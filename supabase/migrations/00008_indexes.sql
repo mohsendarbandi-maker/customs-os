@@ -1,0 +1,13 @@
+CREATE INDEX idx_profiles_org ON profiles(organization_id);
+CREATE INDEX idx_profiles_client ON profiles(client_id, organization_id);
+CREATE INDEX idx_clients_org ON clients(organization_id);
+CREATE INDEX idx_cases_org_status ON cases(organization_id, status);
+CREATE INDEX idx_cases_client ON cases(client_id, organization_id);
+CREATE INDEX idx_cases_broker ON cases(assigned_broker_id, organization_id);
+CREATE INDEX idx_shipments_case ON shipments(case_id, organization_id);
+CREATE INDEX idx_containers_shipment ON containers(shipment_id, organization_id);
+CREATE INDEX idx_declarations_kottaj ON customs_declarations(organization_id, kottaj_number);
+CREATE INDEX idx_finance_case ON financial_transactions(case_id, organization_id);
+CREATE INDEX idx_documents_case ON documents(case_id, organization_id);
+CREATE INDEX idx_audit_org_created ON audit_logs(organization_id, created_at DESC);
+CREATE INDEX idx_status_history_case ON case_status_history(case_id, created_at ASC);

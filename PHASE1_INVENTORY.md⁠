@@ -1,0 +1,125 @@
+# Phase 1 Database & Architecture Static Inventory
+
+NOTE: This inventory is a STATIC / SOURCE INVENTORY derived directly from statement analysis of migration files `00001_extensions.sql` through `00010_triggers.sql`. It does NOT represent live PostgreSQL catalog verification.
+
+- Tables: 15
+  - organizations
+  - profiles
+  - customs_offices
+  - hs_codes
+  - vessels
+  - clients
+  - cases
+  - case_status_history
+  - shipments
+  - containers
+  - customs_declarations
+  - permits
+  - financial_transactions
+  - documents
+  - audit_logs
+
+- Enums: 8
+  - user_role
+  - case_status
+  - transport_mode
+  - container_size
+  - currency_code
+  - transaction_type
+  - permit_status
+  - doc_type
+
+- Functions: 13
+  - auth.user_org_id
+  - auth.user_role
+  - auth.user_client_id
+  - public.create_tenant_account
+  - trigger_set_updated_at
+  - prevent_org_id_mutation
+  - prevent_profile_tampering
+  - prevent_profile_deletion
+  - prevent_organization_deletion
+  - validate_case_assigned_broker
+  - audit_case_status_change
+  - record_audit_event
+  - prevent_audit_tampering
+
+- Triggers: 29
+  - 9 updated_at triggers (organizations, profiles, clients, cases, shipments, customs_declarations, permits, financial_transactions, documents)
+  - 9 tenant immutability triggers (tr_lock_org_* on profiles, clients, cases, shipments, containers, customs_declarations, permits, financial_transactions, documents)
+  - tr_profile_tamper_guard
+  - tr_profile_no_delete
+  - tr_org_no_delete
+  - tr_case_broker_validate
+  - tr_case_status_audit
+  - 4 audit triggers (tr_audit_cases, tr_audit_clients, tr_audit_declarations, tr_audit_finance)
+  - tr_audit_immutable
+  - tr_status_history_immutable
+
+- Indexes: 13
+  - idx_profiles_org
+  - idx_profiles_client
+  - idx_clients_org
+  - idx_cases_org_status
+  - idx_cases_client
+  - idx_cases_broker
+  - idx_shipments_case
+  - idx_containers_shipment
+  - idx_declarations_kottaj
+  - idx_finance_case
+  - idx_documents_case
+  - idx_audit_org_created
+  - idx_status_history_case
+
+- RLS Policies: 44
+  - customs_offices (1 SELECT)
+  - hs_codes (1 SELECT)
+  - organizations (1 SELECT, 1 UPDATE)
+  - profiles (1 SELECT, 2 UPDATE)
+  - audit_logs (1 SELECT)
+  - clients (1 SELECT, 1 INSERT, 1 UPDATE, 1 DELETE)
+  - vessels (1 SELECT, 1 INSERT, 1 UPDATE, 1 DELETE)
+  - cases (1 SELECT, 1 INSERT, 1 UPDATE, 1 DELETE)
+  - case_status_history (1 SELECT)
+  - shipments (1 SELECT, 1 INSERT, 1 UPDATE, 1 DELETE)
+  - containers (1 SELECT, 1 INSERT, 1 UPDATE, 1 DELETE)
+  - customs_declarations (1 SELECT, 1 INSERT, 1 UPDATE, 1 DELETE)
+  - permits (1 SELECT, 1 INSERT, 1 UPDATE, 1 DELETE)
+  - financial_transactions (1 SELECT, 1 INSERT, 1 UPDATE)
+  - documents (1 SELECT, 1 INSERT, 1 UPDATE, 1 DELETE)
+
+- Foreign Keys: 30
+  - 14 direct/catalog references
+  - 16 composite tenant-aware foreign keys enforcing (parent_id, organization_id)
+
+- CHECK Constraints: 13
+  - organizations: name length (>= 2)
+  - profiles: full_name length (>= 2)
+  - profiles: chk_profile_client_role
+  - hs_codes: import_duty_pct (>= 0.0)
+  - clients: name length (>= 2)
+  - shipments: gross_weight_kg (> 0)
+  - customs_declarations: customs_path IN ('green', 'yellow', 'red')
+  - customs_declarations: assessed_value_irr (>= 0)
+  - customs_declarations: total_duties_irr (>= 0)
+  - financial_transactions: original_amount (> 0)
+  - financial_transactions: exchange_rate (> 0)
+  - financial_transactions: base_amount_irr (> 0)
+  - financial_transactions: chk_base_amount_irr_calc
+
+- Explicit UNIQUE Constraints: 15 (excluding primary keys)
+  - customs_offices: code
+  - profiles: uq_profiles_tenant (id, organization_id)
+  - vessels: uq_vessels_tenant (id, organization_id)
+  - clients: uq_clients_tenant (id, organization_id)
+  - clients: uq_clients_national_id_per_org (organization_id, national_id)
+  - cases: uq_cases_tenant (id, organization_id)
+  - cases: uq_cases_number_per_org (organization_id, case_number)
+  - shipments: uq_shipments_tenant (id, organization_id)
+  - containers: uq_containers_tenant (id, organization_id)
+  - customs_declarations: uq_declarations_tenant (id, organization_id)
+  - customs_declarations: uq_declarations_kottaj_per_org (organization_id, kottaj_number)
+  - permits: uq_permits_tenant (id, organization_id)
+  - financial_transactions: uq_finance_tenant (id, organization_id)
+  - documents: uq_documents_tenant (id, organization_id)
+  - documents: uq_documents_version (organization_id, case_id, doc_type, version)
