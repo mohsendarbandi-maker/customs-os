@@ -2,8 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  .dir-rtl {
-    direction: rtl;
-  }
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  background: #f9fafb;
+}
+
+* {
+  box-sizing: border-box;
 }
