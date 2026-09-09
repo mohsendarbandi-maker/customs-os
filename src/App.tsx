@@ -15,7 +15,6 @@ function Dashboard() {
       <div className="p-8 text-center text-2xl font-bold bg-white rounded-xl shadow-lg border border-green-100">
         🎉 به نرم افزار گمرک خوش آمدید
       </div>
-
       <p className="mt-4 text-gray-500">
         فاز ۲ (احراز هویت و امنیت) با موفقیت فعال است.
       </p>
@@ -29,18 +28,15 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* مسیر اصلی */}
-            <Route path="/" element={<Navigate to="/login" replace />} />
-
             {/* صفحه لاگین */}
             <Route path="/login" element={<LoginPage />} />
 
             {/* راه اندازی اولیه سازمان */}
             <Route path="/onboarding" element={<OnboardingPage />} />
 
-            {/* داشبورد محافظت شده */}
+            {/* داشبورد اصلی (همان روت / ) */}
             <Route
-              path="/dashboard"
+              path="/"
               element={
                 <ProtectedRoute>
                   <Dashboard />
@@ -48,8 +44,8 @@ function App() {
               }
             />
 
-            {/* هر آدرس نامعتبر */}
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            {/* هر آدرس نامعتبر به داشبورد هدایت شود تا باگ حلقه بی‌نهایت ایجاد نشود */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
