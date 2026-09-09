@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Wand2, Save, Loader2, CheckCircle2, AlertCircle, LogOut, Ship, Building2, Wallet, LayoutDashboard } from 'lucide-react';
+import { 
+  Wand2, Save, Loader2, CheckCircle2, AlertCircle, LogOut, 
+  Ship, Building2, Wallet, LayoutDashboard, Search, Bell, Menu, ShieldAlert 
+} from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { profile, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'home' | 'smart_paste'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'ships' | 'customs' | 'finance' | 'smart_paste'>('home');
+  const [lang, setLang] = useState<'FA' | 'EN'>('FA');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pasteText, setPasteText] = useState('');
   
   const [formData, setFormData] = useState({
     client: '',
+    vessel: '',
     regNumber: '',
     receiptNumber: '',
     netWeight: '',
@@ -29,6 +35,7 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
+  // Smart Paste Extraction Engine
   const handleSmartPaste = () => {
     const text = pasteText;
     const extract = (regex: RegExp) => {
@@ -38,6 +45,7 @@ export const DashboardPage: React.FC = () => {
 
     setFormData({
       client: extract(/صاحب کالا:?\s*(.+)/) || extract(/صاحب کالا;?\s*(.+)/) || '',
+      vessel: extract(/کشتی:?\s*(.+)/) || '',
       regNumber: extract(/شماره ثبت سفارش:\s*(\d+)/),
       receiptNumber: extract(/شماره قبض انبار:\s*(\d+)/),
       netWeight: extract(/وزن خالص:\s*([0-9,]+)/),
@@ -49,12 +57,12 @@ export const DashboardPage: React.FC = () => {
 
   const handleSaveToDatabase = async () => {
     if (!profile?.organization_id) {
-      setStatusMessage({ type: 'error', text: 'خطای دسترسی: پروفایل سازمانی یافت نشد.' });
+      setStatusMessage({ type: 'error', text: lang === 'FA' ? 'خطای دسترسی: پروفایل سازمانی یافت نشد.' : 'Access Error: Organization profile not found.' });
       return;
     }
     
     if (!formData.client || !formData.regNumber) {
-      setStatusMessage({ type: 'error', text: 'وارد کردن نام صاحب کالا و شماره ثبت سفارش الزامی است.' });
+      setStatusMessage({ type: 'error', text: lang === 'FA' ? 'وارد کردن نام صاحب کالا و شماره ثبت سفارش الزامی است.' : 'Client and Registration Number are required.' });
       return;
     }
 
@@ -85,7 +93,7 @@ export const DashboardPage: React.FC = () => {
           .single();
           
         if (clientInsertError) throw clientInsertError;
-        if (!newClient) throw new Error('خطا در ایجاد پروفایل مشتری.');
+        if (!newClient) throw new Error('Client creation failed.');
         clientId = newClient.id;
       }
 
@@ -102,217 +110,281 @@ export const DashboardPage: React.FC = () => {
 
       if (caseError) {
         if (caseError.code === '23505') {
-          throw new Error('محموله‌ای با این شماره ثبت سفارش قبلاً ثبت شده است.');
+          throw new Error(lang === 'FA' ? 'محموله‌ای با این شماره ثبت سفارش قبلاً ثبت شده است.' : 'A shipment with this registration number already exists.');
         }
         throw caseError;
       }
 
-      setStatusMessage({ type: 'success', text: 'محموله با موفقیت در سیستم ثبت شد.' });
-      setFormData({ client: '', regNumber: '', receiptNumber: '', netWeight: '', amount: '', currency: '' });
+      setStatusMessage({ type: 'success', text: lang === 'FA' ? 'محموله با موفقیت در سیستم ثبت شد.' : 'Shipment successfully saved to database.' });
+      setFormData({ client: '', vessel: '', regNumber: '', receiptNumber: '', netWeight: '', amount: '', currency: '' });
       setPasteText('');
 
     } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err.message || 'خطا در ارتباط با سرور.' });
+      setStatusMessage({ type: 'error', text: err.message || 'Server connection error.' });
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
-      {/* هدر بالا */}
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-            OS
+    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans antialiased overflow-hidden" dir={lang === 'FA' ? 'rtl' : 'ltr'}>
+      
+      {/* Enterprise Sidebar */}
+      <aside className={`flex flex-col border-l border-slate-800 bg-slate-900/60 backdrop-blur-xl transition-all duration-300 z-30 ${sidebarCollapsed ? 'w-20' : 'w-72'}`}>
+        <div className="flex h-16 items-center px-6 border-b border-slate-800/80 justify-between">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shrink-0 shadow-lg">
+              <Ship className="text-white w-5 h-5" />
+            </div>
+            {!sidebarCollapsed && (
+              <div>
+                <span className="font-bold tracking-tight text-white block">Customs OS</span>
+                <span className="text-[10px] text-blue-400 font-mono tracking-widest block uppercase">Enterprise v3.4</span>
+              </div>
+            )}
           </div>
-          <div>
-            <h1 className="font-bold text-base text-slate-800">سیستم مدیریت گمرک</h1>
-            <p className="text-xs text-slate-500">{profile?.full_name || 'مدیر سیستم'}</p>
-          </div>
+          <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400">
+            <Menu className="w-4 h-4" />
+          </button>
         </div>
-        <button 
-          onClick={handleLogout}
-          className="flex items-center gap-2 bg-rose-50 hover:bg-rose-100 text-rose-600 px-3.5 py-2 rounded-xl text-sm font-bold transition-all"
-        >
-          <LogOut size={16} />
-          <span>خروج</span>
-        </button>
-      </header>
 
-      {/* محتوای اصلی */}
-      <main className="flex-1 max-w-2xl w-full mx-auto p-4 sm:p-6 pb-20">
-        {activeTab === 'home' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="mb-6">
-              <h2 className="text-xl font-extrabold text-slate-900">منوی اصلی عملیات</h2>
-              <p className="text-sm text-slate-500 mt-1">لطفاً بخش مورد نظر خود را انتخاب کنید.</p>
-            </div>
-
-            <button 
-              onClick={() => setActiveTab('smart_paste')} 
-              className="w-full bg-secondary hover:bg-blue-700 text-white p-6 rounded-2xl shadow-lg text-lg font-bold transition-all flex items-center justify-between group"
+        <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto">
+          {[
+            { id: 'home', label: lang === 'FA' ? 'داشبورد فرماندهی' : 'Command Dashboard', icon: LayoutDashboard },
+            { id: 'ships', label: lang === 'FA' ? 'لجستیک و کشتی‌ها' : 'Ships & Logistics', icon: Ship },
+            { id: 'customs', label: lang === 'FA' ? 'عملیات گمرک (EPL)' : 'Customs Operations', icon: Building2 },
+            { id: 'finance', label: lang === 'FA' ? 'امور مالی و تعرفه‌ها' : 'Financial Center', icon: Wallet },
+            { id: 'smart_paste', label: lang === 'FA' ? 'ثبت هوشمند (Smart Paste)' : 'Smart Paste', icon: Wand2 },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl font-medium transition-all group relative ${
+                activeTab === item.id 
+                  ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20' 
+                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+              }`}
             >
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-white/20 rounded-xl">
-                  <Wand2 size={24} />
-                </div>
-                <span>ثبت هوشمند محموله (Smart Paste)</span>
-              </div>
-              <span className="text-xl group-hover:-translate-x-1 transition-transform">←</span>
+              <item.icon className={`w-5 h-5 shrink-0 ${activeTab === item.id ? 'text-blue-400' : 'text-slate-500'}`} />
+              {!sidebarCollapsed && <span className="text-sm">{item.label}</span>}
             </button>
+          ))}
+        </nav>
 
-            <button className="w-full bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 p-5 rounded-2xl shadow-sm text-base font-bold flex items-center gap-3 transition-all">
-              <div className="p-2 bg-slate-100 rounded-lg text-slate-600"><Ship size={20} /></div>
-              <span>۱. مدیریت کشتی‌ها و حمل‌ونقل</span>
-            </button>
+        <div className="p-4 border-t border-slate-800/80">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl hover:bg-rose-500/10 text-rose-400 font-medium transition-colors"
+          >
+            <LogOut size={20} className="shrink-0" />
+            {!sidebarCollapsed && <span>{lang === 'FA' ? 'خروج از سیستم' : 'Sign Out'}</span>}
+          </button>
+        </div>
+      </aside>
 
-            <button className="w-full bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 p-5 rounded-2xl shadow-sm text-base font-bold flex items-center gap-3 transition-all">
-              <div className="p-2 bg-slate-100 rounded-lg text-slate-600"><Building2 size={20} /></div>
-              <span>۲. عملیات گمرک و اظهار</span>
-            </button>
-
-            <button className="w-full bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 p-5 rounded-2xl shadow-sm text-base font-bold flex items-center gap-3 transition-all">
-              <div className="p-2 bg-slate-100 rounded-lg text-slate-600"><Wallet size={20} /></div>
-              <span>۳. امور مالی و هزینه‌ها</span>
-            </button>
-          </div>
-        )}
-
-        {activeTab === 'smart_paste' && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            <button 
-              onClick={() => {
-                setActiveTab('home');
-                setStatusMessage(null);
-              }}
-              className="text-slate-500 hover:text-slate-800 text-sm font-bold flex items-center gap-1 mb-2"
-            >
-              ➔ بازگشت به منوی اصلی
-            </button>
-
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-secondary">
-                  <Wand2 size={22} />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-800">جعبه جادویی استخراج متن</h2>
-                  <p className="text-xs text-slate-500">اطلاعات کپی‌شده از ترلو را در کادر زیر وارد کنید.</p>
-                </div>
-              </div>
-
-              {statusMessage && (
-                <div className={`mb-4 p-4 rounded-xl text-sm font-medium flex items-center gap-3 border ${
-                  statusMessage.type === 'success' 
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
-                    : 'bg-rose-50 text-rose-800 border-rose-200'
-                }`}>
-                  {statusMessage.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-                  <span>{statusMessage.text}</span>
-                </div>
-              )}
-
-              <textarea 
-                rows={4}
-                className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm focus:ring-2 focus:ring-secondary outline-none transition-all resize-none font-mono text-slate-900"
-                placeholder="مثال:&#10;صاحب کالا: آذرفولاد امین&#10;شماره ثبت سفارش: 90611944"
-                value={pasteText}
-                onChange={(e) => setPasteText(e.target.value)}
+      {/* Main Container */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
+        
+        {/* Top Header */}
+        <header className="h-16 flex items-center justify-between px-8 bg-slate-900/40 backdrop-blur-xl border-b border-slate-800/80 z-20">
+          <div className="flex items-center gap-4 flex-1 max-w-xl">
+            <div className="relative w-full">
+              <Search className={`absolute ${lang === 'FA' ? 'right-3.5' : 'left-3.5'} top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500`} />
+              <input
+                type="text"
+                placeholder={lang === 'FA' ? "جستجوی جهانی شماره ثبت، ک کوتاژ، نام کشتی (⌘K)..." : "Global search..."}
+                className={`w-full bg-slate-900/80 border border-slate-800 rounded-xl ${lang === 'FA' ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500/50`}
               />
-              <button 
-                onClick={handleSmartPaste}
-                className="w-full mt-3 bg-secondary hover:bg-blue-700 text-white py-3 rounded-xl font-bold transition-all shadow-sm flex items-center justify-center gap-2"
-              >
-                <Wand2 size={18} />
-                <span>استخراج خودکار اطلاعات</span>
-              </button>
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-              <h3 className="font-bold text-sm text-slate-700 border-b border-slate-100 pb-3">فیلدهای تفکیک‌شده (قابل ویرایش)</h3>
-              
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">صاحب کالا / شرکت</label>
-                <input 
-                  type="text" 
-                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-bold text-slate-900" 
-                  value={formData.client} 
-                  onChange={e => setFormData({...formData, client: e.target.value})} 
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">شماره ثبت سفارش</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-mono text-slate-900" 
-                    value={formData.regNumber} 
-                    onChange={e => setFormData({...formData, regNumber: e.target.value})} 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">شماره قبض انبار</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-mono text-slate-900" 
-                    value={formData.receiptNumber} 
-                    onChange={e => setFormData({...formData, receiptNumber: e.target.value})} 
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">مبلغ کل فاکتور</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-mono text-left text-slate-900" 
-                    dir="ltr"
-                    value={formData.amount} 
-                    onChange={e => setFormData({...formData, amount: e.target.value})} 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">نوع ارز</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm text-slate-900" 
-                    value={formData.currency} 
-                    onChange={e => setFormData({...formData, currency: e.target.value})} 
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">وزن خالص (کیلوگرم)</label>
-                <input 
-                  type="text" 
-                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-mono text-slate-900" 
-                  value={formData.netWeight} 
-                  onChange={e => setFormData({...formData, netWeight: e.target.value})} 
-                />
-              </div>
-
-              <button 
-                onClick={handleSaveToDatabase}
-                disabled={isSaving}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 mt-4"
-              >
-                {isSaving ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : (
-                  <>
-                    <Save size={18} />
-                    <span>ذخیره نهایی در پایگاه داده</span>
-                  </>
-                )}
-              </button>
             </div>
           </div>
-        )}
-      </main>
+
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setLang(lang === 'FA' ? 'EN' : 'FA')}
+              className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono font-bold text-slate-300 hover:bg-slate-800"
+            >
+              {lang === 'FA' ? 'English' : 'فارسی'}
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="text-left">
+                <p className="text-xs font-bold text-slate-200">{profile?.full_name || 'مدیر سیستم'}</p>
+                <p className="text-[10px] text-slate-500 font-mono">{profile?.role || 'Owner'}</p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-xs">
+                MD
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <main className="flex-1 overflow-y-auto p-8 space-y-8">
+          
+          {activeTab === 'home' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  { title: lang === 'FA' ? 'کشتی‌های در راه' : 'In Transit', value: '۱۲', color: 'text-blue-400' },
+                  { title: lang === 'FA' ? 'اسناد آماده اظهار' : 'Ready for Declaration', value: '۸', color: 'text-emerald-400' },
+                  { title: lang === 'FA' ? 'نیازمند پیگیری مالی' : 'Pending Financials', value: '۳', color: 'text-amber-400' }
+                ].map((stat, idx) => (
+                  <div key={idx} className="p-6 rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 shadow-xl">
+                    <h3 className="text-sm font-medium text-slate-400">{stat.title}</h3>
+                    <p className={`text-3xl font-bold font-mono mt-2 ${stat.color}`}>{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800 text-center space-y-4">
+                <h2 className="text-lg font-bold text-slate-200">{lang === 'FA' ? 'به سیستم مدیریت یکپارچه گمرک خوش آمدید' : 'Welcome to Customs OS'}</h2>
+                <p className="text-sm text-slate-400">{lang === 'FA' ? 'برای شروع روی دکمه ثبت هوشمند محموله در منو کلیک کنید.' : 'Click Smart Paste in the menu to begin.'}</p>
+                <button 
+                  onClick={() => setActiveTab('smart_paste')}
+                  className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-600/20"
+                >
+                  {lang === 'FA' ? '🪄 ورود به جعبه جادویی (Smart Paste)' : '🪄 Open Smart Paste'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'smart_paste' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-6xl mx-auto">
+              
+              {/* Smart Paste Box */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="p-6 rounded-2xl bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 shadow-xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-blue-600/10 text-blue-400 border border-blue-500/20">
+                        <Wand2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-bold text-slate-200">{lang === 'FA' ? 'جعبه جادویی (Smart Paste)' : 'Smart Paste'}</h2>
+                        <p className="text-[11px] text-slate-500">{lang === 'FA' ? 'استخراج خودکار اطلاعات ترلو' : 'Extract Trello text'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {statusMessage && (
+                    <div className={`p-4 rounded-xl text-xs font-medium flex items-center gap-3 border ${
+                      statusMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    }`}>
+                      {statusMessage.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                      <span>{statusMessage.text}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <textarea
+                      rows={6}
+                      value={pasteText}
+                      onChange={(e) => setPasteText(e.target.value)}
+                      placeholder={lang === 'FA' ? "متن کارت ترلو را اینجا Paste کنید...\nصاحب کالا: آذرفولاد امین\nشماره ثبت سفارش: 90611944" : "Paste Trello text here..."}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500/50 resize-none"
+                    />
+                    <button
+                      onClick={handleSmartPaste}
+                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <Wand2 className="w-4 h-4" />
+                      <span>{lang === 'FA' ? 'استخراج خودکار اطلاعات' : 'Extract Information'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Fields */}
+              <div className="lg:col-span-7">
+                <div className="p-6 rounded-2xl bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 shadow-xl space-y-6">
+                  <h2 className="text-sm font-bold text-slate-200 border-b border-slate-800 pb-4">{lang === 'FA' ? 'اطلاعات تفکیک‌شده پرونده' : 'Extracted Case Fields'}</h2>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1.5">{lang === 'FA' ? 'صاحب کالا / شرکت' : 'Client / Company'}</label>
+                      <input
+                        type="text"
+                        value={formData.client}
+                        onChange={(e) => setFormData({ ...formData, client: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-100 focus:outline-none focus:border-blue-500/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1.5">{lang === 'FA' ? 'شماره ثبت سفارش' : 'Registration No'}</label>
+                      <input
+                        type="text"
+                        value={formData.regNumber}
+                        onChange={(e) => setFormData({ ...formData, regNumber: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-blue-500/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1.5">{lang === 'FA' ? 'شماره قبض انبار' : 'Warehouse Receipt No'}</label>
+                      <input
+                        type="text"
+                        value={formData.receiptNumber}
+                        onChange={(e) => setFormData({ ...formData, receiptNumber: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-blue-500/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1.5">{lang === 'FA' ? 'مبلغ کل فاکتور' : 'Invoice Amount'}</label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={formData.amount}
+                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-mono text-left focus:outline-none focus:border-blue-500/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1.5">{lang === 'FA' ? 'نوع ارز' : 'Currency'}</label>
+                      <input
+                        type="text"
+                        value={formData.currency}
+                        onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-blue-500/50"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1.5">{lang === 'FA' ? 'وزن خالص (کیلوگرم)' : 'Net Weight (KG)'}</label>
+                      <input
+                        type="text"
+                        value={formData.netWeight}
+                        onChange={(e) => setFormData({ ...formData, netWeight: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-blue-500/50"
+                      />
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={handleSaveToDatabase}
+                    disabled={isSaving}
+                    className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    <span>{lang === 'FA' ? 'ذخیره نهایی در پایگاه داده Supabase' : 'Save to Supabase Database'}</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {(activeTab === 'ships' || activeTab === 'customs' || activeTab === 'finance') && (
+            <div className="p-12 rounded-2xl bg-slate-900/60 border border-slate-800 text-center space-y-4">
+              <h2 className="text-xl font-bold text-slate-200">
+                {activeTab === 'ships' && (lang === 'FA' ? 'بخش لجستیک و کشتی‌ها' : 'Ships & Logistics')}
+                {activeTab === 'customs' && (lang === 'FA' ? 'بخش عملیات گمرک (EPL)' : 'Customs Operations')}
+                {activeTab === 'finance' && (lang === 'FA' ? 'بخش مالی و تعرفه‌ها' : 'Financial Center')}
+              </h2>
+              <p className="text-sm text-slate-400">{lang === 'FA' ? 'این بخش به زودی به دیتابیس متصل می‌شود.' : 'This module is connecting to the database.'}</p>
+            </div>
+          )}
+
+        </main>
+      </div>
     </div>
   );
 };
