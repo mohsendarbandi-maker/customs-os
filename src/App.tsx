@@ -6,21 +6,9 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 
 import { LoginPage } from './pages/LoginPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { DashboardPage } from './pages/DashboardPage'; // <--- اتصال داشبورد جدید
 
 const queryClient = new QueryClient();
-
-function Dashboard() {
-  return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 flex items-center justify-center flex-col">
-      <div className="p-8 text-center text-2xl font-bold bg-white rounded-xl shadow-lg border border-green-100">
-        🎉 به نرم افزار گمرک خوش آمدید
-      </div>
-      <p className="mt-4 text-gray-500">
-        فاز ۲ (احراز هویت و امنیت) با موفقیت فعال است.
-      </p>
-    </div>
-  );
-}
 
 function App() {
   return (
@@ -28,23 +16,20 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* صفحه لاگین */}
             <Route path="/login" element={<LoginPage />} />
-
-            {/* راه اندازی اولیه سازمان */}
             <Route path="/onboarding" element={<OnboardingPage />} />
 
-            {/* داشبورد اصلی (همان روت / ) */}
+            {/* مسیر داشبورد اصلی */}
             <Route
               path="/"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <DashboardPage />
                 </ProtectedRoute>
               }
             />
 
-            {/* هر آدرس نامعتبر به داشبورد هدایت شود تا باگ حلقه بی‌نهایت ایجاد نشود */}
+            {/* هدایت آدرس‌های نامعتبر به داشبورد */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
