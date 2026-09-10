@@ -8,13 +8,12 @@ export async function extractCustomsDataWithAI(promptText: string, fileBase64?: 
     throw new Error('کلید API گوگل در تنظیمات یافت نشد.');
   }
 
-  // استفاده از نسخه پایدار v1beta که فایل‌ها را پشتیبانی می‌کند
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // 🐛 FIX: استفاده از نسخه دقیق و عددی مدل (002) برای جلوگیری از باگ Alias سرور گوگل
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-002:generateContent?key=${apiKey}`;
 
   const parts: any[] = [];
 
   if (fileBase64) {
-    // اصلاح باگ ارسال فرمت فایل خالی در مرورگرهای موبایل
     let cleanMimeType = 'application/pdf'; 
     const lowerMime = (mimeType || '').toLowerCase();
     
@@ -47,7 +46,7 @@ export async function extractCustomsDataWithAI(promptText: string, fileBase64?: 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache' // جلوگیری از کش شدن درخواست‌های API در مرورگر
+        'Cache-Control': 'no-cache'
       },
       body: JSON.stringify(payload)
     });
