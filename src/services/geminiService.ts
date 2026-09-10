@@ -1,26 +1,28 @@
 /// <reference types="vite/client" />
 
-// دریافت کلید از متغیرهای محیطی با Fallback برای جلوگیری از کرش کردن
 const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
 
 export async function extractCustomsDataWithAI(promptText: string, fileBase64?: string, mimeType?: string): Promise<string> {
   if (!apiKey) {
-    throw new Error('کلید API گوگل (VITE_GEMINI_API_KEY) یافت نشد. لطفاً در تنظیمات Vercel اضافه کنید.');
+    throw new Error('کلید API گوگل (VITE_GEMINI_API_KEY) در تنظیمات Vercel یافت نشد.');
   }
 
-  // اصلاح نام مدل در آدرس URL: کلمه -latest حذف شد و از نام قطعی gemini-1.5-flash استفاده کردیم
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // استفاده از نسخه نهایی، پایدار و استاندارد v1
+  const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-  let parts: any[] = [{ text: promptText }];
+  let parts: any[] = [];
 
+  // حل مشکل اصلی: استفاده از نگارش صحیح inlineData و mimeType برای API گوگل
   if (fileBase64 && mimeType) {
-    parts.unshift({
-      inline_data: {
-        mime_type: mimeType,
+    parts.push({
+      inlineData: {
+        mimeType: mimeType,
         data: fileBase64
       }
     });
   }
+
+  parts.push({ text: promptText });
 
   const payload = {
     contents: [{ parts }]
