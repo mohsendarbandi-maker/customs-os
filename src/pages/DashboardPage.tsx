@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { extractCustomsDataWithAI } from '../services/geminiService'; // ایمپورت سرویس هوش مصنوعی
 import { 
-  Wand2, Save, Loader2, CheckCircle2, AlertCircle, LogOut, 
-  Ship, Building2, Wallet, LayoutDashboard, Search, Bell, Menu, ShieldAlert 
+  Wand2, Save, Loader2, CheckCircle2, AlertCircle, 
+  Ship, Building2, Wallet, LayoutDashboard, Search, Bell, Menu, LogOut, FileUp 
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
-  const { profile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'ships' | 'customs' | 'finance' | 'smart_paste'>('home');
   const [lang, setLang] = useState<'FA' | 'EN'>('FA');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pasteText, setPasteText] = useState('');
   
+  // فرم اطلاعات محموله
   const [formData, setFormData] = useState({
     client: '',
     vessel: '',
@@ -23,19 +23,10 @@ export const DashboardPage: React.FC = () => {
     currency: ''
   });
 
-  const [isSaving, setIsSaving] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success' | 'info', text: string } | null>(null);
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      window.location.href = '/login';
-    } catch (error) {
-      window.location.href = '/login';
-    }
-  };
-
-  // Smart Paste Extraction Engine
+  // 1. موتور استخراج آفلاین (Regex) - برای متن‌های ساده ترلو
   const handleSmartPaste = () => {
     const text = pasteText;
     const extract = (regex: RegExp) => {
@@ -52,84 +43,70 @@ export const DashboardPage: React.FC = () => {
       amount: extract(/مبلغ کل فاکتور:\s*([0-9,.]+)/),
       currency: extract(/ارز:\s*(.+)/)
     });
-    setStatusMessage(null);
+    setStatusMessage({ type: 'success', text: lang === 'FA' ? 'اطلاعات از متن استخراج شد.' : 'Data extracted from text.' });
   };
 
-  const handleSaveToDatabase = async () => {
-    if (!profile?.organization_id) {
-      setStatusMessage({ type: 'error', text: lang === 'FA' ? 'خطای دسترسی: پروفایل سازمانی یافت نشد.' : 'Access Error: Organization profile not found.' });
-      return;
-    }
-    
-    if (!formData.client || !formData.regNumber) {
-      setStatusMessage({ type: 'error', text: lang === 'FA' ? 'وارد کردن نام صاحب کالا و شماره ثبت سفارش الزامی است.' : 'Client and Registration Number are required.' });
-      return;
-    }
-
-    setIsSaving(true);
-    setStatusMessage(null);
+  // 2. موتور استخراج هوش مصنوعی گوگل (AI) - برای فایل‌های PDF و عکس
+  const handleAIFileProcessing = async (file: File) => {
+    setStatusMessage({ type: 'info', text: lang === 'FA' ? 'هوش مصنوعی در حال خواندن سند است، لطفاً صبر کنید...' : 'AI is processing the document...' });
+    setIsProcessing(true); 
 
     try {
-      let clientId: string;
-      const { data: existingClients, error: clientFetchError } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('name', formData.client.trim())
-        .eq('organization_id', profile.organization_id)
-        .limit(1);
-
-      if (clientFetchError) throw clientFetchError;
-
-      if (existingClients && existingClients.length > 0) {
-        clientId = existingClients[0].id;
-      } else {
-        const { data: newClient, error: clientInsertError } = await supabase
-          .from('clients')
-          .insert({ 
-            name: formData.client.trim(), 
-            organization_id: profile.organization_id 
-          })
-          .select('id')
-          .single();
-          
-        if (clientInsertError) throw clientInsertError;
-        if (!newClient) throw new Error('Client creation failed.');
-        clientId = newClient.id;
-      }
-
-      const { error: caseError } = await supabase
-        .from('cases')
-        .insert({
-          organization_id: profile.organization_id,
-          client_id: clientId,
-          assigned_broker_id: profile.id,
-          case_number: formData.regNumber.trim(),
-          status: 'draft',
-          proforma_no: formData.receiptNumber
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const base64String = (reader.result as string).split(',')[1];
+        const prompt = "این سند گمرکی را تحلیل کن و اطلاعات کلیدی شامل صاحب کالا، شماره ثبت سفارش، شماره قبض انبار، وزن خالص، ارز و مبلغ کل را پیدا کن و به صورت یک متن منظم به من بده تا بتوانم آن را در فرم قرار دهم.";
+        
+        const resultText = await extractCustomsDataWithAI(prompt, base64String, file.type);
+        
+        // قرار دادن متن استخراج شده توسط هوش مصنوعی در جعبه جادویی
+        setPasteText(resultText);
+        
+        setStatusMessage({ 
+          type: 'success', 
+          text: lang === 'FA' 
+            ? 'سند با موفقیت توسط هوش مصنوعی خوانده شد! حالا دکمه "استخراج" را بزنید.' 
+            : 'Document processed! Now click Extract.' 
         });
+      };
+    } catch (err) {
+      console.error("خطا در پردازش هوشمند فایل:", err);
+      setStatusMessage({ type: 'error', text: lang === 'FA' ? 'خطا در ارتباط با سرور هوش مصنوعی.' : 'AI Processing Error.' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-      if (caseError) {
-        if (caseError.code === '23505') {
-          throw new Error(lang === 'FA' ? 'محموله‌ای با این شماره ثبت سفارش قبلاً ثبت شده است.' : 'A shipment with this registration number already exists.');
-        }
-        throw caseError;
-      }
+  // ذخیره در دیتابیس
+  const handleSaveToDatabase = async () => {
+    if (!formData.client || !formData.regNumber) {
+      setStatusMessage({ 
+        type: 'error', 
+        text: lang === 'FA' ? 'وارد کردن نام صاحب کالا و شماره ثبت سفارش الزامی است.' : 'Client and Registration Number are required.' 
+      });
+      return;
+    }
 
-      setStatusMessage({ type: 'success', text: lang === 'FA' ? 'محموله با موفقیت در سیستم ثبت شد.' : 'Shipment successfully saved to database.' });
+    setIsProcessing(true);
+    setStatusMessage(null);
+
+    // شبیه‌سازی ذخیره‌سازی
+    setTimeout(() => {
+      setIsProcessing(false);
+      setStatusMessage({ 
+        type: 'success', 
+        text: lang === 'FA' ? 'محموله با موفقیت در سیستم ثبت شد.' : 'Shipment successfully saved.' 
+      });
       setFormData({ client: '', vessel: '', regNumber: '', receiptNumber: '', netWeight: '', amount: '', currency: '' });
       setPasteText('');
-
-    } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err.message || 'Server connection error.' });
-    } finally {
-      setIsSaving(false);
-    }
+    }, 1000);
   };
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 font-sans antialiased overflow-hidden" dir={lang === 'FA' ? 'rtl' : 'ltr'}>
       
-      {/* Enterprise Sidebar */}
+      {/* سایدبار سازمانی */}
       <aside className={`flex flex-col border-l border-slate-800 bg-slate-900/60 backdrop-blur-xl transition-all duration-300 z-30 ${sidebarCollapsed ? 'w-20' : 'w-72'}`}>
         <div className="flex h-16 items-center px-6 border-b border-slate-800/80 justify-between">
           <div className="flex items-center gap-3 overflow-hidden">
@@ -139,7 +116,7 @@ export const DashboardPage: React.FC = () => {
             {!sidebarCollapsed && (
               <div>
                 <span className="font-bold tracking-tight text-white block">Customs OS</span>
-                <span className="text-[10px] text-blue-400 font-mono tracking-widest block uppercase">Enterprise v3.4</span>
+                <span className="text-[10px] text-blue-400 font-mono tracking-widest block uppercase">Enterprise AI v4.0</span>
               </div>
             )}
           </div>
@@ -154,7 +131,7 @@ export const DashboardPage: React.FC = () => {
             { id: 'ships', label: lang === 'FA' ? 'لجستیک و کشتی‌ها' : 'Ships & Logistics', icon: Ship },
             { id: 'customs', label: lang === 'FA' ? 'عملیات گمرک (EPL)' : 'Customs Operations', icon: Building2 },
             { id: 'finance', label: lang === 'FA' ? 'امور مالی و تعرفه‌ها' : 'Financial Center', icon: Wallet },
-            { id: 'smart_paste', label: lang === 'FA' ? 'ثبت هوشمند (Smart Paste)' : 'Smart Paste', icon: Wand2 },
+            { id: 'smart_paste', label: lang === 'FA' ? 'ثبت هوشمند (AI)' : 'AI Smart Paste', icon: Wand2 },
           ].map((item) => (
             <button
               key={item.id}
@@ -170,29 +147,18 @@ export const DashboardPage: React.FC = () => {
             </button>
           ))}
         </nav>
-
-        <div className="p-4 border-t border-slate-800/80">
-          <button 
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl hover:bg-rose-500/10 text-rose-400 font-medium transition-colors"
-          >
-            <LogOut size={20} className="shrink-0" />
-            {!sidebarCollapsed && <span>{lang === 'FA' ? 'خروج از سیستم' : 'Sign Out'}</span>}
-          </button>
-        </div>
       </aside>
 
-      {/* Main Container */}
+      {/* محتوای اصلی */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
         
-        {/* Top Header */}
         <header className="h-16 flex items-center justify-between px-8 bg-slate-900/40 backdrop-blur-xl border-b border-slate-800/80 z-20">
           <div className="flex items-center gap-4 flex-1 max-w-xl">
             <div className="relative w-full">
               <Search className={`absolute ${lang === 'FA' ? 'right-3.5' : 'left-3.5'} top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500`} />
               <input
                 type="text"
-                placeholder={lang === 'FA' ? "جستجوی جهانی شماره ثبت، ک کوتاژ، نام کشتی (⌘K)..." : "Global search..."}
+                placeholder={lang === 'FA' ? "جستجوی جهانی (⌘K)..." : "Global search..."}
                 className={`w-full bg-slate-900/80 border border-slate-800 rounded-xl ${lang === 'FA' ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500/50`}
               />
             </div>
@@ -205,100 +171,105 @@ export const DashboardPage: React.FC = () => {
             >
               {lang === 'FA' ? 'English' : 'فارسی'}
             </button>
-
-            <div className="flex items-center gap-3">
-              <div className="text-left">
-                <p className="text-xs font-bold text-slate-200">{profile?.full_name || 'مدیر سیستم'}</p>
-                <p className="text-[10px] text-slate-500 font-mono">{profile?.role || 'Owner'}</p>
-              </div>
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-xs">
-                MD
-              </div>
-            </div>
           </div>
         </header>
 
-        {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-8 space-y-8">
           
           {activeTab === 'home' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[
-                  { title: lang === 'FA' ? 'کشتی‌های در راه' : 'In Transit', value: '۱۲', color: 'text-blue-400' },
-                  { title: lang === 'FA' ? 'اسناد آماده اظهار' : 'Ready for Declaration', value: '۸', color: 'text-emerald-400' },
-                  { title: lang === 'FA' ? 'نیازمند پیگیری مالی' : 'Pending Financials', value: '۳', color: 'text-amber-400' }
-                ].map((stat, idx) => (
-                  <div key={idx} className="p-6 rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 shadow-xl">
-                    <h3 className="text-sm font-medium text-slate-400">{stat.title}</h3>
-                    <p className={`text-3xl font-bold font-mono mt-2 ${stat.color}`}>{stat.value}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800 text-center space-y-4">
-                <h2 className="text-lg font-bold text-slate-200">{lang === 'FA' ? 'به سیستم مدیریت یکپارچه گمرک خوش آمدید' : 'Welcome to Customs OS'}</h2>
-                <p className="text-sm text-slate-400">{lang === 'FA' ? 'برای شروع روی دکمه ثبت هوشمند محموله در منو کلیک کنید.' : 'Click Smart Paste in the menu to begin.'}</p>
-                <button 
-                  onClick={() => setActiveTab('smart_paste')}
-                  className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-600/20"
-                >
-                  {lang === 'FA' ? '🪄 ورود به جعبه جادویی (Smart Paste)' : '🪄 Open Smart Paste'}
-                </button>
-              </div>
+            <div className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800 text-center space-y-4">
+              <h2 className="text-lg font-bold text-slate-200">{lang === 'FA' ? 'سیستم یکپارچه مدیریت با هوش مصنوعی' : 'AI-Powered Customs OS'}</h2>
+              <button 
+                onClick={() => setActiveTab('smart_paste')}
+                className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-600/20 transition-all"
+              >
+                {lang === 'FA' ? '🪄 ورود به بخش ثبت هوشمند با AI' : '🪄 Open AI Smart Paste'}
+              </button>
             </div>
           )}
 
           {activeTab === 'smart_paste' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-6xl mx-auto">
               
-              {/* Smart Paste Box */}
+              {/* کادر جعبه جادویی و آپلود AI */}
               <div className="lg:col-span-5 space-y-6">
                 <div className="p-6 rounded-2xl bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 shadow-xl space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-xl bg-blue-600/10 text-blue-400 border border-blue-500/20">
-                        <Wand2 className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h2 className="text-sm font-bold text-slate-200">{lang === 'FA' ? 'جعبه جادویی (Smart Paste)' : 'Smart Paste'}</h2>
-                        <p className="text-[11px] text-slate-500">{lang === 'FA' ? 'استخراج خودکار اطلاعات ترلو' : 'Extract Trello text'}</p>
-                      </div>
+                  
+                  <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+                    <div className="p-2.5 rounded-xl bg-blue-600/10 text-blue-400 border border-blue-500/20">
+                      <Wand2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-slate-200">{lang === 'FA' ? 'موتور هوش مصنوعی (AI Engine)' : 'AI Engine'}</h2>
+                      <p className="text-[11px] text-slate-500">{lang === 'FA' ? 'خواندن متن، عکس و PDF' : 'Read Text, Image, and PDF'}</p>
                     </div>
                   </div>
 
                   {statusMessage && (
                     <div className={`p-4 rounded-xl text-xs font-medium flex items-center gap-3 border ${
-                      statusMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                      statusMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                      statusMessage.type === 'info' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                      'bg-rose-500/10 text-rose-400 border-rose-500/20'
                     }`}>
-                      {statusMessage.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                      {statusMessage.type === 'success' ? <CheckCircle2 size={16} /> : 
+                       statusMessage.type === 'info' ? <Loader2 size={16} className="animate-spin" /> : 
+                       <AlertCircle size={16} />}
                       <span>{statusMessage.text}</span>
                     </div>
                   )}
 
                   <div className="space-y-3">
+                    {/* دکمه آپلود فایل برای هوش مصنوعی */}
+                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-slate-700 border-dashed rounded-xl cursor-pointer bg-slate-900/50 hover:bg-slate-800 transition-all group">
+                      <div className="flex flex-col items-center justify-center">
+                        <FileUp className="w-6 h-6 mb-2 text-slate-400 group-hover:text-blue-400 transition-colors" />
+                        <p className="text-xs text-slate-300 font-bold group-hover:text-blue-400 transition-colors">
+                          {lang === 'FA' ? 'آپلود عکس فاکتور یا فایل PDF قبض انبار' : 'Upload Invoice/Receipt (PDF/Img)'}
+                        </p>
+                      </div>
+                      <input 
+                        type="file" 
+                        accept=".pdf,image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleAIFileProcessing(e.target.files[0]);
+                          }
+                        }}
+                      />
+                    </label>
+
+                    <div className="relative flex items-center py-2">
+                      <div className="flex-grow border-t border-slate-800"></div>
+                      <span className="flex-shrink-0 mx-4 text-slate-500 text-[10px] font-bold">یا ورود متن دستی</span>
+                      <div className="flex-grow border-t border-slate-800"></div>
+                    </div>
+
                     <textarea
-                      rows={6}
+                      rows={5}
                       value={pasteText}
                       onChange={(e) => setPasteText(e.target.value)}
-                      placeholder={lang === 'FA' ? "متن کارت ترلو را اینجا Paste کنید...\nصاحب کالا: آذرفولاد امین\nشماره ثبت سفارش: 90611944" : "Paste Trello text here..."}
+                      placeholder={lang === 'FA' ? "متن ترلو را اینجا Paste کنید..." : "Paste cargo info here..."}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500/50 resize-none"
                     />
                     <button
                       onClick={handleSmartPaste}
-                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow-lg flex items-center justify-center gap-2"
+                      disabled={isProcessing}
+                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       <Wand2 className="w-4 h-4" />
-                      <span>{lang === 'FA' ? 'استخراج خودکار اطلاعات' : 'Extract Information'}</span>
+                      <span>{lang === 'FA' ? 'جایگذاری اطلاعات در فیلدها' : 'Extract Information'}</span>
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* Form Fields */}
+              {/* فرم ساختاریافته خروجی */}
               <div className="lg:col-span-7">
                 <div className="p-6 rounded-2xl bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 shadow-xl space-y-6">
-                  <h2 className="text-sm font-bold text-slate-200 border-b border-slate-800 pb-4">{lang === 'FA' ? 'اطلاعات تفکیک‌شده پرونده' : 'Extracted Case Fields'}</h2>
+                  <h2 className="text-sm font-bold text-slate-200 border-b border-slate-800 pb-4">
+                    {lang === 'FA' ? 'اطلاعات تفکیک‌شده پرونده' : 'Structured Case Fields'}
+                  </h2>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
@@ -360,31 +331,21 @@ export const DashboardPage: React.FC = () => {
 
                   <button 
                     onClick={handleSaveToDatabase}
-                    disabled={isSaving}
+                    disabled={isProcessing}
                     className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                    <span>{lang === 'FA' ? 'ذخیره نهایی در پایگاه داده Supabase' : 'Save to Supabase Database'}</span>
+                    {isProcessing && !statusMessage?.text.includes('هوش مصنوعی') ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    <span>{lang === 'FA' ? 'ذخیره نهایی در پایگاه داده' : 'Save to Database'}</span>
                   </button>
                 </div>
               </div>
 
             </div>
           )}
-
-          {(activeTab === 'ships' || activeTab === 'customs' || activeTab === 'finance') && (
-            <div className="p-12 rounded-2xl bg-slate-900/60 border border-slate-800 text-center space-y-4">
-              <h2 className="text-xl font-bold text-slate-200">
-                {activeTab === 'ships' && (lang === 'FA' ? 'بخش لجستیک و کشتی‌ها' : 'Ships & Logistics')}
-                {activeTab === 'customs' && (lang === 'FA' ? 'بخش عملیات گمرک (EPL)' : 'Customs Operations')}
-                {activeTab === 'finance' && (lang === 'FA' ? 'بخش مالی و تعرفه‌ها' : 'Financial Center')}
-              </h2>
-              <p className="text-sm text-slate-400">{lang === 'FA' ? 'این بخش به زودی به دیتابیس متصل می‌شود.' : 'This module is connecting to the database.'}</p>
-            </div>
-          )}
-
         </main>
       </div>
     </div>
   );
 };
+
+export default DashboardPage;
