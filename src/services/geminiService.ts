@@ -1,38 +1,56 @@
-import { GoogleGenAI } from '@google/genai';
+/// <reference types="vite/client" />
 
-// دریافت امن کلید API از تنظیمات محیطی Vite
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+export async function extractCustomsDataWithAI(promptText: string, fileBase64?: string, mimeType?: string): Promise<string> {
+  // دور زدن خطای تایپ‌اسکریپت برای متغیرهای محیطی Vite
+  const env = (import.meta as any).env;
+  const apiKey = env.VITE_GEMINI_API_KEY;
 
-if (!apiKey) {
-  console.warn("هشدار: کلید VITE_GEMINI_API_KEY در متغیرهای محیطی یافت نشد.");
-}
+  if (!apiKey) {
+    throw new Error("کلید VITE_GEMINI_API_KEY در تنظیمات Vercel یافت نشد.");
+  }
 
-const aiClient = new GoogleGenAI({ apiKey });
+  // استفاده از REST API مستقیم گوگل به جای پکیج @google/genai
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-/**
- * تابع استخراج اطلاعات گمرکی با استفاده از مدل چندوجهی گوگل (متن، عکس، PDF)
- */
-export async function extractCustomsDataWithAI(promptText: string, fileBase64?: string, mimeType?: string) {
+  // ساختاردهی محتوا
+  let parts: any[] = [{ text: promptText }];
+
+  // اگر فایلی وجود داشت، آن را به عنوان داده چندوجهی اضافه کن
+  if (fileBase64 && mimeType) {
+    parts.unshift({
+      inline_data: {
+        mime_type: mimeType,
+        data: fileBase64
+      }
+    });
+  }
+
   try {
-    const contents: any[] = [promptText];
-
-    // اگر فایل (تصویر یا PDF) آپلود شده باشد، به صورت چندوجهی (Multimodal) ارسال می‌شود
-    if (fileBase64 && mimeType) {
-      contents.unshift({
-        inlineData: {
-          data: fileBase64,
-          mimeType: mimeType
-        }
-      });
-    }
-
-    // استفاده از مدل سریع و بهینه گوگل برای تحلیل اسناد
-    const response = await aiClient.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: contents,
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{ parts }]
+      })
     });
 
-    return response.text;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || `خطای API گوگل: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // استخراج امن متن از پاسخ گوگل (Null-safe)
+    const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!extractedText) {
+      throw new Error("گوگل پاسخی برنگرداند یا فرمت فایل خوانا نبود.");
+    }
+
+    return extractedText;
   } catch (error) {
     console.error("AI Extraction Error:", error);
     throw error;
