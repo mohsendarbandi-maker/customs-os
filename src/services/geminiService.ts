@@ -8,8 +8,8 @@ export async function extractCustomsDataWithAI(promptText: string, fileBase64?: 
     throw new Error('کلید API گوگل (VITE_GEMINI_API_KEY) یافت نشد. لطفاً در تنظیمات Vercel اضافه کنید.');
   }
 
-  // استفاده از REST API مستقیم به جای SDK برای جلوگیری از خطای نصب پکیج در Vercel
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+  // اصلاح نام مدل در آدرس URL: کلمه -latest حذف شد و از نام قطعی gemini-1.5-flash استفاده کردیم
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
   let parts: any[] = [{ text: promptText }];
 
