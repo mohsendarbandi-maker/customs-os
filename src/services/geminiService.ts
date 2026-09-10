@@ -8,22 +8,21 @@ export async function extractCustomsDataWithAI(promptText: string, fileBase64?: 
     throw new Error('کلید API گوگل در تنظیمات یافت نشد.');
   }
 
-  // استفاده از نسخه پایدار v1beta که برای خواندن فایل‌ها بهینه‌ترین حالت است
+  // استفاده از نسخه پایدار v1beta که فایل‌ها را پشتیبانی می‌کند
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
   const parts: any[] = [];
 
   if (fileBase64) {
-    // 🐛 FIX: فیلتر قدرتمند برای اصلاح باگ فرمت فایل در گوشی‌های آیفون
-    let cleanMimeType = 'application/pdf'; // پیش‌فرض روی PDF
-    
+    // اصلاح باگ ارسال فرمت فایل خالی در مرورگرهای موبایل
+    let cleanMimeType = 'application/pdf'; 
     const lowerMime = (mimeType || '').toLowerCase();
+    
     if (lowerMime.includes('png')) cleanMimeType = 'image/png';
     else if (lowerMime.includes('jpg') || lowerMime.includes('jpeg')) cleanMimeType = 'image/jpeg';
     else if (lowerMime.includes('webp')) cleanMimeType = 'image/webp';
     else if (lowerMime.includes('heic') || lowerMime.includes('heif')) cleanMimeType = 'image/heic';
-    else cleanMimeType = 'application/pdf'; // اگر آیفون فرمت را خالی یا عجیب فرستاد، حتماً PDF در نظر بگیر
-
+    
     parts.push({
       inlineData: {
         mimeType: cleanMimeType,
@@ -48,13 +47,13 @@ export async function extractCustomsDataWithAI(promptText: string, fileBase64?: 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache' // جلوگیری از کش شدن درخواست‌های API در مرورگر
       },
       body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("جزئیات خطای گوگل:", errorData);
       throw new Error(errorData.error?.message || 'خطا در ارتباط با سرور گوگل');
     }
 
@@ -70,7 +69,6 @@ export async function extractCustomsDataWithAI(promptText: string, fileBase64?: 
     throw new Error('گوگل سند را خواند اما نتوانست متنی از آن استخراج کند.');
     
   } catch (error: any) {
-    console.error("AI Extraction Error:", error);
-    throw new Error(error.message || 'خطای ناشناخته در ارتباط با هوش مصنوعی');
+    throw new Error(error.message || 'خطای شبکه در ارتباط با هوش مصنوعی');
   }
 }
