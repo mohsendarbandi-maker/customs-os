@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Ship, Building2, Wallet, LayoutDashboard, LogOut, Save, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Ship, Building2, Wallet, LayoutDashboard, LogOut, Save, Loader2, CheckCircle2, AlertCircle, FileCheck2 } from 'lucide-react';
 
 const roleLabels: Record<string, string> = {
   owner: 'مالک', admin: 'مدیر', broker: 'کارگزار', accountant: 'حسابدار', warehouse: 'انباردار', client: 'مشتری'
@@ -24,12 +24,13 @@ const Field: React.FC<FieldProps> = ({ label, value, onChange, placeholder = '',
 
 export const DashboardPage: React.FC = () => {
   const { signOut, profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'home' | 'case' | 'shipment'>('case');
+  const [activeTab, setActiveTab] = useState<'home' | 'case' | 'shipment' | 'declaration'>('case');
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success' | 'info'; text: string } | null>(null);
   const [caseId, setCaseId] = useState('');
   const [caseForm, setCaseForm] = useState({ client: '', regNumber: '' });
   const [shipmentForm, setShipmentForm] = useState({ shippingLine: '', bl: '', blYear: String(new Date().getFullYear()), vessel: '', grossWeight: '', transportMode: 'sea' });
+  const [declarationForm, setDeclarationForm] = useState({ kottaj: '', declarationDate: new Date().toISOString().slice(0, 10), customsPath: '', assessedValue: '', duties: '' });
 
   const showError = (text: string) => setStatusMessage({ type: 'error', text });
 
@@ -74,9 +75,36 @@ export const DashboardPage: React.FC = () => {
         p_transport_mode: shipmentForm.transportMode,
       });
       if (error) throw error;
+      setActiveTab('declaration');
       setStatusMessage({ type: 'success', text: `محموله با موفقیت ثبت شد. شناسه محموله: ${data}` });
     } catch (e: any) {
       showError(`خطا در ثبت محموله: ${e?.message || 'خطای نامشخص'}`);
+    } finally { setIsProcessing(false); }
+  };
+
+  const registerDeclaration = async () => {
+    if (!caseId) return showError('ابتدا یک پرونده ایجاد یا انتخاب کنید.');
+    if (!declarationForm.kottaj.trim()) return showError('شماره کوتاژ الزامی است.');
+    const assessed = declarationForm.assessedValue.trim() ? Number(declarationForm.assessedValue.replace(/,/g, '')) : null;
+    const duties = declarationForm.duties.trim() ? Number(declarationForm.duties.replace(/,/g, '')) : null;
+    if (assessed !== null && (!Number.isFinite(assessed) || assessed < 0)) return showError('ارزش ارزیابی‌شده معتبر نیست.');
+    if (duties !== null && (!Number.isFinite(duties) || duties < 0)) return showError('حقوق و عوارض معتبر نیست.');
+
+    setIsProcessing(true); setStatusMessage({ type: 'info', text: 'در حال ثبت اظهارنامه...' });
+    try {
+      const { data, error } = await supabase.rpc('register_declaration_workflow', {
+        p_case_id: caseId,
+        p_kottaj_number: declarationForm.kottaj.trim(),
+        p_declaration_date: new Date(`${declarationForm.declarationDate}T00:00:00`).toISOString(),
+        p_customs_office_id: null,
+        p_customs_path: declarationForm.customsPath || null,
+        p_assessed_value_irr: assessed,
+        p_total_duties_irr: duties,
+      });
+      if (error) throw error;
+      setStatusMessage({ type: 'success', text: `اظهارنامه با موفقیت ثبت شد. شناسه اظهارنامه: ${data}` });
+    } catch (e: any) {
+      showError(`خطا در ثبت اظهارنامه: ${e?.message || 'خطای نامشخص'}`);
     } finally { setIsProcessing(false); }
   };
 
@@ -88,9 +116,10 @@ export const DashboardPage: React.FC = () => {
       </header>
 
       <div className="max-w-7xl mx-auto p-5">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
           <button onClick={() => setActiveTab('case')} className={`p-4 rounded-2xl border text-right ${activeTab === 'case' ? 'border-blue-500 bg-blue-500/10' : 'border-slate-800 bg-slate-900/50'}`}><Building2 className="mb-2 text-blue-400" size={20} /><b className="text-sm">پرونده جدید</b><div className="text-[11px] text-slate-500 mt-1">صاحب کالا + ثبت سفارش</div></button>
           <button onClick={() => setActiveTab('shipment')} className={`p-4 rounded-2xl border text-right ${activeTab === 'shipment' ? 'border-blue-500 bg-blue-500/10' : 'border-slate-800 bg-slate-900/50'}`}><Ship className="mb-2 text-emerald-400" size={20} /><b className="text-sm">بارنامه و محموله</b><div className="text-[11px] text-slate-500 mt-1">B/L + خط کشتیرانی + کشتی</div></button>
+          <button onClick={() => setActiveTab('declaration')} className={`p-4 rounded-2xl border text-right ${activeTab === 'declaration' ? 'border-blue-500 bg-blue-500/10' : 'border-slate-800 bg-slate-900/50'}`}><FileCheck2 className="mb-2 text-cyan-400" size={20} /><b className="text-sm">اظهارنامه</b><div className="text-[11px] text-slate-500 mt-1">کوتاژ + مسیر گمرکی</div></button>
           <button onClick={() => setActiveTab('home')} className={`p-4 rounded-2xl border text-right ${activeTab === 'home' ? 'border-blue-500 bg-blue-500/10' : 'border-slate-800 bg-slate-900/50'}`}><LayoutDashboard className="mb-2 text-amber-400" size={20} /><b className="text-sm">داشبورد</b><div className="text-[11px] text-slate-500 mt-1">نمای کلی عملیات</div></button>
           <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/50"><Wallet className="mb-2 text-violet-400" size={20} /><b className="text-sm">مالی</b><div className="text-[11px] text-slate-500 mt-1">در فاز بعد</div></div>
         </div>
@@ -118,7 +147,20 @@ export const DashboardPage: React.FC = () => {
           <p className="text-[11px] text-slate-500 mt-4">قانون B/L: شماره B/L می‌تواند برای مالک یا کشتی دیگر تکرار شود؛ اما برای یک خط کشتیرانی در یک سال، تکرار آن در همان سازمان مجاز نیست.</p>
         </section>}
 
-        {activeTab === 'home' && <section className="grid md:grid-cols-3 gap-4"><div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800"><div className="text-xs text-slate-500">پرونده جاری</div><div className="text-2xl font-bold mt-2">{caseId ? '۱' : '۰'}</div></div><div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800"><div className="text-xs text-slate-500">مرحله فعلی</div><div className="text-2xl font-bold mt-2">{caseId ? 'B/L' : 'پرونده'}</div></div><div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800"><div className="text-xs text-slate-500">مرحله بعد</div><div className="text-2xl font-bold mt-2">اظهارنامه</div></div></section>}
+        {activeTab === 'declaration' && <section className="max-w-4xl bg-slate-900/60 border border-slate-800 rounded-2xl p-6">
+          <div className="flex justify-between items-start mb-6"><div><h1 className="text-lg font-bold">ثبت اظهارنامه گمرکی</h1><p className="text-xs text-slate-500 mt-1">مرحله ۳: کوتاژ و اطلاعات اظهارنامه به پرونده متصل می‌شود</p></div><div className="text-xs bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Case: <span dir="ltr">{caseId || 'ابتدا پرونده بسازید'}</span></div></div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <Field label="شماره کوتاژ" value={declarationForm.kottaj} onChange={v => setDeclarationForm({ ...declarationForm, kottaj: v })} placeholder="مثلاً 123456" />
+            <Field label="تاریخ اظهار" value={declarationForm.declarationDate} onChange={v => setDeclarationForm({ ...declarationForm, declarationDate: v })} type="date" />
+            <label><span className="block text-xs text-slate-400 mb-1.5">مسیر گمرکی</span><select value={declarationForm.customsPath} onChange={e => setDeclarationForm({ ...declarationForm, customsPath: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm"><option value="">انتخاب نشده</option><option value="green">سبز</option><option value="yellow">زرد</option><option value="red">قرمز</option></select></label>
+            <Field label="ارزش ارزیابی‌شده (ریال)" value={declarationForm.assessedValue} onChange={v => setDeclarationForm({ ...declarationForm, assessedValue: v })} />
+            <Field label="حقوق و عوارض (ریال)" value={declarationForm.duties} onChange={v => setDeclarationForm({ ...declarationForm, duties: v })} />
+          </div>
+          <button onClick={registerDeclaration} disabled={isProcessing || !caseId} className="mt-5 w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 font-bold text-sm"><FileCheck2 size={17} className="inline ml-2" /> ثبت اظهارنامه واقعی</button>
+          <p className="text-[11px] text-slate-500 mt-4">کوتاژ در هر سازمان یکتا است. پس از ثبت موفق، وضعیت پرونده به «ثبت در EPL» می‌رود.</p>
+        </section>}
+
+        {activeTab === 'home' && <section className="grid md:grid-cols-3 gap-4"><div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800"><div className="text-xs text-slate-500">پرونده جاری</div><div className="text-2xl font-bold mt-2">{caseId ? '۱' : '۰'}</div></div><div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800"><div className="text-xs text-slate-500">مرحله فعلی</div><div className="text-2xl font-bold mt-2">{caseId ? 'اظهارنامه' : 'پرونده'}</div></div><div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800"><div className="text-xs text-slate-500">مرحله بعد</div><div className="text-2xl font-bold mt-2">مجوزها</div></div></section>}
       </div>
     </div>
   );
