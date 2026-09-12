@@ -6,86 +6,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fix Jalali date converter
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('src/pages/DashboardPage.tsx')
-          s = p.read_text()
-          start = s.index('const normalizeDateForDb =')
-          end = s.index('\n};', start) + 3
-          helper = r'''const normalizeDateForDb = (value: string | null | undefined): string | null => {
-            const raw = (value || '').trim();
-            if (!raw) return null;
-            const normalized = raw
-              .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-              .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
-              .replace(/[.-]/g, '/');
-            const parts = normalized.split('/').map(Number);
-            if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return raw;
-            const [jy, jm, jd] = parts;
-            if (jy >= 1900 && jy <= 2200) {
-              if (jm < 1 || jm > 12 || jd < 1 || jd > 31) return raw;
-              return `${jy}-${String(jm).padStart(2, '0')}-${String(jd).padStart(2, '0')}`;
-            }
-            if (jy < 1200 || jy > 1600 || jm < 1 || jm > 12 || jd < 1 || jd > 31) return raw;
-            const formatter = new Intl.DateTimeFormat('en-US-u-ca-persian', {
-              timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'
-            });
-            const startMs = Date.UTC(jy + 620, 0, 1);
-            const endMs = Date.UTC(jy + 623, 0, 1);
-            for (let t = startMs; t < endMs; t += 86400000) {
-              const current = new Date(t);
-              const parts = formatter.formatToParts(current);
-              const y = Number(parts.find(p => p.type === 'year')?.value);
-              const m = Number(parts.find(p => p.type === 'month')?.value);
-              const d = Number(parts.find(p => p.type === 'day')?.value);
-              if (y === jy && m === jm && d === jd) return current.toISOString().slice(0, 10);
-            }
-            return raw;
-          };'''
-          p.write_text(s[:start] + helper + s[end:])
-          PY
-      - run: npm install
+          cache: npm
+      - run: npm ci
       - run: npm run build
-      - name: Restore normal build workflow and clean one-time repair workflows
-        shell: bash
-        run: |
-          cat > .github/workflows/build.yml <<'EOF'
-          name: Build
-
-          on:
-            push:
-              branches: [main]
-            workflow_dispatch:
-
-          jobs:
-            build:
-              runs-on: ubuntu-latest
-              steps:
-                - uses: actions/checkout@v4
-                - uses: actions/setup-node@v4
-                  with:
-                    node-version: 22
-                - run: npm install
-                - run: npm run build
-          EOF
-          rm -f .github/workflows/fix-jalali-date.yml .github/workflows/repair-date-fields.yml .github/workflows/apply-maritime-ui.yml .github/workflows/apply-maritime-ui-v2.yml .github/workflows/apply-maritime-ui-v3.yml
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/pages/DashboardPage.tsx .github/workflows/build.yml .github/workflows/fix-jalali-date.yml .github/workflows/repair-date-fields.yml .github/workflows/apply-maritime-ui.yml .github/workflows/apply-maritime-ui-v2.yml .github/workflows/apply-maritime-ui-v3.yml
-          git commit -m 'Fix Jalali date conversion and clean repair workflows' || true
-          git push origin HEAD:main
