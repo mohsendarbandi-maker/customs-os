@@ -1,3 +1,6 @@
+-- Phase 3.3: declaration / EPL workflow.
+-- Kottaj is an EPL output and is recorded after the declaration is produced.
+
 ALTER TABLE public.customs_declarations
   ADD CONSTRAINT uq_customs_declarations_tenant_kottaj UNIQUE (organization_id, kottaj_number);
 
@@ -22,26 +25,21 @@ DECLARE
   v_existing_case_id uuid;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
-  v_org_id := user_org_id();
+  v_org_id := public.user_org_id();
   IF v_org_id IS NULL THEN RAISE EXCEPTION 'User organization not found'; END IF;
-  IF user_role() NOT IN ('owner','admin','broker') THEN
-    RAISE EXCEPTION 'User role is not allowed to register declarations';
-  END IF;
+  IF public.user_role() NOT IN ('owner','admin','broker') THEN RAISE EXCEPTION 'User role is not allowed to register declarations'; END IF;
   IF p_case_id IS NULL THEN RAISE EXCEPTION 'Case is required'; END IF;
   IF nullif(trim(p_kottaj_number), '') IS NULL THEN RAISE EXCEPTION 'Kottaj number is required'; END IF;
 
-  SELECT c.organization_id INTO v_case_org_id
-  FROM public.cases c WHERE c.id = p_case_id;
-  IF v_case_org_id IS NULL THEN RAISE EXCEPTION 'Case not found'; END IF;
-  IF v_case_org_id <> v_org_id THEN RAISE EXCEPTION 'Case belongs to another organization'; END IF;
+  SELECT c.organization_id INTO v_case_org_id FROM public.cases c WHERE c.id = p_case_id;
+  IF v_case_org_id IS NULL OR v_case_org_id <> v_org_id THEN RAISE EXCEPTION 'Case not found or access denied'; END IF;
   IF p_declaration_date IS NULL THEN RAISE EXCEPTION 'Declaration date is required'; END IF;
   IF p_assessed_value_irr IS NOT NULL AND p_assessed_value_irr < 0 THEN RAISE EXCEPTION 'Assessed value cannot be negative'; END IF;
   IF p_total_duties_irr IS NOT NULL AND p_total_duties_irr < 0 THEN RAISE EXCEPTION 'Total duties cannot be negative'; END IF;
 
   IF p_customs_office_id IS NOT NULL AND NOT EXISTS (
-    SELECT 1 FROM public.customs_offices co
-    WHERE co.id = p_customs_office_id AND co.organization_id = v_org_id
-  ) THEN RAISE EXCEPTION 'Customs office not found in current organization'; END IF;
+    SELECT 1 FROM public.customs_offices co WHERE co.id = p_customs_office_id
+  ) THEN RAISE EXCEPTION 'Customs office not found'; END IF;
 
   SELECT d.id, d.case_id INTO v_declaration_id, v_existing_case_id
   FROM public.customs_declarations d
@@ -59,12 +57,15 @@ BEGIN
     declaration_date, customs_path, assessed_value_irr, total_duties_irr
   ) VALUES (
     v_org_id, p_case_id, p_customs_office_id, trim(p_kottaj_number),
-    p_declaration_date, nullif(trim(p_customs_path), ''),
-    p_assessed_value_irr, p_total_duties_irr
+    p_declaration_date, nullif(trim(p_customs_path), ''), p_assessed_value_irr, p_total_duties_irr
   ) RETURNING id INTO v_declaration_id;
 
-  UPDATE public.cases
-  SET status = 'submitted_epl'
+  UPDATE public.cases SET status = CASE
+    WHEN lower(trim(p_customs_path)) = 'green' THEN 'path_green'::case_status
+    WHEN lower(trim(p_customs_path)) = 'yellow' THEN 'path_yellow'::case_status
+    WHEN lower(trim(p_customs_path)) = 'red' THEN 'path_red'::case_status
+    ELSE 'kottaj_received'::case_status
+  END
   WHERE id = p_case_id AND organization_id = v_org_id;
 
   RETURN v_declaration_id;
