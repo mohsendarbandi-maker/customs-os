@@ -1,13 +1,23 @@
 import React, { useState } from 'react';
 import { extractCustomsDataWithAI } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { 
   Wand2, Save, Loader2, CheckCircle2, AlertCircle, 
   Ship, Building2, Wallet, LayoutDashboard, Search, Menu, LogOut, FileUp 
 } from 'lucide-react';
 
+const roleLabels: Record<string, { fa: string; en: string }> = {
+  owner: { fa: 'مالک', en: 'Owner' },
+  admin: { fa: 'مدیر', en: 'Admin' },
+  broker: { fa: 'کارگزار', en: 'Broker' },
+  accountant: { fa: 'حسابدار', en: 'Accountant' },
+  warehouse: { fa: 'انباردار', en: 'Warehouse' },
+  client: { fa: 'مشتری', en: 'Client' },
+};
+
 export const DashboardPage: React.FC = () => {
-  const { signOut } = useAuth();
+  const { signOut, profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'ships' | 'customs' | 'finance' | 'smart_paste'>('home');
   const [lang, setLang] = useState<'FA' | 'EN'>('FA');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -88,17 +98,57 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  const handleSaveToDatabase = () => {
+  const handleSaveToDatabase = async () => {
     if (!formData.client || !formData.regNumber) {
       setStatusMessage({ type: 'error', text: lang === 'FA' ? 'فیلدهای صاحب کالا و ثبت سفارش الزامی است.' : 'Client and Reg No required.' });
       return;
     }
+
     setIsProcessing(true);
-    setTimeout(() => {
-      setStatusMessage({ type: 'success', text: lang === 'FA' ? 'با موفقیت در پایگاه داده ذخیره شد.' : 'Saved to DB successfully.' });
+    setStatusMessage({ type: 'info', text: lang === 'FA' ? 'در حال ذخیره در پایگاه داده و بررسی RLS...' : 'Saving to database and checking RLS...' });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error(lang === 'FA' ? 'نشست کاربر معتبر نیست.' : 'Invalid user session.');
+      if (!profile?.organization_id) throw new Error(lang === 'FA' ? 'پروفایل یا سازمان کاربر یافت نشد.' : 'User profile or organization not found.');
+
+      const { data: existingClient, error: lookupError } = await supabase
+        .from('clients')
+        .select('id, name')
+        .eq('organization_id', profile.organization_id)
+        .eq('name', formData.client)
+        .maybeSingle();
+
+      if (lookupError) throw new Error(`${lang === 'FA' ? 'خطا در بررسی صاحب کالا' : 'Client lookup failed'}: ${lookupError.message}`);
+
+      if (!existingClient) {
+        const { error: insertError } = await supabase
+          .from('clients')
+          .insert({
+            organization_id: profile.organization_id,
+            name: formData.client,
+          });
+
+        if (insertError) {
+          throw new Error(`${lang === 'FA' ? 'ذخیره توسط RLS/DB رد شد' : 'RLS/DB save rejected'}: ${insertError.message}`);
+        }
+      }
+
+      setStatusMessage({
+        type: 'success',
+        text: lang === 'FA'
+          ? 'تست موفق! اطلاعات صاحب کالا با موفقیت از RLS عبور کرد و در دیتابیس ثبت شد.'
+          : 'RLS test passed. Client data was saved successfully.'
+      });
+    } catch (err: any) {
+      console.error('Integration Test Error:', err);
+      setStatusMessage({ type: 'error', text: err?.message || 'خطای ناشناخته در ارتباط با دیتابیس.' });
+    } finally {
       setIsProcessing(false);
-    }, 800);
+    }
   };
+
+  const currentRole = profile?.role ? roleLabels[profile.role] : null;
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 font-sans antialiased overflow-hidden" dir={lang === 'FA' ? 'rtl' : 'ltr'}>
@@ -119,6 +169,16 @@ export const DashboardPage: React.FC = () => {
             <Menu className="w-4 h-4" />
           </button>
         </div>
+
+        {!sidebarCollapsed && (
+          <div className="mx-3 mt-4 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+            <div className="text-[10px] text-slate-500 uppercase tracking-wider">{lang === 'FA' ? 'کاربر جاری' : 'Current user'}</div>
+            <div className="mt-1 text-sm font-bold text-slate-200 truncate">{profile?.full_name || '—'}</div>
+            <div className="mt-2 inline-flex items-center rounded-lg border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-[11px] font-bold text-blue-400">
+              {currentRole ? (lang === 'FA' ? currentRole.fa : currentRole.en) : '—'}
+            </div>
+          </div>
+        )}
 
         <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto">
           {[
