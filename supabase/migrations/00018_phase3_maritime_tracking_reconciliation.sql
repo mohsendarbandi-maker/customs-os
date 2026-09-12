@@ -1,23 +1,23 @@
 -- Phase 3.6: maritime tracking and vessel identity reconciliation.
 -- This migration mirrors the live Supabase schema so a fresh database and the live project stay aligned.
 
-alter table public.vessels
-  add column if not exists imo_number varchar(20),
-  add column if not exists flag_code char(2);
+ALTER TABLE public.vessels
+  ADD COLUMN IF NOT EXISTS imo_number varchar(20),
+  ADD COLUMN IF NOT EXISTS flag_code char(2);
 
-alter table public.shipments
-  add column if not exists current_status text not null default 'draft',
-  add column if not exists current_location text,
-  add column if not exists eta_destination timestamptz,
-  add column if not exists etd_origin timestamptz,
-  add column if not exists actual_departure_at timestamptz,
-  add column if not exists actual_arrival_at timestamptz,
-  add column if not exists actual_loading_start_at timestamptz,
-  add column if not exists actual_loading_end_at timestamptz,
-  add column if not exists actual_discharge_start_at timestamptz,
-  add column if not exists actual_discharge_end_at timestamptz;
+ALTER TABLE public.shipments
+  ADD COLUMN IF NOT EXISTS current_status text NOT NULL DEFAULT 'draft',
+  ADD COLUMN IF NOT EXISTS current_location text,
+  ADD COLUMN IF NOT EXISTS eta_destination timestamptz,
+  ADD COLUMN IF NOT EXISTS etd_origin timestamptz,
+  ADD COLUMN IF NOT EXISTS actual_departure_at timestamptz,
+  ADD COLUMN IF NOT EXISTS actual_arrival_at timestamptz,
+  ADD COLUMN IF NOT EXISTS actual_loading_start_at timestamptz,
+  ADD COLUMN IF NOT EXISTS actual_loading_end_at timestamptz,
+  ADD COLUMN IF NOT EXISTS actual_discharge_start_at timestamptz,
+  ADD COLUMN IF NOT EXISTS actual_discharge_end_at timestamptz;
 
-create table if not exists public.shipment_tracking_events (
+CREATE TABLE IF NOT EXISTS public.shipment_tracking_events (
   id uuid primary key default extensions.uuid_generate_v4(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   shipment_id uuid not null references public.shipments(id) on delete cascade,
@@ -31,60 +31,55 @@ create table if not exists public.shipment_tracking_events (
   created_at timestamptz not null default now()
 );
 
-alter table public.shipment_tracking_events enable row level security;
-drop policy if exists shipment_tracking_events_select on public.shipment_tracking_events;
-drop policy if exists shipment_tracking_events_insert on public.shipment_tracking_events;
-create policy shipment_tracking_events_select on public.shipment_tracking_events for select to authenticated using (organization_id = public.user_org_id());
-create policy shipment_tracking_events_insert on public.shipment_tracking_events for insert to authenticated with check (organization_id = public.user_org_id() and public.user_role() in ('owner','admin','broker'));
-grant select, insert on public.shipment_tracking_events to authenticated;
+ALTER TABLE public.shipment_tracking_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS shipment_tracking_events_select ON public.shipment_tracking_events;
+DROP POLICY IF EXISTS shipment_tracking_events_insert ON public.shipment_tracking_events;
+DROP POLICY IF EXISTS shipment_tracking_events_update ON public.shipment_tracking_events;
+CREATE POLICY shipment_tracking_events_select ON public.shipment_tracking_events FOR SELECT TO authenticated USING (organization_id=public.user_org_id());
+CREATE POLICY shipment_tracking_events_insert ON public.shipment_tracking_events FOR INSERT TO authenticated WITH CHECK (organization_id=public.user_org_id() AND public.user_role() IN ('owner','admin','broker'));
+CREATE POLICY shipment_tracking_events_update ON public.shipment_tracking_events FOR UPDATE TO authenticated USING (organization_id=public.user_org_id() AND public.user_role() IN ('owner','admin','broker')) WITH CHECK (organization_id=public.user_org_id());
+GRANT SELECT,INSERT,UPDATE ON public.shipment_tracking_events TO authenticated;
 
-create unique index if not exists uq_shipments_bl_line_year
-  on public.shipments (organization_id, lower(trim(shipping_line)), lower(trim(bill_of_lading_no)), bill_of_lading_year)
-  where bill_of_lading_no is not null and trim(bill_of_lading_no) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_shipments_bl_line_year
+  ON public.shipments(organization_id,lower(trim(shipping_line)),lower(trim(bill_of_lading_no)),bill_of_lading_year)
+  WHERE bill_of_lading_no IS NOT NULL AND trim(bill_of_lading_no)<>'';
+CREATE INDEX IF NOT EXISTS idx_shipments_bl ON public.shipments(organization_id,bill_of_lading_no,bill_of_lading_year);
+CREATE INDEX IF NOT EXISTS idx_shipment_tracking_events_shipment_time ON public.shipment_tracking_events(shipment_id,event_time desc);
 
-create index if not exists idx_shipment_tracking_events_shipment_time
-  on public.shipment_tracking_events(shipment_id, event_time desc);
-
-create or replace function public.set_shipment_tracking_status(
-  p_shipment_id uuid,
-  p_status text,
-  p_location text default null,
-  p_event_time timestamptz default now(),
-  p_time_type text default 'actual',
-  p_notes text default null,
-  p_source text default 'manual'
-) returns uuid language plpgsql security invoker set search_path = public, pg_temp as $$
-declare v_org uuid; v_event_code text; v_event_id uuid;
-begin
-  if auth.uid() is null then raise exception 'Authentication required'; end if;
-  v_org := public.user_org_id();
-  if v_org is null or public.user_role() not in ('owner','admin','broker') then raise exception 'Insufficient access'; end if;
-  if not exists (select 1 from public.shipments where id=p_shipment_id and organization_id=v_org) then raise exception 'Shipment not found or access denied'; end if;
-  if p_status not in ('draft','booking_confirmed','loading','loaded','departed','in_transit','approaching_destination','anchorage','berthing','discharging','discharged','completed','delayed','cancelled') then raise exception 'Invalid shipment status'; end if;
-  if p_time_type not in ('estimated','requested','planned','actual') then raise exception 'Invalid time type'; end if;
-  v_event_code := case p_status
-    when 'loading' then 'loading_start' when 'loaded' then 'loading_complete' when 'departed' then 'departed'
-    when 'in_transit' then 'in_transit' when 'approaching_destination' then 'approaching_destination'
-    when 'anchorage' then 'anchorage_arrived' when 'berthing' then 'berthing'
-    when 'discharging' then 'discharge_start' when 'discharged' then 'discharge_complete'
-    when 'completed' then 'completed' when 'delayed' then 'delayed' when 'cancelled' then 'cancelled'
-    when 'booking_confirmed' then 'booking_confirmed' else 'draft' end;
-  update public.shipments set
-    current_status=p_status,
-    current_location=nullif(trim(p_location),''),
-    actual_loading_start_at=case when p_status='loading' and p_time_type='actual' then p_event_time else actual_loading_start_at end,
-    actual_loading_end_at=case when p_status='loaded' and p_time_type='actual' then p_event_time else actual_loading_end_at end,
-    actual_departure_at=case when p_status='departed' and p_time_type='actual' then p_event_time else actual_departure_at end,
-    actual_arrival_at=case when p_status in ('anchorage','berthing','discharging','discharged','completed') and p_time_type='actual' then p_event_time else actual_arrival_at end,
-    actual_discharge_start_at=case when p_status='discharging' and p_time_type='actual' then p_event_time else actual_discharge_start_at end,
-    actual_discharge_end_at=case when p_status in ('discharged','completed') and p_time_type='actual' then p_event_time else actual_discharge_end_at end,
+CREATE OR REPLACE FUNCTION public.set_shipment_tracking_status(
+  p_shipment_id uuid, p_status text, p_location text DEFAULT NULL,
+  p_event_time timestamptz DEFAULT now(), p_time_type text DEFAULT 'actual',
+  p_notes text DEFAULT NULL, p_source text DEFAULT 'manual'
+) RETURNS uuid LANGUAGE plpgsql SECURITY INVOKER SET search_path=public,pg_temp AS $$
+DECLARE v_org uuid; v_event_code text; v_event_id uuid;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  v_org:=public.user_org_id();
+  IF v_org IS NULL OR public.user_role() NOT IN ('owner','admin','broker') THEN RAISE EXCEPTION 'Insufficient access'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.shipments WHERE id=p_shipment_id AND organization_id=v_org) THEN RAISE EXCEPTION 'Shipment not found or access denied'; END IF;
+  IF p_status NOT IN ('draft','booking_confirmed','loading','loaded','departed','in_transit','approaching_destination','anchorage','berthing','discharging','discharged','completed','delayed','cancelled') THEN RAISE EXCEPTION 'Invalid shipment status'; END IF;
+  IF p_time_type NOT IN ('estimated','requested','planned','actual') THEN RAISE EXCEPTION 'Invalid time type'; END IF;
+  v_event_code:=CASE p_status
+    WHEN 'loading' THEN 'loading_start' WHEN 'loaded' THEN 'loading_complete' WHEN 'departed' THEN 'departed'
+    WHEN 'in_transit' THEN 'in_transit' WHEN 'approaching_destination' THEN 'approaching_destination'
+    WHEN 'anchorage' THEN 'anchorage_arrived' WHEN 'berthing' THEN 'berthing'
+    WHEN 'discharging' THEN 'discharge_start' WHEN 'discharged' THEN 'discharge_complete'
+    WHEN 'completed' THEN 'completed' WHEN 'delayed' THEN 'delayed' WHEN 'cancelled' THEN 'cancelled'
+    WHEN 'booking_confirmed' THEN 'booking_confirmed' ELSE 'draft' END;
+  UPDATE public.shipments SET
+    current_status=p_status,current_location=nullif(trim(p_location),''),
+    actual_loading_start_at=CASE WHEN p_status='loading' AND p_time_type='actual' THEN p_event_time ELSE actual_loading_start_at END,
+    actual_loading_end_at=CASE WHEN p_status='loaded' AND p_time_type='actual' THEN p_event_time ELSE actual_loading_end_at END,
+    actual_departure_at=CASE WHEN p_status='departed' AND p_time_type='actual' THEN p_event_time ELSE actual_departure_at END,
+    actual_arrival_at=CASE WHEN p_status IN ('anchorage','berthing','discharging','discharged','completed') AND p_time_type='actual' THEN p_event_time ELSE actual_arrival_at END,
+    actual_discharge_start_at=CASE WHEN p_status='discharging' AND p_time_type='actual' THEN p_event_time ELSE actual_discharge_start_at END,
+    actual_discharge_end_at=CASE WHEN p_status IN ('discharged','completed') AND p_time_type='actual' THEN p_event_time ELSE actual_discharge_end_at END,
     updated_at=now()
-  where id=p_shipment_id and organization_id=v_org;
-  insert into public.shipment_tracking_events(organization_id,shipment_id,event_code,time_type,event_time,location,notes,source,created_by)
-  values(v_org,p_shipment_id,v_event_code,p_time_type,p_event_time,nullif(trim(p_location),''),p_notes,p_source,auth.uid())
-  returning id into v_event_id;
-  return v_event_id;
-end; $$;
+  WHERE id=p_shipment_id AND organization_id=v_org;
+  INSERT INTO public.shipment_tracking_events(organization_id,shipment_id,event_code,time_type,event_time,location,notes,source,created_by)
+  VALUES(v_org,p_shipment_id,v_event_code,p_time_type,p_event_time,nullif(trim(p_location),''),p_notes,p_source,auth.uid()) RETURNING id INTO v_event_id;
+  RETURN v_event_id;
+END; $$;
 
-revoke execute on function public.set_shipment_tracking_status(uuid,text,text,timestamptz,text,text,text) from public, anon;
-grant execute on function public.set_shipment_tracking_status(uuid,text,text,timestamptz,text,text,text) to authenticated;
+REVOKE EXECUTE ON FUNCTION public.set_shipment_tracking_status(uuid,text,text,timestamptz,text,text,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.set_shipment_tracking_status(uuid,text,text,timestamptz,text,text,text) TO authenticated;
