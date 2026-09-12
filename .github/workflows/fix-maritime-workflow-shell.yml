@@ -1,0 +1,45 @@
+name: Fix maritime workflow shell
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-maritime-workflow-shell.yml'
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Fix workflow shell and retrigger it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          python3 - <<'PY'
+          import json, os, urllib.request, base64
+          repo=os.environ['GITHUB_REPOSITORY']
+          token=os.environ['GH_TOKEN']
+          path='.github/workflows/apply-maritime-ui.yml'
+          api=f'https://api.github.com/repos/{repo}/contents/{path}'
+          req=urllib.request.Request(api,headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json'})
+          obj=json.load(urllib.request.urlopen(req))
+          content=base64.b64decode(obj['content']).decode()
+          content=content.replace('shell: python\n','shell: python {0}\n')
+          payload=json.dumps({'message':'fix maritime repair workflow shell','content':base64.b64encode(content.encode()).decode(),'sha':obj['sha'],'branch':'main'}).encode()
+          req=urllib.request.Request(api,data=payload,method='PUT',headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','Content-Type':'application/json'})
+          urllib.request.urlopen(req).read()
+          PY
+      - name: Remove helper workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan cleanup-helper 2>/dev/null || true
+          git fetch origin main
+          git checkout main
+          rm -f .github/workflows/fix-maritime-workflow-shell.yml
+          git add -u .github/workflows/fix-maritime-workflow-shell.yml
+          git commit -m "remove one-time workflow shell fixer" || true
+          git push origin main || true
