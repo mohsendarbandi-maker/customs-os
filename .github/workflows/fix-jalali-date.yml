@@ -1,0 +1,79 @@
+name: Fix Jalali date conversion
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-jalali-date.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Replace broken Jalali converter
+        shell: bash
+        run: |
+          set -e
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/pages/DashboardPage.tsx')
+          s = p.read_text()
+          start = s.index('const normalizeDateForDb =')
+          end = s.index('\n};', start) + 3
+          helper = r'''const normalizeDateForDb = (value: string | null | undefined): string | null => {
+  const raw = (value || '').trim();
+  if (!raw) return null;
+  const normalized = raw
+    .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[.-]/g, '/');
+  const parts = normalized.split('/').map(Number);
+  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return raw;
+  const [jy, jm, jd] = parts;
+
+  // Gregorian dates are already valid for PostgreSQL.
+  if (jy >= 1900 && jy <= 2200) {
+    if (jm < 1 || jm > 12 || jd < 1 || jd > 31) return raw;
+    return `${jy}-${String(jm).padStart(2, '0')}-${String(jd).padStart(2, '0')}`;
+  }
+  if (jy < 1200 || jy > 1600 || jm < 1 || jm > 12 || jd < 1 || jd > 31) return raw;
+
+  // Use the browser's standards-based Persian calendar implementation rather than
+  // the previous hand-written arithmetic converter, which produced invalid dates.
+  const formatter = new Intl.DateTimeFormat('en-US-u-ca-persian', {
+    timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  const targetYear = jy;
+  const targetMonth = jm;
+  const targetDay = jd;
+  const start = Date.UTC(jy + 620, 0, 1);
+  const end = Date.UTC(jy + 623, 0, 1);
+  for (let t = start; t < end; t += 86400000) {
+    const current = new Date(t);
+    const values = formatter.formatToParts(current).reduce<Record<string,string>>((acc, part) => {
+      if (part.type === 'year' || part.type === 'month' || part.type === 'day') acc[part.type] = part.value;
+      return acc;
+    }, {});
+    if (Number(values.year) === targetYear && Number(values.month) === targetMonth && Number(values.day) === targetDay) {
+      return current.toISOString().slice(0, 10);
+    }
+  }
+  return raw;
+};'''
+          s = s[:start] + helper + s[end:]
+          p.write_text(s)
+          PY
+          npm install --ignore-scripts
+          npm run build
+          rm -f .github/workflows/fix-jalali-date.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/DashboardPage.tsx .github/workflows/fix-jalali-date.yml
+          git commit -m 'Fix Jalali date conversion using Persian calendar'
+          git push origin HEAD:main
