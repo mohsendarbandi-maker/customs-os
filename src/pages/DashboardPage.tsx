@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { MaritimeTab } from '../components/MaritimeTab';
 import { supabase } from '../lib/supabase';
 import { Ship, Building2, LayoutDashboard, LogOut, Save, Loader2, CheckCircle2, AlertCircle, FileCheck2, Calculator, PackageCheck, ClipboardPaste, Printer, Anchor, FileText } from 'lucide-react';
 
@@ -13,29 +14,27 @@ const Field: React.FC<FieldProps> = ({ label, value, onChange, placeholder = '',
 const normalizeKey = (key: string) => key.trim().replace(/\s+/g, ' ').replace(/ي/g, 'ی').replace(/ك/g, 'ک').toLowerCase();
 const cleanValue = (v: string) => v.trim().replace(/^['"“”]+|['"“”]+$/g, '').trim();
 
-// Convert Jalali/Persian dates (e.g. 1405/02/29) to Gregorian YYYY-MM-DD for PostgreSQL date columns.
+// Convert Jalali/Persian dates to Gregorian YYYY-MM-DD for PostgreSQL date columns.
 const normalizeDateForDb = (value: string | null | undefined): string | null => {
   const raw = (value || '').trim();
   if (!raw) return null;
   const normalized = raw.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[.-]/g, '/');
   const parts = normalized.split('/').map(Number);
   if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return raw;
-  let [y, m, d] = parts;
-  if (y >= 1300 && y <= 1600) {
-    y -= 979;
-    let gy = 1600 + 400 * Math.floor(y / 12053);
-    y %= 12053;
-    gy += 4 * Math.floor(y / 1461);
-    y %= 1461;
-    if (y > 365) { gy += Math.floor((y - 1) / 365); y = (y - 1) % 365; }
-    let days = y * 365 + Math.floor(y / 4) + (m <= 6 ? (m - 1) * 31 : (m - 7) * 30 + 186) + (d - 1);
-    const leap = (gy % 4 === 0 && gy % 100 !== 0) || gy % 400 === 0;
-    const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    let gm = 1;
-    while (days >= monthDays[gm - 1]) { days -= monthDays[gm - 1]; gm++; }
-    return `${gy}-${String(gm).padStart(2, '0')}-${String(days + 1).padStart(2, '0')}`;
+  const [y,m,d] = parts;
+  if (y >= 1900 && y <= 2200) return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  if (y < 1300 || y > 1600) return raw;
+  const target = `${y}-${m}-${d}`;
+  const fmt = new Intl.DateTimeFormat('en-US-u-ca-persian', { year:'numeric', month:'numeric', day:'numeric', timeZone:'UTC' });
+  const start = Date.UTC(y + 621, 2, 19);
+  for (let i=0; i<380; i++) {
+    const dt = new Date(start + i * 86400000);
+    const parts = fmt.formatToParts(dt);
+    const py = Number(parts.find(x=>x.type==='year')?.value);
+    const pm = Number(parts.find(x=>x.type==='month')?.value);
+    const pd = Number(parts.find(x=>x.type==='day')?.value);
+    if (`${py}-${pm}-${pd}` === target) return dt.toISOString().slice(0,10);
   }
-  if (y >= 1900 && y <= 2200) return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   return raw;
 };
 
@@ -95,7 +94,7 @@ HS: 72083900
 
 export const DashboardPage: React.FC = () => {
   const { signOut, profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'home'|'case'|'operation'|'valuation'|'declaration'>('case');
+  const [activeTab, setActiveTab] = useState<'home'|'case'|'operation'|'maritime'|'valuation'|'declaration'>('case');
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{type:'error'|'success'|'info';text:string}|null>(null);
   const [caseId, setCaseId] = useState('');
@@ -205,7 +204,7 @@ export const DashboardPage: React.FC = () => {
     <div className="no-print max-w-7xl mx-auto p-5">
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-5">
         <button onClick={()=>setActiveTab('case')} className={`p-4 rounded-2xl border text-right ${activeTab==='case'?'border-blue-500 bg-blue-500/10':'border-slate-800 bg-slate-900/50'}`}><Building2 className="mb-2 text-blue-400" size={20}/><b className="text-sm">پرونده</b><div className="text-[11px] text-slate-500 mt-1">صاحب کالا + ثبت سفارش اختیاری</div></button>
-        <button onClick={()=>setActiveTab('operation')} className={`p-4 rounded-2xl border text-right ${activeTab==='operation'?'border-blue-500 bg-blue-500/10':'border-slate-800 bg-slate-900/50'}`}><Anchor className="mb-2 text-cyan-400" size={20}/><b className="text-sm">کشتیرانی / B/L</b><div className="text-[11px] text-slate-500 mt-1">کشتی + بارنامه + تخلیه</div></button>
+        <button onClick={()=>setActiveTab('operation')} className={`p-4 rounded-2xl border text-right ${activeTab==='operation'?'border-blue-500 bg-blue-500/10':'border-slate-800 bg-slate-900/50'}`}><Anchor className="mb-2 text-cyan-400" size={20}/><b className="text-sm">کشتیرانی / B/L</b><div className="text-[11px] text-slate-500 mt-1">کشتی + بارنامه + تخلیه</div></button><button onClick={()=>setActiveTab('maritime')} className={`p-4 rounded-2xl border text-right ${activeTab==='maritime'?'border-cyan-500 bg-cyan-500/10':'border-slate-800 bg-slate-900/50'}`}><Anchor className="mb-2 text-cyan-400" size={20}/><b className="text-sm">کشتیرانی / Maritime</b><div className="text-[11px] text-slate-500 mt-1">B/L + کشتی + رهگیری</div></button>
         <button onClick={()=>setActiveTab('valuation')} className={`p-4 rounded-2xl border text-right ${activeTab==='valuation'?'border-blue-500 bg-blue-500/10':'border-slate-800 bg-slate-900/50'}`}><Calculator className="mb-2 text-amber-400" size={20}/><b className="text-sm">ارزش و عوارض</b><div className="text-[11px] text-slate-500 mt-1">ارزش‌گذاری</div></button>
         <button onClick={()=>setActiveTab('declaration')} className={`p-4 rounded-2xl border text-right ${activeTab==='declaration'?'border-blue-500 bg-blue-500/10':'border-slate-800 bg-slate-900/50'}`}><FileCheck2 className="mb-2 text-emerald-400" size={20}/><b className="text-sm">EPL / کوتاژ</b><div className="text-[11px] text-slate-500 mt-1">بعد از اظهار</div></button>
         <button onClick={()=>setActiveTab('home')} className={`p-4 rounded-2xl border text-right ${activeTab==='home'?'border-blue-500 bg-blue-500/10':'border-slate-800 bg-slate-900/50'}`}><LayoutDashboard className="mb-2 text-violet-400" size={20}/><b className="text-sm">داشبورد</b><div className="text-[11px] text-slate-500 mt-1">وضعیت پرونده</div></button>
@@ -217,6 +216,8 @@ export const DashboardPage: React.FC = () => {
       {activeTab==='case'&&<section className="max-w-3xl bg-slate-900/60 border border-slate-800 rounded-2xl p-6"><h1 className="text-lg font-bold">ایجاد پرونده گمرکی</h1><p className="text-xs text-slate-500 mt-1 mb-6">صاحب کالا به ثبت سفارش وابسته نیست. اگر ثبت سفارش هنوز نرسیده، پرونده را همین حالا ایجاد کن و بعداً آن را متصل کن.</p><div className="grid md:grid-cols-3 gap-4"><Field label="صاحب کالا / شرکت *" value={caseForm.client} onChange={v=>setCaseForm({...caseForm,client:v})} placeholder="مثلاً آذرفولاد امین"/><Field label="شماره ثبت سفارش (اختیاری)" value={caseForm.regNumber} onChange={v=>setCaseForm({...caseForm,regNumber:v})}/><Field label="تاریخ ثبت سفارش" value={caseForm.regDate} onChange={v=>setCaseForm({...caseForm,regDate:v})} placeholder="1405/02/05"/></div><button onClick={createCase} disabled={isProcessing} className="mt-5 w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 font-bold text-sm"><Save size={17} className="inline ml-2"/> ایجاد پرونده</button></section>}
 
       {activeTab==='operation'&&<section className="max-w-6xl bg-slate-900/60 border border-slate-800 rounded-2xl p-6"><div className="flex justify-between items-start mb-6"><div><h1 className="text-lg font-bold">کشتیرانی، کشتی، B/L، تخلیه و اسناد پایه</h1><p className="text-xs text-slate-500 mt-1">این اطلاعات می‌تواند قبل از رسیدن ثبت سفارش وارد پرونده شود.</p></div><span className="text-xs bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">Case: <span dir="ltr">{caseId||'—'}</span></span></div><div className="grid md:grid-cols-4 gap-4 mb-6"><Field label="کشتیرانی" value={operationForm.shippingLine} onChange={v=>setOperationForm({...operationForm,shippingLine:v})}/><Field label="نام کشتی" value={operationForm.vesselName} onChange={v=>setOperationForm({...operationForm,vesselName:v})}/><Field label="Voyage" value={operationForm.voyageNo} onChange={v=>setOperationForm({...operationForm,voyageNo:v})}/><Field label="نوع کشتی" value={operationForm.vesselType} onChange={v=>setOperationForm({...operationForm,vesselType:v})}/><Field label="شماره B/L" value={operationForm.billOfLading} onChange={v=>setOperationForm({...operationForm,billOfLading:v})}/><Field label="سال B/L" value={operationForm.billYear} onChange={v=>setOperationForm({...operationForm,billYear:v})}/><Field label="بندر بارگیری" value={operationForm.originPort} onChange={v=>setOperationForm({...operationForm,originPort:v})}/><Field label="بندر تخلیه" value={operationForm.destinationPort} onChange={v=>setOperationForm({...operationForm,destinationPort:v})}/></div><div className="border-t border-slate-800 pt-5"><h2 className="font-bold mb-4 flex items-center gap-2"><PackageCheck size={18} className="text-emerald-400"/> تخلیه، قبض انبار، بارشماری و ترخیصیه</h2><div className="grid md:grid-cols-4 gap-4"><Field label="تاریخ تخلیه" value={operationForm.unloadingDate} onChange={v=>setOperationForm({...operationForm,unloadingDate:v})}/><Field label="شماره قبض انبار" value={operationForm.warehouseReceiptNo} onChange={v=>setOperationForm({...operationForm,warehouseReceiptNo:v})}/><Field label="تاریخ قبض انبار" value={operationForm.warehouseReceiptDate} onChange={v=>setOperationForm({...operationForm,warehouseReceiptDate:v})}/><Field label="شماره بارشماری" value={operationForm.tallyNo} onChange={v=>setOperationForm({...operationForm,tallyNo:v})}/><Field label="شماره ترخیصیه" value={operationForm.releaseInvoiceNo} onChange={v=>setOperationForm({...operationForm,releaseInvoiceNo:v})}/><Field label="تاریخ ترخیصیه" value={operationForm.releaseInvoiceDate} onChange={v=>setOperationForm({...operationForm,releaseInvoiceDate:v})}/><Field label="ترخیصیه الکترونیک" value={operationForm.electronicReleaseNo} onChange={v=>setOperationForm({...operationForm,electronicReleaseNo:v})}/><label className="block"><span className="block text-xs text-slate-400 mb-1.5">وضعیت ترخیصیه</span><select value={operationForm.releaseStatus} onChange={e=>setOperationForm({...operationForm,releaseStatus:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm"><option value="pending">در انتظار</option><option value="invoice_received">فاکتور دریافت شد</option><option value="paid">پرداخت شد</option><option value="released">آزاد شد</option></select></label></div></div><div className="border-t border-slate-800 pt-5 mt-5"><h2 className="font-bold mb-4">اطلاعات کالا و اسناد تجاری</h2><div className="grid md:grid-cols-4 gap-4"><Field label="تعداد" value={operationForm.cargoCount} onChange={v=>setOperationForm({...operationForm,cargoCount:v})}/><Field label="واحد" value={operationForm.cargoCountUnit} onChange={v=>setOperationForm({...operationForm,cargoCountUnit:v})}/><Field label="شرح کالا" value={operationForm.cargoDescription} onChange={v=>setOperationForm({...operationForm,cargoDescription:v})}/><Field label="مبدأ" value={operationForm.originCountry} onChange={v=>setOperationForm({...operationForm,originCountry:v})}/><Field label="کشور معامله" value={operationForm.transactionCountry} onChange={v=>setOperationForm({...operationForm,transactionCountry:v})}/><Field label="اینکوترمز" value={operationForm.deliveryTerm} onChange={v=>setOperationForm({...operationForm,deliveryTerm:v})}/><Field label="مبلغ فاکتور" value={operationForm.invoiceAmount} onChange={v=>setOperationForm({...operationForm,invoiceAmount:v})}/><Field label="ارز" value={operationForm.invoiceCurrency} onChange={v=>setOperationForm({...operationForm,invoiceCurrency:v})}/><Field label="وزن خالص (kg)" value={operationForm.netWeight} onChange={v=>setOperationForm({...operationForm,netWeight:v})}/><Field label="وزن ناخالص (kg)" value={operationForm.grossWeight} onChange={v=>setOperationForm({...operationForm,grossWeight:v})}/><Field label="بیمه (ریال)" value={operationForm.insuranceIrr} onChange={v=>setOperationForm({...operationForm,insuranceIrr:v})}/><Field label="HS Code" value={operationForm.tariffCode} onChange={v=>setOperationForm({...operationForm,tariffCode:v})}/><Field label="حقوق ورودی %" value={operationForm.dutyRate} onChange={v=>setOperationForm({...operationForm,dutyRate:v})}/></div><Field label="شرح کالا / توضیحات تکمیلی" value={operationForm.cargoDescription} onChange={v=>setOperationForm({...operationForm,cargoDescription:v})}/></div><button onClick={saveOperationData} disabled={isProcessing} className="mt-6 w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 font-bold text-sm">ذخیره اطلاعات دریایی و عملیاتی</button></section>}
+
+      {activeTab==='maritime'&&<MaritimeTab caseId={caseId} onMessage={(type,text)=>setStatusMessage({type,text})}/>}
 
       {activeTab==='valuation'&&<section className="max-w-3xl bg-slate-900/60 border border-slate-800 rounded-2xl p-6"><h1 className="text-lg font-bold">ارزش‌گذاری</h1><p className="text-xs text-slate-500 mt-1 mb-6">این محاسبه فعلاً موتور اولیه است و قبل از نهایی‌سازی قانونی باید قواعد واقعی هر نوع کالا/قرارداد کنترل شود.</p><div className="grid md:grid-cols-3 gap-4"><Field label="نرخ ارز مبادله‌ای گمرک" value={valuationForm.fxRate} onChange={v=>setValuationForm({...valuationForm,fxRate:v})}/><Field label="حقوق ورودی %" value={valuationForm.dutyRate||operationForm.dutyRate} onChange={v=>setValuationForm({...valuationForm,dutyRate:v})}/><Field label="VAT %" value={valuationForm.vatRate} onChange={v=>setValuationForm({...valuationForm,vatRate:v})}/></div><button onClick={calculateValuation} disabled={isProcessing} className="mt-5 w-full py-3 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 font-bold">محاسبه</button>{valuationResult&&<div className="mt-5 grid md:grid-cols-3 gap-3">{[['ارزش گمرکی',valuationResult.customs_value_irr],['حقوق ورودی',valuationResult.import_duty_irr],['قابل پرداخت',valuationResult.total_payable_irr]].map(([k,v])=><div key={String(k)} className="bg-slate-950 rounded-xl p-4"><div className="text-xs text-slate-500">{k}</div><b>{fmt(v)}</b> ریال</div>)}</div>}</section>}
 
