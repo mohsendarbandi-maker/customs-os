@@ -1,0 +1,76 @@
+name: Complete maritime dashboard fix
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch dashboard integration
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          p=Path('src/pages/DashboardPage.tsx')
+          s=p.read_text(encoding='utf-8')
+
+          if "../components/MaritimeTab" not in s:
+              s=s.replace("import { useAuth } from '../context/AuthContext';", "import { useAuth } from '../context/AuthContext';\nimport { MaritimeTab } from '../components/MaritimeTab';")
+
+          s=s.replace("useState<'home'|'case'|'operation'|'valuation'|'declaration'>('case')", "useState<'home'|'case'|'operation'|'maritime'|'valuation'|'declaration'>('case')")
+
+          old=re.compile(r"// Convert Jalali/Persian dates.*?const parseSmartPaste", re.S)
+          new="""// Convert Jalali/Persian dates to Gregorian YYYY-MM-DD for PostgreSQL date columns.\nconst normalizeDateForDb = (value: string | null | undefined): string | null => {\n  const raw = (value || '').trim();\n  if (!raw) return null;\n  const normalized = raw.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[.-]/g, '/');\n  const parts = normalized.split('/').map(Number);\n  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return raw;\n  const [y,m,d] = parts;\n  if (y >= 1900 && y <= 2200) return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;\n  if (y < 1300 || y > 1600) return raw;\n  const target = `${y}-${m}-${d}`;\n  const fmt = new Intl.DateTimeFormat('en-US-u-ca-persian', { year:'numeric', month:'numeric', day:'numeric', timeZone:'UTC' });\n  const start = Date.UTC(y + 621, 2, 19);\n  for (let i=0; i<380; i++) {\n    const dt = new Date(start + i * 86400000);\n    const parts = fmt.formatToParts(dt);\n    const py = Number(parts.find(x=>x.type==='year')?.value);\n    const pm = Number(parts.find(x=>x.type==='month')?.value);\n    const pd = Number(parts.find(x=>x.type==='day')?.value);\n    if (`${py}-${pm}-${pd}` === target) return dt.toISOString().slice(0,10);\n  }\n  return raw;\n};\n\nconst parseSmartPaste"""
+          if old.search(s):
+              s=old.sub(new,s,count=1)
+
+          # Add a dedicated Maritime button beside the existing operation button.
+          marker="<button onClick={()=>setActiveTab('operation')}"
+          if marker in s and "setActiveTab('maritime')" not in s:
+              idx=s.index(marker)
+              end=s.index('</button>',idx)+len('</button>')
+              btn="<button onClick={()=>setActiveTab('maritime')} className={`p-4 rounded-2xl border text-right ${activeTab==='maritime'?'border-cyan-500 bg-cyan-500/10':'border-slate-800 bg-slate-900/50'}`}><Anchor className=\"mb-2 text-cyan-400\" size={20}/><b className=\"text-sm\">کشتیرانی / Maritime</b><div className=\"text-[11px] text-slate-500 mt-1\">B/L + کشتی + رهگیری</div></button>"
+              s=s[:end]+btn+s[end:]
+
+          # Render the new maritime module before the valuation tab.
+          render_marker="{activeTab==='valuation'&&"
+          if render_marker in s and "<MaritimeTab caseId={caseId}" not in s:
+              s=s.replace(render_marker, "{activeTab==='maritime'&&<MaritimeTab caseId={caseId} onMessage={(type,text)=>setStatusMessage({type,text})}/>}\n\n      "+render_marker, 1)
+
+          p.write_text(s,encoding='utf-8')
+
+          # Fix a harmless typo in the new component before the build.
+          m=Path('src/components/MaritimeTab.tsx')
+          ms=m.read_text(encoding='utf-8').replace("data.shippinging_line||data.shipping_line||''", "data.shipping_line||''")
+          m.write_text(ms,encoding='utf-8')
+
+      - name: Build
+        run: |
+          node --version
+          npm --version
+          npm install
+          npm run build
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/DashboardPage.tsx src/components/MaritimeTab.tsx .github/workflows/complete-maritime-fix.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "feat: integrate maritime tracking and fix Jalali dates"
+            git push
+          fi
