@@ -1,0 +1,101 @@
+name: Apply maritime UI repair v2
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-maritime-ui-v2.yml'
+  workflow_dispatch:
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Repair Dashboard
+        shell: python {0}
+        run: |
+          from pathlib import Path
+          import re
+          p = Path('src/pages/DashboardPage.tsx')
+          s = p.read_text()
+          if "from 'jalaali-js'" not in s:
+              s = s.replace("import { supabase } from '../lib/supabase';", "import { supabase } from '../lib/supabase';\nimport { toGregorian, isValidJalaaliDate } from 'jalaali-js';")
+          s = re.sub(r"// Convert Jalali/Persian dates.*?\nconst parseSmartPaste", r'''// Convert Jalali/Persian dates to Gregorian YYYY-MM-DD for PostgreSQL date columns.
+const normalizeDateForDb = (value: string | null | undefined): string | null => {
+  const raw = (value || '').trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[.-]/g, '/');
+  const parts = normalized.split('/').map(Number);
+  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return raw;
+  const [y, m, d] = parts;
+  if (y >= 1200 && y <= 1600) {
+    if (!isValidJalaaliDate(y, m, d)) throw new Error(`تاریخ شمسی نامعتبر است: ${raw}`);
+    const g = toGregorian(y, m, d);
+    return `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
+  }
+  if (y >= 1900 && y <= 2200 && m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  return raw;
+};
+
+const parseSmartPaste''', s, flags=re.S)
+          s = s.replace("shippingLine:'', vesselName:'', voyageNo:'', vesselType:'ایرانی', billOfLading:'', billYear:String(new Date().getFullYear()),", "shippingLine:'', vesselName:'', vesselImo:'', vesselFlagCode:'', voyageNo:'', vesselType:'ایرانی', billOfLading:'', billYear:String(new Date().getFullYear()),")
+          s = s.replace("const [caseId, setCaseId] = useState('');", "const [caseId, setCaseId] = useState('');\n  const [shipmentId, setShipmentId] = useState('');\n  const [trackingStatus, setTrackingStatus] = useState('draft');\n  const [trackingLocation, setTrackingLocation] = useState('');\n  const [trackingNotes, setTrackingNotes] = useState('');\n  const [language, setLanguage] = useState<'fa'|'en'>('fa');")
+          s = s.replace("const vesselName = pick(d,'کشتی','vessel','vessel name');", "const vesselName = pick(d,'کشتی','vessel','vessel name');\n    const vesselImo = pick(d,'IMO','imo','imo number','شماره IMO');\n    const vesselFlagCode = pick(d,'پرچم','flag','vessel flag','flag code','کد پرچم');")
+          s = s.replace("setOperationForm(p=>({...p,shippingLine:shippingLine||p.shippingLine,vesselName:vesselName||p.vesselName,voyageNo", "setOperationForm(p=>({...p,shippingLine:shippingLine||p.shippingLine,vesselName:vesselName||p.vesselName,vesselImo:vesselImo||p.vesselImo,vesselFlagCode:vesselFlagCode||p.vesselFlagCode,voyageNo")
+          s = s.replace("electronicReleaseNo:pick(d,'ترخیصیه الکترونیک','electronic release')||p.electronicReleaseNo}));", "electronicReleaseNo:pick(d,'ترخیصیه الکترونیک','electronic release')||p.electronicReleaseNo,releaseInvoiceDate:pick(d,'تاریخ ترخیصیه','release invoice date')||p.releaseInvoiceDate}));")
+          start = s.index('  const saveOperationData = async () => {')
+          end = s.index('  const calculateValuation = async()=>{', start)
+          new_save = '''  const saveOperationData = async () => {
+    if(!caseId) return showError('ابتدا پرونده را ایجاد کنید.');
+    const nums=['cargoCount','invoiceAmount','netWeight','grossWeight','insuranceIrr','dutyRate'] as const;
+    for(const key of nums){const value=parseNum(operationForm[key]);if(value!==null&&(!Number.isFinite(value)||value<0))return showError(`مقدار ${key} معتبر نیست.`)}
+    if(!operationForm.billOfLading.trim()) return showError(language==='fa'?'شماره B/L برای پرونده کشتیرانی الزامی است.':'B/L number is required for the maritime shipment file.');
+    if(!operationForm.shippingLine.trim()) return showError(language==='fa'?'نام کشتیرانی الزامی است.':'Shipping line is required.');
+    if(!operationForm.vesselName.trim()) return showError(language==='fa'?'نام کشتی الزامی است.':'Vessel name is required.');
+    setIsProcessing(true);setStatusMessage({type:'info',text:language==='fa'?'در حال ذخیره پرونده کشتیرانی...':'Saving maritime shipment file...'});
+    try{
+      const {error}=await supabase.rpc('update_case_operational_data',{p_case_id:caseId,p_vessel_type:operationForm.vesselType||null,p_unloading_date:normalizeDateForDb(operationForm.unloadingDate),p_warehouse_receipt_no:operationForm.warehouseReceiptNo||null,p_warehouse_receipt_date:normalizeDateForDb(operationForm.warehouseReceiptDate),p_release_status:operationForm.releaseStatus||null,p_cargo_count:parseNum(operationForm.cargoCount),p_cargo_count_unit:operationForm.cargoCountUnit||null,p_cargo_description:operationForm.cargoDescription||null,p_origin_country_code:operationForm.originCountry||null,p_transaction_country_code:operationForm.transactionCountry||null,p_delivery_term:operationForm.deliveryTerm||null,p_invoice_amount:parseNum(operationForm.invoiceAmount),p_invoice_currency:operationForm.invoiceCurrency||null,p_net_weight_kg:parseNum(operationForm.netWeight),p_gross_weight_kg:parseNum(operationForm.grossWeight),p_insurance_amount_irr:parseNum(operationForm.insuranceIrr),p_tariff_code:operationForm.tariffCode||null,p_import_duty_rate:parseNum(operationForm.dutyRate)});
+      if(error)throw error;
+      const {data:shipId,error:shipError}=await supabase.rpc('update_shipment_maritime_data',{p_case_id:caseId,p_shipping_line:operationForm.shippingLine.trim(),p_bill_of_lading_no:operationForm.billOfLading.trim(),p_bill_of_lading_year:Number(operationForm.billYear)||new Date().getFullYear(),p_vessel_name:operationForm.vesselName.trim(),p_vessel_imo:operationForm.vesselImo.trim()||null,p_vessel_flag_code:operationForm.vesselFlagCode.trim().toUpperCase()||null,p_voyage_no:operationForm.voyageNo.trim()||null,p_origin_port:operationForm.originPort.trim()||null,p_destination_port:operationForm.destinationPort.trim()||null,p_cargo_count:parseNum(operationForm.cargoCount),p_cargo_count_unit:operationForm.cargoCountUnit||null,p_net_weight_kg:parseNum(operationForm.netWeight),p_gross_weight_kg:parseNum(operationForm.grossWeight),p_tally_no:operationForm.tallyNo.trim()||null,p_release_invoice_no:operationForm.releaseInvoiceNo.trim()||null,p_release_invoice_date:normalizeDateForDb(operationForm.releaseInvoiceDate),p_release_status:operationForm.releaseStatus||null,p_electronic_release_no:operationForm.electronicReleaseNo.trim()||null});
+      if(shipError)throw shipError;
+      setShipmentId(shipId); setTrackingStatus('draft');
+      setActiveTab('valuation');setStatusMessage({type:'success',text:language==='fa'?'پرونده کشتیرانی و B/L با موفقیت ذخیره شد.':'Maritime shipment and B/L file saved successfully.'});
+    }catch(e:any){showError(`${language==='fa'?'خطا در ذخیره اطلاعات: ':'Save error: '}${e?.message||'Unknown error'}`)}finally{setIsProcessing(false)}
+  };
+
+  const setShipmentStatus = async (status:string) => {
+    if(!shipmentId) return showError(language==='fa'?'ابتدا اطلاعات B/L را ذخیره کن.':'Save the B/L first.');
+    setIsProcessing(true);
+    try{
+      const {error}=await supabase.rpc('set_shipment_tracking_status',{p_shipment_id:shipmentId,p_status:status,p_location:trackingLocation.trim()||null,p_event_time:new Date().toISOString(),p_time_type:'actual',p_notes:trackingNotes.trim()||null,p_source:'manual'});
+      if(error)throw error;
+      setTrackingStatus(status);
+      setStatusMessage({type:'success',text:language==='fa'?'وضعیت حمل ثبت و در تاریخچه ذخیره شد.':'Shipment status recorded and added to the event history.'});
+    }catch(e:any){showError(e?.message||'Tracking update failed')}finally{setIsProcessing(false)}
+  };
+
+'''
+          s = s[:start] + new_save + s[end:]
+          op_start = s.index("      {activeTab==='operation'&&")
+          val_start = s.index("      {activeTab==='valuation'&&", op_start)
+          new_op = '''      {activeTab==='operation'&&<section className="max-w-7xl bg-slate-900/60 border border-slate-800 rounded-2xl p-6"><div className="flex justify-between items-start mb-6"><div><h1 className="text-lg font-bold">{language==='fa'?'پرونده کشتیرانی / B/L':'Maritime Shipment / B/L File'}</h1><p className="text-xs text-slate-500 mt-1">{language==='fa'?'بر اساس اطلاعات Draft B/L؛ از بارگیری تا تخلیه و تاریخچه وضعیت.':'Based on the draft B/L, from loading through discharge with an auditable status history.'}</p></div><button onClick={()=>setLanguage(language==='fa'?'en':'fa')} className="px-3 py-2 rounded-lg border border-slate-700 text-xs">{language==='fa'?'English':'فارسی'}</button></div><div className="grid md:grid-cols-4 gap-4 mb-6"><Field label="Shipping Line / کشتیرانی" value={operationForm.shippingLine} onChange={v=>setOperationForm({...operationForm,shippingLine:v})}/><Field label="Vessel / نام کشتی" value={operationForm.vesselName} onChange={v=>setOperationForm({...operationForm,vesselName:v})}/><Field label="IMO Number / شماره IMO" value={operationForm.vesselImo} onChange={v=>setOperationForm({...operationForm,vesselImo:v})} placeholder="7 digits"/><Field label="Flag / پرچم" value={operationForm.vesselFlagCode} onChange={v=>setOperationForm({...operationForm,vesselFlagCode:v.toUpperCase()})} placeholder="IR"/><Field label="Voyage / شماره سفر" value={operationForm.voyageNo} onChange={v=>setOperationForm({...operationForm,voyageNo:v})}/><Field label="B/L Number / شماره بارنامه" value={operationForm.billOfLading} onChange={v=>setOperationForm({...operationForm,billOfLading:v})}/><Field label="B/L Year / سال بارنامه" value={operationForm.billYear} onChange={v=>setOperationForm({...operationForm,billYear:v})}/><Field label="Vessel Type / نوع کشتی" value={operationForm.vesselType} onChange={v=>setOperationForm({...operationForm,vesselType:v})}/><Field label="POL / بندر بارگیری" value={operationForm.originPort} onChange={v=>setOperationForm({...operationForm,originPort:v})}/><Field label="POD / بندر تخلیه" value={operationForm.destinationPort} onChange={v=>setOperationForm({...operationForm,destinationPort:v})}/></div><div className="border-t border-slate-800 pt-5"><h2 className="font-bold mb-4">Voyage Tracking / وضعیت سفر</h2><div className="grid md:grid-cols-4 gap-3 mb-4">{[['draft','Draft / پیش‌نویس'],['booking_confirmed','Booking Confirmed / رزرو تأیید شد'],['loading','Loading / در حال بارگیری'],['loaded','Loaded / بارگیری کامل'],['departed','Departed / حرکت کرده'],['in_transit','In Transit / در مسیر'],['approaching_destination','Approaching Destination / نزدیک مقصد'],['anchorage','Anchorage / صف لنگرگاه'],['berthing','Berthing / پهلوگیری'],['discharging','Discharging / در حال تخلیه'],['discharged','Discharged / تخلیه کامل'],['completed','Completed / تکمیل شد'],['delayed','Delayed / با تأخیر'],['cancelled','Cancelled / لغو شد']].map(([value,label])=><button key={value} disabled={isProcessing} onClick={()=>setShipmentStatus(value)} className={`p-3 rounded-xl border text-xs text-right ${trackingStatus===value?'border-cyan-500 bg-cyan-500/10':'border-slate-800 bg-slate-950/60'}`}>{label}</button>)}</div><div className="grid md:grid-cols-2 gap-4"><Field label="Current Location / موقعیت فعلی" value={trackingLocation} onChange={setTrackingLocation} placeholder="Port / Anchorage / At Sea"/><Field label="Notes / توضیحات" value={trackingNotes} onChange={setTrackingNotes}/></div><div className="mt-3 text-xs text-slate-400">Current status / وضعیت فعلی: <b className="text-cyan-300">{trackingStatus}</b></div></div><div className="border-t border-slate-800 pt-5 mt-5"><h2 className="font-bold mb-4">Discharge & Release / تخلیه و اسناد عملیاتی</h2><div className="grid md:grid-cols-4 gap-4"><Field label="Unloading Date / تاریخ تخلیه" value={operationForm.unloadingDate} onChange={v=>setOperationForm({...operationForm,unloadingDate:v})} placeholder="1405/02/29"/><Field label="Warehouse Receipt / قبض انبار" value={operationForm.warehouseReceiptNo} onChange={v=>setOperationForm({...operationForm,warehouseReceiptNo:v})}/><Field label="Warehouse Receipt Date / تاریخ قبض" value={operationForm.warehouseReceiptDate} onChange={v=>setOperationForm({...operationForm,warehouseReceiptDate:v})} placeholder="1405/02/29"/><Field label="Tally No / بارشماری" value={operationForm.tallyNo} onChange={v=>setOperationForm({...operationForm,tallyNo:v})}/><Field label="Release Invoice / ترخیصیه" value={operationForm.releaseInvoiceNo} onChange={v=>setOperationForm({...operationForm,releaseInvoiceNo:v})}/><Field label="Release Invoice Date / تاریخ ترخیصیه" value={operationForm.releaseInvoiceDate} onChange={v=>setOperationForm({...operationForm,releaseInvoiceDate:v})} placeholder="1405/02/29"/><Field label="Electronic Release / ترخیصیه الکترونیک" value={operationForm.electronicReleaseNo} onChange={v=>setOperationForm({...operationForm,electronicReleaseNo:v})}/><label className="block"><span className="block text-xs text-slate-400 mb-1.5">Release Status / وضعیت ترخیصیه</span><select value={operationForm.releaseStatus} onChange={e=>setOperationForm({...operationForm,releaseStatus:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm"><option value="pending">Pending / در انتظار</option><option value="invoice_received">Invoice Received / فاکتور دریافت شد</option><option value="paid">Paid / پرداخت شد</option><option value="released">Released / آزاد شد</option></select></label></div></div><div className="border-t border-slate-800 pt-5 mt-5"><h2 className="font-bold mb-4">Cargo & Weight / کالا و وزن</h2><div className="grid md:grid-cols-4 gap-4"><Field label="Quantity / تعداد" value={operationForm.cargoCount} onChange={v=>setOperationForm({...operationForm,cargoCount:v})}/><Field label="Unit / واحد" value={operationForm.cargoCountUnit} onChange={v=>setOperationForm({...operationForm,cargoCountUnit:v})}/><Field label="Net Weight kg / وزن خالص" value={operationForm.netWeight} onChange={v=>setOperationForm({...operationForm,netWeight:v})}/><Field label="Gross Weight kg / وزن ناخالص" value={operationForm.grossWeight} onChange={v=>setOperationForm({...operationForm,grossWeight:v})}/><Field label="Cargo Description / شرح کالا" value={operationForm.cargoDescription} onChange={v=>setOperationForm({...operationForm,cargoDescription:v})}/><Field label="Origin Country / کشور مبدأ" value={operationForm.originCountry} onChange={v=>setOperationForm({...operationForm,originCountry:v})}/><Field label="Transaction Country / کشور معامله" value={operationForm.transactionCountry} onChange={v=>setOperationForm({...operationForm,transactionCountry:v})}/><Field label="Incoterm / اینکوترمز" value={operationForm.deliveryTerm} onChange={v=>setOperationForm({...operationForm,deliveryTerm:v})}/><Field label="Invoice / فاکتور" value={operationForm.invoiceAmount} onChange={v=>setOperationForm({...operationForm,invoiceAmount:v})}/><Field label="Currency / ارز" value={operationForm.invoiceCurrency} onChange={v=>setOperationForm({...operationForm,invoiceCurrency:v})}/><Field label="Insurance IRR / بیمه ریالی" value={operationForm.insuranceIrr} onChange={v=>setOperationForm({...operationForm,insuranceIrr:v})}/><Field label="HS Code / کد تعرفه" value={operationForm.tariffCode} onChange={v=>setOperationForm({...operationForm,tariffCode:v})}/><Field label="Import Duty % / حقوق ورودی" value={operationForm.dutyRate} onChange={v=>setOperationForm({...operationForm,dutyRate:v})}/></div></div><button onClick={saveOperationData} disabled={isProcessing} className="mt-6 w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 font-bold">{language==='fa'?'ذخیره پرونده کشتیرانی':'Save Maritime Shipment File'}</button></section>}
+
+'''
+          s = s[:op_start] + new_op + s[val_start:]
+          p.write_text(s)
+      - name: Install dependency
+        run: npm install jalaali-js@2.0.0 --save --package-lock=false
+      - name: Build
+        run: npm install --package-lock=false && npm run build
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/DashboardPage.tsx package.json
+          git diff --cached --quiet && exit 0
+          git commit -m "fix maritime shipment tracking and Jalali dates"
+          git push
