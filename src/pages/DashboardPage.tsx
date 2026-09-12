@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { extractCustomsDataWithAI } from '../services/geminiService';
+import { useAuth } from '../context/AuthContext';
 import { 
   Wand2, Save, Loader2, CheckCircle2, AlertCircle, 
   Ship, Building2, Wallet, LayoutDashboard, Search, Menu, LogOut, FileUp 
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
+  const { signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'ships' | 'customs' | 'finance' | 'smart_paste'>('home');
   const [lang, setLang] = useState<'FA' | 'EN'>('FA');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -18,7 +20,6 @@ export const DashboardPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success' | 'info', text: string } | null>(null);
 
-  // منطق جایگذاری هوشمند با اعتبارسنجی Null-Reference
   const handleSmartPaste = () => {
     if (!pasteText.trim()) {
       setStatusMessage({ type: 'error', text: lang === 'FA' ? 'متنی برای پردازش وجود ندارد.' : 'No text to process.' });
@@ -28,7 +29,7 @@ export const DashboardPage: React.FC = () => {
     const text = pasteText;
     const extract = (regex: RegExp) => { 
       const match = text.match(regex); 
-      return match?.[1]?.trim() || ''; // ایمن‌سازی در برابر Null
+      return match?.[1]?.trim() || '';
     };
 
     setFormData({
@@ -44,21 +45,19 @@ export const DashboardPage: React.FC = () => {
     setStatusMessage({ type: 'success', text: lang === 'FA' ? 'اطلاعات با موفقیت جایگذاری شد.' : 'Data successfully extracted.' });
   };
 
-  // پردازش فایل با هوش مصنوعی + اعتبارسنجی امنیتی و حجمی
   const handleAIFileProcessing = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; // ایمن‌سازی Null-Reference
+    const file = e.target.files?.[0];
     if (!file) return;
 
-    // اعتبارسنجی حجم فایل (جلوگیری از Performance Bottleneck) - حداکثر 5 مگابایت
     const MAX_FILE_SIZE = 5 * 1024 * 1024; 
     if (file.size > MAX_FILE_SIZE) {
       setStatusMessage({ type: 'error', text: lang === 'FA' ? 'حجم فایل نباید بیشتر از ۵ مگابایت باشد.' : 'File size exceeds 5MB limit.' });
-      e.target.value = ''; // ریست کردن اینپوت
+      e.target.value = '';
       return;
     }
 
     setStatusMessage({ type: 'info', text: lang === 'FA' ? 'هوش مصنوعی در حال پردازش سند است...' : 'AI is processing document...' });
-    setIsProcessing(true); // فعال‌سازی قفل Race Condition
+    setIsProcessing(true);
     
     try {
       const reader = new FileReader();
@@ -76,7 +75,7 @@ export const DashboardPage: React.FC = () => {
           setStatusMessage({ type: 'error', text: apiError.message || 'خطا در ارتباط با سرور هوش مصنوعی گوگل.' });
         } finally {
           setIsProcessing(false);
-          e.target.value = ''; // آزادسازی اینپوت برای آپلود مجدد
+          e.target.value = '';
         }
       };
       reader.onerror = () => {
@@ -103,7 +102,6 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 font-sans antialiased overflow-hidden" dir={lang === 'FA' ? 'rtl' : 'ltr'}>
-      {/* Sidebar */}
       <aside className={`flex flex-col border-l border-slate-800 bg-slate-900/60 backdrop-blur-xl transition-all duration-300 z-30 ${sidebarCollapsed ? 'w-20' : 'w-72'}`}>
         <div className="flex h-16 items-center px-6 border-b border-slate-800/80 justify-between">
           <div className="flex items-center gap-3 overflow-hidden">
@@ -142,9 +140,19 @@ export const DashboardPage: React.FC = () => {
             </button>
           ))}
         </nav>
+
+        <div className="px-3 pb-4 pt-2 border-t border-slate-800/80">
+          <button
+            onClick={signOut}
+            className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl font-medium text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition-all"
+            title={lang === 'FA' ? 'خروج از حساب' : 'Sign out'}
+          >
+            <LogOut className="w-5 h-5 shrink-0" />
+            {!sidebarCollapsed && <span className="text-sm">{lang === 'FA' ? 'خروج از حساب' : 'Sign out'}</span>}
+          </button>
+        </div>
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
         <header className="h-16 flex items-center justify-between px-8 bg-slate-900/40 border-b border-slate-800/80">
           <div className="relative w-full max-w-xl">
