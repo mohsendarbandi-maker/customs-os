@@ -7,6 +7,21 @@ const roleLabels: Record<string, string> = {
   owner: 'مالک', admin: 'مدیر', broker: 'کارگزار', accountant: 'حسابدار', warehouse: 'انباردار', client: 'مشتری'
 };
 
+type FieldProps = {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+};
+
+const Field: React.FC<FieldProps> = ({ label, value, onChange, placeholder = '', type = 'text' }) => (
+  <label className="block">
+    <span className="block text-xs text-slate-400 mb-1.5">{label}</span>
+    <input type={type} value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+  </label>
+);
+
 export const DashboardPage: React.FC = () => {
   const { signOut, profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'case' | 'shipment'>('case');
@@ -28,6 +43,7 @@ export const DashboardPage: React.FC = () => {
       });
       if (error) throw error;
       setCaseId(data);
+      setCaseForm(prev => ({ ...prev, regNumber: '' }));
       setActiveTab('shipment');
       setStatusMessage({ type: 'success', text: `پرونده ایجاد شد. شناسه پرونده: ${data}` });
     } catch (e: any) {
@@ -64,13 +80,6 @@ export const DashboardPage: React.FC = () => {
     } finally { setIsProcessing(false); }
   };
 
-  const Field = ({ label, value, onChange, placeholder = '', type = 'text' }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) => (
-    <label className="block">
-      <span className="block text-xs text-slate-400 mb-1.5">{label}</span>
-      <input type={type} value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
-    </label>
-  );
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100" dir="rtl">
       <header className="h-16 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between px-5">
@@ -91,6 +100,7 @@ export const DashboardPage: React.FC = () => {
         {activeTab === 'case' && <section className="max-w-3xl bg-slate-900/60 border border-slate-800 rounded-2xl p-6">
           <h1 className="text-lg font-bold mb-1">ایجاد پرونده گمرکی</h1><p className="text-xs text-slate-500 mb-6">مرحله ۱: صاحب کالا و شماره ثبت سفارش</p>
           <div className="grid md:grid-cols-2 gap-4"><Field label="صاحب کالا / شرکت" value={caseForm.client} onChange={v => setCaseForm({ ...caseForm, client: v })} placeholder="نام شرکت" /><Field label="شماره ثبت سفارش" value={caseForm.regNumber} onChange={v => setCaseForm({ ...caseForm, regNumber: v })} /></div>
+          <p className="text-[11px] text-slate-500 mt-4">یک صاحب کالا می‌تواند در طول سال چند ثبت سفارش و چند پرونده داشته باشد.</p>
           <button onClick={createCase} disabled={isProcessing} className="mt-5 w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 font-bold text-sm"><Save size={17} className="inline ml-2" /> ایجاد پرونده واقعی</button>
         </section>}
 
