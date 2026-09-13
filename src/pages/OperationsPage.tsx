@@ -17,6 +17,7 @@ const docTypes=[
 export const OperationsPage:React.FC=()=>{
  const [searchParams,setSearchParams]=useSearchParams();
  const requestedTab=searchParams.get('tab');
+ const requestedCaseId=searchParams.get('caseId');
  const [clients,setClients]=useState<any[]>([]),[cases,setCases]=useState<any[]>([]),[shipments,setShipments]=useState<any[]>([]),[orders,setOrders]=useState<any[]>([]),[documents,setDocuments]=useState<any[]>([]),[permits,setPermits]=useState<any[]>([]);
  const [caseId,setCaseId]=useState(''),[clientId,setClientId]=useState('');
  const [tab,setTab]=useState<'operation'|'registration'|'declaration'|'valuation'|'documents'>(()=>requestedTab==='declaration'?'declaration':requestedTab==='valuation'?'valuation':requestedTab==='documents'?'documents':requestedTab==='registration'?'registration':'operation');
@@ -46,6 +47,7 @@ export const OperationsPage:React.FC=()=>{
   } else {setDocuments([]);setPermits([])}
  };
  useEffect(()=>{load();try{const raw=localStorage.getItem('customs_last_maritime');if(raw){const x=JSON.parse(raw);setForm(p=>({...p,...x}));if(x.clientId)setClientId(x.clientId)}}catch{}},[]);
+ useEffect(()=>{if(requestedCaseId&&cases.some(c=>c.id===requestedCaseId)&&requestedCaseId!==caseId)selectCase(requestedCaseId)},[requestedCaseId,cases]);
  useEffect(()=>{if(caseId)load()},[caseId]);
 
  const selectedClient=useMemo(()=>clients.find(c=>c.id===clientId),[clients,clientId]);
