@@ -9,6 +9,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { MainMenuPage } from './pages/MainMenuPage';
 import { ClientRegistryPage } from './pages/ClientRegistryPage';
 import { MaritimePage } from './pages/MaritimePage';
+import { DeclarationPrintPage } from './pages/DeclarationPrintPage';
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ function App() {
     <Route path="/clients" element={<ProtectedRoute><ClientRegistryPage /></ProtectedRoute>} />
     <Route path="/maritime" element={<ProtectedRoute><MaritimePage /></ProtectedRoute>} />
     <Route path="/operations" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+    <Route path="/print-declaration" element={<ProtectedRoute><DeclarationPrintPage /></ProtectedRoute>} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></BrowserRouter></AuthProvider></QueryClientProvider>;
 }
