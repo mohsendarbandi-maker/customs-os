@@ -1,0 +1,2 @@
+-- Migration history reconciliation.
+-- The semantic implementation is preserved in 00021_phase13_workflow_integrity_and_credential_boundary.sql.
