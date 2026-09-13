@@ -2,24 +2,34 @@
 
 Customs OS is a multi-tenant Customs Clearance & Logistics Management System designed for Iranian customs brokerage operations.
 
-## Phase 1 Purpose
-The objective of Phase 1 is strictly the **Database Foundation**. It establishes:
-- Multi-tenancy isolation enforced at the PostgreSQL database level
-- Complete normalized schema covering cases, shipments, containers, declarations, permits, finance, and documents
-- Row Level Security (RLS) policies across all tenant-scoped tables
-- Database triggers for tenant immutability, role-escalation prevention, broker assignment validation, and audit trails
-- Client-role data scoping ensuring clients access only their own dossiers
+## Current implementation
 
-Phase 1 does NOT contain application UI, authentication screens, dashboards, AI, OCR, or third-party integrations.
+The repository now contains the database foundation plus the operational customs workflow used by the application:
+
+- Multi-tenant PostgreSQL/Supabase schema with RLS and role-based access for owner/admin/broker/accountant/warehouse/client.
+- Cargo-owner registry, independent registration orders, maritime/B/L data, declarations/EPL, valuation, documents, permits, finance, cargo exit, case history and stage control.
+- Configurable permit rules and case completion/integrity checks.
+- Immutable audit and status-history protections.
+- Offline RPC queue for a deliberately limited set of replay-safe workflow updates; authentication/session operations and case creation are never queued automatically.
+- EPL credentials stored in Supabase Vault; the browser receives only username and password-configured status, never the plaintext password.
 
 ## Architecture & Technology Stack
-- **Database:** PostgreSQL via Supabase (Migrations in `supabase/migrations/`)
-- **Frontend Core:** React + Vite + TypeScript (Scaffolding only)
+
+- **Database:** PostgreSQL via Supabase (`supabase/migrations/`)
+- **Frontend:** React + Vite + TypeScript
 - **Styling:** Tailwind CSS
-- **State & Routing:** TanStack Query, React Router DOM
+- **State & Routing:** React state + React Router DOM; TanStack Query available for expansion
 - **Testing:** Vitest
+- **Runtime:** Node 22+
 
-## Verification Status
-**CURRENT STATUS: NOT READY / NOT LOCKED**
+## Workflow model
 
-Phase 1 source code has been statically prepared. However, live execution commands (`npm install`, `npm run build`, `npm run lint`, `npm test`, and `supabase db reset`) require execution in a local shell environment with a running Supabase container. Phase 2 must not begin until live database verification passes. See `PHASE1_VERIFICATION_STATUS.md`.
+The application follows the real customs sequence: preliminary maritime/cargo data -> unloading and release documents -> cargo-owner document pack -> valuation -> EPL declaration and kottaj -> customs path and permits -> payment -> exit -> completion/archive.
+
+Kottaj is treated as an EPL output, not as an initial case field. A B/L uniqueness key is scoped by organization, shipping line, B/L number and B/L year.
+
+## Release status
+
+**CURRENT STATUS: RELEASE CANDIDATE — NOT YET VERIFIED FOR PRODUCTION**
+
+Remaining release gates are operational verification against the live Supabase project, tenant-isolation testing with an additional tenant, successful CI on the latest `main`, and a successful Vercel production deployment serving that commit. The repository's `RELEASE_READINESS.md` is the authoritative release checklist.
