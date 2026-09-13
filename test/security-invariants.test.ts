@@ -21,7 +21,7 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
   const allSql = migrations.map(({ sql }) => sql).join('\n');
 
   it('contains the canonical foundation migrations and later production migrations', () => {
-    expect(migrationFiles.length).toBeGreaterThanOrEqual(25);
+    expect(migrationFiles.length).toBeGreaterThanOrEqual(26);
     for (const name of ['00001_extensions.sql','00002_enums.sql','00003_auth_foundation.sql','00004_reference_data.sql','00005_core_entities.sql','00006_finance_documents.sql','00007_audit_logs.sql','00008_indexes.sql','00009_rls.sql','00010_triggers.sql']) expect(migrationFiles).toContain(name);
   });
 
@@ -70,7 +70,7 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
       '20260913182808_phase10_integrity_checks.sql','20260913182815_phase11_production_security_hardening.sql',
       '20260913184205_phase12_security_advisor_cleanup.sql','00021_phase13_workflow_integrity_and_credential_boundary.sql',
       '00022_phase14_maritime_rpc_compatibility.sql','00023_phase15_exit_stage_integrity.sql',
-      '00024_stage_transition_and_registration_integrity.sql','00025_lock_trigger_function_execute.sql'
+      '00024_stage_transition_and_registration_integrity.sql','00025_lock_trigger_function_execute.sql','00026_completion_requires_release.sql'
     ]) expect(migrationFiles).toContain(name);
     const phase13 = readMigration('00021_phase13_workflow_integrity_and_credential_boundary.sql');
     expect(phase13).toContain('advance_case_stage');
@@ -93,6 +93,10 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     expect(phase24).toContain("WHEN 'completed' THEN p_target_status = 'archived'");
     const phase25 = readMigration('00025_lock_trigger_function_execute.sql');
     expect(phase25).toContain('REVOKE ALL ON FUNCTION public.registration_order_set_tenant_and_case_client() FROM PUBLIC, anon, authenticated');
+    const phase26 = readMigration('00026_completion_requires_release.sql');
+    expect(phase26).toContain("release_status");
+    expect(phase26).toContain("<> 'released'");
+    expect(phase26).toContain('Gross weight');
     expect(allSql).toContain('SET search_path = public, pg_temp');
     expect(allSql).toContain('REVOKE');
   });
@@ -102,6 +106,15 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     expect(ui).toContain("select('id,client_id,case_id,order_number");
     expect(ui).toContain('client_id:clientId');
     expect(ui).toContain('const s=shipments.find(x=>x.case_id===id);');
+  });
+
+  it('prevents browser-side EPL password retrieval or printing', () => {
+    const clientUi = fs.readFileSync(path.resolve(__dirname, '../src/pages/ClientRegistryPage.tsx'), 'utf8');
+    const printUi = fs.readFileSync(path.resolve(__dirname, '../src/pages/DeclarationPrintPage.tsx'), 'utf8');
+    expect(clientUi).not.toContain('epl_password');
+    expect(printUi).not.toContain('epl_password');
+    expect(printUi).not.toContain('eplPassword');
+    expect(printUi).toContain('password_configured');
   });
 
   it('contains the durable offline queue and binds replay to the authenticated user', () => {
