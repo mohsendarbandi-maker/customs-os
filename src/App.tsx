@@ -1,29 +1,17 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AuthProvider } from './context/AuthContext';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { LoginPage } from './pages/LoginPage';
-import { OnboardingPage } from './pages/OnboardingPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { MainMenuPage } from './pages/MainMenuPage';
-import { ClientRegistryPage } from './pages/ClientRegistryPage';
-import { MaritimePage } from './pages/MaritimePage';
-import { DeclarationPrintPage } from './pages/DeclarationPrintPage';
-
-const queryClient = new QueryClient();
-
-function App() {
-  return <QueryClientProvider client={queryClient}><AuthProvider><BrowserRouter><Routes>
-    <Route path="/login" element={<LoginPage />} />
-    <Route path="/onboarding" element={<OnboardingPage />} />
-    <Route path="/" element={<ProtectedRoute><MainMenuPage /></ProtectedRoute>} />
-    <Route path="/clients" element={<ProtectedRoute><ClientRegistryPage /></ProtectedRoute>} />
-    <Route path="/maritime" element={<ProtectedRoute><MaritimePage /></ProtectedRoute>} />
-    <Route path="/operations" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-    <Route path="/print-declaration" element={<ProtectedRoute><DeclarationPrintPage /></ProtectedRoute>} />
-    <Route path="*" element={<Navigate to="/" replace />} />
-  </Routes></BrowserRouter></AuthProvider></QueryClientProvider>;
-}
-
+import {BrowserRouter,Routes,Route,Navigate,useLocation,useNavigate} from 'react-router-dom';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {AuthProvider} from './context/AuthContext';
+import {ProtectedRoute} from './components/ProtectedRoute';
+import {LoginPage} from './pages/LoginPage';
+import {OnboardingPage} from './pages/OnboardingPage';
+import {MainMenuPage} from './pages/MainMenuPage';
+import {ClientRegistryPage} from './pages/ClientRegistryPage';
+import {MaritimePage} from './pages/MaritimePage';
+import {DeclarationPrintPage} from './pages/DeclarationPrintPage';
+import {OperationsPage} from './pages/OperationsPage';
+import {Home,ArrowRight} from 'lucide-react';
+const queryClient=new QueryClient();
+const AppShell:React.FC<{children:React.ReactNode}>=({children})=>{const location=useLocation();const navigate=useNavigate();if(location.pathname==='/')return <>{children}</>;return <><button onClick={()=>navigate('/')} className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/95 border border-slate-700 text-slate-100 shadow-xl backdrop-blur" title="صفحه اصلی"><Home size={16}/><span className="text-xs">صفحه اصلی</span></button><div className="pt-2">{children}</div></>};
+function App(){return <QueryClientProvider client={queryClient}><AuthProvider><BrowserRouter><AppShell><Routes><Route path="/login" element={<LoginPage/>}/><Route path="/onboarding" element={<OnboardingPage/>}/><Route path="/" element={<ProtectedRoute><MainMenuPage/></ProtectedRoute>}/><Route path="/clients" element={<ProtectedRoute><ClientRegistryPage/></ProtectedRoute>}/><Route path="/maritime" element={<ProtectedRoute><MaritimePage/></ProtectedRoute>}/><Route path="/operations" element={<ProtectedRoute><OperationsPage/></ProtectedRoute>}/><Route path="/print-declaration" element={<ProtectedRoute><DeclarationPrintPage/></ProtectedRoute>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></AppShell></BrowserRouter></AuthProvider></QueryClientProvider>};
 export default App;
