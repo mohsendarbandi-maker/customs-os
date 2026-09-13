@@ -1,0 +1,2 @@
+-- Migration history reconciliation.
+-- The semantic implementation is preserved in 00024_stage_transition_and_registration_integrity.sql.
