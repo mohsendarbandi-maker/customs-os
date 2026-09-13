@@ -81,14 +81,31 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     expect(triggerSql).toContain('tr_status_history_immutable');
   });
 
-  it('contains semantic coverage for production stage, readiness, integrity and security controls', () => {
-    expect(allSql).toContain('advance_case_stage');
-    expect(allSql).toContain('get_case_completion_readiness');
-    expect(allSql).toContain('get_customs_os_integrity_report');
-    expect(allSql).toContain('case_operational_readiness');
+  it('verifies release migration history is present in the repository', () => {
+    const requiredHistoryFiles = [
+      '20260913182750_phase8_case_stage_gate.sql',
+      '20260913182759_phase9_case_completion_readiness.sql',
+      '20260913182808_phase10_integrity_checks.sql',
+      '20260913182815_phase11_production_security_hardening.sql',
+      '20260913184205_phase12_security_advisor_cleanup.sql',
+    ];
+
+    for (const name of requiredHistoryFiles) {
+      expect(migrationFiles).toContain(name);
+    }
+
+    const releaseSql = requiredHistoryFiles.map(readMigration).join('\n');
+    expect(releaseSql).toContain('advance_case_stage');
+    expect(releaseSql).toContain('get_case_completion_readiness');
+    expect(releaseSql).toContain('get_customs_os_integrity_report');
+    expect(releaseSql).toContain('case_operational_readiness');
+    expect(releaseSql).toContain('SET search_path = public, pg_temp');
+    expect(releaseSql).toContain('security_invoker = true');
+  });
+
+  it('verifies security controls remain present across the repository', () => {
     expect(allSql).toContain('case_status_history');
     expect(allSql).toContain('REVOKE');
     expect(allSql).toContain('SET search_path = public, pg_temp');
-    expect(allSql).toContain('security_invoker = true');
   });
 });
