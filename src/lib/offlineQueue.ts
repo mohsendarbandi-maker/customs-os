@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 type QueuedRpc = {
   id: string;
   createdAt: string;
+  userId: string;
   functionName: string;
   args: Record<string, unknown>;
   attempts: number;
@@ -13,15 +14,15 @@ type QueueListener = (items: QueuedRpc[]) => void;
 
 const DB_NAME = 'customs-os-offline';
 const STORE_NAME = 'rpc_queue';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
-// Only idempotent/replay-safe workflow RPCs are queued automatically.
-// Login/session RPCs, read RPCs, and case creation are deliberately excluded.
+// Only mutations that are safe to replay without creating duplicate business events.
+// Maritime tracking is deliberately excluded because every execution inserts a new event.
+// Login/session RPCs, read RPCs, and case creation are also excluded.
 export const OFFLINE_QUEUEABLE_RPCS = new Set([
   'attach_registration_order',
   'update_case_operational_data',
   'update_shipment_maritime_data',
-  'set_shipment_tracking_status',
 ]);
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -36,6 +37,16 @@ export const attachSupabaseClient = (client: SupabaseClient) => {
 const storageAvailable = () => typeof indexedDB !== 'undefined';
 const makeId = () => `${Date.now()}-${crypto.randomUUID()}`;
 
+const currentUserId = async () => {
+  if (!supabaseClient) return null;
+  try {
+    const { data } = await supabaseClient.auth.getSession();
+    return data.session?.user.id ?? null;
+  } catch {
+    return null;
+  }
+};
+
 const openDb = () => {
   if (!storageAvailable()) return Promise.reject(new Error('IndexedDB unavailable'));
   if (dbPromise) return dbPromise;
@@ -46,6 +57,12 @@ const openDb = () => {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
         store.createIndex('createdAt', 'createdAt', { unique: false });
+        store.createIndex('userId', 'userId', { unique: false });
+      } else {
+        const store = request.transaction?.objectStore(STORE_NAME);
+        if (store && !store.indexNames.contains('userId')) {
+          store.createIndex('userId', 'userId', { unique: false });
+        }
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -64,10 +81,17 @@ const emit = async () => {
 };
 
 export const listQueue = async (): Promise<QueuedRpc[]> => {
+  const userId = await currentUserId();
+  if (!userId) return [];
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const request = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
-    request.onsuccess = () => resolve((request.result as QueuedRpc[]).sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+    request.onsuccess = () => {
+      const items = (request.result as QueuedRpc[])
+        .filter((item) => item.userId === userId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      resolve(items);
+    };
     request.onerror = () => reject(request.error || new Error('Unable to read offline queue'));
   });
 };
@@ -100,9 +124,14 @@ export const enqueueRpc = async (functionName: string, args: Record<string, unkn
   if (!OFFLINE_QUEUEABLE_RPCS.has(functionName)) {
     throw new Error(`RPC is not eligible for offline queue: ${functionName}`);
   }
+  const userId = await currentUserId();
+  if (!userId) {
+    throw new Error('Authenticated user required for offline queue');
+  }
   const item: QueuedRpc = {
     id: makeId(),
     createdAt: new Date().toISOString(),
+    userId,
     functionName,
     args,
     attempts: 0,
@@ -119,10 +148,13 @@ const isNetworkError = (error: unknown) => {
 
 export const flushOfflineQueue = async () => {
   if (flushing || !navigator.onLine || !supabaseClient) return;
+  const userId = await currentUserId();
+  if (!userId) return;
   flushing = true;
   try {
     const items = await listQueue();
     for (const item of items) {
+      if (item.userId !== userId) continue;
       if (!OFFLINE_QUEUEABLE_RPCS.has(item.functionName)) {
         await deleteQueueItem(item.id);
         continue;
@@ -134,7 +166,6 @@ export const flushOfflineQueue = async () => {
           item.lastError = error.message;
           await putQueueItem(item);
           if (isNetworkError(error)) break;
-          // Validation/auth errors remain visible in the queue for manual resolution.
           continue;
         }
         await deleteQueueItem(item.id);
