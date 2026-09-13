@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 type QueuedRpc = {
   id: string;
@@ -15,13 +15,29 @@ const DB_NAME = 'customs-os-offline';
 const STORE_NAME = 'rpc_queue';
 const DB_VERSION = 1;
 
+// Only idempotent/replay-safe workflow RPCs are queued automatically.
+// Login/session RPCs, read RPCs, and case creation are deliberately excluded.
+export const OFFLINE_QUEUEABLE_RPCS = new Set([
+  'attach_registration_order',
+  'update_case_operational_data',
+  'update_shipment_maritime_data',
+  'set_shipment_tracking_status',
+]);
+
 let dbPromise: Promise<IDBDatabase> | null = null;
+let supabaseClient: SupabaseClient | null = null;
 const listeners = new Set<QueueListener>();
 let flushing = false;
 
+export const attachSupabaseClient = (client: SupabaseClient) => {
+  supabaseClient = client;
+};
+
+const storageAvailable = () => typeof indexedDB !== 'undefined';
 const makeId = () => `${Date.now()}-${crypto.randomUUID()}`;
 
 const openDb = () => {
+  if (!storageAvailable()) return Promise.reject(new Error('IndexedDB unavailable'));
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -43,7 +59,7 @@ const emit = async () => {
     const items = await listQueue();
     listeners.forEach((listener) => listener(items));
   } catch {
-    // A storage failure must never break the app UI.
+    // Storage failure must never break the application UI.
   }
 };
 
@@ -81,6 +97,9 @@ export const subscribeOfflineQueue = (listener: QueueListener) => {
 };
 
 export const enqueueRpc = async (functionName: string, args: Record<string, unknown>) => {
+  if (!OFFLINE_QUEUEABLE_RPCS.has(functionName)) {
+    throw new Error(`RPC is not eligible for offline queue: ${functionName}`);
+  }
   const item: QueuedRpc = {
     id: makeId(),
     createdAt: new Date().toISOString(),
@@ -99,19 +118,23 @@ const isNetworkError = (error: unknown) => {
 };
 
 export const flushOfflineQueue = async () => {
-  if (flushing || !navigator.onLine) return;
+  if (flushing || !navigator.onLine || !supabaseClient) return;
   flushing = true;
   try {
     const items = await listQueue();
     for (const item of items) {
+      if (!OFFLINE_QUEUEABLE_RPCS.has(item.functionName)) {
+        await deleteQueueItem(item.id);
+        continue;
+      }
       try {
-        const { error } = await supabase.rpc(item.functionName, item.args);
+        const { error } = await supabaseClient.rpc(item.functionName, item.args);
         if (error) {
           item.attempts += 1;
           item.lastError = error.message;
           await putQueueItem(item);
           if (isNetworkError(error)) break;
-          // Auth/validation errors stay queued for manual resolution instead of being lost.
+          // Validation/auth errors remain visible in the queue for manual resolution.
           continue;
         }
         await deleteQueueItem(item.id);
@@ -144,26 +167,21 @@ export const rpcWithOfflineQueue = async (
   args: Record<string, unknown>,
   options?: { queueWhenOffline?: boolean }
 ) => {
-  const queueWhenOffline = options?.queueWhenOffline ?? true;
-  if (queueWhenOffline && !navigator.onLine) {
+  if (!supabaseClient) throw new Error('Supabase client is not attached');
+  const queueWhenOffline = options?.queueWhenOffline ?? OFFLINE_QUEUEABLE_RPCS.has(functionName);
+  const queueable = OFFLINE_QUEUEABLE_RPCS.has(functionName);
+
+  if (queueWhenOffline && queueable && !navigator.onLine) {
     const id = await enqueueRpc(functionName, args);
-    return { data: null, error: null, queued: true, queueId: id };
+    return { data: null, error: null, queued: true as const, queueId: id };
   }
 
-  try {
-    const result = await supabase.rpc(functionName, args);
-    if (!result.error) return { ...result, queued: false as const };
+  const result = await supabaseClient.rpc(functionName, args);
+  if (!result.error) return { ...result, queued: false as const };
 
-    if (queueWhenOffline && isNetworkError(result.error)) {
-      const id = await enqueueRpc(functionName, args);
-      return { data: null, error: null, queued: true, queueId: id };
-    }
-    return { ...result, queued: false as const };
-  } catch (error) {
-    if (queueWhenOffline && isNetworkError(error)) {
-      const id = await enqueueRpc(functionName, args);
-      return { data: null, error: null, queued: true, queueId: id };
-    }
-    throw error;
+  if (queueWhenOffline && queueable && isNetworkError(result.error)) {
+    const id = await enqueueRpc(functionName, args);
+    return { data: null, error: null, queued: true as const, queueId: id };
   }
+  return { ...result, queued: false as const };
 };
