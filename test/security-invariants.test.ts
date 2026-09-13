@@ -21,7 +21,7 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
   const allSql = migrations.map(({ sql }) => sql).join('\n');
 
   it('contains the canonical foundation migrations and later production migrations', () => {
-    expect(migrationFiles.length).toBeGreaterThanOrEqual(24);
+    expect(migrationFiles.length).toBeGreaterThanOrEqual(25);
     for (const name of ['00001_extensions.sql','00002_enums.sql','00003_auth_foundation.sql','00004_reference_data.sql','00005_core_entities.sql','00006_finance_documents.sql','00007_audit_logs.sql','00008_indexes.sql','00009_rls.sql','00010_triggers.sql']) expect(migrationFiles).toContain(name);
   });
 
@@ -69,7 +69,8 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
       '20260913182750_phase8_case_stage_gate.sql','20260913182759_phase9_case_completion_readiness.sql',
       '20260913182808_phase10_integrity_checks.sql','20260913182815_phase11_production_security_hardening.sql',
       '20260913184205_phase12_security_advisor_cleanup.sql','00021_phase13_workflow_integrity_and_credential_boundary.sql',
-      '00022_phase14_maritime_rpc_compatibility.sql','00023_phase15_exit_stage_integrity.sql','00024_stage_transition_and_registration_integrity.sql'
+      '00022_phase14_maritime_rpc_compatibility.sql','00023_phase15_exit_stage_integrity.sql',
+      '00024_stage_transition_and_registration_integrity.sql','00025_lock_trigger_function_execute.sql'
     ]) expect(migrationFiles).toContain(name);
     const phase13 = readMigration('00021_phase13_workflow_integrity_and_credential_boundary.sql');
     expect(phase13).toContain('advance_case_stage');
@@ -85,11 +86,13 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     expect(phase15).toContain('Archived case cannot change exit status');
     expect(phase15).toContain('Final cargo exit requires exit-permit stage');
     const phase24 = readMigration('00024_stage_transition_and_registration_integrity.sql');
-    expect(phase24).toContain("Organization mismatch");
-    expect(phase24).toContain("tr_registration_order_tenant_client");
-    expect(phase24).toContain("انتقال مرحله غیرمجاز است");
+    expect(phase24).toContain('Organization mismatch');
+    expect(phase24).toContain('tr_registration_order_tenant_client');
+    expect(phase24).toContain('انتقال مرحله غیرمجاز است');
     expect(phase24).toContain("WHEN 'kottaj_received' THEN p_target_status IN ('path_green','path_yellow','path_red')");
     expect(phase24).toContain("WHEN 'completed' THEN p_target_status = 'archived'");
+    const phase25 = readMigration('00025_lock_trigger_function_execute.sql');
+    expect(phase25).toContain('REVOKE ALL ON FUNCTION public.registration_order_set_tenant_and_case_client() FROM PUBLIC, anon, authenticated');
     expect(allSql).toContain('SET search_path = public, pg_temp');
     expect(allSql).toContain('REVOKE');
   });
