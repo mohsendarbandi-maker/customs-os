@@ -1,0 +1,2 @@
+-- Migration history reconciliation.
+-- The semantic implementation is preserved in 00022_phase14_maritime_rpc_compatibility.sql.
