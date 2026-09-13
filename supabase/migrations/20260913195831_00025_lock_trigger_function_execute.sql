@@ -1,0 +1,2 @@
+-- Migration history reconciliation.
+-- The semantic implementation is preserved in 00025_lock_trigger_function_execute.sql.
