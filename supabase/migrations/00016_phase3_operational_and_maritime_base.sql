@@ -34,6 +34,13 @@ END; $$;
 REVOKE ALL ON FUNCTION public.attach_registration_order(uuid,text,date,text,text,numeric,text,numeric,currency_code,text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.attach_registration_order(uuid,text,date,text,text,numeric,text,numeric,currency_code,text) TO authenticated;
 
+ALTER TABLE public.cases ADD COLUMN IF NOT EXISTS net_weight_kg numeric;
+ALTER TABLE public.cases ADD COLUMN IF NOT EXISTS gross_weight_kg numeric;
+ALTER TABLE public.cases DROP CONSTRAINT IF EXISTS cases_net_weight_nonnegative;
+ALTER TABLE public.cases ADD CONSTRAINT cases_net_weight_nonnegative CHECK (net_weight_kg IS NULL OR net_weight_kg>=0);
+ALTER TABLE public.cases DROP CONSTRAINT IF EXISTS cases_gross_weight_nonnegative;
+ALTER TABLE public.cases ADD CONSTRAINT cases_gross_weight_nonnegative CHECK (gross_weight_kg IS NULL OR gross_weight_kg>=0);
+
 ALTER TABLE public.vessels ADD COLUMN IF NOT EXISTS imo_number varchar(20), ADD COLUMN IF NOT EXISTS flag_code char(2);
 ALTER TABLE public.shipments
   ADD COLUMN IF NOT EXISTS voyage_no text, ADD COLUMN IF NOT EXISTS cargo_count numeric, ADD COLUMN IF NOT EXISTS cargo_count_unit text,
