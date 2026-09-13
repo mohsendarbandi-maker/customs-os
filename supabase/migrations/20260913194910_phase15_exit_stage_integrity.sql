@@ -1,0 +1,2 @@
+-- Migration history reconciliation.
+-- The semantic implementation is preserved in 00023_phase15_exit_stage_integrity.sql.
