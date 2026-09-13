@@ -1,0 +1,3 @@
+-- Migration history reconciliation.
+-- The live database already contains this migration's applied changes.
+-- The canonical repository migrations retain the deployable schema; this file preserves remote history for Supabase branching/preview checks.

@@ -1,0 +1,1 @@
+-- Migration history reconciliation. Changes already applied to the live database and represented by the repository's canonical migrations.

@@ -11,16 +11,22 @@ function readMigration(name: string) {
   return fs.readFileSync(path.join(migrationsDir, name), 'utf8');
 }
 
-describe('STATIC TESTS -- Database Invariant Verification', () => {
-  const migrationFiles = fs
+function readAllMigrations() {
+  return fs
     .readdirSync(migrationsDir)
     .filter((name) => name.endsWith('.sql'))
-    .sort();
+    .sort()
+    .map((name) => ({ name, sql: readMigration(name) }));
+}
 
-  it('contains the canonical foundation migrations plus later phase migrations', () => {
+describe('STATIC TESTS -- Database Invariant Verification', () => {
+  const migrations = readAllMigrations();
+  const migrationFiles = migrations.map(({ name }) => name);
+  const allSql = migrations.map(({ sql }) => sql).join('\n');
+
+  it('contains the canonical foundation migrations and later production migrations', () => {
     expect(migrationFiles.length).toBeGreaterThanOrEqual(20);
-
-    const required = [
+    for (const name of [
       '00001_extensions.sql',
       '00002_enums.sql',
       '00003_auth_foundation.sql',
@@ -31,17 +37,9 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
       '00008_indexes.sql',
       '00009_rls.sql',
       '00010_triggers.sql',
-    ];
-
-    for (const name of required) {
+    ]) {
       expect(migrationFiles).toContain(name);
     }
-
-    expect(migrationFiles.some((name) => name.includes('phase4'))).toBe(true);
-    expect(migrationFiles.some((name) => name.includes('phase5'))).toBe(true);
-    expect(migrationFiles.some((name) => name.includes('phase6'))).toBe(true);
-    expect(migrationFiles.some((name) => name.includes('phase7'))).toBe(true);
-    expect(migrationFiles.some((name) => name.includes('phase8'))).toBe(true);
   });
 
   it('enforces exact decimal base amount calculation in finance', () => {
@@ -83,18 +81,14 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     expect(triggerSql).toContain('tr_status_history_immutable');
   });
 
-  it('includes production readiness migrations for stage gating, integrity and security', () => {
-    expect(migrationFiles).toContain(
-      '20260913182750_phase8_case_stage_gate.sql',
-    );
-    expect(migrationFiles).toContain(
-      '20260913182759_phase9_case_completion_readiness.sql',
-    );
-    expect(migrationFiles).toContain(
-      '20260913182808_phase10_integrity_checks.sql',
-    );
-    expect(migrationFiles).toContain(
-      '20260913182815_phase11_production_security_hardening.sql',
-    );
+  it('contains semantic coverage for production stage, readiness, integrity and security controls', () => {
+    expect(allSql).toContain('advance_case_stage');
+    expect(allSql).toContain('get_case_completion_readiness');
+    expect(allSql).toContain('get_customs_os_integrity_report');
+    expect(allSql).toContain('case_operational_readiness');
+    expect(allSql).toContain('case_status_history');
+    expect(allSql).toContain('REVOKE');
+    expect(allSql).toContain('SET search_path = public, pg_temp');
+    expect(allSql).toContain('security_invoker = true');
   });
 });
