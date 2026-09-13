@@ -1,9 +1,86 @@
 import React,{useEffect,useState} from 'react';
-import {ArrowRight,Copy,Eye,EyeOff,FileText,Printer} from 'lucide-react';
+import {ArrowRight,Copy,FileText,Printer,ShieldCheck} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
-export const DeclarationPrintPage:React.FC=()=>{const[cases,setCases]=useState<any[]>([]);const[selected,setSelected]=useState<any|null>(null);const[cred,setCred]=useState({eplUsername:'',eplPassword:''});const[showPassword,setShowPassword]=useState(true);const[busy,setBusy]=useState(false);
- useEffect(()=>{supabase.from('cases').select('id,case_number,status,registration_order_no,proforma_no,created_at,client_id,clients(name,national_id)').order('created_at',{ascending:false}).then(({data})=>setCases(data||[]))},[]);
- const load=async(id:string)=>{if(!id){setSelected(null);return}setBusy(true);try{const {data,error}=await supabase.from('cases').select('id,case_number,status,registration_order_no,proforma_no,created_at,client_id,clients(name,national_id)').eq('id',id).single();if(error)throw error;const {data:c,error:ce}=await supabase.rpc('get_client_epl_credentials',{p_client_id:data.client_id});if(ce)throw ce;setSelected(data);setCred({eplUsername:c?.[0]?.epl_username||'',eplPassword:c?.[0]?.epl_password||''})}catch{}finally{setBusy(false)}};
+
+type CredentialState={eplUsername:string;passwordConfigured:boolean};
+
+export const DeclarationPrintPage:React.FC=()=>{
+ const[cases,setCases]=useState<any[]>([]);
+ const[selected,setSelected]=useState<any|null>(null);
+ const[cred,setCred]=useState<CredentialState>({eplUsername:'',passwordConfigured:false});
+ const[busy,setBusy]=useState(false);
+
+ useEffect(()=>{
+  supabase
+   .from('cases')
+   .select('id,case_number,status,registration_order_no,proforma_no,created_at,client_id,clients(name,national_id)')
+   .order('created_at',{ascending:false})
+   .then(({data})=>setCases(data||[]));
+ },[]);
+
+ const load=async(id:string)=>{
+  if(!id){setSelected(null);setCred({eplUsername:'',passwordConfigured:false});return;}
+  setBusy(true);
+  try{
+   const {data,error}=await supabase
+    .from('cases')
+    .select('id,case_number,status,registration_order_no,proforma_no,created_at,client_id,clients(name,national_id)')
+    .eq('id',id)
+    .single();
+   if(error)throw error;
+   const {data:c,error:ce}=await supabase.rpc('get_client_epl_credentials',{p_client_id:data.client_id});
+   if(ce)throw ce;
+   const row=c?.[0];
+   setSelected(data);
+   setCred({eplUsername:row?.epl_username||'',passwordConfigured:Boolean(row?.password_configured)});
+  }catch(e:any){
+   setSelected(null);
+   setCred({eplUsername:'',passwordConfigured:false});
+  }finally{setBusy(false);}
+ };
+
  const copy=async(v:string)=>{if(v)await navigator.clipboard?.writeText(v)};
- return <main className="min-h-screen bg-slate-950 text-slate-100 p-5 md:p-8" dir="rtl"><div className="max-w-4xl mx-auto"><div className="no-print flex items-center justify-between mb-6"><div><h1 className="text-2xl font-black flex items-center gap-2"><FileText className="text-blue-400"/> چاپ اطلاعات اظهار / EPL Handoff</h1><p className="text-sm text-slate-400 mt-2">برگه تحویل به همکار شامل اطلاعات صاحب کالا و ورود سامانه EPL.</p></div><Link to="/" className="px-4 py-2 rounded-xl border border-slate-700"><ArrowRight className="inline ml-2" size={16}/> صفحه اصلی</Link></div><div className="no-print bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-5"><label className="text-sm text-slate-300">انتخاب پرونده<select onChange={e=>load(e.target.value)} className="mt-2 w-full bg-slate-950 border border-slate-800 rounded-xl p-3"><option value="">انتخاب کنید</option>{cases.map(c=><option key={c.id} value={c.id}>{c.clients?.name||'—'} — {c.case_number||c.id.slice(0,8)} — {c.registration_order_no||'بدون ثبت سفارش'}</option>)}</select></label></div>{selected&&<section className="bg-white text-slate-900 rounded-2xl p-8 print-sheet"><div className="flex justify-between items-start border-b-2 border-slate-900 pb-4"><div><h2 className="text-2xl font-black">Customs OS</h2><p className="text-sm mt-1">Cargo Owner & EPL Handoff</p></div><button className="no-print px-4 py-2 rounded-xl bg-slate-900 text-white font-bold" onClick={()=>window.print()} disabled={busy}><Printer className="inline ml-2" size={17}/> چاپ</button></div><div className="grid md:grid-cols-2 gap-5 mt-7"><div><div className="text-xs text-slate-500">صاحب کالا</div><div className="font-bold text-lg">{selected.clients?.name||'—'}</div></div><div><div className="text-xs text-slate-500">شناسه ملی شرکت</div><div className="font-bold" dir="ltr">{selected.clients?.national_id||'—'}</div></div><div><div className="text-xs text-slate-500">شناسه ملی اظهارکننده / EPL Username</div><div className="font-bold text-lg flex gap-2 items-center" dir="ltr">{cred.eplUsername||'—'}<button className="no-print" onClick={()=>copy(cred.eplUsername)}><Copy size={16}/></button></div></div><div><div className="text-xs text-slate-500">رمز عبور EPL</div><div className="font-bold flex gap-2 items-center" dir="ltr"><span>{showPassword?cred.eplPassword:'••••••••'}</span><button className="no-print" onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button><button className="no-print" onClick={()=>copy(cred.eplPassword)}><Copy size={16}/></button></div></div><div><div className="text-xs text-slate-500">شماره پرونده</div><div className="font-bold">{selected.case_number||'—'}</div></div><div><div className="text-xs text-slate-500">ثبت سفارش</div><div className="font-bold" dir="ltr">{selected.registration_order_no||'—'}</div></div><div><div className="text-xs text-slate-500">پروفرما</div><div className="font-bold">{selected.proforma_no||'—'}</div></div><div><div className="text-xs text-slate-500">وضعیت</div><div className="font-bold">{selected.status}</div></div></div><p className="mt-8 text-xs text-slate-500 border-t pt-4">این نسخه شامل اطلاعات ورود EPL صاحب کالا است و باید فقط در اختیار همکار مجاز قرار گیرد.</p></section>}</div><style>{`@media print{.no-print{display:none!important}.print-sheet{box-shadow:none!important;border-radius:0!important;padding:0!important}body{background:white!important}}`}</style></main>};
+
+ return <main className="min-h-screen bg-slate-950 text-slate-100 p-5 md:p-8" dir="rtl">
+  <div className="max-w-4xl mx-auto">
+   <div className="no-print flex items-center justify-between mb-6">
+    <div>
+     <h1 className="text-2xl font-black flex items-center gap-2"><FileText className="text-blue-400"/> چاپ اطلاعات اظهار / EPL Handoff</h1>
+     <p className="text-sm text-slate-400 mt-2">برگه تحویل عملیاتی بدون نمایش یا چاپ رمز عبور EPL.</p>
+    </div>
+    <Link to="/" className="px-4 py-2 rounded-xl border border-slate-700"><ArrowRight className="inline ml-2" size={16}/> صفحه اصلی</Link>
+   </div>
+
+   <div className="no-print bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-5">
+    <label className="text-sm text-slate-300">انتخاب پرونده
+     <select onChange={e=>load(e.target.value)} className="mt-2 w-full bg-slate-950 border border-slate-800 rounded-xl p-3">
+      <option value="">انتخاب کنید</option>
+      {cases.map(c=><option key={c.id} value={c.id}>{c.clients?.name||'—'} — {c.case_number||c.id.slice(0,8)} — {c.registration_order_no||'بدون ثبت سفارش'}</option>)}
+     </select>
+    </label>
+   </div>
+
+   {selected&&<section className="bg-white text-slate-900 rounded-2xl p-8 print-sheet">
+    <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
+     <div><h2 className="text-2xl font-black">Customs OS</h2><p className="text-sm mt-1">Cargo Owner & EPL Handoff</p></div>
+     <button className="no-print px-4 py-2 rounded-xl bg-slate-900 text-white font-bold" onClick={()=>window.print()} disabled={busy}><Printer className="inline ml-2" size={17}/> چاپ</button>
+    </div>
+
+    <div className="grid md:grid-cols-2 gap-5 mt-7">
+     <div><div className="text-xs text-slate-500">صاحب کالا</div><div className="font-bold text-lg">{selected.clients?.name||'—'}</div></div>
+     <div><div className="text-xs text-slate-500">شناسه ملی شرکت</div><div className="font-bold" dir="ltr">{selected.clients?.national_id||'—'}</div></div>
+     <div><div className="text-xs text-slate-500">شناسه ملی اظهارکننده / EPL Username</div><div className="font-bold text-lg flex gap-2 items-center" dir="ltr">{cred.eplUsername||'—'}{cred.eplUsername&&<button className="no-print" onClick={()=>copy(cred.eplUsername)}><Copy size={16}/></button>}</div></div>
+     <div><div className="text-xs text-slate-500">وضعیت رمز EPL</div><div className="font-bold flex items-center gap-2"><ShieldCheck size={17} className={cred.passwordConfigured?'text-emerald-600':'text-amber-600'}/>{cred.passwordConfigured?'ثبت شده در Vault':'ثبت نشده'}</div></div>
+     <div><div className="text-xs text-slate-500">شماره پرونده</div><div className="font-bold">{selected.case_number||'—'}</div></div>
+     <div><div className="text-xs text-slate-500">ثبت سفارش</div><div className="font-bold" dir="ltr">{selected.registration_order_no||'—'}</div></div>
+     <div><div className="text-xs text-slate-500">پروفرما</div><div className="font-bold">{selected.proforma_no||'—'}</div></div>
+     <div><div className="text-xs text-slate-500">وضعیت</div><div className="font-bold">{selected.status}</div></div>
+    </div>
+
+    <p className="mt-8 text-xs text-slate-500 border-t pt-4">این نسخه عمداً رمز عبور EPL را نمایش نمی‌دهد. رمز فقط از طریق فرآیند امن مدیریت Credential استفاده شود.</p>
+   </section>}
+  </div>
+  <style>{`@media print{.no-print{display:none!important}.print-sheet{box-shadow:none!important;border-radius:0!important;padding:0!important}body{background:white!important}}`}</style>
+ </main>;
+};
