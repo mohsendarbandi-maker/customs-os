@@ -29,6 +29,8 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     const finSql = readMigration('00006_finance_documents.sql');
     expect(finSql).toContain('chk_base_amount_irr_calc');
     expect(finSql).toContain('base_amount_irr = ROUND(original_amount * exchange_rate, 2)');
+    const financeUi = fs.readFileSync(path.resolve(__dirname, '../src/pages/FinancePage.tsx'), 'utf8');
+    expect(financeUi).toContain('round2(amount*rate)');
   });
 
   it('enforces client scoping invariants on profiles and core entities', () => {
@@ -62,8 +64,13 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     expect(triggerSql).toContain('tr_status_history_immutable');
   });
 
-  it('verifies release migration history and Phase 13 workflow integrity', () => {
-    for (const name of ['20260913182750_phase8_case_stage_gate.sql','20260913182759_phase9_case_completion_readiness.sql','20260913182808_phase10_integrity_checks.sql','20260913182815_phase11_production_security_hardening.sql','20260913184205_phase12_security_advisor_cleanup.sql','00021_phase13_workflow_integrity_and_credential_boundary.sql']) expect(migrationFiles).toContain(name);
+  it('verifies release migration history and workflow integrity', () => {
+    for (const name of [
+      '20260913182750_phase8_case_stage_gate.sql','20260913182759_phase9_case_completion_readiness.sql',
+      '20260913182808_phase10_integrity_checks.sql','20260913182815_phase11_production_security_hardening.sql',
+      '20260913184205_phase12_security_advisor_cleanup.sql','00021_phase13_workflow_integrity_and_credential_boundary.sql',
+      '00022_phase14_maritime_rpc_compatibility.sql','00023_phase15_exit_stage_integrity.sql'
+    ]) expect(migrationFiles).toContain(name);
     const phase13 = readMigration('00021_phase13_workflow_integrity_and_credential_boundary.sql');
     expect(phase13).toContain('advance_case_stage');
     expect(phase13).toContain('get_case_completion_readiness');
@@ -71,8 +78,21 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     expect(phase13).toContain('security_invoker=true');
     expect(phase13).toContain('password_configured boolean');
     expect(phase13).not.toContain('vault.decrypted_secrets');
+    const phase14 = readMigration('00022_phase14_maritime_rpc_compatibility.sql');
+    expect(phase14).toContain('p_client_id uuid DEFAULT NULL');
+    expect(phase14).toContain('Client not found or access denied');
+    const phase15 = readMigration('00023_phase15_exit_stage_integrity.sql');
+    expect(phase15).toContain('Archived case cannot change exit status');
+    expect(phase15).toContain('Final cargo exit requires exit-permit stage');
     expect(allSql).toContain('SET search_path = public, pg_temp');
     expect(allSql).toContain('REVOKE');
+  });
+
+  it('verifies Operations preserves registration-order ownership and exact shipment linking', () => {
+    const ui = fs.readFileSync(path.resolve(__dirname, '../src/pages/OperationsPage.tsx'), 'utf8');
+    expect(ui).toContain("select('id,client_id,case_id,order_number");
+    expect(ui).toContain('client_id:clientId');
+    expect(ui).toContain('const s=shipments.find(x=>x.case_id===id);');
   });
 
   it('contains the durable offline queue and binds replay to the authenticated user', () => {
