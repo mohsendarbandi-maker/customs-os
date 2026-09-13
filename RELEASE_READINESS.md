@@ -7,14 +7,18 @@
 - Phase 10 — Integrity Checks: implemented with `get_customs_os_integrity_report()` and `case_operational_readiness`.
 - Phase 11 — Production Security Hardening: anonymous execution removed from sensitive workflow functions; immutable history tables are protected from client DML.
 - Phase 12 — Release Candidate: source cleanup completed, stale security tests corrected, temporary files removed, and security-advisor cleanup applied.
-- Phase 13 — Workflow Integrity & Credential Boundary: Phase 8–10 live workflow functions are now represented by a canonical repository migration; EPL passwords are no longer returned to the browser; finance UI rounds base IRR amounts to the database precision; Offline Queue is bound to the authenticated user and excludes event-creating tracking RPCs from automatic replay.
+- Phase 13 — Workflow Integrity & Credential Boundary: Phase 8–10 live workflow functions are represented by a canonical repository migration; EPL passwords are no longer returned to the browser; finance UI rounds base IRR amounts to database precision; Offline Queue is bound to the authenticated user and excludes event-creating tracking RPCs from automatic replay.
+- Phase 14 — Maritime RPC Compatibility: the live maritime persistence RPC accepts and validates the optional client context used by the Operations UI, preserving tenant ownership and B/L identity rules.
+- Phase 15 — Exit Stage Integrity: cargo-exit updates cannot regress archived/completed workflow state and final exit requires the exit-permit stage; exit-driven case stage changes are recorded in immutable status history.
 
 ## Verification completed
 
-- Supabase Phase 13 migration applied successfully to the live project.
-- Live `advance_case_stage`, `get_case_completion_readiness`, and `get_customs_os_integrity_report` functions are SECURITY INVOKER with an explicit `search_path` and authenticated-role grants.
-- Browser-facing EPL credential lookup now returns only `epl_username` and `password_configured`; plaintext Vault secrets are not exposed to the client.
+- Supabase Phase 13, 14 and 15 migrations applied successfully to the live project.
+- Live workflow/readiness and credential functions are SECURITY INVOKER with explicit search paths and authenticated-only grants where appropriate.
+- Browser-facing EPL credential lookup returns only username and password-configured status; plaintext Vault secrets are not exposed to the client.
+- Operations preserves registration-order client ownership for independent orders and only auto-loads shipments explicitly linked to the selected case.
 - Offline Queue automatic replay is limited to selected workflow updates and does not include authentication/session operations, case creation, or tracking-event creation.
+- Finance UI now sends base IRR values rounded to the same two-decimal precision enforced by the database.
 - GitHub Actions is configured to run tests before the production build on pushes to `main`.
 
 ## Required before production use
@@ -27,6 +31,6 @@
 
 ## Known repository/preview constraint
 
-Supabase GitHub Preview currently attempts to initialize the repository against an environment where `organizations` already exists and reports `relation "organizations" already exists`. This is a migration-history/preview-environment reconciliation issue and is separate from the application runtime schema already applied to the live project.
+Supabase GitHub Preview currently attempts to initialize the repository against an environment where `organizations` already exists and reports `relation "organizations" already exists`. This remains a migration-history/preview-environment reconciliation issue and is separate from the application runtime schema already applied to the live project.
 
 Vercel production deployment has not yet been verified for the latest source. The project remains a **release candidate**, not a verified production release.
