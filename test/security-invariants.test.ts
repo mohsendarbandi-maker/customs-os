@@ -104,7 +104,7 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     expect(allSql).toContain('security_invoker = true');
   });
 
-  it('contains the durable offline queue implementation and limits automatic replay to safe workflow RPCs', () => {
+  it('contains the durable offline queue and binds replay to the authenticated user', () => {
     const queueSql = fs.readFileSync(path.resolve(__dirname, '../src/lib/offlineQueue.ts'), 'utf8');
     expect(queueSql).toContain("const DB_NAME = 'customs-os-offline'");
     expect(queueSql).toContain("const STORE_NAME = 'rpc_queue'");
@@ -112,9 +112,12 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     expect(queueSql).toContain('window.addEventListener(\'online\'');
     expect(queueSql).toContain('attachSupabaseClient');
     expect(queueSql).toContain('OFFLINE_QUEUEABLE_RPCS');
+    expect(queueSql).toContain('currentUserId');
+    expect(queueSql).toContain('userId');
     expect(queueSql).toContain('attach_registration_order');
     expect(queueSql).toContain('update_case_operational_data');
     expect(queueSql).not.toContain("'create_case_workflow'");
+    expect(queueSql).not.toContain("'set_shipment_tracking_status'");
   });
 
   it('verifies security controls remain present across the repository', () => {
