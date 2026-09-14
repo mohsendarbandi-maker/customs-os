@@ -7,7 +7,7 @@ type Vessel={id:string;name:string;imo_number:string|null;flag_code:string|null;
 const n=(v:any)=>v==null||v===''?'—':new Intl.NumberFormat('fa-IR').format(Number(v));
 export const VesselTrackingPage:React.FC=()=>{
  const [rows,setRows]=useState<Vessel[]>([]),[selected,setSelected]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const load=async()=>{setBusy(true);setError('');try{const {data,error}=await supabase.from('vessels').select('id,name,imo_number,flag_code,last_latitude,last_longitude,last_position_at,last_position_source,last_speed_knots,last_course_deg').order('last_position_at',{ascending:false,nullsLast:true}).order('name');if(error)throw error;setRows((data||[]) as Vessel[]);if(!selected&&data?.[0])setSelected(data[0].id)}catch(e:any){setError(e?.message||'دریافت اطلاعات کشتی ناموفق بود')}finally{setBusy(false)}};
+ const load=async()=>{setBusy(true);setError('');try{const {data,error}=await supabase.from('vessels').select('id,name,imo_number,flag_code,last_latitude,last_longitude,last_position_at,last_position_source,last_speed_knots,last_course_deg').order('last_position_at',{ascending:false}).order('name');if(error)throw error;setRows((data||[]) as Vessel[]);if(!selected&&data?.[0])setSelected(data[0].id)}catch(e:any){setError(e?.message||'دریافت اطلاعات کشتی ناموفق بود')}finally{setBusy(false)}};
  useEffect(()=>{load()},[]);
  const vessel=useMemo(()=>rows.find(x=>x.id===selected)||rows[0], [rows,selected]);
  const hasPos=Number.isFinite(vessel?.last_latitude)&&Number.isFinite(vessel?.last_longitude);
