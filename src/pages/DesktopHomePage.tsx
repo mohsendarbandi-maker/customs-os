@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {Link} from 'react-router-dom';
-import {Anchor,Archive,BriefcaseBusiness,Calculator,CloudSun,Clock3,Database,FileCheck2,FileSearch,FolderKanban,HardDrive,MapPinned,Menu,PackageSearch,RefreshCw,Settings,Ship,Truck,Wallet,Wifi,Wind} from 'lucide-react';
+import {Anchor,Archive,Briefcase,Calculator,CloudSun,Clock3,Database,FileCheck2,FileSearch,FolderKanban,HardDrive,MapPinned,Menu,PackageSearch,RefreshCw,Settings,Ship,Truck,Wallet,Wifi,Wind} from 'lucide-react';
 
 const cities=[
  {name:'تهران',lat:35.6892,lon:51.3890},
@@ -9,7 +9,7 @@ const cities=[
  {name:'باکو',lat:40.4093,lon:49.8671},
 ];
 const apps=[
- ['control','مرکز کنترل','/control',FolderKanban],['operations','عملیات گمرکی','/operations',BriefcaseBusiness],['maritime','کشتیرانی و B/L','/maritime',Anchor],['vessel','موقعیت کشتی','/vessel-tracking',MapPinned],['clients','صاحبان کالا','/clients',Database],['finance','مالی','/finance',Wallet],['exit','خروج و ترانزیت','/exit',Truck],['permits','مجوزها','/permit-rules',FileCheck2],['documents','استخراج اسناد','/documents/extract',FileSearch],['history','سوابق پرونده','/history',Archive],['stage','مرحله پرونده','/stage',PackageSearch],['print','چاپ اظهار','/print-declaration',Calculator],
+ ['control','مرکز کنترل','/control',FolderKanban],['operations','عملیات گمرکی','/operations',Briefcase],['maritime','کشتیرانی و B/L','/maritime',Anchor],['vessel','موقعیت کشتی','/vessel-tracking',MapPinned],['clients','صاحبان کالا','/clients',Database],['finance','مالی','/finance',Wallet],['exit','خروج و ترانزیت','/exit',Truck],['permits','مجوزها','/permit-rules',FileCheck2],['documents','استخراج اسناد','/documents/extract',FileSearch],['history','سوابق پرونده','/history',Archive],['stage','مرحله پرونده','/stage',PackageSearch],['print','چاپ اظهار','/print-declaration',Calculator],
 ] as const;
 
 const faDate=new Intl.DateTimeFormat('fa-IR-u-ca-persian',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
