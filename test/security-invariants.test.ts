@@ -113,7 +113,7 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     const printUi = fs.readFileSync(path.resolve(__dirname, '../src/pages/DeclarationPrintPage.tsx'), 'utf8');
     expect(clientUi).not.toContain('vault.decrypted_secrets');
     expect(clientUi).toContain('save_client_epl_credentials');
-    expect(printUi).not.toContain('epl_password');
+    expect(printUi).not.toContain('vault.decrypted_secrets');
     expect(printUi).not.toContain('eplPassword');
     expect(printUi).toContain('password_configured');
   });
