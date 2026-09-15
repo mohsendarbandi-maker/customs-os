@@ -7,7 +7,7 @@ type AppearanceState={theme:ThemeMode;comfort:ComfortMode;density:Density;sideba
 const AppearanceContext=createContext<AppearanceState|null>(null);
 const read=<T,>(key:string,fallback:T):T=>{try{const v=localStorage.getItem(key);return v?JSON.parse(v) as T:fallback}catch{return fallback}};
 export const AppearanceProvider:React.FC<{children:React.ReactNode}>=({children})=>{
- const[theme,setThemeState]=useState<ThemeMode>(()=>{const v=read<string>('customs-theme','dark');return v==='light'?'light':'dark'});
+ const[theme,setThemeState]=useState<ThemeMode>(()=>read('customs-theme','dark')==='light'?'light':'dark');
  const[comfort,setComfortState]=useState<ComfortMode>(()=>read('customs-comfort','normal'));
  const[density,setDensityState]=useState<Density>(()=>read('customs-density','comfortable'));
  const[sidebarCollapsed,setSidebarCollapsedState]=useState<boolean>(()=>read('customs-sidebar-collapsed',false));
