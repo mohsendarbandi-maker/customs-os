@@ -6,9 +6,8 @@ import {supabase} from '../lib/supabase';
 const items=['در انتظار مبلغ ترخیصیه','پاس کشتی','اظهار','مالیات علی الحساب','درخواست ضمانتنامه حقوق ورودی و ارزش افزوده','ارزیابی','آزمایشگاه','مجوز استاندارد','نوبت کارشناسی','کد ساتا','تبصره دو منطقه آزاد','صورت‌حساب انبارداری اولیه','صورت‌حساب انبارداری متمم','وکالت حمل'];
 const STORAGE_KEY='customs_os_declaration_checklist';
 const fields=[
- ['regNumber','شماره ثبت سفارش'],['regDate','تاریخ ثبت سفارش'],['packageCount','تعداد'],['warehouseReceiptNo','شماره قبض انبار'],['warehouseReceiptDate','تاریخ قبض انبار'],['cargoDescription','شرح کالا'],['originCountry','کشور مبدا'],['transactionCountry','کشور طرف معامله'],['deliveryTerm','شرایط تحویل'],['invoiceAmount','مبلغ کل فاکتور'],['invoiceCurrency','ارز'],['bankBranchCode','کد شعبه'],['bankName','نام بانک'],['bankBranch','شعبه'],['lcNumber','شماره اعتبار اسنادی'],['dutyRate','ماخذ حقوق ورودی'],['tariffCode','کد تعرفه کالا'],['netWeight','وزن خالص'],['grossWeight','وزن ناخالص'],['billOfLading','بارنامه'],['insuranceIrr','بیمه (ریال)'],
+ ['vesselType','نوع کشتی'],['regNumber','شماره ثبت سفارش'],['regDate','تاریخ ثبت سفارش'],['packageCount','تعداد'],['warehouseReceiptNo','شماره قبض انبار'],['warehouseReceiptDate','تاریخ قبض انبار'],['cargoDescription','شرح کالا'],['originCountry','کشور مبدا'],['transactionCountry','کشور طرف معامله'],['deliveryTerm','شرایط تحویل'],['invoiceAmount','مبلغ کل فاکتور'],['invoiceCurrency','ارز'],['bankBranchCode','کد شعبه'],['bankName','نام بانک'],['bankBranch','شعبه'],['lcNumber','شماره اعتبار اسنادی'],['dutyRate','ماخذ حقوق ورودی'],['tariffCode','کد تعرفه کالا'],['netWeight','وزن خالص'],['grossWeight','وزن ناخالص'],['billOfLading','بارنامه'],['insuranceIrr','بیمه (ریال)'],
 ] as const;
-const requiredDocs=['ثبت سفارش','اینویس','پروفرما','بیمه‌نامه','پکینگ لیست','اطلاعات بانکی','گواهی بازرسی'];
 const prompt=`من اسناد حمل یک محموله وارداتی شامل این مدارک را برایت ارسال می‌کنم: اینویس، پکینگ لیست، بارنامه، بیمه‌نامه، قبض انبار، ترخیصیه، ثبت سفارش، پروفرما و در صورت وجود گواهی بازرسی.
 
 وظیفه تو این است که فقط بر اساس اطلاعات موجود در اسناد، به عنوان «کارشناس خبره امور گمرکی و سامانه EPL» اطلاعات مورد نیاز اظهارنامه را استخراج و محاسبه کنی.
@@ -55,9 +54,8 @@ export const DeclarationChecklistPage:React.FC=()=>{
    const final=await supabase.functions.invoke('ai-assistant',{body:{query:prompt+'\n\nنتایج استخراج‌شده از همه اسناد را با هم تطبیق بده و خروجی نهایی را فقط بر اساس همین اطلاعات تولید کن.',document_text:combined,extract_fields:true,page_context:'/operations?tab=pre-declaration'}});
    if(final.error)throw final.error;
    const raw=final.data?.answer||final.data?.message||{};let parsed:any={};if(typeof raw==='object')parsed=raw;else{try{parsed=JSON.parse(raw)}catch{const m=String(raw).match(/\{[\s\S]*\}/);if(m)parsed=JSON.parse(m[0])}}
-   const mapped:Record<string,string>={};for(const [key,label] of fields){if(parsed[key]!=null) mapped[key]=normalize(parsed[key]);}
-   if(parsed.billOfLading!=null)mapped.billOfLading=normalize(parsed.billOfLading);
-   setValues(v=>({...v,...mapped}));setNeeded(normalize(parsed.requiredDocuments||parsed.informationNeeded||parsed.اطلاعات_مورد_نیاز||'ندارد'));
+   const mapped:Record<string,string>={};for(const [key] of fields){if(parsed[key]!=null)mapped[key]=normalize(parsed[key]);}
+   setValues(v=>({...v,...mapped}));setNeeded(normalize(parsed.requiredDocuments||'ندارد'));
    setStatus(`${Object.keys(mapped).length} فیلد از اسناد استخراج و در فرم قرار گرفت.`);
  }catch(e:any){setStatus(e?.message||'بررسی اسناد ناموفق بود.')}finally{setBusy(false)}};
  const displayFiles=useMemo(()=>files.map(f=>f.name),[files]);
