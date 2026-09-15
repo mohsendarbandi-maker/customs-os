@@ -16,7 +16,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - run: npm install
       - run: npm test
+      - run: npm run typecheck
       - run: npm run build
-      # Customs OS: production build verification after UI/AI integration changes.
+      # Customs OS: tests + TypeScript + production build are required for every main commit.
