@@ -1,0 +1,26 @@
+/* Customs OS responsive layer: mobile-first touch, safe areas and dense operational screens. */
+@media(max-width:767px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%}
+  body{padding-bottom:env(safe-area-inset-bottom)}
+  .app-content{overflow-x:hidden}
+  .app-content>div{min-width:0}
+  .app-content [class*="grid-cols-"]{min-width:0}
+  .app-content [class*="grid-cols-"]>*{min-width:0}
+  .app-content .flex{min-width:0}
+  .app-content .truncate{min-width:0}
+  input,select,textarea{font-size:16px!important;min-height:44px}
+  button,.icon-btn{min-height:44px;touch-action:manipulation}
+  .app-mobilebar{min-height:58px}
+  .app-mobile-drawer{width:min(90vw,360px)}
+  .app-mobile-drawer nav{overscroll-behavior:contain}
+  table{font-size:12px}
+  .overflow-x-auto{max-width:100%;overflow-x:auto;overflow-y:hidden}
+  [role="dialog"]{max-width:calc(100vw - 24px);max-height:calc(100vh - 24px)}
+}
+@media(min-width:768px){
+  .app-content{padding-inline:20px}
+}
+@media(min-width:1200px){
+  .app-content{padding-inline:28px}
+}
+@media(prefers-reduced-motion:reduce){.app-nav-item{transition:none!important}}
