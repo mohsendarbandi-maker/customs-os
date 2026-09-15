@@ -4,6 +4,7 @@ const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'au
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json'}});
 
 const fields=['vesselType','regNumber','regDate','packageCount','warehouseReceiptNo','warehouseReceiptDate','cargoDescription','originCountry','transactionCountry','deliveryTerm','invoiceAmount','invoiceCurrency','bankBranchCode','bankName','bankBranch','lcNumber','dutyRate','tariffCode','netWeight','grossWeight','billOfLading','insuranceIrr','requiredDocuments'];
+const shipmentFields=['ownerName','shippingLine','vesselName','imo','count','unit','net','gross','billOfLading'];
 
 function extractText(data:any){
  if(typeof data?.output_text==='string'&&data.output_text.trim())return data.output_text.trim();
@@ -12,6 +13,33 @@ function extractText(data:any){
  for(const item of Array.isArray(data?.outputs)?data.outputs:[]){if(item?.type==='text'&&typeof item.text==='string')texts.push(item.text)}
  return texts.join('\n').trim();
 }
+
+const shipmentPrompt=`
+تو مسئول استخراج اطلاعات اولیه «محموله کشتیرانی» در Customs OS هستی.
+همه اسناد و همه صفحات ارسالی را به عنوان یک مجموعه واحد بررسی کن و بین آنها تطبیق بده.
+هدف فقط استخراج ۹ فیلد زیر است و هیچ فیلد دیگری نباید جایگزین آنها شود:
+1. ownerName = نام صاحب کالا
+2. shippingLine = نام کشتیرانی/شرکت حمل دریایی
+3. vesselName = نام کشتی
+4. imo = شماره IMO کشتی، دقیقاً ۷ رقم
+5. count = تعداد محموله
+6. unit = واحد واقعی تعداد مثل رول، بسته، کیسه، دستگاه، عدد
+7. net = وزن خالص
+8. gross = وزن ناخالص
+9. billOfLading = شماره B/L
+
+قواعد:
+- هیچ مقدار را حدس نزن. اگر در اسناد وجود ندارد یا خوانا نیست، دقیقاً «xxxx» برگردان.
+- همه ۹ فیلد را همیشه برگردان؛ هیچ فیلدی حذف یا خالی نشود.
+- برای نام صاحب کالا و نام کشتیرانی/کشتی، متن واقعی سند را بخوان و ترجمه ساختگی نکن؛ نام تجاری را حفظ کن.
+- IMO را از خود سند کشتی/B/L پیدا کن و فقط شماره ۷ رقمی را برگردان.
+- تعداد و واحد را از Packing List، B/L و سایر اسناد تطبیق بده؛ عدد را با واحد واقعی برگردان.
+- وزن خالص و ناخالص را دقیقاً از سند بخوان. واحد وزن را در مقدار نیاور مگر برای روشن شدن لازم باشد.
+- شماره B/L باید دقیقاً مطابق اصل سند، با حروف/اعداد انگلیسی و علائم آن حفظ شود؛ ترجمه یا تغییر فرمت ممنوع.
+- اگر چند سند مقدار متفاوت دارند، مقدار قابل اتکاتر و منطبق با B/L/Packing List را انتخاب کن.
+- هیچ شماره پرونده، CASE-... یا شناسه داخلی تولید نکن.
+- خروجی فقط JSON مطابق schema باشد و هیچ Markdown یا توضیح دیگری ننویس.
+`;
 
 const preDeclarationPrompt=`
 تو فقط مسئول استخراج «ورود اطلاعات قبل اظهار» برای سامانه گمرکی ایران هستی.
@@ -56,20 +84,22 @@ Deno.serve(async(req)=>{
   const documents=Array.isArray(body?.documents)?body.documents:[];
   const pageContext=String(body?.page_context||'').slice(0,1000);
   const extractFields=Boolean(body?.extract_fields);
+  const shipmentExtract=Boolean(body?.shipment_extract);
   if(!query&&!documentText&&!documentData&&!documents.length)return json({error:'No query or document was supplied.'},400);
 
   const totalSize=documents.reduce((n:any,d:any)=>n+String(d?.data||'').length,0)+documentData.length;
   if(totalSize>45000000)return json({error:'حجم مجموع اسناد برای ارسال به هوش مصنوعی بیش از حد مجاز است. اسناد را در چند نوبت ارسال کنید.'},413);
 
-  const system=`You are Customs OS AI for Iranian customs clearance. You must follow the user's extraction rules literally. Never invent values. When the requested output field is descriptive, output Persian. Preserve official identifiers exactly. Current section: ${pageContext}`;
-  const prompt=extractFields?preDeclarationPrompt:(query||'این اسناد را برای عملیات گمرکی تحلیل کن.');
+  const system=`You are Customs OS AI for Iranian customs clearance. Follow extraction rules literally. Never invent values. Preserve official identifiers exactly. Current section: ${pageContext}`;
+  const prompt=shipmentExtract?shipmentPrompt:(extractFields?preDeclarationPrompt:(query||'این اسناد را برای عملیات گمرکی تحلیل کن.'));
   const input:any[]=[{type:'text',text:prompt}];
   if(documentText)input.push({type:'text',text:`DOCUMENT TEXT:\n${documentText}`});
   if(documentData){if(documentMime==='application/pdf')input.push({type:'document',data:documentData,mime_type:'application/pdf'});else if(documentMime.startsWith('image/'))input.push({type:'image',data:documentData,mime_type:documentMime});else return json({error:'نوع فایل پشتیبانی نمی‌شود. PDF یا تصویر ارسال کنید.'},415)}
   for(const d of documents){const data=String(d?.data||'').replace(/^data:[^;]+;base64,/,'');const mime=String(d?.mime_type||'').toLowerCase();if(!data)continue;if(mime==='application/pdf')input.push({type:'text',text:`نام سند: ${String(d?.name||'سند')}`},{type:'document',data,mime_type:'application/pdf'});else if(mime.startsWith('image/'))input.push({type:'text',text:`نام سند: ${String(d?.name||'سند')}`},{type:'image',data,mime_type:mime});else return json({error:`نوع فایل ${String(d?.name||'')} پشتیبانی نمی‌شود.`},415)}
 
   const payload:any={model:'gemini-3.5-flash-lite',input,system_instruction:system,store:true};
-  if(extractFields)payload.response_format={type:'text',mime_type:'application/json',schema:{type:'object',properties:Object.fromEntries(fields.map(k=>[k,{type:'string'}])),required:fields,additionalProperties:false}};
+  if(shipmentExtract)payload.response_format={type:'text',mime_type:'application/json',schema:{type:'object',properties:Object.fromEntries(shipmentFields.map(k=>[k,{type:'string'}])),required:shipmentFields,additionalProperties:false}};
+  else if(extractFields)payload.response_format={type:'text',mime_type:'application/json',schema:{type:'object',properties:Object.fromEntries(fields.map(k=>[k,{type:'string'}])),required:fields,additionalProperties:false}};
   const r=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const raw=await r.text();let data:any={};try{data=JSON.parse(raw)}catch{data={raw:raw.slice(0,3000)}}
   if(!r.ok){const msg=String(data?.error?.message||data?.message||data?.raw||`Gemini HTTP ${r.status}`);return json({error:`Gemini error: ${msg}`},502)}
