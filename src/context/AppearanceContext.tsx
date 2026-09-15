@@ -7,10 +7,10 @@ type AppearanceState={theme:ThemeMode;comfort:ComfortMode;density:Density;sideba
 const AppearanceContext=createContext<AppearanceState|null>(null);
 const read=<T,>(key:string,fallback:T):T=>{try{const v=localStorage.getItem(key);return v?JSON.parse(v) as T:fallback}catch{return fallback}};
 export const AppearanceProvider:React.FC<{children:React.ReactNode}>=({children})=>{
- const[theme,setThemeState]=useState<ThemeMode>(()=>read('customs-theme','dark')==='light'?'light':'dark');
- const[comfort,setComfortState]=useState<ComfortMode>(()=>read('customs-comfort','normal'));
- const[density,setDensityState]=useState<Density>(()=>read('customs-density','comfortable'));
- const[sidebarCollapsed,setSidebarCollapsedState]=useState<boolean>(()=>read('customs-sidebar-collapsed',false));
+ const[theme,setThemeState]=useState<ThemeMode>(()=>read<ThemeMode>('customs-theme','dark'));
+ const[comfort,setComfortState]=useState<ComfortMode>(()=>read<ComfortMode>('customs-comfort','normal'));
+ const[density,setDensityState]=useState<Density>(()=>read<Density>('customs-density','comfortable'));
+ const[sidebarCollapsed,setSidebarCollapsedState]=useState<boolean>(()=>read<boolean>('customs-sidebar-collapsed',false));
  const persist=(key:string,value:unknown)=>{try{localStorage.setItem(key,JSON.stringify(value))}catch{}};
  const setTheme=(v:ThemeMode)=>{setThemeState(v);persist('customs-theme',v)};
  const setComfort=(v:ComfortMode)=>{setComfortState(v);persist('customs-comfort',v)};
