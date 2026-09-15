@@ -16,6 +16,7 @@ import {VesselSearchPage} from './pages/VesselSearchPage';
 import {DeclarationPrintPage} from './pages/DeclarationPrintPage';
 import {OperationsPage} from './pages/OperationsPage';
 import {DeclarationChecklistPage} from './pages/DeclarationChecklistPage';
+import {PreDeclarationPage} from './pages/PreDeclarationPage';
 import {PermitRulesPage} from './pages/PermitRulesPage';
 import {FinancePage} from './pages/FinancePage';
 import {ExitPage} from './pages/ExitPage';
@@ -25,13 +26,7 @@ import {CaseStagePage} from './pages/CaseStagePage';
 import {DocumentExtractionPage} from './pages/DocumentExtractionPage';
 import {SettingsEnterprisePage} from './pages/SettingsEnterprisePage';
 import {RemindersPage} from './pages/RemindersPage';
-
 const queryClient=new QueryClient({defaultOptions:{queries:{staleTime:30000,refetchOnWindowFocus:false,retry:1}}});
-
-function OperationsRoute(){
- const[params]=useSearchParams();
- return params.get('tab')==='declaration'?<DeclarationChecklistPage/>:<OperationsPage/>;
-}
-
+function OperationsRoute(){const[params]=useSearchParams();return params.get('tab')==='declaration'?<DeclarationChecklistPage/>:params.get('tab')==='pre-declaration'?<PreDeclarationPage/>:<OperationsPage/>}
 function App(){return <QueryClientProvider client={queryClient}><AuthProvider><AppearanceProvider><SettingsPersistenceBridge/><BrowserRouter><AppShell><Routes><Route path="/login" element={<LoginPage/>}/><Route path="/onboarding" element={<OnboardingPage/>}/><Route path="/" element={<ProtectedRoute><DesktopHomePage/></ProtectedRoute>}/><Route path="/legacy-dashboard" element={<ProtectedRoute><MainMenuPage/></ProtectedRoute>}/><Route path="/clients" element={<ProtectedRoute><ClientRegistryPage/></ProtectedRoute>}/><Route path="/maritime" element={<ProtectedRoute><MaritimePage/></ProtectedRoute>}/><Route path="/vessel-search" element={<ProtectedRoute><VesselSearchPage/></ProtectedRoute>}/><Route path="/reminders" element={<ProtectedRoute><RemindersPage/></ProtectedRoute>}/><Route path="/operations" element={<ProtectedRoute><OperationsRoute/></ProtectedRoute>}/><Route path="/permit-rules" element={<ProtectedRoute><PermitRulesPage/></ProtectedRoute>}/><Route path="/finance" element={<ProtectedRoute><FinancePage/></ProtectedRoute>}/><Route path="/exit" element={<ProtectedRoute><ExitPage/></ProtectedRoute>}/><Route path="/control" element={<ProtectedRoute><ControlCenterPage/></ProtectedRoute>}/><Route path="/history" element={<ProtectedRoute><CaseHistoryPage/></ProtectedRoute>}/><Route path="/stage" element={<ProtectedRoute><CaseStagePage/></ProtectedRoute>}/><Route path="/print-declaration" element={<ProtectedRoute><DeclarationPrintPage/></ProtectedRoute>}/><Route path="/documents/extract" element={<ProtectedRoute><DocumentExtractionPage/></ProtectedRoute>}/><Route path="/settings/*" element={<ProtectedRoute><SettingsEnterprisePage/></ProtectedRoute>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></AppShell></BrowserRouter></AppearanceProvider></AuthProvider></QueryClientProvider>}
 export default App;
