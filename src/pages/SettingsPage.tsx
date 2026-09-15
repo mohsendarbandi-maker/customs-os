@@ -10,7 +10,7 @@ import {
  UserCog,Users,Wallet,Webhook,X,Eye,EyeOff
 } from 'lucide-react';
 
-type SettingItem={slug:string;label:string;en:string;icon:React.ComponentType<{size?:number;className?:string}>;group:string;roles?:string[]};
+type SettingItem={slug:string;label:string;en:string;icon:React.ElementType;group:string;roles?:string[]};
 
 const groups=[
  {id:'account',label:'حساب و کاربر'},
@@ -61,7 +61,7 @@ const items:SettingItem[]=[
 const roleLabel:Record<string,string>={owner:'مالک',admin:'مدیر',broker:'کارگزار',accountant:'حسابدار',warehouse:'انبار',client:'صاحب کالا'};
 const defaultSettings={theme:'system',density:'comfortable',comfort:'normal',sidebarCollapsed:false,fontSize:'medium',animations:true,reducedMotion:false,stickyHeader:true,zebraRows:false,hoverRows:true,calendar:'jalali',timezone:'Asia/Tehran',timeFormat:'24',autoSave:false,sessionTimeout:60,numberingPrefix:'DB',numberingDigits:6,numberingYear:true,numberingMonth:false,duplicateClients:true,defaultPort:'بندر شهید رجایی',defaultCustomsOffice:'گمرک شهید رجایی',defaultWorkflow:'standard',currency:'IRR',exchangeMode:'manual',vatRate:10,documentMaxMb:25,retentionDays:3650,vesselAutoRefresh:15,quietHours:false,quietFrom:'22:00',quietTo:'07:00'};
 
-const Card:React.FC<{title:string;desc?:string;icon?:React.ComponentType<{size?:number}>;children:React.ReactNode;className?:string}>=({title,desc,icon:Icon,children,className=''})=><section className={`rounded-2xl border app-border bg-[var(--surface)] p-4 md:p-5 ${className}`}><div className="flex items-start gap-3 mb-4">{Icon&&<div className="h-10 w-10 rounded-xl grid place-items-center bg-[color-mix(in_srgb,var(--primary)_13%,var(--surface-2))] text-[var(--primary)]"><Icon size={19}/></div>}<div className="min-w-0"><h3 className="font-bold">{title}</h3>{desc&&<p className="mt-1 text-xs app-muted">{desc}</p>}</div></div>{children}</section>;
+const Card:React.FC<{title:string;desc?:string;icon?:React.ElementType;children:React.ReactNode;className?:string}>=({title,desc,icon:Icon,children,className=''})=><section className={`rounded-2xl border app-border bg-[var(--surface)] p-4 md:p-5 ${className}`}><div className="flex items-start gap-3 mb-4">{Icon&&<div className="h-10 w-10 rounded-xl grid place-items-center bg-[color-mix(in_srgb,var(--primary)_13%,var(--surface-2))] text-[var(--primary)]"><Icon size={19}/></div>}<div className="min-w-0"><h3 className="font-bold">{title}</h3>{desc&&<p className="mt-1 text-xs app-muted">{desc}</p>}</div></div>{children}</section>;
 const Field:React.FC<{label:string;help?:string;children:React.ReactNode}>=({label,help,children})=><label className="block"><span className="block text-sm font-semibold mb-1.5">{label}</span>{children}{help&&<span className="block text-[11px] app-muted mt-1">{help}</span>}</label>;
 const Input:React.FC<React.InputHTMLAttributes<HTMLInputElement>>=p=><input {...p} className={`w-full rounded-xl border app-border bg-[var(--surface-2)] text-[var(--text)] px-3 min-h-11 outline-none focus:border-[var(--primary)] ${p.className||''}`}/>;
 const Select:React.FC<React.SelectHTMLAttributes<HTMLSelectElement>>=p=><select {...p} className={`w-full rounded-xl border app-border bg-[var(--surface-2)] text-[var(--text)] px-3 min-h-11 outline-none focus:border-[var(--primary)] ${p.className||''}`}/>;
