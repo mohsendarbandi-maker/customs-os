@@ -1,98 +1,15 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
-const cors={
-  'Access-Control-Allow-Origin':'*',
-  'Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods':'POST, OPTIONS'
-};
+const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json'}});
-
 const fields=[
-'client','clientNationalId','clientEconomicId','seller','sellerAddress','sellerCountry','sellerRegistrationId',
-'regNumber','regDate','registrationType','proformaNumber','proformaDate','contractNumber','contractDate',
-'shippingLine','carrier','vesselName','imoNumber','voyageNo','billOfLading','billYear','billDate','billType',
-'originPort','destinationPort','transshipmentPort','originCountry','transactionCountry','loadingDate','unloadingDate',
-'deliveryTerm','paymentTerm','currency','cargoDescription','cargoBrand','cargoModel','cargoCount','cargoCountUnit',
-'packageCount','packageType','netWeight','grossWeight','volume','weightUnit','tariffCode','tariffDescription',
-'countryOfOrigin','invoiceAmount','invoiceCurrency','freightAmount','freightCurrency','insuranceAmount','insuranceCurrency',
-'insuranceIrr','customsValue','exchangeRate','dutyRate','vatRate','dutyAmount','vatAmount','totalPayable',
-'warehouseReceiptNo','warehouseReceiptDate','warehouseName','warehouseAddress','customsOffice','declarationNumber',
-'declarationDate','declarationType','containerNumber','containerCount','sealNumber','portOfLoading','portOfDischarge',
-'bankName','bankReference','paymentDate','purchaseOrderNumber','purchaseOrderDate','hsDescription','notes'
+'client','clientNationalId','clientEconomicId','seller','sellerAddress','sellerCountry','sellerRegistrationId','regNumber','regDate','registrationType','proformaNumber','proformaDate','contractNumber','contractDate',
+'shippingLine','carrier','vesselName','vesselType','imoNumber','voyageNo','billOfLading','billYear','billDate','billType','originPort','destinationPort','transshipmentPort','originCountry','transactionCountry','loadingDate','unloadingDate','deliveryTerm','paymentTerm','currency','cargoDescription','cargoBrand','cargoModel','cargoCount','cargoCountUnit','packageCount','packageType','netWeight','grossWeight','volume','weightUnit','tariffCode','tariffDescription','countryOfOrigin','invoiceAmount','invoiceCurrency','freightAmount','freightCurrency','insuranceAmount','insuranceCurrency','insuranceIrr','customsValue','exchangeRate','dutyRate','vatRate','dutyAmount','vatAmount','totalPayable','warehouseReceiptNo','warehouseReceiptDate','warehouseName','warehouseAddress','customsOffice','declarationNumber','declarationDate','declarationType','containerNumber','containerCount','sealNumber','portOfLoading','portOfDischarge','bankName','bankBranchCode','bankBranch','bankReference','paymentDate','lcNumber','purchaseOrderNumber','purchaseOrderDate','hsDescription','requiredDocuments','notes'
 ];
-
-function extractText(data:any){
-  if(typeof data?.output_text==='string' && data.output_text.trim()) return data.output_text.trim();
-  const steps=Array.isArray(data?.steps)?data.steps:[];
-  const texts:string[]=[];
-  for(const step of steps){
-    const content=Array.isArray(step?.content)?step.content:[];
-    for(const item of content){if(item?.type==='text' && typeof item.text==='string')texts.push(item.text);}
-  }
-  if(texts.length)return texts.join('\n').trim();
-  const outputs=Array.isArray(data?.outputs)?data.outputs:[];
-  for(const item of outputs){if(item?.type==='text' && typeof item.text==='string')texts.push(item.text);}
-  return texts.join('\n').trim();
-}
-
-Deno.serve(async(req)=>{
-  if(req.method==='OPTIONS')return new Response('ok',{headers:cors});
-  try{
-    const auth=req.headers.get('Authorization');
-    if(!auth?.startsWith('Bearer '))return json({error:'Unauthorized: Supabase session is missing.'},401);
-    const key=Deno.env.get('GEMINI_API_KEY')?.trim();
-    if(!key)return json({error:'GEMINI_API_KEY is missing in Supabase Secrets.'},503);
-
-    const body=await req.json().catch(()=>({}));
-    const query=String(body?.query||'').slice(0,16000);
-    const documentText=String(body?.document_text||'').slice(0,160000);
-    const documentData=String(body?.document_data||'').replace(/^data:[^;]+;base64,/,'');
-    const documentMime=String(body?.document_mime_type||'').trim().toLowerCase();
-    const pageContext=String(body?.page_context||'').slice(0,1000);
-    const extractFields=Boolean(body?.extract_fields);
-    const previousInteractionId=String(body?.previous_interaction_id||'').trim();
-
-    if(!query&&!documentText&&!documentData)return json({error:'No query or document was supplied.'},400);
-    if(documentData && documentData.length>14000000)return json({error:'فایل برای ارسال مستقیم به Gemini بزرگ است. لطفاً فایل کوچک‌تری انتخاب کنید.'},413);
-
-    const system=`You are Customs OS AI, an expert assistant for Iranian customs clearance, import/export, logistics, maritime operations, documents, finance and case management. Answer in Persian unless asked otherwise. Be precise and conservative. Never invent document values. Read the entire document, including every page, table, header, footer, stamp and handwritten/printed field that is legible. Preserve numbers, dates, units, currencies, container numbers, B/L numbers and HS codes exactly as shown. If a value is uncertain, omit it rather than guessing. Current application section: ${pageContext}`;
-    const prompt=extractFields
-      ? `از کل سند گمرکی/تجاری اطلاعات قابل انتقال به Customs OS را استخراج کن. همه صفحات، جدول‌ها، سربرگ‌ها، پاورقی‌ها، مهرها و فیلدهای خوانا را بررسی کن. فقط JSON معتبر مطابق schema برگردان، بدون markdown و بدون توضیح. هر فیلد را فقط وقتی پر کن که مقدار آن صریحاً در همین سند دیده می‌شود. مقادیر را دقیقاً با همان عدد/تاریخ/واحد/ارز سند نگه دار. برای شماره‌ها صفرهای ابتدای مقدار را حذف نکن. اگر فیلدی وجود ندارد یا خوانا نیست، آن را خالی نکن و اصلاً برنگردان. اگر چند مقدار برای یک فیلد وجود دارد، مقدار مربوط به سند اصلی را انتخاب کن و در notes مغایرت را توضیح بده. سند را از نظر نوع (پروفرما، فاکتور، پکینگ لیست، B/L، قبض انبار، اظهارنامه، گواهی مبدأ، بیمه، مجوز و...) تشخیص بده و تمام اطلاعات مرتبط با همان سند را استخراج کن.`
-      : (query||'این سند را برای عملیات گمرکی و لجستیکی تحلیل کن و اطلاعات مهم، خطاها، مغایرت‌ها و فیلدهای قابل استخراج را ارائه بده.');
-
-    const input:any[]=[{type:'text',text:prompt}];
-    if(documentText)input.push({type:'text',text:`DOCUMENT TEXT:\n${documentText}`});
-    if(documentData){
-      if(documentMime==='application/pdf')input.push({type:'document',data:documentData,mime_type:'application/pdf'});
-      else if(documentMime.startsWith('image/'))input.push({type:'image',data:documentData,mime_type:documentMime});
-      else return json({error:'نوع فایل پشتیبانی نمی‌شود. PDF یا تصویر ارسال کنید.'},415);
-    }
-
-    const payload:any={model:'gemini-3.5-flash-lite',input,system_instruction:system,store:true};
-    if(previousInteractionId)payload.previous_interaction_id=previousInteractionId;
-    if(extractFields){
-      payload.response_format={
-        type:'text',
-        mime_type:'application/json',
-        schema:{type:'object',properties:Object.fromEntries(fields.map(k=>[k,{type:'string'}])),additionalProperties:false}
-      };
-    }
-
-    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
-      method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},body:JSON.stringify(payload)
-    });
-    const raw=await r.text();
-    let data:any={};try{data=JSON.parse(raw)}catch{data={raw:raw.slice(0,3000)}};
-    if(!r.ok){
-      const msg=String(data?.error?.message||data?.message||data?.raw||`Gemini HTTP ${r.status}`);
-      console.error('Gemini Interactions failed',{status:r.status,error:msg});
-      const hint=r.status===400?'درخواست Gemini نامعتبر است.':r.status===401||r.status===403?'کلید Gemini معتبر نیست یا دسترسی API فعال نیست.':r.status===429?'سهمیه رایگان Gemini فعلاً تمام شده یا Rate Limit شده است.':'سرویس Gemini خطا داده است.';
-      return json({error:`${hint} جزئیات: ${msg}`},502);
-    }
-    const answer=extractText(data)||'پاسخ خالی از Gemini دریافت شد.';
-    return json({answer,model:'gemini-3.5-flash-lite',interaction_id:data?.id||data?.interaction_id||null,status:data?.status||null});
-  }catch(e){
-    console.error('ai-assistant fatal error',e);
-    return json({error:e instanceof Error?e.message:'AI request failed'},500);
-  }
-});
+function extractText(data:any){if(typeof data?.output_text==='string'&&data.output_text.trim())return data.output_text.trim();const steps=Array.isArray(data?.steps)?data.steps:[];const texts:string[]=[];for(const step of steps){const content=Array.isArray(step?.content)?step.content:[];for(const item of content){if(item?.type==='text'&&typeof item.text==='string')texts.push(item.text)}}if(texts.length)return texts.join('\n').trim();const outputs=Array.isArray(data?.outputs)?data.outputs:[];for(const item of outputs){if(item?.type==='text'&&typeof item.text==='string')texts.push(item.text)}return texts.join('\n').trim()}
+Deno.serve(async(req)=>{if(req.method==='OPTIONS')return new Response('ok',{headers:cors});try{const auth=req.headers.get('Authorization');if(!auth?.startsWith('Bearer '))return json({error:'Unauthorized: Supabase session is missing.'},401);const key=Deno.env.get('GEMINI_API_KEY')?.trim();if(!key)return json({error:'GEMINI_API_KEY is missing in Supabase Secrets.'},503);const body=await req.json().catch(()=>({}));const query=String(body?.query||'').slice(0,16000);const documentText=String(body?.document_text||'').slice(0,160000);const documentData=String(body?.document_data||'').replace(/^data:[^;]+;base64,/,'');const documentMime=String(body?.document_mime_type||'').trim().toLowerCase();const pageContext=String(body?.page_context||'').slice(0,1000);const extractFields=Boolean(body?.extract_fields);const previousInteractionId=String(body?.previous_interaction_id||'').trim();if(!query&&!documentText&&!documentData)return json({error:'No query or document was supplied.'},400);if(documentData&&documentData.length>14000000)return json({error:'فایل برای ارسال مستقیم به Gemini بزرگ است. لطفاً فایل کوچک‌تری انتخاب کنید.'},413);
+const system=`You are Customs OS AI, an expert assistant for Iranian customs clearance, import/export, logistics, maritime operations, documents, finance and case management. Answer in Persian unless asked otherwise. Be precise and conservative. Never invent document values. Read the entire document, including every page, table, header, footer, stamp and handwritten/printed field that is legible. Preserve numbers, dates, units, currencies, container numbers, B/L numbers and HS codes exactly as shown. If a value is uncertain, omit it rather than guessing. Current application section: ${pageContext}`;
+const prompt=extractFields?`از کل سند گمرکی/تجاری اطلاعات قابل انتقال به Customs OS را استخراج کن. همه صفحات، جدول‌ها، سربرگ‌ها، پاورقی‌ها، مهرها و فیلدهای خوانا را بررسی کن. فقط JSON معتبر مطابق schema برگردان، بدون markdown و بدون توضیح. هر فیلد را فقط وقتی پر کن که مقدار آن صریحاً در سند دیده می‌شود. مقادیر را دقیقاً با همان عدد/تاریخ/واحد/ارز سند نگه دار. برای شماره‌ها صفرهای ابتدای مقدار را حذف نکن. اگر فیلدی وجود ندارد یا خوانا نیست، اصلاً برنگردان. اگر چند مقدار برای یک فیلد وجود دارد، مقدار مربوط به سند اصلی را انتخاب کن. برای vesselType فقط ایرانی یا خارجی طبق پرچم/مالک کشتی. برای بانک فقط بانک ایرانی را استخراج کن و کد شعبه، نام شعبه، شماره LC/ابزار پرداخت را اگر صریحاً موجود است استخراج کن؛ اگر روش پرداخت TT/نقدی است lcNumber باید --- باشد. requiredDocuments فقط نام مدارکی باشد که طبق قواعد درخواست از صاحب کالا هستند و در مجموعه اسناد ارسال‌شده وجود ندارند؛ اگر چیزی لازم نیست ندارد.`:(query||'این سند را برای عملیات گمرکی و لجستیکی تحلیل کن.');
+const input:any[]=[{type:'text',text:prompt}];if(documentText)input.push({type:'text',text:`DOCUMENT TEXT:\n${documentText}`});if(documentData){if(documentMime==='application/pdf')input.push({type:'document',data:documentData,mime_type:'application/pdf'});else if(documentMime.startsWith('image/'))input.push({type:'image',data:documentData,mime_type:documentMime});else return json({error:'نوع فایل پشتیبانی نمی‌شود. PDF یا تصویر ارسال کنید.'},415)}
+const payload:any={model:'gemini-3.5-flash-lite',input,system_instruction:system,store:true};if(previousInteractionId)payload.previous_interaction_id=previousInteractionId;if(extractFields)payload.response_format={type:'text',mime_type:'application/json',schema:{type:'object',properties:Object.fromEntries(fields.map(k=>[k,{type:'string'}])),additionalProperties:false}};
+const r=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},body:JSON.stringify(payload)});const raw=await r.text();let data:any={};try{data=JSON.parse(raw)}catch{data={raw:raw.slice(0,3000)}}if(!r.ok){const msg=String(data?.error?.message||data?.message||data?.raw||`Gemini HTTP ${r.status}`);const hint=r.status===400?'درخواست Gemini نامعتبر است.':r.status===401||r.status===403?'کلید Gemini معتبر نیست یا دسترسی API فعال نیست.':r.status===429?'سهمیه رایگان Gemini فعلاً تمام شده یا Rate Limit شده است.':'سرویس Gemini خطا داده است.';return json({error:`${hint} جزئیات: ${msg}`},502)}const answer=extractText(data)||'پاسخ خالی از Gemini دریافت شد.';return json({answer,model:'gemini-3.5-flash-lite',interaction_id:data?.id||data?.interaction_id||null,status:data?.status||null});}catch(e){console.error('ai-assistant fatal error',e);return json({error:e instanceof Error?e.message:'AI request failed'},500)}});
