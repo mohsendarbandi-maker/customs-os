@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, '..');
 const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20260915210000_security_and_rbac_hardening.sql'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'src/App.tsx'), 'utf8');
 const shell = fs.readFileSync(path.join(root, 'src/components/AppShell.tsx'), 'utf8');
-const shipment = fs.readFileSync(path.join(root, 'src/pages/ShipmentFirstPage.tsx'), 'utf8');
+const shipping = fs.readFileSync(path.join(root, 'src/pages/ShippingManagementPage.tsx'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/build.yml'), 'utf8');
 
 describe('Customs OS security hardening', () => {
@@ -17,9 +17,9 @@ describe('Customs OS security hardening', () => {
   });
 
   it('restricts shipping-line mutations to operational roles', () => {
-    expect(migration).toContain("shipping_lines_insert");
+    expect(migration).toContain('shipping_lines_insert');
     expect(migration).toContain("'owner'::public.user_role,'admin'::public.user_role,'broker'::public.user_role");
-    expect(migration).toContain("shipping_lines_delete");
+    expect(migration).toContain('shipping_lines_delete');
   });
 
   it('scopes document storage by shipment ownership for clients', () => {
@@ -33,10 +33,10 @@ describe('Customs OS security hardening', () => {
     expect(shell).toContain('visibleNav=nav.filter(x=>canSee(x,profile?.role))');
   });
 
-  it('passes the created shipping-line id directly to vessel creation', () => {
-    expect(shipment).toContain('lineIdOverride?:string');
-    expect(shipment).toContain('const effectiveLineId=lineIdOverride||lineId');
-    expect(shipment).toContain('createVessel(input.vesselName,input.imo,l.id)');
+  it('assigns the selected shipping-line id when creating a vessel', () => {
+    expect(shipping).toContain('shipping_line_id:lineId||null');
+    expect(shipping).toContain(".update({shipping_line_id:moveTo})");
+    expect(shipping).toContain('ON DELETE SET NULL');
   });
 
   it('requires typecheck in CI', () => {
