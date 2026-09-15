@@ -1,3 +1,4 @@
+-- Completion gate invariant: Gross weight must be present and cannot be below net weight.
 CREATE OR REPLACE FUNCTION public.get_case_completion_readiness(p_case_id uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path = public, pg_temp AS $$
 DECLARE
