@@ -84,7 +84,7 @@ Deno.serve(async(req)=>{
   const documents=Array.isArray(body?.documents)?body.documents:[];
   const pageContext=String(body?.page_context||'').slice(0,1000);
   const extractFields=Boolean(body?.extract_fields);
-  const shipmentExtract=Boolean(body?.shipment_extract);
+  const shipmentExtract=Boolean(body?.shipment_extract)||query.includes('اطلاعات محموله کشتیرانی');
   if(!query&&!documentText&&!documentData&&!documents.length)return json({error:'No query or document was supplied.'},400);
 
   const totalSize=documents.reduce((n:any,d:any)=>n+String(d?.data||'').length,0)+documentData.length;
