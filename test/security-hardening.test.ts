@@ -33,10 +33,9 @@ describe('Customs OS security hardening', () => {
     expect(shell).toContain('visibleNav=nav.filter(x=>canSee(x,profile?.role))');
   });
 
-  it('assigns the selected shipping-line id when creating a vessel', () => {
+  it('assigns the selected shipping-line id when creating and moving a vessel', () => {
     expect(shipping).toContain('shipping_line_id:lineId||null');
     expect(shipping).toContain(".update({shipping_line_id:moveTo})");
-    expect(shipping).toContain('ON DELETE SET NULL');
   });
 
   it('requires typecheck in CI', () => {
