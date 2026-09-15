@@ -1,6 +1,6 @@
 import React,{useState} from 'react';
 import {NavLink,useLocation,useNavigate} from 'react-router-dom';
-import {Activity,Anchor,BarChart3,Building2,Calculator,ChevronLeft,ChevronRight,FileCheck2,FileText,FileSearch,History,LayoutDashboard,Menu,Palette,Printer,Settings2,ShieldCheck,Ship,Truck,X,LogOut,Sun,Moon,BookOpen,Wallet,ClipboardList,FolderOpen} from 'lucide-react';
+import {Activity,Anchor,BarChart3,Building2,Calculator,ChevronLeft,ChevronRight,FileCheck2,FileText,FileSearch,History,LayoutDashboard,Menu,Palette,Printer,Settings2,ShieldCheck,Ship,Truck,X,LogOut,Sun,Moon,BookOpen,Wallet,ClipboardList,FolderOpen,LibraryBig} from 'lucide-react';
 import {useAuth,UserRole} from '../context/AuthContext';
 import {useAppearance} from '../context/AppearanceContext';
 import {OfflineQueueStatus} from './OfflineQueueStatus';
@@ -31,9 +31,10 @@ const nav:NavItem[]=[
  {label:'مراحل پرونده',en:'Case Stages',to:'/stage',icon:History,group:'کنترل',roles:management},
  {label:'تاریخچه و Audit',en:'History & Audit',to:'/history',icon:History,group:'کنترل',roles:allStaff},
  {label:'چاپ اظهار',en:'Declaration Print',to:'/print-declaration',icon:Printer,group:'کنترل',roles:management},
+ {label:'دانشنامه گمرکی',en:'Customs Knowledge Center',to:'/knowledge',icon:LibraryBig,group:'دانش و منابع',roles:management},
  {label:'تنظیمات',en:'Settings',to:'/settings',icon:Settings2,group:'سیستم'}
 ];
-const groups=['عملیات','حمل و اسناد','گمرکی','ترخیص','مالی و خروج','کنترل','سیستم'];
+const groups=['عملیات','حمل و اسناد','گمرکی','ترخیص','مالی و خروج','کنترل','دانش و منابع','سیستم'];
 const roles:Record<string,string>={owner:'مالک',admin:'مدیر',broker:'کارگزار',accountant:'حسابدار',warehouse:'انبار',client:'صاحب کالا'};
 const canSee=(item:NavItem,role?:UserRole|null)=>!item.roles||!!role&&item.roles.includes(role);
 export const AppShell:React.FC<{children:React.ReactNode}>=({children})=>{
