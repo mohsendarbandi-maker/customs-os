@@ -21,3 +21,6 @@ enabled = true
 
 [storage]
 enabled = true
+
+[functions.ai-assistant]
+verify_jwt = true
