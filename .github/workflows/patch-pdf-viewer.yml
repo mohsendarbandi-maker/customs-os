@@ -1,0 +1,41 @@
+name: Patch PDF viewer
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'chore: install PDF.js multi-page viewer'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Patch viewer
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/pages/CustomsDocumentManagerPage.tsx')
+          s=p.read_text(encoding='utf-8')
+          if "../components/PdfDocumentViewer" not in s:
+              s=s.replace("import {supabase} from '../lib/supabase';", "import {supabase} from '../lib/supabase';\nimport PdfDocumentViewer from '../components/PdfDocumentViewer';")
+          start=s.find('<div className="flex-1 min-h-0 bg-neutral-900">')
+          if start<0: raise SystemExit('viewer container not found')
+          end=s.find('</div></div></div>}', start)
+          if end<0: raise SystemExit('viewer closing block not found')
+          end += len('</div></div></div>}')
+          replacement='<PdfDocumentViewer url={previewUrl} name={fileName(selected)} onClose={()=>{setSelected(null);setPreviewUrl(\'\')}} onDownload={()=>void download(selected)}/>'
+          s=s[:start]+replacement+s[end:]
+          p.write_text(s,encoding='utf-8')
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/pages/CustomsDocumentManagerPage.tsx .github/workflows/patch-pdf-viewer.yml
+          git commit -m "chore: install PDF.js multi-page viewer"
+          git rm .github/workflows/patch-pdf-viewer.yml
+          git add -u
+          git commit -m "chore: remove temporary PDF viewer patch workflow"
+          git push
