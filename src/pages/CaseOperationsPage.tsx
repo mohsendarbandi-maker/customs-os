@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {ArrowLeft,CheckCircle2,CircleAlert,FileCheck2,FileText,Loader2,ReceiptText,ShipWheel,WalletCards} from 'lucide-react';
+import {ArrowLeft,CheckCircle2,AlertCircle,FileCheck2,FileText,Loader2,ReceiptText,ShipWheel,WalletCards} from 'lucide-react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
 
@@ -34,7 +34,7 @@ export const CaseOperationsPage:React.FC=()=>{
  if(!current)return <main dir="rtl" className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8"><div className="max-w-6xl mx-auto space-y-4"><h1 className="text-2xl font-black">نمای عملیاتی پرونده</h1>{error&&<div className="p-4 rounded-xl border border-red-900 text-red-300">{error}</div>}<div className="p-5 rounded-2xl border border-slate-800 bg-slate-900">پرونده‌ای برای نمایش وجود ندارد.</div></div></main>;
  return <main dir="rtl" className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8"><div className="max-w-6xl mx-auto space-y-5">
  <header className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs text-cyan-400 font-bold">عملیات پرونده</div><h1 className="text-2xl font-black mt-1">{current.case_number||current.id.slice(0,8)}</h1><p className="text-sm text-slate-400 mt-1">{current.cargo_description||'پرونده گمرکی'} · وضعیت: <b className="text-slate-200">{stageLabel(current.status)}</b></p></div><Link to="/" className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900"><ArrowLeft className="inline ml-2" size={16}/>صفحه اصلی</Link></header>
- {error&&<div className="p-4 rounded-xl border border-red-900 bg-red-950/20 text-red-300">{error}</div>}
+ {error&&<div className="p-4 rounded-xl border border-red-900 bg-red-950/20 text-red-300"><AlertCircle className="inline ml-2" size={16}/>{error}</div>}
  <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4"><label className="text-sm text-slate-400">انتخاب پرونده</label><select value={selected} onChange={e=>setSelected(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3">{cases.map(c=><option key={c.id} value={c.id}>{c.case_number||c.id.slice(0,8)} — {stageLabel(c.status)}</option>)}</select></section>
  <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-center justify-between gap-3 mb-4"><h2 className="font-black">گردش پرونده</h2><span className="text-xs text-cyan-300">{stageLabel(current.status)}</span></div><div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">{stages.map((s,i)=>{const ok=i<idx||i===idx;const display=s==='path'?(current.status.startsWith('path_')?stageLabel(current.status):'مسیر گمرکی'):stageLabel(s);return <div key={s} className={`rounded-xl border p-2 text-center text-xs ${ok?'border-emerald-900 bg-emerald-950/20 text-emerald-300':'border-slate-800 bg-slate-950 text-slate-500'}`}><div>{ok?<CheckCircle2 className="mx-auto mb-1" size={15}/>:<div className="h-[15px] mb-1"/>}</div>{display}</div>})}</div></section>
  <div className="grid lg:grid-cols-2 gap-5">
