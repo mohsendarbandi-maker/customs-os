@@ -3,6 +3,7 @@ import {Download,ExternalLink,Loader2,X,ZoomIn,ZoomOut} from 'lucide-react';
 import {getDocument,GlobalWorkerOptions,PDFDocumentProxy} from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 GlobalWorkerOptions.workerSrc=workerUrl;
+// Multi-page PDF viewer; integrated into CustomsDocumentManagerPage by the temporary workflow.
 export default function PdfDocumentViewer({url,name,onClose,onDownload}:{url:string;name:string;onClose:()=>void;onDownload:()=>void}){
  const host=useRef<HTMLDivElement>(null);const[pdf,setPdf]=useState<PDFDocumentProxy|null>(null);const[loading,setLoading]=useState(true);const[error,setError]=useState('');const[scale,setScale]=useState(1.05);
  useEffect(()=>{let alive=true;let loaded:PDFDocumentProxy|undefined;setLoading(true);setError('');(async()=>{try{const r=await fetch(url);if(!r.ok)throw new Error(`HTTP ${r.status}`);const data=await r.arrayBuffer();loaded=await getDocument({data}).promise;if(alive)setPdf(loaded);else void loaded.destroy()}catch(e:any){if(alive)setError(e?.message||'خطا در خواندن PDF')}})();return()=>{alive=false;if(loaded)void loaded.destroy()};},[url]);
