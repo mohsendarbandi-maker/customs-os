@@ -2,7 +2,6 @@ import React,{useEffect,useState} from 'react';
 import {ArrowRight,Check,Loader2} from 'lucide-react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
-import {buildCaseDisplayName} from '../lib/displayNames';
 import {CASE_WORKFLOW,getCaseNextAction} from '../lib/caseWorkflow';
 const ITEMS=[['release_invoice_pending','در انتظار مبلغ ترخیصیه'],['ship_pass','پاس کشتی'],['declaration','اظهار'],['advance_tax','مالیات علی الحساب'],['duty_guarantee','درخواست ضمانتنامه حقوق ورودی و ارزش افزوده'],['valuation','ارزیابی'],['laboratory','آزمایشگاه'],['standard','مجوز استاندارد'],['expert_queue','نوبت کارشناسی'],['sata_code','کد ساتا'],['free_zone_note2','تبصره دو منطقه آزاد']] as const;
 type ItemKey=typeof ITEMS[number][0];
