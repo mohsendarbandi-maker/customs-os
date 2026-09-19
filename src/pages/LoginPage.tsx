@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { CustomsLogo } from '../components/CustomsLogo';
 
 export const LoginPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -52,6 +53,7 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dir-rtl font-sans p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
         <div className="text-center mb-8">
+          <div className="flex justify-center mb-5"><CustomsLogo size={64} showWordmark /></div>
           <h1 className="text-2xl font-bold text-blue-900 mb-2">
             {isLogin ? 'ورود به سیستم' : 'ثبت‌نام در سیستم'}
           </h1>
