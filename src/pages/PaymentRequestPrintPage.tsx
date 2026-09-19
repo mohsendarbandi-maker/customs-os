@@ -1,3 +1,4 @@
+import '../styles/finance-print.css';
 import React,{useEffect,useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
