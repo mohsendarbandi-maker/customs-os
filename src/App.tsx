@@ -27,6 +27,7 @@ import { ShipmentFirstPage as ShipmentStartPage } from './pages/ShipmentFirstPag
 import { PreDeclarationPage } from './pages/PreDeclarationPage';
 import { PermitRulesPage } from './pages/PermitRulesPage';
 import { FinancePage } from './pages/FinancePage';
+import { FinanceShipmentPage } from './pages/FinanceShipmentPage';
 import { ExitPage } from './pages/ExitPage';
 import { CaseHistoryPage } from './pages/CaseHistoryPage';
 import { CaseStagePage } from './pages/CaseStagePage';
@@ -162,6 +163,14 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={management}>
                       <PermitRulesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/finance/shipments/:id"
+                  element={
+                    <ProtectedRoute allowedRoles={finance}>
+                      <FinanceShipmentPage />
                     </ProtectedRoute>
                   }
                 />
