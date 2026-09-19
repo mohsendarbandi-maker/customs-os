@@ -1,9 +1,16 @@
 import React,{useEffect,useMemo,useState} from 'react';
+import {ArrowLeft,BarChart3,FileText,Plus,Receipt,RefreshCw,Search,WalletCards} from 'lucide-react';
+import {Link} from 'react-router-dom';
+import {supabase} from '../lib/supabase';
+import {useAuth} from '../context/AuthContext';
 import {ArrowRight,Loader2,Plus} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
 
-type Tx={id:string;case_id:string;transaction_type:string;category:string;original_amount:number;original_currency:string;exchange_rate:number;base_amount_irr:number;transaction_date:string;description:string|null};
+type Tab='overview'|'costs'|'invoices'|'requests'|'payments'|'pnl';
+const money=(n:number)=>new Intl.NumberFormat('fa-IR').format(Math.round(Number(n)||0));
+const num=(v:string)=>Number((v||'').replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/,/g,''));
+const currencies=['IRR','USD','EUR','AED','CNY','RUB','GBP','CHF','TRY'];
 const blank={type:'expense',category:'',amount:'',currency:'IRR',rate:'1',description:'',date:''};
 const round2=(n:number)=>Math.round((n+Number.EPSILON)*100)/100;
 export const FinancePage:React.FC=()=>{const[cases,setCases]=useState<any[]>([]),[transactions,setTransactions]=useState<Tx[]>([]),[caseId,setCaseId]=useState(''),[form,setForm]=useState(blank),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
