@@ -28,6 +28,7 @@ import { PreDeclarationPage } from './pages/PreDeclarationPage';
 import { PermitRulesPage } from './pages/PermitRulesPage';
 import { FinancePage } from './pages/FinancePage';
 import { FinanceShipmentPage } from './pages/FinanceShipmentPage';
+import { PaymentRequestPrintPage } from './pages/PaymentRequestPrintPage';
 import { ExitPage } from './pages/ExitPage';
 import { CaseHistoryPage } from './pages/CaseHistoryPage';
 import { CaseStagePage } from './pages/CaseStagePage';
@@ -171,6 +172,14 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={finance}>
                       <FinanceShipmentPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/finance/payment-requests/print"
+                  element={
+                    <ProtectedRoute allowedRoles={finance}>
+                      <PaymentRequestPrintPage />
                     </ProtectedRoute>
                   }
                 />
