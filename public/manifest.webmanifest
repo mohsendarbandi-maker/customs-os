@@ -1,1 +1,19 @@
-{"name":"Customs OS | سیستم مدیریت گمرک","short_name":"Customs OS","description":"سیستم مدیریت گمرک و لجستیک","start_url":"/","display":"standalone","background_color":"#f8fafc","theme_color":"#0F4C81","dir":"rtl","lang":"fa","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
+{
+  "name": "Customs OS | سیستم مدیریت گمرک",
+  "short_name": "Customs OS",
+  "description": "سیستم مدیریت گمرک و لجستیک",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0F4C81",
+  "dir": "rtl",
+  "lang": "fa",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
