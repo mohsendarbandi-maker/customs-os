@@ -28,8 +28,8 @@ describe('Customs OS security hardening', () => {
   });
 
   it('has role-aware route guards and matching navigation visibility', () => {
-    expect(app).toContain('allowedRoles={financeRoles}');
-    expect(app).toContain('allowedRoles={managementRoles}');
+    expect(app).toContain('allowedRoles={finance}');
+    expect(app).toContain('allowedRoles={management}');
     expect(shell).toContain('visibleNav=nav.filter(x=>canSee(x,profile?.role))');
   });
 
