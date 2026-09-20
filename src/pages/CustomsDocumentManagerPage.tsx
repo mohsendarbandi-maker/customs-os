@@ -62,6 +62,7 @@ type Doc = {
   mime_type: string | null;
   size_bytes: number | null;
   status: string;
+  source: 'shipment_documents' | 'customs_documents';
 };
 
 const BUCKET = 'customs_documents';
@@ -217,13 +218,57 @@ export const CustomsDocumentManagerPage: React.FC = () => {
     setBusy(true);
     setError('');
     try {
-      const { data, error } = await supabase
-        .from('customs_documents')
-        .select('id,shipment_id,document_type,original_name,display_name,storage_path,mime_type,size_bytes,status')
-        .eq('shipment_id', id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setDocs((data || []) as Doc[]);
+      const [{ data: canonical, error: canonicalError }, { data: legacy, error: legacyError }] =
+        await Promise.all([
+          supabase
+            .from('shipment_documents')
+            .select(
+              'id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,created_at,updated_at',
+            )
+            .eq('shipment_id', id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('customs_documents')
+            .select(
+              'id,shipment_id,document_type,original_name,display_name,storage_path,mime_type,size_bytes,status,created_at',
+            )
+            .eq('shipment_id', id)
+            .order('created_at', { ascending: false }),
+        ]);
+
+      if (canonicalError) throw canonicalError;
+      if (legacyError) throw legacyError;
+
+      const canonicalDocs: Doc[] = (canonical || []).map((d: any) => ({
+        id: d.id,
+        shipment_id: d.shipment_id,
+        document_type: null,
+        original_name: d.original_file_name || d.document_name || '',
+        display_name: d.document_name || d.original_file_name || null,
+        storage_path: d.storage_path || null,
+        mime_type: d.mime_type || null,
+        size_bytes: d.file_size_bytes ?? null,
+        status: 'canonical',
+        source: 'shipment_documents',
+      }));
+
+      const canonicalIds = new Set(canonicalDocs.map((d) => d.id));
+      const fallbackDocs: Doc[] = (legacy || [])
+        .filter((d: any) => !canonicalIds.has(d.id))
+        .map((d: any) => ({
+          id: d.id,
+          shipment_id: d.shipment_id,
+          document_type: d.document_type || null,
+          original_name: d.original_name || '',
+          display_name: d.display_name || null,
+          storage_path: d.storage_path || null,
+          mime_type: d.mime_type || null,
+          size_bytes: d.size_bytes ?? null,
+          status: d.status || 'legacy',
+          source: 'customs_documents',
+        }));
+
+      setDocs([...canonicalDocs, ...fallbackDocs]);
     } catch (e: any) {
       setError(e?.message || 'دریافت اسناد ناموفق بود');
     } finally {
