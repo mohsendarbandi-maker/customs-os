@@ -7,44 +7,54 @@ type CustomsLogoProps = {
 };
 
 export const CustomsLogo: React.FC<CustomsLogoProps> = ({
-  size = 44,
+  size = 38,
   className = '',
   showWordmark = true,
 }) => {
-  const markSize = size;
-  const width = showWordmark ? Math.round(size * 4.286) : markSize;
+  const mark = Math.max(28, Math.min(size, 64));
 
   return (
     <span
-      className={`customs-logo inline-flex shrink-0 items-center ${className}`}
-      style={{ width, height: markSize, minWidth: width, maxWidth: width }}
+      className={`customs-logo ${className}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: showWordmark ? 10 : 0,
+        height: mark,
+        width: showWordmark ? 'auto' : mark,
+        minWidth: showWordmark ? 0 : mark,
+        flex: '0 0 auto',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap',
+      }}
       aria-label="Customs OS"
     >
       <svg
-        viewBox="0 0 240 56"
-        width="100%"
-        height="100%"
+        width={mark}
+        height={mark}
+        viewBox="0 0 48 48"
         role="img"
         aria-hidden="true"
-        preserveAspectRatio="xMinYMid meet"
-        style={{ display: 'block', overflow: 'visible' }}
+        focusable="false"
+        style={{ display: 'block', flex: '0 0 auto' }}
       >
-        <rect x="2" y="2" width="52" height="52" rx="14" fill="#0F4C81" />
-        <path d="M11 35h34M15 30h26M18 25h20M21 20h14" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
-        <path d="M12 39h32" stroke="#22B8CF" strokeWidth="3" strokeLinecap="round" />
-        <path d="M28 10v8" stroke="#22B8CF" strokeWidth="3" strokeLinecap="round" />
-        <circle cx="28" cy="9" r="3" fill="#22B8CF" />
-        {showWordmark && (
-          <>
-            <text x="66" y="30" fontFamily="Arial, Helvetica, sans-serif" fontSize="22" fontWeight="800" letterSpacing="1" fill="#0F4C81">
-              CUSTOMS OS
-            </text>
-            <text x="67" y="46" fontFamily="Arial, Helvetica, sans-serif" fontSize="9" fontWeight="600" letterSpacing=".7" fill="#64748B">
-              CUSTOMS &amp; LOGISTICS
-            </text>
-          </>
-        )}
+        <rect x="1.5" y="1.5" width="45" height="45" rx="12" fill="#0F4C81" />
+        <path d="M10 32h28M13 27h22M16 22h16M19 17h10" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M11 36h26" fill="none" stroke="#22B8CF" strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M24 9v6" fill="none" stroke="#22B8CF" strokeWidth="2.6" strokeLinecap="round" />
+        <circle cx="24" cy="8" r="2.2" fill="#22B8CF" />
       </svg>
+
+      {showWordmark && (
+        <span style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', lineHeight: 1, flex: '0 0 auto' }}>
+          <span style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: Math.max(14, mark * 0.47), fontWeight: 800, letterSpacing: '.7px', color: 'var(--text)' }}>
+            CUSTOMS OS
+          </span>
+          <span style={{ marginTop: 4, fontFamily: 'Arial, Helvetica, sans-serif', fontSize: Math.max(6, mark * 0.19), fontWeight: 700, letterSpacing: '.5px', color: 'var(--text-muted)' }}>
+            CUSTOMS &amp; LOGISTICS
+          </span>
+        </span>
+      )}
     </span>
   );
 };
