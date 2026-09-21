@@ -71,12 +71,16 @@ function Ops() {
   ) {
     return <Navigate to="/operations?tab=pre-declaration" replace />;
   }
-  if (t === 'pre-declaration') return <PreDeclarationPage />;
-  if (t === 'declaration') return <DeclarationRegistrationPage />;
-  if (t === 'stage5') return <DeclarationOperationsChecklistPage />;
-  if (t === 'exit') return <ExitPage />;
+  const shipmentId = p.get('shipmentId');
+  const declarationId = p.get('declarationId');
+  if (t === 'pre-declaration') return shipmentId ? <PreDeclarationPage /> : <Navigate to="/operations" replace />;
+  if (t === 'declaration') return shipmentId ? <DeclarationRegistrationPage /> : <Navigate to="/operations" replace />;
+  if (t === 'stage5') return declarationId ? <DeclarationOperationsChecklistPage /> : <Navigate to={shipmentId ? `/operations?tab=declaration&shipmentId=${encodeURIComponent(shipmentId)}` : '/operations'} replace />;
+  if (t === 'exit') return declarationId ? <ExitPage /> : <Navigate to={shipmentId ? `/operations?tab=stage5&declarationId=${encodeURIComponent(declarationId || '')}&shipmentId=${encodeURIComponent(shipmentId)}` : '/operations'} replace />;
   return <ShipmentStartPage />;
 }
+
+function LegacyMaritimeRedirect() { return <Navigate to="/operations" replace />; }
 
 function LegacyDocumentsExtractRedirect() {
   const [p] = useSearchParams();
@@ -135,14 +139,7 @@ export default function App() {
                     </ProtectedRoute>
                   }
                 />
-                <Route
-                  path="/maritime"
-                  element={
-                    <ProtectedRoute allowedRoles={management}>
-                      <MaritimePage />
-                    </ProtectedRoute>
-                  }
-                />
+                <Route path="/maritime" element={<ProtectedRoute allowedRoles={management}><LegacyMaritimeRedirect /></ProtectedRoute>} />
                 <Route
                   path="/vessel-search"
                   element={
