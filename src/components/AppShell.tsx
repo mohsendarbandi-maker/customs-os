@@ -1,6 +1,6 @@
 import React,{useState} from 'react';
 import {NavLink,useLocation,useNavigate} from 'react-router-dom';
-import {Activity,Anchor,BarChart3,Building2,Calculator,ChevronLeft,ChevronRight,FileCheck2,FileText,FileSearch,History,LayoutDashboard,Menu,Palette,Printer,Settings2,ShieldCheck,Ship,Truck,X,LogOut,Sun,Moon,BookOpen,Wallet,ClipboardList,FolderOpen,LibraryBig} from 'lucide-react';
+import {Activity,BarChart3,Building2,ChevronLeft,ChevronRight,FileText,FileSearch,History,LayoutDashboard,Menu,Palette,Printer,Settings2,ShieldCheck,Ship,Truck,X,LogOut,Sun,Moon,BookOpen,Wallet,ClipboardList,FolderOpen,LibraryBig} from 'lucide-react';
 import {useAuth,UserRole} from '../context/AuthContext';
 import {useAppearance} from '../context/AppearanceContext';
 import {OfflineQueueStatus} from './OfflineQueueStatus';
