@@ -1,5 +1,5 @@
 import React,{useEffect,useState}from'react';
-import{ArrowRight,Loader2,Save,Ship,RefreshCw,Plus}from'lucide-react';
+import{Save,Ship,RefreshCw,Plus}from'lucide-react';
 import{Link}from'react-router-dom';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
