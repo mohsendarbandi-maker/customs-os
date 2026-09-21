@@ -18,7 +18,6 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { DesktopHomePage } from './pages/DesktopHomePage';
 import { ClientRegistryPage } from './pages/ClientRegistryPage';
 import { ClientDocumentManagerPage } from './pages/ClientDocumentManagerPage';
-import { MaritimePage } from './pages/MaritimePage';
 import { VesselSearchPage } from './pages/VesselSearchPage';
 import { DeclarationPrintPage } from './pages/DeclarationPrintPage';
 import { DeclarationRegistrationPage } from './pages/DeclarationRegistrationPage';
