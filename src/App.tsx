@@ -63,20 +63,13 @@ const admins = new Set([
 
 function Ops() {
   const [p] = useSearchParams();
-  const { profile } = useAuth();
   const t = p.get('tab');
-  if (
-    profile?.role === 'client' &&
-    !['pre-declaration', 'declaration', 'stage5', 'exit'].includes(t || '')
-  ) {
-    return <Navigate to="/operations?tab=pre-declaration" replace />;
-  }
   const shipmentId = p.get('shipmentId');
   const declarationId = p.get('declarationId');
   if (t === 'pre-declaration') return shipmentId ? <PreDeclarationPage /> : <Navigate to="/operations" replace />;
   if (t === 'declaration') return shipmentId ? <DeclarationRegistrationPage /> : <Navigate to="/operations" replace />;
   if (t === 'stage5') return declarationId ? <DeclarationOperationsChecklistPage /> : <Navigate to={shipmentId ? `/operations?tab=declaration&shipmentId=${encodeURIComponent(shipmentId)}` : '/operations'} replace />;
-  if (t === 'exit') return declarationId ? <ExitPage /> : <Navigate to={shipmentId ? `/operations?tab=stage5&declarationId=${encodeURIComponent(declarationId || '')}&shipmentId=${encodeURIComponent(shipmentId)}` : '/operations'} replace />;
+  if (t === 'exit') return declarationId ? <ExitPage /> : <Navigate to={shipmentId ? `/operations?tab=declaration&shipmentId=${encodeURIComponent(shipmentId)}` : '/operations'} replace />;
   return <ShipmentStartPage />;
 }
 
