@@ -1,8 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" role="img" aria-labelledby="title" preserveAspectRatio="xMidYMid meet">
-  <title id="title">Customs OS</title>
-  <rect x="2" y="2" width="52" height="52" rx="14" fill="#0F4C81"/>
-  <path d="M11 35h34M15 30h26M18 25h20M21 20h14" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-  <path d="M12 39h32" stroke="#22B8CF" stroke-width="3" stroke-linecap="round"/>
-  <path d="M28 10v8" stroke="#22B8CF" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="28" cy="9" r="3" fill="#22B8CF"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none"><rect x="32" y="32" width="960" height="960" rx="220" fill="#0F4C81"/><g stroke="#FFFFFF" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"><path d="M190 760V300l322-145 322 145v460"/><path d="M190 300h644"/><path d="M300 405h424M300 510h424M300 615h424M300 720h424"/><path d="M342 300v-58l170-76 170 76v58"/><path d="M512 166V105"/></g><g stroke="#18B6C9" stroke-width="30" stroke-linecap="round"><path d="M145 824h734"/><path d="M365 760v-105M512 760V570M659 760V655"/></g></svg>
