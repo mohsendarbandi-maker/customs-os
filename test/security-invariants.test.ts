@@ -82,7 +82,7 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     const phase14 = readMigration('00022_phase14_maritime_rpc_compatibility.sql');
     expect(phase14).toContain('p_client_id uuid DEFAULT NULL');
     expect(phase14).toContain('Client not found or access denied');
-    const phase15 = readMigration('00023_phase15_exit_stage_integrity.sql');
+    const phase15 = readMigration('00023_exit_stage_integrity.sql');
     expect(phase15).toContain('Archived case cannot change exit status');
     expect(phase15).toContain('Final cargo exit requires exit-permit stage');
     const phase24 = readMigration('00024_stage_transition_and_registration_integrity.sql');
@@ -94,7 +94,7 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     const phase25 = readMigration('00025_lock_trigger_function_execute.sql');
     expect(phase25).toContain('REVOKE ALL ON FUNCTION public.registration_order_set_tenant_and_case_client() FROM PUBLIC, anon, authenticated');
     const phase26 = readMigration('00026_completion_requires_release.sql');
-    expect(phase26).toContain("release_status");
+    expect(phase26).toContain('release_status');
     expect(phase26).toContain("<> 'released'");
     expect(phase26).toContain('Gross weight');
     expect(allSql).toContain('SET search_path = public, pg_temp');
@@ -112,7 +112,9 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     const clientUi = fs.readFileSync(path.resolve(__dirname, '../src/pages/ClientRegistryPage.tsx'), 'utf8');
     const printUi = fs.readFileSync(path.resolve(__dirname, '../src/pages/DeclarationPrintPage.tsx'), 'utf8');
     expect(clientUi).not.toContain('vault.decrypted_secrets');
-    expect(clientUi).toContain('save_client_epl_credentials');
+    expect(clientUi).not.toContain('save_client_epl_credentials');
+    expect(clientUi).not.toContain('get_client_epl_credentials');
+    expect(clientUi).not.toContain('eplPassword');
     expect(printUi).not.toContain('vault.decrypted_secrets');
     expect(printUi).not.toContain('eplPassword');
     expect(printUi).toContain('password_configured');
