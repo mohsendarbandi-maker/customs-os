@@ -95,6 +95,8 @@ Deno.serve(async(req)=>{
   const {data:profile}=await sb.from('profiles').select('role,is_active,organization_id').eq('id',user.id).maybeSingle();if(!profile||profile.is_active===false)return reply({error:'پروفایل کاربر معتبر یا فعال نیست.'},403,origin);
   const b=await req.json().catch(()=>({}));const query=clean(b.query);const mode=clean(b.mode||(b.command_mode?'agent':'chat'));const shipmentId=clean(b.shipment_id);
   if(!query&&!b.document_data&&!b.document_text)return reply({error:'No input'},400,origin);
+  const sessionId=clean(b.session_id);
+  const memory=sessionId?await sb.from('ai_interactions').select('query,answer,created_at').eq('organization_id',profile.organization_id).eq('session_id',sessionId).order('created_at',{ascending:false}).limit(8).then((x:any)=>x.data||[]).catch(()=>[]):[];
   const rows=profile.organization_id?await getContext(sb,profile.organization_id):[];const selected=selectRows(rows,query,shipmentId);const finding=['agent','command','audit','risk'].includes(mode)?risks(selected):[];
   const knowledge=await sb.rpc('ai_find_knowledge',{search_text:query,org_id:profile.organization_id,max_rows:6}).then((x:any)=>x.data||[]).catch(()=>[]);
   let semanticKnowledge:any[]=[];
@@ -102,7 +104,9 @@ Deno.serve(async(req)=>{
     const gk=Deno.env.get('GEMINI_API_KEY');
     if(gk){try{const qv=await geminiEmbedding(query,gk);semanticKnowledge=await sb.rpc('search_knowledge_semantic',{query_embedding:qv,match_count:10,match_threshold:0.18}).then((x:any)=>x.data||[]).catch(()=>[]);}catch{}}
   }
+  const mutationIntent=mode==='agent'&&/(ثبت|تغییر|اصلاح|حذف|بستن|تأیید|رد|پرداخت|ایجاد|ویرایش|لغو|ارسال|کنسل|update|delete|create|change)/i.test(query);
   let prompt='کاربر: '+query+'\nحالت: '+mode+'\nداده واقعی محموله: '+JSON.stringify(selected).slice(0,90000)+'\nیافته‌های اعتبارسنجی: '+JSON.stringify(finding).slice(0,30000)+'\nدانش داخلی مرتبط: '+JSON.stringify(knowledge).slice(0,20000);
+  if(mutationIntent)prompt+='\nاین درخواست تغییر داده است. فقط پیشنهاد اقدام ساختاریافته بده؛ هیچ تغییر مستقیم در داده اصلی انجام نده و برای هر پیشنهاد شواهد و ریسک را مشخص کن.';
   if(mode==='audit'||mode==='risk')prompt+='\nگزارش: وضعیت، موارد تاییدشده، مغایرت‌ها، کمبودها و اقدام بعدی را جدا کن.';
   if(mode==='extract')prompt+='\nفقط داده واقعی سند را استخراج کن؛ موارد ناموجود/ناخوانا xxxx.';
   const parts:any[]=[];const docText=clean(b.document_text);if(docText)parts.push({text:'DOCUMENT:\n'+docText.slice(0,120000)});
@@ -112,9 +116,17 @@ Deno.serve(async(req)=>{
   if(!answer){const groq=Deno.env.get('GROQ_API_KEY');if(groq){try{const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+groq,'Content-Type':'application/json'},body:JSON.stringify({model:'openai/gpt-oss-120b',messages:[{role:'user',content:prompt}],temperature:0})});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||'Groq error');answer=String(d?.choices?.[0]?.message?.content||'');provider='groq';model='openai/gpt-oss-120b'}catch(e){errors.push('Groq: '+(e instanceof Error?e.message:String(e)))}}}
   if(!answer){const key=Deno.env.get('OPENAI_API_KEY');if(key){try{const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4.1-mini',input:prompt})});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||'OpenAI error');answer=String(d?.output_text||'');provider='openai';model='gpt-4.1-mini'}catch(e){errors.push('OpenAI: '+(e instanceof Error?e.message:String(e)))}}}
   if(!answer)return reply({error:'همه سرویس‌های AI ناموفق بودند: '+errors.join(' | ')},502,origin);
-  const interaction=await sb.from('ai_interactions').insert({organization_id:profile.organization_id,user_id:user.id,shipment_id:shipmentId||selected[0]?.shipment_id||null,case_id:selected[0]?.case_id||null,session_id:clean(b.session_id)||null,mode,query,answer,provider,model,latency_ms:null,status:'completed'}).select('id').single();
+  const interaction=await sb.from('ai_interactions').insert({organization_id:profile.organization_id,user_id:user.id,shipment_id:shipmentId||selected[0]?.shipment_id||null,case_id:selected[0]?.case_id||null,session_id:sessionId||null,mode,query,answer,provider,model,latency_ms:null,status:'completed'}).select('id').single();
   const interactionId=interaction.data?.id||null;
+  let proposals:any[]=[];
+  if(mutationIntent&&interactionId){
+    const {data:proposal,error:proposalError}=await sb.from('ai_action_proposals').insert({
+      organization_id:profile.organization_id,interaction_id:interactionId,shipment_id:shipmentId||selected[0]?.shipment_id||null,case_id:selected[0]?.case_id||null,
+      action_type:'review_required',payload:{requested_command:query,matched_shipment_ids:selected.map((r:any)=>r.shipment_id)},evidence_ids:[],risk_level:'high',status:'proposed',created_by:user.id
+    }).select('id,action_type,payload,risk_level,status').single();
+    if(!proposalError&&proposal)proposals=[proposal];
+  }
   if(finding.length)await sb.from('ai_risk_findings').insert(finding.map((f:any)=>({organization_id:profile.organization_id,interaction_id:interactionId,shipment_id:f.shipment_id,risk_type:f.risk_type,severity:f.severity,title:f.title,details:f.details,evidence:f.evidence||[]}))).catch(()=>{});
-  return reply({answer,provider,model,status:'completed',interaction_id:interactionId,matched_shipments:selected.map((r:any)=>r.shipment_id),findings:finding,knowledge_hits:knowledge.length},200,origin);
+  return reply({answer,provider,model,status:'completed',interaction_id:interactionId,matched_shipments:selected.map((r:any)=>r.shipment_id),findings:finding,proposals,knowledge_hits:knowledge.length+semanticKnowledge.length,memory_turns:memory.length},200,origin);
  }catch(e){console.error(e);return reply({error:e instanceof Error?e.message:'AI Core failed'},500,origin)}
 });
