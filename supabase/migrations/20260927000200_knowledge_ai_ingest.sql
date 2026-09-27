@@ -28,3 +28,20 @@ as $$
  order by kc.embedding <=> query_embedding
  limit greatest(1,least(match_count,30));
 $$;
+
+create or replace function public.ai_find_knowledge(search_text text,org_id uuid,max_rows integer default 8)
+returns table(id uuid,title text,content text,metadata jsonb)
+language sql stable security invoker
+set search_path=public,pg_catalog
+as $$
+ select ks.id,ks.title,
+   coalesce(string_agg(kc.content,E'\n\n' order by kc.chunk_index),'') as content,
+   ks.metadata || jsonb_build_object('source_number',ks.source_number,'issued_at',ks.issued_at,'effective_at',ks.effective_at,'issuer',ks.issuer,'subject',ks.subject,'status',ks.status) as metadata
+ from public.knowledge_sources ks
+ left join public.knowledge_chunks kc on kc.source_id=ks.id and kc.organization_id=ks.organization_id
+ where ks.status='active' and ks.organization_id=org_id
+   and (coalesce(search_text,'')='' or ks.title ilike '%'||search_text||'%' or ks.subject ilike '%'||search_text||'%' or kc.content ilike '%'||search_text||'%')
+ group by ks.id
+ order by ks.updated_at desc
+ limit greatest(1,least(max_rows,20));
+$$;
