@@ -22,11 +22,19 @@ const json = (body:unknown, status=200, origin='') => new Response(JSON.stringif
 });
 const textOf = (d:any) => d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').filter(Boolean).join('\n').trim() || '';
 const strip = (v:string) => v.replace(/^data:[^;]+;base64,/,'');
-const schemaFor = (keys:string[]) => ({
+
+// Gemini and OpenAI use different schema dialects. Keep them separate so a
+// provider-specific validation error cannot disable the entire extraction fallback chain.
+const geminiSchemaFor = (keys:string[]) => ({
   type:'OBJECT',
   properties:Object.fromEntries(keys.map(k=>[k,{type:'STRING'}])),
   required:keys,
-  additionalProperties:false
+});
+const openAiSchemaFor = (keys:string[]) => ({
+  type:'object',
+  properties:Object.fromEntries(keys.map(k=>[k,{type:'string'}])),
+  required:keys,
+  additionalProperties:false,
 });
 const parseJsonText = (text:string) => {
   const raw=String(text||'').replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
@@ -92,7 +100,7 @@ Deno.serve(async(req)=>{
     const callGemini=async()=>{
       if(!geminiKey)throw new Error('Gemini key is not configured');
       const generationConfig:any={};
-      if(schemaKeys.length){generationConfig.response_mime_type='application/json';generationConfig.response_schema=schemaFor(schemaKeys);}
+      if(schemaKeys.length){generationConfig.response_mime_type='application/json';generationConfig.response_schema=geminiSchemaFor(schemaKeys);}
       const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',{method:'POST',headers:{'x-goog-api-key':geminiKey,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],systemInstruction:{parts:[{text:`You are Customs OS AI for Iranian customs clearance. User role: ${profile.role}. Never invent official identifiers.`}]},generationConfig})});
       const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{d={raw:raw.slice(0,2000)}}
       if(!r.ok)throw new Error(String(d?.error?.message||d?.message||d?.raw||`Gemini HTTP ${r.status}`));
@@ -107,7 +115,7 @@ Deno.serve(async(req)=>{
     const callOpenAI=async()=>{
       if(!openaiKey)throw new Error('OpenAI key is not configured');
       const body:any={model:'gpt-4o-mini',input:[{role:'user',content:openaiParts}]};
-      if(schemaKeys.length)body.text={format:{type:'json_schema',name:'customs_extraction',strict:true,schema:schemaFor(schemaKeys)}};
+      if(schemaKeys.length)body.text={format:{type:'json_schema',name:'customs_extraction',strict:true,schema:openAiSchemaFor(schemaKeys)}};
       const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${openaiKey}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
       const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{d={raw:raw.slice(0,2000)}}
       if(!r.ok)throw new Error(String(d?.error?.message||d?.message||d?.raw||`OpenAI HTTP ${r.status}`));
