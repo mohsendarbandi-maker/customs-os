@@ -45,3 +45,8 @@ as $$
  order by ks.updated_at desc
  limit greatest(1,least(max_rows,20));
 $$;
+
+create index if not exists ai_action_proposals_interaction_idx on public.ai_action_proposals(interaction_id);
+create index if not exists ai_evidence_interaction_idx on public.ai_evidence(interaction_id);
+create index if not exists ai_risk_findings_interaction_idx on public.ai_risk_findings(interaction_id);
+drop index if exists public.idx_knowledge_sources_org_status_updated;
