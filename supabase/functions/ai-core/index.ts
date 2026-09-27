@@ -70,6 +70,18 @@ async function gemini(prompt:string,parts:any[],key:string,model:string){
  const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{};if(!r.ok)throw new Error(d?.error?.message||'Gemini HTTP '+r.status);return String(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join('\n')||'').trim();
 }
 
+async function geminiEmbedding(text:string,key:string){
+ const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent',{
+  method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
+  body:JSON.stringify({content:{parts:[{text:text.slice(0,30000)}]},output_dimensionality:1536})
+ });
+ const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{}
+ if(!r.ok)throw new Error(d?.error?.message||'Embedding HTTP '+r.status);
+ const v=d?.embedding?.values;
+ if(!Array.isArray(v)||v.length!==1536)throw new Error('Invalid embedding');
+ return v;
+}
+
 Deno.serve(async(req)=>{
  const origin=req.headers.get('Origin')||'';
  if(req.method==='OPTIONS')return new Response('ok',{headers:cors(origin)});
@@ -85,6 +97,11 @@ Deno.serve(async(req)=>{
   if(!query&&!b.document_data&&!b.document_text)return reply({error:'No input'},400,origin);
   const rows=profile.organization_id?await getContext(sb,profile.organization_id):[];const selected=selectRows(rows,query,shipmentId);const finding=['agent','command','audit','risk'].includes(mode)?risks(selected):[];
   const knowledge=await sb.rpc('ai_find_knowledge',{search_text:query,org_id:profile.organization_id,max_rows:6}).then((x:any)=>x.data||[]).catch(()=>[]);
+  let semanticKnowledge:any[]=[];
+  if(query&&profile.organization_id){
+    const gk=Deno.env.get('GEMINI_API_KEY');
+    if(gk){try{const qv=await geminiEmbedding(query,gk);semanticKnowledge=await sb.rpc('search_knowledge_semantic',{query_embedding:qv,match_count:10,match_threshold:0.18}).then((x:any)=>x.data||[]).catch(()=>[]);}catch{}}
+  }
   let prompt='کاربر: '+query+'\nحالت: '+mode+'\nداده واقعی محموله: '+JSON.stringify(selected).slice(0,90000)+'\nیافته‌های اعتبارسنجی: '+JSON.stringify(finding).slice(0,30000)+'\nدانش داخلی مرتبط: '+JSON.stringify(knowledge).slice(0,20000);
   if(mode==='audit'||mode==='risk')prompt+='\nگزارش: وضعیت، موارد تاییدشده، مغایرت‌ها، کمبودها و اقدام بعدی را جدا کن.';
   if(mode==='extract')prompt+='\nفقط داده واقعی سند را استخراج کن؛ موارد ناموجود/ناخوانا xxxx.';
