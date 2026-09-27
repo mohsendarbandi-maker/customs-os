@@ -109,21 +109,29 @@ export const AIWorkspace:React.FC<{pageContext?:string}>=({pageContext=''})=>{
    if(rows.length){await supabase.from('shipment_document_extractions').upsert(rows,{onConflict:'shipment_id,document_id,field_key'});void supabase.from('ai_evidence').insert(rows.map((r:any)=>({organization_id:r.organization_id,shipment_id:r.shipment_id,document_id:r.document_id,field_key:r.field_key,extracted_value:r.extracted_value,extraction_method:'ai-assistant',verification_status:'unverified'})));}
  };
 
- const[open,setOpen]=useState(false),[tab,setTab]=useState<'chat'|'doc'>('chat'),[input,setInput]=useState(''),[messages,setMessages]=useState<Msg[]>([]),[busy,setBusy]=useState(false),[fields,setFields]=useState<Extracted>({}),[status,setStatus]=useState(''),[applied,setApplied]=useState(0),[docResults,setDocResults]=useState<DocResult[]>([]),[sessionId]=useState(()=>{try{const k='customs_ai_session_id';const old=localStorage.getItem(k);if(old)return old;const id=crypto.randomUUID();localStorage.setItem(k,id);return id}catch{return ''}}),[listening,setListening]=useState(false);const fileRef=useRef<HTMLInputElement|null>(null);const chatInputRef=useRef<HTMLInputElement|null>(null);const recognitionRef=useRef<any>(null);const voiceFinalRef=useRef('');const conversationRef=useRef(false);
- const ask=async(text=input.trim(),documentText='',extractFields=false,documentData='',documentMimeType='',commandMode=false)=>{if(!text&&!documentText&&!documentData)return null;setBusy(true);setStatus('');if(text)setMessages(m=>[...m,{role:'user',text}]);setInput('');try{const contextPrefix=sharedContext?'زمینه زنده محموله و اسناد:\\n'+sharedContext+'\\n\\n':'';const prompt=extractFields?'استخراج کامل سند گمرکی/تجاری برای ورود اطلاعات به Customs OS. همه صفحات، جدول‌ها، سربرگ‌ها و پاورقی‌ها را بررسی کن. فقط اطلاعات واقعی را استخراج کن و حدس نزن.':contextPrefix+(text||'این سند را برای عملیات گمرکی و لجستیکی تحلیل کن.');const functionName=extractFields?'ai-assistant':'ai-core';const body=extractFields?{query:prompt,document_text:documentText,document_data:documentData||undefined,document_mime_type:documentMimeType||undefined,extract_fields:true,page_context:pageContext}:{query:text||prompt,document_text:documentText,document_data:documentData||undefined,document_mime_type:documentMimeType||undefined,mode:commandMode?'agent':'chat',shipment_id:shipmentId||undefined,session_id:sessionId||undefined};const{data,error}=await supabase.functions.invoke(functionName,{body});if(error)throw error;const answer=typeof data?.answer==='string'?data.answer:(data?.answer?JSON.stringify(data.answer):data?.message||'پاسخ دریافت نشد.');if(!extractFields){setMessages(m=>[...m,{role:'assistant',text:answer}]);}return answer;}catch(e:any){const detail=await explainInvokeError(e);if(text)setMessages(m=>[...m,{role:'assistant',text:`خطای دستیار: ${detail}`}]);throw new Error(detail)}finally{setBusy(false)}};
- const parseFields=(answer:string)=>{const raw=answer.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();const x=JSON.parse(raw);const parsed:Extracted={};Object.entries(x||{}).forEach(([k,v])=>{if(typeof v==='string'&&v.trim())parsed[k]=v.trim();});return parsed;};
- const extractOne=async(file:File,documentId?:string)=>{if(file.type!=='application/pdf'&&!file.type.startsWith('image/'))throw new Error('فقط PDF و تصویر پشتیبانی می‌شود.');if(file.size>10*1024*1024)throw new Error(`حجم ${file.name} بیشتر از ۱۰MB است.`);if(documentId)await updateExtractionStatus(documentId,'processing');try{const base64=await fileToBase64(file);const answer=await ask('', '', true, base64, file.type);if(!answer)throw new Error('پاسخ خالی از سرویس هوش مصنوعی دریافت شد.');const parsed=parseFields(answer);if(documentId){await persistExtraction(documentId,parsed);await updateExtractionStatus(documentId,'completed');}return parsed}catch(e:any){if(documentId)await updateExtractionStatus(documentId,'failed',e?.message||'استخراج ناموفق');throw e;}};
- const extractMany=async(files:FileList|File[])=>{const list=Array.from(files);if(!list.length)return;setTab('doc');setFields({});setApplied(0);setDocResults([]);setBusy(true);const results:DocResult[]=[];const merged:Extracted={};try{for(let i=0;i<list.length;i++){const file=list[i];setStatus(`در حال استخراج سند ${i+1} از ${list.length}: ${file.name}`);try{const documentId=shipmentId?await persistDocument(file):undefined;const f=await extractOne(file,documentId);results.push({name:file.name,fields:f});Object.entries(f).forEach(([k,v])=>{if(!merged[k])merged[k]=v;});setDocResults([...results]);setFields({...merged});}catch(e:any){results.push({name:file.name,fields:{},error:e?.message||'استخراج ناموفق'});setDocResults([...results]);}}setFields({...merged});const ok=results.filter(x=>!x.error).length;const failed=results.filter(x=>x.error).length;setStatus(`استخراج تمام شد: ${ok} سند موفق${failed?`، ${failed} سند ناموفق`:''}؛ مجموع ${Object.keys(merged).length} فیلد یکتا.`);try{localStorage.setItem('customs_ai_extracted',JSON.stringify({fields:merged,documents:results,fileNames:list.map(f=>f.name),pageContext,at:new Date().toISOString()}))}catch{}}finally{setBusy(false)}};
-const voiceRestartRef=useRef<ReturnType<typeof setTimeout>|null>(null);
-const voiceSessionRef=useRef(0);
+ const[open,setOpen]=useState(false),[tab,setTab]=useState<'chat'|'doc'>('chat'),[input,setInput]=useState(''),[messages,setMessages]=useState<Msg[]>([]),[busy,setBusy]=useState(false),[fields,setFields]=useState<Extracted>({}),[status,setStatus]=useState(''),[applied,setApplied]=useState(0),[docResults,setDocResults]=useState<DocResult[]>([]),[sessionId]=useState(()=>{try{const k='customs_ai_session_id';const old=localStorage.getItem(k);if(old)return old;const id=crypto.randomUUID();localStorage.setItem(k,id);return id}catch{return ''}}),[listening,setListening]=useState(false);const fileRef=useRef<HTMLInputElement|null>(null);const chatInputRef=useRef<HTMLInputElement|null>(null);const recognitionRef=useRef<any>(null);const voiceFinalRef=useRef('');const conversationRef=useRef(false);const clearVoiceTimers=()=>{if(voiceRestartRef.current)clearTimeout(voiceRestartRef.current);if(voiceStartTimerRef.current)clearTimeout(voiceStartTimerRef.current);voiceRestartRef.current=null;voiceStartTimerRef.current=null;};
 
 const scheduleVoiceRestart=()=>{
   if(!conversationRef.current)return;
   if(voiceRestartRef.current)clearTimeout(voiceRestartRef.current);
   voiceRestartRef.current=setTimeout(()=>{
     voiceRestartRef.current=null;
-    if(conversationRef.current&&!recognitionRef.current&&!busy)startSpeechConversation();
-  },800);
+    if(conversationRef.current&&!recognitionRef.current)startSpeechConversation();
+  },700);
+};
+
+const primeMicrophone=async()=>{
+  if(!navigator.mediaDevices?.getUserMedia)return true;
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    stream.getTracks().forEach(track=>track.stop());
+    return true;
+  }catch{
+    conversationRef.current=false;
+    setListening(false);
+    setStatus('دسترسی میکروفون فعال نیست. اجازه Microphone را برای این سایت فعال کنید.');
+    return false;
+  }
 };
 
 const startSpeechConversation=()=>{
@@ -138,19 +146,24 @@ const startSpeechConversation=()=>{
     setStatus('میکروفون فقط در اتصال امن HTTPS قابل استفاده است.');
     return;
   }
+  if(recognitionRef.current)return;
   const session=++voiceSessionRef.current;
   try{
     const r=new SR();
     recognitionRef.current=r;
     voiceFinalRef.current='';
     r.lang='fa-IR';
-    r.continuous=true;
+    // iPhone Safari is more reliable with one utterance per recognition session.
+    // The conversation stays active and the next turn starts automatically.
+    r.continuous=false;
     r.interimResults=true;
     r.maxAlternatives=1;
     r.onstart=()=>{
       if(session!==voiceSessionRef.current)return;
+      if(voiceStartTimerRef.current)clearTimeout(voiceStartTimerRef.current);
+      voiceStartTimerRef.current=null;
       setListening(true);
-      setStatus('🎙️ مکالمه فعال است؛ صحبت کنید. برای پایان دوباره روی میکروفون بزنید.');
+      setStatus('🎙️ مکالمه فعال است؛ صحبت کنید. بعد از جمله، پیام خودکار ارسال می‌شود.');
     };
     r.onresult=(ev:any)=>{
       if(session!==voiceSessionRef.current)return;
@@ -159,11 +172,8 @@ const startSpeechConversation=()=>{
       for(let i=ev.resultIndex;i<ev.results.length;i++){
         const part=String(ev.results[i]?.[0]?.transcript||'').trim();
         if(!part)continue;
-        if(ev.results[i].isFinal){
-          finalText+=(finalText?' ':'')+part;
-        }else{
-          interim+=(interim?' ':'')+part;
-        }
+        if(ev.results[i].isFinal)finalText+=(finalText?' ':'')+part;
+        else interim+=(interim?' ':'')+part;
       }
       voiceFinalRef.current=finalText;
       const shown=(finalText+' '+interim).trim();
@@ -177,6 +187,8 @@ const startSpeechConversation=()=>{
     r.onerror=(ev:any)=>{
       if(session!==voiceSessionRef.current)return;
       const code=String(ev?.error||'');
+      if(voiceStartTimerRef.current)clearTimeout(voiceStartTimerRef.current);
+      voiceStartTimerRef.current=null;
       setListening(false);
       recognitionRef.current=null;
       if(code==='not-allowed'||code==='service-not-allowed'){
@@ -188,26 +200,43 @@ const startSpeechConversation=()=>{
         setStatus('میکروفون موقتاً در دسترس نیست؛ در حال تلاش مجدد…');
       }else if(code==='network'){
         setStatus('سرویس تشخیص گفتار موقتاً در دسترس نیست؛ در حال تلاش مجدد…');
+      }else if(code==='no-speech'){
+        setStatus('صدایی تشخیص داده نشد؛ دوباره صحبت کنید…');
       }else if(code!=='aborted'){
         setStatus('مکالمه موقتاً متوقف شد؛ در حال اتصال مجدد…');
       }
-      scheduleVoiceRestart();
+      if(code!=='not-allowed'&&code!=='service-not-allowed')scheduleVoiceRestart();
     };
     r.onend=()=>{
       if(session!==voiceSessionRef.current)return;
+      if(voiceStartTimerRef.current)clearTimeout(voiceStartTimerRef.current);
+      voiceStartTimerRef.current=null;
       setListening(false);
       recognitionRef.current=null;
       if(voiceFinalRef.current.trim()){
         const finalText=voiceFinalRef.current.trim();
         voiceFinalRef.current='';
         setInput('');
-        if(conversationRef.current)void ask(finalText);
+        if(conversationRef.current&&!busy)void ask(finalText);
       }
       if(conversationRef.current)scheduleVoiceRestart();
       else setStatus('مکالمه متوقف شد.');
     };
     r.start();
+    voiceStartTimerRef.current=setTimeout(()=>{
+      if(session!==voiceSessionRef.current)return;
+      if(!recognitionRef.current||listening)return;
+      try{recognitionRef.current.abort()}catch{}
+      recognitionRef.current=null;
+      setListening(false);
+      if(conversationRef.current){
+        setStatus('سرویس تشخیص گفتار پاسخ نداد؛ در حال راه‌اندازی مجدد…');
+        scheduleVoiceRestart();
+      }
+    },3500);
   }catch{
+    if(voiceStartTimerRef.current)clearTimeout(voiceStartTimerRef.current);
+    voiceStartTimerRef.current=null;
     recognitionRef.current=null;
     setListening(false);
     if(conversationRef.current){
@@ -221,8 +250,7 @@ const startVoice=async()=>{
   if(listening||conversationRef.current){
     conversationRef.current=false;
     voiceSessionRef.current++;
-    if(voiceRestartRef.current)clearTimeout(voiceRestartRef.current);
-    voiceRestartRef.current=null;
+    clearVoiceTimers();
     try{recognitionRef.current?.abort()}catch{}
     recognitionRef.current=null;
     voiceFinalRef.current='';
@@ -231,9 +259,13 @@ const startVoice=async()=>{
     return;
   }
   conversationRef.current=true;
+  setStatus('در حال فعال‌سازی میکروفون…');
+  const ok=await primeMicrophone();
+  if(!ok)return;
+  if(!conversationRef.current)return;
   startSpeechConversation();
 };
 
 const apply=()=>{const result=applyToCurrentForm(fields);setApplied(result.applied.length);const missingLabel=result.missing.length?`؛ ${result.missing.length} فیلد در فرم فعلی پیدا نشد`:'';setStatus(`${result.applied.length} از ${Object.keys(fields).length} فیلد به فرم فعلی ارسال شد${missingLabel}. مقادیر از طریق state/رویداد React اعمال می‌شوند و بعد از بازنمایی صفحه نیز حفظ می‌شوند.`)};
- return <>{!open&&<button onClick={()=>setOpen(true)} className="fixed left-4 bottom-16 z-[55] flex items-center gap-2 rounded-2xl bg-[var(--primary)] text-white px-4 py-3 shadow-2xl font-bold text-sm"><Bot size={18}/>دستیار هوشمند</button>}{open&&<div className="fixed left-4 bottom-4 z-[70] w-[min(440px,calc(100vw-32px))] h-[min(700px,calc(100vh-32px))] rounded-3xl border app-border bg-[var(--surface)] shadow-2xl overflow-hidden flex flex-col" dir="rtl"><header className="p-4 border-b app-border flex items-center justify-between"><div className="flex items-center gap-2"><span className="app-brand-mark"><Bot size={18}/></span><div><b>Customs AI</b><div className="text-[10px] app-muted">Gemini 3.8 Flash · Agent + Voice + Data Command Center</div></div></div><button className="icon-btn" onClick={()=>setOpen(false)}><X size={17}/></button></header><div className="p-2 border-b app-border grid grid-cols-2 gap-2"><button onClick={()=>setTab('chat')} className={`rounded-xl p-2 text-xs font-bold ${tab==='chat'?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]'}`}><Bot size={14} className="inline ml-1"/>چت</button><button onClick={()=>setTab('doc')} className={`rounded-xl p-2 text-xs font-bold ${tab==='doc'?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]'}`}><FileSearch size={14} className="inline ml-1"/>استخراج اسناد</button></div>{tab==='chat'?<><div className="flex-1 overflow-auto p-3 space-y-3">{messages.length===0&&<div className="rounded-2xl bg-[var(--surface-2)] p-4 text-sm leading-7">در هر بخش سامانه سؤال بپرسید یا از گیره کاغذ برای آپلود اسناد استفاده کنید.</div>}{messages.map((m,i)=><div key={i} className={`rounded-2xl p-3 text-sm leading-7 whitespace-pre-wrap ${m.role==='user'?'bg-[var(--primary)] text-white mr-8':'bg-[var(--surface-2)] ml-4'}`}>{m.text}</div>)}{busy&&<div className="text-xs app-muted flex items-center gap-2"><Loader2 size={14} className="animate-spin"/>در حال پردازش…</div>}</div><div className="p-3 border-t app-border flex gap-2"><button className="icon-btn shrink-0" onClick={()=>{setTab('doc');setTimeout(()=>fileRef.current?.click(),0)}} title="آپلود اسناد"><Paperclip size={17}/></button><input ref={chatInputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ask()}}} placeholder="سؤال خود را بپرسید…" className="flex-1 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm outline-none"/><button onClick={startVoice} disabled={busy} className={`icon-btn ${listening?"bg-red-500 text-white":"bg-[var(--surface-2)]"}`} title={listening?"توقف":"پرسش صوتی"}>{listening?<MicOff size={17}/>:<Mic size={17}/>}</button><button onClick={()=>ask()} disabled={busy||!input.trim()} className="icon-btn bg-[var(--primary)] text-white disabled:opacity-40"><Send size={16}/></button></div></>:<div className="flex-1 overflow-auto p-4"><input ref={fileRef} type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={e=>{if(e.target.files?.length)extractMany(e.target.files);e.currentTarget.value=''}}/><button onClick={()=>fileRef.current?.click()} disabled={busy} className="w-full rounded-2xl border border-dashed app-border p-8 text-center bg-[var(--surface-2)]"><FileSearch className="mx-auto mb-3" size={30}/><b>PDF و تصاویر اسناد را انتخاب کنید</b><div className="text-xs app-muted mt-2">چند فایل همزمان · استخراج کامل و تجمیع نتایج</div></button>{docResults.length>0&&<div className="mt-4 space-y-2">{docResults.map((d,i)=><div key={`${d.name}-${i}`} className="rounded-xl bg-[var(--surface-2)] p-3 text-xs"><div className="flex items-center gap-2"><CheckCircle2 size={15} className={d.error?'text-red-400':'text-emerald-400'}/><b className="truncate">{d.name}</b><span className="mr-auto app-muted">{d.error?'ناموفق':`${Object.keys(d.fields).length} فیلد`}</span></div>{d.error&&<div className="mt-1 text-red-400 leading-5">{d.error}</div>}</div>)}</div>}{status&&<div className="mt-4 rounded-xl border app-border p-3 text-xs leading-6">{status}</div>}{Object.keys(fields).length>0&&<><div className="mt-4 rounded-xl border app-border p-3"><div className="text-sm font-bold mb-2 flex items-center gap-2"><CheckCircle2 size={16}/>مجموع فیلدهای استخراج‌شده: {Object.keys(fields).length}</div><div className="max-h-48 overflow-auto text-xs leading-6">{Object.entries(fields).map(([k,v])=><div key={k} className="flex gap-2"><span className="app-muted min-w-28">{k}</span><span>{v}</span></div>)}</div></div><button onClick={apply} disabled={busy} className="mt-3 w-full rounded-xl bg-[var(--primary)] text-white p-3 text-sm font-bold">اعمال همه روی فرم فعلی</button>{applied>0&&<div className="mt-2 text-xs text-emerald-400">{applied} فیلد اعمال شد.</div>}</>}{docResults.length>0&&<button onClick={()=>fileRef.current?.click()} disabled={busy} className="mt-3 w-full rounded-xl border app-border p-3 text-sm font-bold">افزودن اسناد بیشتر</button>}</div>}</div>}</>;
+ return <>{!open&&<button onClick={()=>setOpen(true)} className="fixed left-4 bottom-16 z-[55] flex items-center gap-2 rounded-2xl bg-[var(--primary)] text-white px-4 py-3 shadow-2xl font-bold text-sm"><Bot size={18}/>دستیار هوشمند</button>}{open&&<div className="fixed left-4 bottom-4 z-[70] w-[min(440px,calc(100vw-32px))] h-[min(700px,calc(100vh-32px))] rounded-3xl border app-border bg-[var(--surface)] shadow-2xl overflow-hidden flex flex-col" dir="rtl"><header className="p-4 border-b app-border flex items-center justify-between"><div className="flex items-center gap-2"><span className="app-brand-mark"><Bot size={18}/></span><div><b>Customs AI</b><div className="text-[10px] app-muted">Gemini 3.8 Flash · Agent + Voice + Data Command Center</div></div></div><button className="icon-btn" onClick={()=>setOpen(false)}><X size={17}/></button></header><div className="p-2 border-b app-border grid grid-cols-2 gap-2"><button onClick={()=>setTab('chat')} className={`rounded-xl p-2 text-xs font-bold ${tab==='chat'?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]'}`}><Bot size={14} className="inline ml-1"/>چت</button><button onClick={()=>setTab('doc')} className={`rounded-xl p-2 text-xs font-bold ${tab==='doc'?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]'}`}><FileSearch size={14} className="inline ml-1"/>استخراج اسناد</button></div>{tab==='chat'?<><div className="flex-1 overflow-auto p-3 space-y-3">{messages.length===0&&<div className="rounded-2xl bg-[var(--surface-2)] p-4 text-sm leading-7">در هر بخش سامانه سؤال بپرسید یا از گیره کاغذ برای آپلود اسناد استفاده کنید.</div>}{messages.map((m,i)=><div key={i} className={`rounded-2xl p-3 text-sm leading-7 whitespace-pre-wrap ${m.role==='user'?'bg-[var(--primary)] text-white mr-8':'bg-[var(--surface-2)] ml-4'}`}>{m.text}</div>)}{busy&&<div className="text-xs app-muted flex items-center gap-2"><Loader2 size={14} className="animate-spin"/>در حال پردازش…</div>}</div><div className="p-3 border-t app-border flex gap-2"><button className="icon-btn shrink-0" onClick={()=>{setTab('doc');setTimeout(()=>fileRef.current?.click(),0)}} title="آپلود اسناد"><Paperclip size={17}/></button><input ref={chatInputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ask()}}} placeholder="سؤال خود را بپرسید…" className="flex-1 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm outline-none"/><button onClick={startVoice} className={`icon-btn ${listening?"bg-red-500 text-white":"bg-[var(--surface-2)]"}` title={listening?"توقف":"پرسش صوتی"}>{listening?<MicOff size={17}/>:<Mic size={17}/>}</button><button onClick={()=>ask()} disabled={busy||!input.trim()} className="icon-btn bg-[var(--primary)] text-white disabled:opacity-40"><Send size={16}/></button></div></>:<div className="flex-1 overflow-auto p-4"><input ref={fileRef} type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={e=>{if(e.target.files?.length)extractMany(e.target.files);e.currentTarget.value=''}}/><button onClick={()=>fileRef.current?.click()} disabled={busy} className="w-full rounded-2xl border border-dashed app-border p-8 text-center bg-[var(--surface-2)]"><FileSearch className="mx-auto mb-3" size={30}/><b>PDF و تصاویر اسناد را انتخاب کنید</b><div className="text-xs app-muted mt-2">چند فایل همزمان · استخراج کامل و تجمیع نتایج</div></button>{docResults.length>0&&<div className="mt-4 space-y-2">{docResults.map((d,i)=><div key={`${d.name}-${i}`} className="rounded-xl bg-[var(--surface-2)] p-3 text-xs"><div className="flex items-center gap-2"><CheckCircle2 size={15} className={d.error?'text-red-400':'text-emerald-400'}/><b className="truncate">{d.name}</b><span className="mr-auto app-muted">{d.error?'ناموفق':`${Object.keys(d.fields).length} فیلد`}</span></div>{d.error&&<div className="mt-1 text-red-400 leading-5">{d.error}</div>}</div>)}</div>}{status&&<div className="mt-4 rounded-xl border app-border p-3 text-xs leading-6">{status}</div>}{Object.keys(fields).length>0&&<><div className="mt-4 rounded-xl border app-border p-3"><div className="text-sm font-bold mb-2 flex items-center gap-2"><CheckCircle2 size={16}/>مجموع فیلدهای استخراج‌شده: {Object.keys(fields).length}</div><div className="max-h-48 overflow-auto text-xs leading-6">{Object.entries(fields).map(([k,v])=><div key={k} className="flex gap-2"><span className="app-muted min-w-28">{k}</span><span>{v}</span></div>)}</div></div><button onClick={apply} disabled={busy} className="mt-3 w-full rounded-xl bg-[var(--primary)] text-white p-3 text-sm font-bold">اعمال همه روی فرم فعلی</button>{applied>0&&<div className="mt-2 text-xs text-emerald-400">{applied} فیلد اعمال شد.</div>}</>}{docResults.length>0&&<button onClick={()=>fileRef.current?.click()} disabled={busy} className="mt-3 w-full rounded-xl border app-border p-3 text-sm font-bold">افزودن اسناد بیشتر</button>}</div>}</div>}</>;
 };
