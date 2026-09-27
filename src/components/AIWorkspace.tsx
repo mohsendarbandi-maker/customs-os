@@ -156,32 +156,91 @@ const startRecorderVoice=async()=>{
     setStatus(n==='NotAllowedError'?'دسترسی Microphone برای سایت رد شده است. اجازه Microphone را در تنظیمات iPhone فعال کنید.':'دسترسی به میکروفون ناموفق بود.');
   }
 };
-const startVoice=async()=>{
-  if(listening){
-    try{recognitionRef.current?.stop()}catch{}
-    try{mediaRecorderRef.current?.stop()}catch{}
-    return;
-  }
-  if(!window.isSecureContext){setStatus('میکروفون فقط در اتصال امن HTTPS قابل استفاده است.');return;}
-  // On iPhone Safari, use MediaRecorder first. Browser SpeechRecognition can report
-  // success/start but then fail at the speech-service layer without a usable transcript.
-  if(navigator.mediaDevices?.getUserMedia&&typeof MediaRecorder!=='undefined'){
-    await startRecorderVoice();
-    return;
-  }
+const conversationRef=useRef(false);
+
+const startSpeechConversation=()=>{
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(SR){
-    try{
-      const r=new SR();recognitionRef.current=r;voiceFinalRef.current='';
-      r.lang='fa-IR';r.continuous=false;r.interimResults=true;r.maxAlternatives=1;
-      r.onstart=()=>{setListening(true);setStatus('🎙️ در حال گوش دادن… صحبت کنید.')};
-      r.onresult=(ev:any)=>{let finalText=voiceFinalRef.current,interim='';for(let i=ev.resultIndex;i<ev.results.length;i++){const part=String(ev.results[i]?.[0]?.transcript||'').trim();if(!part)continue;if(ev.results[i].isFinal)finalText+=(finalText?' ':'')+part;else interim+=(interim?' ':'')+part;}voiceFinalRef.current=finalText;const shown=(finalText+' '+interim).trim();if(shown)setInput(shown)};
-      r.onerror=(ev:any)=>{const code=String(ev?.error||'');setListening(false);recognitionRef.current=null;if(code==='no-speech'){setStatus('صدایی تشخیص داده نشد. دوباره تلاش کنید.')}else if(code==='not-allowed'||code==='service-not-allowed'){setStatus('دسترسی میکروفون رد شد. اجازه Microphone سایت را فعال کنید.')}else{setStatus('تشخیص گفتار ناموفق بود.')}};
-      r.onend=()=>{setListening(false);recognitionRef.current=null;const finalText=voiceFinalRef.current.trim();if(finalText)setInput(finalText)};
-      r.start();return;
-    }catch{setStatus('شروع تشخیص گفتار ناموفق بود.');return;}
+  if(!SR){
+    setStatus('تشخیص گفتار فارسی در این مرورگر در دسترس نیست. از میکروفون کیبورد iPhone استفاده کنید.');
+    return;
   }
-  setStatus('میکروفون صوتی در این مرورگر در دسترس نیست.');
+  if(!window.isSecureContext){
+    setStatus('میکروفون فقط در اتصال امن HTTPS قابل استفاده است.');
+    return;
+  }
+  try{
+    const r=new SR();
+    recognitionRef.current=r;
+    voiceFinalRef.current='';
+    r.lang='fa-IR';
+    r.continuous=false;
+    r.interimResults=true;
+    r.maxAlternatives=1;
+    r.onstart=()=>{
+      setListening(true);
+      setStatus('🎙️ مکالمه فعال است؛ صحبت کنید. بعد از پایان جمله، پیام خودکار ارسال می‌شود.');
+    };
+    r.onresult=(ev:any)=>{
+      let finalText=voiceFinalRef.current;
+      let interim='';
+      for(let i=ev.resultIndex;i<ev.results.length;i++){
+        const part=String(ev.results[i]?.[0]?.transcript||'').trim();
+        if(!part)continue;
+        if(ev.results[i].isFinal)finalText+=(finalText?' ':'')+part;
+        else interim+=(interim?' ':'')+part;
+      }
+      voiceFinalRef.current=finalText;
+      const shown=(finalText+' '+interim).trim();
+      if(shown)setInput(shown);
+    };
+    r.onerror=(ev:any)=>{
+      const code=String(ev?.error||'');
+      setListening(false);
+      recognitionRef.current=null;
+      if(code==='aborted')return;
+      if(code==='no-speech'){
+        setStatus(conversationRef.current?'صدایی تشخیص داده نشد؛ دوباره صحبت کنید.':'مکالمه متوقف شد.');
+        if(conversationRef.current)setTimeout(()=>startSpeechConversation(),250);
+      }else if(code==='not-allowed'||code==='service-not-allowed'){
+        conversationRef.current=false;
+        setStatus('دسترسی میکروفون رد شد. اجازه Microphone سایت را فعال کنید.');
+      }else{
+        conversationRef.current=false;
+        setStatus('سرویس تشخیص گفتار این مرورگر در دسترس نیست.');
+      }
+    };
+    r.onend=()=>{
+      setListening(false);
+      recognitionRef.current=null;
+      const finalText=voiceFinalRef.current.trim();
+      voiceFinalRef.current='';
+      if(finalText&&conversationRef.current){
+        void ask(finalText);
+      }else if(!conversationRef.current){
+        setStatus('مکالمه متوقف شد.');
+      }
+    };
+    r.start();
+  }catch{
+    conversationRef.current=false;
+    setListening(false);
+    setStatus('شروع مکالمه صوتی ناموفق بود.');
+  }
+};
+
+const startVoice=async()=>{
+  if(listening||conversationRef.current){
+    conversationRef.current=false;
+    try{recognitionRef.current?.abort()}catch{}
+    try{mediaRecorderRef.current?.stop()}catch{}
+    mediaStreamRef.current?.getTracks().forEach(t=>t.stop());
+    mediaStreamRef.current=null;
+    setListening(false);
+    setStatus('مکالمه متوقف شد.');
+    return;
+  }
+  conversationRef.current=true;
+  startSpeechConversation();
 };
 
 const apply=()=>{const result=applyToCurrentForm(fields);setApplied(result.applied.length);const missingLabel=result.missing.length?`؛ ${result.missing.length} فیلد در فرم فعلی پیدا نشد`:'';setStatus(`${result.applied.length} از ${Object.keys(fields).length} فیلد به فرم فعلی ارسال شد${missingLabel}. مقادیر از طریق state/رویداد React اعمال می‌شوند و بعد از بازنمایی صفحه نیز حفظ می‌شوند.`)};
