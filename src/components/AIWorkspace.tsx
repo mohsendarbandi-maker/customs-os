@@ -109,71 +109,73 @@ export const AIWorkspace:React.FC<{pageContext?:string}>=({pageContext=''})=>{
    if(rows.length){await supabase.from('shipment_document_extractions').upsert(rows,{onConflict:'shipment_id,document_id,field_key'});await supabase.from('ai_evidence').insert(rows.map((r:any)=>({organization_id:r.organization_id,shipment_id:r.shipment_id,document_id:r.document_id,field_key:r.field_key,extracted_value:r.extracted_value,extraction_method:'ai-assistant',verification_status:'unverified'}))).catch(()=>{});}
  };
 
- const[open,setOpen]=useState(false),[tab,setTab]=useState<'chat'|'doc'>('chat'),[input,setInput]=useState(''),[messages,setMessages]=useState<Msg[]>([]),[busy,setBusy]=useState(false),[fields,setFields]=useState<Extracted>({}),[status,setStatus]=useState(''),[applied,setApplied]=useState(0),[docResults,setDocResults]=useState<DocResult[]>([]),[sessionId]=useState(()=>{try{const k='customs_ai_session_id';const old=localStorage.getItem(k);if(old)return old;const id=crypto.randomUUID();localStorage.setItem(k,id);return id}catch{return ''}}),[listening,setListening]=useState(false);const fileRef=useRef<HTMLInputElement|null>(null);const chatInputRef=useRef<HTMLInputElement|null>(null);const recognitionRef=useRef<any>(null);const voiceFinalRef=useRef('');
+ const[open,setOpen]=useState(false),[tab,setTab]=useState<'chat'|'doc'>('chat'),[input,setInput]=useState(''),[messages,setMessages]=useState<Msg[]>([]),[busy,setBusy]=useState(false),[fields,setFields]=useState<Extracted>({}),[status,setStatus]=useState(''),[applied,setApplied]=useState(0),[docResults,setDocResults]=useState<DocResult[]>([]),[sessionId]=useState(()=>{try{const k='customs_ai_session_id';const old=localStorage.getItem(k);if(old)return old;const id=crypto.randomUUID();localStorage.setItem(k,id);return id}catch{return ''}}),[listening,setListening]=useState(false);const fileRef=useRef<HTMLInputElement|null>(null);const chatInputRef=useRef<HTMLInputElement|null>(null);const recognitionRef=useRef<any>(null);const voiceFinalRef=useRef('');const mediaRecorderRef=useRef<MediaRecorder|null>(null);const mediaStreamRef=useRef<MediaStream|null>(null);const voiceChunksRef=useRef<Blob[]>([]);
  const ask=async(text=input.trim(),documentText='',extractFields=false,documentData='',documentMimeType='',commandMode=false)=>{if(!text&&!documentText&&!documentData)return null;setBusy(true);setStatus('');if(text)setMessages(m=>[...m,{role:'user',text}]);setInput('');try{const contextPrefix=sharedContext?'زمینه زنده محموله و اسناد:\\n'+sharedContext+'\\n\\n':'';const prompt=extractFields?'استخراج کامل سند گمرکی/تجاری برای ورود اطلاعات به Customs OS. همه صفحات، جدول‌ها، سربرگ‌ها و پاورقی‌ها را بررسی کن. فقط اطلاعات واقعی را استخراج کن و حدس نزن.':contextPrefix+(text||'این سند را برای عملیات گمرکی و لجستیکی تحلیل کن.');const functionName=extractFields?'ai-assistant':'ai-core';const body=extractFields?{query:prompt,document_text:documentText,document_data:documentData||undefined,document_mime_type:documentMimeType||undefined,extract_fields:true,page_context:pageContext}:{query:text||prompt,document_text:documentText,document_data:documentData||undefined,document_mime_type:documentMimeType||undefined,mode:commandMode?'agent':'chat',shipment_id:shipmentId||undefined,session_id:sessionId||undefined};const{data,error}=await supabase.functions.invoke(functionName,{body});if(error)throw error;const answer=typeof data?.answer==='string'?data.answer:(data?.answer?JSON.stringify(data.answer):data?.message||'پاسخ دریافت نشد.');if(!extractFields){setMessages(m=>[...m,{role:'assistant',text:answer}]);}return answer;}catch(e:any){const detail=await explainInvokeError(e);if(text)setMessages(m=>[...m,{role:'assistant',text:`خطای دستیار: ${detail}`}]);throw new Error(detail)}finally{setBusy(false)}};
  const parseFields=(answer:string)=>{const raw=answer.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();const x=JSON.parse(raw);const parsed:Extracted={};Object.entries(x||{}).forEach(([k,v])=>{if(typeof v==='string'&&v.trim())parsed[k]=v.trim();});return parsed;};
  const extractOne=async(file:File,documentId?:string)=>{if(file.type!=='application/pdf'&&!file.type.startsWith('image/'))throw new Error('فقط PDF و تصویر پشتیبانی می‌شود.');if(file.size>10*1024*1024)throw new Error(`حجم ${file.name} بیشتر از ۱۰MB است.`);if(documentId)await updateExtractionStatus(documentId,'processing');try{const base64=await fileToBase64(file);const answer=await ask('', '', true, base64, file.type);if(!answer)throw new Error('پاسخ خالی از سرویس هوش مصنوعی دریافت شد.');const parsed=parseFields(answer);if(documentId){await persistExtraction(documentId,parsed);await updateExtractionStatus(documentId,'completed');}return parsed}catch(e:any){if(documentId)await updateExtractionStatus(documentId,'failed',e?.message||'استخراج ناموفق');throw e;}};
  const extractMany=async(files:FileList|File[])=>{const list=Array.from(files);if(!list.length)return;setTab('doc');setFields({});setApplied(0);setDocResults([]);setBusy(true);const results:DocResult[]=[];const merged:Extracted={};try{for(let i=0;i<list.length;i++){const file=list[i];setStatus(`در حال استخراج سند ${i+1} از ${list.length}: ${file.name}`);try{const documentId=shipmentId?await persistDocument(file):undefined;const f=await extractOne(file,documentId);results.push({name:file.name,fields:f});Object.entries(f).forEach(([k,v])=>{if(!merged[k])merged[k]=v;});setDocResults([...results]);setFields({...merged});}catch(e:any){results.push({name:file.name,fields:{},error:e?.message||'استخراج ناموفق'});setDocResults([...results]);}}setFields({...merged});const ok=results.filter(x=>!x.error).length;const failed=results.filter(x=>x.error).length;setStatus(`استخراج تمام شد: ${ok} سند موفق${failed?`، ${failed} سند ناموفق`:''}؛ مجموع ${Object.keys(merged).length} فیلد یکتا.`);try{localStorage.setItem('customs_ai_extracted',JSON.stringify({fields:merged,documents:results,fileNames:list.map(f=>f.name),pageContext,at:new Date().toISOString()}))}catch{}}finally{setBusy(false)}};
- const startVoice=()=>{
-  if(listening){try{recognitionRef.current?.stop()}catch{}return;}
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){
-    setStatus('تشخیص گفتار در این مرورگر در دسترس نیست. کادر پیام را لمس کنید و از میکروفون کیبورد iPhone برای دیکته فارسی استفاده کنید.');
+ const transcribeRecordedVoice=async(blob:Blob)=>{
+  if(!blob.size){setStatus('صدایی ضبط نشد. دوباره تلاش کنید.');return;}
+  setBusy(true);
+  setStatus('در حال تبدیل صدا به متن…');
+  try{
+    const reader=new FileReader();
+    const base64=await new Promise<string>((resolve,reject)=>{reader.onload=()=>{const x=String(reader.result||'');const i=x.indexOf(',');resolve(i>=0?x.slice(i+1):x)};reader.onerror=()=>reject(new Error('خواندن صدای ضبط‌شده ناموفق بود.'));reader.readAsDataURL(blob);});
+    const mime=blob.type||'audio/mp4';
+    const {data,error}=await supabase.functions.invoke('ai-assistant',{body:{query:'صدای زیر را به متن فارسی دقیق تبدیل کن. فقط متن گفته‌شده را برگردان؛ هیچ توضیح، خلاصه یا حدسی اضافه نکن.',document_data:base64,document_mime_type:mime,voice_transcription:true}});
+    if(error)throw error;
+    const text=String(data?.answer||data?.text||'').trim();
+    if(!text)throw new Error('متنی از صدا دریافت نشد.');
+    setInput(text);
+    setStatus('متن صوتی آماده ارسال است.');
     setTimeout(()=>chatInputRef.current?.focus(),50);
-    return;
-  }
-  if(!window.isSecureContext){
-    setStatus('میکروفون فقط در اتصال امن HTTPS قابل استفاده است.');
+  }catch(e:any){
+    setStatus(await explainInvokeError(e));
+  }finally{setBusy(false);}
+};
+const startRecorderVoice=async()=>{
+  if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined'){
+    setStatus('ضبط صدای مرورگر در این iPhone در دسترس نیست. از میکروفون کیبورد iPhone استفاده کنید.');
+    setTimeout(()=>chatInputRef.current?.focus(),50);
     return;
   }
   try{
-    const r=new SR();
-    recognitionRef.current=r;
-    voiceFinalRef.current='';
-    r.lang='fa-IR';
-    r.continuous=false;
-    r.interimResults=true;
-    r.maxAlternatives=1;
-    r.onstart=()=>{setListening(true);setStatus('🎙️ در حال گوش دادن… صحبت کنید.')};
-    r.onresult=(ev:any)=>{
-      let finalText=voiceFinalRef.current;
-      let interim='';
-      for(let i=ev.resultIndex;i<ev.results.length;i++){
-        const part=String(ev.results[i]?.[0]?.transcript||'').trim();
-        if(!part)continue;
-        if(ev.results[i].isFinal) finalText+=(finalText?' ':'')+part;
-        else interim+=(interim?' ':'')+part;
-      }
-      voiceFinalRef.current=finalText;
-      const shown=(finalText+' '+interim).trim();
-      if(shown)setInput(shown);
-    };
-    r.onerror=(ev:any)=>{
-      const code=String(ev?.error||'');
-      setListening(false);
-      if(code==='not-allowed'||code==='service-not-allowed'){
-        setStatus('دسترسی میکروفون رد شد. در تنظیمات Safari/مرورگر، اجازه Microphone را برای سایت فعال کنید و دوباره بزنید.');
-      }else if(code==='no-speech'){
-        setStatus('صدایی تشخیص داده نشد. دوباره روی میکروفون بزنید و واضح صحبت کنید.');
-      }else if(code==='network'){
-        setStatus('سرویس تشخیص گفتار در دسترس نیست. میکروفون کیبورد iPhone را برای دیکته فارسی امتحان کنید.');
-      }else{
-        setStatus('خطا در تشخیص صدا. دوباره تلاش کنید.');
-      }
-    };
-    r.onend=()=>{
-      setListening(false);
-      recognitionRef.current=null;
-      const finalText=voiceFinalRef.current.trim();
-      if(finalText)setInput(finalText);
-    };
-    r.start();
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaStreamRef.current=stream;voiceChunksRef.current=[];
+    const preferred=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t));
+    const recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined);
+    mediaRecorderRef.current=recorder;
+    recorder.ondataavailable=(e:BlobEvent)=>{if(e.data?.size)voiceChunksRef.current.push(e.data)};
+    recorder.onstart=()=>{setListening(true);setStatus('🎙️ در حال ضبط… برای پایان دوباره روی میکروفون بزنید.')};
+    recorder.onerror=()=>{setListening(false);setStatus('ضبط صدا ناموفق بود.')};
+    recorder.onstop=async()=>{setListening(false);mediaStreamRef.current?.getTracks().forEach(t=>t.stop());mediaStreamRef.current=null;mediaRecorderRef.current=null;const blob=new Blob(voiceChunksRef.current,{type:recorder.mimeType||preferred||'audio/mp4'});voiceChunksRef.current=[];await transcribeRecordedVoice(blob)};
+    recorder.start();
   }catch(e:any){
     setListening(false);
-    recognitionRef.current=null;
-    setStatus('شروع میکروفون ناموفق بود. اگر Safari تشخیص گفتار را پشتیبانی نمی‌کند، از میکروفون کیبورد iPhone استفاده کنید.');
-    setTimeout(()=>chatInputRef.current?.focus(),50);
+    const n=String(e?.name||'');
+    setStatus(n==='NotAllowedError'?'دسترسی Microphone برای سایت رد شده است. اجازه Microphone را در تنظیمات iPhone فعال کنید.':'دسترسی به میکروفون ناموفق بود.');
   }
+};
+const startVoice=async()=>{
+  if(listening){
+    try{recognitionRef.current?.stop()}catch{}
+    try{mediaRecorderRef.current?.stop()}catch{}
+    return;
+  }
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!window.isSecureContext){setStatus('میکروفون فقط در اتصال امن HTTPS قابل استفاده است.');return;}
+  if(SR){
+    try{
+      const r=new SR();recognitionRef.current=r;voiceFinalRef.current='';
+      r.lang='fa-IR';r.continuous=false;r.interimResults=true;r.maxAlternatives=1;
+      r.onstart=()=>{setListening(true);setStatus('🎙️ در حال گوش دادن… صحبت کنید.')};
+      r.onresult=(ev:any)=>{let finalText=voiceFinalRef.current,interim='';for(let i=ev.resultIndex;i<ev.results.length;i++){const part=String(ev.results[i]?.[0]?.transcript||'').trim();if(!part)continue;if(ev.results[i].isFinal)finalText+=(finalText?' ':'')+part;else interim+=(interim?' ':'')+part;}voiceFinalRef.current=finalText;const shown=(finalText+' '+interim).trim();if(shown)setInput(shown)};
+      r.onerror=(ev:any)=>{const code=String(ev?.error||'');setListening(false);recognitionRef.current=null;if(code==='not-allowed'||code==='service-not-allowed'){setStatus('دسترسی میکروفون رد شد. اجازه Microphone سایت را فعال کنید.')}else if(code==='no-speech'){setStatus('صدایی تشخیص داده نشد. دوباره تلاش کنید.')}else if(code==='network'){void startRecorderVoice()}else{setStatus('تشخیص گفتار ناموفق بود؛ ضبط صوتی را امتحان می‌کنیم…');void startRecorderVoice()}};
+      r.onend=()=>{setListening(false);recognitionRef.current=null;const finalText=voiceFinalRef.current.trim();if(finalText)setInput(finalText)};
+      r.start();return;
+    }catch{}
+  }
+  await startRecorderVoice();
 };
 
 const apply=()=>{const result=applyToCurrentForm(fields);setApplied(result.applied.length);const missingLabel=result.missing.length?`؛ ${result.missing.length} فیلد در فرم فعلی پیدا نشد`:'';setStatus(`${result.applied.length} از ${Object.keys(fields).length} فیلد به فرم فعلی ارسال شد${missingLabel}. مقادیر از طریق state/رویداد React اعمال می‌شوند و بعد از بازنمایی صفحه نیز حفظ می‌شوند.`)};
