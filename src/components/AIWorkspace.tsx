@@ -162,20 +162,26 @@ const startVoice=async()=>{
     try{mediaRecorderRef.current?.stop()}catch{}
     return;
   }
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!window.isSecureContext){setStatus('میکروفون فقط در اتصال امن HTTPS قابل استفاده است.');return;}
+  // On iPhone Safari, use MediaRecorder first. Browser SpeechRecognition can report
+  // success/start but then fail at the speech-service layer without a usable transcript.
+  if(navigator.mediaDevices?.getUserMedia&&typeof MediaRecorder!=='undefined'){
+    await startRecorderVoice();
+    return;
+  }
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(SR){
     try{
       const r=new SR();recognitionRef.current=r;voiceFinalRef.current='';
       r.lang='fa-IR';r.continuous=false;r.interimResults=true;r.maxAlternatives=1;
       r.onstart=()=>{setListening(true);setStatus('🎙️ در حال گوش دادن… صحبت کنید.')};
       r.onresult=(ev:any)=>{let finalText=voiceFinalRef.current,interim='';for(let i=ev.resultIndex;i<ev.results.length;i++){const part=String(ev.results[i]?.[0]?.transcript||'').trim();if(!part)continue;if(ev.results[i].isFinal)finalText+=(finalText?' ':'')+part;else interim+=(interim?' ':'')+part;}voiceFinalRef.current=finalText;const shown=(finalText+' '+interim).trim();if(shown)setInput(shown)};
-      r.onerror=(ev:any)=>{const code=String(ev?.error||'');setListening(false);recognitionRef.current=null;if(code==='not-allowed'||code==='service-not-allowed'){setStatus('دسترسی میکروفون رد شد. اجازه Microphone سایت را فعال کنید.')}else if(code==='no-speech'){setStatus('صدایی تشخیص داده نشد. دوباره تلاش کنید.')}else if(code==='network'){void startRecorderVoice()}else{setStatus('تشخیص گفتار ناموفق بود؛ ضبط صوتی را امتحان می‌کنیم…');void startRecorderVoice()}};
+      r.onerror=(ev:any)=>{const code=String(ev?.error||'');setListening(false);recognitionRef.current=null;if(code==='no-speech'){setStatus('صدایی تشخیص داده نشد. دوباره تلاش کنید.')}else if(code==='not-allowed'||code==='service-not-allowed'){setStatus('دسترسی میکروفون رد شد. اجازه Microphone سایت را فعال کنید.')}else{setStatus('تشخیص گفتار ناموفق بود.')}};
       r.onend=()=>{setListening(false);recognitionRef.current=null;const finalText=voiceFinalRef.current.trim();if(finalText)setInput(finalText)};
       r.start();return;
-    }catch{}
+    }catch{setStatus('شروع تشخیص گفتار ناموفق بود.');return;}
   }
-  await startRecorderVoice();
+  setStatus('میکروفون صوتی در این مرورگر در دسترس نیست.');
 };
 
 const apply=()=>{const result=applyToCurrentForm(fields);setApplied(result.applied.length);const missingLabel=result.missing.length?`؛ ${result.missing.length} فیلد در فرم فعلی پیدا نشد`:'';setStatus(`${result.applied.length} از ${Object.keys(fields).length} فیلد به فرم فعلی ارسال شد${missingLabel}. مقادیر از طریق state/رویداد React اعمال می‌شوند و بعد از بازنمایی صفحه نیز حفظ می‌شوند.`)};
