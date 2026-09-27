@@ -324,19 +324,16 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           .from(BUCKET)
           .upload(path, f, { contentType: mime, cacheControl: '3600', upsert: false });
         if (ue) throw new Error(`آپلود «${f.name}» ناموفق بود: ${ue.message}`);
-        const { error: de } = await supabase.from('customs_documents').insert({
+        const { error: de } = await supabase.from('shipment_documents').insert({
           organization_id: org,
           shipment_id: current.id,
-          case_id: current.case_id,
-          document_type: inferType(f.name),
-          original_name: f.name,
-          display_name: f.name,
+          uploaded_by: user.id,
+          document_name: f.name,
+          original_file_name: f.name,
           storage_path: path,
           mime_type: mime,
-          size_bytes: f.size,
-          created_by: user.id,
-          status: 'review',
-          tags: [],
+          file_size_bytes: f.size,
+          extraction_status: 'pending',
         });
         if (de) {
           await supabase.storage.from(BUCKET).remove([path]);
@@ -357,6 +354,19 @@ export const CustomsDocumentManagerPage: React.FC = () => {
     setExtracting(d);
     setExtracted([]);
     setExtractProgress('در حال دریافت سند از Storage...');
+    const canonicalDocument = d.source === 'shipment_documents';
+    const markExtraction = async (status: 'processing'|'completed'|'failed', errorMessage?: string) => {
+      if (!canonicalDocument) return;
+      const patch: any = {
+        extraction_status: status,
+        extraction_error: errorMessage || null,
+        extraction_started_at: status === 'processing' ? new Date().toISOString() : undefined,
+        extraction_completed_at: status === 'completed' || status === 'failed' ? new Date().toISOString() : undefined,
+      };
+      Object.keys(patch).forEach((k) => patch[k] === undefined && delete patch[k]);
+      await supabase.from('shipment_documents').update(patch).eq('id', d.id);
+    };
+    await markExtraction('processing');
     try {
       const { data: blob, error } = await supabase.storage.from(BUCKET).download(d.storage_path);
       if (error) throw error;
@@ -425,10 +435,13 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           if (ee) throw ee;
         }
       }
+      await markExtraction('completed');
       setExtractProgress('');
     } catch (e: any) {
+      const message = e?.message || 'استخراج اطلاعات سند ناموفق بود';
+      try { await markExtraction('failed', message); } catch {}
       setExtractProgress('');
-      setError(e?.message || 'استخراج اطلاعات سند ناموفق بود');
+      setError(message);
     }
   };
 
