@@ -105,7 +105,7 @@ Deno.serve(async(req)=>{
     if(gk){try{const qv=await geminiEmbedding(query,gk);semanticKnowledge=await sb.rpc('search_knowledge_semantic',{query_embedding:qv,match_count:10,match_threshold:0.18}).then((x:any)=>x.data||[]).catch(()=>[]);}catch{}}
   }
   const mutationIntent=mode==='agent'&&/(ثبت|تغییر|اصلاح|حذف|بستن|تأیید|رد|پرداخت|ایجاد|ویرایش|لغو|ارسال|کنسل|update|delete|create|change)/i.test(query);
-  let prompt='کاربر: '+query+'\nحالت: '+mode+'\nداده واقعی محموله: '+JSON.stringify(selected).slice(0,90000)+'\nیافته‌های اعتبارسنجی: '+JSON.stringify(finding).slice(0,30000)+'\nدانش داخلی مرتبط: '+JSON.stringify(knowledge).slice(0,20000);
+  let prompt='کاربر: '+query+'\nحالت: '+mode+'\nداده واقعی محموله: '+JSON.stringify(selected).slice(0,90000)+'\nیافته‌های اعتبارسنجی: '+JSON.stringify(finding).slice(0,30000)+'\nدانش داخلی مرتبط: '+JSON.stringify({keyword:knowledge,semantic:semanticKnowledge}).slice(0,35000)+'\nحافظه جلسه اخیر: '+JSON.stringify(memory).slice(0,16000)+'\nاگر از دانشنامه استفاده می‌کنی، منبع را با عنوان/شماره/صفحه در پاسخ مشخص کن و هرگز منبع یا بند را جعل نکن.';
   if(mutationIntent)prompt+='\nاین درخواست تغییر داده است. فقط پیشنهاد اقدام ساختاریافته بده؛ هیچ تغییر مستقیم در داده اصلی انجام نده و برای هر پیشنهاد شواهد و ریسک را مشخص کن.';
   if(mode==='audit'||mode==='risk')prompt+='\nگزارش: وضعیت، موارد تاییدشده، مغایرت‌ها، کمبودها و اقدام بعدی را جدا کن.';
   if(mode==='extract')prompt+='\nفقط داده واقعی سند را استخراج کن؛ موارد ناموجود/ناخوانا xxxx.';
