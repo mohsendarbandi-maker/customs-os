@@ -112,9 +112,56 @@ Deno.serve(async(req)=>{
   const parts:any[]=[];const docText=clean(b.document_text);if(docText)parts.push({text:'DOCUMENT:\n'+docText.slice(0,120000)});
   const data=strip(String(b.document_data||''));const mime=clean(b.document_mime_type).toLowerCase();if(data&&(mime==='application/pdf'||mime.startsWith('image/')))parts.push({inline_data:{mime_type:mime,data}});
   let answer='',provider='',model='',errors:string[]=[];
-  const g=Deno.env.get('GEMINI_API_KEY');if(g){try{model=mode==='extract'?'gemini-3.5-flash-lite':'gemini-3.8-flash';answer=await gemini(prompt,parts,g,model);provider='gemini'}catch(e){errors.push('Gemini: '+(e instanceof Error?e.message:String(e)))}}
-  if(!answer){const groq=Deno.env.get('GROQ_API_KEY');if(groq){try{const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+groq,'Content-Type':'application/json'},body:JSON.stringify({model:'openai/gpt-oss-120b',messages:[{role:'user',content:prompt}],temperature:0})});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||'Groq error');answer=String(d?.choices?.[0]?.message?.content||'');provider='groq';model='openai/gpt-oss-120b'}catch(e){errors.push('Groq: '+(e instanceof Error?e.message:String(e)))}}}
-  if(!answer){const key=Deno.env.get('OPENAI_API_KEY');if(key){try{const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4.1-mini',input:prompt})});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||'OpenAI error');answer=String(d?.output_text||'');provider='openai';model='gpt-4.1-mini'}catch(e){errors.push('OpenAI: '+(e instanceof Error?e.message:String(e)))}}}
+  const timeoutMs=Number(Deno.env.get('AI_PROVIDER_TIMEOUT_MS')||18000);
+  const withTimeout=async<T>(fn:()=>Promise<T>)=>{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),timeoutMs);
+    try{return await fn()}finally{clearTimeout(t)}
+  };
+  const jsonFetch=async(url:string,init:any)=>{
+    const r=await withTimeout(()=>fetch(url,{...init,signal:(init.signal||undefined)}));
+    const raw=await r.text(); let d:any={}; try{d=JSON.parse(raw)}catch{d={raw:raw.slice(0,3000)}}
+    if(!r.ok)throw new Error(String(d?.error?.message||d?.error?.error?.message||d?.message||d?.raw||('HTTP '+r.status)));
+    return d;
+  };
+  const geminiKeys=Array.from({length:10},(_,i)=>Deno.env.get('GEMINI_API_KEY_'+(i+1))||'').filter(Boolean);
+  const primaryGemini=Deno.env.get('GEMINI_API_KEY')||''; if(primaryGemini)geminiKeys.unshift(primaryGemini);
+  const uniqueGemini=[...new Set(geminiKeys)];
+  const callGeminiKey=async(key:string,geminiModel='gemini-3.8-flash')=>{
+    const d=await jsonFetch('https://generativelanguage.googleapis.com/v1beta/models/'+geminiModel+':generateContent',{
+      method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
+      body:JSON.stringify({systemInstruction:{parts:[{text:'You are Customs OS enterprise AI. Never invent official identifiers. Use only supplied database/document evidence. Explicitly report missing or conflicting evidence. Answer Persian.'}]},contents:[{role:'user',parts:[{text:prompt},...parts]}]})
+    });
+    return String(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join('\n')||'').trim();
+  };
+  for(let i=0;i<uniqueGemini.length&&!answer;i++){try{answer=await callGeminiKey(uniqueGemini[i],mode==='extract'?'gemini-3.5-flash-lite':'gemini-3.8-flash');if(answer){provider='gemini';model='gemini-3.8-flash';}}catch(e){errors.push('Gemini-'+(i+1)+': '+(e instanceof Error?e.message:String(e)))}}
+  if(!answer){
+    const groqKeys=Array.from({length:5},(_,i)=>Deno.env.get('GROQ_API_KEY_'+(i+1))||'').filter(Boolean);
+    const g=Deno.env.get('GROQ_API_KEY');if(g)groqKeys.unshift(g);
+    for(let i=0;i<[...new Set(groqKeys)].length&&!answer;i++){const key=[...new Set(groqKeys)][i];try{
+      const d=await jsonFetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model:'openai/gpt-oss-120b',messages:[{role:'user',content:prompt}],temperature:0})});
+      answer=String(d?.choices?.[0]?.message?.content||''); if(answer){provider='groq';model='openai/gpt-oss-120b'}
+    }catch(e){errors.push('Groq-'+(i+1)+': '+(e instanceof Error?e.message:String(e)))}}}
+  if(!answer){
+    const orKey=Deno.env.get('OPENROUTER_API_KEY');
+    if(orKey)try{
+      const d=await jsonFetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+orKey,'Content-Type':'application/json','HTTP-Referer':'https://customs-os-psi.vercel.app','X-Title':'Customs OS'},body:JSON.stringify({model:'openrouter/free',messages:[{role:'user',content:prompt}],temperature:0})});
+      answer=String(d?.choices?.[0]?.message?.content||''); if(answer){provider='openrouter';model=String(d?.model||'openrouter/free')}
+    }catch(e){errors.push('OpenRouter: '+(e instanceof Error?e.message:String(e)))}
+  }
+  if(!answer){
+    const cfToken=Deno.env.get('CLOUDFLARE_AI_TOKEN'),cfAccount=Deno.env.get('CLOUDFLARE_ACCOUNT_ID');
+    if(cfToken&&cfAccount)try{
+      const d=await jsonFetch('https://api.cloudflare.com/client/v4/accounts/'+cfAccount+'/ai/run/@cf/zai-org/glm-4.7-flash',{method:'POST',headers:{Authorization:'Bearer '+cfToken,'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+      answer=String(d?.result?.response||''); if(answer){provider='cloudflare';model='@cf/zai-org/glm-4.7-flash'}
+    }catch(e){errors.push('Cloudflare AI: '+(e instanceof Error?e.message:String(e)))}
+  }
+  if(!answer){
+    const key=Deno.env.get('OPENAI_API_KEY');
+    if(key)try{
+      const d=await jsonFetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4.1-mini',input:prompt})});
+      answer=String(d?.output_text||''); if(answer){provider='openai';model='gpt-4.1-mini'}
+    }catch(e){errors.push('OpenAI: '+(e instanceof Error?e.message:String(e)))}
+  }
   if(!answer)return reply({error:'همه سرویس‌های AI ناموفق بودند: '+errors.join(' | ')},502,origin);
   const interaction=await sb.from('ai_interactions').insert({organization_id:profile.organization_id,user_id:user.id,shipment_id:shipmentId||selected[0]?.shipment_id||null,case_id:selected[0]?.case_id||null,session_id:sessionId||null,mode,query,answer,provider,model,latency_ms:null,status:'completed'}).select('id').single();
   const interactionId=interaction.data?.id||null;
