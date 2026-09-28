@@ -10,6 +10,7 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
   
   const { user, needsOnboarding } = useAuth();
   const navigate = useNavigate();
@@ -22,6 +23,27 @@ export const LoginPage: React.FC = () => {
       navigate(needsOnboarding ? '/onboarding' : from, { replace: true });
     }
   }, [user, needsOnboarding, navigate, location]);
+
+  const handleAuditGuest = async () => {
+    setError(null);
+    setAuditLoading(true);
+
+    try {
+      const { data, error: signInError } = await supabase.auth.signInAnonymously();
+      if (signInError) throw signInError;
+      if (!data.user) throw new Error('جلسه مهمان ممیزی ایجاد نشد.');
+
+      const { error: profileError } = await supabase.rpc('create_audit_guest_profile');
+      if (profileError) throw profileError;
+
+      await supabase.auth.refreshSession();
+      navigate('/operations', { replace: true });
+    } catch (err: any) {
+      setError(err.message || 'ورود مهمان ممیزی انجام نشد.');
+    } finally {
+      setAuditLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,6 +130,20 @@ export const LoginPage: React.FC = () => {
             )}
           </button>
         </form>
+
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={handleAuditGuest}
+            disabled={loading || auditLoading}
+            className="w-full border border-slate-300 rounded-xl py-3 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {auditLoading ? 'در حال ورود به حالت ممیزی…' : 'ورود مهمان ممیزی'}
+          </button>
+          <p className="text-xs text-center text-slate-500 mt-2">
+            دسترسی مشاهده‌ای برای تست و ممیزی سیستم — بدون امکان ویرایش
+          </p>
+        </div>
 
         <div className="mt-6 text-center">
           <button
