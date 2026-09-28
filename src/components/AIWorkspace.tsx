@@ -269,7 +269,6 @@ const transcribeVoice=async(blob:Blob)=>{
  if(error)throw error;
  const text=String(data?.answer||'').trim();
  if(!text)throw new Error('متن از صدا دریافت نشد.');
- setMessages(m=>[...m,{role:'user',text}]);
  setInput('');
  await ask(text);
 };
