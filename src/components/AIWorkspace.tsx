@@ -109,7 +109,7 @@ export const AIWorkspace:React.FC<{pageContext?:string}>=({pageContext=''})=>{
    if(rows.length){await supabase.from('shipment_document_extractions').upsert(rows,{onConflict:'shipment_id,document_id,field_key'});void supabase.from('ai_evidence').insert(rows.map((r:any)=>({organization_id:r.organization_id,shipment_id:r.shipment_id,document_id:r.document_id,field_key:r.field_key,extracted_value:r.extracted_value,extraction_method:'ai-assistant',verification_status:'unverified'})));}
  };
 
- const[open,setOpen]=useState(false),[tab,setTab]=useState<'chat'|'doc'>('chat'),[input,setInput]=useState(''),[messages,setMessages]=useState<Msg[]>([]),[busy,setBusy]=useState(false),[fields,setFields]=useState<Extracted>({}),[status,setStatus]=useState(''),[applied,setApplied]=useState(0),[docResults,setDocResults]=useState<DocResult[]>([]),[sessionId]=useState(()=>{try{const k='customs_ai_session_id';const old=localStorage.getItem(k);if(old)return old;const id=crypto.randomUUID();localStorage.setItem(k,id);return id}catch{return ''}}),[listening,setListening]=useState(false);const fileRef=useRef<HTMLInputElement|null>(null);const recognitionRef=useRef<any>(null);const voiceFinalRef=useRef('');const conversationRef=useRef(false);
+ const[open,setOpen]=useState(false),[tab,setTab]=useState<'chat'|'doc'>('chat'),[input,setInput]=useState(''),[messages,setMessages]=useState<Msg[]>([]),[busy,setBusy]=useState(false),[fields,setFields]=useState<Extracted>({}),[status,setStatus]=useState(''),[applied,setApplied]=useState(0),[docResults,setDocResults]=useState<DocResult[]>([]),[sessionId]=useState(()=>{try{const k='customs_ai_session_id';const old=localStorage.getItem(k);if(old)return old;const id=crypto.randomUUID();localStorage.setItem(k,id);return id}catch{return ''}}),[listening,setListening]=useState(false);const fileRef=useRef<HTMLInputElement|null>(null);const recognitionRef=useRef<any>(null);const voiceFinalRef=useRef('');const conversationRef=useRef(false);const mediaRecorderRef=useRef<MediaRecorder|null>(null);const mediaStreamRef=useRef<MediaStream|null>(null);const voiceChunksRef=useRef<Blob[]>([]);
  const ask=async(text=input.trim(),documentText='',extractFields=false,documentData='',documentMimeType='',commandMode=false,documentStoragePath='')=>{if(!text&&!documentText&&!documentData)return null;setBusy(true);setStatus('');if(text)setMessages(m=>[...m,{role:'user',text}]);setInput('');try{const contextPrefix=sharedContext?'زمینه زنده محموله و اسناد:\\n'+sharedContext+'\\n\\n':'';const prompt=extractFields?'استخراج کامل سند گمرکی/تجاری برای ورود اطلاعات به Customs OS. همه صفحات، جدول‌ها، سربرگ‌ها و پاورقی‌ها را بررسی کن. فقط اطلاعات واقعی را استخراج کن و حدس نزن.':contextPrefix+(text||'این سند را برای عملیات گمرکی و لجستیکی تحلیل کن.');const functionName=extractFields?'ai-assistant':'ai-core';const body=extractFields?{query:prompt,document_text:documentText,document_data:documentData||undefined,document_mime_type:documentMimeType||undefined,document_storage_path:documentStoragePath||undefined,extract_fields:true,page_context:pageContext}:{query:text||prompt,document_text:documentText,document_data:documentData||undefined,document_mime_type:documentMimeType||undefined,document_storage_path:documentStoragePath||undefined,mode:commandMode?'agent':'chat',shipment_id:shipmentId||undefined,session_id:sessionId||undefined};const{data,error}=await supabase.functions.invoke(functionName,{body});if(error)throw error;const answer=typeof data?.answer==='string'?data.answer:(data?.answer?JSON.stringify(data.answer):data?.message||'پاسخ دریافت نشد.');if(!extractFields){setMessages(m=>[...m,{role:'assistant',text:answer}]);}return answer;}catch(e:any){const detail=await explainInvokeError(e);if(text)setMessages(m=>[...m,{role:'assistant',text:`خطای دستیار: ${detail}`}]);throw new Error(detail)}finally{setBusy(false);if(conversationRef.current&&!recognitionRef.current)scheduleVoiceRestart()}};
  const parseFields=(answer:string)=>{const raw=answer.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();const x=JSON.parse(raw);const parsed:Extracted={};Object.entries(x||{}).forEach(([k,v])=>{if(typeof v==='string'&&v.trim())parsed[k]=v.trim();});return parsed;};
  const extractOne=async(file:File,documentId?:string)=>{if(file.type!=='application/pdf'&&!file.type.startsWith('image/'))throw new Error('فقط PDF و تصویر پشتیبانی می‌شود.');if(file.size>50*1024*1024)throw new Error(`حجم ${file.name} بیشتر از ۵۰MB است.`);if(documentId)await updateExtractionStatus(documentId,'processing');try{let storagePath='';if(documentId){const {data:doc,error:de}=await supabase.from('shipment_documents').select('storage_path').eq('id',documentId).maybeSingle();if(de||!doc?.storage_path)throw new Error(de?.message||'مسیر سند در Storage پیدا نشد.');storagePath=doc.storage_path;}const base64=documentId?'':await fileToBase64(file);const answer=await ask('', '', true, base64, file.type, false, storagePath);if(!answer)throw new Error('پاسخ خالی از سرویس هوش مصنوعی دریافت شد.');const parsed=parseFields(answer);if(documentId){await persistExtraction(documentId,parsed);await updateExtractionStatus(documentId,'completed');}return parsed}catch(e:any){if(documentId)await updateExtractionStatus(documentId,'failed',e?.message||'استخراج ناموفق');throw e;}};
@@ -262,24 +262,47 @@ const startSpeechConversation=()=>{
   }
 };
 
+const blobToBase64=async(blob:Blob)=>{const buf=await blob.arrayBuffer();let binary='';const bytes=new Uint8Array(buf);const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,i+chunk));return btoa(binary);};
+const transcribeVoice=async(blob:Blob)=>{
+ const base64=await blobToBase64(blob);
+ const {data,error}=await supabase.functions.invoke('ai-assistant',{body:{voice_transcription:true,document_data:base64,document_mime_type:blob.type||'audio/mp4'}});
+ if(error)throw error;
+ const text=String(data?.answer||'').trim();
+ if(!text)throw new Error('متن از صدا دریافت نشد.');
+ setMessages(m=>[...m,{role:'user',text}]);
+ setInput('');
+ await ask(text);
+};
+const stopVoiceRecorder=()=>{try{if(mediaRecorderRef.current&&mediaRecorderRef.current.state!=='inactive')mediaRecorderRef.current.stop();}catch{}};
 const startVoice=async()=>{
-  if(listening||conversationRef.current){
-    conversationRef.current=false;
-    voiceSessionRef.current++;
-    clearVoiceTimers();
-    try{recognitionRef.current?.abort()}catch{}
-    recognitionRef.current=null;
-    voiceFinalRef.current='';
-    setListening(false);
-    setStatus('مکالمه متوقف شد.');
-    return;
-  }
-  conversationRef.current=true;
-  setStatus('در حال فعال‌سازی میکروفون…');
-  const ok=await primeMicrophone();
-  if(!ok)return;
-  if(!conversationRef.current)return;
-  startSpeechConversation();
+ if(listening||mediaRecorderRef.current){stopVoiceRecorder();return;}
+ if(!window.isSecureContext){setStatus('برای استفاده از میکروفون، سایت باید با HTTPS باز شود.');return;}
+ if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined'){setStatus('ضبط صدای مرورگر در این دستگاه در دسترس نیست.');return;}
+ setStatus('در حال درخواست اجازه Microphone…');
+ try{
+  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+  mediaStreamRef.current=stream;voiceChunksRef.current=[];
+  const preferred=['audio/mp4','audio/webm;codecs=opus','audio/webm'].find(t=>MediaRecorder.isTypeSupported(t));
+  const recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined);
+  mediaRecorderRef.current=recorder;
+  recorder.ondataavailable=(e)=>{if(e.data?.size)voiceChunksRef.current.push(e.data);};
+  recorder.onerror=()=>{try{stream.getTracks().forEach(t=>t.stop());}catch{}mediaRecorderRef.current=null;mediaStreamRef.current=null;setListening(false);setStatus('ضبط صدا ناموفق بود.');};
+  recorder.onstop=async()=>{
+   mediaRecorderRef.current=null;try{stream.getTracks().forEach(t=>t.stop());}catch{}mediaStreamRef.current=null;setListening(false);
+   const blob=new Blob(voiceChunksRef.current,{type:preferred||'audio/mp4'});voiceChunksRef.current=[];
+   if(blob.size<1000){setStatus('صدای قابل استفاده‌ای ضبط نشد؛ دوباره صحبت کنید.');return;}
+   setBusy(true);setStatus('در حال تبدیل صدا به متن…');
+   try{await transcribeVoice(blob);setStatus('صدا با موفقیت به متن تبدیل و ارسال شد.');}
+   catch(e:any){setStatus('خطای تبدیل صدا: '+await explainInvokeError(e));}
+   finally{setBusy(false);}
+  };
+  recorder.start(250);setListening(true);setStatus('🎙️ میکروفون فعال است؛ صحبت کنید. برای پایان دوباره روی میکروفون بزنید.');
+ }catch(error:any){
+  setListening(false);const name=String(error?.name||'');
+  if(name==='NotAllowedError'||name==='SecurityError')setStatus('دسترسی میکروفون رد شده است. روی «فعال‌کردن میکروفون» بزنید و اجازه Microphone را برای سایت فعال کنید.');
+  else if(name==='NotFoundError')setStatus('میکروفون پیدا نشد یا به دستگاه وصل نیست.');
+  else setStatus('فعال‌سازی میکروفون ناموفق بود؛ تنظیمات Microphone مرورگر را بررسی کنید.');
+ }
 };
 
 const requestMicrophone=async()=>{setStatus('در حال درخواست اجازه Microphone…');const ok=await primeMicrophone();if(ok)setStatus('میکروفون آماده است. حالا دکمه میکروفون را بزنید و صحبت کنید.');};
