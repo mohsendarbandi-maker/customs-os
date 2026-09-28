@@ -50,20 +50,20 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dir-rtl font-sans p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
-        <div className="text-center mb-8">
+    <div className="future-auth min-h-screen flex items-center justify-center dir-rtl font-sans p-4">
+      <div className="future-auth-card w-full max-w-md">
+        <div className="text-center mb-8 future-auth-head">
           <div className="flex justify-center mb-5"><CustomsLogo size={64} showWordmark /></div>
-          <h1 className="text-2xl font-bold text-blue-900 mb-2">
+          <h1 className="text-2xl font-black mb-2">
             {isLogin ? 'ورود به سیستم' : 'ثبت‌نام در سیستم'}
           </h1>
-          <p className="text-gray-500 text-sm">
+          <p className="text-sm app-muted">
             نرم‌افزار جامع مدیریت ترخیص و لجستیک گمرکی
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-6 border border-red-100">
+          <div className="future-error text-sm mb-6">
             {error}
           </div>
         )}
@@ -75,7 +75,7 @@ export const LoginPage: React.FC = () => {
               type="email"
               required
               disabled={loading}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all text-left dir-ltr disabled:bg-gray-100"
+              className="future-input w-full px-4 py-3 text-left dir-ltr disabled:opacity-60"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@company.com"
@@ -89,7 +89,7 @@ export const LoginPage: React.FC = () => {
               required
               disabled={loading}
               minLength={6}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all text-left dir-ltr disabled:bg-gray-100"
+              className="future-input w-full px-4 py-3 text-left dir-ltr disabled:opacity-60"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -99,7 +99,7 @@ export const LoginPage: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
+            className="future-submit w-full font-black py-3.5 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -117,7 +117,7 @@ export const LoginPage: React.FC = () => {
               setError(null);
             }}
             disabled={loading}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
+            className="future-switch text-sm font-bold disabled:opacity-50"
           >
             {isLogin ? 'حساب کاربری ندارید؟ ثبت‌نام کنید' : 'از قبل حساب دارید؟ وارد شوید'}
           </button>
