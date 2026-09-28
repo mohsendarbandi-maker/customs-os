@@ -37,7 +37,7 @@ export const ShipmentFirstPage:React.FC=()=>{
     supabase.from('vessels').select('id,name,imo_number,flag_code,shipping_line_id').eq('organization_id',profile.organization_id).order('name'),supabase.from('shipping_lines').select('id,name,name_fa').order('name')
    ]);
    if(ce||se||ve)throw ce||se||ve;
-   setClients(c||[]);setVessels((v||[])as Vessel[]);setRows((s||[])as Row[]);
+   setClients(c||[]);setVessels((v||[])as Vessel[]);setRows((s||[])as Row[]);setLines((l||[])as ShippingLine[]);
   }catch(e:any){setMessage(e?.message||'خطا در دریافت اطلاعات')}finally{setBusy(false)}
  };
  useEffect(()=>{void load()},[profile?.organization_id]);
@@ -49,8 +49,9 @@ export const ShipmentFirstPage:React.FC=()=>{
  const ensureVessel=async()=>{
   const name=form.vessel.trim();if(!name)throw new Error('نام کشتی الزامی است.');
   const found=vessels.find(v=>same(v.name,name));if(found)return found;
+  const line=lines.find(x=>same(x.name,form.shippingLine)||same(x.name_fa||'',form.shippingLine));
   const imo=digits(form.imo).replace(/\D/g,'');if(imo&&!/^\d{7}$/.test(imo))throw new Error('IMO باید ۷ رقم باشد.');
-  const{data,error}=await supabase.from('vessels').insert({organization_id:profile?.organization_id,name,imo_number:imo||null,flag_code:form.flag.toUpperCase()||null}).select('id,name,imo_number,flag_code,shipping_line_id').single();
+  const{data,error}=await supabase.from('vessels').insert({organization_id:profile?.organization_id,name,imo_number:imo||null,flag_code:form.flag.toUpperCase()||null,shipping_line_id:line?.id||null}).select('id,name,imo_number,flag_code,shipping_line_id').single();
   if(error)throw error;setVessels(p=>[...p,data as Vessel]);return data as Vessel;
  };
  const save=async()=>{
@@ -58,13 +59,12 @@ export const ShipmentFirstPage:React.FC=()=>{
   if(!form.ownerId)return setMessage('صاحب کالا را انتخاب کنید.');
   if(!clients.some(c=>c.id===form.ownerId))return setMessage('صاحب کالا برای این سازمان معتبر نیست.');
   if(!form.vessel.trim())return setMessage('نام کشتی را وارد یا انتخاب کنید.');
-  if(!form.billOfLading.trim())return setMessage('شماره B/L الزامی است.');
   if(!form.count.trim()||!form.net.trim()||!form.gross.trim())return setMessage('تعداد، وزن خالص و وزن ناخالص را تکمیل کنید.');
   setBusy(true);setMessage('در حال ذخیره شروع عملیات...');
   try{
    const vessel=await ensureVessel();const owner=clients.find(c=>c.id===form.ownerId);
    const display=buildShipmentDisplayName({cargo_count:num(form.count),cargo_count_unit:form.unit||'رول',client_name:owner?.name,vessel_name:vessel.name});
-   const payload={organization_id:profile.organization_id,client_id:form.ownerId,vessel_id:vessel.id,transport_mode:'sea',shipping_line:form.shippingLine||null,bill_of_lading_no:form.billOfLading.trim(),bill_of_lading_year:num(form.year),voyage_no:form.voyage||null,origin_port:form.originPort||null,destination_port:form.destinationPort||null,cargo_count:num(form.count),cargo_count_unit:form.unit||'رول',net_weight_kg:num(form.net),gross_weight_kg:num(form.gross),current_status:form.status||'draft',current_location:form.location||null,transport_documents_status:form.transportDocumentsStatus,release_invoice_payment_status:form.releaseInvoicePaymentStatus,display_name:display};
+   const payload={organization_id:profile.organization_id,client_id:form.ownerId,vessel_id:vessel.id,transport_mode:'sea',shipping_line:form.shippingLine||null,bill_of_lading_no:form.billOfLading.trim()||null,bill_of_lading_year:form.billOfLading.trim()?num(form.year):null,voyage_no:form.voyage||null,origin_port:form.originPort||null,destination_port:form.destinationPort||null,cargo_count:num(form.count),cargo_count_unit:form.unit||'رول',net_weight_kg:num(form.net),gross_weight_kg:num(form.gross),current_status:form.status||'draft',current_location:form.location||null,transport_documents_status:form.transportDocumentsStatus,release_invoice_payment_status:form.releaseInvoicePaymentStatus,display_name:display};
    let shipmentId=selected;
    if(selected){const{error}=await supabase.from('shipments').update(payload).eq('id',selected).eq('organization_id',profile.organization_id);if(error)throw error}
    else{
