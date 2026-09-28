@@ -51,20 +51,20 @@ export const OnboardingPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dir-rtl font-sans p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
+    <div className="future-auth min-h-screen flex items-center justify-center dir-rtl font-sans p-4">
+      <div className="future-auth-card w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+          <div className="future-orb mx-auto mb-5">
             🏢
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">راه‌اندازی سازمان</h1>
-          <p className="text-gray-500 text-sm">
+          <h1 className="text-2xl font-black mb-2">راه‌اندازی سازمان</h1>
+          <p className="app-muted text-sm">
             برای شروع کار با سیستم، نام خود و شرکت ترخیص‌کاری را وارد کنید.
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-6 border border-red-100">
+          <div className="future-error text-sm mb-6">
             {error}
           </div>
         )}
@@ -77,7 +77,7 @@ export const OnboardingPage: React.FC = () => {
               required
               minLength={2}
               disabled={loading}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+              className="future-input w-full px-4 py-3"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="مثال: محمد موسوی"
@@ -91,12 +91,12 @@ export const OnboardingPage: React.FC = () => {
               required
               minLength={2}
               disabled={loading}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+              className="future-input w-full px-4 py-3"
               value={orgName}
               onChange={(e) => setOrgName(e.target.value)}
               placeholder="مثال: شرکت ترخیص‌کاری تجارت‌گستر"
             />
-            <p className="text-xs text-gray-400 mt-2">
+            <p className="text-xs app-muted mt-2">
               شما به عنوان مدیر کل (Owner) این سازمان ثبت خواهید شد.
             </p>
           </div>
@@ -104,7 +104,7 @@ export const OnboardingPage: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center mt-2"
+            className="future-submit w-full font-black py-3.5 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center mt-2"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
