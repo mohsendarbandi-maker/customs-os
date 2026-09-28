@@ -137,15 +137,26 @@ const stopVoiceRecorder=()=>{
 };
 
 const transcribeVoice=async(blob:Blob)=>{
- const base64=await blobToBase64(blob);
- const {data,error}=await supabase.functions.invoke('ai-assistant',{body:{voice_transcription:true,document_data:base64,document_mime_type:blob.type||'audio/mp4'}});
- if(error)throw error;
- const text=String(data?.answer||'').trim();
- if(!text)throw new Error('متن از صدا دریافت نشد.');
- setInput(text);
- await ask(text);
+ const {data:{user}}=await supabase.auth.getUser();
+ if(!user)throw new Error('کاربر وارد نشده است.');
+ const {data:profile,error:pe}=await supabase.from('profiles').select('organization_id').eq('id',user.id).maybeSingle();
+ if(pe||!profile?.organization_id)throw new Error(pe?.message||'سازمان کاربر مشخص نیست.');
+ const ext=(blob.type||'audio/mp4').includes('webm')?'webm':'mp4';
+ const path=\`\${profile.organization_id}/ai-voice/\${crypto.randomUUID()}.\${ext}\`;
+ const {error:ue}=await supabase.storage.from('customs_documents').upload(path,blob,{contentType:blob.type||'audio/mp4',cacheControl:'60',upsert:false});
+ if(ue)throw new Error(\`آپلود صدای ضبط‌شده ناموفق بود: \${ue.message}\`);
+ try{
+  const {data,error}=await supabase.functions.invoke('ai-assistant',{body:{voice_transcription:true,document_storage_path:path,document_mime_type:blob.type||'audio/mp4'}});
+  if(error)throw error;
+  const text=String(data?.answer||'').trim();
+  if(!text)throw new Error('متن از صدا دریافت نشد.');
+  setInput(text);
+  await ask(text);
+ }catch(error){
+  try{await supabase.storage.from('customs_documents').remove([path]);}catch{}
+  throw error;
+ }
 };
-
 const startVoice=async()=>{
  if(listening||mediaRecorderRef.current){stopVoiceRecorder();return;}
  if(!window.isSecureContext){setStatus('برای استفاده از میکروفون، سایت باید با HTTPS باز شود.');return;}
