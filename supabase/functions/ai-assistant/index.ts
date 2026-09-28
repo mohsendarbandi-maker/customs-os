@@ -1,149 +1,42 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
-
-const allowedOrigins = new Set([
-  'https://customs-os-psi.vercel.app',
-  'https://customs.mohsen-darbandi.workers.dev',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-]);
-
-const fields = ['vesselType','regNumber','regDate','packageCount','warehouseReceiptNo','warehouseReceiptDate','cargoDescription','originCountry','transactionCountry','deliveryTerm','invoiceAmount','invoiceCurrency','bankBranchCode','bankName','bankBranch','lcNumber','dutyRate','tariffCode','netWeight','grossWeight','billOfLading','insuranceIrr','requiredDocuments'];
-const shipmentFields = ['ownerName','shippingLine','vesselName','imo','count','unit','net','gross','billOfLading'];
-
-const cors = (origin:string) => ({
-  'Access-Control-Allow-Origin': allowedOrigins.has(origin) ? origin : 'https://customs.mohsen-darbandi.workers.dev',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Vary': 'Origin',
-});
-const json = (body:unknown, status=200, origin='') => new Response(JSON.stringify(body), {
-  status, headers: {...cors(origin), 'Content-Type':'application/json', 'Cache-Control':'no-store'}
-});
-const textOf = (d:any) => d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').filter(Boolean).join('\n').trim() || '';
-const strip = (v:string) => v.replace(/^data:[^;]+;base64,/,'');
-
-// Gemini and OpenAI use different schema dialects. Keep them separate so a
-// provider-specific validation error cannot disable the entire extraction fallback chain.
-const geminiSchemaFor = (keys:string[]) => ({
-  type:'OBJECT',
-  properties:Object.fromEntries(keys.map(k=>[k,{type:'STRING'}])),
-  required:keys,
-});
-const openAiSchemaFor = (keys:string[]) => ({
-  type:'object',
-  properties:Object.fromEntries(keys.map(k=>[k,{type:'string'}])),
-  required:keys,
-  additionalProperties:false,
-});
-const parseJsonText = (text:string) => {
-  const raw=String(text||'').replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
-  try{return JSON.parse(raw)}catch{
-    const a=raw.indexOf('{'),b=raw.lastIndexOf('}');
-    if(a>=0&&b>a)return JSON.parse(raw.slice(a,b+1));
-    throw new Error('AI returned non-JSON extraction output.');
-  }
+const cors=(o:string)=>({'Access-Control-Allow-Origin':o||'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin'});
+const out=(x:unknown,s=200,o='')=>new Response(JSON.stringify(x),{status:s,headers:{...cors(o),'Content-Type':'application/json','Cache-Control':'no-store'}});
+const fields=['vesselType','regNumber','regDate','packageCount','warehouseReceiptNo','warehouseReceiptDate','cargoDescription','originCountry','transactionCountry','deliveryTerm','invoiceAmount','invoiceCurrency','bankBranchCode','bankName','bankBranch','lcNumber','dutyRate','tariffCode','netWeight','grossWeight','billOfLading','insuranceIrr','requiredDocuments'];
+const shipFields=['ownerName','shippingLine','vesselName','imo','count','unit','net','gross','billOfLading'];
+const strip=(s:string)=>s.replace(/^data:[^;]+;base64,/,'');
+const clip=(s:string,n:number)=>{const x=String(s||'');return x.length<=n?x:x.slice(0,n)+'\\n[context clipped]';};
+const geminiSchema=(keys:string[])=>({type:'object',properties:Object.fromEntries(keys.map(k=>[k,{type:'string'}])),required:keys});
+const openaiSchema=(keys:string[])=>({type:'object',properties:Object.fromEntries(keys.map(k=>[k,{type:'string'}])),required:keys,additionalProperties:false});
+const text=(d:any)=>d?.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||'').filter(Boolean).join('\n').trim()||d?.output_text||'';
+const limited=(s:number,m:string)=>s===429||/rate.?limit|quota|too many|resource.?exhausted|limit exceeded/i.test(m);
+const loadOperationalContext=async(sb:any,organizationId:string)=>{
+  const [sh,cl,ca,de,sc,docsRes,checks,inv,pay,req,vessels]=await Promise.all([
+    sb.from('shipments').select('id,case_id,client_id,display_name,bill_of_lading_no,cargo_count,cargo_count_unit,net_weight_kg,gross_weight_kg,current_status,release_status,release_invoice_payment_status,finance_status').eq('organization_id',organizationId).order('updated_at',{ascending:false}).limit(300),
+    sb.from('clients').select('id,name').eq('organization_id',organizationId).limit(300),
+    sb.from('cases').select('id,client_id,case_number,display_name,registration_order_no,warehouse_receipt_no,warehouse_receipt_date,cargo_count,cargo_count_unit,cargo_description,net_weight_kg,gross_weight_kg,status,release_status').eq('organization_id',organizationId).limit(300),
+    sb.from('customs_declarations').select('id,shipment_id,case_id,kottaj_number,declaration_date,customs_path,payment_reference,workflow_stage').eq('organization_id',organizationId).limit(300),
+    sb.from('shipment_customs_data').select('shipment_id,registration_order_no,warehouse_receipt_no,warehouse_receipt_date_shamsi,cargo_description,tariff_code,net_weight_kg,gross_weight_kg,bill_of_lading').eq('organization_id',organizationId).limit(300),
+    sb.from('shipment_documents').select('shipment_id,document_name,original_file_name,extraction_status').eq('organization_id',organizationId).limit(500),
+    sb.from('case_checklist_items').select('case_id,stage_no,item_key,completed').eq('organization_id',organizationId).limit(1000),
+    sb.from('finance_invoice_shipments').select('shipment_id,invoice_id').eq('organization_id',organizationId).limit(500),
+    sb.from('finance_payments').select('shipment_id,case_id,amount,currency,amount_irr,payment_type,description,payment_date').eq('organization_id',organizationId).limit(500),
+    sb.from('finance_payment_requests').select('shipment_id,request_no,requested_amount,currency,status,subject').eq('organization_id',organizationId).limit(500),
+    sb.from('vessels').select('id,name,imo_number,flag,last_latitude,last_longitude,last_position_at,last_position_source,last_speed_knots,last_course_deg').eq('organization_id',organizationId).limit(300)
+  ]);
+  const clients=cl.data||[],cases=ca.data||[],declarations=de.data||[],customs=sc.data||[],docs=docsRes.data||[],checks=checks.data||[],invoices=inv.data||[],payments=pay.data||[],requests=req.data||[],vessels=vessels.data||[];
+  const cm=new Map(clients.map((x:any)=>[x.id,x])); const km=new Map(cases.map((x:any)=>[x.id,x]));
+  const usable=(v:any)=>{const s=String(v??'').trim();return !!s&&!/^x{2,}$/i.test(s)&&s!=='—'&&s!=='-'};const dm=new Map<string,any>();for(const x of declarations){if(!x.shipment_id)continue;const prev=dm.get(x.shipment_id);if(!prev||(!usable(prev.kottaj_number)&&usable(x.kottaj_number))||(prev.kottaj_number===x.kottaj_number&&new Date(x.declaration_date||0)>new Date(prev.declaration_date||0)))dm.set(x.shipment_id,x);}
+  const sm=new Map<string,any>();for(const x of customs){if(x.shipment_id&&!sm.has(x.shipment_id))sm.set(x.shipment_id,x);}const vm=new Map(vessels.map((x:any)=>[x.id,x]));const docsBy=new Map<string,any[]>();for(const x of docs){const a=docsBy.get(x.shipment_id)||[];a.push(x);docsBy.set(x.shipment_id,a);}const checksBy=new Map<string,any[]>();for(const x of checks){const a=checksBy.get(x.case_id)||[];a.push(x);checksBy.set(x.case_id,a);}const invIdsBy=new Map<string,string[]>();for(const x of invoices){const a=invIdsBy.get(x.shipment_id)||[];a.push(x.invoice_id);invIdsBy.set(x.shipment_id,a);}const payBy=new Map<string,any[]>();for(const x of payments){const a=payBy.get(x.shipment_id)||[];a.push(x);payBy.set(x.shipment_id,a);}const reqBy=new Map<string,any[]>();for(const x of requests){const a=reqBy.get(x.shipment_id)||[];a.push(x);reqBy.set(x.shipment_id,a);}
+  const rows=(sh.data||[]).map((s:any)=>{const ca=km.get(s.case_id)||null,cl=cm.get(s.client_id||ca?.client_id)||null,de=dm.get(s.id)||null,sc=sm.get(s.id)||null;return {shipment_id:s.id,client_name:cl?.name||null,case_number:ca?.case_number||null,shipment_name:s.display_name||null,cargo_count:s.cargo_count??ca?.cargo_count??null,cargo_unit:s.cargo_count_unit??ca?.cargo_count_unit??null,bill_of_lading:s.bill_of_lading_no||sc?.bill_of_lading||null,kottaj_number:de?.kottaj_number||null,warehouse_receipt_no:sc?.warehouse_receipt_no||ca?.warehouse_receipt_no||null,warehouse_receipt_date:sc?.warehouse_receipt_date_shamsi||ca?.warehouse_receipt_date||null,registration_order_no:sc?.registration_order_no||ca?.registration_order_no||null,net_weight_kg:s.net_weight_kg??sc?.net_weight_kg??ca?.net_weight_kg??null,gross_weight_kg:s.gross_weight_kg??sc?.gross_weight_kg??ca?.gross_weight_kg??null,cargo_description:sc?.cargo_description||ca?.cargo_description||null,status:s.current_status||ca?.status||null,release_status:s.release_status||ca?.release_status||null,release_invoice_payment_status:s.release_invoice_payment_status||null,finance_status:s.finance_status||null,workflow_stage:de?.workflow_stage??null,customs_path:de?.customs_path||null,vessel:(vm.get(s.vessel_id)||null),documents:docsBy.get(s.id)||[],checklist:checksBy.get(s.case_id)||[],invoice_ids:invIdsBy.get(s.id)||[],payments:payBy.get(s.id)||[],payment_requests:reqBy.get(s.id)||[]};});
+  return JSON.stringify(rows).slice(0,70000);
 };
-
-Deno.serve(async(req)=>{
-  const origin=req.headers.get('Origin')||'';
-  if(req.method==='OPTIONS') return new Response('ok',{headers:cors(origin)});
-  if(req.method!=='POST') return json({error:'Method not allowed.'},405,origin);
-
-  try {
-    const auth=req.headers.get('Authorization')||'';
-    const token=auth.startsWith('Bearer ')?auth.slice(7).trim():'';
-    if(!token) return json({error:'Unauthorized: Supabase session is missing.'},401,origin);
-
-    const url=Deno.env.get('SUPABASE_URL')?.trim();
-    const anon=Deno.env.get('SUPABASE_ANON_KEY')?.trim();
-    const geminiKey=Deno.env.get('GEMINI_API_KEY')?.trim();
-    const openaiKey=Deno.env.get('OPENAI_API_KEY')?.trim();
-    const groqKey=Deno.env.get('GROQ_API_KEY')?.trim();
-    if(!url||!anon) return json({error:'Supabase runtime configuration is missing.'},503,origin);
-    if(!geminiKey&&!openaiKey&&!groqKey) return json({error:'No AI provider key is configured in Supabase Secrets.'},503,origin);
-
-    const sb=createClient(url,anon,{global:{headers:{Authorization:`Bearer ${token}`}}});
-    const {data:{user},error:ue}=await sb.auth.getUser(token);
-    if(ue||!user) return json({error:'Unauthorized: invalid Supabase session.'},401,origin);
-    const {data:profile}=await sb.from('profiles').select('id,organization_id,role,is_active').eq('id',user.id).maybeSingle();
-    if(!profile||profile.is_active===false) return json({error:'پروفایل کاربر معتبر یا فعال نیست.'},403,origin);
-
-    const b=await req.json().catch(()=>({}));
-    const query=String(b?.query||'').slice(0,20000);
-    const docText=String(b?.document_text||'').slice(0,120000);
-    const docData=strip(String(b?.document_data||''));
-    const docMime=String(b?.document_mime_type||'').toLowerCase();
-    const docs=Array.isArray(b?.documents)?b.documents:[];
-    const extract=Boolean(b?.extract_fields);
-    const ship=Boolean(b?.shipment_extract)||query.includes('اطلاعات محموله کشتیرانی');
-    if(!query&&!docText&&!docData&&!docs.length) return json({error:'No query or document was supplied.'},400,origin);
-
-    const parts:any[]=[];
-    const addFile=(data:string,mime:string,name:string)=>{
-      if(!data)return;
-      if(mime==='application/pdf'||mime.startsWith('image/')) parts.push({text:`نام سند: ${name||'سند'}`},{inline_data:{mime_type:mime,data}});
-      else throw new Error(`نوع فایل ${name||''} پشتیبانی نمی‌شود؛ PDF یا تصویر ارسال کنید.`);
-    };
-    if(docText) parts.push({text:`DOCUMENT TEXT:\n${docText}`});
-    if(docData) addFile(docData,docMime,'سند');
-    for(const x of docs)addFile(strip(String(x?.data||x?.base64||'')),String(x?.mime_type||x?.mimeType||'').toLowerCase(),String(x?.name||'سند'));
-
-    const prompt=ship
-      ? 'تو مسئول استخراج اطلاعات اولیه محموله کشتیرانی در Customs OS هستی. فقط ownerName, shippingLine, vesselName, imo, count, unit, net, gross, billOfLading را استخراج کن. هیچ مقدار را حدس نزن؛ نبود یا ناخوانا دقیقاً xxxx. نام تجاری را ترجمه نکن. IMO فقط ۷ رقم. B/L عین سند. خروجی فقط JSON.'
-      : extract
-      ? 'تو مسئول استخراج ورود اطلاعات قبل اظهار برای سامانه گمرکی ایران هستی. همه صفحات و اسناد را بررسی و تطبیق بده. هیچ مقدار را حدس نزن؛ نبود یا ناخوانا دقیقاً xxxx. شناسه‌های رسمی عیناً. وزن‌ها دقیق. همه فیلدها همیشه برگردند. خروجی فقط JSON.'
-      : (query||'این اسناد را برای عملیات گمرکی تحلیل کن.');
-    parts.unshift({text:prompt});
-    const schemaKeys=ship?shipmentFields:(extract?fields:[]);
-
-    const callGemini=async()=>{
-      if(!geminiKey)throw new Error('Gemini key is not configured');
-      const generationConfig:any={};
-      if(schemaKeys.length){generationConfig.response_mime_type='application/json';generationConfig.response_schema=geminiSchemaFor(schemaKeys);}
-      const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',{method:'POST',headers:{'x-goog-api-key':geminiKey,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],systemInstruction:{parts:[{text:`You are Customs OS AI for Iranian customs clearance. User role: ${profile.role}. Never invent official identifiers.`}]},generationConfig})});
-      const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{d={raw:raw.slice(0,2000)}}
-      if(!r.ok)throw new Error(String(d?.error?.message||d?.message||d?.raw||`Gemini HTTP ${r.status}`));
-      return {answer:textOf(d),provider:'gemini'};
-    };
-
-    const openaiParts:any[]=[];
-    if(docText)openaiParts.push({type:'input_text',text:`DOCUMENT TEXT:\n${docText}`});
-    if(docData){openaiParts.push({type:'input_file',filename:'document',file_data:`data:${docMime};base64,${docData}`});}
-    for(const x of docs){const data=strip(String(x?.data||x?.base64||''));const mime=String(x?.mime_type||x?.mimeType||'application/pdf').toLowerCase();if(data)openaiParts.push({type:'input_file',filename:String(x?.name||'document'),file_data:`data:${mime};base64,${data}`});}
-    openaiParts.unshift({type:'input_text',text:prompt});
-    const callOpenAI=async()=>{
-      if(!openaiKey)throw new Error('OpenAI key is not configured');
-      const body:any={model:'gpt-4o-mini',input:[{role:'user',content:openaiParts}]};
-      if(schemaKeys.length)body.text={format:{type:'json_schema',name:'customs_extraction',strict:true,schema:openAiSchemaFor(schemaKeys)}};
-      const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${openaiKey}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
-      const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{d={raw:raw.slice(0,2000)}}
-      if(!r.ok)throw new Error(String(d?.error?.message||d?.message||d?.raw||`OpenAI HTTP ${r.status}`));
-      const answer=String(d?.output_text||d?.output?.flatMap((o:any)=>o?.content||[]).map((c:any)=>c?.text||'').join('')||'').trim();
-      return {answer,provider:'openai'};
-    };
-
-    const callGroq=async()=>{
-      if(!groqKey)throw new Error('Groq key is not configured');
-      const text=parts.filter(p=>p?.text).map(p=>p.text).join('\n');
-      if(!text)throw new Error('Groq fallback requires document text; it cannot directly process the uploaded PDF here.');
-      const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${groqKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'system',content:'You are Customs OS AI. Never invent official identifiers. Return JSON only when asked.'},{role:'user',content:text}],temperature:0})});
-      const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{d={raw:raw.slice(0,2000)}}
-      if(!r.ok)throw new Error(String(d?.error?.message||d?.message||d?.raw||`Groq HTTP ${r.status}`));
-      return {answer:String(d?.choices?.[0]?.message?.content||''),provider:'groq'};
-    };
-
-    const attempts:string[]=[];
-    const providers=[callGemini,callOpenAI,callGroq];
-    let result:any=null;
-    for(const provider of providers){try{result=await provider();if(result?.answer)break;}catch(e){attempts.push(e instanceof Error?e.message:String(e));}}
-    if(!result?.answer)return json({error:`همه سرویس‌های AI ناموفق بودند: ${attempts.join(' | ')}`},502,origin);
-
-    let answer=result.answer;
-    if(schemaKeys.length){try{const parsed=parseJsonText(answer);answer=JSON.stringify(parsed);}catch{}}
-    return json({answer,model:result.provider,status:'completed',provider:result.provider},200,origin);
-  } catch(e) {
-    console.error('ai-assistant fatal error',e);
-    return json({error:e instanceof Error?e.message:'AI request failed'},500,origin);
-  }
-});
+Deno.serve(async(req)=>{const o=req.headers.get('Origin')||'';if(req.method==='OPTIONS')return new Response('ok',{headers:cors(o)});if(req.method!=='POST')return out({error:'Method not allowed.'},405,o);try{const a=req.headers.get('Authorization')||'',token=a.startsWith('Bearer ')?a.slice(7):'';if(!token)return out({error:'Unauthorized'},401,o);const url=Deno.env.get('SUPABASE_URL')!,anon=Deno.env.get('SUPABASE_ANON_KEY')!,sb=createClient(url,anon,{global:{headers:{Authorization:`Bearer ${token}`}}});const{data:{user}}=await sb.auth.getUser(token);if(!user)return out({error:'Unauthorized'},401,o);const{data:profile}=await sb.from('profiles').select('role,is_active,organization_id').eq('id',user.id).maybeSingle();if(!profile||profile.is_active===false)return out({error:'پروفایل کاربر معتبر یا فعال نیست.'},403,o);const b=await req.json().catch(()=>({}));const q=String(b.query||'').slice(0,12000),dt=String(b.document_text||'').slice(0,30000),dd=strip(String(b.document_data||'')),dm=String(b.document_mime_type||'').toLowerCase(),docs=Array.isArray(b.documents)?b.documents:[],ex=!!b.extract_fields,voice=!!b.voice_transcription,sh=!!b.shipment_extract||q.includes('اطلاعات محموله کشتیرانی');if(!q&&!dt&&!dd&&!docs.length)return out({error:'No query or document was supplied.'},400,o);const commandMode=!!b.command_mode;let operationalContext='';if(commandMode&&!ex&&!sh&&q&&profile.organization_id){try{operationalContext=await loadOperationalContext(sb,profile.organization_id)}catch{operationalContext=''}}const prompt=voice?'این فایل صوتی را به متن دقیق فارسی تبدیل کن. فقط همان کلمات گفته‌شده را برگردان؛ هیچ خلاصه، توضیح، ترجمه، حدس یا قالب‌بندی اضافه نکن.':sh?'فقط این فیلدها را استخراج کن: ownerName, shippingLine, vesselName, imo, count, unit, net, gross, billOfLading. حدس نزن؛ مقدار ناموجود یا ناخوانا xxxx. خروجی JSON.':ex?'اطلاعات گمرکی را از همه صفحات و اسناد استخراج کن. حدس نزن؛ مقدار ناموجود یا ناخوانا xxxx. شناسه‌های رسمی عیناً. همه فیلدها را برگردان. خروجی JSON.':commandMode?'تو دستیار عملیاتی Customs OS هستی. پرسش را فقط بر اساس داده واقعی زیر پاسخ بده. برای «۲۲ رول شرکت آبتین» تعداد و صاحب کالا را تطبیق بده. شماره کوتاژ فقط از kottaj_number، قبض انبار فقط از warehouse_receipt_no و ثبت سفارش فقط از registration_order_no. اگر چند مورد است همه را جدا کن؛ اگر نیست صریحاً ثبت نشده بگو؛ هرگز حدس نزن. پاسخ کوتاه و فارسی باشد. داده عملیاتی:\n'+operationalContext:q||'اسناد را برای عملیات گمرکی تحلیل کن.';const keys=sh?shipFields:(ex?fields:[]);const input=clip(prompt+'\n'+(dt?dt:''),22000);const errors:string[]=[];
+ const toBytes=(b64:string)=>{const bin=atob(b64);const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;};
+ const providers=[
+ {name:'Gemini',key:Deno.env.get('GEMINI_API_KEY'),run:async(k:string)=>{const pp:any=[{text:input}];if(dd)pp.push({inlineData:{mimeType:dm,data:dd}});const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent',{method:'POST',headers:{'x-goog-api-key':k,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:pp}],generationConfig:keys.length?{responseMimeType:'application/json'}:undefined})});const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{};return {r,d,t:text(d)}}},
+ {name:'Cloudflare',key:Deno.env.get('CLOUDFLARE_API_TOKEN'),run:async(k:string)=>{const account=Deno.env.get('CLOUDFLARE_ACCOUNT_ID');if(!account)throw new Error('CLOUDFLARE_ACCOUNT_ID missing');const model=voice?'@cf/openai/whisper':'@cf/meta/llama-3.1-8b-instruct';const headers:any={Authorization:'Bearer '+k};let body:any;if(voice){body=toBytes(dd);headers['Content-Type']='application/octet-stream';}else{headers['Content-Type']='application/json';body=JSON.stringify({messages:[{role:'user',content:input}]});}const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+'/ai/run/'+model,{method:'POST',headers,body});const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{};return {r,d,t:voice?(d?.result?.text||''):(d?.result?.response||'')}}},
+ {name:'Groq',key:Deno.env.get('GROQ_API_KEY'),run:async(k:string)=>{if(voice){const form=new FormData();form.append('file',new Blob([toBytes(dd)],{type:dm||'audio/mp4'}),'voice.'+(dm.includes('webm')?'webm':'mp4'));form.append('model','whisper-large-v3');form.append('language','fa');form.append('response_format','json');form.append('temperature','0');const r=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:`Bearer ${k}`},body:form});const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{};return {r,d,t:d?.text||''};}const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${k}`,'Content-Type':'application/json'},body:JSON.stringify({model:'openai/gpt-oss-120b',messages:[{role:'user',content:clip(input,20000)}],temperature:0,max_tokens:900,response_format:keys.length?{type:'json_object'}:undefined})});const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{};return {r,d,t:d?.choices?.[0]?.message?.content||''}}},
+ {name:'OpenRouter',key:Deno.env.get('OPENROUTER_API_KEY'),run:async(k:string)=>{const content:any[]=voice?[{type:'text',text:input},{type:'input_audio',input_audio:{data:dd,format:dm.includes('webm')?'webm':'mp4'}}]:[{type:'text',text:input}];const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+k,'Content-Type':'application/json','HTTP-Referer':'https://customs.mohsen-darbandi.workers.dev','X-Title':'Customs OS'},body:JSON.stringify({model:'google/gemini-2.5-flash',messages:[{role:'user',content}],response_format:keys.length?{type:'json_object'}:undefined})});const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{};return {r,d,t:d?.choices?.[0]?.message?.content||''}}},
+ {name:'OpenAI',key:Deno.env.get('OPENAI_API_KEY'),run:async(k:string)=>{if(voice){const form=new FormData();form.append('file',new Blob([toBytes(dd)],{type:dm||'audio/mp4'}),'voice.'+(dm.includes('webm')?'webm':'mp4'));form.append('model','gpt-4o-mini-transcribe');form.append('language','fa');const r=await fetch('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{Authorization:`Bearer ${k}`},body:form});const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{};return {r,d,t:d?.text||''};}const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${k}`,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4.1-mini',input:input,text:keys.length?{format:{type:'json_schema',name:'extraction',schema:openaiSchema(keys),strict:true}}:undefined})});const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{};return {r,d,t:d?.output_text||''}}}
+ ];for(const p of providers){if(!p.key)continue;try{const z=await p.run(p.key),msg=String(z.d?.error?.message||z.d?.error||`HTTP ${z.r.status}`);if(z.r.ok&&String(z.t||'').trim())return out({answer:String(z.t).trim(),provider:p.name,status:'completed'},200,o);errors.push(`${p.name}: ${msg}`);continue}catch(e){errors.push(`${p.name}: ${e instanceof Error?e.message:String(e)}`)}}return out({error:`همه سرویس‌های هوش مصنوعی در دسترس نبودند. ${errors.join(' | ')}`},502,o)}catch(e){return out({error:e instanceof Error?e.message:'AI request failed'},500,o)}});
