@@ -5,6 +5,9 @@ const allowed=new Set(['https://customs-os-psi.vercel.app','https://customs.mohs
 const cors=(origin:string)=>({'Access-Control-Allow-Origin':allowed.has(origin)?origin:'https://customs.mohsen-darbandi.workers.dev','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin'});
 const reply=(body:unknown,status=200,origin='')=>new Response(JSON.stringify(body),{status,headers:{...cors(origin),'Content-Type':'application/json','Cache-Control':'no-store'}});
 const clean=(v:any)=>String(v??'').trim();
+const strip=(s:string)=>s.replace(/^data:[^;]+;base64,/,'');
+const clip=(s:string,n:number)=>{const x=String(s||'');return x.length<=n?x:x.slice(0,n)+'\\n[context clipped]';};
+const providerPrompt=(base:string,limit:number)=>clip(base,limit);
 const valid=(v:any)=>{const s=clean(v);return !!s&&!/^x{2,}$/i.test(s)&&s!=='-'&&s!=='—'};
 
 async function getContext(sb:any,org:string){
@@ -36,12 +39,26 @@ async function getContext(sb:any,org:string){
 }
 
 function selectRows(rows:any[],q:string,shipmentId:string){
- if(shipmentId)return rows.filter(r=>r.shipment_id===shipmentId);
- const n=q.toLowerCase(); const nums=n.match(/\d+/g)||[];
- return rows.filter(r=>{
-  const h=[r.client_name,r.shipment_name,r.case_number,r.bill_of_lading,r.cargo_description,r.cargo_count,r.cargo_unit].filter(valid).join(' ').toLowerCase();
-  return (nums.length===0||nums.some(x=>h.includes(x)))&&(h.includes(n)||String(r.client_name||'').toLowerCase().split(' ').some((w:string)=>w.length>2&&n.includes(w)));
- }).slice(0,12);
+ if(shipmentId){
+  const exact=rows.filter(r=>r.shipment_id===shipmentId);
+  return exact.length?exact:rows.filter(r=>r.case_id===shipmentId).slice(0,12);
+ }
+ const n=clean(q).toLowerCase();
+ if(!n)return rows.slice(0,12);
+ const nums=n.match(/\d+/g)||[];
+ const stop=new Set(['برای','محموله','پرونده','اسناد','سند','اطلاعات','وضعیت','چیست','چیه','درباره','لطفا','لطفاً','بگو','به','از','در','را','رو','که','این','آن','من','ما','شما','دارد','دارم','دارند','است','هست','هستند','همه','کدام','کدوم','چند','آخرین','فعلی','سامانه']);
+ const tokens=n.split(/\s+/).map(x=>x.trim()).filter(x=>x.length>=3&&!stop.has(x));
+ const ranked=rows.map(r=>{
+  const h=[r.client_name,r.shipment_name,r.case_number,r.bill_of_lading,r.cargo_description,r.cargo_count,r.cargo_unit,r.warehouse_receipt_no,r.registration_order_no,r.kottaj_number].filter(valid).join(' ').toLowerCase();
+  const tokenHits=tokens.filter(t=>h.includes(t)).length;
+  const numberHit=nums.length===0||nums.some(x=>h.includes(x));
+  const docHit=(r.documents||[]).length>0&&/(سند|اسناد|مدرک|مدارک|بارنامه|قبض|document|file)/i.test(n);
+  const extractionHit=(r.extractions||[]).length>0&&/(استخراج|اطلاعات|مقدار|وزن|تعداد|مشخصات|document|extraction)/i.test(n);
+  const score=tokenHits*5+(numberHit&&nums.length?5:0)+(docHit?3:0)+(extractionHit?3:0);
+  return {r,score};
+ }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).map(x=>x.r);
+ const fallback=rows.filter(r=>(r.documents||[]).length>0);
+ return [...ranked,...fallback].filter((r,i,a)=>a.findIndex(x=>x.shipment_id===r.shipment_id)===i).slice(0,12);
 }
 
 function risks(rows:any[]){
@@ -71,9 +88,9 @@ async function gemini(prompt:string,parts:any[],key:string,model:string){
 }
 
 async function geminiEmbedding(text:string,key:string){
- const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent',{
+ const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2-preview:embedContent',{
   method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
-  body:JSON.stringify({content:{parts:[{text:text.slice(0,30000)}]},output_dimensionality:1536})
+  body:JSON.stringify({content:{parts:[{text:text.slice(0,30000)}]},outputDimensionality:1536})
  });
  const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{}
  if(!r.ok)throw new Error(d?.error?.message||'Embedding HTTP '+r.status);
@@ -105,63 +122,21 @@ Deno.serve(async(req)=>{
     if(gk){try{const qv=await geminiEmbedding(query,gk);semanticKnowledge=await sb.rpc('search_knowledge_semantic',{query_embedding:qv,match_count:10,match_threshold:0.18}).then((x:any)=>x.data||[]).catch(()=>[]);}catch{}}
   }
   const mutationIntent=mode==='agent'&&/(ثبت|تغییر|اصلاح|حذف|بستن|تأیید|رد|پرداخت|ایجاد|ویرایش|لغو|ارسال|کنسل|update|delete|create|change)/i.test(query);
-  let prompt='کاربر: '+query+'\nحالت: '+mode+'\nداده واقعی محموله: '+JSON.stringify(selected).slice(0,90000)+'\nیافته‌های اعتبارسنجی: '+JSON.stringify(finding).slice(0,30000)+'\nدانش داخلی مرتبط: '+JSON.stringify({keyword:knowledge,semantic:semanticKnowledge}).slice(0,35000)+'\nحافظه جلسه اخیر: '+JSON.stringify(memory).slice(0,16000)+'\nاگر از دانشنامه استفاده می‌کنی، منبع را با عنوان/شماره/صفحه در پاسخ مشخص کن و هرگز منبع یا بند را جعل نکن.';
+  let prompt='کاربر: '+clip(query,4000)+'\nحالت: '+mode+'\nداده واقعی محموله: '+clip(JSON.stringify(selected),10000)+'\nیافته‌های اعتبارسنجی: '+clip(JSON.stringify(finding),4000)+'\nدانش داخلی مرتبط: '+clip(JSON.stringify({keyword:knowledge,semantic:semanticKnowledge}),5000)+'\nحافظه جلسه اخیر: '+clip(JSON.stringify(memory),3000)+'\nاگر از دانشنامه استفاده می‌کنی، منبع را با عنوان/شماره/صفحه در پاسخ مشخص کن و هرگز منبع یا بند را جعل نکن.';
   if(mutationIntent)prompt+='\nاین درخواست تغییر داده است. فقط پیشنهاد اقدام ساختاریافته بده؛ هیچ تغییر مستقیم در داده اصلی انجام نده و برای هر پیشنهاد شواهد و ریسک را مشخص کن.';
   if(mode==='audit'||mode==='risk')prompt+='\nگزارش: وضعیت، موارد تاییدشده، مغایرت‌ها، کمبودها و اقدام بعدی را جدا کن.';
   if(mode==='extract')prompt+='\nفقط داده واقعی سند را استخراج کن؛ موارد ناموجود/ناخوانا xxxx.';
-  const parts:any[]=[];const docText=clean(b.document_text);if(docText)parts.push({text:'DOCUMENT:\n'+docText.slice(0,120000)});
-  const data=strip(String(b.document_data||''));const mime=clean(b.document_mime_type).toLowerCase();if(data&&(mime==='application/pdf'||mime.startsWith('image/')))parts.push({inline_data:{mime_type:mime,data}});
+  const parts:any[]=[];const docText=clean(b.document_text);if(docText)parts.push({text:'DOCUMENT:\n'+clip(docText,18000)});
+  const data=strip(String(b.document_data||''));const mime=clean(b.document_mime_type).toLowerCase();if(data&&(mime==='application/pdf'||mime.startsWith('image/')))parts.push({inlineData:{mimeType:mime,data}});
   let answer='',provider='',model='',errors:string[]=[];
-  const timeoutMs=Number(Deno.env.get('AI_PROVIDER_TIMEOUT_MS')||18000);
-  const withTimeout=async<T>(fn:()=>Promise<T>)=>{
-    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),timeoutMs);
-    try{return await fn()}finally{clearTimeout(t)}
-  };
-  const jsonFetch=async(url:string,init:any)=>{
-    const r=await withTimeout(()=>fetch(url,{...init,signal:(init.signal||undefined)}));
-    const raw=await r.text(); let d:any={}; try{d=JSON.parse(raw)}catch{d={raw:raw.slice(0,3000)}}
-    if(!r.ok)throw new Error(String(d?.error?.message||d?.error?.error?.message||d?.message||d?.raw||('HTTP '+r.status)));
-    return d;
-  };
-  const geminiKeys=Array.from({length:10},(_,i)=>Deno.env.get('GEMINI_API_KEY_'+(i+1))||'').filter(Boolean);
-  const primaryGemini=Deno.env.get('GEMINI_API_KEY')||''; if(primaryGemini)geminiKeys.unshift(primaryGemini);
-  const uniqueGemini=[...new Set(geminiKeys)];
-  const callGeminiKey=async(key:string,geminiModel='gemini-3.8-flash')=>{
-    const d=await jsonFetch('https://generativelanguage.googleapis.com/v1beta/models/'+geminiModel+':generateContent',{
-      method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
-      body:JSON.stringify({systemInstruction:{parts:[{text:'You are Customs OS enterprise AI. Never invent official identifiers. Use only supplied database/document evidence. Explicitly report missing or conflicting evidence. Answer Persian.'}]},contents:[{role:'user',parts:[{text:prompt},...parts]}]})
-    });
-    return String(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join('\n')||'').trim();
-  };
-  for(let i=0;i<uniqueGemini.length&&!answer;i++){try{answer=await callGeminiKey(uniqueGemini[i],mode==='extract'?'gemini-3.5-flash-lite':'gemini-3.8-flash');if(answer){provider='gemini';model='gemini-3.8-flash';}}catch(e){errors.push('Gemini-'+(i+1)+': '+(e instanceof Error?e.message:String(e)))}}
-  if(!answer){
-    const groqKeys=Array.from({length:5},(_,i)=>Deno.env.get('GROQ_API_KEY_'+(i+1))||'').filter(Boolean);
-    const g=Deno.env.get('GROQ_API_KEY');if(g)groqKeys.unshift(g);
-    for(let i=0;i<[...new Set(groqKeys)].length&&!answer;i++){const key=[...new Set(groqKeys)][i];try{
-      const d=await jsonFetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model:'openai/gpt-oss-120b',messages:[{role:'user',content:prompt}],temperature:0})});
-      answer=String(d?.choices?.[0]?.message?.content||''); if(answer){provider='groq';model='openai/gpt-oss-120b'}
-    }catch(e){errors.push('Groq-'+(i+1)+': '+(e instanceof Error?e.message:String(e)))}}}
-  if(!answer){
-    const orKey=Deno.env.get('OPENROUTER_API_KEY');
-    if(orKey)try{
-      const d=await jsonFetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+orKey,'Content-Type':'application/json','HTTP-Referer':'https://customs-os-psi.vercel.app','X-Title':'Customs OS'},body:JSON.stringify({model:'openrouter/free',messages:[{role:'user',content:prompt}],temperature:0})});
-      answer=String(d?.choices?.[0]?.message?.content||''); if(answer){provider='openrouter';model=String(d?.model||'openrouter/free')}
-    }catch(e){errors.push('OpenRouter: '+(e instanceof Error?e.message:String(e)))}
-  }
-  if(!answer){
-    const cfToken=Deno.env.get('CLOUDFLARE_AI_TOKEN'),cfAccount=Deno.env.get('CLOUDFLARE_ACCOUNT_ID');
-    if(cfToken&&cfAccount)try{
-      const d=await jsonFetch('https://api.cloudflare.com/client/v4/accounts/'+cfAccount+'/ai/run/@cf/zai-org/glm-4.7-flash',{method:'POST',headers:{Authorization:'Bearer '+cfToken,'Content-Type':'application/json'},body:JSON.stringify({prompt})});
-      answer=String(d?.result?.response||''); if(answer){provider='cloudflare';model='@cf/zai-org/glm-4.7-flash'}
-    }catch(e){errors.push('Cloudflare AI: '+(e instanceof Error?e.message:String(e)))}
-  }
-  if(!answer){
-    const key=Deno.env.get('OPENAI_API_KEY');
-    if(key)try{
-      const d=await jsonFetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4.1-mini',input:prompt})});
-      answer=String(d?.output_text||''); if(answer){provider='openai';model='gpt-4.1-mini'}
-    }catch(e){errors.push('OpenAI: '+(e instanceof Error?e.message:String(e)))}
-  }
+  const providers:any[]=[
+    {name:'gemini',key:Deno.env.get('GEMINI_API_KEY'),run:async(k:string)=>{const m=mode==='extract'?'gemini-3.5-flash-lite':'gemini-3.8-flash';return {answer:await gemini(prompt,parts,k,m),model:m}}},
+    {name:'cloudflare',key:Deno.env.get('CLOUDFLARE_API_TOKEN'),run:async(k:string)=>{const account=Deno.env.get('CLOUDFLARE_ACCOUNT_ID');if(!account)throw new Error('CLOUDFLARE_ACCOUNT_ID missing');const r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+account+'/ai/run/@cf/meta/llama-3.1-8b-instruct',{method:'POST',headers:{Authorization:'Bearer '+k,'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:providerPrompt(prompt,24000)}]})});const d=await r.json();if(!r.ok)throw new Error(d?.errors?.[0]?.message||'Cloudflare HTTP '+r.status);return {answer:String(d?.result?.response||''),model:'@cf/meta/llama-3.1-8b-instruct'}}},
+    {name:'groq',key:Deno.env.get('GROQ_API_KEY'),run:async(k:string,groqPrompt?:string)=>{const input=providerPrompt(groqPrompt||prompt,20000);const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+k,'Content-Type':'application/json'},body:JSON.stringify({model:'openai/gpt-oss-120b',messages:[{role:'user',content:input}],temperature:0,max_tokens:900})});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||'Groq HTTP '+r.status);return {answer:String(d?.choices?.[0]?.message?.content||''),model:'openai/gpt-oss-120b'}}},
+    {name:'openrouter',key:Deno.env.get('OPENROUTER_API_KEY'),run:async(k:string)=>{const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+k,'Content-Type':'application/json'},body:JSON.stringify({model:'openai/gpt-4o-mini',messages:[{role:'user',content:providerPrompt(prompt,24000)}]})});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||'OpenRouter HTTP '+r.status);return {answer:String(d?.choices?.[0]?.message?.content||''),model:'openai/gpt-4o-mini'}}},
+    {name:'openai',key:Deno.env.get('OPENAI_API_KEY'),run:async(k:string)=>{const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+k,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4.1-mini',input:providerPrompt(prompt,30000)})});const d=await r.json();if(!r.ok)throw new Error(d?.error?.message||'OpenAI HTTP '+r.status);return {answer:String(d?.output_text||''),model:'gpt-4.1-mini'}}}
+  ];
+  for(const p of providers){if(!p.key)continue;try{const z=await (p.name==='Groq'?p.run(p.key,providerPrompt(prompt,20000)):p.run(p.key));if(String(z.answer||'').trim()){answer=String(z.answer).trim();provider=p.name;model=z.model;break}errors.push(p.name+': empty output')}catch(e){errors.push(p.name+': '+(e instanceof Error?e.message:String(e)))}}
   if(!answer)return reply({error:'همه سرویس‌های AI ناموفق بودند: '+errors.join(' | ')},502,origin);
   const interaction=await sb.from('ai_interactions').insert({organization_id:profile.organization_id,user_id:user.id,shipment_id:shipmentId||selected[0]?.shipment_id||null,case_id:selected[0]?.case_id||null,session_id:sessionId||null,mode,query,answer,provider,model,latency_ms:null,status:'completed'}).select('id').single();
   const interactionId=interaction.data?.id||null;
