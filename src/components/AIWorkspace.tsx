@@ -142,13 +142,13 @@ const transcribeVoice=async(blob:Blob)=>{
  const {data:profile,error:pe}=await supabase.from('profiles').select('organization_id').eq('id',user.id).maybeSingle();
  if(pe||!profile?.organization_id)throw new Error(pe?.message||'سازمان کاربر مشخص نیست.');
  const ext=(blob.type||'audio/mp4').includes('webm')?'webm':'mp4';
- const path=\`\${profile.organization_id}/ai-voice/\${crypto.randomUUID()}.\${ext}\`;
+ const path=`${profile.organization_id}/ai-voice/${crypto.randomUUID()}.${ext}`;
  const {error:ue}=await supabase.storage.from('customs_documents').upload(path,blob,{contentType:blob.type||'audio/mp4',cacheControl:'60',upsert:false});
- if(ue)throw new Error(\`آپلود صدای ضبط‌شده ناموفق بود: \${ue.message}\`);
+ if(ue)throw new Error(`آپلود صدای ضبط‌شده ناموفق بود: ${ue.message}`);
  try{
-  const audioBase64=await blobToBase64(blob);const {data,error}=await supabase.functions.invoke('ai-assistant',{body:{voice_transcription:true,document_data:audioBase64,document_storage_path:path,document_mime_type:blob.type||'audio/mp4'}});
+  const {data,error}=await supabase.functions.invoke('ai-voice',{body:{document_storage_path:path,document_mime_type:blob.type||'audio/mp4'}});
   if(error)throw error;
-  const text=String(data?.answer||'').trim();
+  const text=String(data?.transcript||'').trim();
   if(!text)throw new Error('متن از صدا دریافت نشد.');
   setInput(text);
   await ask(text);
