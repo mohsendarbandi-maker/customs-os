@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {Anchor,ArrowRight,RefreshCw,Save,Trash2,Search,Ship} from 'lucide-react';
+import {Anchor,ArrowRight,ChevronRight,RefreshCw,Save,Trash2,Search,Ship,X} from 'lucide-react';
 import {Link,useNavigate} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
 const statuses=[['draft','پیش‌نویس'],['booking_confirmed','تأیید رزرو'],['loading','در حال بارگیری'],['loaded','بارگیری کامل'],['departed','حرکت'],['in_transit','در مسیر'],['approaching_destination','نزدیک مقصد'],['anchorage','لنگرگاه'],['berthing','پهلوگیری'],['discharging','در حال تخلیه'],['discharged','تخلیه کامل'],['completed','تکمیل'],['delayed','تأخیر'],['cancelled','لغو']];
