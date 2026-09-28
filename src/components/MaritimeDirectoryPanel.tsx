@@ -23,6 +23,8 @@ export const MaritimeDirectoryPanel:React.FC=()=>{
  const[contactEditing,setContactEditing]=useState('');
  const[busy,setBusy]=useState(false);
  const[message,setMessage]=useState('');
+ const[waVessel,setWaVessel]=useState('');
+ const[waBl,setWaBl]=useState('');
 
  const load=async()=>{
   setBusy(true);setMessage('');
@@ -41,6 +43,18 @@ export const MaritimeDirectoryPanel:React.FC=()=>{
  useEffect(()=>{load()},[]);
  const lineContacts=useMemo(()=>contacts.filter(x=>x.shipping_line_id===selectedLine),[contacts,selectedLine]);
  const lineVessels=useMemo(()=>vessels.filter(x=>x.shipping_line_id===selectedLine),[vessels,selectedLine]);
+ useEffect(()=>{if(selectedLine&&lineVessels.length&&!lineVesselExists(lineVessels,waVessel))setWaVessel(lineVessels[0].id)},[selectedLine,lineVessels]);
+ const lineVesselExists=(list:Vessel[],id:string)=>list.some(v=>v.id===id);
+ const openWhatsApp=(contact:Contact,kind:'status'|'invoice')=>{
+  const raw=(contact.whatsapp||contact.phone||'').replace(/[^0-9+]/g,'');
+  if(!raw){setMessage('برای این مسئول شماره WhatsApp یا تلفن ثبت نشده است.');return}
+  const phone=raw.startsWith('+')?raw.slice(1):raw.startsWith('00')?raw.slice(2):raw;
+  const vv=lineVessels.find(v=>v.id===waVessel)||lineVessels[0];
+  const vesselText=vv?`کشتی ${vv.name}${vv.imo_number?` (IMO ${vv.imo_number})`:''}`:'کشتی';
+  const bl=waBl.trim()?`\nشماره B/L: ${waBl.trim()}`:'';
+  const msg=kind==='status'?`سلام، لطفاً آخرین وضعیت ${vesselText} را اعلام فرمایید.${bl}`:`سلام، لطفاً صورتحساب ترخیصیه ${vesselText} را برای ما ارسال فرمایید.${bl}`;
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,'_blank','noopener,noreferrer');
+ };
 
  const saveLine=async()=>{
   if(!lineName.trim()){setMessage('نام کشتیرانی الزامی است.');return}
@@ -101,7 +115,7 @@ export const MaritimeDirectoryPanel:React.FC=()=>{
      <div className="grid lg:grid-cols-2 gap-3">
       <div className="rounded-xl border app-border bg-[var(--surface)] p-3">
        <div className="flex justify-between items-center mb-2"><b className="text-sm">مسئولان تماس</b><UserPlus size={17}/></div>
-       <div className="space-y-2 mb-3">{lineContacts.map(x=><div key={x.id} className="rounded-lg border app-border p-2.5"><div className="flex justify-between gap-2"><b className="text-sm">{x.full_name}</b><span className="flex gap-1"><button onClick={()=>editContact(x)} className="icon-btn" title="ویرایش"><Edit2 size={13}/></button><button onClick={()=>deleteContact(x.id)} className="icon-btn icon-btn-danger" title="حذف"><Trash2 size={13}/></button></span></div><div className="text-[10px] app-muted mt-1">{x.role_title||'مسئول'}{x.is_primary?' · مسئول اصلی':''}</div><div className="grid grid-cols-2 gap-1 text-[11px] mt-2">{x.phone&&<span><Phone size={12} className="inline ml-1"/>{x.phone}</span>}{x.whatsapp&&<span><Phone size={12} className="inline ml-1"/>WhatsApp: {x.whatsapp}</span>}{x.email&&<span className="col-span-2"><Mail size={12} className="inline ml-1"/>{x.email}</span>}</div></div>)}</div>
+       <div className="rounded-lg border app-border bg-[var(--surface-2)] p-3 mb-3"><div className="text-xs font-bold mb-2">ارسال سریع از WhatsApp</div><div className="grid grid-cols-2 gap-2"><select value={waVessel} onChange={e=>setWaVessel(e.target.value)} className="rounded-lg border app-border bg-[var(--surface)] px-2 py-2 text-xs"><option value="">انتخاب کشتی</option>{lineVessels.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select><input value={waBl} onChange={e=>setWaBl(e.target.value)} placeholder="B/L اختیاری" dir="ltr" className="rounded-lg border app-border bg-[var(--surface)] px-2 py-2 text-xs"/></div><div className="text-[10px] app-muted mt-2">با انتخاب مسئول، پیام از WhatsApp خود کاربر در گوشی/مرورگر باز می‌شود؛ اتصال API جداگانه لازم نیست.</div></div><div className="space-y-2 mb-3">{lineContacts.map(x=><div key={x.id} className="rounded-lg border app-border p-2.5"><div className="flex justify-between gap-2"><b className="text-sm">{x.full_name}</b><span className="flex gap-1"><button onClick={()=>editContact(x)} className="icon-btn" title="ویرایش"><Edit2 size={13}/></button><button onClick={()=>deleteContact(x.id)} className="icon-btn icon-btn-danger" title="حذف"><Trash2 size={13}/></button></span></div><div className="text-[10px] app-muted mt-1">{x.role_title||'مسئول'}{x.is_primary?' · مسئول اصلی':''}</div><div className="grid grid-cols-2 gap-1 text-[11px] mt-2">{x.phone&&<span><Phone size={12} className="inline ml-1"/>{x.phone}</span>}{x.whatsapp&&<span><Phone size={12} className="inline ml-1"/>WhatsApp: {x.whatsapp}</span>}{x.email&&<span className="col-span-2"><Mail size={12} className="inline ml-1"/>{x.email}</span>}</div><div className="flex flex-wrap gap-1 mt-2"><button onClick={()=>openWhatsApp(x,'status')} className="px-2.5 py-1.5 rounded-lg bg-green-600 text-white text-[10px] font-bold">آخرین وضعیت کشتی</button><button onClick={()=>openWhatsApp(x,'invoice')} className="px-2.5 py-1.5 rounded-lg bg-emerald-700 text-white text-[10px] font-bold">درخواست صورتحساب ترخیصیه</button></div></div>)}</div>
        <div className="grid gap-2"><input value={contact.full_name} onChange={e=>setContact(p=>({...p,full_name:e.target.value}))} placeholder="نام مسئول" className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2"/><input value={contact.role_title||''} onChange={e=>setContact(p=>({...p,role_title:e.target.value}))} placeholder="سمت / مسئولیت" className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2"/><div className="grid grid-cols-2 gap-2"><input value={contact.phone||''} onChange={e=>setContact(p=>({...p,phone:e.target.value}))} placeholder="شماره تماس" dir="ltr" className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2"/><input value={contact.whatsapp||''} onChange={e=>setContact(p=>({...p,whatsapp:e.target.value}))} placeholder="WhatsApp" dir="ltr" className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2"/></div><input value={contact.email||''} onChange={e=>setContact(p=>({...p,email:e.target.value}))} placeholder="ایمیل" dir="ltr" className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2"/><textarea value={contact.notes||''} onChange={e=>setContact(p=>({...p,notes:e.target.value}))} placeholder="یادداشت" className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2"/><label className="text-xs"><input type="checkbox" checked={contact.is_primary} onChange={e=>setContact(p=>({...p,is_primary:e.target.checked}))} className="ml-2"/>مسئول اصلی</label><button onClick={saveContact} disabled={busy} className="py-2.5 rounded-lg bg-[var(--primary)] text-white font-bold">{contactEditing?'ذخیره ویرایش مسئول':'افزودن مسئول'}</button></div>
       </div>
       <div className="rounded-xl border app-border bg-[var(--surface)] p-3">
