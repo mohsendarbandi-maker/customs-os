@@ -4,7 +4,7 @@ import{Link}from'react-router-dom';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
 import{useCaseSelectorData}from'../hooks/useCaseSelectorData';
-import{FINANCE_CURRENCIES,formatMoney,normalizeDigits,parseFinanceNumber,paidByLabel,approvalLabel,paymentRequestStatusLabel,triggerPointLabel,pettyCashDirectionLabel}from'../lib/finance';
+import{FINANCE_CURRENCIES,formatMoney,normalizeDigits,parseFinanceNumber,paidByLabel,approvalLabel,paymentRequestStatusLabel,triggerPointLabel,pettyCashDirectionLabel,calculateOutstanding}from'../lib/finance';
 
 type Tab='overview'|'expenses'|'invoices'|'approvals'|'petty'|'requests'|'profit'|'permissions'|'settings';
 type PermissionRow={id?:string;user_id:string;view_own_expenses:boolean;view_own_petty_cash:boolean;view_own_receipts:boolean;approve_other_expenses:boolean;issue_payment_request:boolean;view_org_financials:boolean;view_profit:boolean};
@@ -87,7 +87,7 @@ export const FinancePage:React.FC=()=>{
    return [...grouped.values()].map(x=>({...x,shipment:shipments.find(s=>s.case_id===x.case_id)})).sort((a,b)=>b.amount-a.amount);
  },[activeLines,profits,vouchers,shipments]);
  const filteredShipments=useMemo(()=>{const q=search.trim().toLowerCase();return shipments.filter(s=>!q||[s.display_name,s.bill_of_lading_no,s.client_name].join(' ').toLowerCase().includes(q))},[shipments,search]);
- const claimFor=(shipmentId:string)=>Math.max(0,costs.filter(x=>x.shipment_id===shipmentId&&x.approval_status==='approved'&&x.paid_by==='our_company'&&x.billable).reduce((a,x)=>a+Number(x.amount_irr||0)+Number(x.vat_amount||0),0)-payments.filter(x=>x.shipment_id===shipmentId&&x.direction==='received').reduce((a,x)=>a+Number(x.amount_irr||0),0));
+ const claimFor=(shipmentId:string)=>calculateOutstanding(costs.filter(x=>x.shipment_id===shipmentId&&x.approval_status==='approved'&&x.paid_by==='our_company'&&x.billable).reduce((a,x)=>a+Number(x.amount_irr||0)+Number(x.vat_amount||0),0),profits.filter(p=>lines.some(l=>l.id===p.voucher_line_item_id&&vouchers.some(v=>v.id===l.voucher_id&&v.case_id===shipments.find(s=>s.id===shipmentId)?.case_id))).reduce((a,x)=>a+Number(x.profit_amount||0),0),payments.filter(x=>x.shipment_id===shipmentId&&x.direction==='received').reduce((a,x)=>a+Number(x.amount_irr||0),0));
  const loadShipmentPosition=async(shipmentId:string)=>{
    setRequestPosition(null);
    if(!shipmentId){setRequestForm(f=>({...f,amount:''}));return}
