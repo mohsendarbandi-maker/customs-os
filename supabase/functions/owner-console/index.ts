@@ -1,66 +1,8 @@
-import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from 'npm:@supabase/supabase-js@2';
-
-const ORIGINS=new Set(['https://darbandicommercial.ir','https://www.darbandicommercial.ir','https://customs-os-psi.vercel.app','http://localhost:5173','http://127.0.0.1:5173']);
-const cors=(origin:string)=>({'Access-Control-Allow-Origin':ORIGINS.has(origin)?origin:'https://darbandicommercial.ir','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS','Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin'});
-const out=(body:unknown,status=200,origin='')=>new Response(JSON.stringify(body),{status,headers:cors(origin)});
-const str=(v:any)=>String(v??'').trim();
-const isUuid=(v:any)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str(v));
-
-type Resource={table:string; immutable?:boolean; archive?:boolean; softDelete?:boolean; searchFields?:string[]};
-const RESOURCES:Record<string,Resource>={
- profiles:{table:'profiles',searchFields:['full_name','phone','role']},
- clients:{table:'clients',searchFields:['name']},cases:{table:'cases',searchFields:['case_number','display_name','registration_order_no','proforma_no','warehouse_receipt_no','cargo_description']},
- registration_orders:{table:'registration_orders',searchFields:['order_number','tariff_code','notes']},shipments:{table:'shipments',searchFields:['display_name','bill_of_lading_no','shipping_line','voyage_no','origin_port','destination_port']},
- containers:{table:'containers',searchFields:['container_number','seal_number']},shipment_customs_data:{table:'shipment_customs_data',searchFields:['registration_order_no','warehouse_receipt_no','cargo_description','tariff_code','bill_of_lading']},
- shipping_lines:{table:'shipping_lines',searchFields:['name','name_fa']},vessels:{table:'vessels',searchFields:['name','imo_number','flag_code']},contacts:{table:'shipping_line_contacts',searchFields:['full_name','phone','whatsapp','email']},
- shipment_documents:{table:'shipment_documents',archive:true,searchFields:['document_name','original_file_name','storage_path']},customs_documents:{table:'customs_documents',archive:true,searchFields:['original_name','display_name','document_number']},
- shipment_document_extractions:{table:'shipment_document_extractions',searchFields:['field_key','field_label','extracted_value']},document_extraction_fields:{table:'document_extraction_fields',searchFields:['field_key','field_label']},
- documents:{table:'documents',searchFields:['name','title','document_type']},document_rules:{table:'document_requirement_rules',searchFields:['rule_name','document_type']},
- permit_rules:{table:'permit_rules',searchFields:['rule_name','hs_prefix','cargo_keyword','permit_type']},permits:{table:'permits',searchFields:['permit_number','permit_type','issuing_authority']},
- customs_offices:{table:'customs_offices',searchFields:['name','code']},hs_codes:{table:'hs_codes',searchFields:['code','description']},settings_reference_data:{table:'settings_reference_data',searchFields:['key','label','value']},
- case_checklist_items:{table:'case_checklist_items',searchFields:['item_key']},declaration_checklist_items:{table:'declaration_checklist_items',searchFields:['item_key']},declaration_exit_checklist_items:{table:'declaration_exit_checklist_items',searchFields:['item_key']},
- declarations:{table:'customs_declarations',searchFields:['kottaj_number','customs_path','payment_reference']},
- cost_categories:{table:'finance_cost_categories',searchFields:['code','name_fa','name_en','description']},finance_settings:{table:'finance_org_settings'},
- costs:{table:'finance_cost_items',searchFields:['description','notes','internal_notes']},payments:{table:'finance_payments',searchFields:['payment_no','reference_no','bank_name','description']},
- payment_requests:{table:'finance_payment_requests',searchFields:['request_no','subject','body_text']},payment_request_lines:{table:'finance_payment_request_lines',searchFields:['description']},
- invoices:{table:'finance_invoices',searchFields:['invoice_no','public_note','internal_note']},invoice_lines:{table:'finance_invoice_lines',searchFields:['description']},invoice_shipments:{table:'finance_invoice_shipments'},
- payment_allocations:{table:'finance_payment_allocations',searchFields:['description','reference_no']},
- vouchers:{table:'customs_accounting_vouchers',searchFields:['company_name','cargo_type']},voucher_lines:{table:'voucher_line_items',immutable:true},
- exit:{table:'case_exit_operations',searchFields:['exit_permit_no','vehicle_plate','driver_name']},org:{table:'organizations',searchFields:['name','economic_code']},org_settings:{table:'organization_settings'},
- ai_gateway:{table:'ai_gateway_settings'},templates:{table:'print_templates',searchFields:['template_key','name','document_type']},user_settings:{table:'user_settings'},
- knowledge_sources:{table:'knowledge_sources',searchFields:['title','name','source_type']},knowledge_chunks:{table:'knowledge_chunks',searchFields:['content']},
- ai_knowledge_documents:{table:'ai_knowledge_documents',searchFields:['title','file_name']},ai_knowledge_chunks:{table:'ai_knowledge_chunks',searchFields:['content']}
-}
-const READ_ONLY:Record<string,string>={
- audit:'audit_logs',case_history:'case_status_history',financial_history:'financial_transactions',
- ai_commands:'ai_operator_commands',ai_interactions:'ai_interactions',ai_action_logs:'ai_agent_action_logs',
- ai_risk_findings:'ai_risk_findings',file_security_events:'file_security_events',
- shipment_tracking:'shipment_tracking_events',discrepancy_logs:'discrepancy_logs'
-};
-
-const PROTECTED=new Set(['id','organization_id','created_at','updated_at','created_by','updated_by','user_id','uploaded_by','voided_by','voided_at','archived_by','archived_at','is_archived','archive_reason']);
-const allowedData=(data:any)=>{
- const src=data&&typeof data==='object'?data:{}, out:any={};
- for(const [k,v] of Object.entries(src))if(!PROTECTED.has(k))out[k]=v;
- return out;
-};
-
-async function authContext(req:Request){
- const auth=req.headers.get('Authorization')||'';
- const jwt=auth.startsWith('Bearer ')?auth.slice(7).trim():'';
- if(!jwt)throw new Error('Unauthorized');
- const url=Deno.env.get('SUPABASE_URL'),anon=Deno.env.get('SUPABASE_ANON_KEY');
- if(!url||!anon)throw new Error('Supabase configuration missing');
- const sb=createClient(url,anon,{global:{headers:{Authorization:'Bearer '+jwt}}});
- const {data:{user}}=await sb.auth.getUser(jwt);if(!user)throw new Error('Unauthorized');
- const {data:profile,error}=await sb.from('profiles').select('id,organization_id,role,is_active,full_name').eq('id',user.id).maybeSingle();
- if(error)throw error;
- if(!profile||profile.is_active===false||profile.role!=='owner')throw new Error('Owner access required');
- return {sb,user,profile};
-}
-
 async function listRows(sb:any,profile:any,resource:string,body:any){
+async function write(ctx:any,body:any){
+ const {sb,user,profile}=ctx;
+ const resource=str(body.resource), op=str(body.action||body.op);
+
  if(resource==='profiles'){
    if(op==='list'){
      let q=sb.from('profiles').select('id,full_name,phone,role,client_id,is_active,created_at,updated_at').eq('organization_id',profile.organization_id).order('full_name').limit(Math.min(Number(body.limit)||300,500));
@@ -108,6 +50,7 @@ async function listRows(sb:any,profile:any,resource:string,body:any){
  }
 
  if(resource==='org'&&(op==='create'||op==='delete'))throw new Error('Organization root cannot be created or deleted from Owner Console.');
+ if(resource==='org'&&(op==='create'||op==='delete'))throw new Error('Organization root cannot be created or deleted from Owner Console.');
  const cfg=RESOURCES[resource];if(!cfg)throw new Error('Unknown resource');
  if(cfg.immutable)throw new Error('این منبع غیرقابل‌ویرایش است.');
  if(op==='list')return await listRows(sb,profile,resource,body);
@@ -133,7 +76,7 @@ async function listRows(sb:any,profile:any,resource:string,body:any){
  if(resource==='cases'&&op==='update')delete d.status;
  if(op==='create'){
    if(cfg.table==='organizations')d.id=profile.organization_id;
-   else if(cfg.table!=='user_settings')d.organization_id=profile.organization_id;
+   else if(!cfg.global&&cfg.table!=='user_settings')d.organization_id=profile.organization_id;
    if(cfg.table!=='user_settings'&&('created_by' in (body.data||{})||resource==='costs'||resource==='payments'||resource==='payment_requests'||resource==='invoices'))d.created_by=user.id;
    if('updated_by' in (body.data||{})||resource==='costs'||resource==='payment_requests'||resource==='invoices')d.updated_by=user.id;
    if(cfg.table==='user_settings')d.user_id=isUuid(d.user_id)?d.user_id:user.id;
@@ -144,15 +87,20 @@ async function listRows(sb:any,profile:any,resource:string,body:any){
    if(!Object.keys(d).length)throw new Error('No editable fields supplied');
    if(resource==='organizations')return await updateOrg(sb,profile.organization_id,d);
    if('updated_by' in (body.data||{})||resource==='costs'||resource==='payment_requests'||resource==='invoices')d.updated_by=user.id;
-   const r=await sb.from(cfg.table).update(d).eq('id',body.id).eq('organization_id',profile.organization_id).select('*').single();
+   const r=cfg.global
+     ? await sb.from(cfg.table).update(d).eq('id',body.id).select('*').single()
+     : await sb.from(cfg.table).update(d).eq('id',body.id).eq('organization_id',profile.organization_id).select('*').single();
    if(r.error)throw r.error;return r.data;
  }
  if(op==='delete'){
    if(!isUuid(body.id))throw new Error('record id required');
+   if(cfg.global)throw new Error('Global reference records cannot be physically deleted from Owner Console.');
    const r=await sb.from(cfg.table).delete().eq('id',body.id).eq('organization_id',profile.organization_id);
    if(r.error)throw r.error;return {deleted:true,id:body.id};
  }
  throw new Error('Unsupported operation');
+}
+
 }
 
 async function updateOrg(sb:any,org:string,d:any){
