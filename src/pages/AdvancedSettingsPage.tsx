@@ -297,7 +297,7 @@ const sections=[
 {id:'documents',label:'Documents',icon:Archive,res:['shipment_documents','customs_documents','shipment_document_extractions','document_extraction_fields','documents']},
 {id:'doc_rules',label:'Document Rules',icon:Settings2,res:['document_rules','settings_reference_data']},
 {id:'permit_rules',label:'Permit Rules',icon:ShieldCheck,res:['permit_rules','permits','hs_codes','customs_offices']},
-{id:'finance',label:'Finance / Accounting',icon:Wallet,res:['finance_settings','cost_categories','costs','payments','payment_requests','payment_request_lines','invoices','invoice_lines','invoice_shipments','payment_allocations','vouchers','voucher_lines']},
+{id:'finance',label:'Finance / Accounting',icon:Wallet,res:['finance_settings','cost_categories','costs','payments','payment_requests','payment_request_lines','invoices','invoice_lines','invoice_shipments','payment_allocations','vouchers','voucher_lines','financial_permissions','petty_cash_ledger','voucher_line_profit']},
 {id:'declarations',label:'Declaration / EPL / Kottaj',icon:FileCog,res:['declarations','declaration_checklist_items','declaration_exit_checklist_items']},
 {id:'exit',label:'Exit',icon:ArrowLeft,res:['exit']},
 {id:'ai',label:'AI Gateway / Core',icon:Bot,res:['ai_gateway','ai_knowledge_documents','ai_knowledge_chunks','knowledge_sources','knowledge_chunks']},
