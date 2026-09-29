@@ -171,12 +171,35 @@ const execute=async(sb:any,user:any,org:string,code:string,t:any,p:any,attachmen
    if(r.error){await sb.storage.from('customs_documents').remove([path]);throw r.error;}return{type:'write',data:pick(r.data,['id','shipment_id','document_name','original_file_name','storage_path','mime_type','file_size_bytes'])};
  }
  if(code==='documents.update'||code==='documents.delete'){
-   const id=t.document_id;if(!isUuid(id))throw new Error('document_id لازم است.');const a=await one(sb,'shipment_documents',id);
-   if(a){if(code==='documents.update'){const ch:any={};for(const k of ['document_name','original_file_name','extraction_status'])if(p[k]!==undefined)ch[k]=p[k];const r=await sb.from('shipment_documents').update(ch).eq('id',id).select('*').single();if(r.error)throw r.error;return{type:'write',data:pick(r.data,['id','document_name','original_file_name','extraction_status','storage_path'])};}
-     const r=await sb.from('shipment_documents').delete().eq('id',id);if(r.error)throw r.error;if(a.storage_path)await sb.storage.from('customs_documents').remove([a.storage_path]);return{type:'delete',data:{id},before:pick(a,['id','shipment_id','document_name','storage_path'])};}
-   const b=await one(sb,'customs_documents',id);if(!b)throw new Error('سند پیدا نشد یا دسترسی ندارید.');
-   if(code==='documents.update'){const ch:any={};for(const k of ['display_name','status','document_number','issue_date'])if(p[k]!==undefined)ch[k]=p[k];const r=await sb.from('customs_documents').update(ch).eq('id',id).select('*').single();if(r.error)throw r.error;return{type:'write',data:pick(r.data,['id','display_name','status','document_number','issue_date','storage_path'])};}
-   const r=await sb.from('customs_documents').delete().eq('id',id);if(r.error)throw r.error;if(b.storage_path)await sb.storage.from('customs_documents').remove([b.storage_path]);return{type:'delete',data:{id},before:pick(b,['id','shipment_id','display_name','storage_path'])};
+  const id=t.document_id;
+  if(!isUuid(id))throw new Error('document_id لازم است.');
+  const shipmentDoc=await one(sb,'shipment_documents',id);
+  if(shipmentDoc){
+   if(code==='documents.update'){
+    const ch:any={};
+    for(const k of ['document_name','original_file_name','extraction_status'])if(p[k]!==undefined)ch[k]=p[k];
+    const r=await sb.from('shipment_documents').update(ch).eq('id',id).select('*').single();
+    if(r.error)throw r.error;
+    return{type:'write',data:pick(r.data,['id','document_name','original_file_name','extraction_status','storage_path'])};
+   }
+   const r=await sb.from('shipment_documents').delete().eq('id',id);
+   if(r.error)throw r.error;
+   if(shipmentDoc.storage_path)await sb.storage.from('customs_documents').remove([shipmentDoc.storage_path]);
+   return{type:'delete',data:{id},before:pick(shipmentDoc,['id','shipment_id','document_name','storage_path'])};
+  }
+  const customsDoc=await one(sb,'customs_documents',id);
+  if(!customsDoc)throw new Error('سند پیدا نشد یا دسترسی ندارید.');
+  if(code==='documents.update'){
+   const ch:any={};
+   for(const k of ['display_name','status','document_number','issue_date'])if(p[k]!==undefined)ch[k]=p[k];
+   const r=await sb.from('customs_documents').update(ch).eq('id',id).select('*').single();
+   if(r.error)throw r.error;
+   return{type:'write',data:pick(r.data,['id','display_name','status','document_number','issue_date','storage_path'])};
+  }
+  const r=await sb.from('customs_documents').delete().eq('id',id);
+  if(r.error)throw r.error;
+  if(customsDoc.storage_path)await sb.storage.from('customs_documents').remove([customsDoc.storage_path]);
+  return{type:'delete',data:{id},before:pick(customsDoc,['id','shipment_id','display_name','storage_path'])};
  }
  if(code.startsWith('permits.')){
    if(code.endsWith('.create')){const cx=await caseRow(sb,t);if(cx.clarification)return cx;const r=await sb.from('permits').insert({organization_id:org,case_id:cx.row.id,permit_type:str(p.permit_type),permit_number:str(p.permit_number)||null,issuing_authority:str(p.issuing_authority)||null,status:str(p.status)||'pending',issued_at:p.issued_at||null,expires_at:p.expires_at||null}).select('*').single();if(r.error)throw r.error;return{type:'write',data:pick(r.data,['id','case_id','permit_type','permit_number','issuing_authority','status','issued_at','expires_at'])};}
