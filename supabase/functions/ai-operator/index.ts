@@ -90,7 +90,7 @@ function redact(v:string){let s=v;s=s.replace(/(authorization|bearer|api[_ -]?ke
 function forbidden(v:any):boolean{if(v==null)return false;if(Array.isArray(v))return v.some(forbidden);if(typeof v==='object')return Object.entries(v).some(([k,x])=>/raw.?sql|execute.?sql|service.?role|secret_key|admin.?key|access_token|refresh_token/i.test(k)||forbidden(x));return typeof v==='string'&&/\b(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE)\b\s+.+\b(FROM|TABLE|INTO)\b/i.test(v);}
 function riskFor(p:Plan):Risk{
  const d=ACTIONS[p.action_code];if(!d)return'destructive';
- if(p.action_code==='cases.status_change'&&str(p.params?.target_status)==='archived')return'destructive';
+ if(p.action_code==='cases.status_change'&&str(p.params?.target_status)==='archived')return'destructive';if(p.action_code==='exit.update'&&str(p.params?.exit_status)==='exited')return'destructive';
  if(p.action_code==='settings.user.update'&&(p.params?.role!==undefined||p.params?.is_active!==undefined||p.params?.client_id!==undefined))return'destructive';
  if(p.action_code==='settings.user.deactivate')return'destructive';
  return d.risk;
