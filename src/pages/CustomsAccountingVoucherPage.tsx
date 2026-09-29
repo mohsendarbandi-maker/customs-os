@@ -65,7 +65,7 @@ export const CustomsAccountingVoucherPage:React.FC=()=>{
    setLines(mapped.length?mapped:Array.from({length:30},(_,i)=>blank(i+1)));setLoading(false);
  };
  useEffect(()=>{void loadCategories();if(isEdit)void loadVoucher(id!);else void loadList()},[id]);
- useEffect(()=>{const preset=params.get('shipmentId');if(!isEdit&&preset&&rows.length){const r=rows.find(x=>x.id===preset);if(r){setShipmentId(r.id);setClientId(r.client_id||'')}}},[params,rows,isEdit]);
+ useEffect(()=>{const presetShipment=params.get('shipmentId');const presetCase=params.get('caseId');const preset=presetShipment||presetCase;if(!isEdit&&preset&&rows.length){const r=presetShipment?rows.find(x=>x.id===preset):rows.find(x=>x.case_id===preset);if(r){setShipmentId(r.id);setClientId(r.client_id||'')}}},[params,rows,isEdit]);
 
  const previewDebit=useMemo(()=>lines.filter(x=>x.status==='active').reduce((a,x)=>a+num(x.debit_amount),0),[lines]);
  const previewCredit=useMemo(()=>lines.filter(x=>x.status==='active').reduce((a,x)=>a+num(x.credit_amount),0),[lines]);
@@ -75,7 +75,7 @@ export const CustomsAccountingVoucherPage:React.FC=()=>{
  const ul=(idx:number,k:keyof Line,v:string)=>setLines(p=>p.map((x,i)=>{if(i!==idx)return x;const n={...x,[k]:v};if(k==='debit_amount'&&num(v)>0)n.credit_amount='';if(k==='credit_amount'&&num(v)>0)n.debit_amount='';if(k==='category_id')n.description_category=categories.find(c=>c.id===v)?.name_fa||'';return n}));
  const addRow=()=>setLines(p=>p.concat(blank((p[p.length-1]?.row_number||0)+1)));
 
- const selectClient=(value:string)=>{setClientId(value);setShipmentId('');setVoucher(null);if(value){const first=rows.find(r=>r.case_id&&r.client_id===value);if(first)setShipmentId(first.id)}};
+ const selectClient=(value:string)=>{setClientId(value);setShipmentId('');setVoucher(null);setTonnageManual(false);setHeader({company_name:'',cargo_type:'',tonnage:'',unit_count:'',unit_type:'',cargo_entry_date:'',permit_issue_date:'',kottaj_number:''})};
  const selectShipment=(value:string)=>{setShipmentId(value);const s=rows.find(r=>r.id===value);if(!s)return;setHeader({company_name:s.client_name||'',cargo_type:s.cargo_description||'',tonnage:s.gross_weight_kg==null?'':fmt3(Number(s.gross_weight_kg)/1000),unit_count:s.cargo_count==null?'':String(s.cargo_count),unit_type:s.cargo_count_unit||'',cargo_entry_date:s.warehouse_receipt_date||'',permit_issue_date:s.initial_warehousing_invoice_confirmed_at?s.initial_warehousing_invoice_confirmed_at.slice(0,10):'',kottaj_number:''});setTonnageManual(false)};
 
  const save=async()=>{
