@@ -22,7 +22,8 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
   it('enforces exact decimal base amount calculation in finance', () => {
     const finSql = readMigration('00006_finance_documents.sql');
     expect(finSql).toContain('chk_base_amount_irr_calc'); expect(finSql).toContain('base_amount_irr = ROUND(original_amount * exchange_rate, 2)');
-    expect(fs.readFileSync(path.resolve(__dirname, '../src/pages/FinancePage.tsx'), 'utf8')).toContain('Math.round(amount*r*100)/100');
+    const financeUi=fs.readFileSync(path.resolve(__dirname, '../src/pages/FinancePage.tsx'), 'utf8'); const financeUtil=fs.readFileSync(path.resolve(__dirname, '../src/lib/finance.ts'), 'utf8');
+    expect(financeUi).toContain("Math.round(amount*rate*100)/100"); expect(financeUi).toContain("paid_by==='our_company'"); expect(financeUtil).toContain('formatCurrency');
   });
   it('enforces client scoping invariants on profiles and core entities', () => {
     const authSql = readMigration('00003_auth_foundation.sql'); const rlsSql = readMigration('00009_rls.sql');
