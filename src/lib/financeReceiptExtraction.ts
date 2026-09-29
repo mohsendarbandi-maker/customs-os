@@ -64,6 +64,29 @@ export const extractFinanceReceipt=async(file:File,onProgress?:(message:string)=
    pages.push(c.items.map((x:any)=>x.str||'').join(' '));
   }
   text=pages.join('\n');
+  if(!text.trim()){
+   onProgress?.('PDF متن قابل استخراج ندارد؛ OCR صفحات فیش در حال اجراست…');
+   const worker=await createWorker('fas+eng');
+   try{
+    const ocrPages:string[]=[];
+    const maxPages=Math.min(pdf.numPages,3);
+    for(let n=1;n<=maxPages;n++){
+     onProgress?.('OCR صفحه '+n+' از '+maxPages+'…');
+     const page=await pdf.getPage(n);
+     const viewport=page.getViewport({scale:1.65});
+     const canvas=document.createElement('canvas');
+     canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+     const ctx=canvas.getContext('2d');
+     if(!ctx)continue;
+     await page.render({canvasContext:ctx,viewport}).promise;
+     const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,'image/png'));
+     if(!blob)continue;
+     const r=await worker.recognize(blob);
+     ocrPages.push(r.data.text||'');
+    }
+    text=ocrPages.join('\n');
+   }finally{await worker.terminate();}
+  }
  }else if(file.type.startsWith('image/')){
   onProgress?.('OCR فارسی/انگلیسی فیش در حال اجراست…');
   const worker=await createWorker('fas+eng');
