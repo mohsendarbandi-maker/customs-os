@@ -78,7 +78,8 @@ const ACTIONS:Record<string,{module:string;label:string;risk:Risk;description:st
  'settings.print_template.create':{module:'settings',label:'ایجاد قالب چاپ',risk:'requires_confirmation',description:'ایجاد print_templates'},
  'settings.print_template.update':{module:'settings',label:'ویرایش قالب چاپ',risk:'requires_confirmation',description:'ویرایش print_templates'},
  'settings.print_template.delete':{module:'settings',label:'حذف قالب چاپ',risk:'destructive',description:'حذف print_templates'},
- 'settings.audit.read':{module:'settings',label:'مشاهده Audit Log',risk:'safe',description:'خواندن Audit Log غیرقابل تغییر'}
+ 'settings.audit.read':{module:'settings',label:'مشاهده Audit Log',risk:'safe',description:'خواندن Audit Log غیرقابل تغییر'},
+ 'assistant.answer':{module:'assistant',label:'پاسخ هوشمند',risk:'safe',description:'پاسخ به پرسش کاربر بر اساس داده واقعی Customs OS بدون تغییر داده'}
 };
 const headers=(o:string)=>({'Access-Control-Allow-Origin':ORIGINS.has(o)?o:'https://darbandicommercial.ir','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS','Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin'});
 const out=(v:unknown,code=200,o='')=>new Response(JSON.stringify(v),{status:code,headers:headers(o)});
@@ -123,7 +124,47 @@ async function providerCall(provider:string,key:string,prompt:string){
 function parseJson(raw:string){const v=raw.replace(/^\s*\`\`\`(?:json)?/i,'').replace(/\`\`\`\s*$/,'').trim();const a=v.indexOf('{'),b=v.lastIndexOf('}');if(a<0||b<a)throw new Error('Action Plan معتبر JSON نیست.');return JSON.parse(v.slice(a,b+1));}
 const isCapabilitiesQuery=(q:string)=>{const s=str(q).replace(/[؟?!.,،؛:]+$/g,'').replace(/\s+/g,' ').trim();return /^(?:سلام|درود|چه کارهایی از دستت برمیاد|چه کارهایی از دست شما برمیاد|چه کارهایی میتونی انجام بدی|چه کارهایی می‌توانی انجام بدهی|چه امکاناتی داری|چه قابلیت هایی داری|چه قابلیت‌هایی داری|چه امکاناتی می‌توانی ارائه کنی|از دستت چی برمیاد|چه چیزهایی میتونی انجام بدی|what can you do|capabilities|help)$/iu.test(s)};
 const capabilitiesText=()=>"AI Operator در محدوده دسترسی همین کاربر می‌تواند:\n\nمشاهده و گزارش‌گیری پرونده‌ها، محموله‌ها و وضعیت عملیات\nمشاهده و مدیریت کشتیرانی، کشتی‌ها و اطلاعات سفر\nمشاهده، ثبت و مدیریت اسناد\nمشاهده و مدیریت مجوزها و قواعد مجوز\nمشاهده و مدیریت اظهار و اطلاعات اظهارنامه\nمدیریت چک‌لیست workflow\nمشاهده و مدیریت امور مالی، هزینه‌ها، تنخواه، پرداخت‌ها، درخواست وجه و فاکتورها\nمشاهده و مدیریت اسناد حسابداری\nمشاهده و ثبت عملیات خروج\nگزارش مرکز کنترل و یادآورها\nتنظیمات سازمان و قابلیت‌های مجاز Owner\n\nدر عملیات نوشتاری، قبل از اجرا تأیید لازم گرفته می‌شود و عملیات مخرب تأیید دو مرحله‌ای دارند.";
-async function buildPlan(query:string,role:string,page:string,g:any,attachmentMeta:any=null){
+const normalizeText=(v:any)=>str(v).toLowerCase().replace(/[\\u200c\\u200f\\u0640]/g,' ').replace(/[_-]+/g,' ').replace(/[^\\p{L}\\p{N}]+/gu,' ').replace(/\\s+/g,' ').trim();
+async function loadOperatorContext(sb:any,org:string,q:string){
+ const [ships,clients,cases,decls,customs,vessels,docs,payments,requests]=await Promise.all([
+  sb.from('shipments').select('id,case_id,client_id,vessel_id,display_name,bill_of_lading_no,cargo_count,cargo_count_unit,net_weight_kg,gross_weight_kg,current_status,release_status,release_invoice_payment_status,finance_status,updated_at').eq('organization_id',org).order('updated_at',{ascending:false}).limit(400),
+  sb.from('clients').select('id,name').eq('organization_id',org).order('name').limit(400),
+  sb.from('cases').select('id,client_id,case_number,display_name,registration_order_no,warehouse_receipt_no,warehouse_receipt_date,cargo_count,cargo_count_unit,cargo_description,net_weight_kg,gross_weight_kg,status,release_status').eq('organization_id',org).order('created_at',{ascending:false}).limit(400),
+  sb.from('customs_declarations').select('id,shipment_id,case_id,kottaj_number,declaration_date,customs_path,payment_reference,workflow_stage').eq('organization_id',org).order('declaration_date',{ascending:false}).limit(400),
+  sb.from('shipment_customs_data').select('shipment_id,registration_order_no,warehouse_receipt_no,warehouse_receipt_date_shamsi,cargo_description,tariff_code,net_weight_kg,gross_weight_kg,bill_of_lading,invoice_amount,invoice_currency').eq('organization_id',org).limit(500),
+  sb.from('vessels').select('id,name,imo_number,flag_code,shipping_line_id,last_latitude,last_longitude,last_position_at,last_position_source,last_speed_knots,last_course_deg').eq('organization_id',org).order('name').limit(400),
+  sb.from('shipment_documents').select('shipment_id,document_name,original_file_name,extraction_status,created_at').eq('organization_id',org).order('created_at',{ascending:false}).limit(700),
+  sb.from('finance_payments').select('shipment_id,case_id,amount,currency,amount_irr,payment_type,description,payment_date').eq('organization_id',org).order('payment_date',{ascending:false}).limit(700),
+  sb.from('finance_payment_requests').select('shipment_id,request_no,requested_amount,currency,status,subject').eq('organization_id',org).order('request_date',{ascending:false}).limit(500)
+ ]);
+ const cm=new Map((clients.data||[]).map((x:any)=>[x.id,x.name]));
+ const km=new Map((cases.data||[]).map((x:any)=>[x.id,x]));
+ const dm=new Map<string,any>();for(const x of (decls.data||[])){if(x.shipment_id&&!dm.has(x.shipment_id))dm.set(x.shipment_id,x);}
+ const scm=new Map<string,any>();for(const x of (customs.data||[])){if(x.shipment_id&&!scm.has(x.shipment_id))scm.set(x.shipment_id,x);}
+ const vm=new Map((vessels.data||[]).map((x:any)=>[x.id,x]));
+ const db=new Map<string,any[]>();for(const x of (docs.data||[])){const a=db.get(x.shipment_id)||[];a.push(x);db.set(x.shipment_id,a);}
+ const pb=new Map<string,any[]>();for(const x of (payments.data||[])){const a=pb.get(x.shipment_id)||[];a.push(x);pb.set(x.shipment_id,a);}
+ const rb=new Map<string,any[]>();for(const x of (requests.data||[])){const a=rb.get(x.shipment_id)||[];a.push(x);rb.set(x.shipment_id,a);}
+ const rows=(ships.data||[]).map((s:any)=>{
+  const c=km.get(s.case_id)||{},cd=scm.get(s.id)||{},d=dm.get(s.id)||{},v=vm.get(s.vessel_id)||null;
+  return {shipment_id:s.id,case_id:s.case_id,client_id:s.client_id||c.client_id||null,client_name:cm.get(s.client_id||c.client_id)||null,shipment_name:s.display_name||null,case_number:c.case_number||null,cargo_count:s.cargo_count??c.cargo_count??null,cargo_unit:s.cargo_count_unit??c.cargo_count_unit??null,cargo_description:cd.cargo_description||c.cargo_description||null,bill_of_lading:s.bill_of_lading_no||cd.bill_of_lading||null,kottaj_number:d.kottaj_number||null,warehouse_receipt_no:cd.warehouse_receipt_no||c.warehouse_receipt_no||null,warehouse_receipt_date:cd.warehouse_receipt_date_shamsi||c.warehouse_receipt_date||null,registration_order_no:cd.registration_order_no||c.registration_order_no||null,net_weight_kg:s.net_weight_kg??cd.net_weight_kg??c.net_weight_kg??null,gross_weight_kg:s.gross_weight_kg??cd.gross_weight_kg??c.gross_weight_kg??null,status:s.current_status||c.status||null,release_status:s.release_status||c.release_status||null,release_invoice_payment_status:s.release_invoice_payment_status||null,finance_status:s.finance_status||null,workflow_stage:d.workflow_stage??null,customs_path:d.customs_path||null,vessel:v?{id:v.id,name:v.name,imo_number:v.imo_number,flag_code:v.flag_code}:null,documents:db.get(s.id)||[],payments:pb.get(s.id)||[],payment_requests:rb.get(s.id)||[],updated_at:s.updated_at||null};
+ });
+ const query=normalizeText(q);
+ const nums=query.match(/\\d+/g)||[];
+ const stop=new Set(['برای','محموله','پرونده','اطلاعات','وضعیت','چیست','چیه','درباره','لطفا','لطفاً','بگو','به','از','در','را','رو','که','این','آن','من','ما','شما','دارد','دارم','دارند','است','هست','هستند','همه','کدام','کدوم','چند','آخرین','فعلی','سامانه','نشون','نشان','کن','کنه','کنم','میخواهم','می‌خواهم','لطفا']);
+ const tokens=query.split(/\\s+/).filter((x:string)=>x.length>=2&&!stop.has(x));
+ const scored=rows.map((r:any)=>{
+   const hay=normalizeText([r.client_name,r.shipment_name,r.case_number,r.cargo_description,r.bill_of_lading,r.kottaj_number,r.warehouse_receipt_no,r.registration_order_no,r.vessel?.name,r.cargo_count,r.cargo_unit].filter((x:any)=>x!=null).join(' '));
+   const hits=tokens.filter((t:string)=>hay.includes(t)).length;
+   const numHit=nums.length?nums.some((n:string)=>hay.includes(n)):false;
+   return {r,score:hits*6+(numHit?8:0)};
+ }).sort((a:any,b:any)=>b.score-a.score);
+ const matched=scored.filter((x:any)=>x.score>0).slice(0,20).map((x:any)=>x.r);
+ const recent=rows.slice(0,15).filter((r:any)=>!matched.some((m:any)=>m.shipment_id===r.shipment_id));
+ return JSON.stringify({organization_visible_shipments:rows.length,matched, recent, matching_note:'matched records are ranked by exact identifiers, numbers, names, cargo, B/L, client and vessel text. Use only these records as database evidence.'}).slice(0,65000);
+}
+
+async function buildPlan(sb:any,org:string,query:string,role:string,page:string,g:any,attachmentMeta:any=null){
  const providers=Array.from(new Set([str(g.preferred_provider),...(Array.isArray(g.fallback_providers)?g.fallback_providers:[])]).values()).filter(Boolean);
  const active=g.online_enabled===false?providers.filter((x:string)=>x==='cloudflare'):providers;
  const keyList=(p:string)=>{
@@ -134,7 +175,7 @@ async function buildPlan(query:string,role:string,page:string,g:any,attachmentMe
   if(p==='openai')return [Deno.env.get('OPENAI_API_KEY')].filter(Boolean) as string[];
   return [];
  };
- const safeQuery=g.redaction_enabled===false?cleanText(query):redact(query);const safePage=redact(cleanText(page,1600));const safeAttachment=attachmentMeta&&typeof attachmentMeta==='object'?pick(attachmentMeta,['file_name','mime_type','file_size_bytes']):null;const prompt='Customs OS secure planner. One action only. Never invent IDs. If target is not unique use action_code=clarification. Never output SQL, token, secret or service_role. User role: '+role+'\nCurrent page context: '+safePage+'\nAttachment metadata: '+cleanText(JSON.stringify(safeAttachment||{}),800)+'\nAction catalog: '+cleanText(JSON.stringify(catalog()),18000)+'\nUser command: '+safeQuery+'\nReturn JSON with action_code,module,target,params,risk,confidence,clarification,reason.';
+ const safeQuery=g.redaction_enabled===false?cleanText(query):redact(query);const safePage=redact(cleanText(page,1600));const safeAttachment=attachmentMeta&&typeof attachmentMeta==='object'?pick(attachmentMeta,['file_name','mime_type','file_size_bytes']):null;const liveContext=await loadOperatorContext(sb,org,query).catch(()=>'{"matched":[],"recent":[]}');const prompt='You are the intelligent operational brain of Customs OS. Understand the user\'s natural-language intent before choosing an action. User role: '+role+'\\nCurrent page: '+safePage+'\\nAttachment metadata: '+cleanText(JSON.stringify(safeAttachment||{}),800)+'\\nLive database evidence (already filtered by the user\'s RLS permissions): '+cleanText(liveContext,62000)+'\\nAction catalog: '+cleanText(JSON.stringify(catalog()),18000)+'\\nUser command: '+safeQuery+'\\nRules: (1) Never invent IDs, official numbers, names, amounts or dates. (2) Use the live database evidence to resolve fuzzy references such as «۲۲ رول آبتین», client names, B/L, vessel names and cargo descriptions. (3) If exactly one record matches, populate its UUID in target. (4) If multiple records match, return clarification and name the conflicting candidates. (5) If no record matches for a requested record-specific action, return clarification. (6) For a purely informational/conversational question, use action_code assistant.answer, module assistant, risk safe, and put a concise Persian answer in params.answer based only on the live evidence. (7) For a real data change, choose exactly one catalog action and fill all required params. (8) Never output SQL, tokens, secrets or service_role. Return JSON with action_code,module,target,params,risk,confidence,clarification,reason.';
  const errors:string[]=[];
  for(const p of active){for(const key of keyList(p)){try{return{plan:parseJson(await providerCall(p,key,prompt)),provider:p};}catch(e){errors.push(p+': '+(e instanceof Error?e.message:String(e)));}}}
  throw new Error('هیچ provider فعالی نتوانست Action Plan بسازد. '+errors.join(' | '));
@@ -185,6 +226,7 @@ const snap=async(sb:any,code:string,t:any)=>{
 
 const targetWithResult=(code:string,targetInput:any,resultData:any)=>{const t={...(targetInput||{})};const d=resultData&&typeof resultData==='object'?resultData:{};const pairs:Array<[string,string]>=[];if(code.startsWith('maritime.shipping_line.'))pairs.push(['shipping_line_id','id']);if(code.startsWith('maritime.vessel.'))pairs.push(['vessel_id','id']);if(code.startsWith('maritime.contact.'))pairs.push(['contact_id','id']);if(code.startsWith('documents.'))pairs.push(['document_id','id']);if(code.startsWith('permits.'))pairs.push(['permit_id','id']);if(code.startsWith('declarations.'))pairs.push(['declaration_id','id']);if(code.startsWith('finance.cost.'))pairs.push(['cost_id','id']);if(code.startsWith('finance.payment.'))pairs.push(['payment_id','id']);if(code.startsWith('finance.payment_request.'))pairs.push(['request_id','id']);if(code.startsWith('finance.invoice.'))pairs.push(['invoice_id','id']);if(code.startsWith('accounting_vouchers.create'))pairs.push(['voucher_id','voucher_id']);if(code==='accounting_vouchers.void_line')pairs.push(['line_id','id']);if(code.startsWith('control.reminder.'))pairs.push(['reminder_id','id']);if(code==='exit.update')pairs.push(['exit_id','exit_id']);if(code.startsWith('settings.cost_category.'))pairs.push(['category_id','id']);if(code.startsWith('settings.requirement_rule.'))pairs.push(['rule_id','id']);if(code.startsWith('settings.print_template.'))pairs.push(['template_id','id']);for(const [k,dkey] of pairs){if(isUuid(d[dkey])){t[k]=d[dkey];break;}}if(code==='exit.update'&&isUuid(resultData))t.exit_id=resultData;if((code==='settings.user.create'||code==='settings.user.update'||code==='settings.user.deactivate')&&isUuid(d.id))t.user_id=d.id;return t;};
 const execute=async(sb:any,user:any,org:string,code:string,t:any,p:any,attachment:any)=>{
+ if(code==='assistant.answer'){return{type:'read',data:{answer:cleanText(p?.answer,12000)}};}
  if(code==='cases.read'){
    const x=await caseRow(sb,t);if(x.clarification)return x;
    const sh=x.shipment||(await sb.from('shipments').select('*').eq('case_id',x.row.id).limit(1)).data?.[0];
@@ -381,7 +423,7 @@ async function main(req:Request){
    const rc=await sb.from('ai_operator_commands').select('id',{count:'exact',head:true}).eq('user_id',user.id).gte('created_at',since);
    if(rc.error)throw rc.error;if((rc.count||0)>=(Number(g.max_commands_per_minute)||20))return out({error:'سقف درخواست AI Operator در دقیقه پر شده است.'},429,origin);
 
-   const planned=await buildPlan(query,pr.data.role,str(body.page_context),g,body.attachment_meta||null);
+   const planned=await buildPlan(sb,pr.data.organization_id,query,pr.data.role,str(body.page_context),g,body.attachment_meta||null);
    const plan=validate(planned.plan,g);
    if(plan.action_code.startsWith('settings.')&&pr.data.role!=='owner')return out({error:'این عملیات فقط برای Owner مجاز است.'},403,origin);
 
