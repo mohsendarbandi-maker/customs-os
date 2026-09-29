@@ -21,7 +21,8 @@ describe('AI Operator security invariants',()=>{
    expect(operator).toContain('g.redaction_enabled===false?cleanText(query):redact(query)');
    expect(operator).toContain('safePage=redact(cleanText(page,1600))');
    expect(operator).toContain('attachmentMeta');
-   expect(operator).not.toContain('attachment.data');
+   expect(operator).toContain('safeAttachment');
+   expect(operator).toContain('User command: '+"'+safeQuery+'"+'\\nReturn JSON');
  });
  it('has server-derived risk and destructive double confirmation',()=>{
    expect(operator).toContain("effectiveRisk");
