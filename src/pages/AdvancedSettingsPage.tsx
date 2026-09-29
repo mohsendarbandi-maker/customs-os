@@ -38,6 +38,31 @@ knowledge_sources:['title','source_type','source_number','issued_at','effective_
 }
 const logLabels:Record<LogKey,string>={audit:'Audit Log',case_history:'Status History',financial_history:'Financial History',ai_commands:'AI Operator Commands',ai_interactions:'AI Interactions',ai_action_logs:'AI Action Logs',ai_risk_findings:'AI Risk Findings',file_security_events:'File Security Events',shipment_tracking:'Shipment Tracking Events',discrepancy_logs:'Discrepancy Logs'};
 
+const resourceTables:Record<string,string>={
+profiles:'profiles',clients:'clients',cases:'cases',registration_orders:'registration_orders',shipments:'shipments',
+containers:'containers',shipment_customs_data:'shipment_customs_data',shipping_lines:'shipping_lines',vessels:'vessels',
+contacts:'shipping_line_contacts',shipment_documents:'shipment_documents',customs_documents:'customs_documents',
+shipment_document_extractions:'shipment_document_extractions',document_extraction_fields:'document_extraction_fields',
+documents:'documents',document_rules:'document_requirement_rules',permit_rules:'permit_rules',permits:'permits',
+customs_offices:'customs_offices',hs_codes:'hs_codes',settings_reference_data:'settings_reference_data',
+case_checklist_items:'case_checklist_items',declaration_checklist_items:'declaration_checklist_items',
+declaration_exit_checklist_items:'declaration_exit_checklist_items',cost_categories:'finance_cost_categories',
+finance_settings:'finance_org_settings',costs:'finance_cost_items',payments:'finance_payments',
+payment_requests:'finance_payment_requests',payment_request_lines:'finance_payment_request_lines',
+invoices:'finance_invoices',invoice_lines:'finance_invoice_lines',invoice_shipments:'finance_invoice_shipments',
+payment_allocations:'finance_payment_allocations',vouchers:'customs_accounting_vouchers',voucher_lines:'voucher_line_items',
+declarations:'customs_declarations',exit:'case_exit_operations',ai_gateway:'ai_gateway_settings',
+templates:'print_templates',org:'organizations',org_settings:'organization_settings',user_settings:'user_settings',
+knowledge_sources:'knowledge_sources',knowledge_chunks:'knowledge_chunks',ai_knowledge_documents:'ai_knowledge_documents',
+ai_knowledge_chunks:'ai_knowledge_chunks'
+};
+const resourceGlobals=new Set(['customs_offices','hs_codes']);
+const logTables:Record<string,string>={
+audit:'audit_logs',case_history:'case_status_history',financial_history:'financial_transactions',
+ai_commands:'ai_operator_commands',ai_interactions:'ai_interactions',ai_action_logs:'ai_agent_action_logs',
+ai_risk_findings:'ai_risk_findings',file_security_events:'file_security_events',
+shipment_tracking:'shipment_tracking_events',discrepancy_logs:'discrepancy_logs'
+};
 const safeJson=(row:any)=>{
 const out:any={};
 for(const[k,v]of Object.entries(row||{})){
@@ -54,8 +79,9 @@ return <div className="fixed inset-0 z-[140] bg-black/60 flex items-center justi
 };
 
 const UsersPanel:React.FC<{onMessage:(s:string)=>void}>=({onMessage})=>{
+const{profile}=useAuth();const profileOrgId=profile?.organization_id||'';
 const[rows,setRows]=useState<any[]>([]),[search,setSearch]=useState(''),[selected,setSelected]=useState<any>(null),[newMode,setNewMode]=useState(false),[form,setForm]=useState<any>({user_id:'',full_name:'',phone:'',role:'client',client_id:'',is_active:true}),[modal,setModal]=useState(false),[busy,setBusy]=useState(false);
-const load=async()=>{setBusy(true);try{const{data,error}=await supabase.functions.invoke('owner-console',{body:{action:'list',resource:'profiles',search,limit:500}});if(error)throw error;setRows(Array.isArray(data)?data:[])}catch(e:any){onMessage(e?.message||'دریافت کاربران ناموفق بود.')}finally{setBusy(false)}};
+const load=async()=>{setBusy(true);try{let q:any=supabase.from('profiles').select('*').eq('organization_id',profileOrgId);const{data,error}=await q.limit(500);if(error)throw error;const s=search.trim().toLowerCase();const filtered=s?(data||[]).filter((r:any)=>Object.values(r||{}).some((v:any)=>String(v??'').toLowerCase().includes(s))):(data||[]);setRows(filtered)}catch(e:any){onMessage(e?.message||'دریافت کاربران ناموفق بود.')}finally{setBusy(false)}};
 useEffect(()=>{void load()},[search]);
 const open=(u:any)=>{setNewMode(false);setSelected(u);setForm({user_id:u.id,full_name:u.full_name||'',phone:u.phone||'',role:u.role||'client',client_id:u.client_id||'',is_active:!!u.is_active})};
 const create=()=>{setSelected(null);setNewMode(true);setForm({user_id:'',full_name:'',phone:'',role:'client',client_id:'',is_active:true})};
@@ -75,8 +101,9 @@ return <section className="space-y-3"><div className="rounded-2xl border app-bor
 };
 
 const ResourcePanel:React.FC<{resource:ResourceKey;onMessage:(s:string)=>void}>=({resource,onMessage})=>{
+const{profile}=useAuth();const profileOrgId=profile?.organization_id||'';
 const[rows,setRows]=useState<any[]>([]),[search,setSearch]=useState(''),[selected,setSelected]=useState<any>(null),[json,setJson]=useState('{}'),[busy,setBusy]=useState(false),[danger,setDanger]=useState<'delete'|'archive'|'void'|null>(null);
-const load=async()=>{setBusy(true);try{const{data,error}=await supabase.functions.invoke('owner-console',{body:{action:'list',resource,search,limit:500}});if(error)throw error;setRows(Array.isArray(data)?data:[])}catch(e:any){onMessage(e?.message||'خواندن داده ناموفق بود.')}finally{setBusy(false)}};
+const load=async()=>{setBusy(true);try{const table=resourceTables[resource];if(!table)throw new Error('منبع خواندن نشده است');let data:any[]=[];if(resource==='user_settings'){const u=await supabase.from('profiles').select('id').eq('organization_id',profileOrgId);if(u.error)throw u.error;const ids=(u.data||[]).map((x:any)=>x.id);if(ids.length){const q=await supabase.from(table).select('*').in('user_id',ids).limit(500);if(q.error)throw q.error;data=q.data||[]}}else if(resource==='org'){const q=await supabase.from(table).select('*').eq('id',profileOrgId).limit(1);if(q.error)throw q.error;data=q.data||[]}else{let q:any=supabase.from(table).select('*');if(!resourceGlobals.has(resource))q=q.eq('organization_id',profileOrgId);q=q.limit(500);const r=await q;if(r.error)throw r.error;data=r.data||[]}const s=search.trim().toLowerCase();if(s)data=data.filter((r:any)=>Object.values(r||{}).some((v:any)=>String(v??'').toLowerCase().includes(s)));setRows(data)}catch(e:any){onMessage(e?.message||'خواندن داده ناموفق بود.')}finally{setBusy(false)}};
 useEffect(()=>{void load()},[resource,search]);
 const selectRow=(row:any)=>{setSelected(row);setJson(JSON.stringify(safeJson(row),null,2))};
 const save=async()=>{setBusy(true);try{const data=JSON.parse(json||'{}');const body:any={action:selected?'update':'create',resource,data};if(selected?.id)body.id=selected.id;const{data:r,error}=await supabase.functions.invoke('owner-console',{body});if(error)throw error;onMessage(selected?'ویرایش ذخیره شد.':'رکورد ایجاد شد.');setSelected(r);setJson(JSON.stringify(safeJson(r),null,2));await load()}catch(e:any){onMessage(e?.message||'JSON یا ذخیره نامعتبر است.')}finally{setBusy(false)}};
@@ -92,8 +119,9 @@ return <>{open? <div className="fixed inset-0 z-[130] bg-black/60 flex items-cen
 };
 
 const LogsPanel:React.FC<{onMessage:(s:string)=>void}>=({onMessage})=>{
+const{profile}=useAuth();const profileOrgId=profile?.organization_id||'';
 const[kind,setKind]=useState<LogKey>('audit'),[rows,setRows]=useState<any[]>([]);
-const load=async()=>{try{const{data,error}=await supabase.functions.invoke('owner-console',{body:{action:'list',resource:kind,limit:500}});if(error)throw error;setRows(Array.isArray(data)?data:[])}catch(e:any){onMessage(e?.message||'خواندن Log ناموفق بود.')}};
+const load=async()=>{try{const table=logTables[kind];const r=await supabase.from(table).select('*').eq('organization_id',profileOrgId).limit(500);if(r.error)throw r.error;setRows(r.data||[])}catch(e:any){onMessage(e?.message||'خواندن Log ناموفق بود.')}};
 useEffect(()=>{void load()},[kind]);
 return <section className="rounded-2xl border app-border bg-[var(--surface)] overflow-hidden"><div className="p-4 border-b app-border flex items-center gap-2"><History size={17}/><b>سوابق — فقط خواندنی</b><select className="mr-auto min-h-9 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-xs" value={kind} onChange={e=>setKind(e.target.value as LogKey)}>{Object.entries(logLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select><button className="icon-btn" onClick={()=>void load()}><RefreshCw size={15}/></button></div><div className="max-h-[65vh] overflow-auto">{rows.map((r:any,i:number)=><details key={r.id||i} className="border-b app-border p-3"><summary className="text-xs cursor-pointer">{logLabels[kind]} · {r.created_at||r.event_at||'—'}</summary><pre dir="ltr" className="mt-2 rounded-xl bg-[var(--surface-2)] p-3 text-[9px] overflow-auto">{JSON.stringify(r,null,2)}</pre></details>)}{!rows.length&&<div className="p-10 text-center text-xs app-muted">رکوردی وجود ندارد.</div>}</div></section>;
 };
