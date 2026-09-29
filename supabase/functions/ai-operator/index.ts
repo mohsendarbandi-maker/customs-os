@@ -3,7 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 type Risk='safe'|'requires_confirmation'|'destructive';
 type Plan={action_code:string;module:string;target:Record<string,unknown>;params:Record<string,unknown>;risk?:Risk;confidence?:number;clarification?:string|null;reason?:string};
-const ORIGINS=new Set(['https://darbandicommercial.ir','https://www.darbandicommercial.ir','https://customs-os-psi.vercel.app','http://localhost:5173','http://127.0.0.1:5173']);
+const ORIGINS=new Set(['https://darbandicommercial.ir','https://www.darbandicommercial.ir','http://darbandicommercial.ir','http://www.darbandicommercial.ir','https://customs-os-psi.vercel.app','http://localhost:5173','http://127.0.0.1:5173']);
 const ACTIONS:Record<string,{module:string;label:string;risk:Risk;description:string}>={
  'cases.read':{module:'cases',label:'مشاهده پرونده',risk:'safe',description:'خواندن پرونده و اطلاعات محموله و اظهار مرتبط'},
  'cases.update':{module:'cases',label:'ویرایش پرونده',risk:'requires_confirmation',description:'ویرایش داده های عملیاتی پرونده'},
