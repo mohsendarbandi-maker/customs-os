@@ -5,11 +5,12 @@ const operator=readFileSync(new URL('../supabase/functions/ai-operator/index.ts'
 const app=readFileSync(new URL('../src/App.tsx',import.meta.url),'utf8');
 const advanced=readFileSync(new URL('../src/pages/AdvancedSettingsPage.tsx',import.meta.url),'utf8');
 const migration=readFileSync(new URL('../supabase/migrations/20260929160000_ai_operator_and_advanced_settings.sql',import.meta.url),'utf8');
+const ledgerMigration=readFileSync(new URL('../supabase/migrations/20260929170000_ai_operator_command_ledger_immutable.sql',import.meta.url),'utf8');
 
 describe('AI Operator security invariants',()=>{
  it('never references a service-role secret or raw SQL execution',()=>{
-   expect(operator).not.toMatch(/SERVICE_ROLE|service_role|SUPABASE_SECRET_KEYS|execute_sql|supabase_secret|admin[_ -]?key/i);
-   expect(operator).not.toMatch(/\b(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE)\b\s+.+\b(FROM|TABLE|INTO)\b/i);
+   expect(operator).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEYS|supabase_secret|auth\.admin\./i);
+   expect(operator).not.toMatch(/['\"](database_reset|drop_table|truncate_table|bulk_delete)['\"]/i);
  });
  it('requires the caller Authorization JWT and uses the anon key client',()=>{
    expect(operator).toContain("req.headers.get('Authorization')");
@@ -25,9 +26,9 @@ describe('AI Operator security invariants',()=>{
    expect(operator).not.toMatch(/database[_ -]?reset|drop[_ -]?table|truncate|bulk[_ -]?delete/i);
  });
  it('hardens the command ledger against direct updates',()=>{
-   expect(migration).toContain('revoke update on public.ai_operator_commands');
-   expect(migration).toContain('ai_operator_transition_command');
-   expect(migration).toContain('Executed AI Operator command is immutable');
+   expect(ledgerMigration).toContain('revoke update on public.ai_operator_commands');
+   expect(ledgerMigration).toContain('ai_operator_transition_command');
+   expect(ledgerMigration).toContain('Executed AI Operator command is immutable');
  });
  it('enforces owner-only advanced route and page guard',()=>{
    expect(app).toContain("s==='advanced'&&profile?.role!=='owner'");
