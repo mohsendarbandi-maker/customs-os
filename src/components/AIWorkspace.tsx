@@ -1,6 +1,7 @@
 import React,{useRef,useState} from 'react';
 import {Bot,Send,X,CheckCircle2,Mic,MicOff,Plus,PanelLeftClose,SquarePen,ChevronDown} from 'lucide-react';
 import {supabase} from '../lib/supabase';
+import {makeClientId} from '../lib/clientId';
 
 type Msg={role:'user'|'assistant';text:string};
 type Extracted=Record<string,string>;
