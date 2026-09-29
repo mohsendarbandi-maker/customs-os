@@ -150,7 +150,50 @@ export const FinancePage:React.FC=()=>{
 
   {tab==='requests'&&<Card className="p-4"><div className="flex justify-between mb-4"><div><h2 className="font-black">درخواست وجه</h2><p className="text-[10px] app-muted mt-1">سه نقطه صدور: ابتدای ثبت، میانه فرایند و تسویه نهایی. صدور چندباره مجاز است.</p></div>{canRequest&&<Btn primary onClick={()=>setRequestOpen(true)}><FileOutput size={15}/>درخواست جدید</Btn>}</div><div className="grid md:grid-cols-2 gap-3">{requests.map(x=><div key={x.id} className="rounded-2xl border app-border bg-[var(--surface-2)] p-4"><div className="flex justify-between gap-3"><div><b dir="ltr">{x.request_no}</b><div className="text-[10px] app-muted mt-1">{clientName(x.client_id)} · {shipmentName(x.shipment_id)}</div></div><StatusBadge status={x.status} label={paymentRequestStatusLabel(x.status)}/></div><div className="grid grid-cols-3 gap-2 mt-4"><InfoBox label="مبلغ" value={formatMoney(x.requested_amount,x.currency)}/><InfoBox label="نقطه صدور" value={triggerPointLabel(x.trigger_point)}/><InfoBox label="تاریخ" value={dateFa(x.request_date)}/></div><div className="flex flex-wrap gap-2 mt-4"><a target="_blank" rel="noreferrer" href={'/finance/payment-requests/print?id='+x.id} className="min-h-10 px-3 rounded-xl border app-border text-xs font-bold inline-flex items-center gap-2"><FileText size={14}/>چاپ / PDF</a>{(isOwner||isAdmin)&&<select className="min-h-10 rounded-xl border app-border bg-[var(--surface)] px-3 text-xs" value={x.status} onChange={e=>void updateRequest(x.id,e.target.value)}><option value="draft">پیش‌نویس</option><option value="sent">ارسال‌شده</option><option value="partially_paid">پرداخت جزئی</option><option value="paid">پرداخت‌شده</option><option value="cancelled">لغوشده</option></select>}</div></div>)}{!requests.length&&<Empty text="درخواست وجهی ثبت نشده است."/>}</div></Card>}
 
-  {tab==='profit'&&<Card className="p-4"><div className="flex flex-col gap-4"><div className="flex flex-wrap justify-between gap-3"><div><h2 className="font-black">سود پنهان روی ردیف سند حسابداری</h2><p className="text-[10px] app-muted mt-1">سود فقط برای کاربران مجاز نمایش داده می‌شود و هرگز وارد چاپ سند رسمی نمی‌شود.</p></div><div className="flex gap-2"><Metric icon={Banknote} title="کل سود ثبت‌شده" value={formatMoney(profitTotal,'IRR')}/><Metric icon={FileText} title="ردیف‌های دارای سود" value={String(profits.length)}/></div></div>{!canProfit?<PermissionNotice text="این بخش فقط برای Owner یا Admin دارای مجوز مشاهده سود است."/>:<><div className="rounded-2xl border app-border bg-[var(--surface-2)] p-4"><b className="text-sm">جمع سود به تفکیک پرونده</b><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-3">{profitByCase.map(x=><div key={x.case_id} className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="text-xs font-black">{x.shipment?.display_name||x.shipment?.bill_of_lading_no||'پرونده'}</div><div className="text-[10px] app-muted mt-1">{clientName(x.shipment?.client_id||'')} · {x.lines} ردیف سود</div><div className="text-xl font-black mt-3" dir="ltr">{formatMoney(x.amount,'IRR')}</div></div>)}{!profitByCase.length&&<Empty text="هنوز سودی روی پرونده‌ها تعریف نشده است."/>}</div></div><div><b className="text-sm">ردیف‌های سند</b><div className="grid md:grid-cols-2 gap-3 mt-3">{activeLines.map(l=>{const v=vouchers.find(z=>z.id===l.voucher_id),p=profits.find(z=>z.voucher_line_item_id===l.id);return <div key={l.id} className="rounded-2xl border app-border bg-[var(--surface-2)] p-4"><div className="flex justify-between"><div><b>{l.description||'بدون شرح'}</b><div className="text-[10px] app-muted mt-1">سند {v?.voucher_number||'—'} · کوتاژ {v?.kottaj_number||'—'}</div></div><InfoBox label="مبلغ ردیف" value={formatMoney(Math.max(Number(l.debit_amount||0),Number(l.credit_amount||0)),'IRR')}/></div><div className="grid grid-cols-2 gap-2 mt-4"><InfoBox label="سود" value={p?formatMoney(p.profit_amount,'IRR'):'تعریف نشده'}/><InfoBox label="نمایش" value={p?.visible_to==='owner_and_admin'?'Owner + Admin':'Owner only'}/></div><Btn onClick={()=>setProfitOpen({lineId:l.id,type:p?.profit_type||'partial_amount',amount:p?.profit_amount||'',visible_to:p?.visible_to||'owner_only'})}>{p?'ویرایش سود':'تعریف سود'}</Btn></div>})}{!activeLines.length&&<Empty text="ردیف فعال سند حسابداری پیدا نشد."/>}</div></div></>}</Card>}
+  {tab==='profit'&&<Card className="p-4">
+   <div className="flex flex-col gap-4">
+    <div className="flex flex-wrap justify-between gap-3">
+     <div>
+      <h2 className="font-black">سود پنهان روی ردیف سند حسابداری</h2>
+      <p className="text-[10px] app-muted mt-1">سود فقط برای کاربران مجاز نمایش داده می‌شود و هرگز وارد چاپ سند رسمی نمی‌شود.</p>
+     </div>
+     <div className="flex gap-2">
+      <Metric icon={Banknote} title="کل سود ثبت‌شده" value={formatMoney(profitTotal,'IRR')}/>
+      <Metric icon={FileText} title="ردیف‌های دارای سود" value={String(profits.length)}/>
+     </div>
+    </div>
+    {!canProfit?<PermissionNotice text="این بخش فقط برای Owner یا Admin دارای مجوز مشاهده سود است."/>:<>
+     <section className="rounded-2xl border app-border bg-[var(--surface-2)] p-4">
+      <b className="text-sm">جمع سود به تفکیک پرونده</b>
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-3">
+       {profitByCase.map(x=><div key={x.case_id} className="rounded-2xl border app-border bg-[var(--surface)] p-4">
+        <div className="text-xs font-black">{x.shipment?.display_name||x.shipment?.bill_of_lading_no||'پرونده'}</div>
+        <div className="text-[10px] app-muted mt-1">{clientName(x.shipment?.client_id||'')} · {x.lines} ردیف سود</div>
+        <div className="text-xl font-black mt-3" dir="ltr">{formatMoney(x.amount,'IRR')}</div>
+       </div>)}
+       {!profitByCase.length&&<div className="md:col-span-3"><Empty text="هنوز سودی روی پرونده‌ها تعریف نشده است."/></div>}
+      </div>
+     </section>
+     <section>
+      <b className="text-sm">ردیف‌های سند</b>
+      <div className="grid md:grid-cols-2 gap-3 mt-3">
+       {activeLines.map(l=>{const v=vouchers.find(z=>z.id===l.voucher_id),p=profits.find(z=>z.voucher_line_item_id===l.id);return <div key={l.id} className="rounded-2xl border app-border bg-[var(--surface-2)] p-4">
+        <div className="flex justify-between gap-3">
+         <div><b>{l.description||'بدون شرح'}</b><div className="text-[10px] app-muted mt-1">سند {v?.voucher_number||'—'} · کوتاژ {v?.kottaj_number||'—'}</div></div>
+         <InfoBox label="مبلغ ردیف" value={formatMoney(Math.max(Number(l.debit_amount||0),Number(l.credit_amount||0)),'IRR')}/>
+        </div>
+        <div className="grid grid-cols-2 gap-2 mt-4">
+         <InfoBox label="سود" value={p?formatMoney(p.profit_amount,'IRR'):'تعریف نشده'}/>
+         <InfoBox label="نمایش" value={p?.visible_to==='owner_and_admin'?'Owner + Admin':'Owner only'}/>
+        </div>
+        <div className="mt-3"><Btn onClick={()=>setProfitOpen({lineId:l.id,type:p?.profit_type||'partial_amount',amount:p?.profit_amount||'',visible_to:p?.visible_to||'owner_only'})}>{p?'ویرایش سود':'تعریف سود'}</Btn></div>
+       </div>})}
+       {!activeLines.length&&<div className="md:col-span-2"><Empty text="ردیف فعال سند حسابداری پیدا نشد."/></div>}
+      </div>
+     </section>
+    </>}
+   </div>
+  </Card>}
 
   {tab==='permissions'&&isOwner&&<Card className="p-4"><div className="mb-4"><h2 className="font-black">ماتریس دسترسی مالی</h2><p className="text-[10px] app-muted mt-1">دسترسی‌ها در Database نگهداری می‌شوند، نه هاردکد.</p></div><div className="space-y-3">{profiles.map(p=>{const row={...(permissionRows.find(x=>x.user_id===p.id)||{user_id:p.id,view_own_expenses:true,view_own_petty_cash:true,view_own_receipts:true,approve_other_expenses:p.role==='owner'||p.role==='admin',issue_payment_request:p.role==='owner'||p.role==='admin',view_org_financials:p.role==='owner',view_profit:p.role==='owner'})};return <div key={p.id} className="rounded-2xl border app-border bg-[var(--surface-2)] p-4"><div className="flex justify-between mb-4"><div><b>{p.full_name}</b><div className="text-[10px] app-muted mt-1">{roleLabel(p.role)} · {p.is_active?'فعال':'غیرفعال'}</div></div><Btn primary onClick={()=>void savePerm(row)}><Save size={14}/>ذخیره</Btn></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">{[['view_own_expenses','مشاهده هزینه خودش'],['view_own_petty_cash','مشاهده تنخواه خودش'],['view_own_receipts','مشاهده فیش خودش'],['approve_other_expenses','تأیید/رد هزینه دیگران'],['issue_payment_request','صدور درخواست وجه'],['view_org_financials','گزارش تجمیعی سازمان'],['view_profit','مشاهده سود پنهان']].map(([k,l])=><label key={k} className="rounded-xl border app-border bg-[var(--surface)] p-3 flex justify-between text-xs"><span>{l}</span><input type="checkbox" checked={!!row[k]} onChange={e=>{row[k]=e.target.checked;setPermissionRows(a=>a.some(x=>x.user_id===row.user_id)?a.map(x=>x.user_id===row.user_id?{...x,...row}:x):a.concat(row))}}/></label>)}</div></div>})}</div></Card>}
 
