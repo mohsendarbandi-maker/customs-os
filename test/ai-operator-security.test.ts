@@ -23,7 +23,15 @@ describe('AI Operator security invariants',()=>{
    expect(operator).toContain('safePage=redact(cleanText(page,1600))');
    expect(operator).toContain('attachmentMeta');
    expect(operator).toContain('safeAttachment');
+   expect(operator).toContain('Live database evidence');
+   expect(operator).toContain('action_code assistant.answer');
+   expect(operator).toContain('Never invent IDs');
    expect(operator).toContain('User command: '+"'+safeQuery+'"+'\\nReturn JSON');
+ });
+ it('has live context and conversational-answer routing',()=>{
+   expect(operator).toContain('loadOperatorContext');
+   expect(operator).toContain("'assistant.answer'");
+   expect(operator).toContain('matched');
  });
  it('has server-derived risk and destructive double confirmation',()=>{
    expect(operator).toContain("effectiveRisk");
