@@ -51,35 +51,17 @@ async function authContext(req:Request){
 }
 
 async function listRows(sb:any,profile:any,resource:string,body:any){
- if(resource==='profiles'){const r=await sb.from('profiles').select('id,full_name,phone,role,client_id,is_active,created_at,updated_at').eq('organization_id',profile.organization_id).order('full_name').limit(Math.min(Number(body.limit)||300,500));if(r.error)throw r.error;return r.data||[];}
- const ro=READ_ONLY[resource];
- if(ro){
-  const q=sb.from(ro).select('*').eq('organization_id',profile.organization_id).order('created_at',{ascending:false}).limit(Math.min(Number(body.limit)||300,500));
-  const r=await q;if(r.error)throw r.error;return r.data||[];
- }
- const cfg=RESOURCES[resource];if(!cfg)throw new Error('Unknown resource');
- let q:any;
- if(cfg.table==='organizations'){
-   q=sb.from(cfg.table).select('*').eq('id',profile.organization_id).limit(1);
- }else if(cfg.table==='user_settings'){
-   q=sb.from(cfg.table).select('*').in('user_id',(await sb.from('profiles').select('id').eq('organization_id',profile.organization_id)).data?.map((x:any)=>x.id)||[]).limit(500);
- }else{
-   q=sb.from(cfg.table).select('*').eq('organization_id',profile.organization_id).order('created_at',{ascending:false}).limit(Math.min(Number(body.limit)||300,500));
- }
- const search=str(body.search);
- if(search){
-   const safe=search.replace(/[%,]/g,' ');
-   const sf=(cfg.searchFields||[]).map((k:string)=>k+'.ilike.%'+safe+'%');
-   if(sf.length)q=q.or(sf.join(','));
- }
- const r=await q;if(r.error)throw r.error;return r.data||[];
-}
-
-async function write(ctx:any,body:any){
- const {sb,user,profile}=ctx;
- const resource=str(body.resource), op=str(body.action||body.op);
  if(resource==='profiles'){
-   if(op==='list')return await listRows(sb,profile,'profiles',body);
+   if(op==='list'){
+     let q=sb.from('profiles').select('id,full_name,phone,role,client_id,is_active,created_at,updated_at').eq('organization_id',profile.organization_id).order('full_name').limit(Math.min(Number(body.limit)||300,500));
+     const search=str(body.search);if(search){if(isUuid(search))q=q.or('full_name.ilike.%'+search+'%,phone.ilike.%'+search+'%,role.ilike.%'+search+',id.eq.'+search);else q=q.or('full_name.ilike.%'+search+'%,phone.ilike.%'+search+'%,role.ilike.%'+search+'%');}
+     const r=await q;if(r.error)throw r.error;return r.data||[];
+   }
+   if(op==='create'){
+     if(!isUuid(body.user_id)||!str(body.full_name))throw new Error('Auth user id و نام کامل لازم است');
+     const d=body.data||{};
+     const r=await sb.rpc('owner_insert_profile',{p_user_id:body.user_id,p_role:str(d.role)||'client',p_client_id:isUuid(d.client_id)?d.client_id:null,p_full_name:str(body.full_name),p_phone:str(d.phone)||null});if(r.error)throw r.error;return r.data;
+   }
    if(op==='save'){
      if(!isUuid(body.id))throw new Error('user id required');
      const d=body.data||{};
@@ -88,13 +70,14 @@ async function write(ctx:any,body:any){
    }
    if(op==='deactivate'){
      if(!isUuid(body.id))throw new Error('user id required');
-     const r=await sb.rpc('owner_manage_profile',{p_user_id:body.id,p_role:null,p_client_id:null,p_full_name:null,p_phone:null,p_is_active:false,p_reason:str(body.reason)});
-     if(r.error)throw r.error;return r.data;
+     if(str(body.confirmation)!=='تأیید نهایی غیرفعال‌سازی کاربر')throw new Error('Final confirmation phrase is required.');
+     const r=await sb.rpc('owner_manage_profile',{p_user_id:body.id,p_role:null,p_client_id:null,p_full_name:null,p_phone:null,p_is_active:false,p_reason:str(body.reason)});if(r.error)throw r.error;return r.data;
    }
    throw new Error('User deletion is intentionally soft-deactivation only.');
  }
  if(resource==='case_status_override'){
    if(!isUuid(body.id)||!str(body.new_status)||!str(body.reason))throw new Error('case id, status and reason are required');
+   if(str(body.confirmation)!=='تأیید نهایی اصلاح وضعیت')throw new Error('Final confirmation phrase is required.');
    const r=await sb.rpc('owner_override_case_status',{p_case_id:body.id,p_new_status:body.new_status,p_reason:str(body.reason)});
    if(r.error)throw r.error;return r.data;
  }
@@ -114,6 +97,7 @@ async function write(ctx:any,body:any){
    if(r.error)throw r.error;return r.data;
  }
 
+ if(resource==='org'&&(op==='create'||op==='delete'))throw new Error('Organization root cannot be created or deleted from Owner Console.');
  const cfg=RESOURCES[resource];if(!cfg)throw new Error('Unknown resource');
  if(cfg.immutable)throw new Error('این منبع غیرقابل‌ویرایش است.');
  if(op==='list')return await listRows(sb,profile,resource,body);
