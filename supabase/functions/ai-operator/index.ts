@@ -88,7 +88,14 @@ const pick=(r:any,ks:string[])=>r?Object.fromEntries(ks.filter(k=>r[k]!==undefin
 const cleanText=(v:any,n=8000)=>str(v).slice(0,n);
 function redact(v:string){let s=v;s=s.replace(/(authorization|bearer|api[_ -]?key|token|password|secret|کلید|رمز)\s*[:=]?\s*\S+/gi,'$1:[REDACTED]');s=s.replace(/\bsk-[A-Za-z0-9_-]{12,}\b/g,'[REDACTED]');s=s.replace(/\beyJ[A-Za-z0-9_-]{20,}\b/g,'[REDACTED]');return cleanText(s);}
 function forbidden(v:any):boolean{if(v==null)return false;if(Array.isArray(v))return v.some(forbidden);if(typeof v==='object')return Object.entries(v).some(([k,x])=>/raw.?sql|execute.?sql|service.?role|secret_key|admin.?key|access_token|refresh_token/i.test(k)||forbidden(x));return typeof v==='string'&&/\b(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE)\b\s+.+\b(FROM|TABLE|INTO)\b/i.test(v);}
-function riskFor(p:Plan):Risk{const d=ACTIONS[p.action_code];if(!d)return'destructive';if(p.action_code==='cases.status_change'&&str(p.params?.target_status)==='archived')return'destructive';if(p.action_code==='settings.user.update'&&(p.params?.role!==undefined||p.params?.is_active!==undefined||p.params?.client_id!==undefined))return'destructive';if(p.action_code==='settings.user.deactivate')return'destructive';return d.risk;}
+function riskFor(p:Plan):Risk{
+ const d=ACTIONS[p.action_code];if(!d)return'destructive';
+ if(p.action_code==='cases.status_change'&&str(p.params?.target_status)==='archived')return'destructive';
+ if(p.action_code==='settings.user.update'&&(p.params?.role!==undefined||p.params?.is_active!==undefined||p.params?.client_id!==undefined))return'destructive';
+ if(p.action_code==='settings.user.deactivate')return'destructive';
+ return d.risk;
+}
+const effectiveRisk=(p:Plan)=>riskFor(p);
 const catalog=()=>Object.entries(ACTIONS).map(([action_code,d])=>({action_code,module:d.module,label:d.label,description:d.description,risk:d.risk}));
 const transition=async(sb:any,id:string,patch:any)=>{
  const r=await sb.rpc('ai_operator_transition_command',{
@@ -148,9 +155,15 @@ async function target(sb:any,table:string,t:any,idKey:string,nameKey:string,name
 
 const snap=async(sb:any,code:string,t:any)=>{
  if(code.startsWith('cases.')){const x=await caseRow(sb,t);return x.row?pick(x.row,['id','case_number','client_id','status','registration_order_no','proforma_no','warehouse_receipt_no','warehouse_receipt_date','cargo_description','cargo_count','cargo_count_unit','net_weight_kg','gross_weight_kg','release_status','valuation_status','total_payable_irr']):null;}
+ if(code.startsWith('maritime.shipping_line.')){const x=await target(sb,'shipping_lines',t,'shipping_line_id','name','name');return pick(x.row,['id','name','name_fa']);}
+ if(code.startsWith('maritime.vessel.')){const x=await target(sb,'vessels',t,'vessel_id','name','name');return pick(x.row,['id','name','imo_number','flag_code','shipping_line_id']);}
+ if(code.startsWith('maritime.contact.')){const x=await target(sb,'shipping_line_contacts',t,'contact_id','full_name','full_name');return pick(x.row,['id','shipping_line_id','full_name','role_title','phone','whatsapp','email','is_primary']);}
  if(code==='maritime.shipment_update'){const x=await shipment(sb,t);return pick(x.row,['id','case_id','client_id','vessel_id','shipping_line','bill_of_lading_no','bill_of_lading_year','voyage_no','origin_port','destination_port','cargo_count','cargo_count_unit','net_weight_kg','gross_weight_kg','release_invoice_no','release_invoice_date','release_status']);}
+ if(code==='documents.upload'||code==='documents.update'||code==='documents.delete'){if(!isUuid(t?.document_id))return null;const x=await one(sb,'shipment_documents',t.document_id);if(x)return pick(x,['id','shipment_id','document_name','original_file_name','storage_path','mime_type','file_size_bytes','extraction_status','created_at']);const y=await one(sb,'customs_documents',t.document_id);return pick(y,['id','shipment_id','case_id','document_type','display_name','original_name','storage_path','status','document_number','issue_date','created_at']);}
  if(code.startsWith('permits.')){const x=await target(sb,'permits',t,'permit_id','permit_number','permit_number');return pick(x.row,['id','case_id','permit_type','permit_number','issuing_authority','status','issued_at','expires_at']);}
+ if(code.startsWith('permit_rules.')){const x=await target(sb,'permit_rules',t,'rule_id','rule_name','rule_name');return pick(x.row,['id','rule_name','document_type','condition_json','required','priority','note','is_active']);}
  if(code.startsWith('declarations.')&&isUuid(t?.declaration_id))return pick(await one(sb,'customs_declarations',t.declaration_id),['id','shipment_id','case_id','kottaj_number','declaration_date','customs_path','payment_reference','total_duties_irr','workflow_stage']);
+ if(code==='checklist.update'){if(isUuid(t?.case_id)){const r=await sb.from('case_checklist_items').select('*').eq('case_id',t.case_id).eq('item_key',str(t.item_key||'' )).maybeSingle();return pick(r.data,['id','case_id','stage_no','item_key','completed','updated_at']);}if(isUuid(t?.declaration_id)){const r=await sb.from('declaration_exit_checklist_items').select('*').eq('declaration_id',t.declaration_id).eq('item_key',str(t.item_key||'' )).maybeSingle();return pick(r.data,['id','declaration_id','item_key','completed','completed_at','completed_by','updated_at']);}}
  if(code.startsWith('finance.cost.')){const x=await target(sb,'finance_cost_items',t,'cost_id','cost_id','id');return pick(x.row,['id','shipment_id','case_id','client_id','description','amount','amount_irr','status','paid_by','billable']);}
  if(code.startsWith('finance.payment.')){const x=await target(sb,'finance_payments',t,'payment_id','payment_no','payment_no');return pick(x.row,['id','payment_no','shipment_id','case_id','amount','amount_irr','currency','direction','payment_type','reference_no']);}
  if(code.startsWith('finance.payment_request.')){const x=await target(sb,'finance_payment_requests',t,'request_id','request_no','request_no');return pick(x.row,['id','request_no','shipment_id','requested_amount','currency','status','subject']);}
@@ -158,10 +171,17 @@ const snap=async(sb:any,code:string,t:any)=>{
  if(code.startsWith('accounting_vouchers.')&&isUuid(t?.voucher_id))return pick(await one(sb,'customs_accounting_vouchers',t.voucher_id),['id','voucher_number','case_id','client_id','company_name','cargo_type','tonnage','unit_count','unit_type','cargo_entry_date','permit_issue_date','debit_total','credit_total','balance_total','is_balanced']);
  if(code==='accounting_vouchers.void_line'&&isUuid(t?.line_id))return pick(await one(sb,'voucher_line_items',t.line_id),['id','voucher_id','row_number','description','receipt_number','debit_amount','credit_amount','status','void_reason','voided_by','voided_at']);
  if(code==='exit.update'){const x=await target(sb,'case_exit_operations',t,'exit_id','exit_permit_no','exit_permit_no');return pick(x.row,['id','case_id','exit_status','exit_permit_no','exit_permit_date','exit_at','vehicle_plate','driver_name']);}
+ if(code.startsWith('control.reminder.')){const x=await target(sb,'operational_reminders',t,'reminder_id','title','title');return pick(x.row,['id','case_id','shipment_id','title','description','due_at','due_precision','priority','status']);}
+ if(code==='settings.user.create'||code==='settings.user.update'||code==='settings.user.deactivate'){if(isUuid(t?.user_id))return pick(await one(sb,'profiles',t.user_id),['id','full_name','phone','role','client_id','is_active','created_at','updated_at']);}
+ if(code.startsWith('settings.cost_category.')){const x=await target(sb,'finance_cost_categories',t,'category_id','name_fa','name_fa');return pick(x.row,['id','code','name_fa','name_en','description','is_pass_through','is_billable_default','is_active','sort_order']);}
+ if(code.startsWith('settings.requirement_rule.')){const x=await target(sb,'document_requirement_rules',t,'rule_id','rule_name','rule_name');return pick(x.row,['id','rule_name','document_type','condition_json','required','priority','note','is_active']);}
+ if(code.startsWith('settings.print_template.')){const x=await target(sb,'print_templates',t,'template_id','template_key','template_key');return pick(x.row,['id','template_key','name','document_type','html_template','css_text','is_active']);}
+ if(code==='settings.ai_gateway.update'){const r=await sb.from('ai_gateway_settings').select('*').eq('organization_id',t.organization_id||'').maybeSingle();return r.error?null:r.data;}
+ if(code==='settings.org.update'){const r=await sb.from('organization_settings').select('*').eq('organization_id',t.organization_id||'').maybeSingle();return r.error?null:r.data;}
  return null;
 };
 
-const targetWithResult=(code:string,targetInput:any,resultData:any)=>{const t={...(targetInput||{})};const d=resultData&&typeof resultData==='object'?resultData:{};const pairs:Array<[string,string]>=[];if(code.startsWith('maritime.shipping_line.'))pairs.push(['shipping_line_id','id']);if(code.startsWith('maritime.vessel.'))pairs.push(['vessel_id','id']);if(code.startsWith('maritime.contact.'))pairs.push(['contact_id','id']);if(code.startsWith('documents.'))pairs.push(['document_id','id']);if(code.startsWith('permits.'))pairs.push(['permit_id','id']);if(code.startsWith('declarations.'))pairs.push(['declaration_id','id']);if(code.startsWith('finance.cost.'))pairs.push(['cost_id','id']);if(code.startsWith('finance.payment.'))pairs.push(['payment_id','id']);if(code.startsWith('finance.payment_request.'))pairs.push(['request_id','id']);if(code.startsWith('finance.invoice.'))pairs.push(['invoice_id','id']);if(code.startsWith('accounting_vouchers.create'))pairs.push(['voucher_id','voucher_id']);if(code==='accounting_vouchers.void_line')pairs.push(['line_id','id']);if(code.startsWith('control.reminder.'))pairs.push(['reminder_id','id']);if(code.startsWith('settings.cost_category.'))pairs.push(['category_id','id']);if(code.startsWith('settings.requirement_rule.'))pairs.push(['rule_id','id']);if(code.startsWith('settings.print_template.'))pairs.push(['template_id','id']);for(const [k,dkey] of pairs){if(isUuid(d[dkey])){t[k]=d[dkey];break;}}if((code==='settings.user.create'||code==='settings.user.update'||code==='settings.user.deactivate')&&isUuid(d.id))t.user_id=d.id;return t;};
+const targetWithResult=(code:string,targetInput:any,resultData:any)=>{const t={...(targetInput||{})};const d=resultData&&typeof resultData==='object'?resultData:{};const pairs:Array<[string,string]>=[];if(code.startsWith('maritime.shipping_line.'))pairs.push(['shipping_line_id','id']);if(code.startsWith('maritime.vessel.'))pairs.push(['vessel_id','id']);if(code.startsWith('maritime.contact.'))pairs.push(['contact_id','id']);if(code.startsWith('documents.'))pairs.push(['document_id','id']);if(code.startsWith('permits.'))pairs.push(['permit_id','id']);if(code.startsWith('declarations.'))pairs.push(['declaration_id','id']);if(code.startsWith('finance.cost.'))pairs.push(['cost_id','id']);if(code.startsWith('finance.payment.'))pairs.push(['payment_id','id']);if(code.startsWith('finance.payment_request.'))pairs.push(['request_id','id']);if(code.startsWith('finance.invoice.'))pairs.push(['invoice_id','id']);if(code.startsWith('accounting_vouchers.create'))pairs.push(['voucher_id','voucher_id']);if(code==='accounting_vouchers.void_line')pairs.push(['line_id','id']);if(code.startsWith('control.reminder.'))pairs.push(['reminder_id','id']);if(code==='exit.update')pairs.push(['exit_id','exit_id']);if(code.startsWith('settings.cost_category.'))pairs.push(['category_id','id']);if(code.startsWith('settings.requirement_rule.'))pairs.push(['rule_id','id']);if(code.startsWith('settings.print_template.'))pairs.push(['template_id','id']);for(const [k,dkey] of pairs){if(isUuid(d[dkey])){t[k]=d[dkey];break;}}if(code==='exit.update'&&isUuid(resultData))t.exit_id=resultData;if((code==='settings.user.create'||code==='settings.user.update'||code==='settings.user.deactivate')&&isUuid(d.id))t.user_id=d.id;return t;};
 const execute=async(sb:any,user:any,org:string,code:string,t:any,p:any,attachment:any)=>{
  if(code==='cases.read'){
    const x=await caseRow(sb,t);if(x.clarification)return x;
@@ -315,35 +335,102 @@ if(code==='settings.user.create'){if(!isUuid(p.user_id)||!str(p.full_name))throw
 };
 
 async function main(req:Request){
- const origin=req.headers.get('Origin')||'';if(req.method==='OPTIONS')return new Response('ok',{headers:headers(origin)});if(req.method!=='POST')return out({error:'Method not allowed'},405,origin);
- const auth=req.headers.get('Authorization')||'';const jwt=auth.startsWith('Bearer ')?auth.slice(7).trim():'';if(!jwt)return out({error:'Unauthorized'},401,origin);
- const url=Deno.env.get('SUPABASE_URL'),anon=Deno.env.get('SUPABASE_ANON_KEY');if(!url||!anon)return out({error:'Supabase configuration missing'},503,origin);
- const sb=createClient(url,anon,{global:{headers:{Authorization:'Bearer '+jwt}}});const authUser=await sb.auth.getUser(jwt);if(!authUser.data.user)return out({error:'Unauthorized'},401,origin);const user=authUser.data.user;
- const pr=await sb.from('profiles').select('id,organization_id,role,is_active,client_id,full_name').eq('id',user.id).maybeSingle();if(pr.error)throw pr.error;if(!pr.data||pr.data.is_active===false)return out({error:'پروفایل کاربر معتبر یا فعال نیست.'},403,origin);
- const body=await req.json().catch(()=>({}));const op=str(body.op||'plan');const gr=await sb.from('ai_gateway_settings').select('*').eq('organization_id',pr.data.organization_id).maybeSingle();if(gr.error)throw gr.error;const g=gr.data||{enabled:true,online_enabled:true,preferred_provider:'gemini',fallback_providers:['cloudflare','groq','openrouter','openai'],confidence_threshold:.75,redaction_enabled:true,max_commands_per_minute:20};if(g.enabled===false)return out({error:'AI Operator توسط Owner غیرفعال شده است.'},403,origin);
- if(op==='history'){const r=await sb.from('ai_operator_commands').select('id,natural_command,module,action_code,risk_level,status,confidence,created_at,confirmation_at,final_confirmation_at,result,error_message').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50);if(r.error)throw r.error;return out({history:r.data||[]},200,origin);}
+ const origin=req.headers.get('Origin')||'';
+ if(req.method==='OPTIONS')return new Response('ok',{headers:headers(origin)});
+ if(req.method!=='POST')return out({error:'Method not allowed'},405,origin);
+
+ const auth=req.headers.get('Authorization')||'';const jwt=auth.startsWith('Bearer ')?auth.slice(7).trim():'';
+ if(!jwt)return out({error:'Unauthorized'},401,origin);
+ const url=Deno.env.get('SUPABASE_URL'),anon=Deno.env.get('SUPABASE_ANON_KEY');
+ if(!url||!anon)return out({error:'Supabase configuration missing'},503,origin);
+
+ const sb=createClient(url,anon,{global:{headers:{Authorization:'Bearer '+jwt}}});
+ const authUser=await sb.auth.getUser(jwt);if(!authUser.data.user)return out({error:'Unauthorized'},401,origin);
+ const user=authUser.data.user;
+ const pr=await sb.from('profiles').select('id,organization_id,role,is_active,client_id,full_name').eq('id',user.id).maybeSingle();
+ if(pr.error)throw pr.error;if(!pr.data||pr.data.is_active===false)return out({error:'پروفایل کاربر معتبر یا فعال نیست.'},403,origin);
+
+ const body=await req.json().catch(()=>({}));const op=str(body.op||'plan');
+ const gr=await sb.from('ai_gateway_settings').select('*').eq('organization_id',pr.data.organization_id).maybeSingle();if(gr.error)throw gr.error;
+ const g=gr.data||{enabled:true,online_enabled:true,preferred_provider:'gemini',fallback_providers:['cloudflare','groq','openrouter','openai'],confidence_threshold:.75,redaction_enabled:true,max_commands_per_minute:20};
+ if(g.enabled===false)return out({error:'AI Operator توسط Owner غیرفعال شده است.'},403,origin);
+
+ if(op==='history'){
+   const r=await sb.from('ai_operator_commands').select('id,natural_command,module,action_code,risk_level,status,confidence,created_at,confirmation_at,final_confirmation_at,result,error_message').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50);
+   if(r.error)throw r.error;return out({history:r.data||[]},200,origin);
+ }
+
  if(op==='plan'){
    const query=str(body.query);if(!query)return out({error:'دستور خالی است.'},400,origin);
-   const since=new Date(Date.now()-60000).toISOString();const rc=await sb.from('ai_operator_commands').select('id',{count:'exact',head:true}).eq('user_id',user.id).gte('created_at',since);if(rc.error)throw rc.error;if((rc.count||0)>=(Number(g.max_commands_per_minute)||20))return out({error:'سقف درخواست AI Operator در دقیقه پر شده است.'},429,origin);
-const planned=await buildPlan(query,pr.data.role,str(body.page_context),g,body.attachment_meta||null);const plan=validate(planned.plan,g);if(plan.action_code.startsWith('settings.')&&pr.data.role!=='owner')return out({error:'این عملیات فقط برای Owner مجاز است.'},403,origin);
+   const since=new Date(Date.now()-60000).toISOString();
+   const rc=await sb.from('ai_operator_commands').select('id',{count:'exact',head:true}).eq('user_id',user.id).gte('created_at',since);
+   if(rc.error)throw rc.error;if((rc.count||0)>=(Number(g.max_commands_per_minute)||20))return out({error:'سقف درخواست AI Operator در دقیقه پر شده است.'},429,origin);
+
+   const planned=await buildPlan(query,pr.data.role,str(body.page_context),g,body.attachment_meta||null);
+   const plan=validate(planned.plan,g);
+   if(plan.action_code.startsWith('settings.')&&pr.data.role!=='owner')return out({error:'این عملیات فقط برای Owner مجاز است.'},403,origin);
+
    if(plan.action_code==='clarification'||plan.clarification){
-     const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:'clarification',target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:'safe',status:'clarification_needed'}).select('id').single();if(r.error)throw r.error;
-     return out({command_id:r.data.id,status:'clarification_needed',plan,provider:planned.provider},200,origin);
+     const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:'clarification',target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:'safe',status:'clarification_needed'}).select('id').single();
+     if(r.error)throw r.error;return out({command_id:r.data.id,status:'clarification_needed',plan,provider:planned.provider},200,origin);
    }
-   const risk=plan.risk as Risk;const phrase=risk==='destructive'?'تأیید نهایی: '+ACTIONS[plan.action_code].label:null;
-   const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:plan.action_code,target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:risk,status:risk==='safe'?'executing':'awaiting_confirmation',confirmation_required:risk!=='safe',final_confirmation_phrase:phrase}).select('id').single();if(r.error)throw r.error;
+
+   const risk=riskFor(plan);const phrase=risk==='destructive'?'تأیید نهایی: '+ACTIONS[plan.action_code].label:null;
+   const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:plan.action_code,target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:risk,status:risk==='safe'?'executing':'awaiting_confirmation',confirmation_required:risk!=='safe',final_confirmation_phrase:phrase}).select('id').single();
+   if(r.error)throw r.error;
    if(risk!=='safe')return out({command_id:r.data.id,status:'awaiting_confirmation',plan,risk_level:risk,confirmation_required:true,final_confirmation_phrase:phrase},200,origin);
-const after=await snap(sb,plan.action_code,targetWithResult(plan.action_code,plan.target||{},result?.data??result));
+
+   try{
+     const before=await snap(sb,plan.action_code,plan.target||{});
+     const result=await execute(sb,user,pr.data.organization_id,plan.action_code,plan.target||{},plan.params||{},body.attachment||null);
+     if(result?.clarification){await transition(sb,r.data.id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:r.data.id,status:'clarification_needed',clarification:result.clarification},200,origin);}
+     const after=await snap(sb,plan.action_code,targetWithResult(plan.action_code,plan.target||{},result?.data??result));
+     await transition(sb,r.data.id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_by:user.id,executed_at:new Date().toISOString(),confirmation_at:new Date().toISOString()});
+     return out({command_id:r.data.id,status:'executed',plan,risk_level:risk,result:result?.data??result,before_data:before,after_data:after},200,origin);
+   }catch(e){
+     const msg=e instanceof Error?e.message:String(e);
+     await transition(sb,r.data.id,{status:'failed',error_message:msg,result:{error:msg},executed_by:user.id,executed_at:new Date().toISOString()});
+     return out({command_id:r.data.id,status:'failed',error:msg},403,origin);
+   }
  }
+
  if(op==='execute'){
-   const id=str(body.command_id);if(!isUuid(id))return out({error:'command_id نامعتبر است.'},400,origin);const row=await sb.from('ai_operator_commands').select('*').eq('id',id).maybeSingle();if(row.error)throw row.error;if(!row.data)return out({error:'دستور پیدا نشد یا دسترسی ندارید.'},404,origin);const cmd=row.data;
+   const id=str(body.command_id);if(!isUuid(id))return out({error:'command_id نامعتبر است.'},400,origin);
+   const row=await sb.from('ai_operator_commands').select('*').eq('id',id).maybeSingle();if(row.error)throw row.error;
+   if(!row.data)return out({error:'دستور پیدا نشد یا دسترسی ندارید.'},404,origin);
+   const cmd=row.data;
+   if(cmd.user_id!==user.id)return out({error:'این دستور متعلق به کاربر جاری نیست.'},403,origin);
    if(['executed','failed','rejected','cancelled','clarification_needed'].includes(cmd.status))return out({error:'این دستور دیگر قابل اجرا نیست.',status:cmd.status},409,origin);
-   const plan=validate(cmd.plan,g);if(plan.action_code==='clarification'||plan.clarification)return out({error:plan.clarification||'Action Plan نیازمند شفاف سازی است.'},409,origin);const risk=effectiveRisk(plan);if(risk!==cmd.risk_level)return out({error:'Risk mismatch; command rejected.'},409,origin);
-   if(risk==='requires_confirmation'&&body.confirm!==true)return out({error:'برای این عملیات تأیید صریح لازم است.',command_id:id},409,origin);
-   if(risk==='destructive'&&!cmd.confirmation_at){if(body.confirm!==true)return out({error:'ابتدا تأیید اولیه عملیات مخرب لازم است.',command_id:id},409,origin);await transition(sb,id,{status:'awaiting_confirmation',confirmation_at:new Date().toISOString()});return out({status:'awaiting_final_confirmation',command_id:id,final_confirmation_phrase:cmd.final_confirmation_phrase},200,origin);}
+
+   const plan=validate(cmd.plan,g);
+   if(plan.action_code==='clarification'||plan.clarification)return out({error:plan.clarification||'Action Plan نیازمند شفاف سازی است.'},409,origin);
+   if(plan.action_code.startsWith('settings.')&&pr.data.role!=='owner')return out({error:'این عملیات فقط برای Owner مجاز است.'},403,origin);
+   const risk=effectiveRisk(plan);
+   if(risk!==cmd.risk_level)return out({error:'Risk mismatch; command rejected.'},409,origin);
+
+   if(risk==='requires_confirmation'){
+     if(body.confirm!==true)return out({error:'برای این عملیات تأیید صریح لازم است.',command_id:id},409,origin);
+   }
+   if(risk==='destructive'&&!cmd.confirmation_at){
+     if(body.confirm!==true)return out({error:'ابتدا تأیید اولیه عملیات مخرب لازم است.',command_id:id},409,origin);
+     await transition(sb,id,{status:'awaiting_confirmation',confirmation_at:new Date().toISOString()});
+     return out({status:'awaiting_final_confirmation',command_id:id,final_confirmation_phrase:cmd.final_confirmation_phrase},200,origin);
+   }
    if(risk==='destructive'&&str(body.final_confirmation)!==str(cmd.final_confirmation_phrase))return out({error:'عبارت تأیید نهایی صحیح نیست.',command_id:id},409,origin);
-   await transition(sb,id,{status:'executing',final_confirmation_at:risk==='destructive'?new Date().toISOString():null});
-const after=await snap(sb,cmd.action_code,targetWithResult(cmd.action_code,cmd.target||{},result?.data??result));
+
+   try{
+     await transition(sb,id,{status:'executing',confirmation_at:risk==='requires_confirmation'?new Date().toISOString():cmd.confirmation_at||null,final_confirmation_at:risk==='destructive'?new Date().toISOString():null});
+     const before=await snap(sb,cmd.action_code,cmd.target||{});
+     const result=await execute(sb,user,pr.data.organization_id,cmd.action_code,cmd.target||{},cmd.plan?.params||{},body.attachment||null);
+     if(result?.clarification){await transition(sb,id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:id,status:'clarification_needed',clarification:result.clarification},200,origin);}
+     const after=await snap(sb,cmd.action_code,targetWithResult(cmd.action_code,cmd.target||{},result?.data??result));
+     await transition(sb,id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_by:user.id,executed_at:new Date().toISOString()});
+     return out({command_id:id,status:'executed',risk_level:risk,result:result?.data??result,before_data:before,after_data:after},200,origin);
+   }catch(e){
+     const msg=e instanceof Error?e.message:String(e);
+     try{await transition(sb,id,{status:'failed',error_message:msg,result:{error:msg},executed_by:user.id,executed_at:new Date().toISOString()});}catch{}
+     return out({command_id:id,status:'failed',error:msg},403,origin);
+   }
  }
  return out({error:'Unknown operation.'},400,origin);
 }
