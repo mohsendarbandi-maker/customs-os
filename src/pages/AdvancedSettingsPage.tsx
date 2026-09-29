@@ -6,6 +6,7 @@ import{supabase}from'../lib/supabase';
 type ResourceKey='profiles'|'cases'|'registration_orders'|'shipments'|'shipping_lines'|'vessels'|'contacts'|'shipment_documents'|'customs_documents'|'document_rules'|'permit_rules'|'permits'|'cost_categories'|'finance_settings'|'costs'|'payments'|'payment_requests'|'invoices'|'vouchers'|'voucher_lines'|'declarations'|'exit'|'ai_gateway'|'templates'|'org'|'org_settings'|'user_settings';
 type LogKey='audit'|'case_history'|'financial_history'|'ai_commands'|'ai_interactions'|'ai_action_logs'|'ai_risk_findings'|'file_security_events'|'shipment_tracking'|'discrepancy_logs';
 
+const roleLabels:Record<string,string>={owner:'Owner',admin:'Admin',broker:'Broker',accountant:'Accountant',warehouse:'Warehouse',client:'Client'};
 const resourceLabels:Record<ResourceKey,string>={
 profiles:'کاربران و نقش‌ها',cases:'پرونده‌ها',registration_orders:'Registration Order',shipments:'محموله‌ها',
 shipping_lines:'کشتیرانی‌ها',vessels:'کشتی‌ها',contacts:'مسئولان کشتیرانی',shipment_documents:'اسناد محموله',
