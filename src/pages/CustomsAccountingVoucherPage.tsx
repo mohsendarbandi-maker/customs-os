@@ -71,7 +71,7 @@ export const CustomsAccountingVoucherPage:React.FC=()=>{
  const previewCredit=useMemo(()=>lines.filter(x=>x.status==='active').reduce((a,x)=>a+num(x.credit_amount),0),[lines]);
  const previewBalance=Math.abs(previewDebit-previewCredit);const previewBalanced=previewDebit===previewCredit;
 
- const uh=(k:keyof typeof header,v:string)=>setHeader(h=>({...h,[k]:v));
+ const uh=(k:keyof typeof header,v:string)=>setHeader(h=>({...h,[k]:v}));
  const ul=(idx:number,k:keyof Line,v:string)=>setLines(p=>p.map((x,i)=>{if(i!==idx)return x;const n={...x,[k]:v};if(k==='debit_amount'&&num(v)>0)n.credit_amount='';if(k==='credit_amount'&&num(v)>0)n.debit_amount='';if(k==='category_id')n.description_category=categories.find(c=>c.id===v)?.name_fa||'';return n}));
  const addRow=()=>setLines(p=>p.concat(blank((p[p.length-1]?.row_number||0)+1)));
 
