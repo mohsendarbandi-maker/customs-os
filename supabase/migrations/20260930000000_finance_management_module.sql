@@ -1,4 +1,5 @@
 -- Customs OS Finance Management Module
+create schema if not exists private;
 -- Canonical finance tables are extended; no duplicate case_expenses/payment_requests tables are introduced.
 
 alter table public.finance_cost_items
