@@ -59,7 +59,7 @@ describe('AI Operator security invariants',()=>{
    expect(advanced).toContain("if(!owner)return");
  });
  it('keeps Audit Log read-only in the advanced UI',()=>{
-   expect(advanced).toContain("Audit Log — فقط خواندنی");
+   expect(advanced).toContain("سوابق / Logs ← فقط خواندنی");
    expect(advanced).not.toContain("from('audit_logs').delete");
  });
 });
