@@ -112,6 +112,7 @@ async function write(ctx:any,body:any){
  }
  if(resource==='document_archive'){
    if(!isUuid(body.id))throw new Error('document id required');
+   if(str(body.confirmation)!=='تأیید نهایی Archive سند')throw new Error('Final confirmation phrase is required.');
    const r=await sb.rpc('owner_archive_document',{p_document_id:body.id,p_reason:str(body.reason)});
    if(r.error)throw r.error;return r.data;
  }
@@ -162,8 +163,7 @@ async function write(ctx:any,body:any){
  }
  if(op==='delete'){
    if(!isUuid(body.id))throw new Error('record id required');
-   if(cfg.global)throw new Error('Global reference records cannot be physically deleted from Owner Console.');
-   const r=await sb.from(cfg.table).delete().eq('id',body.id).eq('organization_id',profile.organization_id);
+   const r=cfg.global ? await sb.from(cfg.table).delete().eq('id',body.id) : await sb.from(cfg.table).delete().eq('id',body.id).eq('organization_id',profile.organization_id);
    if(r.error)throw r.error;return {deleted:true,id:body.id};
  }
  throw new Error('Unsupported operation');
