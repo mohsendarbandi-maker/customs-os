@@ -247,10 +247,17 @@ create policy finance_pr_update on public.finance_payment_requests for update to
 using(organization_id=(select public.user_org_id()) and (select public.user_role()) in ('owner'::public.user_role,'admin'::public.user_role))
 with check(organization_id=(select public.user_org_id()) and (select public.user_role()) in ('owner'::public.user_role,'admin'::public.user_role));
 
-alter table public.voucher_line_items add constraint uq_voucher_line_tenant unique(id,organization_id);
 alter table public.voucher_line_items add column if not exists source_cost_item_id uuid null;
-alter table public.voucher_line_items add constraint fk_voucher_line_source_cost_tenant
-foreign key(source_cost_item_id,organization_id) references public.finance_cost_items(id,organization_id) on delete restrict;
+do $
+begin
+ if not exists(select 1 from pg_constraint where conrelid='public.voucher_line_items'::regclass and conname='uq_voucher_line_tenant') then
+   alter table public.voucher_line_items add constraint uq_voucher_line_tenant unique(id,organization_id);
+ end if;
+ if not exists(select 1 from pg_constraint where conrelid='public.voucher_line_items'::regclass and conname='fk_voucher_line_source_cost_tenant') then
+   alter table public.voucher_line_items add constraint fk_voucher_line_source_cost_tenant
+   foreign key(source_cost_item_id,organization_id) references public.finance_cost_items(id,organization_id) on delete restrict;
+ end if;
+end $;
 create index if not exists idx_voucher_line_source_cost on public.voucher_line_items(organization_id,source_cost_item_id) where source_cost_item_id is not null;
 
 create table if not exists public.voucher_line_profit (
