@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { makeClientId } from './clientId';
 
 type QueuedRpc = {
   id: string;
@@ -35,7 +36,7 @@ export const attachSupabaseClient = (client: SupabaseClient) => {
 };
 
 const storageAvailable = () => typeof indexedDB !== 'undefined';
-const makeUuid = () => { if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID(); if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') { const b = new Uint8Array(16); crypto.getRandomValues(b); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128; return Array.from(b, (x, i) => x.toString(16).padStart(2, '0') + ([3, 5, 7, 9].includes(i) ? '-' : '')).join(''); } throw new Error('Secure UUID generator unavailable'); }; const makeId = () => `${Date.now()}-${makeUuid()}`;
+const makeId = () => `${Date.now()}-${makeClientId()}`;
 
 const currentUserId = async () => {
   if (!supabaseClient) return null;
