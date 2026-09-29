@@ -6,6 +6,7 @@ const app=readFileSync(new URL('../src/App.tsx',import.meta.url),'utf8');
 const advanced=readFileSync(new URL('../src/pages/AdvancedSettingsPage.tsx',import.meta.url),'utf8');
 const migration=readFileSync(new URL('../supabase/migrations/20260929160000_ai_operator_and_advanced_settings.sql',import.meta.url),'utf8');
 const ledgerMigration=readFileSync(new URL('../supabase/migrations/20260929170000_ai_operator_command_ledger_immutable.sql',import.meta.url),'utf8');
+const ownerProfileMigration=readFileSync(new URL('../supabase/migrations/20260929200000_harden_owner_profile_auth_user.sql',import.meta.url),'utf8');
 
 describe('AI Operator security invariants',()=>{
  it('never references a service-role secret or raw SQL execution',()=>{
@@ -29,6 +30,9 @@ describe('AI Operator security invariants',()=>{
    expect(operator).toContain("risk==='destructive'&&!cmd.confirmation_at");
    expect(operator).toContain("final_confirmation");
  });
+ it('prevents orphan profiles by requiring an existing Auth user',()=>{
+   expect(ownerProfileMigration).toContain('from auth.users u where u.id=p_user_id');
+ });
  it('hardens the command ledger against direct updates',()=>{
    expect(ledgerMigration).toContain('revoke update on public.ai_operator_commands');
    expect(ledgerMigration).toContain('ai_operator_transition_command');
@@ -39,6 +43,7 @@ describe('AI Operator security invariants',()=>{
    expect(operator).toContain("plan.action_code.startsWith('settings.')&&pr.data.role!=='owner'");
    expect(operator).toContain("sb.rpc('owner_update_profile'");
    expect(operator).toContain("sb.rpc('owner_insert_profile'");
+   expect(operator).toContain("if(p.action_code==='exit.update'&&str(p.params?.exit_status)==='exited')return'destructive';");
  });
  it('enforces owner-only advanced route and page guard',()=>{
    expect(app).toContain("s==='advanced'&&profile?.role!=='owner'");
