@@ -62,3 +62,11 @@ main.min-h-screen.overflow-hidden.text-white.relative{background:var(--bg)!impor
 
 .app-topbar>div{height:100%;min-height:40px}.app-topbar .flex.items-center.gap-2{height:40px}.app-topbar .icon-btn,.app-topbar .theme-cycle-btn,.app-topbar .app-user-chip,.app-topbar .app-online-chip{height:40px;min-height:40px}.app-online-chip{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:40px;min-width:74px;padding:0 11px;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--text);font-size:11px;font-weight:850;white-space:nowrap}.app-online-dot{width:8px;height:8px;border-radius:999px;background:var(--success);box-shadow:0 0 0 3px color-mix(in srgb,var(--success) 14%,transparent)}.app-online-chip.is-offline .app-online-dot{background:var(--danger);box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 14%,transparent)}.settings-back-btn{height:40px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:0 11px;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--text);font-size:11px;font-weight:800}.settings-back-btn:hover{border-color:var(--primary);background:var(--surface-2)}
 @media(max-width:767px){.app-topbar{height:64px}.settings-back-btn span{display:none}}
+
+/* Header identity/settings cleanup */
+.app-user-chip{width:164px;max-width:164px;overflow:hidden;flex:0 0 164px;box-sizing:border-box}
+.app-user-chip>span:first-child{flex:0 0 28px}
+.app-user-chip>span:last-child{min-width:0;max-width:112px;overflow:hidden;line-height:1.2}
+.app-user-chip>span:last-child b,.app-user-chip>span:last-child .app-muted{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.settings-back-btn{width:auto!important;min-width:92px!important;display:inline-flex!important;visibility:visible!important;opacity:1!important;overflow:visible!important}
+@media(max-width:767px){.settings-back-btn span{display:inline!important}.settings-back-btn{min-width:92px!important;padding:0 11px!important}}
