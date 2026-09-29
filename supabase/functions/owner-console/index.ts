@@ -94,6 +94,7 @@ async function write(ctx:any,body:any){
    }
    if(op==='deactivate'){
      if(!isUuid(body.id))throw new Error('user id required');
+     if(str(body.confirmation)!=='تأیید نهایی غیرفعال‌سازی کاربر')throw new Error('Final confirmation phrase is required.');
      const r=await sb.rpc('owner_manage_profile',{p_user_id:body.id,p_role:null,p_client_id:null,p_full_name:null,p_phone:null,p_is_active:false,p_reason:str(body.reason)});
      if(r.error)throw r.error;return r.data;
    }
