@@ -104,3 +104,9 @@ main.min-h-screen.overflow-hidden.text-white.relative{background:var(--bg)!impor
 .ai-operator-composer>button:disabled{opacity:.25}
 .ai-operator-hint{text-align:center;color:var(--text-muted);font-size:8px;padding-top:5px}
 @media(max-width:640px){.ai-operator-launcher{right:10px;bottom:12px;width:54px}.ai-operator-panel{width:100vw;border-left:0}}
+
+.ai-operator-file-row{display:flex;align-items:center;gap:6px;min-height:26px;margin-bottom:6px}
+.ai-operator-attach{width:30px;height:30px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text-muted);display:grid;place-items:center}
+.ai-operator-attach:disabled{opacity:.35}
+.ai-operator-file-chip{max-width:calc(100% - 36px);display:flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-size:9px;color:var(--text-muted)}
+.ai-operator-file-chip button{display:grid;place-items:center;color:var(--text-muted)}
