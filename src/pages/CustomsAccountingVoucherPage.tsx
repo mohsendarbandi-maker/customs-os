@@ -72,7 +72,7 @@ export const CustomsAccountingVoucherPage:React.FC=()=>{
  const previewBalance=Math.abs(previewDebit-previewCredit);const previewBalanced=previewDebit===previewCredit;
 
  const uh=(k:keyof typeof header,v:string)=>setHeader(h=>({...h,[k]:v}));
- const ul=(idx:number,k:keyof Line,v:string)=>setLines(p=>p.map((x,i)=>{if(i!==idx)return x;const n={...x,[k]:v};if(k==='debit_amount'&&num(v)>0)n.credit_amount='';if(k==='credit_amount'&&num(v)>0)n.debit_amount='';if(k==='category_id')n.description_category=categories.find(c=>c.id===v)?.name_fa||'';return n}));
+ const ul=(idx:number,k:keyof Line,v:string)=>setLines(p=>p.map((x,i)=>{if(i!==idx)return x;const n={...x,[k]:v};if(k==='debit_amount'&&num(v)>0)n.credit_amount='';if(k==='credit_amount'&&num(v)>0)n.debit_amount='';if(k==='category_id'){const suggested=categories.find(c=>c.id===v)?.name_fa||'';n.description_category=suggested;if(suggested&&!n.description.trim())n.description=suggested;}return n}));
  const addRow=()=>setLines(p=>p.concat(blank((p[p.length-1]?.row_number||0)+1)));
 
  const selectClient=(value:string)=>{setClientId(value);setShipmentId('');setVoucher(null);setTonnageManual(false);setHeader({company_name:'',cargo_type:'',tonnage:'',unit_count:'',unit_type:'',cargo_entry_date:'',permit_issue_date:'',kottaj_number:''})};
@@ -86,13 +86,13 @@ export const CustomsAccountingVoucherPage:React.FC=()=>{
    if(entryText&&!entryIso){setMessage('تاریخ ورود را به‌صورت شمسی صحیح وارد کنید.');return}
    if(permitText&&!permitIso){setMessage('تاریخ صدور پروانه را به‌صورت شمسی صحیح وارد کنید.');return}
    if(!header.tonnage||num(header.tonnage)<0){setMessage('وزن ناخالص معتبر نیست.');return}
-   const active=lines.filter(x=>x.status==='active'&&(x.description.trim()||num(x.debit_amount)>0||num(x.credit_amount)>0));
-   for(const x of active){if(!x.description.trim()){setMessage('شرح برای ردیف دارای مبلغ الزامی است.');return}if(num(x.debit_amount)>0&&num(x.credit_amount)>0){setMessage('در هر ردیف فقط بدهکار یا بستانکار می‌تواند مقدار داشته باشد.');return}if(num(x.debit_amount)<=0&&num(x.credit_amount)<=0){setMessage('ردیف ثبت‌شده باید مبلغ بدهکار یا بستانکار داشته باشد.');return}if(x.receipt_number&&!/^[0-9۰-۹]+$/.test(x.receipt_number.trim())){setMessage('شماره فیش فقط باید عددی باشد.');return}}
+   const active=lines.filter(x=>x.status==='active'&&(x.description.trim()||x.description_category.trim()||num(x.debit_amount)>0||num(x.credit_amount)>0));
+   for(const x of active){const effectiveDescription=x.description.trim()||x.description_category.trim();if(!effectiveDescription){setMessage('شرح برای ردیف دارای مبلغ الزامی است.');return}if(num(x.debit_amount)>0&&num(x.credit_amount)>0){setMessage('در هر ردیف فقط بدهکار یا بستانکار می‌تواند مقدار داشته باشد.');return}if(num(x.debit_amount)<=0&&num(x.credit_amount)<=0){setMessage('ردیف ثبت‌شده باید مبلغ بدهکار یا بستانکار داشته باشد.');return}if(x.receipt_number&&!/^[0-9۰-۹]+$/.test(x.receipt_number.trim())){setMessage('شماره فیش فقط باید عددی باشد.');return}}
    setSaving(true);setMessage('');
    try{
     let voucherId=isEdit?id:'';
     if(!voucherId){const{data,error}=await supabase.rpc('create_customs_accounting_voucher',{p_case_id:shipment.case_id,p_company_name:header.company_name,p_cargo_type:header.cargo_type,p_tonnage:tonnageManual?num(header.tonnage):null,p_unit_count:num(header.unit_count),p_unit_type:header.unit_type,p_cargo_entry_date:entryIso,p_kottaj_number:null,p_permit_issue_date:permitIso});if(error)throw error;voucherId=data?.voucher_id;if(!voucherId)throw new Error('شناسه سند پس از ایجاد دریافت نشد.')}
-    const{data,error}=await supabase.rpc('save_customs_accounting_voucher',{p_voucher_id:voucherId,p_company_name:header.company_name,p_cargo_type:header.cargo_type,p_tonnage:num(header.tonnage),p_unit_count:num(header.unit_count),p_unit_type:header.unit_type,p_cargo_entry_date:entryIso,p_kottaj_number:null,p_permit_issue_date:permitIso,p_lines:active.map(x=>({id:x.id||null,row_number:x.row_number,description:x.description.trim(),category_id:x.category_id||null,description_category:x.description_category||null,receipt_number:x.receipt_number.trim()||null,debit_amount:num(x.debit_amount),credit_amount:num(x.credit_amount)}))});
+    const{data,error}=await supabase.rpc('save_customs_accounting_voucher',{p_voucher_id:voucherId,p_company_name:header.company_name,p_cargo_type:header.cargo_type,p_tonnage:num(header.tonnage),p_unit_count:num(header.unit_count),p_unit_type:header.unit_type,p_cargo_entry_date:entryIso,p_kottaj_number:null,p_permit_issue_date:permitIso,p_lines:active.map(x=>({id:x.id||null,row_number:x.row_number,description:x.description.trim()||x.description_category.trim(),category_id:x.category_id||null,description_category:x.description_category||null,receipt_number:x.receipt_number.trim()||null,debit_amount:num(x.debit_amount),credit_amount:num(x.credit_amount)}))});
     if(error)throw error;
     setMessage('سند با موفقیت ذخیره شد. جمع و وضعیت توسط PostgreSQL محاسبه شد.');
     navigate('/finance/accounting-vouchers/'+voucherId,{replace:true});await loadVoucher(voucherId);
