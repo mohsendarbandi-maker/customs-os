@@ -44,6 +44,12 @@ describe('Finance management invariants', () => {
     expect(financeMigration).toContain("Rejected expense requires reason");
     expect(financeMigration).toContain("approve_finance_expense");
     expect(financeMigration).toContain("create policy finance_ci_update");
+    expect(financeMigration).toContain("Expense creator cannot approve or reject their own expense");
+  });
+
+  it('binds client-role expense creation to that client identity', () => {
+    expect(financeMigration).toContain("public.user_role()) <> 'client'::public.user_role");
+    expect(financeMigration).toContain("client_id=(select public.user_client_id())");
   });
 
   it('protects personal finance visibility through configurable permissions', () => {
