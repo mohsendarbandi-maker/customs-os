@@ -100,16 +100,173 @@ onMessage('تغییر کاربر ثبت شد و Audit شد.');setModal(false);se
 return <section className="space-y-3"><div className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex items-center justify-between gap-3"><div><b>مدیریت کاربران و نقش‌ها</b><p className="text-[10px] app-muted mt-1">ایجاد برای Auth User موجود انجام می‌شود؛ حذف فیزیکی Profile ممنوع است و Deactivate استفاده می‌شود.</p></div><div className="flex gap-2"><button className="px-3 py-2 rounded-xl border app-border text-xs" onClick={create}>＋ پروفایل Auth موجود</button><button className="icon-btn" onClick={()=>void load()}><RefreshCw size={15}/></button></div></div><div className="relative mt-3"><Search size={15} className="absolute right-3 top-3 app-muted"/><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] pr-9 px-3 text-sm" value={search} onChange={e=>setSearch(e.target.value)} placeholder="نام، نقش، Client ID یا User ID…"/></div></div><div className="grid xl:grid-cols-[1fr_420px] gap-3"><div className="rounded-2xl border app-border bg-[var(--surface)] overflow-auto max-h-[68vh]">{rows.map(u=><button key={u.id} className="w-full text-right border-b app-border px-4 py-3 hover:bg-[var(--surface-2)]" onClick={()=>open(u)}><div className="flex items-center justify-between gap-3"><div><b className="text-sm">{u.full_name||'بدون نام'}</b><div className="text-[10px] app-muted mt-1">{roleLabels[u.role]||u.role} · {u.is_active?'فعال':'غیرفعال'}</div></div><span className="text-[9px] app-muted break-all">{u.id}</span></div></button>)}</div><div className="rounded-2xl border app-border bg-[var(--surface)] p-4 h-fit">{newMode?<><div className="font-black mb-3">پروفایل جدید برای Auth User</div><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.user_id} onChange={e=>setForm({...form,user_id:e.target.value})} placeholder="Auth User UUID"/><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})} placeholder="نام کامل"/><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="تلفن"/><select className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>{Object.keys(roleLabels).map(r=><option key={r}>{r}</option>)}</select><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-3" value={form.client_id} onChange={e=>setForm({...form,client_id:e.target.value})} placeholder="Client UUID (اختیاری)"/><button className="w-full rounded-xl bg-[var(--primary)] text-white py-2.5 text-xs font-bold" onClick={()=>void save('ایجاد پروفایل از Owner Console')}>ایجاد پروفایل</button></>:selected?<><div className="font-black mb-3">ویرایش کاربر</div><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})} placeholder="نام کامل"/><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="تلفن"/><select className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>{Object.keys(roleLabels).map(r=><option key={r}>{r}</option>)}</select><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.client_id} onChange={e=>setForm({...form,client_id:e.target.value})} placeholder="Client UUID"/><label className="flex items-center gap-2 text-xs mb-3"><input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form,is_active:e.target.checked})}/> فعال</label><button className="w-full rounded-xl bg-[var(--primary)] text-white py-2.5 text-xs font-bold" onClick={()=>setModal(true)}>ذخیره با تأیید</button></>:<div className="text-xs app-muted">یک کاربر را انتخاب کنید یا پروفایل Auth موجود جدید بسازید.</div>}</div></div>{modal&&<OwnerConfirm title="تغییر نقش/وضعیت کاربر" description="این عملیات پرریسک است. آخرین Owner فعال در Database قابل غیرفعال‌سازی یا تنزل نیست." phrase="تأیید نهایی تغییر کاربر" busy={busy} onClose={()=>setModal(false)} onConfirm={save}/>}</section>;
 };
 
+const fieldLabels:Record<string,string>={
+id:'شناسه',full_name:'نام کامل',phone:'تلفن',role:'نقش',is_active:'وضعیت فعال',
+name:'نام',name_fa:'نام فارسی',name_en:'نام انگلیسی',client_id:'صاحب کالا',case_id:'پرونده',
+case_number:'شماره پرونده',display_name:'عنوان',status:'وضعیت',cargo_description:'شرح کالا',
+cargo_count:'تعداد کالا',cargo_count_unit:'واحد تعداد',warehouse_receipt_no:'قبض انبار',
+registration_order_no:'شماره ثبت سفارش',proforma_no:'شماره پروفرما',order_number:'شماره ثبت سفارش',
+order_date:'تاریخ ثبت سفارش',tariff_code:'کد تعرفه',quantity:'مقدار',quantity_unit:'واحد مقدار',
+value_amount:'ارزش',currency:'ارز',order_status:'وضعیت سفارش',bill_of_lading_no:'شماره بارنامه',
+shipping_line:'کشتیرانی',shipping_line_id:'کشتیرانی',voyage_no:'Voyage',vessel_type:'نوع شناور',
+origin_port:'بندر مبدأ',destination_port:'بندر مقصد',origin_country:'کشور مبدأ',transaction_country:'کشور معامله',
+delivery_term:'شرایط تحویل',invoice_amount:'مبلغ فاکتور',invoice_currency:'ارز فاکتور',
+package_count:'تعداد بسته',gross_weight_kg:'وزن ناخالص (کیلوگرم)',net_weight_kg:'وزن خالص (کیلوگرم)',
+bill_of_lading:'بارنامه',container_number:'شماره کانتینر',size_type:'سایز/نوع',seal_number:'شماره پلمب',
+name:'نام',imo_number:'IMO',mmsi_number:'MMSI',flag_code:'پرچم',role_title:'سمت',
+whatsapp:'واتساپ',email:'ایمیل',document_name:'نام سند',original_file_name:'نام فایل اصلی',
+storage_path:'مسیر Storage',file_size_bytes:'حجم فایل',extraction_status:'وضعیت استخراج',
+document_type:'نوع سند',original_name:'نام اصلی',display_name:'عنوان سند',document_number:'شماره سند',
+issue_date:'تاریخ صدور',field_key:'کلید فیلد',field_label:'عنوان فیلد',extracted_value:'مقدار استخراج‌شده',
+source_text:'متن منبع',confidence:'اطمینان',page_number:'صفحه',extraction_method:'روش استخراج',
+normalized_value:'مقدار نرمال‌شده',source_page:'صفحه منبع',verification_status:'وضعیت تأیید',
+extractor:'استخراج‌کننده',version:'نسخه',doc_type:'نوع سند',file_name:'نام فایل',
+mime_type:'نوع فایل',rule_name:'نام قاعده',priority:'اولویت',required:'الزامی',is_active:'فعال',
+condition_json:'شرط قاعده',document_type:'نوع سند',hs_prefix:'پیشوند HS',cargo_keyword:'کلیدواژه کالا',
+permit_type:'نوع مجوز',issuing_authority:'مرجع صادرکننده',permit_number:'شماره مجوز',
+issued_at:'تاریخ صدور',expires_at:'تاریخ انقضا',code:'کد',description:'شرح',
+import_duty_pct:'حقوق ورودی (%)',category:'دسته',data:'داده',item_key:'کلید آیتم',
+stage_no:'مرحله',completed:'تکمیل‌شده',completed_at:'زمان تکمیل',completed_by:'تکمیل‌کننده',
+declaration_id:'اظهارنامه',kottaj_number:'شماره کوتاژ',declaration_date:'تاریخ اظهار',
+customs_path:'مسیر گمرکی',payment_reference:'شناسه پرداخت',assessed_value_irr:'ارزش ارزیابی (ریال)',
+total_duties_irr:'حقوق و عوارض (ریال)',workflow_stage:'مرحله گردش کار',description:'شرح',
+quantity:'مقدار',unit:'واحد',unit_price:'قیمت واحد',amount:'مبلغ',amount_irr:'مبلغ (ریال)',
+notes:'یادداشت',internal_notes:'یادداشت داخلی',payable_by:'پرداخت‌کننده',paid_by:'پرداخت‌شده توسط',
+payment_no:'شماره پرداخت',payment_date:'تاریخ پرداخت',direction:'جهت',payment_type:'نوع پرداخت',
+reference_no:'شماره مرجع',request_no:'شماره درخواست وجه',request_date:'تاریخ درخواست',
+requested_amount:'مبلغ درخواستی',subject:'موضوع',body_text:'متن درخواست',request_id:'درخواست',
+invoice_line_id:'ردیف فاکتور',sort_order:'ترتیب',invoice_no:'شماره فاکتور',invoice_year:'سال',
+due_date:'سررسید',subtotal:'جمع جزء',vat_amount:'مالیات',total_amount:'جمع کل',
+invoice_id:'فاکتور',line_type:'نوع ردیف',vat_rate:'نرخ مالیات',invoice_shipments:'ارتباط فاکتور-محموله',
+payment_id:'پرداخت',balance_total:'مانده',debit_total:'جمع بدهکار',credit_total:'جمع بستانکار',
+voucher_number:'شماره سند حسابداری',company_name:'نام شرکت',cargo_type:'نوع کالا',tonnage:'تناژ',
+unit_count:'تعداد واحد',unit_type:'واحد',is_balanced:'تراز است',row_number:'شماره ردیف',
+description_category:'دسته شرح',receipt_number:'شماره رسید',debit_amount:'بدهکار',
+credit_amount:'بستانکار',void_reason:'دلیل ابطال',exit_status:'وضعیت خروج',exit_permit_no:'شماره مجوز خروج',
+exit_permit_date:'تاریخ مجوز خروج',vehicle_plate:'پلاک خودرو',driver_name:'راننده',exit_at:'زمان خروج',
+enabled:'فعال',online_enabled:'آنلاین',preferred_provider:'Provider اصلی',fallback_providers:'Fallback Providers',
+confidence_threshold:'حد آستانه اطمینان',redaction_enabled:'حذف اطلاعات حساس',max_commands_per_minute:'سقف فرمان/دقیقه',
+template_key:'کلید قالب',template_name:'نام قالب',active:'فعال',title:'عنوان',source_type:'نوع منبع',
+source_number:'شماره منبع',issued_at:'تاریخ صدور',effective_at:'تاریخ اجرا',issuer:'صادرکننده',
+storage_path:'مسیر فایل',extraction_confidence:'اطمینان استخراج',chunk_index:'شماره قطعه',
+content:'محتوا',page_number:'صفحه',source_id:'منبع',source_uri:'آدرس منبع',knowledge_document_id:'سند دانش',
+settings:'تنظیمات',economic_code:'شناسه اقتصادی',created_at:'ایجاد شده',updated_at:'آخرین تغییر'
+};
+const labelFor=(key:string)=>fieldLabels[key]||key.replaceAll('_',' ').replace(/\\b\\w/g,m=>m.toUpperCase());
+
+const primitiveValue=(v:any)=>{
+ if(v===null||v===undefined)return '';
+ if(typeof v==='object')return JSON.stringify(v,null,2);
+ return String(v);
+};
+const inputKind=(key:string,value:any)=>{
+ if(typeof value==='boolean')return 'boolean';
+ if(typeof value==='number')return 'number';
+ if(value && typeof value==='object')return 'json';
+ if(/(^|_)(date|at|time)(_|$)/i.test(key))return 'date';
+ if(/(description|notes|content|source_text|body_text|reason|condition_json|settings)$/i.test(key))return 'textarea';
+ return 'text';
+};
+const statusKeys=new Set(['status','extraction_status','verification_status','exit_status','workflow_stage','order_status']);
+const protectedKeys=new Set(['id','organization_id','created_at','updated_at','created_by','updated_by','uploaded_by','voided_by','voided_at','archived_by','archived_at','is_archived','archive_reason']);
+
+const RecordField:React.FC<{label:string;kind:string;value:any;onChange:(v:any)=>void}>=({label,kind,value,onChange})=>{
+ if(kind==='boolean')return <label className="rounded-2xl border app-border bg-[var(--surface-2)] p-4 flex items-center justify-between gap-3 cursor-pointer"><span><span className="block text-[11px] font-black">{label}</span><span className="block text-[10px] app-muted mt-1">{value?'فعال / بله':'غیرفعال / خیر'}</span></span><input type="checkbox" className="w-5 h-5" checked={!!value} onChange={e=>onChange(e.target.checked)}/></label>;
+ if(kind==='textarea'||kind==='json')return <label className="block md:col-span-2 rounded-2xl border app-border bg-[var(--surface-2)] p-3"><span className="block text-[10px] app-muted mb-2">{label}</span><textarea dir={kind==='json'?'ltr':'rtl'} className="w-full min-h-24 bg-transparent outline-none text-xs leading-6 resize-y" value={primitiveValue(value)} onChange={e=>onChange(kind==='json'?(()=>{try{return JSON.parse(e.target.value)}catch{return e.target.value}})():e.target.value)}/></label>;
+ return <label className="block rounded-2xl border app-border bg-[var(--surface-2)] p-3"><span className="block text-[10px] app-muted mb-2">{label}</span><input type={kind==='number'?'number':kind==='date'?'datetime-local':'text'} className="w-full bg-transparent outline-none text-sm min-h-8" value={primitiveValue(value)} onChange={e=>onChange(kind==='number'?(e.target.value===''?'':Number(e.target.value)):e.target.value)}/></label>;
+};
+
+const RecordCard:React.FC<{resource:ResourceKey;row:any;selected:boolean;onSelect:()=>void}>=({resource,row,selected,onSelect})=>{
+ const keys=Object.keys(row).filter(k=>!protectedKeys.has(k)).slice(0,8);
+ const title=String(row.display_name||row.name||row.document_name||row.original_file_name||row.file_name||row.case_number||row.order_number||row.bill_of_lading_no||row.kottaj_number||row.invoice_no||row.payment_no||row.request_no||row.voucher_number||row.permit_number||row.title||row.template_key||row.code||'رکورد');
+ const status=String(row.status??row.extraction_status??row.exit_status??row.verification_status??'');
+ return <button type="button" onClick={onSelect} className={'w-full text-right rounded-2xl border p-4 transition shadow-sm '+(selected?'border-[var(--primary)] ring-2 ring-[var(--primary)]/15 bg-[var(--surface-2)]':'app-border bg-[var(--surface)] hover:bg-[var(--surface-2)]')}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-black truncate">{title}</div><div className="text-[10px] app-muted mt-1 break-all">{row.id||row.code||'بدون شناسه'}</div></div>{status&&<span className="shrink-0 px-2.5 py-1 rounded-full border app-border text-[10px] font-bold">{status}</span>}</div><div className="grid grid-cols-2 gap-2 mt-4">{keys.slice(0,6).map(k=><div key={k} className="rounded-xl bg-[var(--surface-2)] border app-border px-3 py-2 min-w-0"><div className="text-[9px] app-muted">{labelFor(k)}</div><div className="text-xs mt-1 truncate">{primitiveValue(row[k])||'—'}</div></div>)}</div><div className="mt-3 flex items-center justify-between text-[10px]"><span className="app-muted">{Object.keys(row).filter(k=>!protectedKeys.has(k)).length} فیلد قابل مدیریت</span><span className="font-black text-[var(--primary)]">مشاهده و ویرایش ←</span></div></button>;
+};
+
 const ResourcePanel:React.FC<{resource:ResourceKey;onMessage:(s:string)=>void}>=({resource,onMessage})=>{
-const{profile}=useAuth();const profileOrgId=profile?.organization_id||'';
-const[rows,setRows]=useState<any[]>([]),[search,setSearch]=useState(''),[selected,setSelected]=useState<any>(null),[json,setJson]=useState('{}'),[busy,setBusy]=useState(false),[danger,setDanger]=useState<'delete'|'archive'|'void'|null>(null);
-const load=async()=>{setBusy(true);try{const table=resourceTables[resource];if(!table)throw new Error('منبع خواندن نشده است');let data:any[]=[];if(resource==='user_settings'){const u=await supabase.from('profiles').select('id').eq('organization_id',profileOrgId);if(u.error)throw u.error;const ids=(u.data||[]).map((x:any)=>x.id);if(ids.length){const q=await supabase.from(table).select('*').in('user_id',ids).limit(500);if(q.error)throw q.error;data=q.data||[]}}else if(resource==='org'){const q=await supabase.from(table).select('*').eq('id',profileOrgId).limit(1);if(q.error)throw q.error;data=q.data||[]}else{let q:any=supabase.from(table).select('*');if(!resourceGlobals.has(resource))q=q.eq('organization_id',profileOrgId);q=q.limit(500);const r=await q;if(r.error)throw r.error;data=r.data||[]}const s=search.trim().toLowerCase();if(s)data=data.filter((r:any)=>Object.values(r||{}).some((v:any)=>String(v??'').toLowerCase().includes(s)));setRows(data)}catch(e:any){onMessage(e?.message||'خواندن داده ناموفق بود.')}finally{setBusy(false)}};
-useEffect(()=>{void load()},[resource,search]);
-const selectRow=(row:any)=>{setSelected(row);setJson(JSON.stringify(safeJson(row),null,2))};
-const save=async()=>{setBusy(true);try{const data=JSON.parse(json||'{}');const body:any={action:selected?'update':'create',resource,data};if(selected?.id)body.id=selected.id;const{data:r,error}=await supabase.functions.invoke('owner-console',{body});if(error)throw error;onMessage(selected?'ویرایش ذخیره شد.':'رکورد ایجاد شد.');setSelected(r);setJson(JSON.stringify(safeJson(r),null,2));await load()}catch(e:any){onMessage(e?.message||'JSON یا ذخیره نامعتبر است.')}finally{setBusy(false)}};
-const dangerRun=async(reason:string)=>{if(!selected||!danger)return;setBusy(true);try{let body:any;if(danger==='archive')body={action:'delete',resource:'document_archive',id:selected.id,reason};else if(danger==='void')body={action:'delete',resource:'voucher_void',id:selected.id,reason,confirmation:'تأیید نهایی ابطال ردیف سند'};else if(resource==='cases')body={action:'delete',resource:'case_delete',id:selected.id,reason,confirmation:'تأیید نهایی حذف پرونده'};else body={action:'delete',resource,id:selected.id,reason,confirmation:'تأیید نهایی عملیات'};const{error}=await supabase.functions.invoke('owner-console',{body});if(error)throw error;setDanger(null);setSelected(null);onMessage('عملیات ثبت شد.');await load()}catch(e:any){onMessage(e?.message||'عملیات ناموفق بود.')}finally{setBusy(false)}};
-const isDoc=resource==='shipment_documents'||resource==='customs_documents';const isVoid=resource==='voucher_lines';const cols=resourceColumns[resource]||[];
-return <section className="space-y-3"><div className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><b>{resourceLabels[resource]}</b><div className="text-[10px] app-muted mt-1">{rows.length} رکورد قابل مشاهده</div></div><div className="flex gap-2"><button className="px-3 py-2 rounded-xl border app-border text-xs" onClick={()=>{setSelected(null);setJson('{}')}}>＋ رکورد جدید</button><button className="icon-btn" onClick={()=>void load()}><RefreshCw size={15} className={busy?'animate-spin':''}/></button></div></div><div className="relative mt-3"><Search size={15} className="absolute right-3 top-3 app-muted"/><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] pr-9 px-3 text-sm" value={search} onChange={e=>setSearch(e.target.value)} placeholder="جست‌وجوی این بخش…"/></div></div><div className="grid xl:grid-cols-[1fr_500px] gap-3"><div className="rounded-2xl border app-border bg-[var(--surface)] max-h-[68vh] overflow-auto">{rows.map(row=><button key={row.id||JSON.stringify(row)} type="button" onClick={()=>selectRow(row)} className="w-full text-right px-4 py-3 border-b app-border hover:bg-[var(--surface-2)]"><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{cols.slice(0,9).map(k=><div key={k} className="min-w-0"><div className="text-[9px] app-muted">{k}</div><div className="text-xs truncate">{pretty(row[k])||'—'}</div></div>)}</div></button>)}{!rows.length&&<div className="p-10 text-center text-xs app-muted">رکوردی یافت نشد.</div>}</div><div className="rounded-2xl border app-border bg-[var(--surface)] p-4 h-fit"><div className="flex items-center justify-between"><b>{selected?'ویرایش رکورد':'رکورد جدید'}</b>{selected?.id&&<span className="text-[9px] app-muted break-all">{selected.id}</span>}</div><textarea dir="ltr" className="w-full min-h-[440px] rounded-xl border app-border bg-[var(--surface-2)] p-3 text-xs font-mono mt-3" value={json} onChange={e=>setJson(e.target.value)}/><button disabled={busy} onClick={()=>void save()} className="mt-3 px-4 py-2.5 rounded-xl bg-[var(--primary)] text-white text-xs font-bold inline-flex items-center gap-2"><Save size={14}/> ذخیره</button>{selected?.id&&(isDoc||isVoid||resource==='cases'||resource!=='org')&&<button className="mt-3 mr-2 px-4 py-2.5 rounded-xl border border-red-500/30 text-red-500 text-xs font-bold" onClick={()=>setDanger(isDoc?'archive':isVoid?'void':'delete')}>{isDoc?<><Archive size={14} className="inline ml-1"/> Archive</>:isVoid?<><Lock size={14} className="inline ml-1"/> Void</>:<><Trash2 size={14} className="inline ml-1"/> Delete</>}</button>}{resource==='cases'&&selected?.id&&<CaseOverride row={selected} onMessage={onMessage} onDone={load}/>} {danger&&<OwnerConfirm title={danger==='archive'?'Archive سند':danger==='void'?'Void ردیف حسابداری':resource==='cases'?'حذف اضطراری پرونده':'حذف رکورد'} description={danger==='archive'?'فایل فیزیکی در Storage حذف نمی‌شود؛ فقط Archived می‌شود.':danger==='void'?'ردیف باطل می‌شود و دلیل/زمان/کاربر تاریخی قابل ویرایش نیست.':'عملیات روی داده واقعی سازمان اجرا می‌شود و قبل/بعد در Audit ثبت می‌گردد.'} phrase={danger==='void'?'تأیید نهایی ابطال ردیف سند':resource==='cases'?'تأیید نهایی حذف پرونده':'تأیید نهایی عملیات'} busy={busy} onClose={()=>setDanger(null)} onConfirm={dangerRun}/>}</div></div></section>;
+ const{profile}=useAuth();const profileOrgId=profile?.organization_id||'';
+ const[rows,setRows]=useState<any[]>([]),[search,setSearch]=useState(''),[selected,setSelected]=useState<any>(null),[draft,setDraft]=useState<any>({}),[busy,setBusy]=useState(false),[danger,setDanger]=useState<'delete'|'archive'|'void'|null>(null);
+ const load=async()=>{
+  setBusy(true);
+  try{
+   const table=resourceTables[resource];if(!table)throw new Error('منبع خواندن نشده است');
+   let data:any[]=[];
+   if(resource==='user_settings'){
+    const u=await supabase.from('profiles').select('id').eq('organization_id',profileOrgId);if(u.error)throw u.error;
+    const ids=(u.data||[]).map((x:any)=>x.id);
+    if(ids.length){const q=await supabase.from(table).select('*').in('user_id',ids).limit(500);if(q.error)throw q.error;data=q.data||[]}
+   }else if(resource==='org'){
+    const q=await supabase.from(table).select('*').eq('id',profileOrgId).limit(1);if(q.error)throw q.error;data=q.data||[];
+   }else{
+    let q:any=supabase.from(table).select('*');if(!resourceGlobals.has(resource))q=q.eq('organization_id',profileOrgId);
+    const r=await q.limit(500);if(r.error)throw r.error;data=r.data||[];
+   }
+   const s=search.trim().toLowerCase();if(s)data=data.filter((r:any)=>Object.values(r||{}).some((v:any)=>String(v??'').toLowerCase().includes(s)));
+   setRows(data);
+  }catch(e:any){onMessage(e?.message||'خواندن داده ناموفق بود.')}finally{setBusy(false)}
+ };
+ useEffect(()=>{void load()},[resource,search,profileOrgId]);
+ const selectRow=(row:any)=>{setSelected(row);setDraft({...row})};
+ const update=(key:string,value:any)=>setDraft((d:any)=>({...d,[key]:value}));
+ const save=async()=>{
+  if(!selected)return;
+  setBusy(true);
+  try{
+   const editable:any={};
+   Object.keys(draft).forEach(k=>{if(!protectedKeys.has(k))editable[k]=draft[k]});
+   const{data:r,error}=await supabase.functions.invoke('owner-console',{body:{action:'update',resource,id:selected.id,data:editable}});
+   if(error)throw error;
+   onMessage('رکورد با موفقیت ذخیره شد.');setSelected(r||draft);await load();
+  }catch(e:any){onMessage(e?.message||'ذخیره ناموفق بود.')}finally{setBusy(false)}
+ };
+ const createNew=()=>{setSelected({__new:true});setDraft({})};
+ const create=async()=>{
+  setBusy(true);
+  try{
+   const editable:any={};Object.keys(draft).forEach(k=>{if(!protectedKeys.has(k))editable[k]=draft[k]});
+   const{data:r,error}=await supabase.functions.invoke('owner-console',{body:{action:'create',resource,data:editable}});
+   if(error)throw error;onMessage('رکورد جدید ایجاد شد.');setSelected(r);setDraft(r);await load();
+  }catch(e:any){onMessage(e?.message||'ایجاد رکورد ناموفق بود.')}finally{setBusy(false)}
+ };
+ const dangerRun=async(reason:string)=>{
+  if(!selected||selected.__new)return;setBusy(true);
+  try{
+   let body:any;
+   if(danger==='archive')body={action:'delete',resource:'document_archive',id:selected.id,reason,confirmation:'تأیید نهایی Archive سند'};
+   else if(danger==='void')body={action:'delete',resource:'voucher_void',id:selected.id,reason,confirmation:'تأیید نهایی ابطال ردیف سند'};
+   else if(resource==='cases')body={action:'delete',resource:'case_delete',id:selected.id,reason,confirmation:'تأیید نهایی حذف پرونده'};
+   else body={action:'delete',resource,id:selected.id,reason,confirmation:'تأیید نهایی عملیات'};
+   const{error}=await supabase.functions.invoke('owner-console',{body});if(error)throw error;
+   setDanger(null);setSelected(null);onMessage('عملیات ثبت شد و Audit به‌روزرسانی شد.');await load();
+  }catch(e:any){onMessage(e?.message||'عملیات ناموفق بود.')}finally{setBusy(false)}
+ };
+ const isDoc=resource==='shipment_documents'||resource==='customs_documents';const isVoid=resource==='voucher_lines';
+ const fields=(selected?Object.keys(draft):[]).filter(k=>!protectedKeys.has(k));
+ return <section className="space-y-4">
+  <div className="rounded-3xl border app-border bg-[var(--surface)] p-4 md:p-5 shadow-sm">
+   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div><div className="flex items-center gap-2"><Settings2 size={18}/><b className="text-base">{resourceLabels[resource]}</b><span className="px-2.5 py-1 rounded-full bg-[var(--surface-2)] border app-border text-[10px]">{rows.length} رکورد</span></div><p className="text-[10px] app-muted mt-2">هر رکورد مستقل است؛ انتخاب کنید تا جزئیات و تنظیمات همان رکورد نمایش داده شود.</p></div>
+    <div className="flex gap-2"><button className="px-4 py-2.5 rounded-xl border app-border text-xs font-bold" onClick={createNew}>＋ رکورد جدید</button><button className="icon-btn" onClick={()=>void load()} title="بازخوانی"><RefreshCw size={15} className={busy?'animate-spin':''}/></button></div>
+   </div>
+   <div className="mt-4 flex flex-col md:flex-row gap-2"><div className="relative flex-1"><Search size={15} className="absolute right-3 top-3 app-muted"/><input className="w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] pr-9 px-3 text-sm" value={search} onChange={e=>setSearch(e.target.value)} placeholder="جست‌وجو در همه فیلدهای رکوردها…"/></div><div className="px-3 py-2.5 rounded-xl border app-border bg-[var(--surface-2)] text-[10px] app-muted flex items-center">{busy?'در حال خواندن…':'همگام با Supabase / RLS'}</div></div>
+  </div>
+  <div className="grid 2xl:grid-cols-[minmax(0,1fr)_560px] gap-4">
+   <div className="grid md:grid-cols-2 gap-3 content-start">{rows.map(row=><RecordCard key={row.id||JSON.stringify(row)} resource={resource} row={row} selected={selected?.id===row.id} onSelect={()=>selectRow(row)}/>)}
+    {!rows.length&&<div className="md:col-span-2 rounded-3xl border app-border bg-[var(--surface)] p-12 text-center"><Database size={28} className="mx-auto app-muted"/><div className="font-black mt-3">رکوردی پیدا نشد</div><div className="text-[10px] app-muted mt-1">فیلتر را تغییر دهید یا یک رکورد جدید ایجاد کنید.</div></div>}
+   </div>
+   <div className="rounded-3xl border app-border bg-[var(--surface)] p-4 md:p-5 h-fit 2xl:sticky 2xl:top-4">
+    <div className="flex items-center justify-between gap-3"><div><b>{selected?.__new?'رکورد جدید':selected?'ویرایش رکورد':'تنظیمات رکورد'}</b><p className="text-[10px] app-muted mt-1">{selected?.id||'برای شروع یک رکورد از سمت چپ انتخاب کنید.'}</p></div>{selected&&<button className="icon-btn" onClick={()=>{setSelected(null);setDraft({})}}><X size={16}/></button>}</div>
+    {selected?<><div className="grid md:grid-cols-2 gap-3 mt-4">{fields.map(k=><RecordField key={k} label={labelFor(k)} kind={inputKind(k,draft[k])} value={draft[k]} onChange={v=>update(k,v)}/>)}</div>
+      <div className="mt-4 flex flex-wrap gap-2">
+       <button disabled={busy} onClick={()=>void(selected.__new?create():save())} className="px-5 py-3 rounded-xl bg-[var(--primary)] text-white text-xs font-black inline-flex items-center gap-2"><Save size={15}/>{selected.__new?'ایجاد رکورد':'ذخیره تغییرات'}</button>
+       {selected?.id&&(isDoc||isVoid||resource==='cases'||resource!=='org')&&<button className="px-4 py-3 rounded-xl border border-red-500/30 text-red-500 text-xs font-bold" onClick={()=>setDanger(isDoc?'archive':isVoid?'void':'delete')}>{isDoc?'Archive سند':isVoid?'Void ردیف':'حذف رکورد'}</button>}
+      </div>
+      {selected?.id&&<div className="mt-4 rounded-2xl border app-border bg-[var(--surface-2)] p-3 text-[10px] app-muted">فیلدهای سیستمی و تاریخچه قابل ویرایش نیستند و توسط Database/Audit کنترل می‌شوند.</div>}
+    </>:<div className="mt-10 rounded-2xl border-dashed border app-border p-10 text-center"><Settings2 size={28} className="mx-auto app-muted"/><div className="font-black mt-3">یک رکورد را انتخاب کنید</div><div className="text-[10px] app-muted mt-1">تمام تنظیمات آن رکورد به‌صورت فیلدهای گرافیکی نمایش داده می‌شود.</div></div>}
+   </div>
+  </div>
+  {danger&&<OwnerConfirm title={danger==='archive'?'Archive سند':danger==='void'?'Void ردیف حسابداری':resource==='cases'?'حذف اضطراری پرونده':'حذف رکورد'} description={danger==='archive'?'فایل فیزیکی در Storage حذف نمی‌شود؛ فقط Archived می‌شود.':danger==='void'?'ردیف باطل می‌شود و دلیل/زمان/کاربر تاریخی قابل ویرایش نیست.':'عملیات روی داده واقعی سازمان اجرا می‌شود و دلیل آن در Audit ثبت خواهد شد.'} phrase={danger==='void'?'تأیید نهایی ابطال ردیف سند':resource==='cases'?'تأیید نهایی حذف پرونده':'تأیید نهایی عملیات'} busy={busy} onClose={()=>setDanger(null)} onConfirm={dangerRun}/>}
+ </section>;
 };
 
 const CaseOverride:React.FC<{row:any;onMessage:(s:string)=>void;onDone:()=>void}>=({row,onMessage,onDone})=>{
