@@ -457,7 +457,7 @@ begin
     'case_id',v_case,
     'our_company_cost_irr',v_company,
     'client_direct_cost_irr',v_client_direct,
-    'profit_irr',case when public.user_role() in ('owner'::public.user_role,'admin'::public.user_role) or private.finance_has_permission('view_profit') then v_profit else null end,
+    'profit_irr',case when public.user_role()='owner'::public.user_role or private.finance_has_permission('view_profit') then v_profit else null end,
     'received_irr',v_received,
     'outstanding_irr',greatest(0,v_company+v_profit-v_received)
   );
