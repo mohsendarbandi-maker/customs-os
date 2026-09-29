@@ -1,7 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const allowed=new Set(['https://customs-os-psi.vercel.app','https://customs.mohsen-darbandi.workers.dev','http://localhost:5173','http://127.0.0.1:5173']);
+const allowed=new Set(['https://darbandicommercial.ir','https://www.darbandicommercial.ir','http://darbandicommercial.ir','http://www.darbandicommercial.ir','https://customs-os-psi.vercel.app','https://customs.mohsen-darbandi.workers.dev','http://localhost:5173','http://127.0.0.1:5173']);
 const cors=(origin:string)=>({'Access-Control-Allow-Origin':allowed.has(origin)?origin:'https://customs.mohsen-darbandi.workers.dev','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin'});
 const reply=(body:unknown,status=200,origin='')=>new Response(JSON.stringify(body),{status,headers:{...cors(origin),'Content-Type':'application/json','Cache-Control':'no-store'}});
 const clean=(v:any)=>String(v??'').trim();
