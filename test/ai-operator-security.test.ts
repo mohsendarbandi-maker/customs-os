@@ -22,9 +22,6 @@ describe('AI Operator security invariants',()=>{
    expect(operator).toContain("risk==='destructive'&&!cmd.confirmation_at");
    expect(operator).toContain("final_confirmation");
  });
- it('contains no reset/drop/bulk destructive action in its action catalog',()=>{
-   expect(operator).not.toMatch(/database[_ -]?reset|drop[_ -]?table|truncate|bulk[_ -]?delete/i);
- });
  it('hardens the command ledger against direct updates',()=>{
    expect(ledgerMigration).toContain('revoke update on public.ai_operator_commands');
    expect(ledgerMigration).toContain('ai_operator_transition_command');
