@@ -7,6 +7,7 @@ const page=root('src/pages/AdvancedSettingsPage.tsx');
 const api=root('supabase/functions/owner-console/index.ts');
 const migration=root('supabase/migrations/20260929190356_owner_console_full_rbac_patch2.sql');
 const globalMigration=root('supabase/migrations/20260929191516_owner_console_global_reference_rbac.sql');
+const profileMigration=root('supabase/migrations/20260929161253_owner_profile_update_rpc.sql');
 
 describe('Owner Console security',()=>{
  it('has an explicit owner-only route and page guard',()=>{
@@ -35,7 +36,7 @@ describe('Owner Console security',()=>{
  });
  it('enforces high-risk confirmations server-side',()=>{
   for(const phrase of ['تأیید نهایی تغییر کاربر','تأیید نهایی غیرفعال‌سازی کاربر','تأیید نهایی اصلاح وضعیت','تأیید نهایی حذف پرونده','تأیید نهایی ابطال ردیف سند'])expect(api).toContain(phrase);
-  expect(migration).toContain('Cannot demote or deactivate the last active owner');
+  expect(profileMigration).toContain('Cannot demote or deactivate the last active owner');
  });
  it('does not expose CRUD writes for immutable logs in the UI',()=>{
   expect(page).not.toMatch(/from\(['"]audit_logs['"]\)\.(update|delete)/);
