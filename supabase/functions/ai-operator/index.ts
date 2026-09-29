@@ -165,7 +165,7 @@ const execute=async(sb:any,user:any,org:string,code:string,t:any,p:any,attachmen
    const x=await shipment(sb,t);if(x.clarification)return x;if(!attachment?.data)throw new Error('فایل ضمیمه لازم است.');
    const mime=str(attachment.mime_type).toLowerCase();if(!/^(application\/pdf|image\/(jpeg|png))$/i.test(mime))throw new Error('فقط PDF/JPG/PNG مجاز است.');
    const bytes=Uint8Array.from(atob(str(attachment.data)),c=>c.charCodeAt(0));if(bytes.length>50*1024*1024)throw new Error('حجم فایل بیش از ۵۰MB است.');
-   const name=str(attachment.file_name)||'document';const safe=name.replace(/[^\w.\\-\u0600-\u06ff]+/g,'_');const path=org+'/'+x.row.id+'/'+crypto.randomUUID()+'-'+safe;
+   const name=str(attachment.file_name)||'document';const safe=name.replace(/[^\w.\-\u0600-\u06ff]+/g,'_');const path=org+'/'+x.row.id+'/'+crypto.randomUUID()+'-'+safe;
    const up=await sb.storage.from('customs_documents').upload(path,bytes,{contentType:mime,upsert:false});if(up.error)throw up.error;
    const r=await sb.from('shipment_documents').insert({organization_id:org,shipment_id:x.row.id,uploaded_by:user.id,document_name:name,original_file_name:name,storage_path:path,mime_type:mime,file_size_bytes:bytes.length,extraction_status:'pending'}).select('*').single();
    if(r.error){await sb.storage.from('customs_documents').remove([path]);throw r.error;}return{type:'write',data:pick(r.data,['id','shipment_id','document_name','original_file_name','storage_path','mime_type','file_size_bytes'])};
