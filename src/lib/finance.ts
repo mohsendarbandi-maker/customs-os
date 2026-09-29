@@ -45,6 +45,9 @@ export const triggerPointLabel = (value: string) =>
   value === 'mid_process' ? 'میانه فرآیند' :
   value === 'final_settlement' ? 'تسویه نهایی' : value || '—';
 
+export const calculateOutstanding = (ourCompanyCosts: number, profit: number, received: number) =>
+  Math.max(0, Number(ourCompanyCosts || 0) + Number(profit || 0) - Number(received || 0));
+
 export const pettyCashDirectionLabel = (value: string) =>
   value === 'allocated' ? 'تخصیص' :
   value === 'spent' ? 'هزینه‌کرد' :
