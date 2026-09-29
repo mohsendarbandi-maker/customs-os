@@ -1,132 +1,107 @@
-import React,{useEffect,useState}from'react';
-import{AlertTriangle,Bot,Check,FileCog,History,Plus,RefreshCw,Save,ShieldCheck,Trash2,UserCog}from'lucide-react';
+import React,{useEffect,useMemo,useState}from'react';
+import{AlertTriangle,Archive,ArrowLeft,Bot,Check,ChevronDown,Database,FileCog,History,Lock,RefreshCw,Save,Search,Settings2,ShieldCheck,Ship,Trash2,UserCog,Wallet,X}from'lucide-react';
 import{useAuth}from'../context/AuthContext';
 import{supabase}from'../lib/supabase';
 
-const input='w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm outline-none focus:border-[var(--primary)]';
-const tabs=[['users','کاربران'],['rules','قواعد مدارک'],['categories','دسته هزینه'],['ai','AI Gateway'],['print','قالب چاپ'],['audit','Audit Log']] as const;
-type Tab=typeof tabs[number][0];
+type ResourceKey='profiles'|'cases'|'registration_orders'|'shipments'|'shipping_lines'|'vessels'|'contacts'|'shipment_documents'|'customs_documents'|'document_rules'|'permit_rules'|'permits'|'cost_categories'|'finance_settings'|'costs'|'payments'|'payment_requests'|'invoices'|'vouchers'|'voucher_lines'|'declarations'|'exit'|'ai_gateway'|'templates'|'org'|'org_settings'|'user_settings';
+type LogKey='audit'|'case_history'|'financial_history'|'ai_commands'|'ai_interactions'|'ai_action_logs'|'ai_risk_findings'|'file_security_events'|'shipment_tracking'|'discrepancy_logs';
 
+const resourceLabels:Record<ResourceKey,string>={
+profiles:'کاربران و نقش‌ها',cases:'پرونده‌ها',registration_orders:'Registration Order',shipments:'محموله‌ها',
+shipping_lines:'کشتیرانی‌ها',vessels:'کشتی‌ها',contacts:'مسئولان کشتیرانی',shipment_documents:'اسناد محموله',
+customs_documents:'اسناد گمرکی',document_rules:'قواعد مدارک',permit_rules:'قواعد مجوز',permits:'مجوزها',
+cost_categories:'دسته‌های هزینه',finance_settings:'تنظیمات مالی',costs:'هزینه‌ها',payments:'پرداخت/تنخواه',
+payment_requests:'درخواست وجه',invoices:'فاکتورها',vouchers:'سندهای حسابداری',voucher_lines:'ردیف‌های سند',
+declarations:'اظهارنامه/EPL/کوتاژ',exit:'خروج کالا',ai_gateway:'AI Gateway',templates:'قالب چاپ',
+org:'سازمان',org_settings:'تنظیمات سازمان',user_settings:'تنظیمات کاربر'
+};
+const resourceColumns:Record<ResourceKey,string[]>={
+profiles:['full_name','role','is_active','client_id','phone'],cases:['case_number','display_name','status','cargo_description','cargo_count','warehouse_receipt_no','registration_order_no'],
+registration_orders:['order_number','order_date','status','tariff_code','quantity','quantity_unit','value_amount','currency','case_id','client_id'],
+shipments:['display_name','bill_of_lading_no','shipping_line','voyage_no','cargo_count','cargo_count_unit','net_weight_kg','gross_weight_kg','finance_status'],
+shipping_lines:['name','name_fa'],vessels:['name','imo_number','flag_code','shipping_line_id','mmsi_number'],contacts:['full_name','role_title','phone','whatsapp','email'],
+shipment_documents:['document_name','original_file_name','extraction_status','is_archived','file_size_bytes','created_at'],customs_documents:['document_type','original_name','display_name','status','document_number','issue_date','is_archived'],
+document_rules:['rule_name','document_type','priority','required','is_active','condition_json'],permit_rules:['rule_name','hs_prefix','cargo_keyword','permit_type','issuing_authority','required','priority'],
+permits:['permit_type','permit_number','issuing_authority','status','issued_at','expires_at'],cost_categories:['code','name_fa','name_en','is_active','sort_order'],
+finance_settings:['default_currency','invoice_prefix','payment_request_prefix','next_invoice_number','next_payment_request_number','default_vat_rate','payment_terms','bank_name'],
+costs:['description','quantity','unit','unit_price','amount','currency','amount_irr','status','payable_by','paid_by'],payments:['payment_no','payment_date','direction','amount','currency','amount_irr','payment_type','reference_no'],
+payment_requests:['request_no','request_date','requested_amount','currency','status','subject'],invoices:['invoice_no','invoice_year','issue_date','due_date','status','subtotal','vat_amount','total_amount','currency'],
+vouchers:['voucher_number','company_name','cargo_type','tonnage','unit_count','unit_type','debit_total','credit_total','balance_total','is_balanced'],
+voucher_lines:['voucher_id','row_number','description','description_category','receipt_number','debit_amount','credit_amount','status','void_reason'],
+declarations:['kottaj_number','declaration_date','customs_path','payment_reference','assessed_value_irr','total_duties_irr','workflow_stage'],
+exit:['case_id','exit_status','exit_permit_no','exit_permit_date','vehicle_plate','driver_name','exit_at'],
+ai_gateway:['enabled','online_enabled','preferred_provider','fallback_providers','confidence_threshold','redaction_enabled','max_commands_per_minute'],
+templates:['template_key','name','document_type','is_active'],org:['name','economic_code','created_at'],org_settings:['settings','updated_at'],user_settings:['user_id','settings','updated_at']
+};
+const logLabels:Record<LogKey,string>={audit:'Audit Log',case_history:'Status History',financial_history:'Financial History',ai_commands:'AI Operator Commands',ai_interactions:'AI Interactions',ai_action_logs:'AI Action Logs',ai_risk_findings:'AI Risk Findings',file_security_events:'File Security Events',shipment_tracking:'Shipment Tracking Events',discrepancy_logs:'Discrepancy Logs'};
 
-type OwnerResource=ResourceKey;
-const ownerSections=[
- {id:'users',label:'کاربران و نقش‌ها',resources:['profiles']},
- {id:'cases',label:'پرونده و عملیات',resources:['cases']},
- {id:'registration',label:'Registration Order',resources:['registration_orders']},
- {id:'maritime',label:'کشتیرانی و حمل',resources:['shipments','shipping_lines','vessels','contacts']},
- {id:'documents',label:'اسناد',resources:['shipment_documents','customs_documents']},
- {id:'doc_rules',label:'Rule Engine مدارک',resources:['document_rules']},
- {id:'permit_rules',label:'Permit Rules',resources:['permit_rules','permits']},
- {id:'finance',label:'مالی و حسابداری',resources:['finance_settings','cost_categories','costs','payments','payment_requests','invoices','vouchers','voucher_lines']},
- {id:'declarations',label:'Declaration / EPL / کوتاژ',resources:['declarations']},
- {id:'exit',label:'Exit / خروج',resources:['exit']},
- {id:'ai',label:'AI Gateway / AI Core',resources:['ai_gateway']},
- {id:'print',label:'قالب چاپ / PDF',resources:['templates']},
- {id:'offline',label:'Offline Queue',resources:[]},
- {id:'org',label:'تنظیمات سازمان',resources:['org','org_settings','finance_settings']}
+const safeJson=(row:any)=>{
+const out:any={};
+for(const[k,v]of Object.entries(row||{})){
+if(['id','organization_id','created_at','updated_at','created_by','updated_by','uploaded_by','voided_by','voided_at','archived_by','archived_at','is_archived','archive_reason'].includes(k))continue;
+out[k]=v;
+}
+return out;
+};
+const pretty=(v:any)=>typeof v==='string'?v:v==null?'':JSON.stringify(v);
+
+const OwnerConfirm:React.FC<{title:string;description:string;phrase?:string;onClose:()=>void;onConfirm:(reason:string)=>void;busy:boolean}>=({title,description,phrase,onClose,onConfirm,busy})=>{
+const[reason,setReason]=useState('');const[input,setInput]=useState('');
+return <div className="fixed inset-0 z-[140] bg-black/60 flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-lg rounded-2xl border app-border bg-[var(--surface)] p-5 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><h3 className="font-black flex items-center gap-2"><AlertTriangle size={18}/> {title}</h3><p className="text-xs app-muted mt-2 leading-6">{description}</p></div><button className="icon-btn" onClick={onClose}><X size={17}/></button></div><textarea className="w-full min-h-24 rounded-xl border app-border bg-[var(--surface-2)] p-3 text-sm mt-4" value={reason} onChange={e=>setReason(e.target.value)} placeholder="دلیل اجباری را وارد کنید…"/>{phrase&&<><div className="text-[10px] app-muted mt-3">عبارت تأیید نهایی:</div><div className="rounded-xl border app-border bg-[var(--surface-2)] p-3 text-xs font-black mt-1">{phrase}</div><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mt-2" value={input} onChange={e=>setInput(e.target.value)} placeholder="عبارت را عیناً وارد کنید"/></>}<div className="flex justify-end gap-2 mt-4"><button className="px-4 py-2 rounded-xl border app-border text-xs" onClick={onClose}>انصراف</button><button disabled={busy||!reason.trim()||(!!phrase&&input!==phrase)} className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold" onClick={()=>onConfirm(reason.trim())}>{busy?<RefreshCw size={14} className="inline animate-spin"/>:<Check size={14} className="inline ml-1"/>} تأیید نهایی</button></div></div></div>;
+};
+
+const UsersPanel:React.FC<{onMessage:(s:string)=>void}>=({onMessage})=>{
+const[rows,setRows]=useState<any[]>([]),[search,setSearch]=useState(''),[selected,setSelected]=useState<any>(null),[form,setForm]=useState<any>({full_name:'',phone:'',role:'client',client_id:'',is_active:true}),[modal,setModal]=useState(false),[busy,setBusy]=useState(false);
+const load=async()=>{setBusy(true);try{const{data,error}=await supabase.functions.invoke('owner-console',{body:{action:'list',resource:'profiles',search,limit:500}});if(error)throw error;setRows(Array.isArray(data)?data:[])}catch(e:any){onMessage(e?.message||'دریافت کاربران ناموفق بود.')}finally{setBusy(false)}};
+useEffect(()=>{void load()},[search]);
+const open=(u:any)=>{setSelected(u);setForm({full_name:u.full_name||'',phone:u.phone||'',role:u.role||'client',client_id:u.client_id||'',is_active:!!u.is_active})};
+const save=async(reason:string)=>{if(!selected?.id)return;setBusy(true);try{const{error}=await supabase.functions.invoke('owner-console',{body:{action:'save',resource:'profiles',id:selected.id,data:form,reason,confirmation:'تأیید نهایی تغییر کاربر'}});if(error)throw error;onMessage('تغییر کاربر ثبت شد و Audit شد.');setModal(false);setSelected(null);await load()}catch(e:any){onMessage(e?.message||'ذخیره کاربر ناموفق بود.')}finally{setBusy(false)}};
+return <section className="space-y-3"><div className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex items-center justify-between gap-3"><div><b>مدیریت کاربران و نقش‌ها</b><p className="text-[10px] app-muted mt-1">Auth User باید از قبل وجود داشته باشد؛ حذف فیزیکی Profile عمداً به Deactivate تبدیل شده است.</p></div><button className="icon-btn" onClick={()=>void load()}><RefreshCw size={15}/></button></div><div className="relative mt-3"><Search size={15} className="absolute right-3 top-3 app-muted"/><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] pr-9 px-3 text-sm" value={search} onChange={e=>setSearch(e.target.value)} placeholder="نام، نقش، Client ID یا User ID…"/></div></div><div className="grid xl:grid-cols-[1fr_420px] gap-3"><div className="rounded-2xl border app-border bg-[var(--surface)] overflow-auto max-h-[68vh]">{rows.map(u=><button key={u.id} className="w-full text-right border-b app-border px-4 py-3 hover:bg-[var(--surface-2)]" onClick={()=>open(u)}><div className="flex items-center justify-between gap-3"><div><b className="text-sm">{u.full_name||'بدون نام'}</b><div className="text-[10px] app-muted mt-1">{roleLabels[u.role]||u.role} · {u.is_active?'فعال':'غیرفعال'}</div></div><span className="text-[9px] app-muted break-all">{u.id}</span></div></button>)}</div><div className="rounded-2xl border app-border bg-[var(--surface)] p-4 h-fit">{selected?<><div className="font-black mb-3">ویرایش کاربر</div><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})} placeholder="نام کامل"/><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="تلفن"/><select className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>{Object.keys(roleLabels).map(r=><option key={r}>{r}</option>)}</select><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mb-2" value={form.client_id} onChange={e=>setForm({...form,client_id:e.target.value})} placeholder="Client UUID"/><label className="flex items-center gap-2 text-xs mb-3"><input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form,is_active:e.target.checked})}/> فعال</label><button className="w-full rounded-xl bg-[var(--primary)] text-white py-2.5 text-xs font-bold" onClick={()=>setModal(true)}>ذخیره با تأیید</button></>:<div className="text-xs app-muted">یک کاربر را انتخاب کنید.</div>}</div></div>{modal&&<OwnerConfirm title="تغییر نقش/وضعیت کاربر" description="این عملیات پرریسک است. آخرین Owner فعال در Database قابل غیرفعال‌سازی یا تنزل نیست." phrase="تأیید نهایی تغییر کاربر" busy={busy} onClose={()=>setModal(false)} onConfirm={save}/>}</section>;
+};
+
+const ResourcePanel:React.FC<{resource:ResourceKey;onMessage:(s:string)=>void}>=({resource,onMessage})=>{
+const[rows,setRows]=useState<any[]>([]),[search,setSearch]=useState(''),[selected,setSelected]=useState<any>(null),[json,setJson]=useState('{}'),[busy,setBusy]=useState(false),[danger,setDanger]=useState<'delete'|'archive'|'void'|null>(null);
+const load=async()=>{setBusy(true);try{const{data,error}=await supabase.functions.invoke('owner-console',{body:{action:'list',resource,search,limit:500}});if(error)throw error;setRows(Array.isArray(data)?data:[])}catch(e:any){onMessage(e?.message||'خواندن داده ناموفق بود.')}finally{setBusy(false)}};
+useEffect(()=>{void load()},[resource,search]);
+const selectRow=(row:any)=>{setSelected(row);setJson(JSON.stringify(safeJson(row),null,2))};
+const save=async()=>{setBusy(true);try{const data=JSON.parse(json||'{}');const body:any={action:selected?'update':'create',resource,data};if(selected?.id)body.id=selected.id;const{data:r,error}=await supabase.functions.invoke('owner-console',{body});if(error)throw error;onMessage(selected?'ویرایش ذخیره شد.':'رکورد ایجاد شد.');setSelected(r);setJson(JSON.stringify(safeJson(r),null,2));await load()}catch(e:any){onMessage(e?.message||'JSON یا ذخیره نامعتبر است.')}finally{setBusy(false)}};
+const dangerRun=async(reason:string)=>{if(!selected||!danger)return;setBusy(true);try{let body:any;if(danger==='archive')body={action:'delete',resource:'document_archive',id:selected.id,reason};else if(danger==='void')body={action:'delete',resource:'voucher_void',id:selected.id,reason,confirmation:'تأیید نهایی ابطال ردیف سند'};else if(resource==='cases')body={action:'delete',resource:'case_delete',id:selected.id,reason,confirmation:'تأیید نهایی حذف پرونده'};else body={action:'delete',resource,id:selected.id,reason,confirmation:'تأیید نهایی عملیات'};const{error}=await supabase.functions.invoke('owner-console',{body});if(error)throw error;setDanger(null);setSelected(null);onMessage('عملیات ثبت شد.');await load()}catch(e:any){onMessage(e?.message||'عملیات ناموفق بود.')}finally{setBusy(false)}};
+const isDoc=resource==='shipment_documents'||resource==='customs_documents';const isVoid=resource==='voucher_lines';const cols=resourceColumns[resource]||[];
+return <section className="space-y-3"><div className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><b>{resourceLabels[resource]}</b><div className="text-[10px] app-muted mt-1">{rows.length} رکورد قابل مشاهده</div></div><div className="flex gap-2"><button className="px-3 py-2 rounded-xl border app-border text-xs" onClick={()=>{setSelected(null);setJson('{}')}}>＋ رکورد جدید</button><button className="icon-btn" onClick={()=>void load()}><RefreshCw size={15} className={busy?'animate-spin':''}/></button></div></div><div className="relative mt-3"><Search size={15} className="absolute right-3 top-3 app-muted"/><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] pr-9 px-3 text-sm" value={search} onChange={e=>setSearch(e.target.value)} placeholder="جست‌وجوی این بخش…"/></div></div><div className="grid xl:grid-cols-[1fr_500px] gap-3"><div className="rounded-2xl border app-border bg-[var(--surface)] max-h-[68vh] overflow-auto">{rows.map(row=><button key={row.id||JSON.stringify(row)} type="button" onClick={()=>selectRow(row)} className="w-full text-right px-4 py-3 border-b app-border hover:bg-[var(--surface-2)]"><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{cols.slice(0,9).map(k=><div key={k} className="min-w-0"><div className="text-[9px] app-muted">{k}</div><div className="text-xs truncate">{pretty(row[k])||'—'}</div></div>)}</div></button>)}{!rows.length&&<div className="p-10 text-center text-xs app-muted">رکوردی یافت نشد.</div>}</div><div className="rounded-2xl border app-border bg-[var(--surface)] p-4 h-fit"><div className="flex items-center justify-between"><b>{selected?'ویرایش رکورد':'رکورد جدید'}</b>{selected?.id&&<span className="text-[9px] app-muted break-all">{selected.id}</span>}</div><textarea dir="ltr" className="w-full min-h-[440px] rounded-xl border app-border bg-[var(--surface-2)] p-3 text-xs font-mono mt-3" value={json} onChange={e=>setJson(e.target.value)}/><button disabled={busy} onClick={()=>void save()} className="mt-3 px-4 py-2.5 rounded-xl bg-[var(--primary)] text-white text-xs font-bold inline-flex items-center gap-2"><Save size={14}/> ذخیره</button>{selected?.id&&(isDoc||isVoid||resource==='cases'||resource!=='org')&&<button className="mt-3 mr-2 px-4 py-2.5 rounded-xl border border-red-500/30 text-red-500 text-xs font-bold" onClick={()=>setDanger(isDoc?'archive':isVoid?'void':'delete')}>{isDoc?<><Archive size={14} className="inline ml-1"/> Archive</>:isVoid?<><Lock size={14} className="inline ml-1"/> Void</>:<><Trash2 size={14} className="inline ml-1"/> Delete</>}</button>}{resource==='cases'&&selected?.id&&<CaseOverride row={selected} onMessage={onMessage} onDone={load}/>} {danger&&<OwnerConfirm title={danger==='archive'?'Archive سند':danger==='void'?'Void ردیف حسابداری':resource==='cases'?'حذف اضطراری پرونده':'حذف رکورد'} description={danger==='archive'?'فایل فیزیکی در Storage حذف نمی‌شود؛ فقط Archived می‌شود.':danger==='void'?'ردیف باطل می‌شود و دلیل/زمان/کاربر تاریخی قابل ویرایش نیست.':'عملیات روی داده واقعی سازمان اجرا می‌شود و قبل/بعد در Audit ثبت می‌گردد.'} phrase={danger==='void'?'تأیید نهایی ابطال ردیف سند':resource==='cases'?'تأیید نهایی حذف پرونده':'تأیید نهایی عملیات'} busy={busy} onClose={()=>setDanger(null)} onConfirm={dangerRun}/>}</div></div></section>;
+};
+
+const CaseOverride:React.FC<{row:any;onMessage:(s:string)=>void;onDone:()=>void}>=({row,onMessage,onDone})=>{
+const[open,setOpen]=useState(false),[status,setStatus]=useState(''),[reason,setReason]=useState(''),[phrase,setPhrase]=useState(''),[busy,setBusy]=useState(false);
+const run=async()=>{if(!status.trim()||!reason.trim()||phrase.trim()!=='تأیید نهایی اصلاح وضعیت')return;setBusy(true);try{const{error}=await supabase.functions.invoke('owner-console',{body:{action:'update',resource:'case_status_override',id:row.id,new_status:status.trim(),reason:reason.trim(),confirmation:phrase.trim()}});if(error)throw error;onMessage('Override وضعیت با دلیل در History/Audit ثبت شد.');setOpen(false);onDone()}catch(e:any){onMessage(e?.message||'Override ناموفق بود.')}finally{setBusy(false)}};
+return <>{open? <div className="fixed inset-0 z-[130] bg-black/60 flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-lg rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex justify-between"><b>اصلاح استثنایی وضعیت پرونده</b><button className="icon-btn" onClick={()=>setOpen(false)}><X size={17}/></button></div><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mt-4" value={status} onChange={e=>setStatus(e.target.value)} placeholder="Status معتبر case_status"/><textarea className="w-full min-h-24 rounded-xl border app-border bg-[var(--surface-2)] p-3 text-sm mt-2" value={reason} onChange={e=>setReason(e.target.value)} placeholder="دلیل اجباری…"/><div className="text-[10px] app-muted mt-3">عبارت نهایی: تأیید نهایی اصلاح وضعیت</div><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mt-1" value={phrase} onChange={e=>setPhrase(e.target.value)} placeholder="عبارت را عیناً وارد کنید"/><div className="flex justify-end gap-2 mt-4"><button className="px-3 py-2 rounded-xl border app-border text-xs" onClick={()=>setOpen(false)}>انصراف</button><button disabled={busy||!status.trim()||!reason.trim()||phrase.trim()!=='تأیید نهایی اصلاح وضعیت'} className="px-4 py-2 rounded-xl bg-[var(--primary)] text-white text-xs font-bold" onClick={()=>void run()}>{busy?'در حال ثبت…':'ثبت Override'}</button></div></div></div>:<button className="w-full mt-3 px-3 py-2.5 rounded-xl border border-amber-500/30 text-amber-600 text-xs font-bold" onClick={()=>setOpen(true)}>Override Status — فقط Owner</button>}</>;
+};
+
+const LogsPanel:React.FC<{onMessage:(s:string)=>void}>=({onMessage})=>{
+const[kind,setKind]=useState<LogKey>('audit'),[rows,setRows]=useState<any[]>([]);
+const load=async()=>{try{const{data,error}=await supabase.functions.invoke('owner-console',{body:{action:'list',resource:kind,limit:500}});if(error)throw error;setRows(Array.isArray(data)?data:[])}catch(e:any){onMessage(e?.message||'خواندن Log ناموفق بود.')}};
+useEffect(()=>{void load()},[kind]);
+return <section className="rounded-2xl border app-border bg-[var(--surface)] overflow-hidden"><div className="p-4 border-b app-border flex items-center gap-2"><History size={17}/><b>سوابق — فقط خواندنی</b><select className="mr-auto min-h-9 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-xs" value={kind} onChange={e=>setKind(e.target.value as LogKey)}>{Object.entries(logLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select><button className="icon-btn" onClick={()=>void load()}><RefreshCw size={15}/></button></div><div className="max-h-[65vh] overflow-auto">{rows.map((r:any,i:number)=><details key={r.id||i} className="border-b app-border p-3"><summary className="text-xs cursor-pointer">{logLabels[kind]} · {r.created_at||r.event_at||'—'}</summary><pre dir="ltr" className="mt-2 rounded-xl bg-[var(--surface-2)] p-3 text-[9px] overflow-auto">{JSON.stringify(r,null,2)}</pre></details>)}{!rows.length&&<div className="p-10 text-center text-xs app-muted">رکوردی وجود ندارد.</div>}</div></section>;
+};
+
+const OfflinePanel:React.FC=()=>{
+const[items,setItems]=useState<any[]>([]);
+useEffect(()=>{const a:any[]=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i)||'';if(/queue|offline|sync/i.test(k)){let v:any=localStorage.getItem(k);try{v=JSON.parse(v||'')}catch{}a.push({key:k,value:v})}}setItems(a)},[]);
+return <section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><b>Offline Queue</b><p className="text-xs app-muted mt-1">فقط خواندنی؛ هیچ آیتمی از Queue حذف یا اصلاح نمی‌شود.</p>{items.map(x=><details key={x.key} className="rounded-xl border app-border p-3 mt-2"><summary className="text-xs">{x.key}</summary><pre dir="ltr" className="text-[9px] mt-2 overflow-auto">{pretty(x.value)}</pre></details>)}{!items.length&&<div className="p-10 text-center text-xs app-muted">صف قابل مشاهده‌ای در localStorage پیدا نشد.</div>}</section>;
+};
+
+const sections=[
+{id:'users',label:'کاربران و نقش‌ها',icon:UserCog,res:['profiles']},{id:'cases',label:'Case و عملیات',icon:Database,res:['cases']},
+{id:'registration',label:'Registration Order',icon:FileCog,res:['registration_orders']},{id:'maritime',label:'Maritime',icon:Ship,res:['shipments','shipping_lines','vessels','contacts']},
+{id:'documents',label:'Documents',icon:Archive,res:['shipment_documents','customs_documents']},{id:'doc_rules',label:'Document Rules',icon:Settings2,res:['document_rules']},
+{id:'permit_rules',label:'Permit Rules',icon:ShieldCheck,res:['permit_rules','permits']},{id:'finance',label:'Finance / Accounting',icon:Wallet,res:['finance_settings','cost_categories','costs','payments','payment_requests','invoices','vouchers','voucher_lines']},
+{id:'declarations',label:'Declaration / EPL / Kottaj',icon:FileCog,res:['declarations']},{id:'exit',label:'Exit',icon:ArrowLeft,res:['exit']},
+{id:'ai',label:'AI Gateway / Core',icon:Bot,res:['ai_gateway']},{id:'print',label:'Print / PDF',icon:FileCog,res:['templates']},
+{id:'offline',label:'Offline Queue',icon:RefreshCw,res:[]},{id:'org',label:'Organization Settings',icon:Settings2,res:['org','org_settings','finance_settings']}
 ] as const;
 
-const ownerFields=(resource:OwnerResource,row:any)=>{
- const out:any={};for(const [k,v] of Object.entries(row||{})){
-  if(['id','organization_id','created_at','updated_at','created_by','updated_by','user_id','uploaded_by','voided_by','voided_at','archived_by','archived_at','is_archived','archive_reason'].includes(k))continue;
-  out[k]=v;
- }return out;
-};
-
-const OwnerResourcePanel:React.FC<{resource:OwnerResource;onMessage:(s:string)=>void}>=({resource,onMessage})=>{
- const[rows,setRows]=useState<any[]>([]),[search,setSearch]=useState(''),[selected,setSelected]=useState<any>(null),[json,setJson]=useState('{}'),[busy,setBusy]=useState(false),[modal,setModal]=useState<'delete'|'archive'|'void'|null>(null),[reason,setReason]=useState(''),[phrase,setPhrase]=useState('');
- const cols=resourceColumns[resource]||[];
- const isCase=resource==='cases';
- const isDoc=resource==='shipment_documents'||resource==='customs_documents';
- const isVoid=resource==='voucher_lines';
- const load=async()=>{
-  setBusy(true);
-  try{
-   const{data,error}=await supabase.functions.invoke('owner-console',{body:{action:'list',resource,search,limit:500}});
-   if(error)throw error;setRows(Array.isArray(data)?data:[]);
-  }catch(e:any){onMessage(e?.message||'خطا در خواندن داده.')}finally{setBusy(false)}
- };
- useEffect(()=>{void load()},[resource,search]);
- const open=(row:any)=>{setSelected(row);setJson(JSON.stringify(ownerFields(resource,row),null,2))};
- const createNew=()=>{setSelected(null);setJson('{}')};
- const save=async()=>{
-  setBusy(true);
-  try{
-   const data=JSON.parse(json||'{}');const body:any={action:selected?'update':'create',resource,data};
-   if(selected?.id)body.id=selected.id;
-   const{data:outData,error}=await supabase.functions.invoke('owner-console',{body});
-   if(error)throw error;
-   onMessage(selected?'رکورد ویرایش شد.':'رکورد ایجاد شد.');
-   setSelected(outData);setJson(JSON.stringify(ownerFields(resource,outData),null,2));await load();
-  }catch(e:any){onMessage(e?.message||'JSON یا ذخیره نامعتبر است.')}finally{setBusy(false)}
- };
- const runDanger=async()=>{
-  if(!selected||!modal||!reason.trim())return;
-  setBusy(true);
-  try{
-   let body:any;
-   if(modal==='archive')body={action:'delete',resource:'document_archive',id:selected.id,reason:reason.trim()};
-   else if(modal==='void')body={action:'delete',resource:'voucher_void',id:selected.id,reason:reason.trim(),confirmation:phrase.trim()};
-   else body={action:'delete',resource:'case_delete',id:selected.id,reason:reason.trim(),confirmation:phrase.trim()};
-   const{error}=await supabase.functions.invoke('owner-console',{body});if(error)throw error;
-   onMessage('عملیات با موفقیت ثبت شد.');setModal(null);setReason('');setPhrase('');setSelected(null);await load();
-  }catch(e:any){onMessage(e?.message||'عملیات ناموفق بود.')}finally{setBusy(false)}
- };
- const needsPhrase=modal==='delete'||modal==='void';
- const requiredPhrase=modal==='delete'?'تأیید نهایی حذف پرونده':modal==='void'?'تأیید نهایی ابطال ردیف سند':'';
- return <section className="space-y-3">
-  <div className="rounded-2xl border app-border bg-[var(--surface)] p-4">
-   <div className="flex flex-wrap items-center justify-between gap-3">
-    <div><b>{resourceLabels[resource]}</b><div className="text-[10px] app-muted mt-1">{rows.length} رکورد</div></div>
-    <div className="flex gap-2"><button className="px-3 py-2 rounded-xl border app-border text-xs" onClick={createNew}>＋ رکورد جدید</button><button className="icon-btn" onClick={()=>void load()}><RefreshCw size={15}/></button></div>
-   </div>
-   <div className="relative mt-3"><Search size={15} className="absolute right-3 top-3 app-muted"/><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] pr-9 px-3 text-sm" value={search} onChange={e=>setSearch(e.target.value)} placeholder="جست‌وجو در این بخش…"/></div>
-  </div>
-  <div className="grid xl:grid-cols-[1fr_480px] gap-3">
-   <div className="rounded-2xl border app-border bg-[var(--surface)] overflow-hidden max-h-[68vh] overflow-auto">
-    {rows.map((row:any)=><button key={row.id||JSON.stringify(row)} type="button" onClick={()=>open(row)} className={'w-full text-right border-b app-border px-4 py-3 hover:bg-[var(--surface-2)] '+(selected?.id===row.id?'bg-[var(--surface-2)]':'')}><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{cols.slice(0,9).map(k=><div key={k} className="min-w-0"><div className="text-[9px] app-muted">{k}</div><div className="text-xs truncate">{pretty(row[k])||'—'}</div></div>)}</div></button>)}
-    {!rows.length&&<div className="p-10 text-center text-xs app-muted">رکوردی یافت نشد.</div>}
-   </div>
-   <div className="rounded-2xl border app-border bg-[var(--surface)] p-4 h-fit">
-    <div className="flex items-center justify-between gap-2"><b>{selected?'ویرایش':'رکورد جدید'}</b>{selected?.id&&<span className="text-[9px] app-muted break-all">{selected.id}</span>}</div>
-    <textarea dir="ltr" className="w-full min-h-[430px] rounded-xl border app-border bg-[var(--surface-2)] p-3 text-xs mt-3 font-mono" value={json} onChange={e=>setJson(e.target.value)}/>
-    <div className="flex flex-wrap gap-2 mt-3"><button disabled={busy} onClick={()=>void save()} className="px-4 py-2.5 rounded-xl bg-[var(--primary)] text-white text-xs font-bold inline-flex items-center gap-2"><Save size={14}/>ذخیره</button>
-    {selected?.id&&isCase&&<button className="px-3 py-2 rounded-xl border app-border text-xs" onClick={()=>setJson(j=>j)}>تصحیح وضعیت ← در JSON</button>}
-    {selected?.id&&<button className="px-3 py-2 rounded-xl border border-red-500/30 text-red-500 text-xs" onClick={()=>setModal(isDoc?'archive':isVoid?'void':'delete')}>{isDoc?<><Archive size={14} className="inline ml-1"/>Archive</>:isVoid?<><Lock size={14} className="inline ml-1"/>Void</>:<><Trash2 size={14} className="inline ml-1"/>Delete</>}</button>}</div>
-    {isCase&&<CaseStatusOwnerAction row={selected} onMessage={onMessage} onDone={load}/>}
-   </div>
-  </div>
-  {modal&&<div className="fixed inset-0 z-[120] bg-black/55 flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-lg rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex justify-between gap-3"><div><b className="flex items-center gap-2"><AlertTriangle size={18}/>تأیید عملیات</b><p className="text-xs app-muted mt-2">{modal==='archive'?'سند فیزیکی حذف نمی‌شود و Storage دست‌نخورده می‌ماند.':modal==='void'?'ردیف حسابداری باطل می‌شود و داده‌های Void قابل ویرایش نیستند.':'این عملیات روی رکورد واقعی سازمان انجام می‌شود.'}</p></div><button className="icon-btn" onClick={()=>setModal(null)}><X size={17}/></button></div><textarea className="w-full min-h-24 rounded-xl border app-border bg-[var(--surface-2)] p-3 text-sm mt-4" value={reason} onChange={e=>setReason(e.target.value)} placeholder="دلیل اجباری…"/>{needsPhrase&&<><div className="text-[10px] app-muted mt-3">عبارت نهایی:</div><div className="rounded-xl border app-border bg-[var(--surface-2)] p-3 text-xs font-bold mt-1">{requiredPhrase}</div><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mt-2" value={phrase} onChange={e=>setPhrase(e.target.value)} placeholder="عبارت را عیناً وارد کنید"/></>}<div className="flex justify-end gap-2 mt-4"><button className="px-3 py-2 rounded-xl border app-border text-xs" onClick={()=>setModal(null)}>انصراف</button><button disabled={busy||!reason.trim()||(needsPhrase&&phrase!==requiredPhrase)} onClick={()=>void runDanger()} className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold">تأیید نهایی</button></div></div></div>}
- </section>;
-};
-
-const CaseStatusOwnerAction:React.FC<{row:any;onMessage:(s:string)=>void;onDone:()=>void}>=({row,onMessage,onDone})=>{
- const[open,setOpen]=useState(false),[status,setStatus]=useState(''),[reason,setReason]=useState(''),[busy,setBusy]=useState(false);
- if(!row)return null;
- const run=async()=>{
-  if(!status.trim()||!reason.trim())return;setBusy(true);
-  try{const{error}=await supabase.functions.invoke('owner-console',{body:{action:'update',resource:'case_status_override',id:row.id,new_status:status.trim(),reason:reason.trim()}});if(error)throw error;onMessage('Status با Override ثبت و در History/Audit ثبت شد.');setOpen(false);setStatus('');setReason('');onDone()}catch(e:any){onMessage(e?.message||'Override ناموفق بود.')}finally{setBusy(false)}
- };
- return <><button className="w-full mt-3 px-3 py-2.5 rounded-xl border border-amber-500/30 text-amber-600 text-xs font-bold" onClick={()=>setOpen(true)}>Override Status — فقط Owner</button>{open&&<div className="fixed inset-0 z-[120] bg-black/55 flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-lg rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex justify-between"><b>اصلاح دستی Status</b><button className="icon-btn" onClick={()=>setOpen(false)}><X size={17}/></button></div><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mt-4" value={status} onChange={e=>setStatus(e.target.value)} placeholder="مقدار معتبر case_status، مانند archived"/><textarea className="w-full min-h-24 rounded-xl border app-border bg-[var(--surface-2)] p-3 text-sm mt-2" value={reason} onChange={e=>setReason(e.target.value)} placeholder="دلیل اجباری Override…"/><div className="flex justify-end gap-2 mt-4"><button className="px-3 py-2 rounded-xl border app-border text-xs" onClick={()=>setOpen(false)}>انصراف</button><button disabled={busy||!status.trim()||!reason.trim()} className="px-4 py-2 rounded-xl bg-[var(--primary)] text-white text-xs" onClick={()=>void run()}>ثبت Override</button></div></div></div>}</>;
-};
-
-const OwnerLogsPanel:React.FC<{onMessage:(s:string)=>void}>=({onMessage})=>{
- const[kind,setKind]=useState<ReadOnlyKey>('audit'),[rows,setRows]=useState<any[]>([]);
- const load=async()=>{try{const{data,error}=await supabase.functions.invoke('owner-console',{body:{action:'list',resource:kind,limit:500}});if(error)throw error;setRows(Array.isArray(data)?data:[])}catch(e:any){onMessage(e?.message||'خواندن Log ناموفق بود.')}};
- useEffect(()=>{void load()},[kind]);
- return <section className="rounded-2xl border app-border bg-[var(--surface)] overflow-hidden"><div className="p-4 border-b app-border flex flex-wrap gap-2 items-center"><select className="min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-xs" value={kind} onChange={e=>setKind(e.target.value as ReadOnlyKey)}>{Object.entries(readOnlyLabels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select><button className="icon-btn" onClick={()=>void load()}><RefreshCw size={15}/></button><span className="text-[10px] app-muted">فقط خواندنی؛ Update/Delete در API و Database مسدود است.</span></div><div className="max-h-[56vh] overflow-auto">{rows.map((r:any,i:number)=><details key={r.id||i} className="border-b app-border p-3"><summary className="text-xs cursor-pointer">{readOnlyLabels[kind]} · {r.created_at||r.event_at||''}</summary><pre dir="ltr" className="mt-2 text-[9px] overflow-auto rounded-xl bg-[var(--surface-2)] p-3">{JSON.stringify(r,null,2)}</pre></details>)}</div></section>;
-};
-
-const OwnerOfflinePanel:React.FC=()=>{
- const[items,setItems]=useState<any[]>([]);
- useEffect(()=>{const a:any[]=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i)||'';if(k.toLowerCase().includes('queue')||k.toLowerCase().includes('offline')||k.toLowerCase().includes('sync')){let v:any=localStorage.getItem(k);try{v=JSON.parse(v||'')}catch{}a.push({key:k,value:v})}}setItems(a)},[]);
- return <section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><b>Offline Queue</b><p className="text-xs app-muted mt-1">عیب‌یابی read-only؛ هیچ Sync Queue از اینجا حذف نمی‌شود.</p>{items.length?items.map(x=><details key={x.key} className="border app-border rounded-xl p-3 mt-2"><summary className="text-xs">{x.key}</summary><pre dir="ltr" className="text-[9px] mt-2 overflow-auto">{pretty(x.value)}</pre></details>):<div className="p-10 text-center text-xs app-muted">صف قابل مشاهده‌ای در localStorage پیدا نشد.</div>}</section>;
-};
-
 export const AdvancedSettingsPage:React.FC=()=>{
- const{profile}=useAuth();const owner=profile?.role==='owner';const[section,setSection]=useState<(typeof ownerSections)[number]['id']>('users');const[resource,setResource]=useState<OwnerResource>('profiles');const[message,setMessage]=useState('');
- const current=useMemo(()=>ownerSections.find(x=>x.id===section)!,[section]);
- useEffect(()=>{if(current.resources[0])setResource(current.resources[0] as OwnerResource)},[section]);
- if(!owner)return <main dir="rtl" className="p-6"><div className="max-w-xl mx-auto rounded-2xl border border-red-500/30 bg-red-500/5 p-6 text-center"><ShieldCheck className="mx-auto mb-3 text-red-500"/><h1 className="font-black text-lg mt-3">دسترسی غیرمجاز</h1><p className="text-xs app-muted mt-2">Owner Console فقط برای Owner مجاز است.</p></div></main>;
- return <main dir="rtl" className="min-h-screen p-4 md:p-6"><div className="max-w-[1800px] mx-auto"><header className="flex flex-wrap items-center justify-between gap-3 mb-4"><div><div className="text-[10px] app-muted">OWNER CONTROL PLANE</div><h1 className="text-2xl font-black">تنظیمات تخصصی</h1><p className="text-xs app-muted mt-1">مدیریت کامل و امن داده‌های سازمان در محدوده Owner</p></div><span className="px-3 py-2 rounded-xl border app-border text-[10px]"><Lock size={13} className="inline ml-1"/>Owner Only</span></header>{message&&<div className="mb-4 rounded-xl border app-border bg-[var(--surface-2)] p-3 text-xs">{message}</div>}<div className="grid xl:grid-cols-[250px_1fr] gap-4"><aside className="rounded-2xl border app-border bg-[var(--surface)] p-2 h-fit xl:sticky xl:top-4"><div className="px-3 py-2 text-[10px] app-muted">کنسول مدیریت</div>{ownerSections.map(s=><button key={s.id} onClick={()=>setSection(s.id)} className={'w-full text-right flex items-center px-3 py-2.5 rounded-xl text-xs font-bold '+(section===s.id?'bg-[var(--primary)] text-white':'hover:bg-[var(--surface-2)]')}>{s.label}</button>)}<div className="border-t app-border my-2"/><button onClick={()=>setSection('ai')} className="w-full text-right flex items-center px-3 py-2.5 rounded-xl text-xs">Audit / Logs فقط خواندنی</button></aside><div>{current.resources.length>1&&<div className="flex gap-2 overflow-x-auto pb-2">{current.resources.map(r=><button key={r} onClick={()=>setResource(r as OwnerResource)} className={'px-3 py-2 rounded-xl border app-border text-xs font-bold whitespace-nowrap '+(resource===r?'bg-[var(--primary)] text-white':'bg-[var(--surface)]')}>{resourceLabels[r as OwnerResource]}</button>)}</div>}{section==='offline'?<OwnerOfflinePanel/>:<><OwnerResourcePanel resource={resource} onMessage={setMessage}/><div className="mt-3"><OwnerLogsPanel onMessage={setMessage}/></div></>}</div></div></div></main>;
+const{profile}=useAuth();const owner=profile?.role==='owner';const[section,setSection]=useState<(typeof sections)[number]['id']>('users');const[resource,setResource]=useState<ResourceKey>('profiles');const[message,setMessage]=useState('');const current=useMemo(()=>sections.find(s=>s.id===section)!,[section]);
+useEffect(()=>{if(current.res[0])setResource(current.res[0] as ResourceKey)},[section]);
+if(!owner)return <main dir="rtl" className="p-6"><div className="max-w-xl mx-auto rounded-2xl border border-red-500/30 bg-red-500/5 p-7 text-center"><ShieldCheck size={28} className="mx-auto text-red-500"/><h1 className="font-black text-lg mt-3">دسترسی غیرمجاز</h1><p className="text-xs app-muted mt-2">Owner Console فقط برای Owner قابل دسترسی است.</p></div></main>;
+return <main dir="rtl" className="min-h-screen p-4 md:p-6"><div className="max-w-[1800px] mx-auto"><header className="flex items-center justify-between gap-3 mb-4"><div><div className="text-[10px] app-muted">OWNER CONTROL PLANE</div><h1 className="text-2xl font-black mt-1">تنظیمات تخصصی</h1><p className="text-xs app-muted mt-1">Full CRUD تحت Session واقعی Owner، با مرزهای Audit و Data Integrity</p></div><span className="px-3 py-2 rounded-xl border app-border text-[10px]"><Lock size={13} className="inline ml-1"/> OWNER ONLY</span></header>{message&&<div className="mb-4 rounded-xl border app-border bg-[var(--surface-2)] p-3 text-xs">{message}</div>}<div className="grid xl:grid-cols-[250px_1fr] gap-4"><aside className="rounded-2xl border app-border bg-[var(--surface)] p-2 h-fit xl:sticky xl:top-4"><div className="px-3 py-2 text-[10px] app-muted">۱۴ بخش مدیریتی</div>{sections.map(s=>{const I=s.icon;return <button key={s.id} onClick={()=>setSection(s.id)} className={'w-full text-right flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold '+(section===s.id?'bg-[var(--primary)] text-white':'hover:bg-[var(--surface-2)]')}><I size={15}/>{s.label}</button>})}<button onClick={()=>setSection('ai')} className="w-full text-right mt-2 pt-3 border-t app-border text-[10px] app-muted">سوابق / Logs ← فقط خواندنی</button></aside><div className="min-w-0">{current.res.length>1&&<div className="flex gap-2 overflow-x-auto pb-2">{current.res.map(r=><button key={r} onClick={()=>setResource(r as ResourceKey)} className={'px-3 py-2 rounded-xl border app-border text-xs font-bold whitespace-nowrap '+(resource===r?'bg-[var(--primary)] text-white':'bg-[var(--surface)]')}>{resourceLabels[r as ResourceKey]}</button>)}</div>}{section==='users'?<UsersPanel onMessage={setMessage}/>:section==='offline'?<OfflinePanel/>:section==='ai'?<><ResourcePanel resource="ai_gateway" onMessage={setMessage}/><div className="mt-3"><LogsPanel onMessage={setMessage}/></div></>:<><ResourcePanel resource={resource} onMessage={setMessage}/></>}</div></div></div></main>;
 };
