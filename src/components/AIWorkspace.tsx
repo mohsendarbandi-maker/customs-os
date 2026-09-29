@@ -87,7 +87,7 @@ export const AIWorkspace:React.FC<{pageContext?:string}>=({pageContext=''})=>{
    const {data:profile,error:pe}=await supabase.from('profiles').select('organization_id').eq('id',user.id).maybeSingle();
    if(pe||!profile?.organization_id)throw new Error(pe?.message||'سازمان کاربر مشخص نیست.');
    const safe=file.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_');
-   const path=`${profile.organization_id}/${shipmentId}/${crypto.randomUUID()}-${safe}`;
+   const path=`${profile.organization_id}/${shipmentId}/${makeClientId()}-${safe}`;
    const {error:ue}=await supabase.storage.from('customs_documents').upload(path,file,{contentType:file.type||'application/octet-stream',cacheControl:'3600',upsert:false});
    if(ue)throw new Error(`آپلود «${file.name}» ناموفق بود: ${ue.message}`);
    const {data:doc,error:de}=await supabase.from('shipment_documents').insert({organization_id:profile.organization_id,shipment_id:shipmentId,uploaded_by:user.id,document_name:file.name,original_file_name:file.name,storage_path:path,mime_type:file.type||'application/octet-stream',file_size_bytes:file.size,extraction_status:'pending'}).select('id').single();
