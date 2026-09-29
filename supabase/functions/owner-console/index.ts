@@ -29,7 +29,7 @@ const READ_ONLY:Record<string,string>={
  shipment_tracking:'shipment_tracking_events',discrepancy_logs:'discrepancy_logs'
 };
 
-const PROTECTED=new Set(['id','organization_id','created_at','updated_at','created_by','updated_by','user_id','uploaded_by','voided_by','voided_at','archived_by','archived_at']);
+const PROTECTED=new Set(['id','organization_id','created_at','updated_at','created_by','updated_by','user_id','uploaded_by','voided_by','voided_at','archived_by','archived_at','is_archived','archive_reason']);
 const allowedData=(data:any)=>{
  const src=data&&typeof data==='object'?data:{}, out:any={};
  for(const [k,v] of Object.entries(src))if(!PROTECTED.has(k))out[k]=v;
@@ -83,7 +83,8 @@ async function write(ctx:any,body:any){
    if(op==='save'){
      if(!isUuid(body.id))throw new Error('user id required');
      const d=body.data||{};
-     return (await sb.rpc('owner_manage_profile',{p_user_id:body.id,p_role:d.role===undefined?null:d.role,p_client_id:d.client_id===undefined?null:d.client_id,p_full_name:d.full_name===undefined?null:d.full_name,p_phone:d.phone===undefined?null:d.phone,p_is_active:d.is_active===undefined?null:Boolean(d.is_active),p_reason:str(body.reason)})).data;
+     if((d.role!==undefined||d.is_active!==undefined||d.client_id!==undefined) && str(body.confirmation)!=='تأیید نهایی تغییر کاربر')throw new Error('Final confirmation phrase is required for role/status changes.');
+     const r=await sb.rpc('owner_manage_profile',{p_user_id:body.id,p_role:d.role===undefined?null:d.role,p_client_id:d.client_id===undefined?null:d.client_id,p_full_name:d.full_name===undefined?null:d.full_name,p_phone:d.phone===undefined?null:d.phone,p_is_active:d.is_active===undefined?null:Boolean(d.is_active),p_reason:str(body.reason)});if(r.error)throw r.error;return r.data;
    }
    if(op==='deactivate'){
      if(!isUuid(body.id))throw new Error('user id required');
@@ -135,6 +136,7 @@ async function write(ctx:any,body:any){
    const r=await sb.from('ai_gateway_settings').upsert(d,{onConflict:'organization_id'}).select('*').single();if(r.error)throw r.error;return r.data;
  }
  const d=allowedData(body.data);
+ if(resource==='cases'&&op==='update')delete d.status;
  if(op==='create'){
    if(cfg.table==='organizations')d.id=profile.organization_id;
    else if(cfg.table!=='user_settings')d.organization_id=profile.organization_id;
