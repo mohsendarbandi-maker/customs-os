@@ -9,6 +9,7 @@ export type CaseSelectorRow={
   client_id:string|null;
   vessel_id:string|null;
   created_at:string;
+  updated_at:string;
   case_created_at:string|null;
   display_name:string;
   client_name:string|null;
