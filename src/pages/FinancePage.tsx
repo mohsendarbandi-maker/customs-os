@@ -26,7 +26,7 @@ export const FinancePage:React.FC=()=>{
  const{profile}=useAuth();const orgId=profile?.organization_id||'';const{clients,rows:shipments}=useCaseSelectorData(orgId);
  const isOwner=profile?.role==='owner',isAdmin=profile?.role==='admin';
  const[tab,setTab]=useState<Tab>('overview'),[costs,setCosts]=useState<any[]>([]),[cats,setCats]=useState<any[]>([]),[invoices,setInvoices]=useState<any[]>([]),[requests,setRequests]=useState<any[]>([]),[payments,setPayments]=useState<any[]>([]),[petty,setPetty]=useState<any[]>([]),[profits,setProfits]=useState<any[]>([]),[vouchers,setVouchers]=useState<any[]>([]),[lines,setLines]=useState<any[]>([]),[profiles,setProfiles]=useState<any[]>([]),[permissionRows,setPermissionRows]=useState<any[]>([]),[permission,setPermission]=useState<PermissionRow|null>(null),[orgSummary,setOrgSummary]=useState<any>(null),[settings,setSettings]=useState<any>(null),[settingsForm,setSettingsForm]=useState<any>({}),[search,setSearch]=useState(''),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false);
- const[expenseOpen,setExpenseOpen]=useState(false),[expenseEditOpen,setExpenseEditOpen]=useState(false),[expenseEdit,setExpenseEdit]=useState<any>(null),[approvalTarget,setApprovalTarget]=useState<any>(null),[selectedCostIds,setSelectedCostIds]=useState<string[]>([]),[pettyOpen,setPettyOpen]=useState(false),[requestOpen,setRequestOpen]=useState(false),[profitOpen,setProfitOpen]=useState<any>(null),[requestPosition,setRequestPosition]=useState<any>(null);
+ const[expenseOpen,setExpenseOpen]=useState(false),[expenseEditOpen,setExpenseEditOpen]=useState(false),[expenseEdit,setExpenseEdit]=useState<any>(null),[approvalTarget,setApprovalTarget]=useState<any>(null),[selectedCostIds,setSelectedCostIds]=useState<string[]>([]),[pettyOpen,setPettyOpen]=useState(false),[requestOpen,setRequestOpen]=useState(false),[profitOpen,setProfitOpen]=useState<any>(null),[requestPosition,setRequestPosition]=useState<any>(null),[profitFrom,setProfitFrom]=useState(''),[profitTo,setProfitTo]=useState('');
  const[expense,setExpense]=useState<any>({client_id:'',shipment_id:'',category_id:'',amount:'',currency:'IRR',exchange_rate:'1',paid_by:'',description:'',notes:'',file:null});
  const[pettyForm,setPettyForm]=useState<any>({user_id:profile?.id||'',amount:'',direction:'spent',related_expense_id:'',description:''});
  const[requestForm,setRequestForm]=useState<any>({client_id:'',shipment_id:'',amount:'',currency:'IRR',trigger_point:'mid_process',subject:'درخواست وجه هزینه‌های محموله',public_note:''});
@@ -77,9 +77,11 @@ export const FinancePage:React.FC=()=>{
  const companyApproved=costs.filter(x=>x.approval_status==='approved'&&x.paid_by==='our_company').reduce((a,x)=>a+Number(x.amount_irr||0)+Number(x.vat_amount||0),0);
  const clientDirect=costs.filter(x=>x.approval_status==='approved'&&x.paid_by==='client_direct').reduce((a,x)=>a+Number(x.amount_irr||0)+Number(x.vat_amount||0),0);
  const activeLines=lines.filter(x=>x.status==='active');const profitTotal=profits.reduce((a,x)=>a+Number(x.profit_amount||0),0);
+ const visibleProfits=useMemo(()=>profits.filter(p=>{const d=p.created_at?new Date(p.created_at):null;const from=profitFrom?new Date(profitFrom):null;const to=profitTo?new Date(profitTo+'T23:59:59'):null;return (!d||(!from||d>=from)&&(!to||d<=to))}),[profits,profitFrom,profitTo]);
+ const profitPeriodTotal=visibleProfits.reduce((a,x)=>a+Number(x.profit_amount||0),0);
  const profitByCase=useMemo(()=>{
    const voucherMap=new Map(vouchers.map(v=>[v.id,v]));
-   const lineProfit=new Map(profits.map(p=>[p.voucher_line_item_id,p]));
+   const lineProfit=new Map(visibleProfits.map(p=>[p.voucher_line_item_id,p]));
    const grouped=new Map<string,{case_id:string;shipment?:any;amount:number;lines:number}>();
    for(const line of activeLines){
      const p=lineProfit.get(line.id);const v=voucherMap.get(line.voucher_id);
@@ -88,7 +90,7 @@ export const FinancePage:React.FC=()=>{
      current.amount+=Number(p.profit_amount||0);current.lines+=1;grouped.set(v.case_id,current);
    }
    return [...grouped.values()].map(x=>({...x,shipment:shipments.find(s=>s.case_id===x.case_id)})).sort((a,b)=>b.amount-a.amount);
- },[activeLines,profits,vouchers,shipments]);
+ },[activeLines,visibleProfits,vouchers,shipments]);
  const filteredShipments=useMemo(()=>{const q=search.trim().toLowerCase();return shipments.filter(s=>!q||[s.display_name,s.bill_of_lading_no,s.client_name].join(' ').toLowerCase().includes(q))},[shipments,search]);
  const claimFor=(shipmentId:string)=>calculateOutstanding(costs.filter(x=>x.shipment_id===shipmentId&&x.approval_status==='approved'&&x.paid_by==='our_company'&&x.billable).reduce((a,x)=>a+Number(x.amount_irr||0)+Number(x.vat_amount||0),0),profits.filter(p=>lines.some(l=>l.id===p.voucher_line_item_id&&vouchers.some(v=>v.id===l.voucher_id&&v.case_id===shipments.find(s=>s.id===shipmentId)?.case_id))).reduce((a,x)=>a+Number(x.profit_amount||0),0),payments.filter(x=>x.shipment_id===shipmentId&&x.direction==='received').reduce((a,x)=>a+Number(x.amount_irr||0),0));
  const loadShipmentPosition=async(shipmentId:string)=>{
@@ -155,17 +157,31 @@ export const FinancePage:React.FC=()=>{
 
   {tab==='profit'&&<Card className="p-4">
    <div className="flex flex-col gap-4">
-    <div className="flex flex-wrap justify-between gap-3">
+    <div className="flex flex-wrap items-end justify-between gap-3">
      <div>
       <h2 className="font-black">سود پنهان روی ردیف سند حسابداری</h2>
       <p className="text-[10px] app-muted mt-1">سود فقط برای کاربران مجاز نمایش داده می‌شود و هرگز وارد چاپ سند رسمی نمی‌شود.</p>
      </div>
-     <div className="flex gap-2">
-      <Metric icon={Banknote} title="کل سود ثبت‌شده" value={formatMoney(profitTotal,'IRR')}/>
-      <Metric icon={FileText} title="ردیف‌های دارای سود" value={String(profits.length)}/>
+     <div className="grid grid-cols-2 gap-2 min-w-[260px]">
+      <Metric icon={Banknote} title="کل سود" value={formatMoney(profitTotal,'IRR')}/>
+      <Metric icon={Banknote} title="سود بازه انتخابی" value={formatMoney(profitPeriodTotal,'IRR')}/>
      </div>
     </div>
     {!canProfit?<PermissionNotice text="این بخش فقط برای Owner یا Admin دارای مجوز مشاهده سود است."/>:<>
+     <section className="rounded-2xl border app-border bg-[var(--surface-2)] p-4">
+      <div className="flex flex-col md:flex-row md:items-end gap-3 justify-between">
+       <div><b className="text-sm">گزارش سود دوره‌ای</b><div className="text-[10px] app-muted mt-1">برای گزارش ماهانه یا هر بازه، تاریخ شروع و پایان را انتخاب کنید.</div></div>
+       <div className="grid grid-cols-2 gap-2">
+        <label className="text-[9px] app-muted">از<input className="input mt-1" type="date" value={profitFrom} onChange={e=>setProfitFrom(e.target.value)} dir="ltr"/></label>
+        <label className="text-[9px] app-muted">تا<input className="input mt-1" type="date" value={profitTo} onChange={e=>setProfitTo(e.target.value)} dir="ltr"/></label>
+       </div>
+      </div>
+      <div className="grid md:grid-cols-3 gap-3 mt-4">
+       <InfoBox label="سود بازه" value={formatMoney(profitPeriodTotal,'IRR')}/>
+       <InfoBox label="تعداد ردیف سود" value={String(visibleProfits.length)}/>
+       <InfoBox label="وضعیت گزارش" value={profitFrom||profitTo?'بازه انتخاب شده':'کل دوره'}/>
+      </div>
+     </section>
      <section className="rounded-2xl border app-border bg-[var(--surface-2)] p-4">
       <b className="text-sm">جمع سود به تفکیک پرونده</b>
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-3">
@@ -174,19 +190,19 @@ export const FinancePage:React.FC=()=>{
         <div className="text-[10px] app-muted mt-1">{clientName(x.shipment?.client_id||'')} · {x.lines} ردیف سود</div>
         <div className="text-xl font-black mt-3" dir="ltr">{formatMoney(x.amount,'IRR')}</div>
        </div>)}
-       {!profitByCase.length&&<div className="md:col-span-3"><Empty text="هنوز سودی روی پرونده‌ها تعریف نشده است."/></div>}
+       {!profitByCase.length&&<div className="md:col-span-3"><Empty text="در این بازه سودی ثبت نشده است."/></div>}
       </div>
      </section>
      <section>
-      <b className="text-sm">ردیف‌های سند</b>
-      <div className="grid md:grid-cols-2 gap-3 mt-3">
-       {activeLines.map(l=>{const v=vouchers.find(z=>z.id===l.voucher_id),p=profits.find(z=>z.voucher_line_item_id===l.id);return <div key={l.id} className="rounded-2xl border app-border bg-[var(--surface-2)] p-4">
+      <div className="flex items-center justify-between mb-3"><b className="text-sm">ردیف‌های سند</b><span className="text-[10px] app-muted">{visibleProfits.length} ردیف در بازه</span></div>
+      <div className="grid md:grid-cols-2 gap-3">
+       {activeLines.map(l=>{const v=vouchers.find(z=>z.id===l.voucher_id),p=visibleProfits.find(z=>z.voucher_line_item_id===l.id);return <div key={l.id} className="rounded-2xl border app-border bg-[var(--surface-2)] p-4">
         <div className="flex justify-between gap-3">
          <div><b>{l.description||'بدون شرح'}</b><div className="text-[10px] app-muted mt-1">سند {v?.voucher_number||'—'} · کوتاژ {v?.kottaj_number||'—'}</div></div>
          <InfoBox label="مبلغ ردیف" value={formatMoney(Math.max(Number(l.debit_amount||0),Number(l.credit_amount||0)),'IRR')}/>
         </div>
         <div className="grid grid-cols-2 gap-2 mt-4">
-         <InfoBox label="سود" value={p?formatMoney(p.profit_amount,'IRR'):'تعریف نشده'}/>
+         <InfoBox label="سود" value={p?formatMoney(p.profit_amount,'IRR'):'تعریف نشده در این بازه'}/>
          <InfoBox label="نمایش" value={p?.visible_to==='owner_and_admin'?'Owner + Admin':'Owner only'}/>
         </div>
         <div className="mt-3"><Btn onClick={()=>setProfitOpen({lineId:l.id,type:p?.profit_type||'partial_amount',amount:p?.profit_amount||'',visible_to:p?.visible_to||'owner_only'})}>{p?'ویرایش سود':'تعریف سود'}</Btn></div>
@@ -196,7 +212,7 @@ export const FinancePage:React.FC=()=>{
      </section>
     </>}
    </div>
-  </Card>}
+  </Card>
 
   {tab==='permissions'&&isOwner&&<Card className="p-4"><div className="mb-4"><h2 className="font-black">ماتریس دسترسی مالی</h2><p className="text-[10px] app-muted mt-1">دسترسی‌ها در Database نگهداری می‌شوند، نه هاردکد.</p></div><div className="space-y-3">{profiles.map(p=>{const row={...(permissionRows.find(x=>x.user_id===p.id)||{user_id:p.id,view_own_expenses:true,view_own_petty_cash:true,view_own_receipts:true,approve_other_expenses:p.role==='owner'||p.role==='admin',issue_payment_request:p.role==='owner'||p.role==='admin',view_org_financials:p.role==='owner',view_profit:p.role==='owner'})};return <div key={p.id} className="rounded-2xl border app-border bg-[var(--surface-2)] p-4"><div className="flex justify-between mb-4"><div><b>{p.full_name}</b><div className="text-[10px] app-muted mt-1">{roleLabel(p.role)} · {p.is_active?'فعال':'غیرفعال'}</div></div><Btn primary onClick={()=>void savePerm(row)}><Save size={14}/>ذخیره</Btn></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">{[['view_own_expenses','مشاهده هزینه خودش'],['view_own_petty_cash','مشاهده تنخواه خودش'],['view_own_receipts','مشاهده فیش خودش'],['approve_other_expenses','تأیید/رد هزینه دیگران'],['issue_payment_request','صدور درخواست وجه'],['view_org_financials','گزارش تجمیعی سازمان'],['view_profit','مشاهده سود پنهان']].map(([k,l])=><label key={k} className="rounded-xl border app-border bg-[var(--surface)] p-3 flex justify-between text-xs"><span>{l}</span><input type="checkbox" checked={!!row[k]} onChange={e=>{row[k]=e.target.checked;setPermissionRows(a=>a.some(x=>x.user_id===row.user_id)?a.map(x=>x.user_id===row.user_id?{...x,...row}:x):a.concat(row))}}/></label>)}</div></div>})}</div></Card>}
 
