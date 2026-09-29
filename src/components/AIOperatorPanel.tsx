@@ -73,6 +73,7 @@ export const AIOperatorPanel:React.FC<{pageContext?:string}>=({pageContext=''})=
   setInput('');setError('');setBusy(true);setMessages(m=>[...m,{role:'user',text:q}]);
   try{
    const data=await call({op:'plan',query:q,page_context:pageContext,session_id:sessionId,attachment_meta:file?{file_name:file.name,mime_type:file.type,file_size_bytes:file.size}:null});
+   if(data?.status==='capabilities'){setMessages(m=>[...m,{role:'assistant',text:String(data.answer||'قابلیت‌های AI Operator:\n\n'+(data.capabilities||[]).map((x:any)=>'• '+x.label).join('\n'))}]);setFile(undefined);return;}
    const p=data?.plan as Plan|undefined;
    if(data?.status==='awaiting_confirmation'){
     const risk=(data.risk_level||p?.risk||'requires_confirmation') as Risk;
