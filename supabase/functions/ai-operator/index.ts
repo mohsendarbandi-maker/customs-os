@@ -215,13 +215,25 @@ const execute=async(sb:any,user:any,org:string,code:string,t:any,p:any,attachmen
  if(code.startsWith('maritime.contact.')){if(code.endsWith('.create')){const line=await target(sb,'shipping_lines',t,'shipping_line_id','shipping_line_name','name');if(line.clarification)return line;const r=await sb.from('shipping_line_contacts').insert({organization_id:org,shipping_line_id:line.row.id,full_name:str(p.full_name),role_title:str(p.role_title)||null,phone:str(p.phone)||null,whatsapp:str(p.whatsapp)||null,email:str(p.email)||null,notes:str(p.notes)||null,is_primary:Boolean(p.is_primary)}).select('*').single();if(r.error)throw r.error;return{type:'write',data:pick(r.data,['id','shipping_line_id','full_name','role_title','phone','whatsapp','email','is_primary'])};}const x=await target(sb,'shipping_line_contacts',t,'contact_id','full_name','full_name');if(x.clarification)return x;if(code.endsWith('.update')){const ch:any={};for(const k of ['full_name','role_title','phone','whatsapp','email','notes','is_primary','shipping_line_id'])if(p[k]!==undefined)ch[k]=p[k];const r=await sb.from('shipping_line_contacts').update(ch).eq('id',x.row.id).select('*').single();if(r.error)throw r.error;return{type:'write',data:pick(r.data,['id','shipping_line_id','full_name','role_title','phone','whatsapp','email','is_primary'])};}const r=await sb.from('shipping_line_contacts').delete().eq('id',x.row.id);if(r.error)throw r.error;return{type:'delete',data:{id:x.row.id}};}
 
  if(code==='documents.upload'){
-const x=await shipment(sb,t);if(x.clarification)return x;if(!attachment?.data&&!attachment?.storage_path)
+   const x=await shipment(sb,t);if(x.clarification)return x;
+   if(!attachment?.data&&!attachment?.storage_path)throw new Error('فایل ضمیمه لازم است.');
    const mime=str(attachment.mime_type).toLowerCase();if(!/^(application\/pdf|image\/(jpeg|png))$/i.test(mime))throw new Error('فقط PDF/JPG/PNG مجاز است.');
+   const name=str(attachment.file_name)||'document';const safe=name.replace(/[^\w.\-\u0600-\u06ff]+/g,'_');const suppliedPath=str(attachment.storage_path);
+   if(suppliedPath){
+     const prefix=org+'/'+x.row.id+'/';
+     if(!suppliedPath.startsWith(prefix))throw new Error('مسیر فایل ضمیمه خارج از محدوده محموله است.');
+     const existingSize=Number(attachment.file_size_bytes||0);
+     if(existingSize<0||existingSize>50*1024*1024)throw new Error('حجم فایل نامعتبر است.');
+     const r=await sb.from('shipment_documents').insert({organization_id:org,shipment_id:x.row.id,uploaded_by:user.id,document_name:name,original_file_name:name,storage_path:suppliedPath,mime_type:mime,file_size_bytes:existingSize,extraction_status:'pending'}).select('*').single();
+     if(r.error)throw r.error;
+     return{type:'write',data:pick(r.data,['id','shipment_id','document_name','original_file_name','storage_path','mime_type','file_size_bytes'])};
+   }
    const bytes=Uint8Array.from(atob(str(attachment.data)),c=>c.charCodeAt(0));if(bytes.length>50*1024*1024)throw new Error('حجم فایل بیش از ۵۰MB است.');
-   const name=str(attachment.file_name)||'document';const safe=name.replace(/[^\w.\-\u0600-\u06ff]+/g,'_');const suppliedPath=str(attachment.storage_path);if(suppliedPath){const prefix=org+'/'+x.row.id+'/';if(!suppliedPath.startsWith(prefix))throw new Error('مسیر فایل ضمیمه خارج از محدوده محموله است.');const existingSize=Number(attachment.file_size_bytes||0);const r=await sb.from('shipment_documents').insert({organization_id:org,shipment_id:x.row.id,uploaded_by:user.id,document_name:name,original_file_name:name,storage_path:suppliedPath,mime_type:mime,file_size_bytes:existingSize,extraction_status:'pending'}).select('*').single();if(r.error)throw r.error;return{type:'write',data:pick(r.data,['id','shipment_id','document_name','original_file_name','storage_path','mime_type','file_size_bytes'])};}const path=org+'/'+x.row.id+'/'+crypto.randomUUID()+'-'+safe;
+   const path=org+'/'+x.row.id+'/'+crypto.randomUUID()+'-'+safe;
    const up=await sb.storage.from('customs_documents').upload(path,bytes,{contentType:mime,upsert:false});if(up.error)throw up.error;
    const r=await sb.from('shipment_documents').insert({organization_id:org,shipment_id:x.row.id,uploaded_by:user.id,document_name:name,original_file_name:name,storage_path:path,mime_type:mime,file_size_bytes:bytes.length,extraction_status:'pending'}).select('*').single();
-   if(r.error){await sb.storage.from('customs_documents').remove([path]);throw r.error;}return{type:'write',data:pick(r.data,['id','shipment_id','document_name','original_file_name','storage_path','mime_type','file_size_bytes'])};
+   if(r.error){await sb.storage.from('customs_documents').remove([path]);throw r.error;}
+   return{type:'write',data:pick(r.data,['id','shipment_id','document_name','original_file_name','storage_path','mime_type','file_size_bytes'])};
  }
  if(code==='documents.update'||code==='documents.delete'){
   const id=t.document_id;
