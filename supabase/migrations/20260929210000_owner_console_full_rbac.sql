@@ -56,7 +56,8 @@ begin
 end $$;
 
 -- Organization singleton/settings tables do not have an id column.
-do $$
+do $
+declare t text;
 begin
   execute 'alter table public.organizations enable row level security';
   execute 'drop policy if exists owner_console_org_all on public.organizations';
