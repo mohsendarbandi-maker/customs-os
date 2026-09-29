@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 
-const makeCompatibleUUID=()=>{if(typeof globalThis.crypto?.randomUUID==='function')return globalThis.crypto.randomUUID();const bytes=new Uint8Array(16);if(globalThis.crypto?.getRandomValues)globalThis.crypto.getRandomValues(bytes);else{for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5')};import {
+const makeCompatibleUUID=()=>{const r=()=>Math.floor(Math.random()*256).toString(16).padStart(2,'0');const b=Array.from({length:16},r);b[6]=((parseInt(b[6],16)&15)|64).toString(16).padStart(2,'0');b[8]=((parseInt(b[8],16)&63)|128).toString(16).padStart(2,'0');return `${b.slice(0,4).join('')}-${b.slice(4,6).join('')}-${b.slice(6,8).join('')}-${b.slice(8,10).join('')}-${b.slice(10).join('')}`};import {
   Download,
   Eye,
   FileText,
