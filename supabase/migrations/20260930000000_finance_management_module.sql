@@ -188,7 +188,15 @@ using(organization_id=(select public.user_org_id()) and (
 ));
 drop policy if exists finance_ci_insert on public.finance_cost_items;
 create policy finance_ci_insert on public.finance_cost_items for insert to authenticated
-with check(organization_id=(select public.user_org_id()) and created_by=(select auth.uid()) and approval_status='pending');
+with check(
+ organization_id=(select public.user_org_id())
+ and created_by=(select auth.uid())
+ and approval_status='pending'
+ and (
+  (select public.user_role()) <> 'client'::public.user_role
+  or client_id=(select public.user_client_id())
+ )
+);
 drop policy if exists finance_ci_update on public.finance_cost_items;
 create policy finance_ci_update on public.finance_cost_items for update to authenticated
 using(organization_id=(select public.user_org_id()) and (
