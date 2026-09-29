@@ -110,3 +110,94 @@ main.min-h-screen.overflow-hidden.text-white.relative{background:var(--bg)!impor
 .ai-operator-attach:disabled{opacity:.35}
 .ai-operator-file-chip{max-width:calc(100% - 36px);display:flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-size:9px;color:var(--text-muted)}
 .ai-operator-file-chip button{display:grid;place-items:center;color:var(--text-muted)}
+
+
+/* FINANCE UI — readable glass depth without sacrificing numeric contrast */
+.finance-page{
+  --finance-input-bg:color-mix(in srgb,var(--surface-3) 74%,transparent);
+  --finance-input-border:color-mix(in srgb,var(--border) 82%,var(--primary) 18%);
+  --finance-panel:color-mix(in srgb,var(--surface) 86%,transparent);
+}
+.finance-page .finance-card,
+.finance-page .finance-metric,
+.finance-page .finance-info{
+  background:var(--finance-panel)!important;
+  border-color:color-mix(in srgb,var(--border) 82%,var(--primary) 10%)!important;
+  backdrop-filter:blur(14px) saturate(1.04);
+  -webkit-backdrop-filter:blur(14px) saturate(1.04);
+  box-shadow:0 10px 28px color-mix(in srgb,var(--bg) 16%,transparent);
+}
+.finance-page .finance-metric{
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+.finance-page .finance-metric:hover{
+  transform:translateY(-1px);
+  border-color:color-mix(in srgb,var(--primary) 32%,var(--border))!important;
+  box-shadow:0 14px 32px color-mix(in srgb,var(--primary) 10%,transparent);
+}
+.finance-page .finance-info{
+  background:color-mix(in srgb,var(--surface-2) 64%,transparent)!important;
+}
+.finance-page .input,
+.finance-page input.input,
+.finance-page select.input,
+.finance-page textarea.input{
+  width:100%;
+  min-height:46px;
+  border:1px solid var(--finance-input-border)!important;
+  border-radius:14px!important;
+  background:var(--finance-input-bg)!important;
+  color:var(--text)!important;
+  caret-color:var(--primary);
+  outline:none!important;
+  box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 6%,transparent),0 3px 12px color-mix(in srgb,var(--bg) 10%,transparent);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  transition:border-color .18s ease,box-shadow .18s ease,background .18s ease,transform .18s ease;
+}
+.finance-page textarea.input{min-height:110px;padding-top:11px;padding-bottom:11px;line-height:1.8}
+.finance-page .input::placeholder{color:var(--text-muted)!important;opacity:.9}
+.finance-page .input:hover{
+  border-color:color-mix(in srgb,var(--primary) 28%,var(--border))!important;
+  background:color-mix(in srgb,var(--finance-input-bg) 86%,var(--primary) 14%)!important;
+}
+.finance-page .input:focus{
+  border-color:color-mix(in srgb,var(--primary) 72%,var(--border))!important;
+  background:color-mix(in srgb,var(--surface-2) 76%,transparent)!important;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 11%,transparent),0 10px 28px color-mix(in srgb,var(--primary) 8%,transparent)!important;
+  transform:translateY(-1px);
+}
+.finance-page select.input option{
+  background:var(--surface)!important;
+  color:var(--text)!important;
+}
+.finance-page .finance-modal-backdrop{
+  background:color-mix(in srgb,#020617 56%,transparent);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+.finance-page .finance-modal{
+  background:color-mix(in srgb,var(--surface) 84%,transparent)!important;
+  color:var(--text)!important;
+  backdrop-filter:blur(24px) saturate(1.08);
+  -webkit-backdrop-filter:blur(24px) saturate(1.08);
+  border-color:color-mix(in srgb,var(--border) 86%,var(--primary) 10%)!important;
+}
+.finance-page .finance-modal .rounded-2xl,
+.finance-page .finance-modal .rounded-xl{
+  color:var(--text);
+}
+.finance-page [dir="ltr"]{
+  font-variant-numeric:tabular-nums;
+}
+.finance-page button:not(:disabled),
+.finance-page a{
+  -webkit-tap-highlight-color:transparent;
+}
+@media(max-width:767px){
+  .finance-page .input,
+  .finance-page input.input,
+  .finance-page select.input{min-height:50px;font-size:16px}
+  .finance-page textarea.input{font-size:16px}
+}
+
