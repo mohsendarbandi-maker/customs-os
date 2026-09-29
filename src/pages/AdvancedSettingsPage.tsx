@@ -241,7 +241,7 @@ const ResourcePanel:React.FC<{resource:ResourceKey;onMessage:(s:string)=>void}>=
   }catch(e:any){onMessage(e?.message||'عملیات ناموفق بود.')}finally{setBusy(false)}
  };
  const isDoc=resource==='shipment_documents'||resource==='customs_documents';const isVoid=resource==='voucher_lines';
- const fields=(selected?Object.keys(draft):[]).filter(k=>!protectedKeys.has(k));
+ const fields=selected?.__new?(resourceColumns[resource]||[]):Object.keys(draft).filter(k=>!protectedKeys.has(k));
  return <section className="space-y-4">
   <div className="rounded-3xl border app-border bg-[var(--surface)] p-4 md:p-5 shadow-sm">
    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
