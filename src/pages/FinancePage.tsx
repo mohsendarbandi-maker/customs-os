@@ -147,8 +147,8 @@ export const FinancePage:React.FC=()=>{
   try{
    const oldPath=receiptPath;
    setReceiptPath('');
-   if(oldPath)await supabase.storage.from('finance-receipts').remove([oldPath]).catch(()=>null);
    await uploadExpenseReceipt(file);
+   if(oldPath)await supabase.storage.from('finance-receipts').remove([oldPath]).catch(()=>null);
    await extractExpenseReceipt(file);
   }catch(e:any){setReceiptStatus('error');setReceiptStatusText(e?.message||'آپلود/استخراج فیش ناموفق بود.');setExpenseMsg(e?.message||'آپلود/استخراج فیش ناموفق بود.');}
  };
