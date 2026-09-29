@@ -475,3 +475,14 @@ end;
 $$;
 revoke all on function public.finance_shipment_position(uuid) from public;
 grant execute on function public.finance_shipment_position(uuid) to authenticated;
+revoke execute on function public.approve_finance_expense(uuid,boolean,text) from anon, public;
+grant execute on function public.approve_finance_expense(uuid,boolean,text) to authenticated;
+revoke execute on function public.record_petty_cash_entry(uuid,numeric,text,uuid,text) from anon, public;
+grant execute on function public.record_petty_cash_entry(uuid,numeric,text,uuid,text) to authenticated;
+revoke execute on function public.finance_organization_summary() from anon, public;
+grant execute on function public.finance_organization_summary() to authenticated;
+revoke execute on function public.finance_shipment_position(uuid) from anon, public;
+grant execute on function public.finance_shipment_position(uuid) to authenticated;
+revoke execute on function public.finance_expense_validate_amount() from anon, authenticated, public, service_role;
+revoke execute on function public.validate_voucher_line_profit() from anon, authenticated, public, service_role;
+
