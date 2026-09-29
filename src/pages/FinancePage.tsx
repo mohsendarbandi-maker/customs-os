@@ -13,12 +13,12 @@ const roleLabel=(v:string)=>({owner:'Owner',admin:'Admin',broker:'Broker',accoun
 const dateFa=(v:string|null|undefined)=>v?new Date(v).toLocaleDateString('fa-IR'):'—';
 const tone=(status:string)=>['approved','paid','closed'].includes(status)?'bg-emerald-500/10 border-emerald-500/20 text-emerald-700':['pending','sent','issued','partially_paid','ready'].includes(status)?'bg-amber-500/10 border-amber-500/20 text-amber-700':['rejected','cancelled','void'].includes(status)?'bg-red-500/10 border-red-500/20 text-red-700':'bg-[var(--surface-2)] app-muted';
 const StatusBadge=({status,label}:{status:string;label?:string})=><span className={'inline-flex items-center px-2.5 py-1 rounded-full border text-[10px] font-bold '+tone(status)}>{label||status}</span>;
-const Card=({children,className=''}:{children:React.ReactNode;className?:string})=><section className={'rounded-3xl border app-border bg-[var(--surface)] '+className}>{children}</section>;
-const Metric=({icon:Icon,title,value,sub}:{icon:any;title:string;value:string;sub?:string})=><div className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex items-center gap-2 text-xs app-muted"><span className="grid place-items-center w-8 h-8 rounded-xl bg-[var(--surface-2)]"><Icon size={16}/></span>{title}</div><div dir="ltr" className="text-xl font-black mt-3">{value}</div>{sub&&<div className="text-[10px] app-muted mt-1">{sub}</div>}</div>;
+const Card=({children,className=''}:{children:React.ReactNode;className?:string})=><section className={'finance-card rounded-3xl border app-border bg-[var(--surface)] '+className}>{children}</section>;
+const Metric=({icon:Icon,title,value,sub}:{icon:any;title:string;value:string;sub?:string})=><div className="finance-metric rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex items-center gap-2 text-xs app-muted"><span className="grid place-items-center w-8 h-8 rounded-xl bg-[var(--surface-2)]"><Icon size={16}/></span>{title}</div><div dir="ltr" className="text-xl font-black mt-3">{value}</div>{sub&&<div className="text-[10px] app-muted mt-1">{sub}</div>}</div>;
 const Btn=({children,onClick,primary=false,disabled=false}:{children:React.ReactNode;onClick?:()=>void;primary?:boolean;disabled?:boolean})=><button onClick={onClick} disabled={disabled} className={'min-h-11 px-4 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-2 disabled:opacity-40 '+(primary?'bg-[var(--primary)] text-white':'border app-border bg-[var(--surface)]')}>{children}</button>;
 const Field=({label,children,wide=false,help}:{label:string;children:React.ReactNode;wide?:boolean;help?:string})=><label className={(wide?'md:col-span-2 ':'')+'block text-xs'}><span className="block text-[10px] app-muted mb-2">{label}</span>{children}{help&&<span className="block text-[9px] app-muted mt-1">{help}</span>}</label>;
 const Modal=({title,close,children,wide=false}:{title:string;close:()=>void;children:React.ReactNode;wide?:boolean})=><div className="fixed inset-0 z-[120] bg-black/55 flex items-center justify-center p-4" dir="rtl"><div className={'w-full '+(wide?'max-w-5xl':'max-w-2xl')+' max-h-[92vh] overflow-auto rounded-3xl border app-border bg-[var(--surface)] p-5 shadow-2xl'}><div className="flex items-start justify-between gap-3 mb-4"><h2 className="font-black text-lg">{title}</h2><button className="icon-btn" onClick={close}><X size={17}/></button></div>{children}</div></div>;
-const InfoBox=({label,value}:{label:string;value:string})=><div className="rounded-xl border app-border bg-[var(--surface)] p-3 min-w-0"><div className="text-[9px] app-muted">{label}</div><div className="text-xs font-bold mt-1 truncate">{value}</div></div>;
+const InfoBox=({label,value}:{label:string;value:string})=><div className="finance-info rounded-xl border app-border bg-[var(--surface)] p-3 min-w-0"><div className="text-[9px] app-muted">{label}</div><div className="text-xs font-bold mt-1 truncate">{value}</div></div>;
 const Empty=({text}:{text:string})=><div className="rounded-2xl border border-dashed app-border p-12 text-center text-sm font-bold">{text}</div>;
 const PermissionNotice=({text}:{text:string})=><div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-7 text-center text-sm">{text}</div>;
 
@@ -167,16 +167,30 @@ export const FinancePage:React.FC=()=>{
   if(!expense.client_id||!s||!expense.category_id||amount<=0||rate<=0||!expense.paid_by||!expense.description.trim()){setExpenseMsg('صاحب کالا، محموله، دسته، مبلغ مثبت، ارز، منبع پرداخت و شرح الزامی است.');return;}
   const irr=Math.round(amount*rate*100)/100,threshold=Number(settings?.receipt_mandatory_threshold_irr??0);
   if(irr>threshold&&!expense.file){setExpenseMsg('برای این مبلغ، فیش پرداختی طبق سقف تنظیم‌شده الزامی است.');return;}
-  setBusy(true);try{
+  setBusy(true);setReceiptStatusText('در حال ثبت هزینه در سیستم…');
+  try{
    let storedPath=receiptPath;
    if(expense.file&&!storedPath){storedPath=await uploadExpenseReceipt(expense.file);}
-   const payload={organization_id:orgId,shipment_id:s.id,case_id:s.case_id||null,client_id:expense.client_id,category_id:expense.category_id,description:expense.description.trim(),quantity:1,unit:'ردیف',unit_price:amount,amount,currency:expense.currency,exchange_rate:rate,amount_irr:irr,vat_rate:Number(settings?.default_vat_rate||0),vat_amount:Math.round(irr*Number(settings?.default_vat_rate||0)/100*100)/100,payable_by:'client',billable:expense.paid_by==='our_company',reimbursable:false,status:'draft',approval_status:'pending',created_by:myId,updated_by:myId,notes:expense.notes.trim()||null,receipt_file_url:storedPath||null};
-   const ins=await supabase.from('finance_cost_items').insert(payload).select('*').single();
-   if(ins.error)throw ins.error;
-   setMsg('هزینه با وضعیت «در انتظار تأیید» ثبت شد.');setExpenseOpen(false);await resetExpense(false);await load();
+   const result=await supabase.rpc('create_finance_expense',{
+     p_shipment_id:s.id,
+     p_client_id:expense.client_id,
+     p_category_id:expense.category_id,
+     p_description:expense.description.trim(),
+     p_amount:amount,
+     p_currency:expense.currency,
+     p_exchange_rate:rate,
+     p_paid_by:expense.paid_by,
+     p_notes:expense.notes.trim()||null,
+     p_receipt_file_url:storedPath||null
+   });
+   if(result.error)throw result.error;
+   setMsg('هزینه با وضعیت «در انتظار تأیید» ثبت شد.');
+   setExpenseMsg('✓ هزینه با موفقیت ثبت شد.');
+   setExpenseOpen(false);await resetExpense(false);await load();
   }catch(e:any){
-   setExpenseMsg(e?.message||'ثبت هزینه ناموفق بود.');setMsg(e?.message||'ثبت هزینه ناموفق بود.');
-  }finally{setBusy(false)}
+   const detail=e?.message||e?.error_description||'ثبت هزینه ناموفق بود.';
+   setExpenseMsg(detail);setMsg(detail);
+  }finally{setBusy(false);setReceiptStatusText('');}
  }; const openExpenseEdit=(x:any)=>{if(x.created_by!==myId||x.approval_status!=='pending')return;setExpenseEdit({...x,amount:String(x.amount??''),currency:x.currency||'IRR',exchange_rate:String(x.exchange_rate??'1'),category_id:x.category_id||'',paid_by:x.paid_by||'',description:x.description||'',notes:x.notes||''});setExpenseEditOpen(true)};
  const saveExpenseEdit=async()=>{if(!expenseEdit)return;const amount=parseFinanceNumber(expenseEdit.amount),rate=expenseEdit.currency==='IRR'?1:parseFinanceNumber(expenseEdit.exchange_rate);if(amount<=0||rate<=0||!expenseEdit.category_id||!expenseEdit.paid_by||!String(expenseEdit.description||'').trim())return setMsg('دسته، مبلغ مثبت، نرخ، منبع پرداخت و شرح الزامی است.');setBusy(true);try{const irr=Math.round(amount*rate*100)/100,vr=Number(settings?.default_vat_rate||0),vat=Math.round(irr*vr/100*100)/100;const{error}=await supabase.from('finance_cost_items').update({category_id:expenseEdit.category_id,description:String(expenseEdit.description).trim(),amount,currency:expenseEdit.currency,exchange_rate:rate,amount_irr:irr,vat_rate:vr,vat_amount:vat,paid_by:expenseEdit.paid_by,billable:expenseEdit.paid_by==='our_company',notes:expenseEdit.notes||null,updated_by:myId,updated_at:new Date().toISOString()}).eq('id',expenseEdit.id).eq('created_by',myId).eq('approval_status','pending');if(error)throw error;setMsg('هزینه pending ویرایش شد.');setExpenseEditOpen(false);setExpenseEdit(null);await load()}catch(e:any){setMsg(e?.message||'ویرایش هزینه ناموفق بود.')}finally{setBusy(false)}};
  const deletePendingExpense=async(id:string)=>{if(!window.confirm('هزینه pending حذف شود؟'))return;setBusy(true);try{const{error}=await supabase.from('finance_cost_items').delete().eq('id',id).eq('created_by',myId).eq('approval_status','pending');if(error)throw error;setMsg('هزینه pending حذف شد.');await load()}catch(e:any){setMsg(e?.message||'حذف هزینه ناموفق بود.')}finally{setBusy(false)}};
@@ -196,7 +210,7 @@ export const FinancePage:React.FC=()=>{
  const expenseShipments=shipments.filter(s=>!expense.client_id||s.client_id===expense.client_id);
  const requestShipments=shipments.filter(s=>!requestForm.client_id||s.client_id===requestForm.client_id);
 
- return <main dir="rtl" className="space-y-5 pb-10">
+ return <main dir="rtl" className="finance-page space-y-5 pb-10">
   <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-4"><div><div className="text-[10px] app-muted">FINANCE CONTROL CENTER</div><h1 className="text-2xl md:text-3xl font-black mt-1">مدیریت مالی و هزینه‌های پرونده</h1><p className="text-xs app-muted mt-2">ثبت هزینه → تأیید → مطالبه → اتصال به سند حسابداری</p></div><div className="flex flex-wrap gap-2"><Btn primary onClick={()=>setExpenseOpen(true)}><Plus size={15}/>هزینه جدید</Btn><Btn onClick={()=>setPettyOpen(true)}><WalletCards size={15}/>تنخواه</Btn>{canRequest&&<Btn onClick={()=>setRequestOpen(true)}><FileOutput size={15}/>درخواست وجه</Btn>}<Btn onClick={()=>void load()} disabled={busy}><RefreshCw size={15} className={busy?'animate-spin':''}/></Btn><Link to="/finance/accounting-vouchers" className="min-h-11 px-4 rounded-xl border app-border inline-flex items-center gap-2 text-xs font-bold"><FileText size={15}/>سندهای حسابداری</Link></div></header>
   {msg&&<div className="rounded-2xl border app-border bg-[var(--surface-2)] p-3 text-xs flex gap-2"><AlertCircle size={15}/><span>{msg}</span><button className="mr-auto" onClick={()=>setMsg('')}><X size={14}/></button></div>}
   <div className="flex flex-wrap gap-2">{tabs.filter(x=>tabAllowed(x[0])).map(([k,l,I])=><Btn key={k} primary={tab===k} onClick={()=>setTab(k)}><I size={15}/>{l}</Btn>)}</div>
