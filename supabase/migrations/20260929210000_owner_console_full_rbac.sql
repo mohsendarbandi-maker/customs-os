@@ -55,8 +55,7 @@ begin
   end loop;
 end $$;
 
--- Organization singleton/settings tables do not have an id column.
-do $
+-- Organization singleton/settings tables do not have an id column.\ndo $
 declare t text;
 begin
   execute 'alter table public.organizations enable row level security';
