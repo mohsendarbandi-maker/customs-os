@@ -121,6 +121,8 @@ async function providerCall(provider:string,key:string,prompt:string){
  throw new Error('provider not supported');
 }
 function parseJson(raw:string){const v=raw.replace(/^\s*\`\`\`(?:json)?/i,'').replace(/\`\`\`\s*$/,'').trim();const a=v.indexOf('{'),b=v.lastIndexOf('}');if(a<0||b<a)throw new Error('Action Plan معتبر JSON نیست.');return JSON.parse(v.slice(a,b+1));}
+const isCapabilitiesQuery=(q:string)=>{const s=str(q).replace(/[؟?!.,،؛:]+$/g,'').replace(/\s+/g,' ').trim();return /^(?:سلام|درود|چه کارهایی از دستت برمیاد|چه کارهایی از دست شما برمیاد|چه کارهایی میتونی انجام بدی|چه کارهایی می‌توانی انجام بدهی|چه امکاناتی داری|چه قابلیت هایی داری|چه قابلیت‌هایی داری|چه امکاناتی می‌توانی ارائه کنی|از دستت چی برمیاد|چه چیزهایی میتونی انجام بدی|what can you do|capabilities|help)$/iu.test(s)};
+const capabilitiesText=()=>"AI Operator در محدوده دسترسی همین کاربر می‌تواند:\n\nمشاهده و گزارش‌گیری پرونده‌ها، محموله‌ها و وضعیت عملیات\nمشاهده و مدیریت کشتیرانی، کشتی‌ها و اطلاعات سفر\nمشاهده، ثبت و مدیریت اسناد\nمشاهده و مدیریت مجوزها و قواعد مجوز\nمشاهده و مدیریت اظهار و اطلاعات اظهارنامه\nمدیریت چک‌لیست workflow\nمشاهده و مدیریت امور مالی، هزینه‌ها، تنخواه، پرداخت‌ها، درخواست وجه و فاکتورها\nمشاهده و مدیریت اسناد حسابداری\nمشاهده و ثبت عملیات خروج\nگزارش مرکز کنترل و یادآورها\nتنظیمات سازمان و قابلیت‌های مجاز Owner\n\nدر عملیات نوشتاری، قبل از اجرا تأیید لازم گرفته می‌شود و عملیات مخرب تأیید دو مرحله‌ای دارند.";
 async function buildPlan(query:string,role:string,page:string,g:any,attachmentMeta:any=null){
  const providers=Array.from(new Set([str(g.preferred_provider),...(Array.isArray(g.fallback_providers)?g.fallback_providers:[])]).values()).filter(Boolean);
  const active=g.online_enabled===false?providers.filter((x:string)=>x==='cloudflare'):providers;
@@ -374,6 +376,7 @@ async function main(req:Request){
 
  if(op==='plan'){
    const query=str(body.query);if(!query)return out({error:'دستور خالی است.'},400,origin);
+   if(isCapabilitiesQuery(query))return out({status:'capabilities',answer:capabilitiesText(),capabilities:catalog()},200,origin);
    const since=new Date(Date.now()-60000).toISOString();
    const rc=await sb.from('ai_operator_commands').select('id',{count:'exact',head:true}).eq('user_id',user.id).gte('created_at',since);
    if(rc.error)throw rc.error;if((rc.count||0)>=(Number(g.max_commands_per_minute)||20))return out({error:'سقف درخواست AI Operator در دقیقه پر شده است.'},429,origin);
