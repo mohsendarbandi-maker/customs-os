@@ -305,7 +305,7 @@ async function main(req:Request){
  if(op==='plan'){
    const query=str(body.query);if(!query)return out({error:'دستور خالی است.'},400,origin);
    const since=new Date(Date.now()-60000).toISOString();const rc=await sb.from('ai_operator_commands').select('id',{count:'exact',head:true}).eq('user_id',user.id).gte('created_at',since);if(rc.error)throw rc.error;if((rc.count||0)>=(Number(g.max_commands_per_minute)||20))return out({error:'سقف درخواست AI Operator در دقیقه پر شده است.'},429,origin);
-   const planned=await buildPlan(query,pr.data.role,str(body.page_context),g);const plan=validate(planned.plan,g);
+   const planned=await buildPlan(query,pr.data.role,str(body.page_context),g);const plan=validate(planned.plan,g);if(['settings.audit.read','settings.user.update'].includes(plan.action_code)&&pr.data.role!=='owner')return out({error:'این عملیات فقط برای Owner مجاز است.'},403,origin);
    if(plan.action_code==='clarification'||plan.clarification){
      const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:'clarification',target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:'safe',status:'clarification_needed'}).select('id').single();if(r.error)throw r.error;
      return out({command_id:r.data.id,status:'clarification_needed',plan,provider:planned.provider},200,origin);
