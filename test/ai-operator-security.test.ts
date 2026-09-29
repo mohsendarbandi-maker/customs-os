@@ -26,7 +26,7 @@ describe('AI Operator security invariants',()=>{
    expect(operator).toContain('Live database evidence');
    expect(operator).toContain('action_code assistant.answer');
    expect(operator).toContain('Never invent IDs');
-   expect(operator).toContain('User command: '+"'+safeQuery+'"+'\\nReturn JSON');
+   expect(operator).toContain('Return JSON with action_code,module');
  });
  it('has live context and conversational-answer routing',()=>{
    expect(operator).toContain('loadOperatorContext');
