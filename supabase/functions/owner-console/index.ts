@@ -1,8 +1,12 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const ORIGINS=new Set(['https://darbandicommercial.ir','https://www.darbandicommercial.ir','https://customs-os-psi.vercel.app','http://localhost:5173','http://127.0.0.1:5173']);
-const cors=(origin:string)=>({'Access-Control-Allow-Origin':ORIGINS.has(origin)?origin:'https://darbandicommercial.ir','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS','Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin'});
+const ORIGIN_RE=/^(https?:\/\/)(www\.)?(darbandicommercial\.ir|customs-os-psi\.vercel\.app|customs\.mohsen-darbandi\.workers\.dev)$/i;
+const ORIGINS=new Set(['https://darbandicommercial.ir','https://www.darbandicommercial.ir','http://darbandicommercial.ir','http://www.darbandicommercial.ir','https://customs.mohsen-darbandi.workers.dev','https://customs-os-psi.vercel.app','http://localhost:5173','http://127.0.0.1:5173']);
+const cors=(origin:string)=>{
+ const allow=ORIGINS.has(origin)||ORIGIN_RE.test(origin);
+ return {'Access-Control-Allow-Origin':allow?origin:'https://darbandicommercial.ir','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS','Access-Control-Max-Age':'600','Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin'};
+};
 const out=(body:unknown,status=200,origin='')=>new Response(JSON.stringify(body),{status,headers:cors(origin)});
 const str=(v:any)=>String(v??'').trim();
 const isUuid=(v:any)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str(v));
