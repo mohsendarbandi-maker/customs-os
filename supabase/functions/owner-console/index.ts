@@ -71,7 +71,11 @@ async function listRows(sb:any,profile:any,resource:string,body:any){
  if(cfg.table==='organizations')q=sb.from(cfg.table).select('*').eq('id',profile.organization_id).limit(1);
  else if(cfg.table==='user_settings'){const users=await sb.from('profiles').select('id').eq('organization_id',profile.organization_id);if(users.error)throw users.error;q=sb.from(cfg.table).select('*').in('user_id',(users.data||[]).map((x:any)=>x.id)).limit(500);}
  else if(cfg.global)q=sb.from(cfg.table).select('*').limit(Math.min(Number(body.limit)||300,500));
- else q=sb.from(cfg.table).select('*').eq('organization_id',profile.organization_id).order('created_at',{ascending:false}).limit(Math.min(Number(body.limit)||300,500));
+ else {
+   q=sb.from(cfg.table).select('*').eq('organization_id',profile.organization_id);
+   if(!['declaration_exit_checklist_items','finance_payment_request_lines','finance_invoice_shipments','organization_settings'].includes(cfg.table))q=q.order('created_at',{ascending:false});
+   q=q.limit(Math.min(Number(body.limit)||300,500));
+ }
  const search=str(body.search);if(search){const safe=search.replace(/[%,]/g,' ');const sf=(cfg.searchFields||[]).map((k:string)=>k+'.ilike.%'+safe+'%');if(sf.length)q=q.or(sf.join(','));}
  const r=await q;if(r.error)throw r.error;return r.data||[];
 }
