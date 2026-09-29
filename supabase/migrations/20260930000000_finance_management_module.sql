@@ -358,3 +358,110 @@ using(bucket_id='finance-receipts' and (storage.foldername(name))[1]=(select pub
 drop policy if exists finance_receipts_delete on storage.objects;
 create policy finance_receipts_delete on storage.objects for delete to authenticated
 using(bucket_id='finance-receipts' and (storage.foldername(name))[1]=(select public.user_org_id())::text and (select public.user_role()) in ('owner'::public.user_role,'admin'::public.user_role));
+
+-- ---- Hardening patch: permission-aware reads, secure request-position aggregate, voucher source uniqueness ----
+drop policy if exists finance_ci_select on public.finance_cost_items;
+create policy finance_ci_select on public.finance_cost_items for select to authenticated
+using (
+  organization_id=(select public.user_org_id()) and (
+    (select public.user_role()) in ('owner'::public.user_role,'admin'::public.user_role)
+    or (created_by=(select auth.uid()) and (select private.finance_has_permission('view_own_expenses')))
+    or ((select private.finance_has_permission('approve_other_expenses')) and approval_status='pending')
+  )
+);
+
+drop policy if exists petty_cash_select on public.petty_cash_ledger;
+create policy petty_cash_select on public.petty_cash_ledger for select to authenticated
+using (
+  organization_id=(select public.user_org_id()) and (
+    (select public.user_role()) in ('owner'::public.user_role,'admin'::public.user_role)
+    or (user_id=(select auth.uid()) and (select private.finance_has_permission('view_own_petty_cash')))
+  )
+);
+
+drop policy if exists finance_pay_select on public.finance_payments;
+create policy finance_pay_select on public.finance_payments for select to authenticated
+using (
+  organization_id=(select public.user_org_id()) and (
+    (select public.user_role()) in ('owner'::public.user_role,'admin'::public.user_role)
+    or (select private.finance_has_permission('view_org_financials'))
+    or (created_by=(select auth.uid()) and (select private.finance_has_permission('view_own_receipts')))
+    or ((select public.user_role())='client'::public.user_role and client_id=(select public.user_client_id()))
+  )
+);
+
+drop policy if exists finance_receipts_select on storage.objects;
+create policy finance_receipts_select on storage.objects for select to authenticated
+using (
+  bucket_id='finance-receipts'
+  and (storage.foldername(name))[1]=(select public.user_org_id())::text
+  and (
+    ((storage.foldername(name))[2]=(select auth.uid())::text and (select private.finance_has_permission('view_own_receipts')))
+    or (select public.user_role()) in ('owner'::public.user_role,'admin'::public.user_role)
+    or (select private.finance_has_permission('view_org_financials'))
+  )
+);
+
+create unique index if not exists uq_active_voucher_line_source_cost
+on public.voucher_line_items(organization_id,source_cost_item_id)
+where source_cost_item_id is not null and status='active';
+
+create or replace function public.finance_shipment_position(p_shipment_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path='public','pg_catalog','pg_temp'
+as $$
+declare
+  v_org uuid := public.user_org_id();
+  v_case uuid;
+  v_company numeric := 0;
+  v_client_direct numeric := 0;
+  v_received numeric := 0;
+  v_profit numeric := 0;
+begin
+  if (select auth.uid()) is null then raise exception 'Authentication required'; end if;
+  if v_org is null then raise exception 'Organization not found'; end if;
+  if public.user_role() not in ('owner'::public.user_role,'admin'::public.user_role)
+     and not private.finance_has_permission('issue_payment_request')
+     and not private.finance_has_permission('view_org_financials')
+  then raise exception 'Finance position permission required'; end if;
+
+  select s.case_id into v_case from public.shipments s
+  where s.id=p_shipment_id and s.organization_id=v_org;
+  if v_case is null then raise exception 'Shipment not found'; end if;
+
+  select coalesce(sum(e.amount_irr+coalesce(e.vat_amount,0)),0) into v_company
+  from public.finance_cost_items e
+  where e.organization_id=v_org and e.shipment_id=p_shipment_id
+    and e.approval_status='approved' and e.paid_by='our_company'
+    and coalesce(e.billable,false)=true and e.status<>'cancelled';
+
+  select coalesce(sum(e.amount_irr+coalesce(e.vat_amount,0)),0) into v_client_direct
+  from public.finance_cost_items e
+  where e.organization_id=v_org and e.shipment_id=p_shipment_id
+    and e.approval_status='approved' and e.paid_by='client_direct' and e.status<>'cancelled';
+
+  select coalesce(sum(p.amount_irr),0) into v_received
+  from public.finance_payments p
+  where p.organization_id=v_org and p.shipment_id=p_shipment_id and p.direction='received';
+
+  select coalesce(sum(pl.profit_amount),0) into v_profit
+  from public.voucher_line_profit pl
+  join public.voucher_line_items li on li.id=pl.voucher_line_item_id and li.organization_id=v_org and li.status='active'
+  join public.customs_accounting_vouchers v on v.id=li.voucher_id and v.organization_id=v_org
+  where pl.organization_id=v_org and v.case_id=v_case;
+
+  return jsonb_build_object(
+    'shipment_id',p_shipment_id,
+    'case_id',v_case,
+    'our_company_cost_irr',v_company,
+    'client_direct_cost_irr',v_client_direct,
+    'profit_irr',case when public.user_role() in ('owner'::public.user_role,'admin'::public.user_role) or private.finance_has_permission('view_profit') then v_profit else null end,
+    'received_irr',v_received,
+    'outstanding_irr',greatest(0,v_company+v_profit-v_received)
+  );
+end;
+$$;
+revoke all on function public.finance_shipment_position(uuid) from public;
+grant execute on function public.finance_shipment_position(uuid) to authenticated;
