@@ -128,6 +128,9 @@ async function write(ctx:any,body:any){
  if(op==='list')return await listRows(sb,profile,resource,body);
 
  if(op==='delete'){
+   if(cfg.archive)throw new Error('Documents must use document_archive; physical delete is not permitted.');
+   if(resource==='cases')throw new Error('Cases must use case_delete; generic delete is not permitted.');
+   if(resource==='profiles')throw new Error('Profiles use owner-managed deactivation; physical delete is not permitted.');
    if(!str(body.reason))throw new Error('دلیل حذف الزامی است.');
    if(str(body.confirmation)!=='تأیید نهایی عملیات')throw new Error('Final confirmation phrase is required.');
  }
