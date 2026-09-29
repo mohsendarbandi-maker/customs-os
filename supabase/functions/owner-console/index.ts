@@ -7,19 +7,19 @@ const out=(body:unknown,status=200,origin='')=>new Response(JSON.stringify(body)
 const str=(v:any)=>String(v??'').trim();
 const isUuid=(v:any)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str(v));
 
-type Resource={table:string; immutable?:boolean; archive?:boolean; softDelete?:boolean};
+type Resource={table:string; immutable?:boolean; archive?:boolean; softDelete?:boolean; searchFields?:string[]};
 const RESOURCES:Record<string,Resource>={
  cases:{table:'cases'},registration_orders:{table:'registration_orders'},shipments:{table:'shipments'},
  shipping_lines:{table:'shipping_lines'},vessels:{table:'vessels'},contacts:{table:'shipping_line_contacts'},
- shipment_documents:{table:'shipment_documents',archive:true},customs_documents:{table:'customs_documents',archive:true},
- document_rules:{table:'document_requirement_rules'},permit_rules:{table:'permit_rules'},permits:{table:'permits'},
- declarations:{table:'customs_declarations'},
- cost_categories:{table:'finance_cost_categories'},finance_settings:{table:'finance_org_settings'},
- costs:{table:'finance_cost_items'},payments:{table:'finance_payments'},payment_requests:{table:'finance_payment_requests'},
- invoices:{table:'finance_invoices'},invoice_lines:{table:'finance_invoice_lines'},invoice_shipments:{table:'finance_invoice_shipments'},
- vouchers:{table:'customs_accounting_vouchers'},voucher_lines:{table:'voucher_line_items',immutable:true},
- exit:{table:'case_exit_operations'},org:{table:'organizations'},org_settings:{table:'organization_settings'},
- ai_gateway:{table:'ai_gateway_settings'},templates:{table:'print_templates'},user_settings:{table:'user_settings'}
+ shipment_documents:{table:'shipment_documents',archive:true,searchFields:['document_name','original_file_name','storage_path']},customs_documents:{table:'customs_documents',archive:true,searchFields:['original_name','display_name','document_number']},
+ document_rules:{table:'document_requirement_rules',searchFields:['rule_name','document_type']},permit_rules:{table:'permit_rules',searchFields:['rule_name','hs_prefix','cargo_keyword','permit_type']},permits:{table:'permits',searchFields:['permit_number','permit_type','issuing_authority']},
+ declarations:{table:'customs_declarations',searchFields:['kottaj_number','customs_path','payment_reference']},
+ cost_categories:{table:'finance_cost_categories',searchFields:['code','name_fa','name_en','description']},finance_settings:{table:'finance_org_settings'},
+ costs:{table:'finance_cost_items',searchFields:['description','notes','internal_notes']},payments:{table:'finance_payments',searchFields:['payment_no','reference_no','bank_name','description']},payment_requests:{table:'finance_payment_requests',searchFields:['request_no','subject','body_text']},
+ invoices:{table:'finance_invoices',searchFields:['invoice_no','public_note','internal_note']},invoice_lines:{table:'finance_invoice_lines',searchFields:['description']},invoice_shipments:{table:'finance_invoice_shipments'},
+ vouchers:{table:'customs_accounting_vouchers',searchFields:['voucher_number','company_name','cargo_type']},voucher_lines:{table:'voucher_line_items',immutable:true},
+ exit:{table:'case_exit_operations',searchFields:['exit_permit_no','vehicle_plate','driver_name']},org:{table:'organizations',searchFields:['name','economic_code']},org_settings:{table:'organization_settings'},
+ ai_gateway:{table:'ai_gateway_settings'},templates:{table:'print_templates',searchFields:['template_key','name','document_type']},user_settings:{table:'user_settings'}
 };
 
 const READ_ONLY:Record<string,string>={
@@ -68,8 +68,9 @@ async function listRows(sb:any,profile:any,resource:string,body:any){
  }
  const search=str(body.search);
  if(search){
-   const safe=search.replace(/[%_,]/g,' ');
-   q=q.or(['name','name_fa','display_name','document_name','original_file_name','order_number','case_number','voucher_number','invoice_no','request_no','payment_no'].map(k=>k+'.ilike.%'+safe+'%').join(','));
+   const safe=search.replace(/[%,]/g,' ');
+   const sf=(cfg.searchFields||[]).map((k:string)=>k+'.ilike.%'+safe+'%');
+   if(sf.length)q=q.or(sf.join(','));
  }
  const r=await q;if(r.error)throw r.error;return r.data||[];
 }
