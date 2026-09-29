@@ -66,8 +66,7 @@ async function listRows(sb:any,profile:any,resource:string,body:any){
  }
  const ro=READ_ONLY[resource];
  if(ro){const r=await sb.from(ro).select('*').eq('organization_id',profile.organization_id).limit(Math.min(Number(body.limit)||300,500));if(r.error)throw r.error;return r.data||[];}
- if(resource==='org'&&(op==='create'||op==='delete'))throw new Error('Organization root cannot be created or deleted from Owner Console.');
- const cfg=RESOURCES[resource];if(!cfg)throw new Error('Unknown resource');
+  const cfg=RESOURCES[resource];if(!cfg)throw new Error('Unknown resource');
  let q:any;
  if(cfg.table==='organizations')q=sb.from(cfg.table).select('*').eq('id',profile.organization_id).limit(1);
  else if(cfg.table==='user_settings'){const users=await sb.from('profiles').select('id').eq('organization_id',profile.organization_id);if(users.error)throw users.error;q=sb.from(cfg.table).select('*').in('user_id',(users.data||[]).map((x:any)=>x.id)).limit(500);}
