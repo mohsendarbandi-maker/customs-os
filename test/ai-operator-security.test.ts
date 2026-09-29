@@ -17,6 +17,12 @@ describe('AI Operator security invariants',()=>{
    expect(operator).toContain("createClient(url,anon,{global:{headers:{Authorization:'Bearer '+jwt}}})");
    expect(operator).toContain("sb.auth.getUser(jwt)");
  });
+ it('redacts online planner context and keeps attachment content out of prompts',()=>{
+   expect(operator).toContain('g.redaction_enabled===false?cleanText(query):redact(query)');
+   expect(operator).toContain('safePage=redact(cleanText(page,1600))');
+   expect(operator).toContain('attachmentMeta');
+   expect(operator).not.toContain('attachment.data');
+ });
  it('has server-derived risk and destructive double confirmation',()=>{
    expect(operator).toContain("effectiveRisk");
    expect(operator).toContain("risk==='destructive'&&!cmd.confirmation_at");
@@ -26,6 +32,12 @@ describe('AI Operator security invariants',()=>{
    expect(ledgerMigration).toContain('revoke update on public.ai_operator_commands');
    expect(ledgerMigration).toContain('ai_operator_transition_command');
    expect(ledgerMigration).toContain('Executed AI Operator command is immutable');
+ });
+ it('covers all operator modules and owner-only settings enforcement',()=>{
+   for(const moduleName of ['cases','maritime','documents','permits','declaration','finance','accounting_vouchers','exit','control','settings'])expect(operator).toContain("module:'"+moduleName+"'");
+   expect(operator).toContain("plan.action_code.startsWith('settings.')&&pr.data.role!=='owner'");
+   expect(operator).toContain("sb.rpc('owner_update_profile'");
+   expect(operator).toContain("sb.rpc('owner_insert_profile'");
  });
  it('enforces owner-only advanced route and page guard',()=>{
    expect(app).toContain("s==='advanced'&&profile?.role!=='owner'");
