@@ -70,3 +70,6 @@ main.min-h-screen.overflow-hidden.text-white.relative{background:var(--bg)!impor
 .app-user-chip>span:last-child b,.app-user-chip>span:last-child .app-muted{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .settings-back-btn{width:auto!important;min-width:92px!important;display:inline-flex!important;visibility:visible!important;opacity:1!important;overflow:visible!important}
 @media(max-width:767px){.settings-back-btn span{display:inline!important}.settings-back-btn{min-width:92px!important;padding:0 11px!important}}
+
+/* Wider desktop user identity chip */
+@media(min-width:768px){.app-user-chip{width:210px;max-width:210px;flex:0 0 210px;padding:5px 11px}.app-user-chip>span:last-child{max-width:154px}}
