@@ -10,8 +10,8 @@
 .voucher-print-page .a4-voucher{width:210mm;min-height:297mm;margin:0 auto;background:#fff;color:#111;padding:11mm 10mm;box-sizing:border-box}
 .voucher-print-page .print-head{display:grid;grid-template-columns:1fr 2fr 1fr;gap:7mm;align-items:center;padding-bottom:5mm;border-bottom:2px solid #111}
 .voucher-print-page .org-name{font-size:14px;font-weight:900}.voucher-print-page .doc-title{text-align:center;font-size:20px;font-weight:900}.voucher-print-page .doc-no{text-align:left;font-size:12px}.voucher-print-page .doc-no strong{display:block;font-size:18px;margin-top:1mm}
-.voucher-print-page .client-line{display:flex;align-items:center;gap:0;margin:7mm 0 6mm;border-bottom:1px solid #d7dde5;padding-bottom:4mm;overflow:hidden}
-.voucher-print-page .client-line span{padding:0 4mm;border-left:1px solid #d7dde5;white-space:nowrap;font-size:10.5px}
+.voucher-print-page .client-line{display:flex;align-items:center;gap:0;margin:7mm 0 6mm;border-bottom:1px solid #d7dde5;padding-bottom:4mm;overflow:hidden}.voucher-print-page .client-line span{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.voucher-print-page .client-line span{padding:0 4mm;border-left:1px solid #d7dde5;white-space:nowrap;font-size:10px}
 .voucher-print-page .client-line span:first-child{padding-right:0}.voucher-print-page .client-line span:last-child{border-left:0}
 .voucher-print-page .print-lines{width:100%;border-collapse:collapse;table-layout:fixed}
 .voucher-print-page .print-lines th{background:#f3f5f7;font-size:10.5px;font-weight:900;padding:3.2mm 2.5mm;border-bottom:1.5px solid #9aa4b2}
