@@ -45,7 +45,7 @@ export const FinancePage:React.FC=()=>{
    ]);
    const er=[a,b,c,d,e,f].find(x=>x.error)?.error;if(er)throw er;
    setCosts(a.data||[]);setCats(b.data||[]);setInvoices(inv.data||[]);setRequests(c.data||[]);setPayments(d.data||[]);setPetty(e.data||[]);setSettings(f.data||null);setSettingsForm(f.data||{});
-   const p=await supabase.from('financial_permissions').select('*').eq('organization_id',orgId).eq('user_id',profile?.id||'').maybeSingle();if(p.error)throw p.error;setPermission(p.data||null);
+   const p=await supabase.from('financial_permissions').select('*').eq('organization_id',orgId).eq('user_id',profile?.id||'').maybeSingle();if(p.error)throw p.error;const currentPermission=p.data||null;setPermission(currentPermission);
    if(isOwner){
     const[pr,pm,v,l,pp]=await Promise.all([
      supabase.from('profiles').select('id,full_name,role,is_active,client_id').eq('organization_id',orgId).order('full_name'),
@@ -54,7 +54,7 @@ export const FinancePage:React.FC=()=>{
      supabase.from('voucher_line_items').select('*').eq('organization_id',orgId).order('created_at',{ascending:false}),
      supabase.from('voucher_line_profit').select('*').eq('organization_id',orgId)
     ]);setProfiles(pr.data||[]);setPermissionRows(pm.data||[]);setVouchers(v.data||[]);setLines(l.data||[]);setProfits(pp.data||[]);
-   }else if(isAdmin&&canProfit){
+   }else if(isAdmin&&!!currentPermission?.view_profit){
     const[v,l,pp]=await Promise.all([
      supabase.from('customs_accounting_vouchers').select('id,voucher_number,case_id,company_name,kottaj_number').eq('organization_id',orgId),
      supabase.from('voucher_line_items').select('*').eq('organization_id',orgId).order('created_at',{ascending:false}),
