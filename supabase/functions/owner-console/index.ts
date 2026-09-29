@@ -51,7 +51,7 @@ async function authContext(req:Request){
 }
 
 async function listRows(sb:any,profile:any,resource:string,body:any){
- if(resource==='profiles')return null;
+ if(resource==='profiles'){const r=await sb.from('profiles').select('id,full_name,phone,role,client_id,is_active,created_at,updated_at').eq('organization_id',profile.organization_id).order('full_name').limit(Math.min(Number(body.limit)||300,500));if(r.error)throw r.error;return r.data||[];}
  const ro=READ_ONLY[resource];
  if(ro){
   const q=sb.from(ro).select('*').eq('organization_id',profile.organization_id).order('created_at',{ascending:false}).limit(Math.min(Number(body.limit)||300,500));
@@ -119,6 +119,19 @@ async function write(ctx:any,body:any){
  if(op==='delete'){
    if(!str(body.reason))throw new Error('دلیل حذف الزامی است.');
    if(str(body.confirmation)!=='تأیید نهایی عملیات')throw new Error('Final confirmation phrase is required.');
+ }
+ if(op==='update'&&['org_settings','finance_settings','ai_gateway'].includes(resource)){
+   const d=allowedData(body.data);
+   if(resource==='org_settings'){
+     d.organization_id=profile.organization_id; d.updated_by=user.id; d.updated_at=new Date().toISOString();
+     const r=await sb.from('organization_settings').upsert(d,{onConflict:'organization_id'}).select('*').single();if(r.error)throw r.error;return r.data;
+   }
+   if(resource==='finance_settings'){
+     d.organization_id=profile.organization_id;
+     const r=await sb.from('finance_org_settings').upsert(d,{onConflict:'organization_id'}).select('*').single();if(r.error)throw r.error;return r.data;
+   }
+   d.organization_id=profile.organization_id; d.updated_by=user.id; d.updated_at=new Date().toISOString();
+   const r=await sb.from('ai_gateway_settings').upsert(d,{onConflict:'organization_id'}).select('*').single();if(r.error)throw r.error;return r.data;
  }
  const d=allowedData(body.data);
  if(op==='create'){
