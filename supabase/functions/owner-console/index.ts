@@ -9,19 +9,29 @@ const isUuid=(v:any)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{
 
 type Resource={table:string; immutable?:boolean; archive?:boolean; softDelete?:boolean; searchFields?:string[]};
 const RESOURCES:Record<string,Resource>={
- cases:{table:'cases'},registration_orders:{table:'registration_orders'},shipments:{table:'shipments'},
- shipping_lines:{table:'shipping_lines'},vessels:{table:'vessels'},contacts:{table:'shipping_line_contacts'},
+ profiles:{table:'profiles',searchFields:['full_name','phone','role']},
+ clients:{table:'clients',searchFields:['name']},cases:{table:'cases',searchFields:['case_number','display_name','registration_order_no','proforma_no','warehouse_receipt_no','cargo_description']},
+ registration_orders:{table:'registration_orders',searchFields:['order_number','tariff_code','notes']},shipments:{table:'shipments',searchFields:['display_name','bill_of_lading_no','shipping_line','voyage_no','origin_port','destination_port']},
+ containers:{table:'containers',searchFields:['container_number','seal_number']},shipment_customs_data:{table:'shipment_customs_data',searchFields:['registration_order_no','warehouse_receipt_no','cargo_description','tariff_code','bill_of_lading']},
+ shipping_lines:{table:'shipping_lines',searchFields:['name','name_fa']},vessels:{table:'vessels',searchFields:['name','imo_number','flag_code']},contacts:{table:'shipping_line_contacts',searchFields:['full_name','phone','whatsapp','email']},
  shipment_documents:{table:'shipment_documents',archive:true,searchFields:['document_name','original_file_name','storage_path']},customs_documents:{table:'customs_documents',archive:true,searchFields:['original_name','display_name','document_number']},
- document_rules:{table:'document_requirement_rules',searchFields:['rule_name','document_type']},permit_rules:{table:'permit_rules',searchFields:['rule_name','hs_prefix','cargo_keyword','permit_type']},permits:{table:'permits',searchFields:['permit_number','permit_type','issuing_authority']},
+ shipment_document_extractions:{table:'shipment_document_extractions',searchFields:['field_key','field_label','extracted_value']},document_extraction_fields:{table:'document_extraction_fields',searchFields:['field_key','field_label']},
+ documents:{table:'documents',searchFields:['name','title','document_type']},document_rules:{table:'document_requirement_rules',searchFields:['rule_name','document_type']},
+ permit_rules:{table:'permit_rules',searchFields:['rule_name','hs_prefix','cargo_keyword','permit_type']},permits:{table:'permits',searchFields:['permit_number','permit_type','issuing_authority']},
+ customs_offices:{table:'customs_offices',searchFields:['name','code']},hs_codes:{table:'hs_codes',searchFields:['code','description']},settings_reference_data:{table:'settings_reference_data',searchFields:['key','label','value']},
+ case_checklist_items:{table:'case_checklist_items',searchFields:['item_key']},declaration_checklist_items:{table:'declaration_checklist_items',searchFields:['item_key']},declaration_exit_checklist_items:{table:'declaration_exit_checklist_items',searchFields:['item_key']},
  declarations:{table:'customs_declarations',searchFields:['kottaj_number','customs_path','payment_reference']},
  cost_categories:{table:'finance_cost_categories',searchFields:['code','name_fa','name_en','description']},finance_settings:{table:'finance_org_settings'},
- costs:{table:'finance_cost_items',searchFields:['description','notes','internal_notes']},payments:{table:'finance_payments',searchFields:['payment_no','reference_no','bank_name','description']},payment_requests:{table:'finance_payment_requests',searchFields:['request_no','subject','body_text']},
+ costs:{table:'finance_cost_items',searchFields:['description','notes','internal_notes']},payments:{table:'finance_payments',searchFields:['payment_no','reference_no','bank_name','description']},
+ payment_requests:{table:'finance_payment_requests',searchFields:['request_no','subject','body_text']},payment_request_lines:{table:'finance_payment_request_lines',searchFields:['description']},
  invoices:{table:'finance_invoices',searchFields:['invoice_no','public_note','internal_note']},invoice_lines:{table:'finance_invoice_lines',searchFields:['description']},invoice_shipments:{table:'finance_invoice_shipments'},
- vouchers:{table:'customs_accounting_vouchers',searchFields:['voucher_number','company_name','cargo_type']},voucher_lines:{table:'voucher_line_items',immutable:true},
+ payment_allocations:{table:'finance_payment_allocations',searchFields:['description','reference_no']},
+ vouchers:{table:'customs_accounting_vouchers',searchFields:['company_name','cargo_type']},voucher_lines:{table:'voucher_line_items',immutable:true},
  exit:{table:'case_exit_operations',searchFields:['exit_permit_no','vehicle_plate','driver_name']},org:{table:'organizations',searchFields:['name','economic_code']},org_settings:{table:'organization_settings'},
- ai_gateway:{table:'ai_gateway_settings'},templates:{table:'print_templates',searchFields:['template_key','name','document_type']},user_settings:{table:'user_settings'}
-};
-
+ ai_gateway:{table:'ai_gateway_settings'},templates:{table:'print_templates',searchFields:['template_key','name','document_type']},user_settings:{table:'user_settings'},
+ knowledge_sources:{table:'knowledge_sources',searchFields:['title','name','source_type']},knowledge_chunks:{table:'knowledge_chunks',searchFields:['content']},
+ ai_knowledge_documents:{table:'ai_knowledge_documents',searchFields:['title','file_name']},ai_knowledge_chunks:{table:'ai_knowledge_chunks',searchFields:['content']}
+}
 const READ_ONLY:Record<string,string>={
  audit:'audit_logs',case_history:'case_status_history',financial_history:'financial_transactions',
  ai_commands:'ai_operator_commands',ai_interactions:'ai_interactions',ai_action_logs:'ai_agent_action_logs',
