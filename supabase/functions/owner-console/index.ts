@@ -3,9 +3,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const ORIGIN_RE=/^(https?:\/\/)(www\.)?(darbandicommercial\.ir|customs-os-psi\.vercel\.app|customs\.mohsen-darbandi\.workers\.dev)$/i;
 const ORIGINS=new Set(['https://darbandicommercial.ir','https://www.darbandicommercial.ir','http://darbandicommercial.ir','http://www.darbandicommercial.ir','https://customs.mohsen-darbandi.workers.dev','https://customs-os-psi.vercel.app','http://localhost:5173','http://127.0.0.1:5173']);
-const cors=(origin:string)=>{
+const cors=(origin:string,requestedHeaders:string|null=null,requestedMethod:string|null=null)=>{
  const allow=ORIGINS.has(origin)||ORIGIN_RE.test(origin);
- return {'Access-Control-Allow-Origin':allow?origin:'https://darbandicommercial.ir','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS','Access-Control-Max-Age':'600','Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin'};
+ const headers=requestedHeaders?.trim()||'authorization, x-client-info, apikey, content-type';
+ const methods=requestedMethod?.trim()?(requestedMethod.toUpperCase()==='POST'?'POST, OPTIONS':'POST, OPTIONS'):'POST, OPTIONS';
+ return {'Access-Control-Allow-Origin':allow?origin:'https://darbandicommercial.ir','Access-Control-Allow-Headers':headers,'Access-Control-Allow-Methods':methods,'Access-Control-Max-Age':'600','Access-Control-Allow-Credentials':'true','Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin, Access-Control-Request-Headers'};
 };
 const out=(body:unknown,status=200,origin='')=>new Response(JSON.stringify(body),{status,headers:cors(origin)});
 const str=(v:any)=>String(v??'').trim();
@@ -187,7 +189,7 @@ async function updateOrg(sb:any,org:string,d:any){
 
 Deno.serve(async(req)=>{
  const origin=req.headers.get('Origin')||'';
- if(req.method==='OPTIONS')return new Response('ok',{headers:cors(origin)});
+ if(req.method==='OPTIONS')return new Response('ok',{status:204,headers:cors(origin,req.headers.get('Access-Control-Request-Headers'),req.headers.get('Access-Control-Request-Method'))});
  if(req.method!=='POST')return out({error:'Method not allowed'},405,origin);
  try{
   const ctx=await authContext(req);
