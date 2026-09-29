@@ -62,11 +62,10 @@ begin
   execute 'drop policy if exists owner_console_org_all on public.organizations';
   execute 'create policy owner_console_org_all on public.organizations for all to authenticated using (id=public.user_org_id() and public.user_role()=''owner''::public.user_role) with check (id=public.user_org_id() and public.user_role()=''owner''::public.user_role)';
 
-  for t in select unnest(array['organization_settings','finance_org_settings']) as table_name
-  loop
-    execute format('alter table public.%I enable row level security',t.table_name);
-    execute format('drop policy if exists owner_console_all on public.%I',t.table_name);
-    execute format('create policy owner_console_all on public.%I for all to authenticated using (organization_id=public.user_org_id() and public.user_role()=''owner''::public.user_role) with check (organization_id=public.user_org_id() and public.user_role()=''owner''::public.user_role)',t.table_name);
+  foreach t in array array['organization_settings','finance_org_settings'] loop
+    execute format('alter table public.%I enable row level security',t);
+    execute format('drop policy if exists owner_console_all on public.%I',t);
+    execute format('create policy owner_console_all on public.%I for all to authenticated using (organization_id=public.user_org_id() and public.user_role()=''owner''::public.user_role) with check (organization_id=public.user_org_id() and public.user_role()=''owner''::public.user_role)',t);
   end loop;
 end $$;
 
