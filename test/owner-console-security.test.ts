@@ -7,7 +7,7 @@ const page=root('src/pages/AdvancedSettingsPage.tsx');
 const api=root('supabase/functions/owner-console/index.ts');
 const migration=root('supabase/migrations/20260929190356_owner_console_full_rbac_patch2.sql');
 const globalMigration=root('supabase/migrations/20260929191516_owner_console_global_reference_rbac.sql');
-const profileMigration=root('supabase/migrations/20260929161253_owner_profile_update_rpc.sql');
+const profileMigration=root('supabase/migrations/20260929163000_owner_profile_update_rpc.sql');
 
 describe('Owner Console security',()=>{
  it('has an explicit owner-only route and page guard',()=>{
