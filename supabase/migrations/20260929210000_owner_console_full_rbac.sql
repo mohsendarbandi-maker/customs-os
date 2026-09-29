@@ -55,19 +55,27 @@ begin
   end loop;
 end $$;
 
--- Organization singleton/settings tables do not have an id column.\ndo $$
-declare t text;
-begin
-  execute 'alter table public.organizations enable row level security';
-  execute 'drop policy if exists owner_console_org_all on public.organizations';
-  execute 'create policy owner_console_org_all on public.organizations for all to authenticated using (id=public.user_org_id() and public.user_role()=''owner''::public.user_role) with check (id=public.user_org_id() and public.user_role()=''owner''::public.user_role)';
+-- Organization singleton/settings tables do not have an id column.
+alter table public.organizations enable row level security;
+drop policy if exists owner_console_org_all on public.organizations;
+create policy owner_console_org_all on public.organizations
+for all to authenticated
+using (id=public.user_org_id() and public.user_role()='owner'::public.user_role)
+with check (id=public.user_org_id() and public.user_role()='owner'::public.user_role);
 
-  foreach t in array array['organization_settings','finance_org_settings'] loop
-    execute format('alter table public.%I enable row level security',t);
-    execute format('drop policy if exists owner_console_all on public.%I',t);
-    execute format('create policy owner_console_all on public.%I for all to authenticated using (organization_id=public.user_org_id() and public.user_role()=''owner''::public.user_role) with check (organization_id=public.user_org_id() and public.user_role()=''owner''::public.user_role)',t);
-  end loop;
-end $$;
+alter table public.organization_settings enable row level security;
+drop policy if exists owner_console_all on public.organization_settings;
+create policy owner_console_all on public.organization_settings
+for all to authenticated
+using (organization_id=public.user_org_id() and public.user_role()='owner'::public.user_role)
+with check (organization_id=public.user_org_id() and public.user_role()='owner'::public.user_role);
+
+alter table public.finance_org_settings enable row level security;
+drop policy if exists owner_console_all on public.finance_org_settings;
+create policy owner_console_all on public.finance_org_settings
+for all to authenticated
+using (organization_id=public.user_org_id() and public.user_role()='owner'::public.user_role)
+with check (organization_id=public.user_org_id() and public.user_role()='owner'::public.user_role);
 
 -- User settings is keyed by user_id instead of organization_id.
 alter table public.user_settings enable row level security;
