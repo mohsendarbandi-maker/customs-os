@@ -215,6 +215,8 @@ begin
  if public.user_org_id() is null then raise exception 'Organization not found'; end if;
  if public.user_role() not in ('owner'::public.user_role,'admin'::public.user_role)
     and not private.finance_has_permission('approve_other_expenses') then raise exception 'Expense approval permission required'; end if;
+ if not exists(select 1 from public.finance_cost_items e where e.id=p_expense_id and e.organization_id=public.user_org_id() and e.approval_status='pending') then raise exception 'Expense not found or already decided'; end if;
+ if exists(select 1 from public.finance_cost_items e where e.id=p_expense_id and e.organization_id=public.user_org_id() and e.created_by=(select auth.uid())) then raise exception 'Expense creator cannot approve or reject their own expense'; end if;
  if not p_approve and nullif(trim(coalesce(p_rejection_reason,'')),'') is null then raise exception 'Rejection reason is required'; end if;
  update public.finance_cost_items set
    approval_status=case when p_approve then 'approved' else 'rejected' end,
