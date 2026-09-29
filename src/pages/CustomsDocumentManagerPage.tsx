@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 
-const makeCompatibleUUID=()=>{const r=()=>Math.floor(Math.random()*256).toString(16).padStart(2,'0');const b=Array.from({length:16},r);b[6]=((parseInt(b[6],16)&15)|64).toString(16).padStart(2,'0');b[8]=((parseInt(b[8],16)&63)|128).toString(16).padStart(2,'0');return `${b.slice(0,4).join('')}-${b.slice(4,6).join('')}-${b.slice(6,8).join('')}-${b.slice(8,10).join('')}-${b.slice(10).join('')}`};import {
+import { makeClientId } from '../lib/clientId';import {
   Download,
   Eye,
   FileText,
@@ -321,7 +321,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
         const mime =
           f.type ||
           (/\.pdf$/i.test(f.name) ? 'application/pdf' : /\.png$/i.test(f.name) ? 'image/png' : 'image/jpeg');
-        const path = `${org}/${current.id}/${makeCompatibleUUID()}-${safe}`;
+        const path = `${org}/${current.id}/${makeClientId()}-${safe}`;
         const { error: ue } = await supabase.storage
           .from(BUCKET)
           .upload(path, f, { contentType: mime, cacheControl: '3600', upsert: false });
