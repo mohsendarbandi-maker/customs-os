@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
-import {cleanupOutdatedCaches,clientsClaim} from 'workbox-core';
-import {precacheAndRoute} from 'workbox-precaching';
+import {clientsClaim} from 'workbox-core';
+import {cleanupOutdatedCaches,precacheAndRoute} from 'workbox-precaching';
 import {registerRoute,setCatchHandler} from 'workbox-routing';
 import {NetworkFirst} from 'workbox-strategies';
 
