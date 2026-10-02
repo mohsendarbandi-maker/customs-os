@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
-import{BarChart3,Download,Filter,GitMerge,LayoutList,Plus,Printer,RefreshCw,Search,Settings2,Tags,Upload,Users,Workflow}from'lucide-react';
+import{BarChart3,Download,GitMerge,LayoutList,Plus,Printer,RefreshCw,Search,Settings2,Tags,Upload,Users,Workflow}from'lucide-react';
 import{supabase}from'../../lib/supabase';
 import{useAuth}from'../../context/AuthContext';
 
