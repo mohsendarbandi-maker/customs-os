@@ -24,6 +24,7 @@ export const OFFLINE_QUEUEABLE_RPCS = new Set([
   'attach_registration_order',
   'update_case_operational_data',
   'update_shipment_maritime_data',
+  'create_operational_reminder',
 ]);
 
 let dbPromise: Promise<IDBDatabase> | null = null;
