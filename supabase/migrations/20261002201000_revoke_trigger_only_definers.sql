@@ -1,0 +1,10 @@
+revoke execute on function public.record_org_connection_audit() from public, anon, authenticated;
+revoke execute on function public.registration_order_set_tenant_and_case_client() from public, anon, authenticated;
+revoke execute on function public.set_operational_reminder_org() from public, anon, authenticated;
+revoke execute on function public.sync_case_status_from_documents() from public, anon, authenticated;
+revoke execute on function public.sync_declaration_workflow_stage() from public, anon, authenticated;
+revoke execute on function public.sync_initial_warehousing_invoice_event() from public, anon, authenticated;
+revoke execute on function public.sync_operational_reminder_deliveries() from public, anon, authenticated;
+revoke execute on function public.validate_case_assigned_broker() from public, anon, authenticated;
+revoke execute on function public.validate_operational_reminder_links() from public, anon, authenticated;
+revoke execute on function public.validate_voucher_line_profit() from public, anon, authenticated;
