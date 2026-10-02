@@ -1,0 +1,9 @@
+create index if not exists crm_automation_rules_created_by_idx on public.crm_automation_rules(created_by);
+create index if not exists crm_automation_rules_organization_id_idx on public.crm_automation_rules(organization_id);
+create index if not exists crm_custom_field_values_updated_by_idx on public.crm_custom_field_values(updated_by);
+create index if not exists crm_custom_fields_created_by_idx on public.crm_custom_fields(created_by);
+create index if not exists crm_dedupe_clusters_resolved_by_idx on public.crm_dedupe_clusters(resolved_by);
+create index if not exists crm_entity_tags_created_by_idx on public.crm_entity_tags(created_by);
+create index if not exists crm_import_jobs_created_by_idx on public.crm_import_jobs(created_by);
+create index if not exists crm_saved_views_created_by_idx on public.crm_saved_views(created_by);
+create index if not exists crm_tags_created_by_idx on public.crm_tags(created_by);
