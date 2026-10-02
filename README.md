@@ -4,7 +4,7 @@ Customs OS is a multi-tenant Customs Clearance & Logistics Management System des
 
 ## Current implementation
 
-The repository now contains the database foundation plus the operational customs workflow used by the application:
+The repository contains the database foundation and operational customs workflow used by the application:
 
 - Multi-tenant PostgreSQL/Supabase schema with RLS and role-based access for owner/admin/broker/accountant/warehouse/client.
 - Cargo-owner registry, independent registration orders, maritime/B/L data, declarations/EPL, valuation, documents, permits, finance, cargo exit, case history and stage control.
@@ -12,15 +12,17 @@ The repository now contains the database foundation plus the operational customs
 - Immutable audit and status-history protections.
 - Offline RPC queue for a deliberately limited set of replay-safe workflow updates; authentication/session operations and case creation are never queued automatically.
 - EPL credentials stored in Supabase Vault; the browser receives only username and password-configured status, never the plaintext password.
+- Cloudflare Workers static hosting configuration with SPA fallback.
 
 ## Architecture & Technology Stack
 
-- **Database:** PostgreSQL via Supabase (`supabase/migrations/`)
-- **Frontend:** React + Vite + TypeScript
-- **Styling:** Tailwind CSS
-- **State & Routing:** React state + React Router DOM; TanStack Query available for expansion
-- **Testing:** Vitest
-- **Runtime:** Node 22+
+- Database: PostgreSQL via Supabase
+- Frontend: React + Vite + TypeScript
+- Styling: Tailwind CSS
+- State & Routing: React state + React Router DOM; TanStack Query available for expansion
+- Testing: Vitest
+- Runtime: Node 22+
+- Deployment: Cloudflare Workers
 
 ## Workflow model
 
@@ -30,6 +32,6 @@ Kottaj is treated as an EPL output, not as an initial case field. A B/L uniquene
 
 ## Release status
 
-**CURRENT STATUS: RELEASE CANDIDATE — NOT YET VERIFIED FOR PRODUCTION**
+CURRENT STATUS: RELEASE CANDIDATE — CI VERIFIED
 
-Remaining release gates are operational verification against the live Supabase project, tenant-isolation testing with an additional tenant, successful CI on the latest `main`, and a successful Vercel production deployment serving that commit. The repository's `RELEASE_READINESS.md` is the authoritative release checklist.
+CI has passed the latest npm test, npm run typecheck, and npm run build checks on main. Production use still requires live tenant-isolation and authenticated workflow verification in the deployed Cloudflare environment.
