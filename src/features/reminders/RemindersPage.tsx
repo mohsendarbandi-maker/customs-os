@@ -13,7 +13,7 @@ import {parseReminder,resolveAssignee,resolveLink,type Reminder,type ReminderKin
 type Filter='today'|'scheduled'|'overdue'|'all'|'done'|'assigned';
 type QueryResult={rows:Reminder[];count:number};
 const PAGE_SIZE=50;
-const kinds:[ReminderKind,string][]=[['document','اسناد'],['shipment','محموله / پرونده'],['finance','مالی'],['other','سایر']];
+const kinds:Array<[ReminderKind,string]>=[['document','اسناد'],['shipment','محموله / پرونده'],['finance','مالی'],['other','سایر']];
 const priorityLabel:Record<ReminderPriority,string>={low:'کم',normal:'عادی',high:'زیاد',urgent:'فوری'};
 const filterLabel:Record<Filter,string>={today:'امروز',scheduled:'برنامه‌ریزی‌شده',overdue:'معوق',all:'همه',done:'انجام‌شده',assigned:'به من واگذار شده'};
 const fa=(n:number)=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
