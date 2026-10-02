@@ -48,6 +48,12 @@ create index if not exists chat_members_user_idx
 create index if not exists chat_members_conversation_idx
   on public.chat_conversation_members(conversation_id, deleted_at, role);
 
+alter table public.chat_conversation_members
+  drop constraint if exists chat_members_last_read_fk;
+alter table public.chat_conversation_members
+  add constraint chat_members_last_read_fk
+  foreign key (last_read_message_id) references public.chat_messages(id) on delete set null;
+
 create table if not exists public.chat_messages (
   id uuid primary key default uuid_generate_v4(),
   organization_id uuid not null references public.organizations(id),
@@ -327,7 +333,8 @@ create or replace function public.chat_create_conversation(
   p_related_type text default null,
   p_related_id uuid default null,
   p_shared_with_organization_id uuid default null,
-  p_org_connection_id uuid default null
+  p_org_connection_id uuid default null,
+  p_direct_user_id uuid default null
 )
 returns public.chat_conversations
 language plpgsql
@@ -344,14 +351,16 @@ begin
   if p_type not in ('direct','group','company_channel','related','shared_company') then raise exception 'نوع مکالمه نامعتبر است'; end if;
 
   if p_type='direct' then
-    if p_shared_with_organization_id is null then
-      perform pg_advisory_xact_lock(hashtextextended(v_user::text || ':' || coalesce(p_related_id::text,''),0));
+    if p_direct_user_id is null then raise exception 'کاربر دوم مکالمه مستقیم الزامی است'; end if;
+    if not exists(select 1 from public.profiles p where p.id=p_direct_user_id and p.is_active=true and p.organization_id=v_org) then
+      raise exception 'کاربر دوم مکالمه مستقیم باید عضو فعال همان سازمان باشد';
     end if;
+    perform pg_advisory_xact_lock(hashtextextended(least(v_user::text,p_direct_user_id::text) || ':' || greatest(v_user::text,p_direct_user_id::text),0));
     select c.id into v_existing
     from public.chat_conversations c
     where c.type='direct' and c.organization_id=v_org and c.deleted_at is null
       and exists(select 1 from public.chat_conversation_members m where m.conversation_id=c.id and m.user_id=v_user and m.deleted_at is null)
-      and exists(select 1 from public.chat_conversation_members m where m.conversation_id=c.id and m.user_id=coalesce(p_related_id,v_user) and m.deleted_at is null)
+      and exists(select 1 from public.chat_conversation_members m where m.conversation_id=c.id and m.user_id=p_direct_user_id and m.deleted_at is null)
       and (select count(*) from public.chat_conversation_members m where m.conversation_id=c.id and m.deleted_at is null)=2
     limit 1;
     if v_existing is not null then
@@ -362,7 +371,13 @@ begin
 
   if p_type='shared_company' then
     if p_shared_with_organization_id is null or p_shared_with_organization_id=v_org then raise exception 'سازمان مقصد برای مکالمه مشترک الزامی است'; end if;
-    if not public.orgs_are_connected(v_org,p_shared_with_organization_id) then raise exception 'بین دو سازمان ارتباط پذیرفته‌شده وجود ندارد'; end if;
+    if p_org_connection_id is null or not exists(
+      select 1 from public.org_connections c
+      where c.id=p_org_connection_id
+        and c.source_organization_id=v_org
+        and c.target_organization_id=p_shared_with_organization_id
+        and c.status='accepted' and c.deleted_at is null
+    ) then raise exception 'ارتباط معتبر برای کانال مشترک پیدا نشد'; end if;
     if public.user_role()::text not in ('owner','admin') then raise exception 'ایجاد کانال مشترک فقط برای مالک یا مدیر مجاز است'; end if;
   end if;
 
@@ -963,7 +978,7 @@ $$;
 revoke all on function public.chat_user_is_member(uuid,uuid) from public,anon;
 revoke all on function public.chat_can_manage(uuid) from public,anon;
 revoke all on function public.chat_connection_allowed_for_conversation(uuid,uuid) from public,anon;
-revoke all on function public.chat_create_conversation(text,text,text,uuid,uuid,uuid) from public,anon;
+revoke all on function public.chat_create_conversation(text,text,text,uuid,uuid,uuid,uuid) from public,anon;
 revoke all on function public.chat_add_member(uuid,uuid,text) from public,anon;
 revoke all on function public.chat_insert_message(uuid,uuid,text,text,uuid,uuid,uuid) from public,anon;
 revoke all on function public.chat_mark_read(uuid,uuid) from public,anon;
@@ -986,7 +1001,7 @@ revoke all on function public.chat_storage_path_allowed(text,boolean) from publi
 grant execute on function public.chat_user_is_member(uuid,uuid) to authenticated;
 grant execute on function public.chat_can_manage(uuid) to authenticated;
 grant execute on function public.chat_connection_allowed_for_conversation(uuid,uuid) to authenticated;
-grant execute on function public.chat_create_conversation(text,text,text,uuid,uuid,uuid) to authenticated;
+grant execute on function public.chat_create_conversation(text,text,text,uuid,uuid,uuid,uuid) to authenticated;
 grant execute on function public.chat_add_member(uuid,uuid,text) to authenticated;
 grant execute on function public.chat_insert_message(uuid,uuid,text,text,uuid,uuid,uuid) to authenticated;
 grant execute on function public.chat_mark_read(uuid,uuid) to authenticated;
