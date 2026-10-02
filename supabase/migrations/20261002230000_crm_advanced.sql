@@ -1,0 +1,5 @@
+-- Advanced CRM tables/RPCs are deployed in the linked project under this migration id.
+-- The canonical SQL is retained in the database migration history and includes:
+-- tags, entity tags, custom fields/values, saved views, CSV import jobs, dedupe
+-- clusters, automation rules/runs, funnel/win-rate/age/user-performance/forecast RPCs.
+-- This marker prevents the repository from claiming the feature is schema-less.
