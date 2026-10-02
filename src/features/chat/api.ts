@@ -48,6 +48,7 @@ export const chatApi = {
     replyToMessageId?: string | null;
     forwardedFromMessageId?: string | null;
     threadRootMessageId?: string | null;
+    queueWhenOffline?: boolean;
   }): Promise<{ data: ChatMessage | null; error: unknown; queued: boolean; queueId?: string }> {
     const result = await rpcWithOfflineQueue(
       'chat_insert_message',
@@ -60,7 +61,7 @@ export const chatApi = {
         p_forwarded_from_message_id: input.forwardedFromMessageId ?? null,
         p_thread_root_message_id: input.threadRootMessageId ?? null,
       },
-      { queueWhenOffline: true },
+      { queueWhenOffline: input.queueWhenOffline ?? true },
     );
     return {
       data: result.data as ChatMessage | null,
