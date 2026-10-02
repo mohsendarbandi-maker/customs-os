@@ -24,6 +24,7 @@ export const ChatPage:React.FC=()=>{
  const[online,setOnline]=useState(()=>navigator.onLine);
  const[realtimeState,setRealtimeState]=useState<'connecting'|'subscribed'|'degraded'>('connecting');
  const[typingUsers,setTypingUsers]=useState<string[]>([]);
+ const realtimeStateRef=useRef<'connecting'|'subscribed'|'degraded'>('connecting');
  const[people,setPeople]=useState<Person[]>([]);
  const[peopleOpen,setPeopleOpen]=useState(false);
  const[query,setQuery]=useState('');
@@ -69,7 +70,7 @@ export const ChatPage:React.FC=()=>{
   if(channel.current)void supabase.removeChannel(channel.current);
   if(pollTimer.current!==null)window.clearTimeout(pollTimer.current);
   pollDelay.current=15000;
-  setRealtimeState('connecting');
+  setRealtimeState('connecting');realtimeStateRef.current='connecting';
   setTypingUsers([]);
 
   const ch=supabase.channel('chat:'+selectedId,{config:{private:true,presence:{key:user?.id??'anonymous'}}})
@@ -89,16 +90,16 @@ export const ChatPage:React.FC=()=>{
    })
    .subscribe(async status=>{
      if(status==='SUBSCRIBED'){
-       setRealtimeState('subscribed');pollDelay.current=30000;
+       setRealtimeState('subscribed');realtimeStateRef.current='subscribed';pollDelay.current=30000;
        if(user?.id)await ch.track({user_id:user.id,typing:false,at:Date.now()});
      }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
-       setRealtimeState('degraded');pollDelay.current=Math.min(30000,Math.max(5000,pollDelay.current));
+       setRealtimeState('degraded');realtimeStateRef.current='degraded';pollDelay.current=Math.min(30000,Math.max(5000,pollDelay.current));
      }
    });
   channel.current=ch;
-  schedulePoll(selectedId,realtimeState==='subscribed'?30000:5000);
+  schedulePoll(selectedId,5000);
   return()=>{if(pollTimer.current!==null)window.clearTimeout(pollTimer.current);void supabase.removeChannel(ch);channel.current=null}
- },[selectedId,user?.id,load,refresh,schedulePoll,realtimeState]);
+ },[selectedId,user?.id,load,refresh,schedulePoll]);
 
  useEffect(()=>{bottom.current?.scrollIntoView({behavior:'smooth'})},[messages.length,selectedId]);
 
