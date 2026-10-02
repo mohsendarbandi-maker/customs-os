@@ -3,6 +3,7 @@ import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {useSearchParams} from 'react-router-dom';
 import {Bell,CalendarDays,Check,ChevronLeft,ChevronRight,Clock3,MoreHorizontal,Plus,RefreshCw,Search,Trash2,Undo2,X,Users,Repeat2,ListChecks,Mic,MicOff} from 'lucide-react';
 import {supabase} from '../../lib/supabase';
+import {rpcWithOfflineQueue} from '../../lib/offlineQueue';
 import {useAuth} from '../../context/AuthContext';
 import {addJalaliDays,formatJalaliDateTime,formatRelativeFa,groupDayLabel,startOfTehranDay,toJalali,zonedJalaliToDate} from '../../lib/jalali';
 import {JalaliDateTimePicker} from './JalaliDateTimePicker';
@@ -53,7 +54,7 @@ export const RemindersPage:React.FC=()=>{
  const create=useMutation({
   mutationFn:async({parsed,clientUuid}:{parsed:ReturnType<typeof parseReminder>;clientUuid:string})=>{
    const payload={title:parsed.title,due_at:parsed.dueAt.toISOString(),priority:parsed.priority,kind:parsed.kind,recurrence_rule:parsed.recurrenceRule,alarm_offsets_min:parsed.alarmOffsets,visibility:'private',all_day:false,timezone:'Asia/Tehran',client_uuid:clientUuid};
-   const result=await supabase.rpc('create_operational_reminder',{p_payload:payload}) as {data:Reminder|null;error:{message:string}|null;queued?:boolean};
+   const result=await rpcWithOfflineQueue('create_operational_reminder',{p_payload:payload}) as {data:Reminder|null;error:{message:string}|null;queued?:boolean};
    if(result.error)throw new Error(result.error.message);
    if(result.data){const link=await resolveLink(parsed.linkQuery,parsed.kind).catch(()=>null);const assignee=await resolveAssignee(parsed.assigneeName).catch(()=>null);if(link||assignee){await supabase.from('operational_reminders').update({...link,...(assignee?{assignee_id:assignee}: {})}).eq('id',result.data.id);}}
    return result;
