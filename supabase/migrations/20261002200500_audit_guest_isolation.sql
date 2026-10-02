@@ -67,6 +67,38 @@ $function$;
 revoke execute on function public.create_audit_guest_profile() from public, anon;
 grant execute on function public.create_audit_guest_profile() to authenticated;
 
+
+insert into public.organizations (name)
+select 'Customs OS Demo'
+where not exists (select 1 from public.organizations where name='Customs OS Demo');
+
+do $seed$
+declare v_org uuid; v_client uuid; v_case uuid; v_shipment uuid;
+begin
+  select id into v_org from public.organizations where name='Customs OS Demo' limit 1;
+  insert into public.clients(organization_id,name,economic_code,notes)
+  select v_org,'Demo Importer','DEMO-0001','Synthetic data only — audit guest sandbox'
+  where not exists(select 1 from public.clients where organization_id=v_org and name='Demo Importer');
+  select id into v_client from public.clients where organization_id=v_org and name='Demo Importer' limit 1;
+  insert into public.cases(organization_id,client_id,case_number,status,cargo_description,origin_country_code,transaction_country_code,delivery_term,invoice_amount,invoice_currency,net_weight_kg,gross_weight_kg,display_name)
+  select v_org,v_client,'DEMO-CASE-001','draft'::public.case_status,'Synthetic demo cargo — steel coils','RU','IR','CFR',25000,'USD'::public.currency_code,22000,22500,'Demo steel coils'
+  where not exists(select 1 from public.cases where organization_id=v_org and case_number='DEMO-CASE-001')
+  returning id into v_case;
+  if v_case is null then select id into v_case from public.cases where organization_id=v_org and case_number='DEMO-CASE-001' limit 1; end if;
+  insert into public.shipments(organization_id,case_id,transport_mode,bill_of_lading_no,gross_weight_kg,origin_port,destination_port,shipping_line,cargo_count,cargo_count_unit,net_weight_kg,display_name)
+  select v_org,v_case,'sea'::public.transport_mode,'DEMO-BL-001',22500,'Astrakhan','Bandar Anzali','Demo Shipping Line',22,'rolls',22000,'Demo shipment — steel coils'
+  where not exists(select 1 from public.shipments where organization_id=v_org and bill_of_lading_no='DEMO-BL-001')
+  returning id into v_shipment;
+  if v_shipment is null then select id into v_shipment from public.shipments where organization_id=v_org and bill_of_lading_no='DEMO-BL-001' limit 1; end if;
+  insert into public.financial_transactions(organization_id,case_id,transaction_type,category,original_amount,original_currency,exchange_rate,base_amount_irr,description)
+  select v_org,v_case,'expense'::public.transaction_type,'Demo invoice',25000,'USD'::public.currency_code,1,25000,'Synthetic demo invoice — not a real payable'
+  where not exists(select 1 from public.financial_transactions where organization_id=v_org and case_id=v_case and category='Demo invoice');
+  insert into public.shipment_documents(organization_id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes)
+  select v_org,v_shipment,'Demo commercial invoice','demo-commercial-invoice.pdf','demo/audit-guest/demo-commercial-invoice.pdf','application/pdf',1024
+  where not exists(select 1 from public.shipment_documents where organization_id=v_org and shipment_id=v_shipment and original_file_name='demo-commercial-invoice.pdf');
+end
+$seed$;
+
 -- The following policies intentionally target authenticated sessions only.
 alter policy "ai_knowledge_chunks_org" on public.ai_knowledge_chunks to authenticated;
 alter policy "ai_knowledge_documents_org" on public.ai_knowledge_documents to authenticated;
