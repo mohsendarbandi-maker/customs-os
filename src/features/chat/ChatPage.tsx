@@ -3,7 +3,7 @@ import{CheckCheck,MessageCircle,MoreVertical,Plus,Search,Send,Trash2,Users,Wifi,
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText,formatJalaliDateTime}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
-import{createDirectConversation,deleteForAll,deleteForMe,listConversations,listMessages,markDelivered,markRead,searchChat,sendMessage}from'./api';
+import{createDirectConversation,deleteForAll,deleteForMe,listConversations,listMessages,markRead,searchChat,sendMessage}from'./api';
 import{supabase}from'../../lib/supabase';
 import type{ChatConversation,ChatMessage}from'./types';
 
