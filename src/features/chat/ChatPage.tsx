@@ -324,7 +324,7 @@ export const ChatPage: React.FC = () => {
     },
     onSuccess: () => {
       setDraft('');
-      setPending((items) => items.slice(1));
+      setTyping(false);
       void refresh();
     },
     onError: (error) => {
@@ -375,14 +375,19 @@ export const ChatPage: React.FC = () => {
 
   const handleFiles = useCallback(async (files: FileList | File[]): Promise<void> => {
     if (!selectedId || !profile?.organization_id || !user?.id) return;
+    if (!navigator.onLine) {
+      window.alert('برای ارسال فایل اتصال اینترنت لازم است.');
+      return;
+    }
     for (const raw of Array.from(files)) {
       let file = raw;
+      const queueId = crypto.randomUUID();
       try {
         file = await compressImage(raw);
         const check = await inspectFileMagic(file);
         if (!check.ok || file.size > 50 * 1024 * 1024) {
           setFileQueue((items) => items.concat({
-            id: crypto.randomUUID(),
+            id: queueId,
             file,
             progress: 0,
             status: 'error',
@@ -391,7 +396,6 @@ export const ChatPage: React.FC = () => {
           continue;
         }
 
-        const queueId = crypto.randomUUID();
         setFileQueue((items) => items.concat({
           id: queueId,
           file,
@@ -405,6 +409,7 @@ export const ChatPage: React.FC = () => {
           clientUuid,
           messageType: 'file',
           body: null,
+          queueWhenOffline: false,
         });
         if (message.error || !message.data) {
           throw message.error ?? new Error('ثبت پیام فایل ناموفق بود.');
@@ -440,7 +445,7 @@ export const ChatPage: React.FC = () => {
         await refresh();
       } catch (error) {
         setFileQueue((items) => items.map((item) =>
-          item.id === (files.length === 1 ? item.id : item.id) ? { ...item, status: 'error', error: friendlyError(error) } : item,
+          item.id === queueId ? { ...item, status: 'error', error: friendlyError(error) } : item,
         ));
       }
     }
