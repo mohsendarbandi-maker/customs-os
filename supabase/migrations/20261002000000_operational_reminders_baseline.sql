@@ -1,0 +1,44 @@
+-- Customs OS — operational_reminders baseline
+-- Captured from the live Supabase database before reminder redesign.
+-- This migration is intentionally non-mutating. It documents the live schema/policies/triggers
+-- that the redesign migration must preserve or explicitly replace.
+-- Live table: public.operational_reminders
+-- Live RLS: enabled
+-- Existing columns: id uuid, organization_id uuid, case_id uuid, shipment_id uuid,
+-- title text, description text, due_at timestamptz, priority text, status text,
+-- created_by uuid, completed_at timestamptz, created_at timestamptz, updated_at timestamptz,
+-- due_precision text, source_key text, is_system boolean.
+-- Existing constraints/indexes/policies/triggers were captured from the live database on 2026-10-02.
+--
+-- Constraints:
+-- operational_reminders_pkey PRIMARY KEY (id)
+-- operational_reminders_organization_id_fkey -> organizations(id) ON DELETE CASCADE
+-- operational_reminders_case_id_fkey -> cases(id) ON DELETE CASCADE
+-- operational_reminders_shipment_id_fkey -> shipments(id) ON DELETE CASCADE
+-- operational_reminders_created_by_fkey -> auth.users(id)
+-- priority IN ('low','normal','high','urgent')
+-- status IN ('open','done','dismissed')
+-- due_precision IN ('month','day')
+--
+-- Indexes:
+-- idx_operational_reminders_created_by (created_by)
+-- operational_reminders_case_idx (case_id)
+-- operational_reminders_due_idx (organization_id,status,due_at)
+-- operational_reminders_org_source_key_uidx UNIQUE (organization_id,source_key) WHERE source_key IS NOT NULL
+-- operational_reminders_pkey UNIQUE (id)
+-- operational_reminders_shipment_idx (shipment_id)
+--
+-- Policies:
+-- operational_reminders_delete: authenticated DELETE USING organization_id = user_org_id()
+-- operational_reminders_insert: authenticated INSERT WITH CHECK organization_id = user_org_id() AND created_by = auth.uid()
+-- operational_reminders_select: authenticated SELECT USING organization_id = user_org_id()
+-- operational_reminders_update: authenticated UPDATE USING/WITH CHECK organization_id = user_org_id()
+-- owner_console_all: authenticated ALL for organization owner
+--
+-- Triggers:
+-- tr_owner_console_audit AFTER INSERT/DELETE/UPDATE -> record_audit_event()
+-- trg_block_audit_guest_writes BEFORE INSERT/DELETE/UPDATE -> block_audit_guest_writes()
+-- trg_set_operational_reminder_org BEFORE INSERT -> set_operational_reminder_org()
+-- trg_touch_operational_reminder_updated_at BEFORE UPDATE -> touch_operational_reminder_updated_at()
+--
+-- No SQL statements: this file is a baseline record only.
