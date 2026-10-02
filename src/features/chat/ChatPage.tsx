@@ -31,6 +31,7 @@ export const ChatPage:React.FC=()=>{
  const[reply,setReply]=useState<ChatMessage|null>(null);
  const[menu,setMenu]=useState<string|null>(null);
  const bottom=useRef<HTMLDivElement|null>(null);
+ const messageIdsRef=useRef<Set<string>>(new Set());
  const channel=useRef<ReturnType<typeof supabase.channel>|null>(null);
  const pollTimer=useRef<number|null>(null);
  const pollDelay=useRef(15000);
@@ -74,7 +75,7 @@ export const ChatPage:React.FC=()=>{
 
   const ch=supabase.channel('chat:'+selectedId,{config:{private:true,presence:{key:user?.id??'anonymous'}}})
    .on('postgres_changes',{event:'*',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+selectedId},()=>{void load(selectedId);void refresh()})
-   .on('postgres_changes',{event:'*',schema:'public',table:'chat_message_receipts'},payload=>{const id=(payload.new as any)?.message_id||(payload.old as any)?.message_id;if(id&&messages.some(m=>m.id===id))void load(selectedId)})
+   .on('postgres_changes',{event:'*',schema:'public',table:'chat_message_receipts'},payload=>{const id=(payload.new as any)?.message_id||(payload.old as any)?.message_id;if(id&&messageIdsRef.current.has(id))void load(selectedId)})
    .on('postgres_changes',{event:'*',schema:'public',table:'chat_message_reactions'},payload=>{const id=(payload.new as any)?.message_id||(payload.old as any)?.message_id;if(id&&messages.some(m=>m.id===id))void load(selectedId)})
    .on('postgres_changes',{event:'*',schema:'public',table:'chat_conversation_members',filter:'conversation_id=eq.'+selectedId},()=>{void refresh();void load(selectedId)})
    .on('broadcast',{event:'typing'},payload=>{
@@ -98,9 +99,9 @@ export const ChatPage:React.FC=()=>{
   channel.current=ch;
   schedulePoll(selectedId,5000);
   return()=>{if(pollTimer.current!==null)window.clearTimeout(pollTimer.current);void supabase.removeChannel(ch);channel.current=null}
- },[selectedId,user?.id,load,refresh,schedulePoll,messages]);
+ },[selectedId,user?.id,load,refresh,schedulePoll]);
 
- useEffect(()=>{bottom.current?.scrollIntoView({behavior:'smooth'})},[messages.length,selectedId]);
+ useEffect(()=>{messageIdsRef.current=new Set(messages.map(m=>m.id));bottom.current?.scrollIntoView({behavior:'smooth'})},[messages,selectedId]);
 
  const broadcastTyping=useCallback((typing:boolean)=>{
   if(!channel.current||!user?.id)return;
