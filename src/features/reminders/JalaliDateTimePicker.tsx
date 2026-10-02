@@ -6,7 +6,7 @@ type Props={value:Date;onChange:(value:Date)=>void;onClose:()=>void;allDay:boole
 const pad=(n:number)=>String(n).padStart(2,'0');
 const same=(a:Date,b:Date)=>startOfTehranDay(a).getTime()===startOfTehranDay(b).getTime();
 export const JalaliDateTimePicker:React.FC<Props>=({value,onChange,onClose,allDay,onAllDayChange})=>{
- const now=new Date(),jv=toJalali(value),[month,setMonth]=useState(jv.month),[year,setYear]=useState(jv.year),[hour,setHour]=useState(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',hour12:false,hour:'2-digit',hourCycle:'h23'}).format(value))),[minute,setMinute]=useState(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',minute:'2-digit'}).format(value)));
+ const now=new Date(),jv=toJalali(value),[month,setMonth]=useState(jv.month),[year,setYear]=useState(jv.year),[hour,setHour]=useState(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',hour12:false,hourCycle:'h23',hour:'2-digit'}).format(value))),[minute,setMinute]=useState(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',minute:'2-digit'}).format(value)));
  useEffect(()=>{const j=toJalali(value);setMonth(j.month);setYear(j.year);},[value]);
  const days=useMemo(()=>{const len=jalaliMonthLength(year,month),first=zonedJalaliToDate(year,month,1);const offset=jalaliWeekday(first);return Array.from({length:offset+len},(_,i)=>i<offset?null:i-offset+1);},[year,month]);
  const choose=(day:number,h=hour,m=minute)=>onChange(zonedJalaliToDate(year,month,day,allDay?9:h,allDay?0:m));
