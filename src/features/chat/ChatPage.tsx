@@ -24,7 +24,6 @@ export const ChatPage:React.FC=()=>{
  const[online,setOnline]=useState(()=>navigator.onLine);
  const[realtimeState,setRealtimeState]=useState<'connecting'|'subscribed'|'degraded'>('connecting');
  const[typingUsers,setTypingUsers]=useState<string[]>([]);
- const realtimeStateRef=useRef<'connecting'|'subscribed'|'degraded'>('connecting');
  const[people,setPeople]=useState<Person[]>([]);
  const[peopleOpen,setPeopleOpen]=useState(false);
  const[query,setQuery]=useState('');
@@ -70,13 +69,13 @@ export const ChatPage:React.FC=()=>{
   if(channel.current)void supabase.removeChannel(channel.current);
   if(pollTimer.current!==null)window.clearTimeout(pollTimer.current);
   pollDelay.current=15000;
-  setRealtimeState('connecting');realtimeStateRef.current='connecting';
+  setRealtimeState('connecting');
   setTypingUsers([]);
 
   const ch=supabase.channel('chat:'+selectedId,{config:{private:true,presence:{key:user?.id??'anonymous'}}})
    .on('postgres_changes',{event:'*',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+selectedId},()=>{void load(selectedId);void refresh()})
-   .on('postgres_changes',{event:'*',schema:'public',table:'chat_message_receipts',filter:'message_id=in.(*)'},()=>{void load(selectedId)})
-   .on('postgres_changes',{event:'*',schema:'public',table:'chat_message_reactions',filter:'message_id=in.(*)'},()=>{void load(selectedId)})
+   .on('postgres_changes',{event:'*',schema:'public',table:'chat_message_receipts'},payload=>{const id=(payload.new as any)?.message_id||(payload.old as any)?.message_id;if(id&&messages.some(m=>m.id===id))void load(selectedId)})
+   .on('postgres_changes',{event:'*',schema:'public',table:'chat_message_reactions'},payload=>{const id=(payload.new as any)?.message_id||(payload.old as any)?.message_id;if(id&&messages.some(m=>m.id===id))void load(selectedId)})
    .on('postgres_changes',{event:'*',schema:'public',table:'chat_conversation_members',filter:'conversation_id=eq.'+selectedId},()=>{void refresh();void load(selectedId)})
    .on('broadcast',{event:'typing'},payload=>{
      const p=payload.payload as PresenceUser;
@@ -90,16 +89,16 @@ export const ChatPage:React.FC=()=>{
    })
    .subscribe(async status=>{
      if(status==='SUBSCRIBED'){
-       setRealtimeState('subscribed');realtimeStateRef.current='subscribed';pollDelay.current=30000;
+       setRealtimeState('subscribed');pollDelay.current=30000;
        if(user?.id)await ch.track({user_id:user.id,typing:false,at:Date.now()});
      }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
-       setRealtimeState('degraded');realtimeStateRef.current='degraded';pollDelay.current=Math.min(30000,Math.max(5000,pollDelay.current));
+       setRealtimeState('degraded');pollDelay.current=Math.min(30000,Math.max(5000,pollDelay.current));
      }
    });
   channel.current=ch;
   schedulePoll(selectedId,5000);
   return()=>{if(pollTimer.current!==null)window.clearTimeout(pollTimer.current);void supabase.removeChannel(ch);channel.current=null}
- },[selectedId,user?.id,load,refresh,schedulePoll]);
+ },[selectedId,user?.id,load,refresh,schedulePoll,messages]);
 
  useEffect(()=>{bottom.current?.scrollIntoView({behavior:'smooth'})},[messages.length,selectedId]);
 
