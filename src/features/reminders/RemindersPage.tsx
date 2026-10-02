@@ -1,13 +1,13 @@
-import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import React,{useEffect,useMemo,useState} from 'react';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {useSearchParams} from 'react-router-dom';
-import {Bell,CalendarDays,Check,ChevronLeft,ChevronRight,Clock3,MoreHorizontal,Plus,RefreshCw,Search,Settings,Trash2,Undo2,X,Users,Tag,Repeat2,Paperclip,ListChecks,Mic,MicOff} from 'lucide-react';
+import {Bell,CalendarDays,Check,ChevronLeft,ChevronRight,Clock3,MoreHorizontal,Plus,RefreshCw,Search,Trash2,Undo2,X,Users,Repeat2,ListChecks,Mic,MicOff} from 'lucide-react';
 import {supabase} from '../../lib/supabase';
 import {useAuth} from '../../context/AuthContext';
-import {addJalaliDays,formatJalaliDateTime,formatRelativeFa,groupDayLabel,startOfTehranDay,toJalali,toGregorian,zonedJalaliToDate} from '../../lib/jalali';
+import {addJalaliDays,formatJalaliDateTime,formatRelativeFa,groupDayLabel,startOfTehranDay,toJalali,zonedJalaliToDate} from '../../lib/jalali';
 import {JalaliDateTimePicker} from './JalaliDateTimePicker';
 import {disablePush,enablePush,listPushDevices,setNotificationPreferences,testPush} from './push';
-import {parseReminder,resolveAssignee,resolveLink,recurrenceNext,type Reminder,type ReminderKind,type ReminderPriority,ReminderEntityType} from './reminderCore';
+import {parseReminder,resolveAssignee,resolveLink,type Reminder,type ReminderKind,type ReminderPriority,ReminderEntityType} from './reminderCore';
 
 type Filter='today'|'scheduled'|'overdue'|'all'|'done'|'assigned';
 type QueryResult={rows:Reminder[];count:number};
