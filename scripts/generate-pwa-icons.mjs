@@ -1,0 +1,11 @@
+import {execFileSync} from 'node:child_process';
+import {mkdirSync,rmSync,renameSync} from 'node:fs';
+mkdirSync('public/pwa-gen',{recursive:true});
+const run=(size,out)=>{execFileSync(process.platform==='win32'?'npx.cmd':'npx',['--yes','sharp-cli','-i','public/icon.svg','-o','public/pwa-gen','-f','png','resize',String(size),String(size)],{stdio:'inherit'});renameSync('public/pwa-gen/icon.png',out);};
+run(192,'public/pwa/icon-192.png');
+run(512,'public/pwa/icon-512.png');
+run(192,'public/pwa/icon-192-maskable.png');
+run(512,'public/pwa/icon-512-maskable.png');
+run(180,'public/pwa/apple-touch-icon-180.png');
+run(96,'public/pwa/monochrome-96.png');
+rmSync('public/pwa-gen',{recursive:true,force:true});
