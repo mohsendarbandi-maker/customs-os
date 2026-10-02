@@ -1,48 +1,140 @@
 /// <reference lib="webworker" />
-import {cleanupOutdatedCaches,clientsClaim} from 'workbox-core';
-import {precacheAndRoute} from 'workbox-precaching';
 
 declare const self: ServiceWorkerGlobalScope;
-cleanupOutdatedCaches();
-precacheAndRoute(self.__WB_MANIFEST);
-self.skipWaiting();
-clientsClaim();
 
-type PushData={title?:string;body?:string;tag?:string;url?:string;icon?:string;badge?:string;requireInteraction?:boolean;actions?:NotificationAction[];data?:Record<string,string>};
-const openAction=(rid:string,action:string)=>'/reminders?rid='+encodeURIComponent(rid)+'&act='+encodeURIComponent(action)+'&source=push';
+const CACHE_VERSION = 'customs-os-shell-v1';
+const SHELL_CACHE = CACHE_VERSION;
+const RUNTIME_CACHE = 'customs-os-runtime-v1';
 
-self.addEventListener('push',(event)=>{
- const data=(event.data?.json?.()??{}) as PushData;
- event.waitUntil(self.registration.showNotification(data.title??'یادآور گمرکی',{
-  body:data.body??'یک یادآور برای شما ثبت شده است.',
-  tag:data.tag??'customs-os-reminder',
-  icon:data.icon??'/pwa/icon-192.png',badge:data.badge??'/pwa/badge-96.png',
-  dir:'rtl',lang:'fa',requireInteraction:data.requireInteraction??false,
-  actions:data.actions??[
-   {action:'done',title:'انجام شد'},
-   {action:'snooze10',title:'۱۰ دقیقه بعد'},
-   {action:'tomorrow9',title:'فردا ۹ صبح'}
-  ],
-  data:{...(data.data??{}),url:data.url??'/reminders'}
- }));
+type PushData = {
+  title?: string;
+  body?: string;
+  tag?: string;
+  url?: string;
+  icon?: string;
+  badge?: string;
+  requireInteraction?: boolean;
+  actions?: NotificationAction[];
+  data?: Record<string, string>;
+};
+
+const openAction = (reminderId: string, action: string): string =>
+  '/reminders?rid=' + encodeURIComponent(reminderId) +
+  '&act=' + encodeURIComponent(action) + '&source=push';
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(self.skipWaiting());
 });
-self.addEventListener('notificationclick',(event)=>{
- const n=event.notification,data=(n.data??{}) as Record<string,string>,rid=data.rid??'',action=event.action;
- n.close();
- const target=action&&rid?openAction(rid,action):(data.url??'/reminders');
- event.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(async windows=>{
-  for(const w of windows){
-   if('focus' in w){
-    if('navigate' in w){await w.navigate(new URL(target,self.location.origin).href);}
-    return w.focus();
-   }
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then(async (keys) => {
+      await Promise.all(
+        keys
+          .filter((key) => key !== SHELL_CACHE && key !== RUNTIME_CACHE)
+          .map((key) => caches.delete(key)),
+      );
+      await self.clients.claim();
+    }),
+  );
+});
+
+const cacheResponse = async (request: Request, response: Response): Promise<Response> => {
+  if (response.ok && request.method === 'GET') {
+    const cache = await caches.open(RUNTIME_CACHE);
+    await cache.put(request, response.clone());
   }
-  return self.clients.openWindow(new URL(target,self.location.origin).href);
- }));
+  return response;
+};
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+
+  event.respondWith(
+    fetch(request)
+      .then((response) => cacheResponse(request, response))
+      .catch(async () => {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        if (request.destination === 'document') {
+          const shell = await caches.match('/index.html');
+          if (shell) return shell;
+        }
+        return new Response('شبکه در دسترس نیست.', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      }),
+  );
 });
-self.addEventListener('notificationclose',(event)=>{
- event.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(w=>{for(const c of w)c.postMessage({type:'NOTIFICATION_CLOSED',tag:event.notification.tag});}));
+
+self.addEventListener('push', (event) => {
+  const payload = (event.data?.json() ?? {}) as PushData;
+  const data = payload.data ?? {};
+  const reminderId = data.rid ?? '';
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title ?? 'اعلان Customs OS', {
+      body: payload.body ?? 'یک اعلان جدید برای شما ثبت شده است.',
+      tag: payload.tag ?? (reminderId ? 'customs-os-reminder-' + reminderId : 'customs-os-notification'),
+      icon: payload.icon ?? '/pwa/icon-192.png',
+      badge: payload.badge ?? '/pwa/badge-96.png',
+      dir: 'rtl',
+      lang: 'fa',
+      requireInteraction: payload.requireInteraction ?? false,
+      actions: payload.actions ?? [],
+      data: { ...data, url: payload.url ?? '/reminders' },
+    }),
+  );
 });
-self.addEventListener('pushsubscriptionchange',(event)=>{
- event.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(w=>{for(const c of w)c.postMessage({type:'PUSH_SUBSCRIPTION_CHANGED'});}));
+
+self.addEventListener('notificationclick', (event) => {
+  const notificationData = (event.notification.data ?? {}) as Record<string, string>;
+  const reminderId = notificationData.rid ?? '';
+  const action = event.action;
+  event.notification.close();
+
+  const target =
+    action && reminderId
+      ? openAction(reminderId, action)
+      : notificationData.url ?? '/reminders';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windowClients) => {
+      for (const windowClient of windowClients) {
+        try {
+          await windowClient.navigate(new URL(target, self.location.origin).href);
+        } catch {
+          // A client can disappear between matchAll and navigate.
+        }
+        await windowClient.focus();
+        return windowClient;
+      }
+      return self.clients.openWindow(new URL(target, self.location.origin).href);
+    }),
+  );
+});
+
+self.addEventListener('notificationclose', (event) => {
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        client.postMessage({
+          type: 'NOTIFICATION_CLOSED',
+          tag: event.notification.tag,
+        });
+      }
+    }),
+  );
+});
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+      }
+    }),
+  );
 });

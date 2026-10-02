@@ -1,19 +1,27 @@
 {
-  "name": "Customs OS | سیستم مدیریت گمرک",
+  "id": "/?source=pwa",
+  "name": "Customs OS",
   "short_name": "Customs OS",
-  "description": "سیستم مدیریت گمرک و لجستیک",
-  "start_url": "/",
+  "description": "سامانه مدیریت عملیات گمرکی، لجستیک، مشتریان و ارتباطات سازمانی",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#0F4C81",
+  "orientation": "any",
   "dir": "rtl",
   "lang": "fa",
+  "theme_color": "#0F4C81",
+  "background_color": "#0b1220",
   "icons": [
-    {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ]
+    {"src":"/pwa/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/pwa/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"/pwa/icon-192-maskable.png","sizes":"192x192","type":"image/png","purpose":"maskable"},
+    {"src":"/pwa/icon-512-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"},
+    {"src":"/pwa/monochrome-96.png","sizes":"96x96","type":"image/png","purpose":"monochrome"}
+  ],
+  "shortcuts":[
+    {"name":"یادآور جدید","short_name":"یادآور جدید","url":"/reminders?new=1","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]},
+    {"name":"امروز","short_name":"امروز","url":"/reminders?view=today","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]},
+    {"name":"اسناد","short_name":"اسناد","url":"/documents","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]}
+  ],
+  "share_target": {"action": "/reminders/share", "method": "GET", "params": {"title": "title", "text": "text", "url": "url"}}
 }
