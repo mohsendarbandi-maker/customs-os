@@ -20,7 +20,7 @@ const fa=(n:number)=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)
 const todayRange=()=>{const s=startOfTehranDay();return [s,addJalaliDays(s,1)] as const;};
 const emptyForm={title:'',notes:'',dueAt:new Date(Date.now()+3600000),priority:'normal' as ReminderPriority,kind:'other' as ReminderKind,allDay:false,offsets:[0],recurrence:null as string|null,visibility:'private' as 'private'|'team',tags:''};
 
-function errorFa(error:unknown){const m=error instanceof Error?error.message:String(error??'');const replacements:[[string,string]]=[['permission denied','دسترسی مجاز نیست'],['row-level security','دسترسی این یادآور مجاز نیست'],['violates','اطلاعات ثبت‌شده معتبر نیست'],['invalid','اطلاعات واردشده معتبر نیست']];for(const [a,b] of replacements)if(m.toLowerCase().includes(a))return b;return 'عملیات یادآور انجام نشد';}
+function errorFa(error:unknown){const m=error instanceof Error?error.message:String(error??'');const replacements:Array<[string,string]>=[['permission denied','دسترسی مجاز نیست'],['row-level security','دسترسی این یادآور مجاز نیست'],['violates','اطلاعات ثبت‌شده معتبر نیست'],['invalid','اطلاعات واردشده معتبر نیست']];for(const [a,b] of replacements)if(m.toLowerCase().includes(a))return b;return 'عملیات یادآور انجام نشد';}
 
 type SpeechRecognitionLike={lang:string;interimResults:boolean;resultIndex:number;onresult:(event:SpeechRecognitionEventLike)=>void;onerror:()=>void;onend:()=>void;start:()=>void;stop:()=>void};type SpeechRecognitionEventLike={resultIndex:number;results:ArrayLike<{0:{transcript?:string}} & ArrayLike<{transcript?:string}>>};
 export const RemindersPage:React.FC=()=>{
