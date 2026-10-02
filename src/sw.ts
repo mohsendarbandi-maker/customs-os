@@ -12,7 +12,7 @@ setCatchHandler(async({request})=>request.mode==='navigate'?(await caches.match(
 self.skipWaiting();
 clientsClaim();
 
-type PushData={title?:string;body?:string;tag?:string;url?:string;icon?:string;badge?:string;requireInteraction?:boolean;actions?:NotificationAction[];data?:Record<string,string>};
+type PushData={title?:string;body?:string;tag?:string;url?:string;icon?:string;badge?:string;requireInteraction?:boolean;actions?:Array<{action:string;title:string;icon?:string}>;data?:Record<string,string>};
 const actionUrl=(rid:string,action:string)=>'/reminders?rid='+encodeURIComponent(rid)+'&act='+encodeURIComponent(action)+'&source=push';
 self.addEventListener('push',(event)=>{
  const data=(event.data?.json?.()??{}) as PushData;
@@ -20,7 +20,7 @@ self.addEventListener('push',(event)=>{
   body:data.body??'یک یادآور برای شما ثبت شده است.',tag:data.tag??'customs-os-reminder',
   icon:data.icon??'/pwa/icon-192.png',badge:data.badge??'/pwa/monochrome-96.png',dir:'rtl',lang:'fa',
   requireInteraction:data.requireInteraction??false,
-  actions:data.actions??[{action:'done',title:'انجام شد'},{action:'snooze10',title:'۱۰ دقیقه بعد'},{action:'tomorrow9',title:'فردا ۹ صبح'}],
+  ...(data.actions?{actions:data.actions}:{actions:[{action:'done',title:'انجام شد'},{action:'snooze10',title:'۱۰ دقیقه بعد'},{action:'tomorrow9',title:'فردا ۹ صبح'}]}),
   data:{...(data.data??{}),url:data.url??'/reminders'}
  }));
 });
