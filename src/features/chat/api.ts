@@ -22,7 +22,7 @@ export async function listMessages(conversationId: string, cursor?: { createdAt:
   return unwrap(result) as ChatMessage[];
 }
 
-export async function sendMessage(conversationId: string, clientUuid: string, body: string, replyToMessageId?: string | null): Promise<ChatMessage> {
+export async function sendMessage(conversationId: string, clientUuid: string, body: string, replyToMessageId?: string | null): Promise<ChatMessage | { queued: true; queueId: string }> {
   const result = await supabase.rpc('chat_insert_message', {
     p_conversation_id: conversationId,
     p_client_uuid: clientUuid,
@@ -32,6 +32,7 @@ export async function sendMessage(conversationId: string, clientUuid: string, bo
     p_forwarded_from_message_id: null,
     p_thread_root_message_id: null,
   });
+  if ('queued' in result && result.queued) return { queued: true, queueId: result.queueId };
   return unwrap(result) as ChatMessage;
 }
 
