@@ -2,7 +2,7 @@ import React,{useState} from 'react';
 import {Bell,CalendarDays,Plus,X} from 'lucide-react';
 import {useAuth} from '../../context/AuthContext';
 import {supabase} from '../../lib/supabase';
-import {parseReminder,type ReminderKind,resolveAssignee,resolveLink} from './reminderCore';
+import {parseReminder,type Reminder,type ReminderKind,resolveAssignee,resolveLink} from './reminderCore';
 import {JalaliDateTimePicker} from './JalaliDateTimePicker';
 import {formatJalaliDateTime,zonedJalaliToDate,toJalali} from '../../lib/jalali';
 
