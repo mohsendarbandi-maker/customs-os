@@ -1,0 +1,2 @@
+revoke all on table public.ais_sync_health from anon, authenticated;
+comment on table public.ais_sync_health is 'Internal synchronization health table. RLS enabled with no client policies; client roles have no table grants. Trusted server/service_role only.';
