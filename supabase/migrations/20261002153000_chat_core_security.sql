@@ -48,12 +48,6 @@ create index if not exists chat_members_user_idx
 create index if not exists chat_members_conversation_idx
   on public.chat_conversation_members(conversation_id, deleted_at, role);
 
-alter table public.chat_conversation_members
-  drop constraint if exists chat_members_last_read_fk;
-alter table public.chat_conversation_members
-  add constraint chat_members_last_read_fk
-  foreign key (last_read_message_id) references public.chat_messages(id) on delete set null;
-
 create table if not exists public.chat_messages (
   id uuid primary key default uuid_generate_v4(),
   organization_id uuid not null references public.organizations(id),
@@ -87,6 +81,12 @@ create index if not exists chat_messages_reply_idx
 create index if not exists chat_messages_thread_idx
   on public.chat_messages(thread_root_message_id, created_at asc)
   where thread_root_message_id is not null;
+
+alter table public.chat_conversation_members
+  drop constraint if exists chat_members_last_read_fk;
+alter table public.chat_conversation_members
+  add constraint chat_members_last_read_fk
+  foreign key (last_read_message_id) references public.chat_messages(id) on delete set null;
 
 create or replace function public.chat_normalize_text(p_text text)
 returns text
