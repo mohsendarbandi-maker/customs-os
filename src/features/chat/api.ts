@@ -32,7 +32,8 @@ export async function sendMessage(conversationId: string, clientUuid: string, bo
     p_forwarded_from_message_id: null,
     p_thread_root_message_id: null,
   });
-  if ('queued' in result && result.queued) return { queued: true, queueId: result.queueId };
+  const queuedResult = result as typeof result & { queued?: boolean; queueId?: string };
+  if (queuedResult.queued && queuedResult.queueId) return { queued: true, queueId: queuedResult.queueId };
   return unwrap(result) as ChatMessage;
 }
 
