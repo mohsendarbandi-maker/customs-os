@@ -13,11 +13,13 @@ describe('Owner Console security',()=>{
   expect(app).toContain('<Route path="/settings/advanced" element={<ProtectedRoute allowedRoles={["owner"]}><AdvancedSettingsPage/></ProtectedRoute>}/>');
   expect(page).toContain("profile?.role==='owner'");
  });
- it('rejects direct non-owner API access and never uses service role',()=>{
+ it('rejects direct non-owner API access and keeps admin Auth actions server-side',()=>{
   expect(api).toContain("profile.role!=='owner'");
   expect(api).toContain("sb.auth.getUser(jwt)");
   expect(api).toContain("SUPABASE_ANON_KEY");
-  expect(api).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|service_role|auth\.admin\./i);
+  expect(api).toContain("auth.admin.createUser");
+  expect(api).toContain("SUPABASE_SERVICE_ROLE_KEY");
+  expect(root('src/lib/ownerConsole.ts')).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|service_role|auth\.admin\./i);
  });
  it('covers all requested Owner Console sections',()=>{
   for(const section of ['users','cases','registration','maritime','documents','doc_rules','permit_rules','finance','declarations','exit','ai','print','offline','org'])expect(page).toContain("id:'"+section+"'");
