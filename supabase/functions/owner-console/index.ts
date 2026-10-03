@@ -92,8 +92,56 @@ async function write(ctx:any,body:any){
  if(resource==='profiles'){
    if(op==='list')return await listRows(sb,profile,'profiles',body);
    if(op==='create'){
-     if(!isUuid(body.user_id)||!str(body.full_name))throw new Error('Auth user id و نام کامل لازم است');
-     const d=body.data||{};const r=await sb.rpc('owner_insert_profile',{p_user_id:body.user_id,p_role:str(d.role)||'client',p_client_id:isUuid(d.client_id)?d.client_id:null,p_full_name:str(body.full_name),p_phone:str(d.phone)||null});if(r.error)throw r.error;return r.data;
+     const d=body.data||{};
+     const email=str(body.email||d.email);
+     const password=str(body.password||d.password);
+
+     if(email && password){
+       if(!/^\\S+@\\S+\\.\\S+$/.test(email))throw new Error('ایمیل کاربر معتبر نیست');
+       if(password.length<8)throw new Error('رمز عبور کاربر باید حداقل ۸ کاراکتر باشد');
+
+       const serviceRole=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+       const serviceUrl=Deno.env.get('SUPABASE_URL');
+       if(!serviceRole||!serviceUrl)throw new Error('Supabase server configuration missing');
+
+       const admin=createClient(serviceUrl,serviceRole,{auth:{autoRefreshToken:false,persistSession:false}});
+       const created=await admin.auth.admin.createUser({
+         email,
+         password,
+         email_confirm:true,
+         user_metadata:{full_name:str(body.full_name)},
+       });
+       if(created.error)throw created.error;
+
+       const authUserId=created.data.user?.id;
+       if(!authUserId)throw new Error('Auth user creation returned no user id');
+
+       const profile=await sb.rpc('owner_insert_profile',{
+         p_user_id:authUserId,
+         p_role:str(d.role)||'client',
+         p_client_id:isUuid(d.client_id)?d.client_id:null,
+         p_full_name:str(body.full_name),
+         p_phone:str(d.phone)||null,
+       });
+
+       if(profile.error){
+         await admin.auth.admin.deleteUser(authUserId);
+         throw profile.error;
+       }
+
+       return profile.data;
+     }
+
+     if(!isUuid(body.user_id)||!str(body.full_name))throw new Error('ایمیل و رمز عبور برای کاربر جدید الزامی است؛ برای Auth User موجود، User ID را وارد کنید');
+     const r=await sb.rpc('owner_insert_profile',{
+       p_user_id:body.user_id,
+       p_role:str(d.role)||'client',
+       p_client_id:isUuid(d.client_id)?d.client_id:null,
+       p_full_name:str(body.full_name),
+       p_phone:str(d.phone)||null
+     });
+     if(r.error)throw r.error;
+     return r.data;
    }
    if(op==='save'){
      if(!isUuid(body.id))throw new Error('user id required');
