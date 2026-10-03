@@ -1,8 +1,22 @@
-import React, { createContext, useContext, useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
-export type UserRole = 'owner' | 'admin' | 'broker' | 'accountant' | 'warehouse' | 'client';
+export type UserRole =
+  | 'owner'
+  | 'admin'
+  | 'broker'
+  | 'accountant'
+  | 'warehouse'
+  | 'client';
 
 export interface UserProfile {
   id: string;
@@ -27,20 +41,23 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [needsOnboarding, setNeedsOnboarding] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const currentFetchId = useRef<number>(0);
-  const isMounted = useRef<boolean>(true);
+  const currentFetchId = useRef(0);
+  const isMounted = useRef(false);
+  const initialized = useRef(false);
 
-  // Cleanup on unmount to prevent state updates on unmounted components
   useEffect(() => {
     isMounted.current = true;
+
     return () => {
       isMounted.current = false;
     };
@@ -48,7 +65,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = useCallback(async (userId: string) => {
     const fetchId = ++currentFetchId.current;
-    setError(null);
+
+    if (isMounted.current) {
+      setError(null);
+    }
 
     try {
       const { data, error: fetchError } = await supabase
@@ -57,9 +77,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .maybeSingle();
 
-      if (!isMounted.current || fetchId !== currentFetchId.current) return;
+      if (!isMounted.current || fetchId !== currentFetchId.current) {
+        return;
+      }
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        throw fetchError;
+      }
 
       if (!data) {
         setProfile(null);
@@ -68,12 +92,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(data as UserProfile);
         setNeedsOnboarding(false);
       }
+
+      setError(null);
     } catch (err: unknown) {
-      if (!isMounted.current || fetchId !== currentFetchId.current) return;
-      
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred while fetching user data.';
-      setError(errorMessage);
+      if (!isMounted.current || fetchId !== currentFetchId.current) {
+        return;
+      }
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'خطا در دریافت اطلاعات کاربر';
+
+      console.error('[Auth] fetchProfile failed:', err);
+
       setProfile(null);
+      setNeedsOnboarding(false);
+      setError(message);
     } finally {
       if (isMounted.current && fetchId === currentFetchId.current) {
         setLoading(false);
@@ -81,89 +116,195 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  /*
+   * IMPORTANT:
+   * Never await Supabase database requests directly inside
+   * onAuthStateChange().
+   *
+   * Supabase can internally hold auth locks while emitting the
+   * auth event. Waiting for another Supabase request here can
+   * cause initialization/session races and white-screen states.
+   */
   useEffect(() => {
+    let active = true;
     let subscription: { unsubscribe: () => void } | null = null;
 
-    const initializeAuth = async () => {
-      // Fetch initial session
-      const { data: { session: initialSession } } = await supabase.auth.getSession();
-      
-      if (isMounted.current) {
+    const loadInitialSession = async () => {
+      try {
+        const {
+          data: { session: initialSession },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (!active || !isMounted.current) return;
+
+        if (sessionError) {
+          console.error('[Auth] getSession failed:', sessionError);
+
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setNeedsOnboarding(false);
+          setError(sessionError.message);
+          setLoading(false);
+          return;
+        }
+
         setSession(initialSession);
         setUser(initialSession?.user ?? null);
-        
+
         if (initialSession?.user) {
           await fetchProfile(initialSession.user.id);
         } else {
-          setLoading(false);
-        }
-      }
-
-      // Listen for auth changes
-      const { data } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-        if (!isMounted.current) return;
-        
-        setSession(currentSession);
-        const currentUser = currentSession?.user ?? null;
-        setUser(currentUser);
-
-        if (currentUser) {
-          await fetchProfile(currentUser.id);
-        } else {
-          currentFetchId.current++; // Invalidate pending fetches
+          currentFetchId.current++;
           setProfile(null);
           setNeedsOnboarding(false);
+          setError(null);
           setLoading(false);
         }
-      });
-      
-      subscription = data.subscription;
+
+        initialized.current = true;
+      } catch (err: unknown) {
+        if (!active || !isMounted.current) return;
+
+        console.error('[Auth] initialization failed:', err);
+
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setNeedsOnboarding(false);
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'خطا در راه‌اندازی احراز هویت',
+        );
+        setLoading(false);
+      }
     };
 
-    initializeAuth();
+    /*
+     * Register the listener immediately.
+     * The callback only updates auth state.
+     * Profile loading is scheduled outside the callback.
+     */
+    const {
+      data: { subscription: authSubscription },
+    } = supabase.auth.onAuthStateChange((event, currentSession) => {
+      if (!active || !isMounted.current) return;
+
+      console.log('[Auth] state changed:', event);
+
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+
+      if (!currentSession?.user) {
+        currentFetchId.current++;
+
+        setProfile(null);
+        setNeedsOnboarding(false);
+        setError(null);
+        setLoading(false);
+
+        return;
+      }
+
+      /*
+       * Do NOT await anything here.
+       * Defer profile loading until Supabase has finished
+       * processing the auth event.
+       */
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        const userId = currentSession.user.id;
+
+        setLoading(true);
+
+        setTimeout(() => {
+          if (!active || !isMounted.current) return;
+
+          void fetchProfile(userId);
+        }, 0);
+      }
+    });
+
+    subscription = authSubscription;
+
+    /*
+     * Initial getSession is intentionally performed separately.
+     */
+    void loadInitialSession();
 
     return () => {
-      if (subscription) subscription.unsubscribe();
+      active = false;
+
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
   }, [fetchProfile]);
 
   const signOut = useCallback(async () => {
-    currentFetchId.current++; 
-    setLoading(true);
-    
+    currentFetchId.current++;
+
+    if (isMounted.current) {
+      setLoading(true);
+    }
+
     try {
-      await supabase.auth.signOut();
+      const { error: signOutError } = await supabase.auth.signOut();
+
+      if (signOutError) {
+        console.error('[Auth] signOut failed:', signOutError);
+      }
     } catch (err) {
-      console.error('Sign out error:', err);
+      console.error('[Auth] signOut exception:', err);
     } finally {
       if (isMounted.current) {
         setUser(null);
         setSession(null);
         setProfile(null);
         setNeedsOnboarding(false);
+        setError(null);
         setLoading(false);
       }
     }
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (user?.id) {
-      setLoading(true);
-      await fetchProfile(user.id);
+    const currentUserId = user?.id;
+
+    if (!currentUserId) {
+      setProfile(null);
+      setNeedsOnboarding(false);
+      return;
     }
+
+    setLoading(true);
+
+    await fetchProfile(currentUserId);
   }, [user?.id, fetchProfile]);
 
-  // Memoize context value to prevent unnecessary re-renders of consuming components
-  const contextValue = useMemo(() => ({
-    user,
-    session,
-    profile,
-    loading,
-    needsOnboarding,
-    error,
-    signOut,
-    refreshProfile,
-  }), [user, session, profile, loading, needsOnboarding, error, signOut, refreshProfile]);
+  const contextValue = useMemo<AuthContextType>(
+    () => ({
+      user,
+      session,
+      profile,
+      loading,
+      needsOnboarding,
+      error,
+      signOut,
+      refreshProfile,
+    }),
+    [
+      user,
+      session,
+      profile,
+      loading,
+      needsOnboarding,
+      error,
+      signOut,
+      refreshProfile,
+    ],
+  );
 
   return (
     <AuthContext.Provider value={contextValue}>
@@ -174,8 +315,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
+
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
+
   return context;
 };
