@@ -1,14 +1,15 @@
 {
-  "id": "/?source=pwa",
+  "id": "/",
   "name": "Customs OS | سیستم مدیریت گمرک",
   "short_name": "Customs OS",
   "description": "سامانه مدیریت عملیات گمرکی و لجستیک",
-  "start_url": "/?source=pwa",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "dir": "rtl",
   "lang": "fa",
-  "theme_color": "#2563eb",
+  "theme_color": "#0b1220",
   "background_color": "#0b1220",
   "icons": [
     {"src":"/pwa/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
