@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState}from'react';
 import{AlertTriangle,Archive,ArrowLeft,Bot,Check,ChevronDown,Database,FileCog,History,Lock,RefreshCw,Save,Search,Settings2,ShieldCheck,Ship,Trash2,UserCog,Wallet,X}from'lucide-react';
 import{useAuth}from'../context/AuthContext';
 import{supabase}from'../lib/supabase';
+import{invokeOwnerConsole}from'../lib/ownerConsole';
 
 type ResourceKey='profiles'|'clients'|'cases'|'registration_orders'|'shipments'|'containers'|'shipment_customs_data'|'shipping_lines'|'vessels'|'contacts'|'shipment_documents'|'customs_documents'|'shipment_document_extractions'|'document_extraction_fields'|'documents'|'document_rules'|'permit_rules'|'permits'|'customs_offices'|'hs_codes'|'settings_reference_data'|'case_checklist_items'|'declaration_checklist_items'|'declaration_exit_checklist_items'|'cost_categories'|'finance_settings'|'costs'|'payments'|'payment_requests'|'payment_request_lines'|'invoices'|'invoice_lines'|'invoice_shipments'|'payment_allocations'|'vouchers'|'voucher_lines'|'declarations'|'exit'|'financial_permissions'|'petty_cash_ledger'|'voucher_line_profit'|'ai_gateway'|'templates'|'org'|'org_settings'|'user_settings'|'knowledge_sources'|'knowledge_chunks'|'ai_knowledge_documents'|'ai_knowledge_chunks';
 type LogKey='audit'|'case_history'|'financial_history'|'ai_commands'|'ai_interactions'|'ai_action_logs'|'ai_risk_findings'|'file_security_events'|'shipment_tracking'|'discrepancy_logs';
@@ -15,7 +16,8 @@ case_checklist_items:'Case Checklist',declaration_checklist_items:'Declaration C
 cost_categories:'دسته‌های هزینه',finance_settings:'تنظیمات مالی',costs:'هزینه‌ها',payments:'پرداخت/تنخواه',payment_requests:'درخواست وجه',payment_request_lines:'ردیف‌های درخواست وجه',
 invoices:'فاکتورها',invoice_lines:'خطوط فاکتور',invoice_shipments:'ارتباط فاکتور-محموله',payment_allocations:'تخصیص پرداخت',vouchers:'سندهای حسابداری',voucher_lines:'ردیف‌های سند',financial_permissions:'ماتریس دسترسی مالی',petty_cash_ledger:'دفتر تنخواه',voucher_line_profit:'سود پنهان ردیف سند',
 declarations:'اظهارنامه/EPL/کوتاژ',exit:'خروج کالا',ai_gateway:'AI Gateway',templates:'قالب چاپ',org:'سازمان',org_settings:'تنظیمات سازمان',user_settings:'تنظیمات کاربر',
-knowledge_sources:'دانشنامه - منابع',knowledge_chunks:'دانشنامه - قطعات',ai_knowledge_documents:'AI Knowledge Documents',ai_knowledge_chunks:'AI Knowledge Chunks'}
+knowledge_sources:'دانشنامه - منابع',knowledge_chunks:'دانشنامه - قطعات',ai_knowledge_documents:'AI Knowledge Documents',ai_knowledge_chunks:'AI Knowledge Chunks'
+}
 const resourceColumns:Record<ResourceKey,string[]>={
 profiles:['full_name','role','is_active','client_id','phone'],clients:['name'],cases:['case_number','display_name','status','cargo_description','cargo_count','warehouse_receipt_no','registration_order_no'],
 registration_orders:['order_number','order_date','status','tariff_code','quantity','quantity_unit','value_amount','currency','case_id','client_id'],shipments:['display_name','bill_of_lading_no','shipping_line','voyage_no','cargo_count','cargo_count_unit','net_weight_kg','gross_weight_kg','finance_status'],
@@ -89,11 +91,11 @@ const save=async(reason:string)=>{
 setBusy(true);try{
 if(newMode){
  if(!form.user_id.trim()||!form.full_name.trim()){onMessage('Auth User ID و نام کامل الزامی است.');return;}
- const{error}=await supabase.functions.invoke('owner-console',{body:{action:'create',resource:'profiles',user_id:form.user_id.trim(),full_name:form.full_name.trim(),data:form}});
- if(error)throw error;onMessage('پروفایل Owner Console ساخته شد.');setNewMode(false);setForm({user_id:'',full_name:'',phone:'',role:'client',client_id:'',is_active:true});await load();return;
+ await invokeOwnerConsole({body:{action:'create',resource:'profiles',user_id:form.user_id.trim(),full_name:form.full_name.trim(),data:form}});
+ onMessage('پروفایل Owner Console ساخته شد.');setNewMode(false);setForm({user_id:'',full_name:'',phone:'',role:'client',client_id:'',is_active:true});await load();return;
 }
 if(!selected?.id)return;
-const{error}=await supabase.functions.invoke('owner-console',{body:{action:'save',resource:'profiles',id:selected.id,data:form,reason,confirmation:'تأیید نهایی تغییر کاربر'}});if(error)throw error;
+await invokeOwnerConsole({body:{action:'save',resource:'profiles',id:selected.id,data:form,reason,confirmation:'تأیید نهایی تغییر کاربر'}});
 onMessage('تغییر کاربر ثبت شد و Audit شد.');setModal(false);setSelected(null);await load();
 }catch(e:any){onMessage(e?.message||'ذخیره کاربر ناموفق بود.')}finally{setBusy(false)}
 };
@@ -101,7 +103,7 @@ return <section className="space-y-3"><div className="rounded-2xl border app-bor
 };
 
 const fieldLabels:Record<string,string>={id:'شناسه',full_name:'نام کامل',phone:'تلفن',role:'نقش',is_active:'فعال',name:'نام',name_fa:'نام فارسی',name_en:'نام انگلیسی',client_id:'صاحب کالا',case_id:'پرونده',case_number:'شماره پرونده',display_name:'عنوان سند',status:'وضعیت',cargo_description:'شرح کالا',cargo_count:'تعداد کالا',cargo_count_unit:'واحد تعداد',warehouse_receipt_no:'قبض انبار',registration_order_no:'شماره ثبت سفارش',proforma_no:'شماره پروفرما',order_number:'شماره ثبت سفارش',order_date:'تاریخ ثبت سفارش',tariff_code:'کد تعرفه',quantity:'مقدار',quantity_unit:'واحد مقدار',value_amount:'ارزش',currency:'ارز',order_status:'وضعیت سفارش',bill_of_lading_no:'شماره بارنامه',shipping_line:'کشتیرانی',shipping_line_id:'کشتیرانی',voyage_no:'Voyage',vessel_type:'نوع شناور',origin_port:'بندر مبدأ',destination_port:'بندر مقصد',origin_country:'کشور مبدأ',transaction_country:'کشور معامله',delivery_term:'شرایط تحویل',invoice_amount:'مبلغ فاکتور',invoice_currency:'ارز فاکتور',package_count:'تعداد بسته',gross_weight_kg:'وزن ناخالص (کیلوگرم)',net_weight_kg:'وزن خالص (کیلوگرم)',bill_of_lading:'بارنامه',container_number:'شماره کانتینر',size_type:'سایز/نوع',seal_number:'شماره پلمب',imo_number:'IMO',mmsi_number:'MMSI',flag_code:'پرچم',role_title:'سمت',whatsapp:'واتساپ',email:'ایمیل',document_name:'نام سند',original_file_name:'نام فایل اصلی',storage_path:'مسیر فایل',file_size_bytes:'حجم فایل',extraction_status:'وضعیت استخراج',document_type:'نوع سند',original_name:'نام اصلی',document_number:'شماره سند',issue_date:'تاریخ صدور',field_key:'کلید فیلد',field_label:'عنوان فیلد',extracted_value:'مقدار استخراج‌شده',source_text:'متن منبع',confidence:'اطمینان',page_number:'صفحه',extraction_method:'روش استخراج',normalized_value:'مقدار نرمال‌شده',source_page:'صفحه منبع',verification_status:'وضعیت تأیید',extractor:'استخراج‌کننده',version:'نسخه',doc_type:'نوع سند',file_name:'نام فایل',mime_type:'نوع فایل',rule_name:'نام قاعده',priority:'اولویت',required:'الزامی',condition_json:'شرط قاعده',hs_prefix:'پیشوند HS',cargo_keyword:'کلیدواژه کالا',permit_type:'نوع مجوز',issuing_authority:'مرجع صادرکننده',permit_number:'شماره مجوز',issued_at:'تاریخ صدور',expires_at:'تاریخ انقضا',code:'کد',description:'شرح',import_duty_pct:'حقوق ورودی (%)',category:'دسته',data:'داده',item_key:'کلید آیتم',stage_no:'مرحله',completed:'تکمیل‌شده',completed_at:'زمان تکمیل',completed_by:'تکمیل‌کننده',declaration_id:'اظهارنامه',kottaj_number:'شماره کوتاژ',declaration_date:'تاریخ اظهار',customs_path:'مسیر گمرکی',payment_reference:'شناسه پرداخت',assessed_value_irr:'ارزش ارزیابی (ریال)',total_duties_irr:'حقوق و عوارض (ریال)',workflow_stage:'مرحله گردش کار',unit:'واحد',unit_price:'قیمت واحد',amount:'مبلغ',amount_irr:'مبلغ (ریال)',notes:'یادداشت',internal_notes:'یادداشت داخلی',payable_by:'پرداخت‌کننده',paid_by:'پرداخت‌شده توسط',payment_no:'شماره پرداخت',payment_date:'تاریخ پرداخت',direction:'جهت',payment_type:'نوع پرداخت',reference_no:'شماره مرجع',request_no:'شماره درخواست وجه',request_date:'تاریخ درخواست',requested_amount:'مبلغ درخواستی',subject:'موضوع',body_text:'متن درخواست',request_id:'درخواست',invoice_line_id:'ردیف فاکتور',sort_order:'ترتیب',invoice_no:'شماره فاکتور',invoice_year:'سال',due_date:'سررسید',subtotal:'جمع جزء',vat_amount:'مالیات',total_amount:'جمع کل',invoice_id:'فاکتور',line_type:'نوع ردیف',vat_rate:'نرخ مالیات',invoice_shipments:'ارتباط فاکتور-محموله',payment_id:'پرداخت',balance_total:'مانده',debit_total:'جمع بدهکار',credit_total:'جمع بستانکار',voucher_number:'شماره سند حسابداری',company_name:'نام شرکت',cargo_type:'نوع کالا',tonnage:'تناژ',unit_count:'تعداد واحد',unit_type:'واحد',is_balanced:'تراز است',row_number:'شماره ردیف',description_category:'دسته شرح',receipt_number:'شماره رسید',debit_amount:'بدهکار',credit_amount:'بستانکار',void_reason:'دلیل ابطال',exit_status:'وضعیت خروج',exit_permit_no:'شماره مجوز خروج',exit_permit_date:'تاریخ مجوز خروج',vehicle_plate:'پلاک خودرو',driver_name:'راننده',exit_at:'زمان خروج',enabled:'فعال',online_enabled:'آنلاین',preferred_provider:'Provider اصلی',fallback_providers:'Fallback Providers',confidence_threshold:'حد آستانه اطمینان',redaction_enabled:'حذف اطلاعات حساس',max_commands_per_minute:'سقف فرمان/دقیقه',template_key:'کلید قالب',template_name:'نام قالب',active:'فعال',title:'عنوان',source_type:'نوع منبع',source_number:'شماره منبع',effective_at:'تاریخ اجرا',issuer:'صادرکننده',extraction_confidence:'اطمینان استخراج',chunk_index:'شماره قطعه',content:'محتوا',source_id:'منبع',source_uri:'آدرس منبع',knowledge_document_id:'سند دانش',settings:'تنظیمات',economic_code:'شناسه اقتصادی',created_at:'ایجاد شده',updated_at:'آخرین تغییر'};
-const labelFor=(key:string)=>fieldLabels[key]||key.split('_').join(' ').replace(/\\b\\w/g,m=>m.toUpperCase());
+const labelFor=(key:string)=>fieldLabels[key]||key.split('_').join(' ').replace(/\b\w/g,m=>m.toUpperCase());
 
 const primitiveValue=(v:any)=>{
  if(v===null||v===undefined)return '';
@@ -163,8 +165,7 @@ const ResourcePanel:React.FC<{resource:ResourceKey;onMessage:(s:string)=>void}>=
   try{
    const editable:any={};
    Object.keys(draft).forEach(k=>{if(!protectedKeys.has(k))editable[k]=draft[k]});
-   const{data:r,error}=await supabase.functions.invoke('owner-console',{body:{action:'update',resource,id:selected.id,data:editable}});
-   if(error)throw error;
+   const{data:r}=await invokeOwnerConsole({body:{action:'update',resource,id:selected.id,data:editable}});
    onMessage('رکورد با موفقیت ذخیره شد.');setSelected(r||draft);await load();
   }catch(e:any){onMessage(e?.message||'ذخیره ناموفق بود.')}finally{setBusy(false)}
  };
@@ -173,8 +174,8 @@ const ResourcePanel:React.FC<{resource:ResourceKey;onMessage:(s:string)=>void}>=
   setBusy(true);
   try{
    const editable:any={};Object.keys(draft).forEach(k=>{if(!protectedKeys.has(k))editable[k]=draft[k]});
-   const{data:r,error}=await supabase.functions.invoke('owner-console',{body:{action:'create',resource,data:editable}});
-   if(error)throw error;onMessage('رکورد جدید ایجاد شد.');setSelected(r);setDraft(r);await load();
+   const{data:r}=await invokeOwnerConsole({body:{action:'create',resource,data:editable}});
+   onMessage('رکورد جدید ایجاد شد.');setSelected(r);setDraft(r);await load();
   }catch(e:any){onMessage(e?.message||'ایجاد رکورد ناموفق بود.')}finally{setBusy(false)}
  };
  const dangerRun=async(reason:string)=>{
@@ -185,7 +186,7 @@ const ResourcePanel:React.FC<{resource:ResourceKey;onMessage:(s:string)=>void}>=
    else if(danger==='void')body={action:'delete',resource:'voucher_void',id:selected.id,reason,confirmation:'تأیید نهایی ابطال ردیف سند'};
    else if(resource==='cases')body={action:'delete',resource:'case_delete',id:selected.id,reason,confirmation:'تأیید نهایی حذف پرونده'};
    else body={action:'delete',resource,id:selected.id,reason,confirmation:'تأیید نهایی عملیات'};
-   const{error}=await supabase.functions.invoke('owner-console',{body});if(error)throw error;
+   await invokeOwnerConsole({body});
    setDanger(null);setSelected(null);onMessage('عملیات ثبت شد و Audit به‌روزرسانی شد.');await load();
   }catch(e:any){onMessage(e?.message||'عملیات ناموفق بود.')}finally{setBusy(false)}
  };
@@ -220,7 +221,7 @@ const ResourcePanel:React.FC<{resource:ResourceKey;onMessage:(s:string)=>void}>=
 
 const CaseOverride:React.FC<{row:any;onMessage:(s:string)=>void;onDone:()=>void}>=({row,onMessage,onDone})=>{
 const[open,setOpen]=useState(false),[status,setStatus]=useState(''),[reason,setReason]=useState(''),[phrase,setPhrase]=useState(''),[busy,setBusy]=useState(false);
-const run=async()=>{if(!status.trim()||!reason.trim()||phrase.trim()!=='تأیید نهایی اصلاح وضعیت')return;setBusy(true);try{const{error}=await supabase.functions.invoke('owner-console',{body:{action:'update',resource:'case_status_override',id:row.id,new_status:status.trim(),reason:reason.trim(),confirmation:phrase.trim()}});if(error)throw error;onMessage('Override وضعیت با دلیل در History/Audit ثبت شد.');setOpen(false);onDone()}catch(e:any){onMessage(e?.message||'Override ناموفق بود.')}finally{setBusy(false)}};
+const run=async()=>{if(!status.trim()||!reason.trim()||phrase.trim()!=='تأیید نهایی اصلاح وضعیت')return;setBusy(true);try{await invokeOwnerConsole({body:{action:'update',resource:'case_status_override',id:row.id,new_status:status.trim(),reason:reason.trim(),confirmation:phrase.trim()}});onMessage('Override وضعیت با دلیل در History/Audit ثبت شد.');setOpen(false);onDone()}catch(e:any){onMessage(e?.message||'Override ناموفق بود.')}finally{setBusy(false)}};
 return <>{open? <div className="fixed inset-0 z-[130] bg-black/60 flex items-center justify-center p-4" dir="rtl"><div className="w-full max-w-lg rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex justify-between"><b>اصلاح استثنایی وضعیت پرونده</b><button className="icon-btn" onClick={()=>setOpen(false)}><X size={17}/></button></div><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mt-4" value={status} onChange={e=>setStatus(e.target.value)} placeholder="Status معتبر case_status"/><textarea className="w-full min-h-24 rounded-xl border app-border bg-[var(--surface-2)] p-3 text-sm mt-2" value={reason} onChange={e=>setReason(e.target.value)} placeholder="دلیل اجباری…"/><div className="text-[10px] app-muted mt-3">عبارت نهایی: تأیید نهایی اصلاح وضعیت</div><input className="w-full min-h-10 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm mt-1" value={phrase} onChange={e=>setPhrase(e.target.value)} placeholder="عبارت را عیناً وارد کنید"/><div className="flex justify-end gap-2 mt-4"><button className="px-3 py-2 rounded-xl border app-border text-xs" onClick={()=>setOpen(false)}>انصراف</button><button disabled={busy||!status.trim()||!reason.trim()||phrase.trim()!=='تأیید نهایی اصلاح وضعیت'} className="px-4 py-2 rounded-xl bg-[var(--primary)] text-white text-xs font-bold" onClick={()=>void run()}>{busy?'در حال ثبت…':'ثبت Override'}</button></div></div></div>:<button className="w-full mt-3 px-3 py-2.5 rounded-xl border border-amber-500/30 text-amber-600 text-xs font-bold" onClick={()=>setOpen(true)}>Override Status — فقط Owner</button>}</>;
 };
 
