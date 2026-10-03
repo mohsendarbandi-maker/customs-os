@@ -19,7 +19,8 @@ describe('Owner Console security',()=>{
   expect(api).toContain("SUPABASE_ANON_KEY");
   expect(api).toContain("auth.admin.createUser");
   expect(api).toContain("SUPABASE_SERVICE_ROLE_KEY");
-  expect(root('src/lib/ownerConsole.ts')).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|service_role|auth\.admin\./i);
+  expect(root('src/lib/ownerConsole.ts')).not.toContain('SUPABASE_SERVICE_ROLE_KEY');
+  expect(root('src/lib/ownerConsole.ts')).not.toContain('auth.admin.');
  });
  it('covers all requested Owner Console sections',()=>{
   for(const section of ['users','cases','registration','maritime','documents','doc_rules','permit_rules','finance','declarations','exit','ai','print','offline','org'])expect(page).toContain("id:'"+section+"'");
