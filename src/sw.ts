@@ -2,12 +2,12 @@
 import {clientsClaim} from 'workbox-core';
 import {cleanupOutdatedCaches,precacheAndRoute} from 'workbox-precaching';
 import {registerRoute,setCatchHandler} from 'workbox-routing';
-import {NetworkFirst} from 'workbox-strategies';
 
 declare const self: ServiceWorkerGlobalScope;
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
-registerRoute(({request})=>request.mode==='navigate',new NetworkFirst({cacheName:'customs-os-pages-v5',networkTimeoutSeconds:10}));
+// Navigation HTML must always come from the network; stale HTML can prevent the React bundle from booting.
+// Do not register a navigation cache route here.
 setCatchHandler(async({request})=>request.mode==='navigate'?(await caches.match('/offline.html'))??Response.error():Response.error());
 self.skipWaiting();
 clientsClaim();
