@@ -59,7 +59,7 @@ export const ChatPage:React.FC=()=>{
  },[load,refresh]);
 
  useEffect(()=>{
-  if(profile?.organization_id){void (async()=>{try{const {data,error:e}=await supabase.from('org_connections').select('id,target_organization_id').eq('source_organization_id',profile.organization_id).eq('status','accepted').is('deleted_at',null);if(e)throw e;const ids=(data??[]).map(x=>x.target_organization_id);if(!ids.length){setSharedConnections([]);return}const {data:orgs,error:oe}=await supabase.from('organizations').select('id,name').in('id',ids);if(oe)throw oe;const names=new Map((orgs??[]).map(x=>[x.id,x.name]));setSharedConnections((data??[]).map(x=>({id:x.id,target_organization_id:x.target_organization_id,target_name:names.get(x.target_organization_id)||'سازمان مقصد'})))}catch{setSharedConnections([])}})()}
+  if(profile?.organization_id){void listOrgConnections().then(setSharedConnections).catch(()=>setSharedConnections([]))}
   void refresh();
   const on=()=>setOnline(true),off=()=>setOnline(false);
   window.addEventListener('online',on);window.addEventListener('offline',off);
