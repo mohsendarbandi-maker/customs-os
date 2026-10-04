@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase';
+import { makeClientId } from '../../lib/clientId';
 import type { ChatConversation, ChatMessage } from './types';
 
 const unwrap = <T>(result: { data: T | null; error: { message: string } | null }): T => {
@@ -9,7 +10,50 @@ const unwrap = <T>(result: { data: T | null; error: { message: string } | null }
 
 export async function listConversations(): Promise<ChatConversation[]> {
   const result = await supabase.rpc('chat_conversation_list', { p_limit: 100 });
-  return unwrap(result) as ChatConversation[];
+  const conversations = unwrap(result) as ChatConversation[];
+  if (!conversations.length) return conversations;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
+  if (!userId) return conversations;
+
+  const conversationIds = conversations.map((item) => item.conversation_id);
+  const members = await supabase
+    .from('chat_conversation_members')
+    .select('conversation_id,user_id')
+    .in('conversation_id', conversationIds)
+    .is('deleted_at', null)
+    .is('left_at', null)
+    .neq('user_id', userId);
+
+  if (members.error || !members.data?.length) return conversations;
+
+  const partnerIds = [...new Set(members.data.map((item) => item.user_id))];
+  const profiles = await supabase
+    .from('profiles')
+    .select('id,full_name,phone')
+    .in('id', partnerIds)
+    .eq('is_active', true);
+
+  if (profiles.error) return conversations;
+
+  const profileMap = new Map(
+    (profiles.data ?? []).map((item) => [item.id, item]),
+  );
+  const partnerMap = new Map<string, { full_name: string; phone: string | null }>();
+  for (const member of members.data) {
+    if (member.conversation_id && member.user_id && !partnerMap.has(member.conversation_id)) {
+      const person = profileMap.get(member.user_id);
+      if (person) partnerMap.set(member.conversation_id, person);
+    }
+  }
+
+  return conversations.map((conversation) => {
+    const person = conversation.type === 'direct' ? partnerMap.get(conversation.conversation_id) : undefined;
+    return person
+      ? { ...conversation, display_name: person.full_name || null, display_phone: person.phone }
+      : conversation;
+  });
 }
 
 export async function listMessages(conversationId: string, cursor?: { createdAt: string; id: string }): Promise<ChatMessage[]> {
@@ -21,6 +65,14 @@ export async function listMessages(conversationId: string, cursor?: { createdAt:
   });
   const messages = unwrap(result) as ChatMessage[];
   if (!messages.length) return messages;
+
+  const senderIds = [...new Set(messages.map((m) => m.sender_id).filter(Boolean))];
+  const senderProfiles = senderIds.length
+    ? await supabase.from('profiles').select('id,full_name').in('id', senderIds)
+    : { data: [], error: null };
+  const senderNames = new Map(
+    (senderProfiles.data ?? []).map((item) => [item.id, item.full_name]),
+  );
 
   const ids = messages.map((m) => m.id);
   const attachments = await supabase
@@ -50,6 +102,7 @@ export async function listMessages(conversationId: string, cursor?: { createdAt:
 
   return messages.map((message) => ({
     ...message,
+    sender_name: senderNames.get(message.sender_id) ?? null,
     attachments: byMessage.get(message.id) ?? [],
   }));
 }
@@ -188,7 +241,7 @@ export async function sendFileMessage(
   file: File,
   messageType: 'file' | 'voice' = 'file',
 ): Promise<ChatMessage> {
-  const clientUuid = crypto.randomUUID();
+  const clientUuid = makeClientId();
   const message = unwrap(await supabase.rpc('chat_insert_message', {
     p_conversation_id: conversationId,
     p_client_uuid: clientUuid,
@@ -199,7 +252,7 @@ export async function sendFileMessage(
     p_thread_root_message_id: null,
   })) as ChatMessage;
 
-  const objectId = crypto.randomUUID();
+  const objectId = makeClientId();
   const storagePath = `quarantine/${organizationId}/${conversationId}/${objectId}`;
 
   try {
