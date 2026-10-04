@@ -135,6 +135,8 @@ export const CustomsDocumentManagerPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [documentName, setDocumentName] = useState('');
   const [selected, setSelected] = useState<Doc | null>(null);
   const [extracting, setExtracting] = useState<Doc | null>(null);
   const [extracted, setExtracted] = useState<any[]>([]);
@@ -302,35 +304,28 @@ export const CustomsDocumentManagerPage: React.FC = () => {
   );
   const missing = REQUIRED.filter((t) => !docs.some((d) => (d.document_type || inferType(fileName(d))) === t));
 
-  const upload = async (files: FileList | null) => {
-    if (!files?.length || !current) return;
+  const upload = async (files: File[], customName = '') => {
+    if (!files.length || !current) return;
     setBusy(true);
     setError('');
     setMessage('');
     try {
       const { user, org } = await profile();
-      for (const f of Array.from(files)) {
-        if (
-          !/\.(pdf|jpe?g|png)$/i.test(f.name) &&
-          !['application/pdf', 'image/jpeg', 'image/png'].includes(f.type)
-        ) {
+      for (const f of files) {
+        if (!/\.(pdf|jpe?g|png)$/i.test(f.name) && !['application/pdf','image/jpeg','image/png'].includes(f.type)) {
           throw new Error(`فرمت «${f.name}» پشتیبانی نمی‌شود. فقط PDF/JPG/PNG.`);
         }
         if (f.size > 50 * 1024 * 1024) throw new Error(`حجم «${f.name}» بیشتر از 50 MB است.`);
         const safe = f.name.replace(/[^\w.\-\u0600-\u06ff]+/g, '_');
-        const mime =
-          f.type ||
-          (/\.pdf$/i.test(f.name) ? 'application/pdf' : /\.png$/i.test(f.name) ? 'image/png' : 'image/jpeg');
+        const mime = f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : /\.png$/i.test(f.name) ? 'image/png' : 'image/jpeg');
         const path = `${org}/${current.id}/${makeClientId()}-${safe}`;
-        const { error: ue } = await supabase.storage
-          .from(BUCKET)
-          .upload(path, f, { contentType: mime, cacheControl: '3600', upsert: false });
+        const { error: ue } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: mime, cacheControl: '3600', upsert: false });
         if (ue) throw new Error(`آپلود «${f.name}» ناموفق بود: ${ue.message}`);
         const { error: de } = await supabase.from('shipment_documents').insert({
           organization_id: org,
           shipment_id: current.id,
           uploaded_by: user.id,
-          document_name: f.name,
+          document_name: files.length === 1 && customName ? customName : f.name,
           original_file_name: f.name,
           storage_path: path,
           mime_type: mime,
@@ -343,6 +338,8 @@ export const CustomsDocumentManagerPage: React.FC = () => {
         }
       }
       await loadDocs(current.id);
+      setPendingFiles([]);
+      setDocumentName('');
       setMessage('فایل با موفقیت آپلود شد.');
     } catch (e: any) {
       setError(e?.message || 'بارگذاری ناموفق بود');
@@ -350,7 +347,6 @@ export const CustomsDocumentManagerPage: React.FC = () => {
       setBusy(false);
     }
   };
-
   const extractFields = async (d: Doc) => {
     if (!d.storage_path) return;
     setExtracting(d);
@@ -563,11 +559,35 @@ export const CustomsDocumentManagerPage: React.FC = () => {
               multiple
               accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png"
               onChange={(e) => {
-                void upload(e.target.files);
+                const files = Array.from(e.target.files || []);
+                setPendingFiles(files);
+                setDocumentName('');
                 e.currentTarget.value = '';
               }}
             />
           </div>
+          {pendingFiles.length > 0 && (
+            <div className="mt-3 rounded-2xl border app-border bg-[var(--surface-2)] p-3">
+              <div className="flex flex-col md:flex-row md:items-end gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold">فایل انتخاب‌شده: {pendingFiles.length} مورد</div>
+                  <div className="text-[11px] app-muted mt-1 truncate">{pendingFiles.map(f=>f.name).join('، ')}</div>
+                </div>
+                {pendingFiles.length === 1 && (
+                  <label className="flex-1 min-w-0">
+                    <span className="text-xs font-bold">نام سند (اختیاری)</span>
+                    <input value={documentName} onChange={e=>setDocumentName(e.target.value)} placeholder="مثلاً: پروفرما فولاد آیریک" className="mt-1 w-full rounded-xl border app-border bg-[var(--surface)] p-3"/>
+                    <span className="text-[10px] app-muted mt-1 block">خالی بگذارید تا نام اصلی فایل استفاده شود.</span>
+                  </label>
+                )}
+                <div className="flex gap-2">
+                  <button type="button" disabled={busy} onClick={()=>void upload(pendingFiles,documentName.trim())} className="rounded-xl px-4 py-3 bg-[var(--primary)] text-white font-bold disabled:opacity-50">آپلود و ثبت</button>
+                  <button type="button" disabled={busy} onClick={()=>{setPendingFiles([]);setDocumentName('')}} className="rounded-xl px-4 py-3 border app-border">لغو</button>
+                </div>
+              </div>
+              {pendingFiles.length > 1 && <div className="text-[10px] app-muted mt-2">در آپلود چند فایل، نام هر فایل از نام اصلی خودش ثبت می‌شود.</div>}
+            </div>
+          )}
           {current && (
             <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
               <div className="rounded-xl bg-[var(--surface-2)] p-3">
