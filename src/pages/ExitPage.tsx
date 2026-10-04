@@ -1,10 +1,519 @@
-import React,{useEffect,useRef,useState} from 'react';import{ArrowRight,Check,Loader2,Upload}from'lucide-react';import{Link,useSearchParams}from'react-router-dom';import{supabase}from'../lib/supabase';
-const ITEMS=[['warehouse_invoice_initial','صورت‌حساب انبارداری اولیه'],['warehouse_invoice_supplement','صورت‌حساب انبارداری متمم'],['transport_power_of_attorney','وکالت حمل']] as const;type ItemKey=typeof ITEMS[number][0];type Decl={id:string;shipment_id:string|null;kottaj_number:string};type Uploads={invoice:string;receipt:string};const BUCKET='customs_documents';
-export const ExitPage:React.FC=()=>{const[params]=useSearchParams();const declarationId=params.get('declarationId')||'';const[shipmentId,setShipmentId]=useState('');const[organizationId,setOrganizationId]=useState('');const[decl,setDecl]=useState<Decl|null>(null);const[done,setDone]=useState<Record<string,boolean>>({});const[remainingChecklist,setRemainingChecklist]=useState<Array<{id:string;item_key:string;completed:boolean}>>([]);const[files,setFiles]=useState<Record<string,Uploads>>({warehouse_invoice_initial:{invoice:'',receipt:''},warehouse_invoice_supplement:{invoice:'',receipt:''}});const[busy,setBusy]=useState(false);const[message,setMessage]=useState('');const[error,setError]=useState('');const inputRef=useRef<HTMLInputElement>(null);const target=useRef<{key:string;kind:'invoice'|'receipt'}|null>(null);
-const load=async()=>{if(!declarationId)return;setBusy(true);setError('');try{const{data:{user}}=await supabase.auth.getUser();if(!user)throw new Error('نشست کاربر معتبر نیست.');const{data:p,error:pe}=await supabase.from('profiles').select('organization_id').eq('id',user.id).single();if(pe||!p?.organization_id)throw new Error('سازمان کاربر مشخص نیست.');setOrganizationId(p.organization_id);const{data,error:e}=await supabase.from('customs_declarations').select('id,shipment_id,kottaj_number').eq('id',declarationId).maybeSingle();if(e)throw e;if(!data)throw new Error('اظهارنامه پیدا نشد.');setDecl(data as Decl);setShipmentId(data.shipment_id||'');const{data:rows,error:re}=await supabase.from('declaration_exit_checklist_items').select('item_key,completed').eq('declaration_id',declarationId);if(re)throw re;setDone(Object.fromEntries((rows||[]).map((x:any)=>[x.item_key,!!x.completed])));const{data:pending,error:pe2}=await supabase.from('declaration_checklist_items').select('id,item_key,completed').eq('declaration_id',declarationId).eq('completed',false);if(pe2)throw pe2;setRemainingChecklist((pending||[]) as Array<{id:string;item_key:string;completed:boolean}>)}catch(e:any){setError(e?.message||'دریافت مرحله درب خروج انجام نشد')}finally{setBusy(false)}};useEffect(()=>{void load()},[declarationId]);
-const toggle=async(key:ItemKey)=>{const next=!done[key];setDone(p=>({...p,[key]:next}));setError('');const{data:{user}}=await supabase.auth.getUser();if(!user){setDone(p=>({...p,[key]:!next}));return setError('نشست کاربر معتبر نیست.')}const{error:e}=await supabase.from('declaration_exit_checklist_items').upsert({organization_id:organizationId,declaration_id:declarationId,item_key:key,completed:next,completed_at:next?new Date().toISOString():null,completed_by:next?user.id:null,updated_at:new Date().toISOString()},{onConflict:'declaration_id,item_key'});if(e){setDone(p=>({...p,[key]:!next}));setError(e.message)}};
-const toggleRemaining=async(itemId:string)=>{setError('');const{error:e}=await supabase.rpc('update_declaration_checklist_item',{p_item_id:itemId,p_completed:true});if(e){setError(e.message);return;}setRemainingChecklist(p=>p.filter(x=>x.id!==itemId));};
-const upload=(key:string,kind:'invoice'|'receipt')=>{target.current={key,kind};inputRef.current?.click()};const handleUpload=async(f:File|null)=>{const t=target.current;if(!f||!t||!declarationId)return;setBusy(true);setError('');try{if(!organizationId)throw new Error('سازمان کاربر مشخص نیست.');if(!/^(application\/pdf|image\/(jpeg|png))$/i.test(f.type))throw new Error('فقط PDF، JPG یا PNG مجاز است.');const{data:{user}}=await supabase.auth.getUser();if(!user)throw new Error('نشست کاربر معتبر نیست.');const ext=(f.name.match(/\.[^.]+$/)?.[0]||'').toLowerCase();const safeExt=/^\.(pdf|jpg|jpeg|png)$/.test(ext)?ext:'.bin';const path=`${organizationId}/${shipmentId||decl?.shipment_id||'declaration'}/${declarationId}/exit-${t.key}-${t.kind}-${crypto.randomUUID()}${safeExt}`;const{error:ue}=await supabase.storage.from(BUCKET).upload(path,f,{contentType:f.type,upsert:false});if(ue)throw ue;const{error:de}=await supabase.from('customs_documents').insert({organization_id:organizationId,shipment_id:shipmentId||decl?.shipment_id||null,case_id:null,document_type:'WAREHOUSE_RECEIPT',original_name:f.name,display_name:`${t.key==='warehouse_invoice_initial'?'انبارداری اولیه':'انبارداری متمم'} - ${t.kind==='invoice'?'صورتحساب':'فیش پرداختی'}`,storage_path:path,mime_type:f.type,size_bytes:f.size,created_by:user.id,status:'uploaded',tags:[]});if(de)throw de;setFiles(prev=>({...prev,[t.key]:{...prev[t.key],[t.kind]:f.name}}));setMessage('فایل با موفقیت ذخیره شد.')}catch(e:any){setError(e?.message||'آپلود انجام نشد')}finally{setBusy(false)}};
-const finish=async()=>{if(ITEMS.some(([k])=>!done[k]))return setError('هر سه مورد مرحله ۵ باید انجام شوند.');if(!shipmentId)return setError('محموله مرتبط با اظهارنامه مشخص نیست.');setBusy(true);setError('');try{const now=new Date().toISOString();const{error:e}=await supabase.from('customs_declarations').update({workflow_stage:6,updated_at:now}).eq('id',declarationId);if(e)throw e;const{error:fe}=await supabase.from('shipments').update({finance_status:'ready',updated_at:now}).eq('id',shipmentId);if(fe)throw fe;setMessage('مرحله ۶ درب خروج تکمیل شد؛ پرونده به مرکز مالی تحویل داده شد.');window.setTimeout(()=>{window.location.assign(`/finance/shipments/${encodeURIComponent(shipmentId)}`)},350)}catch(e:any){setError(e?.message||'تکمیل مرحله ۵ انجام نشد')}finally{setBusy(false)}};
-const uploadBox=(key:ItemKey,label:string)=>key==='warehouse_invoice_initial'||key==='warehouse_invoice_supplement'?<div className="p-4 border-b app-border bg-[var(--surface-2)]"><div className="font-bold text-sm mb-3">{label} <span className="text-xs app-muted">(اختیاری)</span></div><div className="grid md:grid-cols-2 gap-3"><button type="button" onClick={()=>upload(key,'invoice')} className="rounded-xl border app-border p-3 text-right"><Upload className="inline ml-2" size={16}/>۱. آپلود صورتحساب {files[key]?.invoice&&<span className="block text-xs text-emerald-600 mt-1">✓ {files[key].invoice}</span>}</button><button type="button" onClick={()=>upload(key,'receipt')} className="rounded-xl border app-border p-3 text-right"><Upload className="inline ml-2" size={16}/>۲. آپلود فیش پرداختی صورتحساب {files[key]?.receipt&&<span className="block text-xs text-emerald-600 mt-1">✓ {files[key].receipt}</span>}</button></div></div>:null;
-return <main dir="rtl" className="min-h-screen bg-[var(--bg)] text-[var(--text)] p-4 md:p-8"><input ref={inputRef} hidden type="file" accept="application/pdf,image/jpeg,image/png" onChange={e=>{void handleUpload(e.target.files?.[0]||null);e.currentTarget.value=''}}/><div className="max-w-3xl mx-auto space-y-5"><header className="flex items-center justify-between gap-3"><div><div className="text-[10px] app-muted">مرحله ۵</div><h1 className="text-2xl md:text-3xl font-black mt-1">درب خروج</h1>{decl&&<div className="text-xs app-muted mt-1">اظهارنامه / کوتاژ {decl.kottaj_number}</div>}</div><Link to={`/operations?tab=stage5&declarationId=${encodeURIComponent(declarationId)}`} className="px-4 py-2 rounded-xl border app-border bg-[var(--surface)] text-xs font-bold"><ArrowRight className="inline ml-1" size={15}/>بازگشت به عملیات گمرکی</Link></header>{error&&<div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">{error}</div>}{message&&<div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-600">{message}</div>}{!declarationId?<div className="rounded-2xl border app-border bg-[var(--surface)] p-5">اظهارنامه‌ای برای مرحله درب خروج انتخاب نشده است.</div>:{decl&&remainingChecklist.length>0&&<section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 overflow-hidden"><div className="p-5 border-b border-amber-500/20"><h2 className="font-black">موارد باقی‌مانده عملیات گمرکی</h2><p className="text-xs app-muted mt-2 leading-6">این موارد مانع ورود به درب خروج نشده‌اند. برای نمونه، «کد ساتا» می‌تواند بعداً تکمیل شود و سهم باقی‌مانده عملیات در همین مرحله ثبت گردد.</p></div>{remainingChecklist.map(item=><button key={item.id} type="button" onClick={()=>void toggleRemaining(item.id)} className="w-full flex items-center gap-3 p-4 border-b border-amber-500/10 text-right"><span className="w-7 h-7 rounded-lg border border-amber-500/30 grid place-items-center shrink-0">✓</span><span className="text-sm font-semibold">{item.item_key}</span></button>)}</section>}<section className="rounded-2xl border app-border bg-[var(--surface)] overflow-hidden"><div className="p-5 border-b app-border flex items-center justify-between"><h2 className="font-black">درب خروج</h2><span className="text-xs app-muted">{ITEMS.filter(([k])=>done[k]).length} از ۳</span></div>{ITEMS.map(([key,label],i)=><React.Fragment key={key}><button onClick={()=>void toggle(key)} className="w-full flex items-center gap-3 p-5 border-b app-border text-right hover:bg-[var(--surface-2)]"><span className={`w-7 h-7 rounded-lg border grid place-items-center shrink-0 ${done[key]?'bg-emerald-500 border-emerald-500 text-white':'app-border'}`}>{done[key]&&<Check size={16}/>}</span><span className="text-sm font-semibold">{i+1}. {label}</span></button>{uploadBox(key,label)}</React.Fragment>)}<div className="p-5"><button disabled={busy||ITEMS.some(([k])=>!done[k])} onClick={()=>void finish()} className="w-full md:w-auto px-6 py-3 rounded-xl bg-[var(--primary)] text-white text-sm font-bold disabled:opacity-40">{busy?<><Loader2 className="inline ml-2 animate-spin" size={16}/>در حال تکمیل...</>:'تکمیل مرحله ۵'}</button></div></section>}</div></main>};
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowRight, Check, Loader2, Upload } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+
+const EXIT_ITEMS = [
+  ['warehouse_invoice_initial', 'صورت‌حساب انبارداری اولیه'],
+  ['warehouse_invoice_supplement', 'صورت‌حساب انبارداری متمم'],
+  ['transport_power_of_attorney', 'وکالت حمل'],
+] as const;
+
+type ExitItemKey = typeof EXIT_ITEMS[number][0];
+
+type Declaration = {
+  id: string;
+  shipment_id: string | null;
+  kottaj_number: string;
+};
+
+type Uploads = {
+  invoice: string;
+  receipt: string;
+};
+
+type RemainingChecklistItem = {
+  id: string;
+  item_key: string;
+  completed: boolean;
+};
+
+const BUCKET = 'customs_documents';
+
+export const ExitPage: React.FC = () => {
+  const [params] = useSearchParams();
+  const declarationId = params.get('declarationId') || '';
+
+  const [shipmentId, setShipmentId] = useState('');
+  const [organizationId, setOrganizationId] = useState('');
+  const [declaration, setDeclaration] = useState<Declaration | null>(null);
+  const [done, setDone] = useState<Record<string, boolean>>({});
+  const [remainingChecklist, setRemainingChecklist] = useState<RemainingChecklistItem[]>([]);
+  const [files, setFiles] = useState<Record<string, Uploads>>({
+    warehouse_invoice_initial: { invoice: '', receipt: '' },
+    warehouse_invoice_supplement: { invoice: '', receipt: '' },
+  });
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const targetRef = useRef<{ key: string; kind: 'invoice' | 'receipt' } | null>(null);
+
+  const load = async () => {
+    if (!declarationId) return;
+
+    setBusy(true);
+    setError('');
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) throw new Error('نشست کاربر معتبر نیست.');
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || !profile?.organization_id) {
+        throw new Error(profileError?.message || 'سازمان کاربر مشخص نیست.');
+      }
+
+      setOrganizationId(profile.organization_id);
+
+      const { data, error: declarationError } = await supabase
+        .from('customs_declarations')
+        .select('id,shipment_id,kottaj_number')
+        .eq('id', declarationId)
+        .maybeSingle();
+
+      if (declarationError) throw declarationError;
+      if (!data) throw new Error('اظهارنامه پیدا نشد.');
+
+      setDeclaration(data as Declaration);
+      setShipmentId(data.shipment_id || '');
+
+      const { data: exitRows, error: exitError } = await supabase
+        .from('declaration_exit_checklist_items')
+        .select('item_key,completed')
+        .eq('declaration_id', declarationId);
+
+      if (exitError) throw exitError;
+
+      setDone(
+        Object.fromEntries(
+          (exitRows || []).map((item: { item_key: string; completed: boolean }) => [
+            item.item_key,
+            Boolean(item.completed),
+          ]),
+        ),
+      );
+
+      const { data: pendingRows, error: pendingError } = await supabase
+        .from('declaration_checklist_items')
+        .select('id,item_key,completed')
+        .eq('declaration_id', declarationId)
+        .eq('completed', false);
+
+      if (pendingError) throw pendingError;
+
+      setRemainingChecklist((pendingRows || []) as RemainingChecklistItem[]);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'دریافت اطلاعات درب خروج انجام نشد.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, [declarationId]);
+
+  const toggleExitItem = async (key: ExitItemKey) => {
+    const next = !done[key];
+    setDone((current) => ({ ...current, [key]: next }));
+    setError('');
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setDone((current) => ({ ...current, [key]: !next }));
+      setError('نشست کاربر معتبر نیست.');
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from('declaration_exit_checklist_items')
+      .upsert(
+        {
+          organization_id: organizationId,
+          declaration_id: declarationId,
+          item_key: key,
+          completed: next,
+          completed_at: next ? new Date().toISOString() : null,
+          completed_by: next ? user.id : null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'declaration_id,item_key' },
+      );
+
+    if (updateError) {
+      setDone((current) => ({ ...current, [key]: !next }));
+      setError(updateError.message);
+    }
+  };
+
+  const completeRemainingItem = async (itemId: string) => {
+    setError('');
+
+    const { error: updateError } = await supabase.rpc(
+      'update_declaration_checklist_item',
+      {
+        p_item_id: itemId,
+        p_completed: true,
+      },
+    );
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setRemainingChecklist((current) =>
+      current.filter((item) => item.id !== itemId),
+    );
+  };
+
+  const selectUploadTarget = (key: string, kind: 'invoice' | 'receipt') => {
+    targetRef.current = { key, kind };
+    inputRef.current?.click();
+  };
+
+  const handleUpload = async (file: File | null) => {
+    const target = targetRef.current;
+
+    if (!file || !target || !declarationId) return;
+
+    setBusy(true);
+    setError('');
+    setMessage('');
+
+    try {
+      if (!organizationId) throw new Error('سازمان کاربر مشخص نیست.');
+
+      if (!/^(application\/pdf|image\/(jpeg|png))$/i.test(file.type)) {
+        throw new Error('فقط PDF، JPG یا PNG مجاز است.');
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) throw new Error('نشست کاربر معتبر نیست.');
+
+      const extension =
+        (file.name.match(/\.[^.]+$/)?.[0] || '').toLowerCase();
+
+      const safeExtension = /^\.(pdf|jpg|jpeg|png)$/.test(extension)
+        ? extension
+        : '.bin';
+
+      const path =
+        `${organizationId}/${shipmentId || declaration?.shipment_id || 'declaration'}/${declarationId}/exit-${target.key}-${target.kind}-${crypto.randomUUID()}${safeExtension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, file, {
+          contentType: file.type,
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { error: documentError } = await supabase
+        .from('customs_documents')
+        .insert({
+          organization_id: organizationId,
+          shipment_id: shipmentId || declaration?.shipment_id || null,
+          case_id: null,
+          document_type: 'WAREHOUSE_RECEIPT',
+          original_name: file.name,
+          display_name:
+            `${target.key === 'warehouse_invoice_initial' ? 'انبارداری اولیه' : 'انبارداری متمم'} - ${target.kind === 'invoice' ? 'صورتحساب' : 'فیش پرداختی'}`,
+          storage_path: path,
+          mime_type: file.type,
+          size_bytes: file.size,
+          created_by: user.id,
+          status: 'uploaded',
+          tags: [],
+        });
+
+      if (documentError) {
+        await supabase.storage.from(BUCKET).remove([path]);
+        throw documentError;
+      }
+
+      setFiles((current) => ({
+        ...current,
+        [target.key]: {
+          ...current[target.key],
+          [target.kind]: file.name,
+        },
+      }));
+      setMessage('فایل با موفقیت ذخیره شد.');
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : 'آپلود انجام نشد.',
+      );
+    } finally {
+      setBusy(false);
+      targetRef.current = null;
+    }
+  };
+
+  const finish = async () => {
+    if (EXIT_ITEMS.some(([key]) => !done[key])) {
+      setError('هر سه مورد درب خروج باید انجام شوند.');
+      return;
+    }
+
+    if (!shipmentId) {
+      setError('محموله مرتبط با اظهارنامه مشخص نیست.');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+
+    try {
+      const now = new Date().toISOString();
+
+      const { error: declarationError } = await supabase
+        .from('customs_declarations')
+        .update({
+          workflow_stage: 6,
+          updated_at: now,
+        })
+        .eq('id', declarationId);
+
+      if (declarationError) throw declarationError;
+
+      const { error: shipmentError } = await supabase
+        .from('shipments')
+        .update({
+          finance_status: 'ready',
+          updated_at: now,
+        })
+        .eq('id', shipmentId);
+
+      if (shipmentError) throw shipmentError;
+
+      setMessage('مرحله ۶ درب خروج تکمیل شد؛ پرونده به مرکز مالی تحویل داده شد.');
+
+      window.setTimeout(() => {
+        window.location.assign(
+          `/finance/shipments/${encodeURIComponent(shipmentId)}`,
+        );
+      }, 350);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'تکمیل درب خروج انجام نشد.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const uploadBox = (key: ExitItemKey, label: string) => {
+    if (
+      key !== 'warehouse_invoice_initial' &&
+      key !== 'warehouse_invoice_supplement'
+    ) {
+      return null;
+    }
+
+    return (
+      <div className="p-4 border-b app-border bg-[var(--surface-2)]">
+        <div className="font-bold text-sm mb-3">
+          {label}{' '}
+          <span className="text-xs app-muted">(اختیاری)</span>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => selectUploadTarget(key, 'invoice')}
+            className="rounded-xl border app-border p-3 text-right"
+          >
+            <Upload className="inline ml-2" size={16} />
+            آپلود صورتحساب
+            {files[key]?.invoice && (
+              <span className="block text-xs text-emerald-600 mt-1">
+                ✓ {files[key].invoice}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectUploadTarget(key, 'receipt')}
+            className="rounded-xl border app-border p-3 text-right"
+          >
+            <Upload className="inline ml-2" size={16} />
+            آپلود فیش پرداختی
+            {files[key]?.receipt && (
+              <span className="block text-xs text-emerald-600 mt-1">
+                ✓ {files[key].receipt}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const completedExitItems = EXIT_ITEMS.filter(([key]) => done[key]).length;
+
+  return (
+    <main
+      dir="rtl"
+      className="min-h-screen bg-[var(--bg)] text-[var(--text)] p-4 md:p-8"
+    >
+      <input
+        ref={inputRef}
+        hidden
+        type="file"
+        accept="application/pdf,image/jpeg,image/png"
+        onChange={(event) => {
+          void handleUpload(event.target.files?.[0] || null);
+          event.currentTarget.value = '';
+        }}
+      />
+
+      <div className="max-w-3xl mx-auto space-y-5">
+        <header className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] app-muted">مرحله ۶</div>
+            <h1 className="text-2xl md:text-3xl font-black mt-1">درب خروج</h1>
+            {declaration && (
+              <div className="text-xs app-muted mt-1">
+                اظهارنامه / کوتاژ {declaration.kottaj_number}
+              </div>
+            )}
+          </div>
+
+          <Link
+            to={`/operations?tab=stage5&declarationId=${encodeURIComponent(declarationId)}`}
+            className="px-4 py-2 rounded-xl border app-border bg-[var(--surface)] text-xs font-bold"
+          >
+            <ArrowRight className="inline ml-1" size={15} />
+            بازگشت به عملیات گمرکی
+          </Link>
+        </header>
+
+        {error && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">
+            {error}
+          </div>
+        )}
+
+        {message && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-600">
+            {message}
+          </div>
+        )}
+
+        {!declarationId ? (
+          <div className="rounded-2xl border app-border bg-[var(--surface)] p-5">
+            اظهارنامه‌ای برای مرحله درب خروج انتخاب نشده است.
+          </div>
+        ) : (
+          <>
+            {remainingChecklist.length > 0 && (
+              <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+                <div className="p-5 border-b border-amber-500/20">
+                  <h2 className="font-black">موارد باقی‌مانده عملیات گمرکی</h2>
+                  <p className="text-xs app-muted mt-2 leading-6">
+                    این موارد مانع ورود به درب خروج نشده‌اند. برای نمونه، «کد ساتا»
+                    می‌تواند بعداً تکمیل شود و سهم باقی‌مانده عملیات در همین مرحله ثبت گردد.
+                  </p>
+                </div>
+
+                {remainingChecklist.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => void completeRemainingItem(item.id)}
+                    className="w-full flex items-center gap-3 p-4 border-b border-amber-500/10 text-right"
+                  >
+                    <span className="w-7 h-7 rounded-lg border border-amber-500/30 grid place-items-center shrink-0">
+                      ✓
+                    </span>
+                    <span className="text-sm font-semibold">{item.item_key}</span>
+                  </button>
+                ))}
+              </section>
+            )}
+
+            <section className="rounded-2xl border app-border bg-[var(--surface)] overflow-hidden">
+              <div className="p-5 border-b app-border flex items-center justify-between">
+                <h2 className="font-black">درب خروج</h2>
+                <span className="text-xs app-muted">
+                  {completedExitItems} از {EXIT_ITEMS.length}
+                </span>
+              </div>
+
+              {EXIT_ITEMS.map(([key, label], index) => (
+                <React.Fragment key={key}>
+                  <button
+                    type="button"
+                    onClick={() => void toggleExitItem(key)}
+                    className="w-full flex items-center gap-3 p-5 border-b app-border text-right hover:bg-[var(--surface-2)]"
+                  >
+                    <span
+                      className={`w-7 h-7 rounded-lg border grid place-items-center shrink-0 ${
+                        done[key]
+                          ? 'bg-emerald-500 border-emerald-500 text-white'
+                          : 'app-border'
+                      }`}
+                    >
+                      {done[key] && <Check size={16} />}
+                    </span>
+                    <span className="text-sm font-semibold">
+                      {index + 1}. {label}
+                    </span>
+                  </button>
+
+                  {uploadBox(key, label)}
+                </React.Fragment>
+              ))}
+
+              <div className="p-5">
+                <button
+                  disabled={busy || EXIT_ITEMS.some(([key]) => !done[key])}
+                  onClick={() => void finish()}
+                  className="w-full md:w-auto px-6 py-3 rounded-xl bg-[var(--primary)] text-white text-sm font-bold disabled:opacity-40"
+                >
+                  {busy ? (
+                    <>
+                      <Loader2
+                        className="inline ml-2 animate-spin"
+                        size={16}
+                      />
+                      در حال تکمیل...
+                    </>
+                  ) : (
+                    'تکمیل مرحله ۶'
+                  )}
+                </button>
+              </div>
+            </section>
+          </>
+        )}
+      </div>
+    </main>
+  );
+};
