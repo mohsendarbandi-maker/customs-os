@@ -12,6 +12,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: production          # ← ADD THIS LINE
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
