@@ -42,6 +42,15 @@ export default {
       }
     }
 
-    return env.ASSETS.fetch(request);
+    const response = await env.ASSETS.fetch(request);
+    const accept = request.headers.get('Accept') || '';
+    if (request.method === 'GET' && (url.pathname === '/' || accept.includes('text/html'))) {
+      const headers = new Headers(response.headers);
+      headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      headers.set('Pragma', 'no-cache');
+      headers.set('Vary', 'Accept-Encoding');
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    }
+    return response;
   },
 };
