@@ -103,8 +103,8 @@ async function write(ctx:any,body:any){
      if(email && password){
        if(role==='client'&&!isUuid(clientId))throw new Error('برای نقش صاحب کالا، Client UUID معتبر الزامی است.');
        if(role!=='client'&&clientId)throw new Error('برای نقش‌های سازمانی، Client UUID نباید تعیین شود.');
-       if(!/^\\S+@\\S+\\.\\S+$/.test(email))throw new Error('ایمیل کاربر معتبر نیست');
-       if(password.length<8)throw new Error('رمز عبور کاربر باید حداقل ۸ کاراکتر باشد');
+       if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))throw new Error('ایمیل کاربر معتبر نیست');
+       if(password.length<6)throw new Error('رمز عبور کاربر باید حداقل ۶ کاراکتر باشد');
 
        const serviceRole=getSecretKey();
        const serviceUrl=Deno.env.get('SUPABASE_URL');
