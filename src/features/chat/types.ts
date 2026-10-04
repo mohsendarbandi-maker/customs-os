@@ -27,4 +27,21 @@ export type ChatMessage = {
   deleted_for_all_at: string | null;
   created_at: string;
   updated_at: string;
+  attachments?: ChatAttachment[];
+};
+
+
+export type ChatAttachment = {
+  id: string;
+  message_id: string;
+  storage_path: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  duration_seconds: number | null;
+  waveform: unknown;
+  security_status: string;
+  security_checked_at: string | null;
+  security_error: string | null;
+  url: string | null;
 };
