@@ -143,6 +143,8 @@ if (!rootElement) {
   throw new Error('Root element #root was not found');
 }
 
+rootElement.replaceChildren();
+
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <AppErrorBoundary>
