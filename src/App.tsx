@@ -6,7 +6,8 @@ import { AppearanceProvider } from './context/AppearanceContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppShell } from './components/AppShell';
 import { SettingsPersistenceBridge } from './components/SettingsPersistenceBridge';
-const lazyPage=<T extends React.ComponentType<any>>(loader:()=>Promise<{default:T}>,key:string)=>lazy(async()=>{
+let lazyPageCounter=0;
+const lazyPage=<T extends React.ComponentType<any>>(loader:()=>Promise<{default:T}>,key=`route-${++lazyPageCounter}`)=>lazy(async()=>{
  try{
   const mod=await loader();
   try{sessionStorage.removeItem('customs-os:chunk-retry:'+key)}catch{}
