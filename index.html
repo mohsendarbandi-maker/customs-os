@@ -10,35 +10,9 @@
     <meta name="apple-mobile-web-app-title" content="Customs OS" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
-      // Never let an old service worker keep the bootstrap HTML frozen on an outdated build.
-      (() => {
-        try {
-          const key = 'customs-os:bootstrap-reset-v1';
-          if (!sessionStorage.getItem(key) && 'serviceWorker' in navigator) {
-            sessionStorage.setItem(key, '1');
-            void Promise.all([
-              navigator.serviceWorker.getRegistrations().then((registrations) => Promise.all(registrations.map((r) => r.unregister()))),
-              caches.keys().then((names) => Promise.all(names.map((name) => caches.delete(name)))),
-            ]).finally(() => {
-              const url = new URL(window.location.href);
-              url.searchParams.set('__bootstrap_reset', String(Date.now()));
-              window.location.replace(url.toString());
-            });
-          }
-        } catch {
-          // Continue booting if browser storage/cache APIs are unavailable.
-        }
-      })();
-    </script>
-    <script>
-      // Select the route-specific PWA manifest before the React app boots.
-      // This keeps Chat and Reminders installs pointed at their own start URL.
       (() => {
         const path = window.location.pathname;
-        const manifest =
-          path.startsWith('/chat') ? '/manifest-chat.webmanifest' :
-          path.startsWith('/reminders') ? '/manifest-reminders.webmanifest' :
-          '/manifest.webmanifest';
+        const manifest = path.startsWith('/chat') ? '/manifest-chat.webmanifest' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest' : '/manifest.webmanifest';
         const link = document.querySelector('link[rel="manifest"]');
         if (link) link.setAttribute('href', manifest);
       })();
@@ -50,16 +24,10 @@
     <style>
       html, body { margin: 0; min-height: 100%; }
       body { font-family:'Vazirmatn',sans-serif; background-color:#f8fafc; }
-      #boot-loader { min-height:100vh; display:grid; place-items:center; padding:24px; box-sizing:border-box; background:#f8fafc; color:#0f172a; }
-      #boot-loader-card { width:min(100%,360px); padding:24px; border:1px solid #e2e8f0; border-radius:20px; background:#fff; box-shadow:0 16px 50px rgba(15,23,42,.08); text-align:center; }
-      #boot-loader-spinner { width:40px; height:40px; margin:0 auto 14px; border:4px solid rgba(15,76,129,.16); border-top-color:#0f4c81; border-radius:50%; animation:boot-spin .8s linear infinite; }
-      #boot-loader-title { font-weight:800; font-size:14px; }
-      #boot-loader-text { margin-top:7px; color:#64748b; font-size:12px; }
-      @keyframes boot-spin { to { transform:rotate(360deg); } }
     </style>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased">
-    <div id="root"><div id="boot-loader" dir="rtl" role="status" aria-live="polite"><div id="boot-loader-card"><div id="boot-loader-spinner" aria-hidden="true"></div><div id="boot-loader-title">در حال بارگذاری سامانه…</div><div id="boot-loader-text">در حال آماده‌سازی Customs OS</div></div></div></div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
