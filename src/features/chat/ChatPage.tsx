@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
-import{CheckCheck,Hash,MessageCircle,Mic,MicOff,MoreVertical,Paperclip,Plus,ScanText,Search,Send,Trash2,UserPlus,Users,Wifi,WifiOff,X}from'lucide-react';
+import{ArrowRight,Check,CheckCheck,Hash,MessageCircle,Mic,MicOff,MoreVertical,Paperclip,Plus,ScanText,Search,Send,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText,formatJalaliDateTime}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
@@ -11,7 +11,17 @@ import type{ChatConversation,ChatMessage}from'./types';
 type Person={id:string;full_name:string;phone:string|null;role:string};
 type PresenceUser={user_id:string;typing?:boolean};
 const err=(e:unknown)=>e instanceof Error?e.message:'عملیات چت انجام نشد. دوباره تلاش کنید.';
-const title=(c:ChatConversation)=>c.title||(c.type==='direct'?'گفتگوی مستقیم':c.type==='shared_company'?'گفتگوی مشترک شرکت‌ها':c.type==='company_channel'?'کانال سازمان':'گفتگو');
+const title=(c:ChatConversation)=>c.display_name||c.title||(c.type==='direct'?'گفتگوی مستقیم':c.type==='shared_company'?'گفتگوی مشترک شرکت‌ها':c.type==='company_channel'?'کانال سازمان':'گفتگو');
+const chatTime=(value:string|null)=>value?new Intl.DateTimeFormat('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran',hour:'2-digit',minute:'2-digit'}).format(new Date(value)):'';
+const dayKey=(value:string)=>new Intl.DateTimeFormat('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
+const dayLabel=(value:string)=>{
+ const target=dayKey(value);
+ const today=dayKey(new Date().toISOString());
+ const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
+ if(target===today)return 'امروز';
+ if(target===dayKey(yesterday.toISOString()))return 'دیروز';
+ return new Intl.DateTimeFormat('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran',weekday:'long',day:'numeric',month:'long'}).format(new Date(value));
+};
 
 export const ChatPage:React.FC=()=>{
  const{user,profile}=useAuth();
@@ -27,6 +37,7 @@ export const ChatPage:React.FC=()=>{
  const[typingUsers,setTypingUsers]=useState<string[]>([]);
  const[people,setPeople]=useState<Person[]>([]);
  const[peopleOpen,setPeopleOpen]=useState(false);
+ const[personQuery,setPersonQuery]=useState('');
  const[query,setQuery]=useState('');
  const[results,setResults]=useState<Array<{kind:string;id:string;conversation_id:string;title:string;snippet:string;created_at:string}>>([]);
  const[reply,setReply]=useState<ChatMessage|null>(null),[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct'),[channelOpen,setChannelOpen]=useState(false),[channelTitle,setChannelTitle]=useState(''),[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel'),[sharedConnections,setSharedConnections]=useState<Array<{id:string,target_organization_id:string,target_name:string}>>([]),[selectedConnection,setSelectedConnection]=useState(''),[attachmentBusy,setAttachmentBusy]=useState(false),[recording,setRecording]=useState(false),[ocrBusy,setOcrBusy]=useState(false);
@@ -40,7 +51,7 @@ export const ChatPage:React.FC=()=>{
  const lastTypingSent=useRef(0);
 
  const refresh=useCallback(async()=>{
-  try{const data=await listConversations();setConversations(data);if(!selectedId&&data[0])setSelectedId(data[0].conversation_id)}
+  try{const data=await listConversations();setConversations(data);if(!selectedId&&data[0]&&window.matchMedia('(min-width:768px)').matches)setSelectedId(data[0].conversation_id)}
   catch(e){setError(err(e))}finally{setLoading(false)}
  },[selectedId]);
 
@@ -118,7 +129,7 @@ export const ChatPage:React.FC=()=>{
  const openPeople=async(mode:'direct'|'member'='direct')=>{
   if(!profile?.organization_id)return;
   const{data,error:e}=await supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',profile.organization_id).eq('is_active',true).order('full_name');
-  if(e){setError(err(e));return}setPeople((data??[])as Person[]);setPeopleMode(mode);setPeopleOpen(true);
+  if(e){setError(err(e));return}setPeople((data??[])as Person[]);setPersonQuery('');setPeopleMode(mode);setPeopleOpen(true);
  };
  const newChat=async(id:string)=>{try{const c=await createDirectConversation(id);await refresh();setSelectedId(c.conversation_id);setPeopleOpen(false)}catch(e){setError(err(e))}};
  const addMember=async(id:string)=>{if(!selectedId)return;try{await addConversationMember(selectedId,id);setPeopleOpen(false);await refresh()}catch(e){setError(err(e))}};
@@ -139,23 +150,129 @@ export const ChatPage:React.FC=()=>{
  const runSearch=async()=>{if(!query.trim()){setResults([]);return}try{setResults(await searchChat(query,selectedId??undefined))}catch(e){setError(err(e))}};
  const selected=conversations.find(c=>c.conversation_id===selectedId)??null;
  const unread=useMemo(()=>conversations.reduce((n,c)=>n+Number(c.unread_count??0),0),[conversations]);
+ const messageMap=useMemo(()=>new Map(messages.map(m=>[m.id,m])),[messages]);
+ const filteredPeople=useMemo(()=>{
+  const q=normalizeFaText(personQuery).toLowerCase();
+  return people.filter(person=>person.id!==user?.id&&!q||person.id!==user?.id&&(normalizeFaText(person.full_name).toLowerCase().includes(q)||(person.phone??'').includes(q)));
+ },[people,personQuery,user?.id]);
 
- return <div dir="rtl" className="h-[calc(100vh-130px)] min-h-[560px] flex flex-col md:flex-row gap-3">
-  <section className="w-full md:w-[330px] rounded-2xl border app-border bg-[var(--surface)] overflow-hidden flex flex-col">
-   <header className="p-3 border-b app-border flex items-center gap-2"><MessageCircle size={20}/><div className="flex-1"><b>گفتگوها</b><div className="text-[11px] app-muted">{unread?String(unread)+' پیام خوانده‌نشده':'همه پیام‌ها خوانده شده‌اند'}</div></div><button className="icon-btn" onClick={()=>void openPeople("direct")} aria-label="گفتگوی مستقیم"><Plus size={19}/></button><button className="icon-btn" onClick={()=>{setChannelType("company_channel");setChannelOpen(true)}} aria-label="کانال جدید"><Hash size={18}/></button></header>
-   <div className="p-2 border-b app-border flex gap-2"><Search size={17} className="app-muted mt-3"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجوی پیام، فایل یا فرد" className="bg-transparent outline-none flex-1 text-sm min-w-0 min-h-11"/></div>
-   <div className="flex-1 overflow-y-auto">{loading?<div className="p-4 app-muted text-sm">در حال بارگذاری…</div>:conversations.map(c=><button key={c.conversation_id} onClick={()=>setSelectedId(c.conversation_id)} className={'w-full text-right p-3 border-b app-border min-h-[76px] '+(selectedId===c.conversation_id?'bg-[color-mix(in_srgb,var(--primary)_9%,transparent)]':'')}><div className="flex gap-2 items-start"><div className="h-10 w-10 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center"><MessageCircle size={18}/></div><div className="min-w-0 flex-1"><b className="block truncate">{title(c)}</b><div className="text-xs app-muted truncate mt-1">{c.last_message_body??'هنوز پیامی ثبت نشده است'}</div></div>{Number(c.unread_count)>0&&<span className="rounded-full min-w-6 h-6 px-1 flex items-center justify-center text-xs bg-[var(--primary)] text-white">{c.unread_count}</span>}</div></button>)}{!loading&&!conversations.length&&<div className="p-8 text-center app-muted"><MessageCircle className="mx-auto mb-2"/>هنوز گفتگویی ندارید.</div>}</div>
+ return <div dir="rtl" className="w-full h-[calc(100dvh-130px)] min-h-[560px] flex gap-0 md:gap-3">
+  <section className={(selectedId?"hidden md:flex":"flex")+" w-full md:w-[360px] shrink-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
+   <header className="h-16 shrink-0 px-3 border-b app-border flex items-center gap-2">
+    <div className="h-10 w-10 rounded-full bg-[var(--primary)] text-white flex items-center justify-center"><MessageCircle size={19}/></div>
+    <div className="flex-1 min-w-0"><b className="block">پیام‌ها</b><div className="text-[11px] app-muted truncate">{unread?String(unread)+' پیام خوانده‌نشده':'گفتگوهای شما'}</div></div>
+    <button className="icon-btn" onClick={()=>void openPeople("direct")} aria-label="گفتگوی جدید"><Plus size={19}/></button>
+    <button className="icon-btn" onClick={()=>{setChannelType("company_channel");setChannelOpen(true)}} aria-label="گروه یا کانال جدید"><Hash size={18}/></button>
+   </header>
+   <div className="px-3 py-2 border-b app-border">
+    <div className="h-11 rounded-xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div>
+   </div>
+   <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+    {loading?<div className="p-5 app-muted text-sm">در حال بارگذاری…</div>:
+      conversations.map(c=>{
+       const name=title(c);const last=c.last_message_body??(c.type==='direct'?'پیام جدید':'هنوز پیامی ثبت نشده است');
+       return <button key={c.conversation_id} onClick={()=>{setSelectedId(c.conversation_id);setResults([])}} className={"w-full text-right px-3 py-3 border-b app-border flex items-center gap-3 min-h-[74px] hover:bg-black/5 dark:hover:bg-white/5 "+(selectedId===c.conversation_id?"bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]":"")}>
+        <div className="h-12 w-12 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold text-lg">{c.type==='direct'?(name.trim().slice(0,1)||'?'):<>{c.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</>}</div>
+        <div className="min-w-0 flex-1">
+         <div className="flex items-center gap-2"><b className="truncate flex-1">{name}</b>{c.last_message_created_at&&<span className="text-[10px] app-muted shrink-0">{chatTime(c.last_message_created_at)}</span>}</div>
+         <div className="text-xs app-muted truncate mt-1">{last}</div>
+        </div>
+        {Number(c.unread_count)>0&&<span className="rounded-full min-w-6 h-6 px-1 flex items-center justify-center text-[11px] bg-[var(--primary)] text-white">{c.unread_count}</span>}
+       </button>
+      })}
+    {!loading&&!conversations.length&&<div className="p-10 text-center app-muted"><MessageCircle size={34} className="mx-auto mb-3"/><div className="font-bold mb-1">هنوز گفتگویی ندارید</div><div className="text-xs">از دکمه + یک گفتگو با همکاران ایجاد کنید.</div></div>}
+   </div>
   </section>
-  <section className="flex-1 min-w-0 rounded-2xl border app-border bg-[var(--surface)] overflow-hidden flex flex-col">
-   {selected?<><header className="min-h-16 border-b app-border px-4 flex items-center gap-3"><div className="h-10 w-10 rounded-full bg-[var(--primary)] text-white flex items-center justify-center"><Users size={18}/></div><div className="flex-1 min-w-0"><b className="truncate block">{title(selected)}</b><span className="text-[11px] app-muted">{realtimeState==='subscribed'?'Realtime فعال':realtimeState==='degraded'?'Realtime در حالت جایگزین · همگام‌سازی دوره‌ای':'در حال اتصال…'}{typingUsers.length?' · در حال نوشتن…':''}</span></div><div className="flex items-center gap-1">{selected&&(selected.type==="group"||selected.type==="company_channel")&&<button className="icon-btn" title="افزودن عضو" onClick={()=>void openPeople("member")}><UserPlus size={16}/></button>}{online&&realtimeState==="subscribed"?<Wifi size={17}/>:<WifiOff size={17}/>}</div></header>
-   {results.length>0&&<div className="border-b app-border p-2 max-h-36 overflow-y-auto">{results.map(r=><button key={r.id} className="block w-full text-right p-2 rounded-lg hover:bg-black/5" onClick={()=>setResults([])}><b className="text-sm">{r.title}</b><div className="text-xs app-muted truncate">{r.snippet}</div></button>)}</div>}
-   <div className="flex-1 overflow-y-auto p-3 md:p-5 space-y-2">{messages.map(m=>{const own=m.sender_id===user?.id;const deleted=Boolean(m.deleted_for_all_at);return <div key={m.id} className={'flex '+(own?'justify-start':'justify-end')}><div className="group max-w-[88%] md:max-w-[70%]"><div className={'relative rounded-2xl px-3 py-2 '+(own?'bg-[var(--primary)] text-white rounded-br-md':'bg-black/5 dark:bg-white/10 rounded-bl-md')}><div className="text-sm whitespace-pre-wrap break-words">{deleted?'این پیام حذف شده است.':m.body}</div>{!deleted&&(m.attachments??[]).map(a=>a.security_status==="clean"&&a.url?(a.mime_type.startsWith("audio/")?<audio key={a.id} controls src={a.url} className="mt-2 max-w-full"/>:<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline"><Paperclip size={14}/>{a.original_name}</a>):<div key={a.id} className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs">{a.security_status==="blocked"?"فایل مسدود شد.":"فایل در حال بررسی امنیتی است…"}</div>)}<div className="flex items-center gap-1 mt-1 text-[9px] opacity-70">{m.edited_at&&<span>ویرایش‌شده</span>}<span>{formatJalaliDateTime(new Date(m.created_at))}</span>{own&&<CheckCheck size={13}/>} {!deleted&&<button onClick={()=>setMenu(menu===m.id?null:m.id)} aria-label="گزینه‌های پیام"><MoreVertical size={14}/></button>}</div>{menu===m.id&&<div className="absolute z-10 left-1 bottom-7 rounded-xl border app-border bg-[var(--surface)] shadow-xl p-1 min-w-36"><button className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setReply(m);setMenu(null)}}>پاسخ</button><button className="w-full text-right px-3 py-2 text-xs" onClick={()=>void remove(m,false)}><Trash2 size={13} className="inline ml-1"/>حذف برای من</button>{own&&<button className="w-full text-right px-3 py-2 text-xs" onClick={()=>void remove(m,true)}>حذف برای همه</button>}</div>}</div></div></div>})}<div ref={bottom}/></div>
-   {reply&&<div className="mx-3 mb-2 rounded-xl border app-border p-2 flex gap-2"><div className="flex-1 text-xs truncate">پاسخ به: {reply.body??'پیام'}</div><button onClick={()=>setReply(null)}>لغو</button></div>}
-   <div className="border-t app-border p-2 md:p-3"><input ref={fileInput} type="file" className="hidden" accept="image/*,application/pdf,text/plain,.doc,.docx,.xls,.xlsx" onChange={e=>{const f=e.target.files?.[0];e.currentTarget.value="";void chooseAttachment(f)}}/><div className="flex items-end gap-2"><button type="button" className="min-h-11 min-w-11 rounded-xl border app-border flex items-center justify-center disabled:opacity-40" disabled={attachmentBusy} onClick={()=>fileInput.current?.click()} aria-label="پیوست فایل"><Paperclip size={18}/></button><button type="button" className={"min-h-11 min-w-11 rounded-xl border app-border flex items-center justify-center "+(recording?"bg-red-600 text-white":"")} disabled={attachmentBusy} onClick={()=>void toggleVoice()} aria-label={recording?"توقف ضبط":"ضبط صدا"}>{recording?<MicOff size={18}/>:<Mic size={18}/>}</button><textarea value={text} onChange={e=>{setText(e.target.value);broadcastTyping(Boolean(e.target.value.trim()))}} onBlur={()=>broadcastTyping(false)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send()}}} placeholder={online?"پیام بنویسید…":"آفلاین؛ پس از اتصال ارسال می‌شود…"} rows={1} className="flex-1 resize-none min-h-11 max-h-32 rounded-xl border app-border bg-transparent px-3 py-2 outline-none"/><button className="min-h-11 min-w-11 rounded-xl bg-[var(--primary)] text-white flex items-center justify-center disabled:opacity-40" disabled={!text.trim()||sending||attachmentBusy} onClick={()=>void send()} aria-label="ارسال"><Send size={19}/></button></div>{attachmentBusy&&<div className="text-[10px] app-muted mt-2">در حال ارسال و بررسی فایل…</div>}{ocrBusy&&<div className="text-[10px] app-muted mt-1 flex items-center gap-1"><ScanText size={13}/> در حال OCR تصویر…</div>}</div>
-   </>:<div className="flex-1 flex items-center justify-center app-muted"><MessageCircle size={32} className="ml-2"/>یک گفتگو را انتخاب کنید.</div>}
+
+  <section className={(selectedId?"flex":"hidden md:flex")+" flex-1 min-w-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
+   {selected?<>
+    <header className="h-16 shrink-0 border-b app-border px-3 md:px-4 flex items-center gap-2">
+     <button className="icon-btn md:hidden" onClick={()=>{setSelectedId(null);setMessages([]);setReply(null)}} aria-label="بازگشت"><ArrowRight size={19}/></button>
+     <div className="h-11 w-11 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold">{selected.type==='direct'?(title(selected).slice(0,1)||'?'):<>{selected.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</>}</div>
+     <div className="flex-1 min-w-0">
+      <b className="block truncate">{title(selected)}</b>
+      <div className="text-[11px] app-muted truncate">{selected.type==='direct'?(typingUsers.length?'در حال نوشتن…':selected.display_phone||'گفتگوی مستقیم'):(typingUsers.length?'در حال نوشتن…':realtimeState==='subscribed'?'متصل':'در حال همگام‌سازی')}</div>
+     </div>
+     {selected&&(selected.type==="group"||selected.type==="company_channel")&&<button className="icon-btn" title="افزودن عضو" onClick={()=>void openPeople("member")}><UserPlus size={16}/></button>}
+     {online&&realtimeState==="subscribed"?<Wifi size={16}/>:<WifiOff size={16}/>}
+    </header>
+
+    {results.length>0&&<div className="border-b app-border px-3 py-2 max-h-40 overflow-y-auto">{results.map(r=><button key={r.id} className="block w-full text-right p-2 rounded-lg hover:bg-black/5" onClick={()=>setResults([])}><b className="text-sm">{r.title}</b><div className="text-xs app-muted truncate">{r.snippet}</div></button>)}</div>}
+
+    <div className="flex-1 min-h-0 overflow-y-auto px-2 py-4 md:px-5 md:py-6 overscroll-contain bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(0,0,0,.025),transparent_18%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,.02),transparent_18%)]">
+     {messages.map((m,index)=>{
+      const own=m.sender_id===user?.id;const deleted=Boolean(m.deleted_for_all_at);const previous=messages[index-1];const showDay=!previous||dayKey(previous.created_at)!==dayKey(m.created_at);const quoted=m.reply_to_message_id?messageMap.get(m.reply_to_message_id):null;
+      return <React.Fragment key={m.id}>
+       {showDay&&<div className="flex justify-center my-3"><span className="px-3 py-1 rounded-full bg-black/5 dark:bg-white/10 text-[10px] app-muted shadow-sm">{dayLabel(m.created_at)}</span></div>}
+       <div className={"flex mb-1.5 "+(own?"justify-start":"justify-end")}>
+        <div className="max-w-[90%] md:max-w-[72%]">
+         <div className={"relative rounded-2xl px-3 py-2 shadow-sm "+(own?"bg-[var(--primary)] text-white rounded-br-md":"bg-black/5 dark:bg-white/10 rounded-bl-md")}>
+          {!own&&selected.type!=="direct"&&m.sender_name&&<div className={"text-[10px] font-bold mb-1 "+(own?"opacity-80":"app-muted")}>{m.sender_name}</div>}
+          {quoted&&<button className={"w-full text-right mb-2 px-2 py-1 rounded-lg border border-current/20 text-[10px] opacity-80"} onClick={()=>{const el=document.getElementById("msg-"+quoted.id);el?.scrollIntoView({behavior:"smooth",block:"center"})}}>{quoted.body||'پیام پیوست‌دار'}</button>}
+          {deleted?<div className="text-sm italic opacity-80">این پیام حذف شده است.</div>:m.body&&<div className="text-[14px] leading-6 whitespace-pre-wrap break-words">{m.body}</div>}
+          {!deleted&&(m.attachments??[]).map(a=>a.security_status==="clean"&&a.url?(a.mime_type.startsWith("audio/")?<audio key={a.id} controls src={a.url} className="mt-2 w-full max-w-[280px]"/>:<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline"><Paperclip size={14}/><span className="truncate">{a.original_name}</span></a>):<div key={a.id} className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs">{a.security_status==="blocked"?"فایل مسدود شد.":"فایل در حال بررسی امنیتی است…"}</div>)}
+          <div className={"flex items-center justify-end gap-1 mt-1 text-[9px] "+(own?"text-white/75":"app-muted")}>
+           {m.edited_at&&<span>ویرایش‌شده</span>}<span>{chatTime(m.created_at)}</span>
+           {own&&(m.delivery_status==='sent'?<Check size={12}/>:m.delivery_status==='delivered'||m.delivery_status==='read'?<CheckCheck size={13}/>:<span className="opacity-70">در حال ارسال</span>)}
+           {!deleted&&<button onClick={()=>setMenu(menu===m.id?null:m.id)} aria-label="گزینه‌های پیام"><MoreVertical size={14}/></button>}
+          </div>
+          {menu===m.id&&<div className="absolute z-20 left-1 bottom-7 rounded-xl border app-border bg-[var(--surface)] text-[var(--text)] shadow-xl p-1 min-w-36">
+           <button className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setReply(m);setMenu(null)}}>پاسخ</button>
+           <button className="w-full text-right px-3 py-2 text-xs" onClick={()=>void remove(m,false)}><Trash2 size={13} className="inline ml-1"/>حذف برای من</button>
+           {own&&<button className="w-full text-right px-3 py-2 text-xs" onClick={()=>void remove(m,true)}>حذف برای همه</button>}
+          </div>}
+         </div>
+        </div>
+       </div>
+      </React.Fragment>
+     })}
+     <div ref={bottom}/>
+    </div>
+
+    {reply&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">پاسخ به: {reply.body||'پیام پیوست‌دار'}</div><button className="icon-btn" onClick={()=>setReply(null)} aria-label="لغو پاسخ"><X size={15}/></button></div>}
+
+    <div className="shrink-0 border-t app-border p-2 md:p-3 bg-[var(--surface)]">
+     <input ref={fileInput} type="file" className="hidden" accept="image/*,application/pdf,text/plain,.doc,.docx,.xls,.xlsx" onChange={e=>{const f=e.target.files?.[0];e.currentTarget.value="";void chooseAttachment(f)}}/>
+     <div className="flex items-end gap-1.5 md:gap-2">
+      <button type="button" className="h-11 w-11 shrink-0 rounded-full border app-border flex items-center justify-center disabled:opacity-40" disabled={attachmentBusy} onClick={()=>fileInput.current?.click()} aria-label="پیوست"><Paperclip size={18}/></button>
+      <button type="button" className={"h-11 w-11 shrink-0 rounded-full border app-border flex items-center justify-center "+(recording?"bg-red-600 text-white":"")} disabled={attachmentBusy} onClick={()=>void toggleVoice()} aria-label={recording?"توقف ضبط":"ضبط صدا"}>{recording?<MicOff size={18}/>:<Mic size={18}/>}</button>
+      <textarea value={text} onChange={e=>{setText(e.target.value);broadcastTyping(Boolean(e.target.value.trim()))}} onBlur={()=>broadcastTyping(false)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send()}}} placeholder={online?"پیام بنویسید…":"آفلاین؛ پس از اتصال ارسال می‌شود…"} rows={1} className="flex-1 resize-none min-h-11 max-h-28 rounded-[22px] border app-border bg-transparent px-4 py-2.5 outline-none text-sm"/>
+      <button className="h-11 w-11 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center disabled:opacity-40" disabled={!text.trim()||sending||attachmentBusy} onClick={()=>void send()} aria-label="ارسال"><Send size={18}/></button>
+     </div>
+     {(attachmentBusy||ocrBusy)&&<div className="text-[10px] app-muted mt-1 px-1">{attachmentBusy?"در حال ارسال فایل…":"در حال OCR تصویر…"}</div>}
+    </div>
+   </>:<div className="flex-1 items-center justify-center app-muted">یک گفتگو را انتخاب کنید.</div>}
   </section>
-  {peopleOpen&&<div className="fixed inset-0 z-[600] bg-black/40 flex items-end md:items-center justify-center p-3" onClick={()=>setPeopleOpen(false)}><div dir="rtl" className="w-full max-w-lg max-h-[80vh] overflow-hidden rounded-2xl bg-[var(--surface)] border app-border shadow-2xl" onClick={e=>e.stopPropagation()}><div className="p-4 border-b app-border flex items-center justify-between"><b>{peopleMode==="direct"?"گفتگوی جدید":"افزودن عضو"}</b><button onClick={()=>setPeopleOpen(false)}><X size={17}/></button></div><div className="overflow-y-auto">{people.filter(p=>p.id!==user?.id).map(p=><button key={p.id} onClick={()=>void (peopleMode==="direct"?newChat(p.id):addMember(p.id))} className="w-full p-3 flex items-center gap-3 border-b app-border text-right min-h-16"><div className="h-9 w-9 rounded-full bg-[var(--primary)] text-white flex items-center justify-center">{p.full_name.slice(0,1)}</div><div><b>{p.full_name}</b><div className="text-xs app-muted">{p.role} · {p.phone??'بدون شماره'}</div></div></button>)}</div></div></div>}
-  {channelOpen&&<div className="fixed inset-0 z-[610] bg-black/40 flex items-end md:items-center justify-center p-3" onClick={()=>setChannelOpen(false)}><div dir="rtl" className="w-full max-w-md rounded-2xl bg-[var(--surface)] border app-border shadow-2xl p-4" onClick={e=>e.stopPropagation()}><div className="flex items-center justify-between"><b>ایجاد کانال / گروه</b><button onClick={()=>setChannelOpen(false)}><X size={17}/></button></div><input value={channelTitle} onChange={e=>setChannelTitle(e.target.value)} placeholder="نام کانال" className="w-full min-h-11 rounded-xl border app-border bg-transparent px-3 mt-4"/><div className="grid grid-cols-2 gap-2 mt-3"><button onClick={()=>setChannelType("company_channel")} className={"min-h-11 rounded-xl border app-border text-xs "+(channelType==="company_channel"?"bg-[var(--primary)] text-white":"")}>کانال داخلی</button><button onClick={()=>setChannelType("group")} className={"min-h-11 rounded-xl border app-border text-xs "+(channelType==="group"?"bg-[var(--primary)] text-white":"")}>گروه</button><button onClick={()=>setChannelType("shared_company")} disabled={!sharedConnections.length} className={"min-h-11 rounded-xl border app-border text-xs "+(channelType==="shared_company"?"bg-[var(--primary)] text-white":"")}>شرکت مشترک</button></div>{channelType==="shared_company"&&<select value={selectedConnection} onChange={e=>setSelectedConnection(e.target.value)} className="w-full min-h-11 rounded-xl border app-border bg-transparent px-3 mt-3"><option value="">انتخاب سازمان متصل</option>{sharedConnections.map(x=><option key={x.id} value={x.id}>{x.target_name}</option>)}</select>}<button disabled={!channelTitle.trim()} onClick={()=>void createChannel()} className="w-full min-h-11 rounded-xl bg-[var(--primary)] text-white font-bold mt-4 disabled:opacity-40">ایجاد</button></div></div>}
-  {error&&<div className="fixed bottom-4 left-4 right-4 md:right-auto z-[700] max-w-md rounded-xl border app-border bg-[var(--surface)] p-3 shadow-xl text-sm">{error}<button className="block text-xs mt-2 app-muted" onClick={()=>setError(null)}>بستن</button></div>}
- </div>
+
+  {peopleOpen&&<div className="fixed inset-0 z-[600] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>setPeopleOpen(false)}>
+   <div dir="rtl" className="w-full md:max-w-lg max-h-[86vh] overflow-hidden rounded-t-3xl md:rounded-2xl bg-[var(--surface)] border app-border shadow-2xl" onClick={e=>e.stopPropagation()}>
+    <div className="p-4 border-b app-border flex items-center gap-2"><div className="flex-1"><b>{peopleMode==="direct"?"گفتگوی جدید":"افزودن عضو"}</b><div className="text-xs app-muted mt-1">{peopleMode==="direct"?"یک همکار را انتخاب کنید.":"عضو جدید را انتخاب کنید."}</div></div><button className="icon-btn" onClick={()=>setPeopleOpen(false)}><X size={17}/></button></div>
+    <div className="p-3 border-b app-border"><div className="h-11 rounded-xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16}/><input autoFocus value={personQuery} onChange={e=>setPersonQuery(e.target.value)} placeholder="جست‌وجوی مخاطب" className="bg-transparent outline-none flex-1 text-sm"/></div></div>
+    <div className="max-h-[58vh] overflow-y-auto">
+     {filteredPeople.map(p=><button key={p.id} onClick={()=>void (peopleMode==="direct"?newChat(p.id):addMember(p.id))} className="w-full p-3 flex items-center gap-3 border-b app-border text-right min-h-[70px] hover:bg-black/5 dark:hover:bg-white/5">
+      <div className="h-11 w-11 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold">{p.full_name.trim().slice(0,1)||<UserRound size={17}/>}</div>
+      <div className="min-w-0 flex-1"><b className="block truncate">{p.full_name}</b><div className="text-xs app-muted truncate mt-1">{p.phone||'شماره ثبت نشده'} · {p.role}</div></div>
+     </button>)}
+     {!filteredPeople.length&&<div className="p-8 text-center app-muted text-sm">مخاطبی پیدا نشد.</div>}
+    </div>
+   </div>
+  </div>}
+
+  {channelOpen&&<div className="fixed inset-0 z-[610] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>setChannelOpen(false)}>
+   <div dir="rtl" className="w-full md:max-w-md rounded-t-3xl md:rounded-2xl bg-[var(--surface)] border app-border shadow-2xl p-4" onClick={e=>e.stopPropagation()}>
+    <div className="flex items-center justify-between"><div><b>ایجاد گروه / کانال</b><div className="text-xs app-muted mt-1">مثل یک گفت‌وگوی گروهی سازمانی</div></div><button className="icon-btn" onClick={()=>setChannelOpen(false)}><X size={17}/></button></div>
+    <input value={channelTitle} onChange={e=>setChannelTitle(e.target.value)} placeholder="نام گروه یا کانال" className="w-full min-h-11 rounded-xl border app-border bg-transparent px-3 mt-4 outline-none"/>
+    <div className="grid grid-cols-2 gap-2 mt-3">
+     <button onClick={()=>setChannelType("company_channel")} className={"min-h-11 rounded-xl border app-border text-xs "+(channelType==="company_channel"?"bg-[var(--primary)] text-white":"")}>کانال داخلی</button>
+     <button onClick={()=>setChannelType("group")} className={"min-h-11 rounded-xl border app-border text-xs "+(channelType==="group"?"bg-[var(--primary)] text-white":"")}>گروه</button>
+     <button onClick={()=>setChannelType("shared_company")} disabled={!sharedConnections.length} className={"min-h-11 rounded-xl border app-border text-xs "+(channelType==="shared_company"?"bg-[var(--primary)] text-white":"")}>شرکت مشترک</button>
+    </div>
+    {channelType==="shared_company"&&<select value={selectedConnection} onChange={e=>setSelectedConnection(e.target.value)} className="w-full min-h-11 rounded-xl border app-border bg-transparent px-3 mt-3"><option value="">انتخاب سازمان متصل</option>{sharedConnections.map(x=><option key={x.id} value={x.id}>{x.target_name}</option>)}</select>}
+    <button disabled={!channelTitle.trim()} onClick={()=>void createChannel()} className="w-full min-h-11 rounded-xl bg-[var(--primary)] text-white font-bold mt-4 disabled:opacity-40">ایجاد</button>
+   </div>
+  </div>}
+
+  {error&&<div className="fixed bottom-4 left-3 right-3 md:left-4 md:right-auto z-[700] max-w-md rounded-2xl border app-border bg-[var(--surface)] p-3 shadow-xl text-sm">{error}<button className="block text-xs mt-2 app-muted" onClick={()=>setError(null)}>بستن</button></div>}
+ </div>;
+
 };
