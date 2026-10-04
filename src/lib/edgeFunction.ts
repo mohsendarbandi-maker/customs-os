@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 
-type EdgeResponse<T = any> = { data: T | null; error: null };
+type EdgeError = { message: string };
+type EdgeResponse<T = any> = { data: T | null; error: EdgeError | null };
 type EdgeInvokeOptions = { body?: Record<string, unknown> };
 
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL as string;
