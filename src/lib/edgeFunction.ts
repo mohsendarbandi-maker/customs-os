@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-type EdgeResponse<T = unknown> = { data: T | null; error: null };
+type EdgeResponse<T = any> = { data: T | null; error: null };
 type EdgeInvokeOptions = { body?: Record<string, unknown> };
 
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL as string;
@@ -60,7 +60,7 @@ async function request<T>(endpoint: string, token: string, body: Record<string, 
   }
 }
 
-export async function invokeEdgeFunction<T = unknown>(
+export async function invokeEdgeFunction<T = any>(
   name: string,
   { body = {} }: EdgeInvokeOptions = {},
 ): Promise<EdgeResponse<T>> {
