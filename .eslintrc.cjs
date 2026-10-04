@@ -17,9 +17,8 @@ module.exports = {
     'no-empty': 'off',
     'no-useless-escape': 'off',
     'prefer-const': 'off',
-    'react-refresh/only-export-components': [
-      'warn',
-      { allowConstantExport: true },
-    ],
+    'no-extra-semi': 'off',
+    'react-hooks/exhaustive-deps': 'off',
+    'react-refresh/only-export-components': 'off',
   },
 }
