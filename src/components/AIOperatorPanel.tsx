@@ -3,6 +3,7 @@ import{Bot,Check,ChevronDown,History,Loader2,Paperclip,Send,ShieldAlert,ShieldCh
 import{supabase}from'../lib/supabase';
 import{makeClientId}from'../lib/clientId';
 import{useAuth}from'../context/AuthContext';
+import{invokeEdgeFunction}from'../lib/edgeFunction';
 
 type Risk='safe'|'requires_confirmation'|'destructive';
 type Plan={action_code:string;module:string;target?:Record<string,unknown>;params?:Record<string,unknown>;risk?:Risk;confidence?:number;clarification?:string|null;reason?:string};
