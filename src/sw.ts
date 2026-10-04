@@ -7,7 +7,7 @@ import {NetworkFirst} from 'workbox-strategies';
 declare const self: ServiceWorkerGlobalScope;
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
-registerRoute(({request})=>request.mode==='navigate',new NetworkFirst({cacheName:'customs-os-pages-v3',networkTimeoutSeconds:5}));
+registerRoute(({request})=>request.mode==='navigate',new NetworkFirst({cacheName:'customs-os-pages-v4',networkTimeoutSeconds:5}));
 setCatchHandler(async({request})=>request.mode==='navigate'?(await caches.match('/offline.html'))??Response.error():Response.error());
 self.skipWaiting();
 clientsClaim();
