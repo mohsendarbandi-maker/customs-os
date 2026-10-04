@@ -10,6 +10,27 @@
     <meta name="apple-mobile-web-app-title" content="Customs OS" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
+      // Never let an old service worker keep the bootstrap HTML frozen on an outdated build.
+      (() => {
+        try {
+          const key = 'customs-os:bootstrap-reset-v1';
+          if (!sessionStorage.getItem(key) && 'serviceWorker' in navigator) {
+            sessionStorage.setItem(key, '1');
+            void Promise.all([
+              navigator.serviceWorker.getRegistrations().then((registrations) => Promise.all(registrations.map((r) => r.unregister()))),
+              caches.keys().then((names) => Promise.all(names.map((name) => caches.delete(name)))),
+            ]).finally(() => {
+              const url = new URL(window.location.href);
+              url.searchParams.set('__bootstrap_reset', String(Date.now()));
+              window.location.replace(url.toString());
+            });
+          }
+        } catch {
+          // Continue booting if browser storage/cache APIs are unavailable.
+        }
+      })();
+    </script>
+    <script>
       // Select the route-specific PWA manifest before the React app boots.
       // This keeps Chat and Reminders installs pointed at their own start URL.
       (() => {
