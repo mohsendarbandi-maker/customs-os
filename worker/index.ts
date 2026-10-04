@@ -42,7 +42,10 @@ export default {
       }
     }
 
-    const response = await env.ASSETS.fetch(request);
+    const assetRequest = (request.method === 'GET' && (url.pathname === '/' || (request.headers.get('Accept') || '').includes('text/html')))
+      ? new Request(new URL('/index.html', request.url), request)
+      : request;
+    const response = await env.ASSETS.fetch(assetRequest);
     const accept = request.headers.get('Accept') || '';
     if (request.method === 'GET' && (url.pathname === '/' || accept.includes('text/html'))) {
       const headers = new Headers(response.headers);
