@@ -169,24 +169,24 @@ export const ChatPage:React.FC=()=>{
 
  return <div dir="rtl" className="w-full h-dvh min-h-[560px] flex gap-0 md:gap-3 bg-[var(--surface)]">
   <section className={(selectedId?"hidden md:flex":"flex")+" w-full md:w-[360px] shrink-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
-   <header className="h-16 shrink-0 px-3 border-b app-border flex items-center gap-2">
-    <div className="h-10 w-10 rounded-full bg-[var(--primary)] text-white flex items-center justify-center"><MessageCircle size={19}/></div>
+   <header className="h-[72px] shrink-0 px-4 border-b app-border flex items-center gap-3">
+    <div className="h-12 w-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center"><MessageCircle size={22}/></div>
     <div className="flex-1 min-w-0"><b className="block">پیام‌ها</b><div className="text-[11px] app-muted truncate">{unread?String(unread)+' پیام خوانده‌نشده':'گفتگوهای شما'}</div></div>
-    <button className="icon-btn" onClick={()=>void openPeople("direct")} aria-label="گفتگوی جدید"><Plus size={19}/></button>
-    <button className="icon-btn" onClick={()=>{setChannelType("company_channel");setChannelOpen(true)}} aria-label="گروه یا کانال جدید"><Hash size={18}/></button>
+    <button className="h-12 w-12 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>void openPeople("direct")} aria-label="گفتگوی جدید"><Plus size={19}/></button>
+    <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>{setChannelType("company_channel");setChannelOpen(true)}} aria-label="گروه یا کانال جدید"><Hash size={18}/></button>
    </header>
    <div className="px-3 py-2 border-b app-border">
-    <div className="h-11 rounded-xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div>
+    <div className="h-12 rounded-2xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div>
    </div>
    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
     {loading?<div className="p-5 app-muted text-sm">در حال بارگذاری…</div>:
       conversations.map(c=>{
        const name=title(c);const last=c.last_message_body??(c.type==='direct'?'پیام جدید':'هنوز پیامی ثبت نشده است');
-       return <button key={c.conversation_id} onClick={()=>{setSelectedId(c.conversation_id);setResults([])}} className={"w-full text-right px-3 py-3 border-b app-border flex items-center gap-3 min-h-[74px] hover:bg-black/5 dark:hover:bg-white/5 "+(selectedId===c.conversation_id?"bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]":"")}>
-        <div className="h-12 w-12 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold text-lg">{c.type==='direct'?(name.trim().slice(0,1)||'?'):<>{c.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</>}</div>
+       return <button key={c.conversation_id} onClick={()=>{setSelectedId(c.conversation_id);setResults([])}} className={"w-full text-right px-3 py-3 border-b app-border flex items-center gap-3 min-h-[86px] hover:bg-black/5 dark:hover:bg-white/5 "+(selectedId===c.conversation_id?"bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]":"")}>
+        <div className="h-14 w-14 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold text-xl">{c.type==='direct'?(name.trim().slice(0,1)||'?'):<>{c.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</>}</div>
         <div className="min-w-0 flex-1">
          <div className="flex items-center gap-2"><b className="truncate flex-1">{name}</b>{c.last_message_created_at&&<span className="text-[10px] app-muted shrink-0">{chatTime(c.last_message_created_at)}</span>}</div>
-         <div className="text-xs app-muted truncate mt-1">{last}</div>
+         <div className="text-[13px] app-muted truncate mt-1">{last}</div>
         </div>
         {Number(c.unread_count)>0&&<span className="rounded-full min-w-6 h-6 px-1 flex items-center justify-center text-[11px] bg-[var(--primary)] text-white">{c.unread_count}</span>}
        </button>
@@ -197,33 +197,33 @@ export const ChatPage:React.FC=()=>{
 
   <section className={(selectedId?"flex":"hidden md:flex")+" flex-1 min-w-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
    {selected?<>
-    <header className="h-16 shrink-0 border-b app-border px-3 md:px-4 flex items-center gap-2">
-     <button className="icon-btn md:hidden" onClick={()=>{setSelectedId(null);setMessages([]);setReply(null)}} aria-label="بازگشت"><ArrowRight size={19}/></button>
-     <div className="h-11 w-11 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold">{selected.type==='direct'?(title(selected).slice(0,1)||'?'):<>{selected.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</>}</div>
+    <header className="h-[72px] shrink-0 border-b app-border px-3 md:px-4 flex items-center gap-2">
+     <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center md:hidden" onClick={()=>{setSelectedId(null);setMessages([]);setReply(null)}} aria-label="بازگشت"><ArrowRight size={19}/></button>
+     <div className="h-12 w-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold">{selected.type==='direct'?(title(selected).slice(0,1)||'?'):<>{selected.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</>}</div>
      <div className="flex-1 min-w-0">
       <b className="block truncate">{title(selected)}</b>
       <div className="text-[11px] app-muted truncate">{selected.type==='direct'?(typingUsers.length?'در حال نوشتن…':selected.display_phone||'گفتگوی مستقیم'):(typingUsers.length?'در حال نوشتن…':realtimeState==='subscribed'?'متصل':'در حال همگام‌سازی')}</div>
      </div>
-     {selected&&(selected.type==="group"||selected.type==="company_channel")&&<button className="icon-btn" title="افزودن عضو" onClick={()=>void openPeople("member")}><UserPlus size={16}/></button>}
-     <button className="icon-btn" title={pushReady?"اعلان‌های پیام فعال است":"فعال‌سازی اعلان پیام"} onClick={()=>void enablePush()} disabled={pushBusy}>{pushReady?<Bell size={17}/>:<BellOff size={17}/>}</button>
+     {selected&&(selected.type==="group"||selected.type==="company_channel")&&<button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title="افزودن عضو" onClick={()=>void openPeople("member")}><UserPlus size={16}/></button>}
+     <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title={pushReady?"اعلان‌های پیام فعال است":"فعال‌سازی اعلان پیام"} onClick={()=>void enablePush()} disabled={pushBusy}>{pushReady?<Bell size={17}/>:<BellOff size={17}/>}</button>
      {online&&realtimeState==="subscribed"?<Wifi size={16}/>:<WifiOff size={16}/>}
     </header>
 
     {results.length>0&&<div className="border-b app-border px-3 py-2 max-h-40 overflow-y-auto">{results.map(r=><button key={r.id} className="block w-full text-right p-2 rounded-lg hover:bg-black/5" onClick={()=>setResults([])}><b className="text-sm">{r.title}</b><div className="text-xs app-muted truncate">{r.snippet}</div></button>)}</div>}
 
-    <div className="flex-1 min-h-0 overflow-y-auto px-2 py-4 md:px-5 md:py-6 overscroll-contain bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(0,0,0,.025),transparent_18%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,.02),transparent_18%)]">
+    <div className="flex-1 min-h-0 overflow-y-auto px-3 py-5 md:px-5 md:py-6 overscroll-contain bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(0,0,0,.025),transparent_18%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,.02),transparent_18%)]">
      {messages.map((m,index)=>{
       const own=m.sender_id===user?.id;const deleted=Boolean(m.deleted_for_all_at);const previous=messages[index-1];const showDay=!previous||dayKey(previous.created_at)!==dayKey(m.created_at);const quoted=m.reply_to_message_id?messageMap.get(m.reply_to_message_id):null;
       return <React.Fragment key={m.id}>
        {showDay&&<div className="flex justify-center my-3"><span className="px-3 py-1 rounded-full bg-black/5 dark:bg-white/10 text-[10px] app-muted shadow-sm">{dayLabel(m.created_at)}</span></div>}
        <div className={"flex mb-1.5 "+(own?"justify-start":"justify-end")}>
-        <div className="max-w-[90%] md:max-w-[72%]">
-         <div className={"relative rounded-2xl px-3 py-2 shadow-sm "+(own?"bg-[var(--primary)] text-white rounded-br-md":"bg-black/5 dark:bg-white/10 rounded-bl-md")}>
+        <div className="max-w-[88%] md:max-w-[72%]">
+         <div className={"relative rounded-2xl px-4 py-2.5 shadow-sm "+(own?"bg-[var(--primary)] text-white rounded-br-md":"bg-black/5 dark:bg-white/10 rounded-bl-md")}>
           {!own&&selected.type!=="direct"&&m.sender_name&&<div className={"text-[10px] font-bold mb-1 "+(own?"opacity-80":"app-muted")}>{m.sender_name}</div>}
           {quoted&&<button className={"w-full text-right mb-2 px-2 py-1 rounded-lg border border-current/20 text-[10px] opacity-80"} onClick={()=>{const el=document.getElementById("msg-"+quoted.id);el?.scrollIntoView({behavior:"smooth",block:"center"})}}>{quoted.body||'پیام پیوست‌دار'}</button>}
-          {deleted?<div className="text-sm italic opacity-80">این پیام حذف شده است.</div>:m.body&&<div className="text-[14px] leading-6 whitespace-pre-wrap break-words">{m.body}</div>}
+          {deleted?<div className="text-sm italic opacity-80">این پیام حذف شده است.</div>:m.body&&<div className="text-[15.5px] leading-7 whitespace-pre-wrap break-words">{m.body}</div>}
           {!deleted&&(m.attachments??[]).map(a=>a.security_status==="clean"&&a.url?(a.mime_type.startsWith("audio/")?<audio key={a.id} controls src={a.url} className="mt-2 w-full max-w-[280px]"/>:<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline"><Paperclip size={14}/><span className="truncate">{a.original_name}</span></a>):<div key={a.id} className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs">{a.security_status==="blocked"?"فایل مسدود شد.":"فایل در حال بررسی امنیتی است…"}</div>)}
-          <div className={"flex items-center justify-end gap-1 mt-1 text-[9px] "+(own?"text-white/75":"app-muted")}>
+          <div className={"flex items-center justify-end gap-1 mt-1 text-[10px] "+(own?"text-white/75":"app-muted")}>
            {m.edited_at&&<span>ویرایش‌شده</span>}<span>{chatTime(m.created_at)}</span>
            {own&&(m.delivery_status==='sent'?<Check size={12}/>:m.delivery_status==='delivered'||m.delivery_status==='read'?<CheckCheck size={13}/>:<span className="opacity-70">در حال ارسال</span>)}
            {!deleted&&<button onClick={()=>setMenu(menu===m.id?null:m.id)} aria-label="گزینه‌های پیام"><MoreVertical size={14}/></button>}
@@ -243,12 +243,18 @@ export const ChatPage:React.FC=()=>{
 
     {reply&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">پاسخ به: {reply.body||'پیام پیوست‌دار'}</div><button className="icon-btn" onClick={()=>setReply(null)} aria-label="لغو پاسخ"><X size={15}/></button></div>}
 
-    <div className="shrink-0 border-t app-border p-2 md:p-3 bg-[var(--surface)]">
+    <div className="shrink-0 border-t app-border p-3 md:p-3 bg-[var(--surface)]">
+    {!pushReady&&<button type="button" onClick={()=>void enablePush()} disabled={pushBusy} className="mb-2 w-full min-h-12 rounded-2xl border app-border bg-[var(--primary)]/10 px-4 flex items-center gap-3 text-right disabled:opacity-50">
+      <span className="h-10 w-10 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center"><Bell size={19}/></span>
+      <span className="min-w-0 flex-1"><b className="block text-sm">اعلان پیام‌ها را فعال کنید</b><span className="block text-xs app-muted mt-0.5">برای دریافت پیام جدید مثل واتساپ</span></span>
+      <span className="text-xs font-bold text-[var(--primary)]">{pushBusy?'در حال فعال‌سازی…':'فعال‌سازی'}</span>
+    </button>}
+
      <input ref={fileInput} type="file" className="hidden" accept="image/*,application/pdf,text/plain,.doc,.docx,.xls,.xlsx" onChange={e=>{const f=e.target.files?.[0];e.currentTarget.value="";void chooseAttachment(f)}}/>
      <div className="flex items-end gap-1.5 md:gap-2">
       <button type="button" className="h-11 w-11 shrink-0 rounded-full border app-border flex items-center justify-center disabled:opacity-40" disabled={attachmentBusy} onClick={()=>fileInput.current?.click()} aria-label="پیوست"><Paperclip size={18}/></button>
       <button type="button" className={"h-11 w-11 shrink-0 rounded-full border app-border flex items-center justify-center "+(recording?"bg-red-600 text-white":"")} disabled={attachmentBusy} onClick={()=>void toggleVoice()} aria-label={recording?"توقف ضبط":"ضبط صدا"}>{recording?<MicOff size={18}/>:<Mic size={18}/>}</button>
-      <textarea value={text} onChange={e=>{setText(e.target.value);broadcastTyping(Boolean(e.target.value.trim()))}} onBlur={()=>broadcastTyping(false)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send()}}} placeholder={online?"پیام بنویسید…":"آفلاین؛ پس از اتصال ارسال می‌شود…"} rows={1} className="flex-1 resize-none min-h-11 max-h-28 rounded-[22px] border app-border bg-transparent px-4 py-2.5 outline-none text-sm"/>
+      <textarea value={text} onChange={e=>{setText(e.target.value);broadcastTyping(Boolean(e.target.value.trim()))}} onBlur={()=>broadcastTyping(false)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send()}}} placeholder={online?"پیام بنویسید…":"آفلاین؛ پس از اتصال ارسال می‌شود…"} rows={1} className="flex-1 resize-none min-h-12 max-h-32 rounded-[24px] border app-border bg-transparent px-4 py-3 outline-none text-[15px]"/>
       <button className="h-11 w-11 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center disabled:opacity-40" disabled={!text.trim()||sending||attachmentBusy} onClick={()=>void send()} aria-label="ارسال"><Send size={18}/></button>
      </div>
      {(attachmentBusy||ocrBusy)&&<div className="text-[10px] app-muted mt-1 px-1">{attachmentBusy?"در حال ارسال فایل…":"در حال OCR تصویر…"}</div>}
