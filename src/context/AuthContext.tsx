@@ -194,6 +194,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       console.log('[Auth] state changed:', event);
 
+      // Supabase emits INITIAL_SESSION while getSession() is still resolving.
+      // Do not turn that transient event into a login redirect.
+      if (event === 'INITIAL_SESSION' && !initialized.current) {
+        return;
+      }
+
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
 
