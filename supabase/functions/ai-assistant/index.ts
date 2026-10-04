@@ -11,7 +11,7 @@ const openaiSchema=(keys:string[])=>({type:'object',properties:Object.fromEntrie
 const text=(d:any)=>d?.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||'').filter(Boolean).join('\n').trim()||d?.output_text||'';
 const limited=(s:number,m:string)=>s===429||/rate.?limit|quota|too many|resource.?exhausted|limit exceeded/i.test(m);
 const loadOperationalContext=async(sb:any,organizationId:string)=>{
-  const [sh,cl,ca,de,sc,docsRes,checksRes,inv,pay,req,vessels]=await Promise.all([
+  const [sh,cl,ca,de,sc,docsRes,checks,inv,pay,req,vessels]=await Promise.all([
     sb.from('shipments').select('id,case_id,client_id,display_name,bill_of_lading_no,cargo_count,cargo_count_unit,net_weight_kg,gross_weight_kg,current_status,release_status,release_invoice_payment_status,finance_status').eq('organization_id',organizationId).order('updated_at',{ascending:false}).limit(300),
     sb.from('clients').select('id,name').eq('organization_id',organizationId).limit(300),
     sb.from('cases').select('id,client_id,case_number,display_name,registration_order_no,warehouse_receipt_no,warehouse_receipt_date,cargo_count,cargo_count_unit,cargo_description,net_weight_kg,gross_weight_kg,status,release_status').eq('organization_id',organizationId).limit(300),
@@ -24,7 +24,7 @@ const loadOperationalContext=async(sb:any,organizationId:string)=>{
     sb.from('finance_payment_requests').select('shipment_id,request_no,requested_amount,currency,status,subject').eq('organization_id',organizationId).limit(500),
     sb.from('vessels').select('id,name,imo_number,flag,last_latitude,last_longitude,last_position_at,last_position_source,last_speed_knots,last_course_deg').eq('organization_id',organizationId).limit(300)
   ]);
-  const clients=cl.data||[],cases=ca.data||[],declarations=de.data||[],customs=sc.data||[],docs=docsRes.data||[],checks=checksRes.data||[],invoices=inv.data||[],payments=pay.data||[],requests=req.data||[],vessels=vessels.data||[];
+  const clients=cl.data||[],cases=ca.data||[],declarations=de.data||[],customs=sc.data||[],docs=docsRes.data||[],checks=checks.data||[],invoices=inv.data||[],payments=pay.data||[],requests=req.data||[],vessels=vessels.data||[];
   const cm=new Map(clients.map((x:any)=>[x.id,x])); const km=new Map(cases.map((x:any)=>[x.id,x]));
   const usable=(v:any)=>{const s=String(v??'').trim();return !!s&&!/^x{2,}$/i.test(s)&&s!=='—'&&s!=='-'};const dm=new Map<string,any>();for(const x of declarations){if(!x.shipment_id)continue;const prev=dm.get(x.shipment_id);if(!prev||(!usable(prev.kottaj_number)&&usable(x.kottaj_number))||(prev.kottaj_number===x.kottaj_number&&new Date(x.declaration_date||0)>new Date(prev.declaration_date||0)))dm.set(x.shipment_id,x);}
   const sm=new Map<string,any>();for(const x of customs){if(x.shipment_id&&!sm.has(x.shipment_id))sm.set(x.shipment_id,x);}const vm=new Map(vessels.map((x:any)=>[x.id,x]));const docsBy=new Map<string,any[]>();for(const x of docs){const a=docsBy.get(x.shipment_id)||[];a.push(x);docsBy.set(x.shipment_id,a);}const checksBy=new Map<string,any[]>();for(const x of checks){const a=checksBy.get(x.case_id)||[];a.push(x);checksBy.set(x.case_id,a);}const invIdsBy=new Map<string,string[]>();for(const x of invoices){const a=invIdsBy.get(x.shipment_id)||[];a.push(x.invoice_id);invIdsBy.set(x.shipment_id,a);}const payBy=new Map<string,any[]>();for(const x of payments){const a=payBy.get(x.shipment_id)||[];a.push(x);payBy.set(x.shipment_id,a);}const reqBy=new Map<string,any[]>();for(const x of requests){const a=reqBy.get(x.shipment_id)||[];a.push(x);reqBy.set(x.shipment_id,a);}

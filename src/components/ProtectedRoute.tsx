@@ -14,12 +14,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   // Gate 1: App is initializing or fetching profile
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] dir-rtl font-sans">
-        <div className="flex flex-col items-center">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-gray-600 font-medium text-sm">در حال بررسی نشست...</p>
-        </div>
-      </div>
+      <div
+        className="min-h-screen bg-[var(--bg)] dir-rtl font-sans"
+        aria-busy="true"
+        aria-label="Customs OS"
+      />
     );
   }
 

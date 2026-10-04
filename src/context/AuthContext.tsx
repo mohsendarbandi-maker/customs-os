@@ -213,16 +213,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
        * Defer profile loading until Supabase has finished
        * processing the auth event.
        */
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (event === 'SIGNED_IN') {
         const userId = currentSession.user.id;
-
         setLoading(true);
 
         setTimeout(() => {
           if (!active || !isMounted.current) return;
-
           void fetchProfile(userId);
         }, 0);
+      }
+
+      // A token refresh is a background auth maintenance event.
+      // Keep the current UI mounted; it must never look like the app is
+      // logging the user out or re-checking the session.
+      if (event === 'TOKEN_REFRESHED') {
+        initialized.current = true;
+        setError(null);
       }
     });
 

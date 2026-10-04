@@ -4,7 +4,14 @@ import { attachSupabaseClient, rpcWithOfflineQueue } from './offlineQueue';
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
 const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
 
-const baseClient = createClient(supabaseUrl, supabaseAnonKey);
+const baseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+  },
+});
 attachSupabaseClient(baseClient);
 
 // Keep the existing Supabase API unchanged while transparently queueing only
