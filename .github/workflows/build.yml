@@ -37,12 +37,15 @@ jobs:
             echo "Checking $base/"
             curl --fail --silent --show-error --location --max-time 30 -o /tmp/index.html "$base/"
             grep -q '<div id="root">' /tmp/index.html
+            # The deployed page must reference Vite's compiled asset, never the TypeScript source.
+            case "$script_src" in /assets/*.js) ;; *) echo "Invalid deployed module path: $script_src"; exit 1;; esac
             script_src="$(sed -n 's/.*<script[^>]*type="module"[^>]*src="\([^"]*\)".*/\1/p' /tmp/index.html | head -n 1)"
             test -n "$script_src"
             case "$script_src" in /*) ;; *) script_src="/$script_src";; esac
             echo "Checking $base$script_src"
             curl --fail --silent --show-error --location --max-time 30 -o /tmp/app.js "$base$script_src"
             test -s /tmp/app.js
+            grep -q '<!doctype html' /tmp/app.js && { echo "Deployed module returned HTML instead of JavaScript"; exit 1; }
 
             crm_src="$(find dist/assets -maxdepth 1 -type f -name 'CRMPage-*.js' -print -quit)"
             test -n "$crm_src"
