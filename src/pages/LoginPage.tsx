@@ -9,12 +9,6 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message] = useState<string | null>(() => (
-    new URLSearchParams(window.location.search).get('access') === 'closed'
-      ? 'حسابی برای این نشانی تعریف نشده است. کاربر جدید باید توسط مالک سازمان ایجاد شود.'
-      : null
-  ));
-
   const { user, needsOnboarding, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -73,12 +67,6 @@ export const LoginPage: React.FC = () => {
           </div>
         )}
 
-        {message && (
-          <div className="future-success text-sm mb-4" role="status">
-            {message}
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
@@ -105,7 +93,6 @@ export const LoginPage: React.FC = () => {
               type="password"
               required
               disabled={loading}
-              minLength={8}
               className="future-input w-full px-4 py-3 text-left dir-ltr disabled:opacity-60"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -127,9 +114,6 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        <div className="mt-6 rounded-xl border app-border bg-[var(--surface-2)] p-3 text-center text-xs app-muted">
-          ثبت‌نام عمومی بسته است. حساب‌ها فقط توسط مالک سازمان و از بخش مدیریت کاربران ایجاد می‌شوند.
-        </div>
       </div>
     </div>
   );
