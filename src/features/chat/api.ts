@@ -113,18 +113,20 @@ export async function addConversationMember(conversationId: string, userId: stri
 }
 
 export async function createConversation(input: {
-  type: 'group' | 'company_channel' | 'related';
+  type: 'group' | 'company_channel' | 'related' | 'shared_company';
   title: string;
   relatedType?: string | null;
   relatedId?: string | null;
+  sharedWithOrganizationId?: string | null;
+  orgConnectionId?: string | null;
 }) {
   const result = await supabase.rpc('chat_create_conversation', {
     p_type: input.type,
     p_title: input.title,
     p_related_type: input.relatedType ?? null,
     p_related_id: input.relatedId ?? null,
-    p_shared_with_organization_id: null,
-    p_org_connection_id: null,
+    p_shared_with_organization_id: input.sharedWithOrganizationId ?? null,
+    p_org_connection_id: input.orgConnectionId ?? null,
     p_direct_user_id: null,
   });
   return unwrap(result);
