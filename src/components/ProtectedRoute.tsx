@@ -15,10 +15,17 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   if (loading) {
     return (
       <div
-        className="min-h-screen bg-[var(--bg)] dir-rtl font-sans"
+        dir="rtl"
+        className="min-h-screen bg-[var(--bg)] text-[var(--text)] flex items-center justify-center p-6"
         aria-busy="true"
-        aria-label="Customs OS"
-      />
+        aria-label="در حال بارگذاری Customs OS"
+      >
+        <div className="w-full max-w-xs rounded-2xl border app-border bg-[var(--surface)] p-6 text-center shadow-xl">
+          <div className="mx-auto mb-4 h-10 w-10 rounded-full border-4 border-[var(--primary)]/20 border-t-[var(--primary)] animate-spin" />
+          <div className="font-bold text-sm">در حال بارگذاری سامانه…</div>
+          <div className="text-xs app-muted mt-2">در حال بازیابی نشست و آماده‌سازی اطلاعات شما</div>
+        </div>
+      </div>
     );
   }
 
