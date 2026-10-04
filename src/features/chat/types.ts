@@ -8,6 +8,8 @@ export type ChatConversation = {
   last_message_created_at: string | null;
   unread_count: number;
   muted_until: string | null;
+  display_name?: string | null;
+  display_phone?: string | null;
 };
 
 export type ChatMessage = {
@@ -27,6 +29,7 @@ export type ChatMessage = {
   deleted_for_all_at: string | null;
   created_at: string;
   updated_at: string;
+  sender_name?: string | null;
   attachments?: ChatAttachment[];
 };
 
