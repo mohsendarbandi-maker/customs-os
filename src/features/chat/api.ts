@@ -69,3 +69,84 @@ export async function searchChat(query: string, conversationId?: string) {
   const result = await supabase.rpc('chat_search', { p_query: query, p_conversation_id: conversationId ?? null, p_limit: 30 });
   return unwrap(result) as Array<{kind:string;id:string;conversation_id:string;title:string;snippet:string;created_at:string}>;
 }
+
+
+export async function addConversationMember(conversationId: string, userId: string, role = 'member') {
+  const result = await supabase.rpc('chat_add_member', {
+    p_conversation_id: conversationId,
+    p_user_id: userId,
+    p_role: role,
+  });
+  return unwrap(result);
+}
+
+export async function createConversation(input: {
+  type: 'group' | 'company_channel' | 'related';
+  title: string;
+  relatedType?: string | null;
+  relatedId?: string | null;
+}) {
+  const result = await supabase.rpc('chat_create_conversation', {
+    p_type: input.type,
+    p_title: input.title,
+    p_related_type: input.relatedType ?? null,
+    p_related_id: input.relatedId ?? null,
+    p_shared_with_organization_id: null,
+    p_org_connection_id: null,
+    p_direct_user_id: null,
+  });
+  return unwrap(result);
+}
+
+export async function sendFileMessage(
+  conversationId: string,
+  organizationId: string,
+  file: File,
+  messageType: 'file' | 'voice' = 'file',
+): Promise<ChatMessage> {
+  const clientUuid = crypto.randomUUID();
+  const message = unwrap(await supabase.rpc('chat_insert_message', {
+    p_conversation_id: conversationId,
+    p_client_uuid: clientUuid,
+    p_message_type: messageType,
+    p_body: null,
+    p_reply_to_message_id: null,
+    p_forwarded_from_message_id: null,
+    p_thread_root_message_id: null,
+  })) as ChatMessage;
+
+  const objectId = crypto.randomUUID();
+  const storagePath = `quarantine/${organizationId}/${conversationId}/${objectId}`;
+
+  try {
+    const upload = await supabase.storage
+      .from('chat-files')
+      .upload(storagePath, file, {
+        contentType: file.type || 'application/octet-stream',
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (upload.error) throw new Error(upload.error.message);
+
+    const attachment = await supabase.rpc('chat_register_attachment', {
+      p_conversation_id: conversationId,
+      p_message_id: message.id,
+      p_storage_path: storagePath,
+      p_original_name: file.name,
+      p_mime_type: file.type || 'application/octet-stream',
+      p_size_bytes: file.size,
+      p_duration_seconds: null,
+      p_waveform: null,
+      p_thumbnail_path: null,
+    });
+
+    if (attachment.error) throw new Error(attachment.error.message);
+
+    return message;
+  } catch (error) {
+    try { await supabase.storage.from('chat-files').remove([storagePath]); } catch {}
+    try { await deleteForAll(message.id); } catch {}
+    throw error;
+  }
+}
