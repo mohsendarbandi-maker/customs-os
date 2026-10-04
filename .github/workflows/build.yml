@@ -29,3 +29,19 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Smoke test live Worker and custom domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          for base in "https://customs.mohsen-darbandi.workers.dev" "https://darbandicommercial.ir"; do
+            echo "Checking $base/"
+            curl --fail --silent --show-error --location --max-time 30 -o /tmp/index.html "$base/"
+            grep -q '<div id="root"></div>' /tmp/index.html
+            script_src="$(sed -n 's/.*<script[^>]*type="module"[^>]*src="\([^"]*\)".*/\1/p' /tmp/index.html | head -n 1)"
+            test -n "$script_src"
+            case "$script_src" in /*) ;; *) script_src="/$script_src";; esac
+            echo "Checking $base$script_src"
+            curl --fail --silent --show-error --location --max-time 30 -o /tmp/app.js "$base$script_src"
+            test -s /tmp/app.js
+          done
+          echo "Live Worker smoke test passed."
