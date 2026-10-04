@@ -10,9 +10,9 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(() => new URLSearchParams(window.location.search).get('access') === 'closed' ? 'حسابی برای این نشانی تعریف نشده است. کاربر جدید باید توسط مالک سازمان ایجاد شود.' : null);
   
-  const { user, needsOnboarding } = useAuth();
+  const { user, needsOnboarding, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -22,7 +22,7 @@ export const LoginPage: React.FC = () => {
       const from = (location.state as any)?.from?.pathname || '/';
       navigate(needsOnboarding ? '/onboarding' : from, { replace: true });
     }
-  }, [user, needsOnboarding, navigate, location]);
+  }, [user, needsOnboarding, navigate, location, signOut]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,27 +31,13 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      if (isLogin) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInError) throw signInError;
-      } else {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-        });
-        if (signUpError) throw signUpError;
-
-        if (data.session) {
-          navigate('/onboarding', { replace: true });
-        } else {
-          setMessage('ثبت‌نام انجام شد. در صورت فعال بودن تأیید ایمیل، لینک تأیید برای شما ارسال شده است.');
-        }
-      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (signInError) throw signInError;
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please try again.');
+      setError(err.message || 'ورود ناموفق بود. اطلاعات ورود را بررسی کنید.');
     } finally {
       setLoading(false);
     }
@@ -63,7 +49,7 @@ export const LoginPage: React.FC = () => {
         <div className="text-center mb-8 future-auth-head">
           <div className="flex justify-center mb-5"><CustomsLogo size={64} showWordmark /></div>
           <h1 className="text-2xl font-black mb-2">
-            {isLogin ? 'ورود به سیستم' : 'ثبت‌نام در سیستم'}
+            ورود به سیستم
           </h1>
           <p className="text-sm app-muted">
             نرم‌افزار جامع مدیریت ترخیص و لجستیک گمرکی
@@ -104,12 +90,12 @@ export const LoginPage: React.FC = () => {
               type="password"
               required
               disabled={loading}
-              minLength={6}
+              minLength={8}
               className="future-input w-full px-4 py-3 text-left dir-ltr disabled:opacity-60"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              autoComplete={isLogin ? 'current-password' : 'new-password'}
+              autoComplete="current-password"
             />
           </div>
 
