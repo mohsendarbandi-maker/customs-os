@@ -9,6 +9,19 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Customs OS" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      // Select the route-specific PWA manifest before the React app boots.
+      // This keeps Chat and Reminders installs pointed at their own start URL.
+      (() => {
+        const path = window.location.pathname;
+        const manifest =
+          path.startsWith('/chat') ? '/manifest-chat.webmanifest' :
+          path.startsWith('/reminders') ? '/manifest-reminders.webmanifest' :
+          '/manifest.webmanifest';
+        const link = document.querySelector('link[rel="manifest"]');
+        if (link) link.setAttribute('href', manifest);
+      })();
+    </script>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon-180.png" />
     <title>Customs OS | سیستم مدیریت گمرک</title>

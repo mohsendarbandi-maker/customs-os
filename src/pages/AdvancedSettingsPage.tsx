@@ -83,17 +83,19 @@ return <div className="fixed inset-0 z-[140] bg-black/60 flex items-center justi
 
 const UsersPanel:React.FC<{onMessage:(s:string)=>void}>=({onMessage})=>{
 const{profile}=useAuth();const profileOrgId=profile?.organization_id||'';
-const[rows,setRows]=useState<any[]>([]),[search,setSearch]=useState(''),[selected,setSelected]=useState<any>(null),[newMode,setNewMode]=useState(false),[form,setForm]=useState<any>({user_id:'',email:'',password:'',full_name:'',phone:'',role:'client',client_id:'',is_active:true}),[modal,setModal]=useState(false),[busy,setBusy]=useState(false);
+const[rows,setRows]=useState<any[]>([]),[search,setSearch]=useState(''),[selected,setSelected]=useState<any>(null),[newMode,setNewMode]=useState(false),[form,setForm]=useState<any>({user_id:'',email:'',password:'',full_name:'',phone:'',role:'broker',client_id:'',is_active:true}),[modal,setModal]=useState(false),[busy,setBusy]=useState(false);
 const load=async()=>{setBusy(true);try{let q:any=supabase.from('profiles').select('*').eq('organization_id',profileOrgId);const{data,error}=await q.limit(500);if(error)throw error;const s=search.trim().toLowerCase();const filtered=s?(data||[]).filter((r:any)=>Object.values(r||{}).some((v:any)=>String(v??'').toLowerCase().includes(s))):(data||[]);setRows(filtered)}catch(e:any){onMessage(e?.message||'دریافت کاربران ناموفق بود.')}finally{setBusy(false)}};
 useEffect(()=>{void load()},[search]);
 const open=(u:any)=>{setNewMode(false);setSelected(u);setForm({user_id:u.id,email:'',password:'',full_name:u.full_name||'',phone:u.phone||'',role:u.role||'client',client_id:u.client_id||'',is_active:!!u.is_active})};
-const create=()=>{setSelected(null);setNewMode(true);setForm({user_id:'',email:'',password:'',full_name:'',phone:'',role:'client',client_id:'',is_active:true})};
+const create=()=>{setSelected(null);setNewMode(true);setForm({user_id:'',email:'',password:'',full_name:'',phone:'',role:'broker',client_id:'',is_active:true})};
 const save=async(reason:string)=>{
 setBusy(true);try{
 if(newMode){
  if(!form.full_name.trim()||(!form.user_id.trim()&&(!form.email.trim()||!form.password))){onMessage('برای کاربر جدید، ایمیل، رمز عبور، نام کامل و سطح دسترسی الزامی است.');return;}
+ if(form.role==='client'&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(form.client_id.trim())){onMessage('برای نقش صاحب کالا، Client UUID معتبر الزامی است.');return;}
+ if(form.role!=='client'&&form.client_id.trim()){onMessage('برای نقش‌های سازمانی، Client UUID را خالی بگذارید.');return;}
  await invokeOwnerConsole({body:{action:'create',resource:'profiles',user_id:form.user_id.trim()||undefined,email:form.email.trim()||undefined,password:form.password,full_name:form.full_name.trim(),data:form}});
- onMessage('کاربر ساخته شد و پروفایل سازمانی او نیز ثبت شد.');setNewMode(false);setForm({user_id:'',email:'',password:'',full_name:'',phone:'',role:'client',client_id:'',is_active:true});await load();return;
+ onMessage('کاربر ساخته شد و پروفایل سازمانی او نیز ثبت شد.');setNewMode(false);setForm({user_id:'',email:'',password:'',full_name:'',phone:'',role:'broker',client_id:'',is_active:true});await load();return;
 }
 if(!selected?.id)return;
 await invokeOwnerConsole({body:{action:'save',resource:'profiles',id:selected.id,data:form,reason,confirmation:'تأیید نهایی تغییر کاربر'}});

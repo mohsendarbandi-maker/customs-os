@@ -12,6 +12,7 @@ const cors=(origin:string,requestedHeaders:string|null=null,requestedMethod:stri
 const out=(body:unknown,status=200,origin='')=>new Response(JSON.stringify(body),{status,headers:cors(origin)});
 const str=(v:any)=>String(v??'').trim();
 const isUuid=(v:any)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str(v));
+const getSecretKey=()=>{try{const raw=Deno.env.get('SUPABASE_SECRET_KEYS');if(raw){const keys=JSON.parse(raw);if(keys?.default)return String(keys.default)}}catch{}return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||'';};
 
 type Resource={table:string; immutable?:boolean; archive?:boolean; softDelete?:boolean; global?:boolean; searchFields?:string[]};
 const RESOURCES:Record<string,Resource>={
@@ -95,12 +96,17 @@ async function write(ctx:any,body:any){
      const d=body.data||{};
      const email=str(body.email||d.email);
      const password=str(body.password||d.password);
+     const requestedRole=str(d.role);
+     const role=requestedRole||'broker';
+     const clientId=d.client_id;
 
      if(email && password){
+       if(role==='client'&&!isUuid(clientId))throw new Error('برای نقش صاحب کالا، Client UUID معتبر الزامی است.');
+       if(role!=='client'&&clientId)throw new Error('برای نقش‌های سازمانی، Client UUID نباید تعیین شود.');
        if(!/^\\S+@\\S+\\.\\S+$/.test(email))throw new Error('ایمیل کاربر معتبر نیست');
        if(password.length<8)throw new Error('رمز عبور کاربر باید حداقل ۸ کاراکتر باشد');
 
-       const serviceRole=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+       const serviceRole=getSecretKey();
        const serviceUrl=Deno.env.get('SUPABASE_URL');
        if(!serviceRole||!serviceUrl)throw new Error('Supabase server configuration missing');
 
@@ -118,8 +124,8 @@ async function write(ctx:any,body:any){
 
        const profile=await sb.rpc('owner_insert_profile',{
          p_user_id:authUserId,
-         p_role:str(d.role)||'client',
-         p_client_id:isUuid(d.client_id)?d.client_id:null,
+         p_role:role as any,
+         p_client_id:role==='client'?clientId:null,
          p_full_name:str(body.full_name),
          p_phone:str(d.phone)||null,
        });
@@ -133,10 +139,12 @@ async function write(ctx:any,body:any){
      }
 
      if(!isUuid(body.user_id)||!str(body.full_name))throw new Error('ایمیل و رمز عبور برای کاربر جدید الزامی است؛ برای Auth User موجود، User ID را وارد کنید');
+     if(role==='client'&&!isUuid(clientId))throw new Error('برای نقش صاحب کالا، Client UUID معتبر الزامی است.');
+     if(role!=='client'&&clientId)throw new Error('برای نقش‌های سازمانی، Client UUID نباید تعیین شود.');
      const r=await sb.rpc('owner_insert_profile',{
        p_user_id:body.user_id,
-       p_role:str(d.role)||'client',
-       p_client_id:isUuid(d.client_id)?d.client_id:null,
+       p_role:role as any,
+       p_client_id:role==='client'?clientId:null,
        p_full_name:str(body.full_name),
        p_phone:str(d.phone)||null
      });
