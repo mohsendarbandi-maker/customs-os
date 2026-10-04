@@ -48,12 +48,14 @@ export async function listConversations(): Promise<ChatConversation[]> {
     }
   }
 
-  return conversations.map((conversation) => {
-    const person = conversation.type === 'direct' ? partnerMap.get(conversation.conversation_id) : undefined;
-    return person
-      ? { ...conversation, display_name: person.full_name || null, display_phone: person.phone }
-      : conversation;
-  });
+  return conversations
+    .filter((conversation) => conversation.type !== 'direct' || partnerMap.has(conversation.conversation_id))
+    .map((conversation) => {
+      const person = conversation.type === 'direct' ? partnerMap.get(conversation.conversation_id) : undefined;
+      return person
+        ? { ...conversation, display_name: person.full_name || null, display_phone: person.phone }
+        : conversation;
+    });
 }
 
 export async function listMessages(conversationId: string, cursor?: { createdAt: string; id: string }): Promise<ChatMessage[]> {
