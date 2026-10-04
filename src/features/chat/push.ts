@@ -51,7 +51,13 @@ export async function enableChatPush(requestPermission = true) {
     throw new Error(permission === 'denied' ? 'اعلان‌ها برای چت مسدود شده‌اند؛ از تنظیمات مرورگر یا iPhone > Notifications فعالشان کنید.' : 'اجازه اعلان صادر نشد.');
   }
 
-  const registration = await navigator.serviceWorker.ready;
+  // Ensure the app worker is registered and active before touching PushManager.
+  let registration = await navigator.serviceWorker.getRegistration('/');
+  if (!registration) {
+    registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  }
+  await navigator.serviceWorker.ready;
+  if (!registration.active) throw new Error('سرویس اعلان هنوز آماده نشده است. صفحه را یک‌بار تازه‌سازی کنید.');
   const existing = await registration.pushManager.getSubscription();
 
   let subscription = existing;
@@ -86,6 +92,7 @@ export async function enableChatPush(requestPermission = true) {
 export async function hasChatPushSubscription() {
   if (!chatPushSupported()) return false;
   const registration = await navigator.serviceWorker.ready;
+  if (!registration.active) return false;
   return Boolean(await registration.pushManager.getSubscription());
 }
 
