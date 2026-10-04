@@ -9,6 +9,10 @@ permissions:
   contents: read
 
 jobs:
+
+concurrency:
+  group: customs-os-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
   build:
     runs-on: ubuntu-latest
     steps:
