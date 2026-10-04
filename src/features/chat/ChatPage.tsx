@@ -1,7 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
 import{ArrowRight,Check,CheckCheck,Hash,MessageCircle,Mic,MicOff,MoreVertical,Paperclip,Plus,ScanText,Search,Send,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
-import{normalizeFaText,formatJalaliDateTime}from'../../lib/jalali';
+import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
 import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,listConversations,listMessages,listOrgConnections,markRead,searchChat,sendFileMessage,sendMessage}from'./api';
 import { recognize } from 'tesseract.js';
