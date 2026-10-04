@@ -9,6 +9,7 @@ const shell = fs.readFileSync(path.join(root, 'src/components/AppShell.tsx'), 'u
 const shipping = fs.readFileSync(path.join(root, 'src/pages/ShippingManagementPage.tsx'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/build.yml'), 'utf8');
 const reminderMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20261002010000_reminders_full_model.sql'), 'utf8');
+const readMigration = (name:string) => fs.readFileSync(path.join(root, 'supabase/migrations', name), 'utf8');
 
 describe('Customs OS security hardening', () => {
   it('scopes shipment documents and extraction to client-owned shipments', () => {
