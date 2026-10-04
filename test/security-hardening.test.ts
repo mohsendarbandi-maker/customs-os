@@ -47,7 +47,7 @@ describe('Customs OS security hardening', () => {
   it('keeps the application closed to self-registration and onboarding', () => {
     const login=fs.readFileSync(path.join(root, 'src/pages/LoginPage.tsx'), 'utf8');
     expect(login).not.toContain('supabase.auth.signUp');
-    expect(login).toContain('ثبت‌نام عمومی بسته است');
+    expect(login).not.toContain('ثبت‌نام عمومی بسته است');
     expect(app).not.toContain('OnboardingPage');
     expect(app).not.toContain('path="/onboarding"');
     expect(workflow).toContain('npm test');

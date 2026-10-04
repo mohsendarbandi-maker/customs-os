@@ -1,5 +1,5 @@
 export interface Env {
-  ASSETS: Fetcher;
+  ASSETS: { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
   SUPABASE_URL: string;
 }
 
