@@ -44,10 +44,11 @@ jobs:
             curl --fail --silent --show-error --location --max-time 30 -o /tmp/app.js "$base$script_src"
             test -s /tmp/app.js
 
-            crm_src="$(grep -oE 'CRMPage-[A-Za-z0-9_-]+\\.js' /tmp/app.js | head -n 1)"
+            crm_src="$(find dist/assets -maxdepth 1 -type f -name 'CRMPage-*.js' -print -quit)"
             test -n "$crm_src"
-            echo "Checking $base/assets/$crm_src"
-            curl --fail --silent --show-error --location --max-time 30 -o /tmp/crm.js "$base/assets/$crm_src"
+            crm_file="$(basename "$crm_src")"
+            echo "Checking $base/assets/$crm_file"
+            curl --fail --silent --show-error --location --max-time 30 -o /tmp/crm.js "$base/assets/$crm_file"
             test -s /tmp/crm.js
           done
           echo "Live Worker smoke test passed."
