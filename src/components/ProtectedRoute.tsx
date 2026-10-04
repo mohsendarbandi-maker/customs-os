@@ -14,10 +14,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   // Gate 1: App is initializing or fetching profile
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dir-rtl font-sans">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] dir-rtl font-sans">
         <div className="flex flex-col items-center">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-gray-600 font-medium text-sm">Authenticating...</p>
+          <p className="text-gray-600 font-medium text-sm">در حال بررسی نشست...</p>
         </div>
       </div>
     );
@@ -33,20 +33,20 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dir-rtl font-sans p-4">
         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 text-center max-w-sm w-full">
-          <h2 className="text-red-600 font-bold text-lg mb-2">Connection Error</h2>
+          <h2 className="text-red-600 font-bold text-lg mb-2">خطای اتصال</h2>
           <p className="text-gray-600 text-sm mb-6">{error}</p>
           <div className="flex flex-col gap-3">
             <button
               onClick={() => refreshProfile()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg font-semibold transition"
             >
-              Try Again
+              تلاش دوباره
             </button>
             <button
               onClick={() => signOut()}
               className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm py-2.5 rounded-lg transition"
             >
-              Sign Out
+              خروج
             </button>
           </div>
         </div>
@@ -67,8 +67,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
           <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">
             ⚠️
           </div>
-          <h2 className="text-gray-900 font-bold text-lg mb-2">Account Suspended</h2>
-          <p className="text-gray-500 text-sm mb-6">Your access to the system has been suspended. Please contact your administrator.</p>
+          <h2 className="text-gray-900 font-bold text-lg mb-2">حساب غیرفعال است</h2>
+          <p className="text-gray-500 text-sm mb-6">دسترسی این حساب توسط مدیر غیرفعال شده است.</p>
           <button
             onClick={() => signOut()}
             className="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2.5 rounded-lg font-semibold transition"
@@ -86,13 +86,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dir-rtl font-sans p-4">
           <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 text-center max-w-sm w-full">
-            <h2 className="text-gray-900 font-bold text-lg mb-2">Access Denied</h2>
-            <p className="text-gray-500 text-sm mb-6">You do not have the required permissions to view this module.</p>
+            <h2 className="text-gray-900 font-bold text-lg mb-2">دسترسی غیرمجاز</h2>
+            <p className="text-gray-500 text-sm mb-6">مجوز لازم برای این بخش را ندارید.</p>
             <button
               onClick={() => window.history.back()}
               className="w-full bg-gray-900 hover:bg-gray-800 text-white text-sm py-2.5 rounded-lg font-semibold transition"
             >
-              Go Back
+              بازگشت
             </button>
           </div>
         </div>
