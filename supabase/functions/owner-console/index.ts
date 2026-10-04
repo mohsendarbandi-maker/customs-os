@@ -245,7 +245,7 @@ async function updateOrg(sb:any,org:string,d:any){
 
 Deno.serve(async(req)=>{
  const origin=req.headers.get('Origin')||'';
- if(req.method==='OPTIONS')return new Response('ok',{status:204,headers:cors(origin,req.headers.get('Access-Control-Request-Headers'),req.headers.get('Access-Control-Request-Method'))});
+ if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors(origin,req.headers.get('Access-Control-Request-Headers'),req.headers.get('Access-Control-Request-Method'))});
  if(req.method!=='POST')return out({error:'Method not allowed'},405,origin);
  try{
   const ctx=await authContext(req);
