@@ -43,6 +43,26 @@ describe('Customs OS security hardening', () => {
     expect(workflow).toContain('npm run typecheck');
   });
 
+  it('keeps the application closed to self-registration and onboarding', () => {
+    const login=fs.readFileSync(path.join(root, 'src/pages/LoginPage.tsx'), 'utf8');
+    expect(login).not.toContain('supabase.auth.signUp');
+    expect(login).toContain('ثبت‌نام عمومی بسته است');
+    expect(app).not.toContain('OnboardingPage');
+    expect(app).not.toContain('path="/onboarding"');
+    expect(workflow).toContain('npm test');
+  });
+
+  it('preserves partial declaration progression instead of hard-blocking incomplete checklists', () => {
+    const checklist=fs.readFileSync(path.join(root, 'src/pages/DeclarationOperationsChecklistPage.tsx'), 'utf8');
+    expect(checklist).toContain('advance_declaration_to_exit_stage');
+    expect(checklist).toContain('remaining');
+    expect(checklist).toContain('ورود به مرحله ۵ با ثبت هشدار موارد ناقص');
+    const partial=readMigration('20261004030000_declaration_partial_stage_transition.sql');
+    expect(partial).toContain('DECLARATION_PARTIAL_STAGE_ADVANCE');
+    expect(partial).toContain('partial_allowed');
+    expect(partial).toContain('موارد باقی‌مانده قابل تکمیل در ادامه فرآیند هستند');
+  });
+
   it('keeps reminders under role-aware RLS', () => {
     expect(reminderMigration).toContain("public.user_role()<>'client'");
     expect(reminderMigration).toContain('created_by=auth.uid()');
