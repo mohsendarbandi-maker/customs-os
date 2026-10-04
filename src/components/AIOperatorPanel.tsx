@@ -55,7 +55,7 @@ export const AIOperatorPanel:React.FC<{pageContext?:string}>=({pageContext=''})=
  const[open,setOpen]=useState(false),[input,setInput]=useState(''),[busy,setBusy]=useState(false),[messages,setMessages]=useState<Message[]>([]),[history,setHistory]=useState<any[]>([]),[showHistory,setShowHistory]=useState(false),[pending,setPending]=useState<Pending>(),[finalPhrase,setFinalPhrase]=useState(''),[error,setError]=useState('');
 
  const call=async(body:any)=>{
-  const{data,error}=await supabase.functions.invoke('ai-operator',{body});
+  const{data,error}=await invokeEdgeFunction('ai-operator',{body});
   if(error){let detail=error.message;try{const c=await(error as any).context?.json?.();detail=c?.error||detail}catch{}throw new Error(detail||'AI Operator پاسخ نداد.');}
   return data;
  };

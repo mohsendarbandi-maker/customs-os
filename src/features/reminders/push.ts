@@ -1,4 +1,5 @@
 import {supabase} from '../../lib/supabase';
+import {invokeEdgeFunction} from '../../lib/edgeFunction';
 import {isPwaInstalled} from './PwaLifecycle';
 
 const b64=(s:string)=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4)),c=>c.charCodeAt(0));
@@ -10,7 +11,7 @@ export async function vapidPublicKey(){
  if(error||typeof data!=='string'||!data)return null;
  return data;
 }
-async function bootstrap(){const {data,error}=await supabase.functions.invoke('send-reminders',{body:{mode:'bootstrap'}});if(error)throw error;return data as {publicKey:string};}
+async function bootstrap(){const {data,error}=await invokeEdgeFunction<{publicKey:string}>('send-reminders',{body:{mode:'bootstrap'}});if(error)throw error;return data as {publicKey:string};}
 export async function enablePush(){
  if(!(await pushSupport()))throw new Error('اعلان در این دستگاه پشتیبانی نمی‌شود؛ در آیفون باید برنامه را به صفحه اصلی اضافه کنید.');
  const permission=await Notification.requestPermission(); if(permission!=='granted')return {status:permission as NotificationPermission};
@@ -30,7 +31,7 @@ export async function disablePush(){
  const {error}=await supabase.from('push_subscriptions').delete().eq('endpoint',endpoint);if(error)throw error; await setNotificationPreferences({push_enabled:false});
 }
 export async function testPush(){
- const {error}=await supabase.functions.invoke('send-reminders',{body:{mode:'test'}});if(error)throw error;
+ const {error}=await invokeEdgeFunction('send-reminders',{body:{mode:'test'}});if(error)throw error;
 }
 export async function listPushDevices(){
  const {data,error}=await supabase.from('push_subscriptions').select('id,endpoint,user_agent,platform,created_at,last_seen_at,last_success_at,is_active,failure_count').order('last_seen_at',{ascending:false});
