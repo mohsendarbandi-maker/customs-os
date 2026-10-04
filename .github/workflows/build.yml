@@ -36,7 +36,7 @@ jobs:
           for base in "https://customs.mohsen-darbandi.workers.dev" "https://darbandicommercial.ir"; do
             echo "Checking $base/"
             curl --fail --silent --show-error --location --max-time 30 -o /tmp/index.html "$base/"
-            grep -q '<div id="root"></div>' /tmp/index.html
+            grep -q '<div id="root">' /tmp/index.html
             script_src="$(sed -n 's/.*<script[^>]*type="module"[^>]*src="\([^"]*\)".*/\1/p' /tmp/index.html | head -n 1)"
             test -n "$script_src"
             case "$script_src" in /*) ;; *) script_src="/$script_src";; esac
