@@ -103,6 +103,56 @@ export async function searchChat(query: string, conversationId?: string) {
 }
 
 
+export type OrgConnection = {
+  id:string;
+  source_organization_id:string;
+  target_organization_id:string;
+  relationship_type:string;
+  status:string;
+  requested_by:string;
+  accepted_by:string|null;
+  created_at:string;
+  updated_at:string;
+  source_name:string;
+  target_name:string;
+};
+
+export async function listOrgConnections():Promise<OrgConnection[]>{
+  const result=await supabase.rpc('chat_list_org_connections');
+  return unwrap(result) as OrgConnection[];
+}
+
+export async function createOrgConnection(targetOrganizationId:string,relationshipType='business_partner'){
+  const {data:{user}}=await supabase.auth.getUser();
+  if(!user)throw new Error('ابتدا وارد سیستم شوید.');
+  const {data:profile,error:profileError}=await supabase.from('profiles').select('organization_id').eq('id',user.id).single();
+  if(profileError)throw profileError;
+  const result=await supabase.from('org_connections').insert({
+    source_organization_id:profile.organization_id,
+    target_organization_id:targetOrganizationId,
+    relationship_type:relationshipType,
+    status:'pending',
+    requested_by:user.id,
+  }).select('*').single();
+  if(result.error)throw new Error(result.error.message);
+  return result.data;
+}
+
+export async function acceptOrgConnection(connectionId:string){
+  const result=await supabase.from('org_connections').update({
+    status:'accepted',
+    accepted_by:(await supabase.auth.getUser()).data.user?.id ?? null,
+  }).eq('id',connectionId).eq('status','pending').select('*').single();
+  if(result.error)throw new Error(result.error.message);
+  return result.data;
+}
+
+export async function cancelOrgConnection(connectionId:string){
+  const result=await supabase.from('org_connections').update({status:'cancelled'}).eq('id',connectionId).select('*').single();
+  if(result.error)throw new Error(result.error.message);
+  return result.data;
+}
+
 export async function addConversationMember(conversationId: string, userId: string, role = 'member') {
   const result = await supabase.rpc('chat_add_member', {
     p_conversation_id: conversationId,
