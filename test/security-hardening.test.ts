@@ -44,7 +44,7 @@ describe('Customs OS security hardening', () => {
     expect(workflow).toContain('npm run typecheck');
   });
 
-  it('keeps the application closed to self-registration and onboarding', () => {
+  it('keeps AI Operator command writes tenant-scoped to the current user', () => {\n    const policies = fs.readFileSync(path.join(root, 'supabase/migrations/20261004090000_fix_ai_operator_commands_rls.sql'), 'utf8');\n    expect(policies).toContain('ai_operator_commands_insert');\n    expect(policies).toContain('organization_id = (select public.user_org_id())');\n    expect(policies).toContain('user_id = (select auth.uid())');\n    expect(policies).toContain('ai_operator_commands_update');\n  });\n\n  it('keeps the application closed to self-registration and onboarding', () => {
     const login=fs.readFileSync(path.join(root, 'src/pages/LoginPage.tsx'), 'utf8');
     expect(login).not.toContain('supabase.auth.signUp');
     expect(login).not.toContain('ثبت‌نام عمومی بسته است');
