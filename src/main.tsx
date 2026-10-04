@@ -7,6 +7,51 @@ import { startOfflineQueue } from './lib/offlineQueue';
 
 type BoundaryState = { hasError: boolean; message: string };
 
+const CHUNK_LOAD_PATTERN =
+  /dynamically imported module|failed to fetch dynamically imported module|importing a module script failed|loading chunk|chunkloaderror/i;
+
+const recoverFromStaleApp = () => {
+  if (typeof window === 'undefined') return;
+
+  let shouldRecover = true;
+  try {
+    const key = 'customs-os-chunk-recovery-at';
+    const previous = Number(sessionStorage.getItem(key) || 0);
+    const now = Date.now();
+    if (previous && now - previous < 120_000) {
+      shouldRecover = false;
+    } else {
+      sessionStorage.setItem(key, String(now));
+    }
+  } catch {
+    // Continue with the recovery even when sessionStorage is unavailable.
+  }
+
+  if (!shouldRecover) return;
+
+  void (async () => {
+    try {
+      const registrations = await navigator.serviceWorker?.getRegistrations?.();
+      await Promise.all((registrations || []).map((registration) => registration.unregister()));
+    } catch (error) {
+      console.warn('[Customs OS] Service worker cleanup failed:', error);
+    }
+
+    try {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((name) => caches.delete(name)));
+    } catch (error) {
+      console.warn('[Customs OS] Cache cleanup failed:', error);
+    }
+
+    try {
+      window.location.reload();
+    } catch {
+      window.location.assign(window.location.href);
+    }
+  })();
+};
+
 class AppErrorBoundary extends React.Component<React.PropsWithChildren, BoundaryState> {
   state: BoundaryState = { hasError: false, message: '' };
 
@@ -19,6 +64,11 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, Boundary
 
   componentDidCatch(error: unknown, info: React.ErrorInfo) {
     console.error('[Customs OS] Unhandled render error:', error, info);
+
+    const message = error instanceof Error ? error.message : String(error);
+    if (CHUNK_LOAD_PATTERN.test(message)) {
+      recoverFromStaleApp();
+    }
   }
 
   render() {
@@ -51,7 +101,7 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, Boundary
             سامانه با خطای غیرمنتظره متوقف شد
           </div>
           <div style={{ color: '#64748b', fontSize: 13, lineHeight: 1.9 }}>
-            صفحه را یک‌بار تازه‌سازی کنید. در صورت تکرار، نسخه فعلی برنامه یا داده‌های ذخیره‌شده مرورگر نیاز به بررسی دارد.
+            در حال بررسی و بازیابی نسخه جدید برنامه هستیم.
           </div>
           {this.state.message && (
             <div style={{ marginTop: 14, color: '#b91c1c', fontSize: 11, direction: 'ltr', wordBreak: 'break-word' }}>
