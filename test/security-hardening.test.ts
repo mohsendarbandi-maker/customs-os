@@ -63,6 +63,10 @@ describe('Customs OS security hardening', () => {
     expect(partial).toContain("workflow_stage=6");
     expect(partial).toContain('partial_allowed');
     expect(partial).toContain('موارد باقی‌مانده مرحله عملیات گمرکی');
+
+    const late=readMigration('20261004080000_preserve_exit_stage_during_late_checklist_completion.sql');
+    expect(late).toContain('when v_current_stage=6 then 6');
+    expect(late).toContain('else 5');
   });
 
   it('keeps reminders under role-aware RLS', () => {
