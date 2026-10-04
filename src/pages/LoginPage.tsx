@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import { CustomsLogo } from '../components/CustomsLogo';
 
 export const LoginPage: React.FC = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,10 +17,13 @@ export const LoginPage: React.FC = () => {
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (user) {
-      const from = (location.state as any)?.from?.pathname || '/';
-      navigate(needsOnboarding ? '/onboarding' : from, { replace: true });
+    if (!user) return;
+    if (needsOnboarding) {
+      void signOut();
+      return;
     }
+    const from = (location.state as any)?.from?.pathname || '/';
+    navigate(from, { replace: true });
   }, [user, needsOnboarding, navigate, location, signOut]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -107,25 +109,14 @@ export const LoginPage: React.FC = () => {
             {loading ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
-              isLogin ? 'ورود' : 'ثبت‌نام'
+              'ورود'
             )}
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <button
-            type="button"
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError(null);
-              setMessage(null);
-            }}
-            disabled={loading}
-            className="future-switch text-sm font-bold disabled:opacity-50"
-          >
-            {isLogin ? 'حساب کاربری ندارید؟ ثبت‌نام کنید' : 'از قبل حساب دارید؟ وارد شوید'}
-          </button>
-        </div>
+        <div className="mt-6 rounded-xl border app-border bg-[var(--surface-2)] p-3 text-center text-xs app-muted">
+          ثبت‌نام عمومی بسته است. حساب‌ها فقط توسط مالک سازمان و از بخش مدیریت کاربران ایجاد می‌شوند.
+        </div>  </div>
       </div>
     </div>
   );
