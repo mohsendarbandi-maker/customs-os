@@ -4,7 +4,7 @@
   "short_name": "چت سازمانی",
   "description": "چت سازمانی Customs OS",
   "start_url": "/chat",
-  "scope": "/",
+  "scope": "/chat",
   "display": "standalone",
   "dir": "rtl",
   "lang": "fa",
@@ -19,6 +19,6 @@
 ],
   "shortcuts": [
     {"name":"چت سازمانی","short_name":"چت","url":"/chat","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]},
-    {"name":"یادآورها","short_name":"یادآورها","url":"/reminders","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]}
+
   ]
 }
