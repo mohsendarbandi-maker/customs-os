@@ -58,10 +58,11 @@ describe('Customs OS security hardening', () => {
     expect(checklist).toContain('advance_declaration_to_exit_stage');
     expect(checklist).toContain('remaining');
     expect(checklist).toContain('ورود به مرحله ۵ با ثبت هشدار موارد ناقص');
-    const partial=readMigration('20261004030000_declaration_partial_stage_transition.sql');
+    const partial=readMigration('20261004070000_fix_partial_stage_transition_to_exit.sql');
     expect(partial).toContain('DECLARATION_PARTIAL_STAGE_ADVANCE');
+    expect(partial).toContain("workflow_stage=6");
     expect(partial).toContain('partial_allowed');
-    expect(partial).toContain('موارد باقی‌مانده قابل تکمیل در ادامه فرآیند هستند');
+    expect(partial).toContain('موارد باقی‌مانده مرحله عملیات گمرکی');
   });
 
   it('keeps reminders under role-aware RLS', () => {
