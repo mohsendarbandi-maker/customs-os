@@ -44,11 +44,6 @@ create trigger trg_chat_members_audit
 after insert or update or delete on public.chat_conversation_members
 for each row execute function public.record_audit_event();
 
-drop trigger if exists trg_chat_members_guest on public.chat_conversation_members;
-create trigger trg_chat_members_guest
-before insert or update or delete on public.chat_conversation_members
-for each row execute function public.block_audit_guest_writes();
-
 drop policy if exists chat_members_insert on public.chat_conversation_members;
 create policy chat_members_insert on public.chat_conversation_members
 for insert to authenticated with check (false);
