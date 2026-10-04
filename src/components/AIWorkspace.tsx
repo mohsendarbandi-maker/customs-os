@@ -138,33 +138,20 @@ const stopVoiceRecorder=()=>{
 };
 
 const transcribeVoice=async(blob:Blob)=>{
- const {data:{user}}=await supabase.auth.getUser();
- if(!user)throw new Error('کاربر وارد نشده است.');
- const {data:profile,error:pe}=await supabase.from('profiles').select('organization_id').eq('id',user.id).maybeSingle();
- if(pe||!profile?.organization_id)throw new Error(pe?.message||'سازمان کاربر مشخص نیست.');
- const ext=(blob.type||'audio/mp4').includes('webm')?'webm':'mp4';
- void ext;
- const path=`${profile.organization_id}/ai-voice/${makeClientId()}.${ext}`;
- const {error:ue}=await supabase.storage.from('customs_documents').upload(path,blob,{contentType:blob.type||'audio/mp4',cacheControl:'60',upsert:false});
- if(ue)throw new Error(`آپلود صدای ضبط‌شده ناموفق بود: ${ue.message}`);
- try{
-  const audioBase64=await blobToBase64(blob);
-  const {data,error}=await supabase.functions.invoke('ai-assistant',{body:{
-    query:'این فایل صوتی را به متن دقیق فارسی تبدیل کن. فقط همان کلمات گفته‌شده را برگردان.',
-    document_data:audioBase64,
-    document_mime_type:blob.type||'audio/mp4',
-    voice_transcription:true,
-    page_context:pageContext
-  }});
-  if(error)throw error;
-  const text=String(data?.transcript||'').trim();
-  if(!text)throw new Error('متن از صدا دریافت نشد.');
-  setInput(text);
-  await ask(text);
- }catch(error){
-  try{await supabase.storage.from('customs_documents').remove([path]);}catch{}
-  throw error;
- }
+ if(!blob.size)throw new Error('صدای خالی دریافت شد.');
+ const audioBase64=await blobToBase64(blob);
+ const {data,error}=await supabase.functions.invoke('ai-assistant',{body:{
+   query:'این فایل صوتی را به متن دقیق فارسی تبدیل کن. فقط همان کلمات گفته‌شده را برگردان؛ خلاصه یا حدس نزن.',
+   document_data:audioBase64,
+   document_mime_type:blob.type||'audio/mp4',
+   voice_transcription:true,
+   page_context:pageContext
+ }});
+ if(error)throw error;
+ const text=String(data?.answer||data?.transcript||'').trim();
+ if(!text)throw new Error('متن از صدا دریافت نشد.');
+ setInput(text);
+ await ask(text);
 };
 const startVoice=async()=>{
  if(listening||mediaRecorderRef.current){stopVoiceRecorder();return;}
