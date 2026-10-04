@@ -19,7 +19,39 @@ export async function listMessages(conversationId: string, cursor?: { createdAt:
     p_before_id: cursor?.id ?? null,
     p_limit: 50,
   });
-  return unwrap(result) as ChatMessage[];
+  const messages = unwrap(result) as ChatMessage[];
+  if (!messages.length) return messages;
+
+  const ids = messages.map((m) => m.id);
+  const attachments = await supabase
+    .from('chat_attachments')
+    .select('id,message_id,storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform,security_status,security_checked_at,security_error')
+    .in('message_id', ids)
+    .is('deleted_at', null);
+
+  if (attachments.error) throw new Error(attachments.error.message);
+
+  const enriched = await Promise.all(
+    (attachments.data ?? []).map(async (attachment) => {
+      if (attachment.security_status !== 'clean' || !attachment.storage_path || attachment.storage_path.startsWith('quarantine/')) {
+        return { ...attachment, url: null };
+      }
+      const signed = await supabase.storage.from('chat-files').createSignedUrl(attachment.storage_path, 3600);
+      return { ...attachment, url: signed.data?.signedUrl ?? null };
+    }),
+  );
+
+  const byMessage = new Map<string, typeof enriched>();
+  for (const attachment of enriched) {
+    const list = byMessage.get(attachment.message_id) ?? [];
+    list.push(attachment);
+    byMessage.set(attachment.message_id, list);
+  }
+
+  return messages.map((message) => ({
+    ...message,
+    attachments: byMessage.get(message.id) ?? [],
+  }));
 }
 
 export async function sendMessage(conversationId: string, clientUuid: string, body: string, replyToMessageId?: string | null): Promise<ChatMessage | { queued: true; queueId: string }> {
