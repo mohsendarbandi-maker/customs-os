@@ -18,9 +18,46 @@ port = 54323
 
 [auth]
 enabled = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = false
 
 [storage]
 enabled = true
 
 [functions.ai-assistant]
+verify_jwt = true
+
+[functions.ai-core]
+verify_jwt = true
+
+[functions.knowledge-ai]
+verify_jwt = true
+
+[functions.ai-voice]
+verify_jwt = true
+
+[functions.ai-operator]
+verify_jwt = true
+
+[functions.owner-console]
 verify_jwt = false
+
+[functions.send-reminders]
+verify_jwt = false
+
+[functions.send-chat-push]
+verify_jwt = false
+
+[functions.scan-chat-file]
+verify_jwt = false
+
+[functions.sync-vessel-ais]
+verify_jwt = true
+
+[functions.sync-vessel-ais-v2]
+verify_jwt = true
+
+[functions.vessel-multi-source]
+verify_jwt = true
