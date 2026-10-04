@@ -1,8 +1,9 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
-import{ArrowRight,Check,CheckCheck,Hash,MessageCircle,Mic,MicOff,MoreVertical,Paperclip,Plus,ScanText,Search,Send,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
+import{ArrowRight,Bell,BellOff,Check,CheckCheck,Hash,MessageCircle,Mic,MicOff,MoreVertical,Paperclip,Plus,ScanText,Search,Send,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
+import{enableChatPush,hasChatPushSubscription}from'./push';
 import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,listConversations,listMessages,listOrgConnections,markRead,searchChat,sendFileMessage,sendMessage}from'./api';
 import { recognize } from 'tesseract.js';
 import{supabase}from'../../lib/supabase';
@@ -115,6 +116,16 @@ export const ChatPage:React.FC=()=>{
  },[selectedId,user?.id,load,refresh,schedulePoll]);
 
  useEffect(()=>{messageIdsRef.current=new Set(messages.map(m=>m.id));bottom.current?.scrollIntoView({behavior:'smooth'})},[messages,selectedId]);
+ useEffect(()=>{let alive=true;void hasChatPushSubscription().then(value=>{if(alive)setPushReady(value)}).catch(()=>{});return()=>{alive=false}},[]);
+
+ const enablePush=async()=>{
+  if(pushBusy)return;
+  setPushBusy(true);
+  try{await enableChatPush(true);setPushReady(true);setError('اعلان‌های چت برای این دستگاه فعال شد.');}
+  catch(e){setError(err(e))}
+  finally{setPushBusy(false)}
+ };
+
 
  const broadcastTyping=useCallback((typing:boolean)=>{
   if(!channel.current||!user?.id)return;
@@ -156,7 +167,7 @@ export const ChatPage:React.FC=()=>{
   return people.filter(person=>person.id!==user?.id&&!q||person.id!==user?.id&&(normalizeFaText(person.full_name).toLowerCase().includes(q)||(person.phone??'').includes(q)));
  },[people,personQuery,user?.id]);
 
- return <div dir="rtl" className="w-full h-[calc(100dvh-130px)] min-h-[560px] flex gap-0 md:gap-3">
+ return <div dir="rtl" className="w-full h-dvh min-h-[560px] flex gap-0 md:gap-3 bg-[var(--surface)]">
   <section className={(selectedId?"hidden md:flex":"flex")+" w-full md:w-[360px] shrink-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
    <header className="h-16 shrink-0 px-3 border-b app-border flex items-center gap-2">
     <div className="h-10 w-10 rounded-full bg-[var(--primary)] text-white flex items-center justify-center"><MessageCircle size={19}/></div>
@@ -194,6 +205,7 @@ export const ChatPage:React.FC=()=>{
       <div className="text-[11px] app-muted truncate">{selected.type==='direct'?(typingUsers.length?'در حال نوشتن…':selected.display_phone||'گفتگوی مستقیم'):(typingUsers.length?'در حال نوشتن…':realtimeState==='subscribed'?'متصل':'در حال همگام‌سازی')}</div>
      </div>
      {selected&&(selected.type==="group"||selected.type==="company_channel")&&<button className="icon-btn" title="افزودن عضو" onClick={()=>void openPeople("member")}><UserPlus size={16}/></button>}
+     <button className="icon-btn" title={pushReady?"اعلان‌های پیام فعال است":"فعال‌سازی اعلان پیام"} onClick={()=>void enablePush()} disabled={pushBusy}>{pushReady?<Bell size={17}/>:<BellOff size={17}/>}</button>
      {online&&realtimeState==="subscribed"?<Wifi size={16}/>:<WifiOff size={16}/>}
     </header>
 
