@@ -1,0 +1,36 @@
+name: verify-build
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Production build (attempt 3)
+        run: npm run build
+
+      - name: Assert AI Operator is statically wired
+        run: |
+          ! grep -F "React.lazy" src/features/chat/ChatPage.tsx
+          ! grep -F "AIOperatorPanel as ChatAIOperatorPanel" src/features/chat/ChatPage.tsx
+          grep -F "CustomsAIOperatorPanel as ChatAIOperatorPanel" src/features/chat/ChatPage.tsx
+          grep -F "export const CustomsAIOperatorPanel" src/components/AIOperatorPanel.tsx

@@ -48,7 +48,7 @@ const resultSummary=(v:any)=>{
 };
 const safeFileName=(name:string)=>name.replace(/[^\w.\-\u0600-\u06ff]+/g,'_').slice(0,180);
 
-export const AIOperatorPanel:React.FC<{pageContext?:string}>=({pageContext=''})=>{
+export const CustomsAIOperatorPanel:React.FC<{pageContext?:string}>=({pageContext=''})=>{
  const{profile}=useAuth();
  const[file,setFile]=useState<File>();
  const[fileInputRef]=useState(()=>React.createRef<HTMLInputElement>());
