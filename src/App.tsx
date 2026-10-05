@@ -28,8 +28,8 @@ const lazyPage=<T extends React.ComponentType<any>>(loader:()=>Promise<{default:
   throw error;
  }
 });
-const LoginPage=lazyPage(()=>import('./pages/LoginPage').then(m=>({default:m.LoginPage})));
-const DesktopHomePage=lazyPage(()=>import('./pages/DesktopHomePage').then(m=>({default:m.DesktopHomePage})));
+// Critical boot routes are statically imported so a missing lazy chunk can never white-screen login/home.
+ 
 const ClientRegistryPage=lazyPage(()=>import('./pages/ClientRegistryPage').then(m=>({default:m.ClientRegistryPage})));
 const ClientDocumentManagerPage=lazyPage(()=>import('./pages/ClientDocumentManagerPage').then(m=>({default:m.ClientDocumentManagerPage})));
 const VesselSearchPage=lazyPage(()=>import('./pages/VesselSearchPage').then(m=>({default:m.VesselSearchPage})));
