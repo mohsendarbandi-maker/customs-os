@@ -53,7 +53,7 @@ export async function listConversations(): Promise<ChatConversation[]> {
     .map((conversation) => {
       const person = conversation.type === 'direct' ? partnerMap.get(conversation.conversation_id) : undefined;
       return person
-        ? { ...conversation, display_name: person.full_name || null, display_phone: person.phone }
+        ? { ...conversation, display_name: person.full_name || null, display_phone: person.phone, display_user_id: members.data?.find((item) => item.conversation_id === conversation.conversation_id)?.user_id ?? null }
         : conversation;
     });
 }
