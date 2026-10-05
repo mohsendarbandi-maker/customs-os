@@ -56,3 +56,44 @@ jobs:
             if grep -qi '<!doctype html' /tmp/crm.js; then echo "CRM module returned HTML instead of JavaScript"; exit 1; fi
           done
           echo "Live Worker smoke test passed."
+
+      - name: Browser runtime smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes playwright@1.55.0 install chromium
+          cat > /tmp/customs-os-smoke.spec.mjs <<'EOF'
+          import { test, expect } from 'playwright/test';
+
+          for (const baseURL of [
+            'https://customs.mohsen-darbandi.workers.dev',
+            'https://darbandicommercial.ir',
+          ]) {
+            test(`runtime boot: ${baseURL}`, async ({ page }) => {
+              const errors = [];
+              page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+              page.on('console', (message) => {
+                if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+              });
+              page.on('requestfailed', (request) => {
+                const url = request.url();
+                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                  errors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+
+              await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+              await expect(page.locator('#root')).toBeAttached();
+              await expect.poll(
+                async () => (await page.locator('#root').innerText()).trim(),
+                { timeout: 15000, message: 'React did not render visible content into #root' },
+              ).not.toBe('');
+
+              if (errors.length) {
+                throw new Error(errors.join('\\n'));
+              }
+            });
+          }
+          EOF
+          npx --yes playwright@1.55.0 test /tmp/customs-os-smoke.spec.mjs --reporter=line
