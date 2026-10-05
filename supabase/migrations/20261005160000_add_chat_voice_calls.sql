@@ -58,6 +58,7 @@ with check (caller_id = (select auth.uid()) or callee_id = (select auth.uid()));
 create or replace function public.protect_chat_voice_call_identity()
 returns trigger
 language plpgsql
+set search_path = public, pg_catalog, pg_temp
 as $function$
 begin
   if new.caller_id is distinct from old.caller_id
@@ -93,10 +94,15 @@ set search_path = public, pg_catalog, pg_temp
 language plpgsql
 as $function$
 declare
-  p jsonb := jsonb_build_object(
+  v_caller_name text;
+  p jsonb;
+begin
+  select p.full_name into v_caller_name from public.profiles p where p.id = new.caller_id;
+  p := jsonb_build_object(
     'call_id', new.id,
     'organization_id', new.organization_id,
     'conversation_id', new.conversation_id,
+    'caller_name', coalesce(v_caller_name, 'همکار'),
     'caller_id', new.caller_id,
     'callee_id', new.callee_id,
     'status', new.status,
