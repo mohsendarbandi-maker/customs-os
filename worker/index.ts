@@ -103,6 +103,7 @@ export default {
     const isManifestRequest =
       url.pathname === '/manifest.webmanifest' ||
       url.pathname === '/manifest-chat.webmanifest' ||
+      url.pathname === '/chat-manifest.webmanifest' ||
       url.pathname === '/manifest-reminders.webmanifest';
 
     const isStaticAsset =
