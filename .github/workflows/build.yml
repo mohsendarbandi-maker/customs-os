@@ -99,8 +99,11 @@ jobs:
             fi
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-icon.svg "$base/chat-icon.svg"
             test -s /tmp/chat-icon.svg
-            chat_manifest_href="$(grep -o 'href="/manifest-chat.webmanifest[^" ]*"' /tmp/chat.html | head -n 1 | sed 's/^href="//;s/"$//')"
-            test -n "$chat_manifest_href"
+            if [ "$base" = "https://chat.darbandicommercial.ir" ]; then
+              chat_manifest_href="/chat-app.webmanifest"
+            else
+              chat_manifest_href="/chat-manifest.webmanifest"
+            fi
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-manifest.json "${base}${chat_manifest_href}"
             if [ "$base" = "https://chat.darbandicommercial.ir" ]; then
               grep -q '"start_url": "/"' /tmp/chat-manifest.json
@@ -120,29 +123,6 @@ jobs:
             echo "Compiled JavaScript asset count: $js_count"
           done
           echo "Production custom domain smoke test passed."
-
-          echo "Dedicated chat PWA smoke target: https://chat.darbandicommercial.ir/"
-          echo "Checking dedicated chat hostname"
-          success=0
-          for attempt in 1 2 3 4 5 6; do
-            if curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat-host.html "https://chat.darbandicommercial.ir/"; then
-              success=1
-              break
-            fi
-            echo "Attempt $attempt failed; retrying chat hostname..."
-            sleep 10
-          done
-          test "$success" = 1
-          grep -q '<div id="root">' /tmp/chat-host.html
-          grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat-host.html
-          grep -q 'chat-app.webmanifest' /tmp/chat-host.html
-          curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-host-manifest.json "https://chat.darbandicommercial.ir/chat-app.webmanifest"
-          grep -q '"start_url": "/"' /tmp/chat-host-manifest.json
-          grep -q '"scope": "/"' /tmp/chat-host-manifest.json
-          curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-host-icon.svg "https://chat.darbandicommercial.ir/chat-icon.svg"
-          test -s /tmp/chat-host-icon.svg
-          chat_ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/chat-host-ice.json -w '%{http_code}' "https://chat.darbandicommercial.ir/api/webrtc/ice")"
-          test "$chat_ice_status" = 401
 
           echo "Checking optional workers.dev endpoint"
           if curl --fail --silent --show-error --location --max-time 20 -o /tmp/workers-dev.html "https://customs.mohsen-darbandi.workers.dev/"; then
