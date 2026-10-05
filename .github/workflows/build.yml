@@ -79,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes playwright@1.55.0 install chromium
-          cat > /tmp/customs-os-smoke.spec.mjs <<'EOF'
+          cat > live-runtime-smoke.spec.mjs <<'EOF'
           import { test, expect } from 'playwright/test';
 
           for (const baseURL of [
@@ -112,4 +112,5 @@ jobs:
             });
           }
           EOF
-          npx --yes playwright@1.55.0 test /tmp/customs-os-smoke.spec.mjs --reporter=line
+          npx --yes playwright@1.55.0 test live-runtime-smoke.spec.mjs --reporter=line
+          rm -f live-runtime-smoke.spec.mjs
