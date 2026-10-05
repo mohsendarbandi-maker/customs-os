@@ -5,11 +5,13 @@ import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
 import{enableChatPush,hasChatPushSubscription}from'./push';
-import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,listConversations,listMessages,listOrgConnections,markRead,searchChat,sendFileMessage,sendMessage}from'./api';
+import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,listMessages,listOrgConnections,markRead,searchChat,sendFileMessage,sendMessage,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
 import { recognize } from 'tesseract.js';
 import{supabase}from'../../lib/supabase';
 import type{ChatConversation,ChatMessage}from'./types';
 import {ChatBrandLogo} from './ChatBrandLogo';
+import {ChatHierarchyPanel} from './ChatHierarchyPanel';
+import {parseRealtimeMessage,parseRealtimeReaction,parseRealtimeRead,parseRealtimeTyping}from'./realtimeProtocol';
 import {useVoiceCall} from './voiceCall';
 import {VoiceCallPanel} from './VoiceCallPanel';
 
@@ -64,7 +66,7 @@ export const ChatPage:React.FC=()=>{
  const[personQuery,setPersonQuery]=useState('');
  const[query,setQuery]=useState('');
  const[results,setResults]=useState<Array<{kind:string;id:string;conversation_id:string;title:string;snippet:string;created_at:string}>>([]);
- const[reply,setReply]=useState<ChatMessage|null>(null),[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct'),[channelOpen,setChannelOpen]=useState(false),[channelTitle,setChannelTitle]=useState(''),[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel'),[sharedConnections,setSharedConnections]=useState<Array<{id:string,target_organization_id:string,target_name:string}>>([]),[selectedConnection,setSelectedConnection]=useState(''),[attachmentBusy,setAttachmentBusy]=useState(false),[recording,setRecording]=useState(false),[ocrBusy,setOcrBusy]=useState(false),[pushReady,setPushReady]=useState(false),[pushBusy,setPushBusy]=useState(false);
+ const[reply,setReply]=useState<ChatMessage|null>(null),[editId,setEditId]=useState<string|null>(null),[forwardId,setForwardId]=useState<string|null>(null),[shipmentUpdateOpen,setShipmentUpdateOpen]=useState(false),[shipmentStatus,setShipmentStatus]=useState('در حال بررسی'),[shipmentNote,setShipmentNote]=useState(''),[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct'),[channelOpen,setChannelOpen]=useState(false),[channelTitle,setChannelTitle]=useState(''),[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel'),[sharedConnections,setSharedConnections]=useState<Array<{id:string,target_organization_id:string,target_name:string}>>([]),[selectedConnection,setSelectedConnection]=useState(''),[attachmentBusy,setAttachmentBusy]=useState(false),[recording,setRecording]=useState(false),[ocrBusy,setOcrBusy]=useState(false),[pushReady,setPushReady]=useState(false),[pushBusy,setPushBusy]=useState(false);
  const[menu,setMenu]=useState<string|null>(null);
  const bottom=useRef<HTMLDivElement|null>(null);const fileInput=useRef<HTMLInputElement|null>(null);const recorderRef=useRef<MediaRecorder|null>(null);const streamRef=useRef<MediaStream|null>(null);const voiceChunks=useRef<Blob[]>([]);
  const messageIdsRef=useRef<Set<string>>(new Set());
@@ -102,7 +104,7 @@ export const ChatPage:React.FC=()=>{
  },[refresh]);
 
  useEffect(()=>{
-  if(!selectedId)return;
+  if(!selectedId||!user?.id)return;
   void load(selectedId);
   if(channel.current)void supabase.removeChannel(channel.current);
   if(pollTimer.current!==null)window.clearTimeout(pollTimer.current);
@@ -110,32 +112,17 @@ export const ChatPage:React.FC=()=>{
   setRealtimeState('connecting');
   setTypingUsers([]);
 
-  const ch=supabase.channel('chat:'+selectedId,{config:{private:true,presence:{key:user?.id??'anonymous'}}})
-   .on('postgres_changes',{event:'*',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+selectedId},()=>{void load(selectedId);void refresh()})
-   .on('postgres_changes',{event:'*',schema:'public',table:'chat_message_receipts'},payload=>{const id=(payload.new as any)?.message_id||(payload.old as any)?.message_id;if(id&&messageIdsRef.current.has(id))void load(selectedId)})
-   .on('postgres_changes',{event:'*',schema:'public',table:'chat_message_reactions'},payload=>{const id=(payload.new as any)?.message_id||(payload.old as any)?.message_id;if(id&&messages.some(m=>m.id===id))void load(selectedId)})
-   .on('postgres_changes',{event:'*',schema:'public',table:'chat_conversation_members',filter:'conversation_id=eq.'+selectedId},()=>{void refresh();void load(selectedId)})
-   .on('broadcast',{event:'typing'},payload=>{
-     const p=payload.payload as PresenceUser;
-     if(!p?.user_id||p.user_id===user?.id)return;
-     setTypingUsers(v=>p.typing?[...new Set([...v,p.user_id])]:v.filter(id=>id!==p.user_id));
-   })
-   .on('presence',{event:'sync'},()=>{
-     const state=ch.presenceState<PresenceUser>();
-     const ids=Object.values(state).flat().filter(p=>p.user_id&&p.user_id!==user?.id&&p.typing).map(p=>p.user_id);
-     setTypingUsers([...new Set(ids)]);
-   })
-   .subscribe(async status=>{
-     if(status==='SUBSCRIBED'){
-       setRealtimeState('subscribed');pollDelay.current=30000;
-       if(user?.id)await ch.track({user_id:user.id,typing:false,at:Date.now()});
-     }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
-       setRealtimeState('degraded');pollDelay.current=Math.min(30000,Math.max(5000,pollDelay.current));
-     }
-   });
+  const ch=supabase.channel('chat:'+selectedId,{config:{private:true,broadcast:{self:false,ack:true},presence:{key:user.id}}});
+  ch.on('broadcast',{event:'message:new'},payload=>{const parsed=parseRealtimeMessage(payload.payload);if(parsed?.conversation_id===selectedId){void load(selectedId);void refresh()}});
+  ch.on('broadcast',{event:'message:update'},payload=>{const parsed=parseRealtimeMessage(payload.payload);if(parsed?.conversation_id===selectedId){void load(selectedId)}});
+  ch.on('broadcast',{event:'reaction:change'},payload=>{if(parseRealtimeReaction(payload.payload)!==null){void load(selectedId)}});
+  ch.on('broadcast',{event:'read'},payload=>{if(parseRealtimeRead(payload.payload)!==null){void load(selectedId)}});
+  ch.on('broadcast',{event:'typing'},payload=>{const parsed=parseRealtimeTyping(payload.payload);if(!parsed||parsed.user_id===user.id)return;setTypingUsers(previous=>{const next=new Set(previous);if(parsed.typing)next.add(parsed.user_id);else next.delete(parsed.user_id);return [...next]})});
+  ch.on('presence',{event:'sync'},()=>{const state=ch.presenceState<PresenceUser>();const onlineUsers:string[]=[];for(const entries of Object.values(state)){for(const entry of entries){if(entry.user_id&&entry.user_id!==user.id)onlineUsers.push(entry.user_id)}}setTypingUsers(previous=>previous.filter(id=>onlineUsers.includes(id))) });
+  ch.subscribe(async status=>{if(status==='SUBSCRIBED'){setRealtimeState('subscribed');pollDelay.current=30000;await ch.track({user_id:user.id,typing:false,at:Date.now()})}else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){setRealtimeState('degraded')}});
   channel.current=ch;
   schedulePoll(selectedId,5000);
-  return()=>{if(pollTimer.current!==null)window.clearTimeout(pollTimer.current);void supabase.removeChannel(ch);channel.current=null}
+  return()=>{if(pollTimer.current!==null)window.clearTimeout(pollTimer.current);void supabase.removeChannel(ch);channel.current=null};
  },[selectedId,user?.id,load,refresh,schedulePoll]);
 
  useEffect(()=>{messageIdsRef.current=new Set(messages.map(m=>m.id));bottom.current?.scrollIntoView({behavior:'smooth'})},[messages,selectedId]);
@@ -207,21 +194,7 @@ export const ChatPage:React.FC=()=>{
    <div className="px-3 py-2 border-b app-border">
     <div className="h-12 rounded-2xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div>
    </div>
-   <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-    {loading?<div className="p-5 app-muted text-sm">در حال بارگذاری…</div>:
-      conversations.map(c=>{
-       const name=title(c);const last=c.last_message_body??(c.type==='direct'?'پیام جدید':'هنوز پیامی ثبت نشده است');
-       return <button key={c.conversation_id} onClick={()=>{setSelectedId(c.conversation_id);setResults([])}} className={"w-full text-right px-3 py-3 border-b app-border flex items-center gap-3 min-h-[86px] hover:bg-black/5 dark:hover:bg-white/5 "+(selectedId===c.conversation_id?"bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]":"")}>
-        <div className="h-14 w-14 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold text-xl">{c.type==='direct'?(name.trim().slice(0,1)||'?'):<>{c.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</>}</div>
-        <div className="min-w-0 flex-1">
-         <div className="flex items-center gap-2"><b className="truncate flex-1 text-[15px]">{name}</b>{c.last_message_created_at&&<span className="text-[10px] app-muted shrink-0">{chatTime(c.last_message_created_at)}</span>}</div>
-         <div className="text-[14px] app-muted truncate mt-1">{last}</div>
-        </div>
-        {Number(c.unread_count)>0&&<span className="rounded-full min-w-6 h-6 px-1 flex items-center justify-center text-[11px] bg-[var(--primary)] text-white">{c.unread_count}</span>}
-       </button>
-      })}
-    {!loading&&!conversations.length&&<div className="p-10 text-center app-muted"><MessageCircle size={34} className="mx-auto mb-3"/><div className="font-bold mb-1">هنوز گفتگویی ندارید</div><div className="text-xs">از دکمه + یک گفتگو با همکاران ایجاد کنید.</div></div>}
-   </div>
+   <ChatHierarchyPanel selectedId={selectedId} onSelect={id=>{setSelectedId(id);setMessages([]);setResults([]);setMenu(null)}} fallback={conversations}/>
   </section>
 
   <section className={(selectedId?"flex":"hidden md:flex")+" flex-1 min-w-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
