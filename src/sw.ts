@@ -14,13 +14,14 @@ clientsClaim();
 
 type PushData={title?:string;body?:string;tag?:string;url?:string;icon?:string;badge?:string;requireInteraction?:boolean;actions?:Array<{action:string;title:string;icon?:string}>;data?:Record<string,string>};
 const actionUrl=(rid:string,action:string)=>'/reminders?rid='+encodeURIComponent(rid)+'&act='+encodeURIComponent(action)+'&source=push';
+const isVoicePush=(data:PushData)=>data.data?.kind==='voice_call';
 self.addEventListener('push',(event)=>{
  const data=(event.data?.json?.()??{}) as PushData;
- event.waitUntil(self.registration.showNotification(data.title??'یادآور گمرکی',{
-  body:data.body??'یک یادآور برای شما ثبت شده است.',tag:data.tag??'customs-os-reminder',
-  icon:data.icon??'/pwa/icon-192.png',badge:data.badge??'/pwa/monochrome-96.png',dir:'rtl',lang:'fa',
-  requireInteraction:data.requireInteraction??false,
-  ...(data.actions?{actions:data.actions}:{actions:[{action:'done',title:'انجام شد'},{action:'snooze10',title:'۱۰ دقیقه بعد'},{action:'tomorrow9',title:'فردا ۹ صبح'}]}),
+ event.waitUntil(self.registration.showNotification(data.title??(isVoicePush(data)?'تماس صوتی ورودی':'یادآور گمرکی'),{
+  body:data.body??(isVoicePush(data)?'تماس صوتی ورودی دارید. برای پاسخ وارد چت سازمانی شوید.':'یک یادآور برای شما ثبت شده است.'),tag:data.tag??(isVoicePush(data)?'customs-os-voice-call':'customs-os-reminder'),
+  icon:data.icon??(isVoicePush(data)?'/chat-icon.svg':'/pwa/icon-192.png'),badge:data.badge??'/pwa/monochrome-96.png',dir:'rtl',lang:'fa',
+  requireInteraction:data.requireInteraction??isVoicePush(data),
+  ...(data.actions?{actions:data.actions}:{actions:isVoicePush(data)?[{action:'open-call',title:'باز کردن تماس'}]:[{action:'done',title:'انجام شد'},{action:'snooze10',title:'۱۰ دقیقه بعد'},{action:'tomorrow9',title:'فردا ۹ صبح'}]}),
   data:{...(data.data??{}),url:data.url??'/reminders'}
  }));
 });
