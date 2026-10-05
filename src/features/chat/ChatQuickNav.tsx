@@ -69,7 +69,16 @@ export const ChatDirectoryPanel:React.FC<DirectoryProps>=({open,mode,organizatio
    }).catch(()=>setHierarchy([])).finally(()=>setLoading(false));
   }else if(mode==='calls'&&organizationId){
    setLoading(true);
-   void supabase.from('chat_voice_calls').select('id,conversation_id,caller_id,callee_id,status,created_at,answered_at,ended_at').eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(60).then(({data})=>setCalls((data??[])as CallRow[])).catch(()=>setCalls([])).finally(()=>setLoading(false));
+   void (async()=>{
+    try{
+     const{data}=await supabase.from('chat_voice_calls').select('id,conversation_id,caller_id,callee_id,status,created_at,answered_at,ended_at').eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(60);
+     setCalls((data??[])as CallRow[]);
+    }catch{
+     setCalls([]);
+    }finally{
+     setLoading(false);
+    }
+   })();
   }else{
    setLoading(false);
   }
