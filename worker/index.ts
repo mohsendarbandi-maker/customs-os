@@ -43,6 +43,12 @@ export default {
     }
 
     const accept = request.headers.get('Accept') || '';
+    const referer = request.headers.get('Referer') || '';
+    const isManifestRequest =
+      url.pathname === '/manifest.webmanifest' ||
+      url.pathname === '/manifest-chat.webmanifest' ||
+      url.pathname === '/manifest-reminders.webmanifest';
+
     const isStaticAsset =
       url.pathname.startsWith('/assets/') ||
       /\.(?:js|mjs|css|map|png|jpe?g|gif|webp|svg|ico|webmanifest|json|txt|woff2?|ttf|eot)$/i.test(url.pathname);
@@ -71,6 +77,38 @@ export default {
         statusText: response.statusText,
         headers: response.headers,
       });
+    }
+
+    // Safari/iOS reads the manifest during page load. Keep manifests fresh and,
+    // as a safety net, serve the chat manifest when the manifest request comes
+    // from a /chat page even if an older HTML/manifest reference is cached.
+    if (isManifestRequest && response.ok) {
+      const manifestHeaders = new Headers(response.headers);
+      manifestHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      manifestHeaders.set('Pragma', 'no-cache');
+      manifestHeaders.set('Vary', 'Referer, Accept-Encoding');
+
+      if (url.pathname === '/manifest.webmanifest' && referer.includes('/chat')) {
+        const chatResponse = await env.ASSETS.fetch(new URL('/manifest-chat.webmanifest?from=chat', assetBase));
+        if (chatResponse.ok) {
+          const chatHeaders = new Headers(chatResponse.headers);
+          chatHeaders.set('Content-Type', 'application/manifest+json; charset=utf-8');
+          chatHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+          chatHeaders.set('Pragma', 'no-cache');
+          chatHeaders.set('Vary', 'Referer, Accept-Encoding');
+          response = new Response(chatResponse.body, {
+            status: chatResponse.status,
+            statusText: chatResponse.statusText,
+            headers: chatHeaders,
+          });
+        }
+      } else {
+        response = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: manifestHeaders,
+        });
+      }
     }
 
     // A custom hostname can temporarily hold a stale negative asset lookup at the edge.
