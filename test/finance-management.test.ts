@@ -4,8 +4,15 @@ import path from 'node:path';
 import { calculateOutstanding, formatCurrency, paidByLabel } from '../src/lib/finance';
 
 const root = path.resolve(process.cwd());
+const migrationPath = (name: string) => {
+  const primary = path.join(root, 'supabase/migrations', name);
+  if (fs.existsSync(primary)) return primary;
+  const legacy = path.join(root, 'supabase/legacy-migrations', name);
+  if (fs.existsSync(legacy)) return legacy;
+  throw new Error(`Migration file not found: ${name}`);
+};
 const financeMigration = fs.readFileSync(
-  path.join(root, 'supabase/migrations/20260930000000_finance_management_module.sql'),
+  migrationPath('20260930000000_finance_management_module.sql'),
   'utf8',
 );
 const financePage = fs.readFileSync(
