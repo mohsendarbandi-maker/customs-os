@@ -10,6 +10,7 @@ type QuickNavProps={
  people:Person[];
  conversations:ChatConversation[];
  onNewMessage:()=>void;
+ onStartDirect:(userId:string)=>void;
  onOpenDirectory:(mode:ChatDirectoryMode)=>void;
  onOpenAi:()=>void;
  onOpenSettings:()=>void;
@@ -40,12 +41,13 @@ type DirectoryProps={
  onClose:()=>void;
  onSelectConversation:(id:string)=>void;
  onNewMessage:()=>void;
+ onStartDirect:(userId:string)=>void;
  onCreateGroup:()=>void;
 };
 
 type CallRow={id:string;conversation_id:string;caller_id:string;callee_id:string;status:string;created_at:string;answered_at:string|null;ended_at:string|null};
 
-export const ChatDirectoryPanel:React.FC<DirectoryProps>=({open,mode,organizationId,people,conversations,onClose,onSelectConversation,onNewMessage,onCreateGroup})=>{
+export const ChatDirectoryPanel:React.FC<DirectoryProps>=({open,mode,organizationId,people,conversations,onClose,onSelectConversation,onNewMessage,onStartDirect,onCreateGroup})=>{
  const[hierarchy,setHierarchy]=useState<ChatHierarchyItem[]>([]);
  const[expanded,setExpanded]=useState<Record<string,boolean>>({});
  const[calls,setCalls]=useState<CallRow[]>([]);
@@ -106,7 +108,7 @@ export const ChatDirectoryPanel:React.FC<DirectoryProps>=({open,mode,organizatio
       <button type="button" className="flex-1 min-w-0 text-right px-2 py-3 flex items-center gap-3" onClick={()=>{onSelectConversation(owner.conversation_id);onClose()}}><div className="h-11 w-11 rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)] grid place-items-center"><UserRound size={18}/></div><span className="min-w-0 flex-1"><b className="block truncate text-[13px]">{owner.title||'صاحب کالا'}</b><span className="text-[10px] app-muted">{child.length} محموله</span></span></button></div>
       {isOpen&&child.length>0&&<div className="mr-5 pr-2 pb-2 border-r app-border">{child.map(shipment=><button key={shipment.conversation_id} type="button" onClick={()=>{onSelectConversation(shipment.conversation_id);onClose()}} className="w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5"><div className="h-9 w-9 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] grid place-items-center"><Hash size={15}/></div><span className="min-w-0 flex-1"><b className="block truncate text-[12px]">{shipment.shipment_display_name||shipment.title||'محموله'}</b><span className="text-[10px] app-muted">{shipment.shipment_bl_number||'بدون شماره بارنامه'}</span></span></button>)}</div>}
      </div>})}</div>:<div className="p-8 text-center text-sm app-muted">هنوز صاحب کالایی در ساختار چت ثبت نشده است.</div>)}
-    {!loading&&mode==='members'&&(members.length?<div className="space-y-1">{members.map(p=><button type="button" key={p.id} onClick={()=>{onClose();onNewMessage()}} className="w-full rounded-2xl px-3 py-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5"><div className="h-11 w-11 shrink-0 rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center font-bold">{(p.full_name||'?').slice(0,1)}</div><div className="min-w-0 flex-1"><b className="block truncate text-[13px]">{p.full_name||'کاربر'}</b><div className="text-[10px] app-muted mt-1">{roleLabel(p.role)}{p.phone?' • '+p.phone:''}</div></div></button>)}</div>:<div className="p-8 text-center text-sm app-muted">عضو فعالی پیدا نشد.</div>)}
+    {!loading&&mode==='members'&&(members.length?<div className="space-y-1">{members.map(p=><button type="button" key={p.id} onClick={()=>{onStartDirect(p.id);onClose()}} className="w-full rounded-2xl px-3 py-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5"><div className="h-11 w-11 shrink-0 rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center font-bold">{(p.full_name||'?').slice(0,1)}</div><div className="min-w-0 flex-1"><b className="block truncate text-[13px]">{p.full_name||'کاربر'}</b><div className="text-[10px] app-muted mt-1">{roleLabel(p.role)}{p.phone?' • '+p.phone:''}</div></div></button>)}</div>:<div className="p-8 text-center text-sm app-muted">عضو فعالی پیدا نشد.</div>)}
     {!loading&&mode==='calls'&&(calls.length?<div className="space-y-1">{calls.filter(c=>!q||(callName(c.caller_id)+' '+callName(c.callee_id)+' '+callLabel(c.status)).toLocaleLowerCase('fa-IR').includes(q)).map(call=>{const mine=people.some(p=>p.id===call.caller_id);const other=mine?call.callee_id:call.caller_id;return <button type="button" key={call.id} onClick={()=>{onSelectConversation(call.conversation_id);onClose()}} className="w-full rounded-2xl px-3 py-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5"><div className="h-11 w-11 shrink-0 rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)] grid place-items-center"><Phone size={17}/></div><div className="min-w-0 flex-1"><b className="block truncate text-[13px]">{callName(other)}</b><div className="text-[10px] app-muted mt-1">{callLabel(call.status)} • {new Intl.DateTimeFormat('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran',dateStyle:'medium',timeStyle:'short'}).format(new Date(call.created_at))}</div></div>{call.status==='missed'?<VolumeX size={15} className="text-red-500"/>:<Volume2 size={15} className="text-[var(--primary)]"/>}</button>})}</div>:<div className="p-8 text-center text-sm app-muted">هنوز سابقه تماسی ثبت نشده است.</div>)}
    </div>
    {mode==='members'&&<footer className="border-t app-border p-3"><button type="button" className="w-full min-h-11 rounded-xl border app-border text-sm font-bold" onClick={onNewMessage}><Plus size={14} className="inline ml-1"/>شروع پیام جدید</button></footer>}
