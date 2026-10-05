@@ -3,7 +3,7 @@
   "name": "چت سازمانی | Customs OS",
   "short_name": "چت سازمانی",
   "description": "پیام‌رسان داخلی سازمان",
-  "start_url": "/chat",
+  "start_url": "/chat?source=pwa",
   "scope": "/chat",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
@@ -19,6 +19,6 @@
     {"src":"/pwa/icon-512-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
   ],
   "shortcuts": [
-    {"name":"چت سازمانی","short_name":"چت","url":"/chat","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]}
+    {"name":"چت سازمانی","short_name":"چت","url":"/chat?source=pwa","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]}
   ]
 }
