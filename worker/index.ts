@@ -39,7 +39,11 @@ export default {
           { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] },
         ];
 
-        if (env.TURN_API_TOKEN && env.TURN_KEY_ID) {
+        if (!env.TURN_API_TOKEN || !env.TURN_KEY_ID) {
+          return json({ error: 'سرویس ارتباط صوتی هنوز پیکربندی نشده است.' }, 503);
+        }
+
+        {
           const turnResponse = await fetch(
             'https://rtc.live.cloudflare.com/v1/turn/keys/' + encodeURIComponent(env.TURN_KEY_ID) + '/credentials/generate-ice-servers',
             {
