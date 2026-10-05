@@ -35,7 +35,7 @@ export default {
         });
         if (!authCheck.ok) return json({ error: 'نشست کاربر معتبر نیست.' }, 401);
 
-        const iceServers: RTCIceServer[] = [
+        const iceServers: Array<{ urls: string | string[]; username?: string; credential?: string }> = [
           { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] },
         ];
 
@@ -56,7 +56,7 @@ export default {
             console.error('[WebRTC] TURN credential generation failed:', turnResponse.status, detail.slice(0, 500));
             return json({ error: 'سرویس ارتباط صوتی آماده نیست.' }, 503);
           }
-          const turnData = await turnResponse.json() as { iceServers?: RTCIceServer[] };
+          const turnData = await turnResponse.json() as { iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }> };
           if (Array.isArray(turnData.iceServers)) iceServers.push(...turnData.iceServers);
         }
 
