@@ -1,6 +1,6 @@
 import{useSearchParams}from'react-router-dom';
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
-import{ArrowRight,Bell,BellOff,Check,CheckCheck,Hash,MessageCircle,Mic,MicOff,MoreVertical,Paperclip,Phone,Plus,ScanText,Search,Send,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
+import{ArrowRight,Bell,BellOff,Check,CheckCheck,Hash,Mic,MicOff,MoreVertical,Paperclip,Phone,PlusSearch,Send,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
@@ -69,7 +69,6 @@ export const ChatPage:React.FC=()=>{
  const[reply,setReply]=useState<ChatMessage|null>(null),[editId,setEditId]=useState<string|null>(null),[forwardId,setForwardId]=useState<string|null>(null),[shipmentUpdateOpen,setShipmentUpdateOpen]=useState(false),[shipmentStatus,setShipmentStatus]=useState('در حال بررسی'),[shipmentNote,setShipmentNote]=useState(''),[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct'),[channelOpen,setChannelOpen]=useState(false),[channelTitle,setChannelTitle]=useState(''),[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel'),[sharedConnections,setSharedConnections]=useState<Array<{id:string,target_organization_id:string,target_name:string}>>([]),[selectedConnection,setSelectedConnection]=useState(''),[attachmentBusy,setAttachmentBusy]=useState(false),[recording,setRecording]=useState(false),[ocrBusy,setOcrBusy]=useState(false),[pushReady,setPushReady]=useState(false),[pushBusy,setPushBusy]=useState(false);
  const[menu,setMenu]=useState<string|null>(null);
  const bottom=useRef<HTMLDivElement|null>(null);const fileInput=useRef<HTMLInputElement|null>(null);const recorderRef=useRef<MediaRecorder|null>(null);const streamRef=useRef<MediaStream|null>(null);const voiceChunks=useRef<Blob[]>([]);
- const messageIdsRef=useRef<Set<string>>(new Set());
  const channel=useRef<ReturnType<typeof supabase.channel>|null>(null);
  const pollTimer=useRef<number|null>(null);
  const pollDelay=useRef(15000);
@@ -125,7 +124,7 @@ export const ChatPage:React.FC=()=>{
   return()=>{if(pollTimer.current!==null)window.clearTimeout(pollTimer.current);void supabase.removeChannel(ch);channel.current=null};
  },[selectedId,user?.id,load,refresh,schedulePoll]);
 
- useEffect(()=>{messageIdsRef.current=new Set(messages.map(m=>m.id));bottom.current?.scrollIntoView({behavior:'smooth'})},[messages,selectedId]);
+ useEffect(()=>{bottom.current?.scrollIntoView({behavior:'smooth'})},[messages,selectedId]);
  useEffect(()=>{
   if(requestedConversationId&&conversations.some(c=>c.conversation_id===requestedConversationId))setSelectedId(requestedConversationId);
  },[requestedConversationId,conversations]);
