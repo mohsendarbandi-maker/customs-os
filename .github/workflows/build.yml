@@ -114,7 +114,7 @@ jobs:
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-manifest.json "${base}${chat_manifest_href}&__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
             grep -q '"start_url": "/chat"' /tmp/chat-manifest.json
             grep -q '"scope": "/chat"' /tmp/chat-manifest.json
-            grep -q '"id": "/chat"' /tmp/chat-manifest.json
+            grep -q '"id": "/chat-v4"' /tmp/chat-manifest.json
             ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
             test "$ice_status" = 401
             echo "Checking dedicated chat subdomain"
