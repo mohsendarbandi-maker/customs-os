@@ -42,7 +42,15 @@ export default {
       }
     }
 
-    const isHtmlNavigation = request.method === 'GET' && (url.pathname === '/' || (request.headers.get('Accept') || '').includes('text/html'));
+    const accept = request.headers.get('Accept') || '';
+    const isStaticAsset =
+      url.pathname.startsWith('/assets/') ||
+      /\.(?:js|mjs|css|map|png|jpe?g|gif|webp|svg|ico|webmanifest|json|txt|woff2?|ttf|eot)$/i.test(url.pathname);
+    const isHtmlNavigation =
+      request.method === 'GET' &&
+      !url.pathname.startsWith('/api/') &&
+      !isStaticAsset &&
+      (url.pathname === '/' || url.pathname.startsWith('/chat') || accept.includes('text/html'));
     const assetBase = new URL(request.url);
     assetBase.hostname = 'customs.mohsen-darbandi.workers.dev';
     const assetRequest = new Request(assetBase, request);
@@ -78,8 +86,7 @@ export default {
       response = await fetch(new Request(canonical, request));
     }
 
-    const accept = request.headers.get('Accept') || '';
-    if (request.method === 'GET' && (url.pathname === '/' || accept.includes('text/html'))) {
+    if (request.method === 'GET' && (url.pathname === '/' || accept.includes('text/html') || isHtmlNavigation)) {
       const headers = new Headers(response.headers);
       headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       headers.set('Pragma', 'no-cache');
