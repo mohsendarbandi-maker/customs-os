@@ -109,7 +109,6 @@ begin
     'answered_at', new.answered_at,
     'ended_at', new.ended_at
   );
-begin
   if tg_op = 'INSERT' then
     perform realtime.send(p, 'voice_invite', 'chat-voice-user:' || new.callee_id::text, true);
   elsif tg_op = 'UPDATE' and old.status is distinct from new.status then
