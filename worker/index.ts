@@ -136,7 +136,7 @@ export default {
 
     if (isHtmlNavigation && url.pathname.startsWith('/chat') && response.ok) {
       const html = await response.text();
-      const chatManifestPath = '/chat-manifest.webmanifest?v=20261005-chat';
+      const chatManifestPath = '/chat-manifest.webmanifest?v=20261005-chat-v2';
       const chatHtml = html
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
         .replace(/href="\/manifest\.webmanifest"/i, 'href="' + chatManifestPath + '"')
