@@ -151,7 +151,7 @@ const normalizeLegacyPwaLaunch = () => {
     if (current.pathname !== '/' || current.searchParams.get('source') !== 'pwa') return false;
 
     current.pathname = '/chat';
-    current.search = '?source=pwa';
+    current.search = '';
     window.location.replace(current.toString());
     return true;
   } catch (error) {
