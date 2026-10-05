@@ -15,7 +15,7 @@ import {parseRealtimeMessage,parseRealtimeReaction,parseRealtimeRead,parseRealti
 import {useVoiceCall} from './voiceCall';
 import {VoiceCallPanel} from './VoiceCallPanel';
 import {ChatSettingsPanel} from './ChatSettingsPanel';
-import {AIOperatorPanel as ChatAIOperatorPanel} from '../../components/AIOperatorPanel';
+import {CustomsAIOperatorPanel as ChatAIOperatorPanel} from '../../components/AIOperatorPanel';
 
 type Person={id:string;full_name:string;phone:string|null;role:string};
 type PresenceUser={user_id:string;typing?:boolean};
