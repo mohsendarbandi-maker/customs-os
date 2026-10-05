@@ -1,4 +1,4 @@
-name: verify-build
+name: verify-chat-modern
 
 on:
   pull_request:
@@ -25,7 +25,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Production build (attempt 3)
+      - name: Production build (messenger modernization)
         run: npm run build
 
       - name: Assert AI Operator is statically wired
