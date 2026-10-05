@@ -1,0 +1,1 @@
+update public.declaration_checklist_items set is_active=false,source=case when source='manual' then source else 'legacy' end where item_key in ('صورت‌حساب انبارداری اولیه','صورت‌حساب انبارداری متمم','وکالت حمل');
