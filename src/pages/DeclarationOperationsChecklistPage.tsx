@@ -147,7 +147,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   if(!canEdit)return;
   setBusy(true);setError('');setMessage('');
   try{
-   const remaining=pending.map(x=>x.note?\`${x.item_label} — توضیح: ${x.note}\`:x.item_label);
+   const remaining=pending.map(x=>x.note?`${x.item_label} — توضیح: ${x.note}`:x.item_label);
    const{error:e}=await supabase.rpc('advance_declaration_to_exit_stage',{p_declaration_id:declarationId,p_remaining_items:remaining});
    if(e)throw e;
    window.location.assign(`/operations?tab=exit&declarationId=${encodeURIComponent(declarationId)}`);
@@ -201,7 +201,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
       {open&&canEdit&&<div className="px-3 pb-4 md:px-14"><div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3"><div className="text-xs font-bold mb-2">توضیح / دلیل ناقص ماندن مورد</div><textarea value={note} onChange={e=>setDraftNote(p=>({...p,[item.id]:e.target.value}))} rows={2} placeholder="مثلاً: منتظر تأیید کارشناس یا دریافت نامه هستیم..." className="w-full rounded-xl border app-border bg-[var(--surface)] p-3 text-sm"/><button type="button" onClick={()=>void saveNote(item)} className="mt-2 rounded-xl bg-[var(--primary)] text-white px-3 py-2 text-xs font-bold"><Save size={14} className="inline ml-1"/>ذخیره توضیح</button></div></div>}
     </div>;
    })}
-   <div className="p-5"><button disabled={busy||!canEdit} onClick={()=>void complete()} className="rounded-xl bg-[var(--primary)] text-white px-6 py-3 font-bold disabled:opacity-40">{busy?<><Loader2 className="inline ml-2 animate-spin" size={16}/>در حال انتقال...</>:pending.length===0?'تکمیل عملیات گمرکی و ورود به مرحله ۵ · درب خروج':'ورود به مرحله ۵ با ثبت هشدار موارد ناقص'}</button>{pending.length>0&&<div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs"><div className="font-bold mb-2 flex items-center gap-2"><AlertTriangle size={14}/> موارد ناقص قبل از خروج</div>{pending.map(x=><div key={x.id} className="py-1">{x.item_label}{x.note?\` — ${x.note}\`:''}</div>)}</div>}</div>
+   <div className="p-5"><button disabled={busy||!canEdit} onClick={()=>void complete()} className="rounded-xl bg-[var(--primary)] text-white px-6 py-3 font-bold disabled:opacity-40">{busy?<><Loader2 className="inline ml-2 animate-spin" size={16}/>در حال انتقال...</>:pending.length===0?'تکمیل عملیات گمرکی و ورود به مرحله ۵ · درب خروج':'ورود به مرحله ۵ با ثبت هشدار موارد ناقص'}</button>{pending.length>0&&<div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs"><div className="font-bold mb-2 flex items-center gap-2"><AlertTriangle size={14}/> موارد ناقص قبل از خروج</div>{pending.map(x=><div key={x.id} className="py-1">{x.item_label}{x.note?` — ${x.note}`:''}</div>)}</div>}</div>
   </section>
  </div></main>;
 };
