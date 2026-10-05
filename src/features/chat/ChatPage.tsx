@@ -172,7 +172,21 @@ export const ChatPage:React.FC=()=>{
   const clientUuid=makeClientId();
   const optimistic:ChatMessage={id:'optimistic-'+clientUuid,organization_id:profile?.organization_id??'',conversation_id:selectedId,sender_id:user?.id??'',client_uuid:clientUuid,message_type:'text',body,reply_to_message_id:reply?.id??null,forwarded_from_message_id:null,thread_root_message_id:null,delivery_status:'sending',edited_at:null,deleted_at:null,deleted_for_all_at:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
   setMessages(v=>[...v,optimistic]);setText('');setReply(null);
-  try{const result=await sendMessage(selectedId,clientUuid,body,reply?.id);setMessages(v=>v.filter(m=>m.id!==optimistic.id));if('queued'in result&&result.queued)setMessages(v=>[...v,{...optimistic,delivery_status:'queued'}]);else{const mentionIds=await resolveMentionUserIds(body);if(mentionIds.length)await setMessageMentions(result.id,mentionIds);await load(selectedId);await refresh()}}
+  try{
+   const result=await sendMessage(selectedId,clientUuid,body,reply?.id);
+   setMessages(v=>v.filter(m=>m.id!==optimistic.id));
+   if('queued' in result&&result.queued){
+    setMessages(v=>[...v,{...optimistic,delivery_status:'queued'}]);
+   }else if('id' in result&&typeof result.id==='string'){
+    const mentionIds=await resolveMentionUserIds(body);
+    if(mentionIds.length)await setMessageMentions(result.id,mentionIds);
+    await load(selectedId);
+    await refresh();
+   }else{
+    await load(selectedId);
+    await refresh();
+   }
+  }
   catch(e){setMessages(v=>v.filter(m=>m.id!==optimistic.id));setText(body);setError(err(e))}finally{setSending(false)}
  };
  const runSearch=async()=>{if(!query.trim()){setResults([]);return}try{setResults(await searchChat(query,selectedId??undefined))}catch(e){setError(err(e))}};
