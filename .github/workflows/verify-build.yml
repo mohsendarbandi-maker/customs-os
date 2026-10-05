@@ -28,7 +28,9 @@ jobs:
       - name: Production build (attempt 3)
         run: npm run build
 
-      - name: Assert AI Operator static import
+      - name: Assert AI Operator is statically wired
         run: |
-          ! grep -R "React\\.lazy.*AIOperatorPanel\\|import('../../components/AIOperatorPanel')" src/features/chat/ChatPage.tsx
-          grep -F "import {AIOperatorPanel as ChatAIOperatorPanel}" src/features/chat/ChatPage.tsx
+          ! grep -F "React.lazy" src/features/chat/ChatPage.tsx
+          ! grep -F "AIOperatorPanel as ChatAIOperatorPanel" src/features/chat/ChatPage.tsx
+          grep -F "CustomsAIOperatorPanel as ChatAIOperatorPanel" src/features/chat/ChatPage.tsx
+          grep -F "export const CustomsAIOperatorPanel" src/components/AIOperatorPanel.tsx
