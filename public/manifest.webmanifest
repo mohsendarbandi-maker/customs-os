@@ -1,9 +1,9 @@
 {
-  "id": "/?source=pwa",
+  "id": "/",
   "name": "Customs OS | سیستم مدیریت گمرک",
   "short_name": "Customs OS",
   "description": "سامانه مدیریت عملیات گمرکی و لجستیک",
-  "start_url": "/?source=pwa",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "dir": "rtl",
