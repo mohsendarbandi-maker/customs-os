@@ -102,10 +102,61 @@ export async function listMessages(conversationId: string, cursor?: { createdAt:
     byMessage.set(attachment.message_id, list);
   }
 
+  const currentUser = (await supabase.auth.getUser()).data.user;
+  const [reactionsResult, pinsResult, starsResult, receiptsResult] = await Promise.all([
+    supabase
+      .from('chat_message_reactions')
+      .select('id,message_id,user_id,emoji,created_at')
+      .in('message_id', ids),
+    supabase
+      .from('chat_message_pins')
+      .select('message_id')
+      .in('message_id', ids),
+    supabase
+      .from('chat_message_user_states')
+      .select('message_id,starred_at,deleted_at')
+      .in('message_id', ids)
+      .eq('user_id', currentUser?.id ?? ''),
+    supabase
+      .from('chat_message_receipts')
+      .select('message_id,user_id,status,delivered_at,read_at')
+      .in('message_id', ids),
+  ]);
+
+  if (reactionsResult.error) throw new Error(reactionsResult.error.message);
+  if (pinsResult.error) throw new Error(pinsResult.error.message);
+  if (starsResult.error) throw new Error(starsResult.error.message);
+  if (receiptsResult.error) throw new Error(receiptsResult.error.message);
+
+  const reactionMap = new Map<string, ChatMessage['reactions']>();
+  for (const reaction of reactionsResult.data ?? []) {
+    const list = reactionMap.get(reaction.message_id) ?? [];
+    list.push(reaction);
+    reactionMap.set(reaction.message_id, list);
+  }
+
+  const pinnedIds = new Set((pinsResult.data ?? []).map((item) => item.message_id));
+  const starredIds = new Set(
+    (starsResult.data ?? [])
+      .filter((item) => item.starred_at !== null && item.deleted_at === null)
+      .map((item) => item.message_id),
+  );
+
+  const receiptMap = new Map<string, ChatMessage['receipts']>();
+  for (const receipt of receiptsResult.data ?? []) {
+    const list = receiptMap.get(receipt.message_id) ?? [];
+    list.push(receipt);
+    receiptMap.set(receipt.message_id, list);
+  }
+
   return messages.map((message) => ({
     ...message,
     sender_name: senderNames.get(message.sender_id) ?? null,
     attachments: byMessage.get(message.id) ?? [],
+    reactions: reactionMap.get(message.id) ?? [],
+    pinned: pinnedIds.has(message.id),
+    starred: starredIds.has(message.id),
+    receipts: receiptMap.get(message.id) ?? [],
   }));
 }
 
