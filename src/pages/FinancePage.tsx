@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState}from'react';
 import{AlertCircle,BarChart3,Banknote,Camera,Check,Clock3,FileOutput,FileSearch,FileText,Plus,RefreshCw,Save,Search,Settings2,ShieldCheck,Upload,UserRound,WalletCards,X,XCircle}from'lucide-react';
 import{Link}from'react-router-dom';
 import{supabase}from'../lib/supabase';
+import{createReceiptPath,validateReceiptFile}from'../features/finance/shipmentCosts';
 import{useAuth}from'../context/AuthContext';
 import{useCaseSelectorData}from'../hooks/useCaseSelectorData';
 import{FINANCE_CURRENCIES,formatMoney,normalizeDigits,parseFinanceNumber,paidByLabel,approvalLabel,paymentRequestStatusLabel,triggerPointLabel,pettyCashDirectionLabel,calculateOutstanding}from'../lib/finance';import{extractFinanceReceipt}from'../lib/financeReceiptExtraction';
@@ -109,16 +110,16 @@ export const FinancePage:React.FC=()=>{
 
  const uploadExpenseReceipt=async(file:File)=>{
   if(!orgId||!myId)throw new Error('اطلاعات سازمان/کاربر آماده نیست.');
-  const ext=(file.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/gi,'');
-  const safe=(file.name.replace(/[^\\w.\\-\u0600-\u06FF]+/g,'_').slice(-100)||('receipt.'+ext));
-  const path=orgId+'/'+myId+'/tmp-'+crypto.randomUUID()+'-'+safe;
+  const checked=await validateReceiptFile(file);
+  if(!checked.ok)throw new Error(checked.error);
+  const path=createReceiptPath(orgId,myId,checked.extension);
   setReceiptStatus('uploading');setReceiptStatusText('در حال آپلود واقعی فیش به Storage…');
-  const up=await supabase.storage.from('finance-receipts').upload(path,file,{contentType:file.type||'application/octet-stream',upsert:false});
+  const up=await supabase.storage.from('finance-receipts').upload(path,file,{contentType:checked.mime,cacheControl:'3600',upsert:false});
   if(up.error)throw up.error;
   setReceiptPath(path);setReceiptStatus('uploaded');setReceiptStatusText('فیش با موفقیت در Storage ذخیره شد.');
   return path;
- };
- const extractExpenseReceipt=async(file:File)=>{
+};
+const extractExpenseReceipt=async(file:File)=>{
   setReceiptStatus('extracting');setReceiptStatusText('در حال استخراج اطلاعات فیش…');
   const{fields}=await extractFinanceReceipt(file,(m)=>setReceiptStatusText(m));
   setExpense((prev:any)=>{
@@ -191,9 +192,9 @@ export const FinancePage:React.FC=()=>{
    const detail=e?.message||e?.error_description||'ثبت هزینه ناموفق بود.';
    setExpenseMsg(detail);setMsg(detail);
   }finally{setExpenseSaving(false);setReceiptStatusText('');}
- }; const openExpenseEdit=(x:any)=>{if(x.created_by!==myId||x.approval_status!=='pending')return;setExpenseEdit({...x,amount:String(x.amount??''),currency:x.currency||'IRR',exchange_rate:String(x.exchange_rate??'1'),category_id:x.category_id||'',paid_by:x.paid_by||'',description:x.description||'',notes:x.notes||''});setExpenseEditOpen(true)};
+ }; const openExpenseEdit=(x:any)=>{if(x.created_by!==myId||!['DRAFT','REJECTED'].includes(String(x.workflow_status||'')))return;setExpenseEdit({...x,amount:String(x.amount??''),currency:x.currency||'IRR',exchange_rate:String(x.exchange_rate??'1'),category_id:x.category_id||'',paid_by:x.paid_by||'',description:x.description||'',notes:x.notes||''});setExpenseEditOpen(true)};
  const saveExpenseEdit=async()=>{if(!expenseEdit)return;const amount=parseFinanceNumber(expenseEdit.amount),rate=expenseEdit.currency==='IRR'?1:parseFinanceNumber(expenseEdit.exchange_rate);if(amount<=0||rate<=0||!expenseEdit.category_id||!expenseEdit.paid_by||!String(expenseEdit.description||'').trim())return setMsg('دسته، مبلغ مثبت، نرخ، منبع پرداخت و شرح الزامی است.');setBusy(true);try{const irr=Math.round(amount*rate*100)/100,vr=Number(settings?.default_vat_rate||0),vat=Math.round(irr*vr/100*100)/100;const{error}=await supabase.from('finance_cost_items').update({category_id:expenseEdit.category_id,description:String(expenseEdit.description).trim(),amount,currency:expenseEdit.currency,exchange_rate:rate,amount_irr:irr,vat_rate:vr,vat_amount:vat,paid_by:expenseEdit.paid_by,billable:expenseEdit.paid_by==='our_company',notes:expenseEdit.notes||null,updated_by:myId,updated_at:new Date().toISOString()}).eq('id',expenseEdit.id).eq('created_by',myId).eq('approval_status','pending');if(error)throw error;setMsg('هزینه pending ویرایش شد.');setExpenseEditOpen(false);setExpenseEdit(null);await load()}catch(e:any){setMsg(e?.message||'ویرایش هزینه ناموفق بود.')}finally{setBusy(false)}};
- const deletePendingExpense=async(id:string)=>{if(!window.confirm('هزینه pending حذف شود؟'))return;setBusy(true);try{const{error}=await supabase.from('finance_cost_items').delete().eq('id',id).eq('created_by',myId).eq('approval_status','pending');if(error)throw error;setMsg('هزینه pending حذف شد.');await load()}catch(e:any){setMsg(e?.message||'حذف هزینه ناموفق بود.')}finally{setBusy(false)}};
+ const deletePendingExpense=async(id:string)=>{if(!window.confirm('هزینه پیش‌نویس بایگانی شود؟'))return;setBusy(true);try{const{error}=await supabase.rpc('archive_finance_shipment_cost',{p_cost_id:id,p_reason:'حذف توسط ثبت‌کننده'});if(error)throw error;setMsg('هزینه بایگانی شد.');await load()}catch(e:any){setMsg(e?.message||'بایگانی هزینه ناموفق بود.')}finally{setBusy(false)}};setBusy(true);try{const{error}=await supabase.from('finance_cost_items').delete().eq('id',id).eq('created_by',myId).eq('approval_status','pending');if(error)throw error;setMsg('هزینه pending حذف شد.');await load()}catch(e:any){setMsg(e?.message||'حذف هزینه ناموفق بود.')}finally{setBusy(false)}};
  const makeInvoice=async()=>{const chosen=costs.filter(x=>selectedCostIds.includes(x.id)&&x.approval_status==='approved'&&x.paid_by==='our_company'&&x.billable&&!['invoiced','paid'].includes(x.status));if(!chosen.length)return setMsg('فقط هزینه‌های approved و قابل مطالبه را انتخاب کنید.');const clientIds=[...new Set(chosen.map(x=>x.client_id))];if(clientIds.length!==1)return setMsg('هزینه‌های انتخاب‌شده باید متعلق به یک صاحب کالا باشند.');const seq=Number(settings?.next_invoice_number||1),prefix=settings?.invoice_prefix||'FIN',year=new Date().getFullYear(),no=prefix+'-'+year+'-'+String(seq).padStart(5,'0');setBusy(true);try{const subtotal=chosen.reduce((a,x)=>a+Number(x.amount_irr||0),0),vat=chosen.reduce((a,x)=>a+Number(x.vat_amount||0),0);const ins=await supabase.from('finance_invoices').insert({organization_id:orgId,client_id:clientIds[0],invoice_no:no,invoice_year:year,status:'draft',subtotal,discount_amount:0,vat_amount:vat,total_amount:subtotal+vat,currency:'IRR',created_by:myId,updated_by:myId}).select('id').single();if(ins.error)throw ins.error;const id=ins.data.id;const li=await supabase.from('finance_invoice_lines').insert(chosen.map((x,i)=>({organization_id:orgId,invoice_id:id,cost_item_id:x.id,shipment_id:x.shipment_id,line_type:'cost',description:x.description,quantity:x.quantity,unit:x.unit,unit_price:x.unit_price,amount:x.amount_irr,vat_rate:x.vat_rate,vat_amount:x.vat_amount,sort_order:i})));if(li.error)throw li.error;const si=await supabase.from('finance_invoice_shipments').insert([...new Set(chosen.map(x=>x.shipment_id))].map(shipment_id=>({invoice_id:id,organization_id:orgId,shipment_id})));if(si.error)throw si.error;const up=await supabase.from('finance_cost_items').update({status:'invoiced',updated_by:myId,updated_at:new Date().toISOString()}).in('id',chosen.map(x=>x.id)).eq('approval_status','approved');if(up.error)throw up.error;await supabase.from('finance_org_settings').update({next_invoice_number:seq+1,updated_at:new Date().toISOString()}).eq('organization_id',orgId);setSelectedCostIds([]);setMsg('صورتحساب '+no+' ایجاد شد.');await load()}catch(e:any){setMsg(e?.message||'ایجاد صورتحساب ناموفق بود.')}finally{setBusy(false)}};
  const issueInvoice=async(id:string)=>{if(!['owner','admin','accountant'].includes(profile?.role||''))return setMsg('مجوز صدور صورتحساب ندارید.');setBusy(true);try{const{error}=await supabase.from('finance_invoices').update({status:'issued',issue_date:new Date().toISOString().slice(0,10),issued_at:new Date().toISOString(),issued_by:myId,updated_by:myId,updated_at:new Date().toISOString()}).eq('id',id).eq('status','draft');if(error)throw error;setMsg('صورتحساب صادر شد.');await load()}catch(e:any){setMsg(e?.message||'صدور صورتحساب ناموفق بود.')}finally{setBusy(false)}};
 
