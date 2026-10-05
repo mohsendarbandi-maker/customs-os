@@ -8,7 +8,14 @@ import React, {
   useMemo,
 } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
+
+const clearLocalAuthStorage = () => {
+  try {
+    localStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
+    sessionStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
+  } catch {}
+};
 
 export type UserRole =
   | 'owner'
@@ -140,6 +147,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         if (sessionError) {
           console.error('[Auth] getSession failed:', sessionError);
+          if (/refresh_token_not_found|invalid refresh token|refresh token/i.test(sessionError.message)) {
+            clearLocalAuthStorage();
+          }
 
           setSession(null);
           setUser(null);
@@ -168,6 +178,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (!active || !isMounted.current) return;
 
         console.error('[Auth] initialization failed:', err);
+        if (/refresh_token_not_found|invalid refresh token|refresh token/i.test(String((err as any)?.message || err))) {
+          clearLocalAuthStorage();
+        }
 
         setSession(null);
         setUser(null);
@@ -204,6 +217,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setUser(currentSession?.user ?? null);
 
       if (!currentSession?.user) {
+        if (event === 'SIGNED_OUT') clearLocalAuthStorage();
         currentFetchId.current++;
 
         setProfile(null);

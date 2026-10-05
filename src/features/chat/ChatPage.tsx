@@ -8,6 +8,7 @@ import{addConversationMember,createConversation,createDirectConversation,deleteF
 import { recognize } from 'tesseract.js';
 import{supabase}from'../../lib/supabase';
 import type{ChatConversation,ChatMessage}from'./types';
+import {ChatBrandLogo} from './ChatBrandLogo';
 
 type Person={id:string;full_name:string;phone:string|null;role:string};
 type PresenceUser={user_id:string;typing?:boolean};
@@ -26,6 +27,14 @@ const dayLabel=(value:string)=>{
 
 export const ChatPage:React.FC=()=>{
  const{user,profile}=useAuth();
+ useEffect(()=>{
+  const previousTitle=document.title;
+  const icon=document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  const previousIcon=icon?.getAttribute('href')??null;
+  document.title='چت سازمانی | Customs OS';
+  if(icon)icon.href='/chat-icon.svg';
+  return()=>{document.title=previousTitle;if(icon&&previousIcon)icon.href=previousIcon;};
+ },[]);
  const[conversations,setConversations]=useState<ChatConversation[]>([]);
  const[selectedId,setSelectedId]=useState<string|null>(null);
  const[messages,setMessages]=useState<ChatMessage[]>([]);
@@ -167,11 +176,11 @@ export const ChatPage:React.FC=()=>{
   return people.filter(person=>person.id!==user?.id&&!q||person.id!==user?.id&&(normalizeFaText(person.full_name).toLowerCase().includes(q)||(person.phone??'').includes(q)));
  },[people,personQuery,user?.id]);
 
- return <div dir="rtl" className="w-full h-dvh min-h-[560px] flex gap-0 md:gap-3 bg-[var(--surface)]">
+ return <div dir="rtl" className="chat-standalone w-full h-dvh min-h-[560px] flex gap-0 md:gap-3 bg-[var(--surface)]">
   <section className={(selectedId?"hidden md:flex":"flex")+" w-full md:w-[360px] shrink-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
-   <header className="h-[72px] shrink-0 px-4 border-b app-border flex items-center gap-3">
-    <div className="h-12 w-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center"><MessageCircle size={22}/></div>
-    <div className="flex-1 min-w-0"><b className="block">پیام‌ها</b><div className="text-[11px] app-muted truncate">{unread?String(unread)+' پیام خوانده‌نشده':'گفتگوهای شما'}</div></div>
+   <header className="h-[76px] shrink-0 px-4 border-b app-border flex items-center gap-3">
+    <ChatBrandLogo size={48}/>
+    <div className="flex-1 min-w-0"><b className="block text-[17px]">چت سازمانی</b><div className="text-[12px] app-muted truncate">{unread?String(unread)+' پیام خوانده‌نشده':'ارتباط داخلی Customs OS'}</div></div>
     <button className="h-12 w-12 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>void openPeople("direct")} aria-label="گفتگوی جدید"><Plus size={19}/></button>
     <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>{setChannelType("company_channel");setChannelOpen(true)}} aria-label="گروه یا کانال جدید"><Hash size={18}/></button>
    </header>
@@ -185,8 +194,8 @@ export const ChatPage:React.FC=()=>{
        return <button key={c.conversation_id} onClick={()=>{setSelectedId(c.conversation_id);setResults([])}} className={"w-full text-right px-3 py-3 border-b app-border flex items-center gap-3 min-h-[86px] hover:bg-black/5 dark:hover:bg-white/5 "+(selectedId===c.conversation_id?"bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]":"")}>
         <div className="h-14 w-14 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold text-xl">{c.type==='direct'?(name.trim().slice(0,1)||'?'):<>{c.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</>}</div>
         <div className="min-w-0 flex-1">
-         <div className="flex items-center gap-2"><b className="truncate flex-1">{name}</b>{c.last_message_created_at&&<span className="text-[10px] app-muted shrink-0">{chatTime(c.last_message_created_at)}</span>}</div>
-         <div className="text-[13px] app-muted truncate mt-1">{last}</div>
+         <div className="flex items-center gap-2"><b className="truncate flex-1 text-[15px]">{name}</b>{c.last_message_created_at&&<span className="text-[10px] app-muted shrink-0">{chatTime(c.last_message_created_at)}</span>}</div>
+         <div className="text-[14px] app-muted truncate mt-1">{last}</div>
         </div>
         {Number(c.unread_count)>0&&<span className="rounded-full min-w-6 h-6 px-1 flex items-center justify-center text-[11px] bg-[var(--primary)] text-white">{c.unread_count}</span>}
        </button>
@@ -198,11 +207,11 @@ export const ChatPage:React.FC=()=>{
   <section className={(selectedId?"flex":"hidden md:flex")+" flex-1 min-w-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
    {selected?<>
     <header className="h-[72px] shrink-0 border-b app-border px-3 md:px-4 flex items-center gap-2">
-     <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center md:hidden" onClick={()=>{setSelectedId(null);setMessages([]);setReply(null)}} aria-label="بازگشت"><ArrowRight size={19}/></button>
+     <button className="h-12 w-12 shrink-0 rounded-full flex items-center justify-center md:hidden" onClick={()=>{setSelectedId(null);setMessages([]);setReply(null)}} aria-label="بازگشت"><ArrowRight size={19}/></button>
      <div className="h-12 w-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold">{selected.type==='direct'?(title(selected).slice(0,1)||'?'):<>{selected.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</>}</div>
      <div className="flex-1 min-w-0">
-      <b className="block truncate">{title(selected)}</b>
-      <div className="text-[11px] app-muted truncate">{selected.type==='direct'?(typingUsers.length?'در حال نوشتن…':selected.display_phone||'گفتگوی مستقیم'):(typingUsers.length?'در حال نوشتن…':realtimeState==='subscribed'?'متصل':'در حال همگام‌سازی')}</div>
+      <b className="block truncate text-[16px]">{title(selected)}</b>
+      <div className="text-[12px] app-muted truncate">{selected.type==='direct'?(typingUsers.length?'در حال نوشتن…':selected.display_phone||'گفتگوی مستقیم'):(typingUsers.length?'در حال نوشتن…':realtimeState==='subscribed'?'متصل':'در حال همگام‌سازی')}</div>
      </div>
      {selected&&(selected.type==="group"||selected.type==="company_channel")&&<button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title="افزودن عضو" onClick={()=>void openPeople("member")}><UserPlus size={16}/></button>}
      <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title={pushReady?"اعلان‌های پیام فعال است":"فعال‌سازی اعلان پیام"} onClick={()=>void enablePush()} disabled={pushBusy}>{pushReady?<Bell size={17}/>:<BellOff size={17}/>}</button>
@@ -221,9 +230,9 @@ export const ChatPage:React.FC=()=>{
          <div className={"relative rounded-2xl px-4 py-2.5 shadow-sm "+(own?"bg-[var(--primary)] text-white rounded-br-md":"bg-black/5 dark:bg-white/10 rounded-bl-md")}>
           {!own&&selected.type!=="direct"&&m.sender_name&&<div className={"text-[10px] font-bold mb-1 "+(own?"opacity-80":"app-muted")}>{m.sender_name}</div>}
           {quoted&&<button className={"w-full text-right mb-2 px-2 py-1 rounded-lg border border-current/20 text-[10px] opacity-80"} onClick={()=>{const el=document.getElementById("msg-"+quoted.id);el?.scrollIntoView({behavior:"smooth",block:"center"})}}>{quoted.body||'پیام پیوست‌دار'}</button>}
-          {deleted?<div className="text-sm italic opacity-80">این پیام حذف شده است.</div>:m.body&&<div className="text-[15.5px] leading-7 whitespace-pre-wrap break-words">{m.body}</div>}
+          {deleted?<div className="text-sm italic opacity-80">این پیام حذف شده است.</div>:m.body&&<div className="text-[17px] leading-8 whitespace-pre-wrap break-words">{m.body}</div>}
           {!deleted&&(m.attachments??[]).map(a=>a.security_status==="clean"&&a.url?(a.mime_type.startsWith("audio/")?<audio key={a.id} controls src={a.url} className="mt-2 w-full max-w-[280px]"/>:<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline"><Paperclip size={14}/><span className="truncate">{a.original_name}</span></a>):<div key={a.id} className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs">{a.security_status==="blocked"?"فایل مسدود شد.":"فایل در حال بررسی امنیتی است…"}</div>)}
-          <div className={"flex items-center justify-end gap-1 mt-1 text-[10px] "+(own?"text-white/75":"app-muted")}>
+          <div className={"flex items-center justify-end gap-1 mt-1 text-[11px] "+(own?"text-white/75":"app-muted")}>
            {m.edited_at&&<span>ویرایش‌شده</span>}<span>{chatTime(m.created_at)}</span>
            {own&&(m.delivery_status==='sent'?<Check size={12}/>:m.delivery_status==='delivered'||m.delivery_status==='read'?<CheckCheck size={13}/>:<span className="opacity-70">در حال ارسال</span>)}
            {!deleted&&<button onClick={()=>setMenu(menu===m.id?null:m.id)} aria-label="گزینه‌های پیام"><MoreVertical size={14}/></button>}
@@ -252,10 +261,10 @@ export const ChatPage:React.FC=()=>{
 
      <input ref={fileInput} type="file" className="hidden" accept="image/*,application/pdf,text/plain,.doc,.docx,.xls,.xlsx" onChange={e=>{const f=e.target.files?.[0];e.currentTarget.value="";void chooseAttachment(f)}}/>
      <div className="flex items-end gap-1.5 md:gap-2">
-      <button type="button" className="h-11 w-11 shrink-0 rounded-full border app-border flex items-center justify-center disabled:opacity-40" disabled={attachmentBusy} onClick={()=>fileInput.current?.click()} aria-label="پیوست"><Paperclip size={18}/></button>
+      <button type="button" className="h-12 w-12 shrink-0 rounded-full border app-border flex items-center justify-center disabled:opacity-40" disabled={attachmentBusy} onClick={()=>fileInput.current?.click()} aria-label="پیوست"><Paperclip size={18}/></button>
       <button type="button" className={"h-11 w-11 shrink-0 rounded-full border app-border flex items-center justify-center "+(recording?"bg-red-600 text-white":"")} disabled={attachmentBusy} onClick={()=>void toggleVoice()} aria-label={recording?"توقف ضبط":"ضبط صدا"}>{recording?<MicOff size={18}/>:<Mic size={18}/>}</button>
       <textarea value={text} onChange={e=>{setText(e.target.value);broadcastTyping(Boolean(e.target.value.trim()))}} onBlur={()=>broadcastTyping(false)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send()}}} placeholder={online?"پیام بنویسید…":"آفلاین؛ پس از اتصال ارسال می‌شود…"} rows={1} className="flex-1 resize-none min-h-12 max-h-32 rounded-[24px] border app-border bg-transparent px-4 py-3 outline-none text-[15px]"/>
-      <button className="h-11 w-11 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center disabled:opacity-40" disabled={!text.trim()||sending||attachmentBusy} onClick={()=>void send()} aria-label="ارسال"><Send size={18}/></button>
+      <button className="h-12 w-12 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center disabled:opacity-40" disabled={!text.trim()||sending||attachmentBusy} onClick={()=>void send()} aria-label="ارسال"><Send size={18}/></button>
      </div>
      {(attachmentBusy||ocrBusy)&&<div className="text-[10px] app-muted mt-1 px-1">{attachmentBusy?"در حال ارسال فایل…":"در حال OCR تصویر…"}</div>}
     </div>

@@ -50,6 +50,21 @@ export default {
       ? await env.ASSETS.fetch(new URL('/index.html', assetBase))
       : await env.ASSETS.fetch(assetRequest);
 
+    // Give /chat its own application identity before the browser evaluates the page.
+    if (isHtmlNavigation && url.pathname.startsWith('/chat') && response.ok) {
+      const html = await response.text();
+      const chatHtml = html
+        .replace(/<title>[^<]*<\\/title>/i, '<title>چت سازمانی | Customs OS<\\/title>')
+        .replace(/href="\\/manifest\\.webmanifest"/i, 'href="/manifest-chat.webmanifest"')
+        .replace(/href="\\/icon\\.svg"/i, 'href="/chat-icon.svg"')
+        .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="چت سازمانی"');
+      response = new Response(chatHtml, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
+    }
+
     // A custom hostname can temporarily hold a stale negative asset lookup at the edge.
     // Recover missing static assets from the canonical Worker hostname; this path never re-enters the fallback on itself.
     if (

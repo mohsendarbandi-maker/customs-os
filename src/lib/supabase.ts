@@ -3,6 +3,18 @@ import { attachSupabaseClient, rpcWithOfflineQueue } from './offlineQueue';
 
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
 const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+export const SUPABASE_AUTH_STORAGE_KEY = 'customs-os-auth-v3';
+
+// Drop the legacy Supabase auth storage namespace once so stale refresh tokens
+// from earlier builds cannot keep failing in a background tab.
+try {
+  const migrationKey = 'customs-os-auth-storage-migrated-v3';
+  if (localStorage.getItem(migrationKey) !== '1') {
+    localStorage.removeItem('sb-bjngfgiecvihofemptub-auth-token');
+    sessionStorage.removeItem('sb-bjngfgiecvihofemptub-auth-token');
+    localStorage.setItem(migrationKey, '1');
+  }
+} catch {}
 
 const baseClient = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -10,6 +22,7 @@ const baseClient = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
+    storageKey: SUPABASE_AUTH_STORAGE_KEY,
   },
 });
 attachSupabaseClient(baseClient);

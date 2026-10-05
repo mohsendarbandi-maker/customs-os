@@ -201,3 +201,30 @@ main.min-h-screen.overflow-hidden.text-white.relative{background:var(--bg)!impor
   .finance-page textarea.input{font-size:16px}
 }
 
+
+
+/* CHAT STANDALONE — independent identity, light high-contrast theme, WhatsApp-scale mobile UI */
+.chat-standalone{
+  --bg:#f3f6f9;--surface:#ffffff;--surface-2:#eef3f7;--surface-3:#e4ebf1;
+  --text:#122033;--text-muted:#526173;--border:#d2dce6;--primary:#0b7ea4;--primary-2:#0a5f7d;
+  color:var(--text);background:var(--bg)!important;color-scheme:light;
+}
+.chat-standalone .app-muted{color:#526173!important}
+.chat-standalone button,.chat-standalone input,.chat-standalone textarea,.chat-standalone select{color:var(--text)}
+.chat-standalone textarea::placeholder,.chat-standalone input::placeholder{color:#718096;opacity:1}
+.chat-standalone .app-border{border-color:var(--border)!important}
+.chat-standalone .dark\\:bg-white\\/10,.chat-standalone .dark\\:bg-white\\/5{background:#eef3f7!important}
+.chat-standalone .dark\\:hover\\:bg-white\\/10:hover,.chat-standalone .dark\\:hover\\:bg-white\\/5:hover{background:#e8eff4!important}
+.chat-standalone .max-w-\\[88\\%\\]{max-width:88%}
+@media(max-width:767px){
+ .chat-standalone{font-size:16px}
+ .chat-standalone section:first-child header{height:80px;padding-inline:14px}
+ .chat-standalone section:first-child>div:nth-child(2){padding:9px 10px}
+ .chat-standalone section:first-child button{min-height:92px;padding-block:12px}
+ .chat-standalone section:nth-child(2)>div.overflow-y-auto{padding-inline:11px;padding-top:12px;padding-bottom:12px}
+ .chat-standalone section:nth-child(2) .rounded-2xl.px-4.py-2\\.5{padding:12px 14px}
+ .chat-standalone section:nth-child(2) .text-\\[17px\\]{font-size:17px;line-height:1.95}
+ .chat-standalone section:nth-child(2) header{height:78px}
+ .chat-standalone section:nth-child(2) .shrink-0.border-t{padding:10px 10px max(12px,env(safe-area-inset-bottom))}
+ .chat-standalone section:nth-child(2) textarea{font-size:17px;min-height:52px}
+}
