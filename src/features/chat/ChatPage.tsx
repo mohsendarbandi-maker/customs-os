@@ -257,7 +257,7 @@ export const ChatPage:React.FC=()=>{
      <div ref={bottom}/>
     </div>
 
-    {(reply||editId)&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">{editId?'در حال ویرایش پیام':'پاسخ به: '+(reply?.body||'پیام پیوست‌دار')}</div><button type="button" className="icon-btn" onClick={()=>{setReply(null);setEditId(null);setText('')}} aria-label="لغو"><X size={15}/></button></div>
+    {(reply||editId)&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">{editId?'در حال ویرایش پیام':'پاسخ به: '+(reply?.body||'پیام پیوست‌دار')}</div><button type="button" className="icon-btn" onClick={()=>{setReply(null);setEditId(null);setText('')}} aria-label="لغو"><X size={15}/></button></div>}
 
     <div className="shrink-0 border-t app-border p-3 md:p-3 bg-[var(--surface)]">
     {!pushReady&&<button type="button" onClick={()=>void enablePush()} disabled={pushBusy} className="mb-2 w-full min-h-12 rounded-2xl border app-border bg-[var(--primary)]/10 px-4 flex items-center gap-3 text-right disabled:opacity-50">
