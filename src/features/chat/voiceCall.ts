@@ -42,13 +42,15 @@ const stringValue = (record: BroadcastPayload, key: string): string => {
 
 const nullableStringValue = (record: BroadcastPayload, key: string): string | null | undefined => {
   const value = record[key];
-  if (value === null || typeof value === 'string') return value;
+  if (value === null) return null;
+  if (typeof value === 'string') return value;
   return undefined;
 };
 
 const nullableNumberValue = (record: BroadcastPayload, key: string): number | null | undefined => {
   const value = record[key];
-  if (value === null || typeof value === 'number') return value;
+  if (value === null) return null;
+  if (typeof value === 'number') return value;
   return undefined;
 };
 
