@@ -24,6 +24,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+      - name: Force a fresh Cloudflare asset manifest
+        run: echo "${GITHUB_SHA}-${GITHUB_RUN_ID}" > dist/build-marker.txt
       - name: Deploy Worker to Cloudflare
         run: npx wrangler@4 deploy
         env:
