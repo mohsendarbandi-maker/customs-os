@@ -172,7 +172,6 @@ export const ChatPage:React.FC=()=>{
   try{const result=await sendMessage(selectedId,clientUuid,body,reply?.id);setMessages(v=>v.filter(m=>m.id!==optimistic.id));if('queued'in result&&result.queued)setMessages(v=>[...v,{...optimistic,delivery_status:'queued'}]);else{await load(selectedId);await refresh()}}
   catch(e){setMessages(v=>v.filter(m=>m.id!==optimistic.id));setText(body);setError(err(e))}finally{setSending(false)}
  };
- const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);setMenu(null);if(selectedId)await load(selectedId)}catch(e){setError(err(e))}};
  const runSearch=async()=>{if(!query.trim()){setResults([]);return}try{setResults(await searchChat(query,selectedId??undefined))}catch(e){setError(err(e))}};
  const react=async(m:ChatMessage,emoji:string)=>{try{await toggleChatReaction(m.id,emoji);if(selectedId)await load(selectedId);setMenu(null)}catch(e){setError(err(e))}};
  const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);setMenu(null);if(selectedId)await load(selectedId)}catch(e){setError(err(e))}};
