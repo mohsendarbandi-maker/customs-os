@@ -18,6 +18,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const isChatHost = url.hostname.toLowerCase() === 'chat.darbandicommercial.ir';
 
 
     if (url.pathname === '/api/webrtc/ice') {
@@ -104,6 +105,7 @@ export default {
       url.pathname === '/manifest.webmanifest' ||
       url.pathname === '/manifest-chat.webmanifest' ||
       url.pathname === '/chat-manifest.webmanifest' ||
+      url.pathname === '/chat-app.webmanifest' ||
       url.pathname === '/manifest-reminders.webmanifest';
 
     const isStaticAsset =
@@ -113,7 +115,7 @@ export default {
       request.method === 'GET' &&
       !url.pathname.startsWith('/api/') &&
       !isStaticAsset &&
-      (url.pathname === '/' || url.pathname.startsWith('/chat') || accept.includes('text/html'));
+      (isChatHost || url.pathname === '/' || url.pathname.startsWith('/chat') || accept.includes('text/html'));
     const assetBase = new URL(request.url);
     assetBase.hostname = 'customs.mohsen-darbandi.workers.dev';
     const assetRequest = new Request(assetBase, request);
@@ -122,11 +124,12 @@ export default {
       : await env.ASSETS.fetch(assetRequest);
 
     // Give /chat its own application identity before the browser evaluates the page.
-    if (isHtmlNavigation && url.pathname.startsWith('/chat') && response.ok) {
+    if (isHtmlNavigation && (isChatHost || url.pathname.startsWith('/chat')) && response.ok) {
       const html = await response.text();
+      const chatManifestPath = isChatHost ? '/chat-app.webmanifest' : '/chat-manifest.webmanifest';
       const chatHtml = html
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
-        .replace(/href="\/manifest\.webmanifest"/i, 'href="/chat-manifest.webmanifest"')
+        .replace(/href="\/manifest\.webmanifest"/i, 'href="' + chatManifestPath + '"')
         .replace(/href="\/icon\.svg"/i, 'href="/chat-icon.svg"')
         .replace(/href="\/pwa\/apple-touch-icon-180\.png"/i, 'href="/chat-icon.svg"')
         .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#0B7EA4"')
@@ -147,8 +150,9 @@ export default {
       manifestHeaders.set('Pragma', 'no-cache');
       manifestHeaders.set('Vary', 'Referer, Accept-Encoding');
 
-      if (url.pathname === '/manifest.webmanifest' && referer.includes('/chat')) {
-        const chatResponse = await env.ASSETS.fetch(new URL('/manifest-chat.webmanifest?from=chat', assetBase));
+      if (url.pathname === '/manifest.webmanifest' && (referer.includes('/chat') || referer.includes('://chat.darbandicommercial.ir'))) {
+        const chatManifestPath = referer.includes('://chat.darbandicommercial.ir') ? '/chat-app.webmanifest' : '/chat-manifest.webmanifest';
+        const chatResponse = await env.ASSETS.fetch(new URL(chatManifestPath + '?from=chat', assetBase));
         if (chatResponse.ok) {
           const chatHeaders = new Headers(chatResponse.headers);
           chatHeaders.set('Content-Type', 'application/manifest+json; charset=utf-8');
