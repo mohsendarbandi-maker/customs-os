@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useState}from'react';
-import{Check,Image,Languages,Palette,Save,Sun,Moon,Type,X}from'lucide-react';
+import{Bell,BellOff,Check,Image,Languages,Palette,Save,Send,Sun,Moon,Type,UserRound,Volume2,VolumeX,X}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
 import{supabase}from'../../lib/supabase';
 
@@ -9,10 +9,18 @@ export type ChatPreferences={
  wallpaper:'plain'|'dots'|'grid'|'soft'|'blueprint';
  fontSize:'small'|'normal'|'large';
  language:'fa'|'en';
+ notificationsEnabled:boolean;
+ soundsEnabled:boolean;
+ vibrationEnabled:boolean;
+ sendOnEnter:boolean;
+ compactMode:boolean;
+ showSenderNames:boolean;
+ showMessagePreview:boolean;
 };
 
 export const DEFAULT_CHAT_PREFERENCES:ChatPreferences={
- theme:'light',accent:'#0B7EA4',wallpaper:'plain',fontSize:'normal',language:'fa'
+ theme:'light',accent:'#0B7EA4',wallpaper:'plain',fontSize:'normal',language:'fa',
+ notificationsEnabled:true,soundsEnabled:true,vibrationEnabled:true,sendOnEnter:true,compactMode:false,showSenderNames:true,showMessagePreview:true
 };
 
 const readLocal=():ChatPreferences=>{
@@ -37,6 +45,13 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
   root.dataset.chatTheme=next.theme;
   root.dataset.chatWallpaper=next.wallpaper;
   root.dataset.chatLanguage=next.language;
+  root.dataset.chatNotifications=String(next.notificationsEnabled);
+  root.dataset.chatSounds=String(next.soundsEnabled);
+  root.dataset.chatVibration=String(next.vibrationEnabled);
+  root.dataset.chatSendOnEnter=String(next.sendOnEnter);
+  root.dataset.chatDensity=next.compactMode?'compact':'comfortable';
+  root.dataset.chatShowSenderNames=String(next.showSenderNames);
+  root.dataset.chatShowMessagePreview=String(next.showMessagePreview);
   root.style.setProperty('--chat-accent',next.accent);
   root.style.setProperty('--chat-font-scale',fontScale(next.fontSize));
  },[]);
@@ -217,6 +232,38 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
        >English</button>
       </div>
       <div className="text-[11px] app-muted mt-2">انتخاب زبان و تنظیمات ظاهر برای همین حساب ذخیره می‌شود.</div>
+     </div>
+     <div className="rounded-2xl border app-border p-4">
+      <div className="flex items-center gap-2 font-bold text-sm"><Bell size={16}/> اعلان‌ها و تماس‌ها</div>
+      <div className="mt-3 space-y-2">
+       {([
+        ['notificationsEnabled','اعلان پیام و تماس',<Bell size={15}/>],
+        ['soundsEnabled','صدای اعلان',prefs.soundsEnabled?<Volume2 size={15}/>:<VolumeX size={15}/>],
+        ['vibrationEnabled','لرزش اعلان تماس',<Phone size={15}/>]
+       ] as const).map(([key,label,icon])=>{
+        const enabled=prefs[key as keyof ChatPreferences] as boolean;
+        return <button key={key} type="button" onClick={()=>update({[key]:!enabled} as Partial<ChatPreferences>)} className="w-full min-h-11 rounded-xl px-3 flex items-center gap-3 hover:bg-black/5 dark:hover:bg-white/5">
+         <span className="text-[var(--primary)]">{icon}</span><span className="flex-1 text-right text-sm">{label}</span><span className={"w-10 h-6 rounded-full p-1 transition "+(enabled?'bg-[var(--chat-accent)]':'bg-black/15 dark:bg-white/15')}><span className={"block h-4 w-4 rounded-full bg-white transition "+(enabled?'mr-4':'mr-0')}/></span>
+        </button>
+       })}
+      </div>
+     </div>
+
+     <div className="rounded-2xl border app-border p-4">
+      <div className="flex items-center gap-2 font-bold text-sm"><Send size={16}/> رفتار و نمایش چت</div>
+      <div className="mt-3 space-y-2">
+       {([
+        ['sendOnEnter','Enter برای ارسال'],
+        ['compactMode','نمایش فشرده و خلوت'],
+        ['showSenderNames','نمایش نام فرستنده در گروه'],
+        ['showMessagePreview','نمایش پیش‌نمایش پیام در اعلان']
+       ] as const).map(([key,label])=>{
+        const enabled=prefs[key];
+        return <button key={key} type="button" onClick={()=>update({[key]:!enabled})} className="w-full min-h-11 rounded-xl px-3 flex items-center gap-3 hover:bg-black/5 dark:hover:bg-white/5">
+         <span className="text-[var(--primary)]">{enabled?<Check size={15}/>:<X size={15}/>}</span><span className="flex-1 text-right text-sm">{label}</span><span className={"w-10 h-6 rounded-full p-1 transition "+(enabled?'bg-[var(--chat-accent)]':'bg-black/15 dark:bg-white/15')}><span className={"block h-4 w-4 rounded-full bg-white transition "+(enabled?'mr-4':'mr-0')}/></span>
+        </button>
+       })}
+      </div>
      </div>
     </div>
 
