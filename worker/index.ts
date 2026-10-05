@@ -43,9 +43,12 @@ export default {
     }
 
     const isHtmlNavigation = request.method === 'GET' && (url.pathname === '/' || (request.headers.get('Accept') || '').includes('text/html'));
+    const assetBase = new URL(request.url);
+    assetBase.hostname = 'customs.mohsen-darbandi.workers.dev';
+    const assetRequest = new Request(assetBase, request);
     let response = isHtmlNavigation
-      ? await env.ASSETS.fetch(new URL('/index.html', request.url))
-      : await env.ASSETS.fetch(request);
+      ? await env.ASSETS.fetch(new URL('/index.html', assetBase))
+      : await env.ASSETS.fetch(assetRequest);
 
     // A custom hostname can temporarily hold a stale negative asset lookup at the edge.
     // Recover missing static assets from the canonical Worker hostname; this path never re-enters the fallback on itself.
