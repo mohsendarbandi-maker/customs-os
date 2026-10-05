@@ -32,7 +32,7 @@ const dayLabel=(value:string)=>{
  return new Intl.DateTimeFormat('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran',weekday:'long',day:'numeric',month:'long'}).format(new Date(value));
 };
 
-// build verification: static AI Operator import
+// build verification: static AI Operator import (green-check)
 export const ChatPage:React.FC=()=>{
  const{user,profile}=useAuth();
  const[searchParams]=useSearchParams();
