@@ -153,6 +153,17 @@ jobs:
                 { timeout: 15000, message: `React did not render visible content into #root\\nErrors: ${errors.join(' | ') || 'none'}\\nScripts: ${scriptResponses.join(' | ') || 'none'}` },
               ).not.toBe('');
 
+              const chatPage = await page.context().newPage();
+              await chatPage.goto(baseURL + '/chat', { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await chatPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+              await expect(chatPage.locator('#root')).toBeAttached();
+              await expect.poll(
+                async () => (await chatPage.locator('#root').innerText()).trim(),
+                { timeout: 15000, message: 'Chat route did not render visible content into #root' },
+              ).not.toBe('');
+              await expect(chatPage).toHaveTitle(/چت سازمانی/);
+              await chatPage.close();
+
               if (errors.length) {
                 throw new Error(errors.join('\\n'));
               }
