@@ -14,7 +14,7 @@ clientsClaim();
 
 type PushData={title?:string;body?:string;tag?:string;url?:string;icon?:string;badge?:string;requireInteraction?:boolean;actions?:Array<{action:string;title:string;icon?:string}>;data?:Record<string,string>};
 const actionUrl=(rid:string,action:string)=>'/reminders?rid='+encodeURIComponent(rid)+'&act='+encodeURIComponent(action)+'&source=push';
-const isVoicePush=(data:PushData)=>data.data?.kind==='voice_call';
+const isVoicePush=(data:PushData)=>data.data?.kind==='voice_call'||data.tag?.startsWith('voice-call-')===true;
 self.addEventListener('push',(event)=>{
  const data=(event.data?.json?.()??{}) as PushData;
  event.waitUntil(self.registration.showNotification(data.title??(isVoicePush(data)?'تماس صوتی ورودی':'یادآور گمرکی'),{
