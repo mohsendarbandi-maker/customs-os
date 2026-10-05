@@ -394,17 +394,6 @@ export function useVoiceCall({
   }, []);
 
   useEffect(() => {
-    remoteAudioRef.current = document.createElement('audio');
-    remoteAudioRef.current.autoplay = true;
-    remoteAudioRef.current.playsInline = true;
-
-    return () => {
-      remoteAudioRef.current?.remove();
-      remoteAudioRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
     disposedRef.current = false;
     if (!userId) return;
 
