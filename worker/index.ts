@@ -39,17 +39,17 @@ export default {
           { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] },
         ];
 
-        if (!env.TURN_API_TOKEN_V2_V2 || !env.TURN_KEY_ID_V2_V2) {
+        if (!env.TURN_API_TOKEN_V2 || !env.TURN_KEY_ID_V2) {
           return json({ error: 'سرویس ارتباط صوتی هنوز پیکربندی نشده است.' }, 503);
         }
 
         {
           const turnResponse = await fetch(
-            'https://rtc.live.cloudflare.com/v1/turn/keys/' + encodeURIComponent(env.TURN_KEY_ID_V2_V2) + '/credentials/generate-ice-servers',
+            'https://rtc.live.cloudflare.com/v1/turn/keys/' + encodeURIComponent(env.TURN_KEY_ID_V2) + '/credentials/generate-ice-servers',
             {
               method: 'POST',
               headers: {
-                Authorization: 'Bearer ' + env.TURN_API_TOKEN_V2_V2,
+                Authorization: 'Bearer ' + env.TURN_API_TOKEN_V2,
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({ ttl: 3600 }),
