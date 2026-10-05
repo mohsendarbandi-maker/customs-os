@@ -22,7 +22,14 @@ export default {
       const chatUrl = new URL(request.url);
       chatUrl.pathname = '/chat';
       chatUrl.search = '?source=pwa';
-      return Response.redirect(chatUrl.toString(), 302);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: chatUrl.toString(),
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
     }
     if (url.pathname === '/api/webrtc/ice') {
       if (request.method !== 'GET') {
