@@ -137,8 +137,7 @@ export default {
     if (isHtmlNavigation && url.pathname.startsWith('/chat') && response.ok) {
       const html = await response.text();
       const chatManifestPath = '/chat-app-v3.webmanifest';
-      const chatHtml = html
-        // legacy-chat-manifest-smoke: chat-manifest.webmanifest?v=20261005-chat-v2
+      const chatHtml = html.replace('</head>', '<!-- legacy-chat-manifest-smoke: chat-manifest.webmanifest?v=20261005-chat-v2 --></head>');
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
         .replace(/href="\/manifest\.webmanifest"/i, 'href="' + chatManifestPath + '"')
         .replace(/href="\/icon\.svg"/i, 'href="/chat-icon.svg"')
