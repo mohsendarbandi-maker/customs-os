@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, Loader2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, Loader2, Upload } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
@@ -25,6 +25,8 @@ type Uploads = {
 type RemainingChecklistItem = {
   id: string;
   item_key: string;
+  item_label?: string | null;
+  note?: string | null;
   completed: boolean;
 };
 
@@ -36,6 +38,8 @@ export const ExitPage: React.FC = () => {
 
   const [shipmentId, setShipmentId] = useState('');
   const [organizationId, setOrganizationId] = useState('');
+  const [shipPassed, setShipPassed] = useState<boolean | null>(null);
+  const [transportDocumentsStatus, setTransportDocumentsStatus] = useState('not_ready');
   const [declaration, setDeclaration] = useState<Declaration | null>(null);
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [remainingChecklist, setRemainingChecklist] = useState<RemainingChecklistItem[]>([]);
@@ -87,6 +91,20 @@ export const ExitPage: React.FC = () => {
       setDeclaration(data as Declaration);
       setShipmentId(data.shipment_id || '');
 
+      if (data.shipment_id) {
+        const { data: shipmentRow, error: shipmentError } = await supabase
+          .from('shipments')
+          .select('ship_passed,transport_documents_status')
+          .eq('id', data.shipment_id)
+          .maybeSingle();
+        if (shipmentError) throw shipmentError;
+        setShipPassed(Boolean(shipmentRow?.ship_passed));
+        setTransportDocumentsStatus(shipmentRow?.transport_documents_status || 'not_ready');
+      } else {
+        setShipPassed(null);
+        setTransportDocumentsStatus('not_ready');
+      }
+
       const { data: exitRows, error: exitError } = await supabase
         .from('declaration_exit_checklist_items')
         .select('item_key,completed')
@@ -105,8 +123,9 @@ export const ExitPage: React.FC = () => {
 
       const { data: pendingRows, error: pendingError } = await supabase
         .from('declaration_checklist_items')
-        .select('id,item_key,completed')
+        .select('id,item_key,item_label,note,completed')
         .eq('declaration_id', declarationId)
+        .eq('is_active', true)
         .eq('completed', false);
 
       if (pendingError) throw pendingError;
@@ -432,6 +451,19 @@ export const ExitPage: React.FC = () => {
           </div>
         ) : (
           <>
+            {shipPassed === false && (
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={18} className="shrink-0 text-amber-600 mt-0.5" />
+                  <div>
+                    <b>هشدار مرحله‌های قبل:</b> پاس کشتی هنوز ثبت نشده است.
+                    <div className="text-xs app-muted mt-1">
+                      وضعیت اسناد کشتیرانی: {transportDocumentsStatus === 'ready' ? 'آماده است' : 'هنوز آماده نیست'}.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {remainingChecklist.length > 0 && (
               <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
                 <div className="p-5 border-b border-amber-500/20">
@@ -452,7 +484,7 @@ export const ExitPage: React.FC = () => {
                     <span className="w-7 h-7 rounded-lg border border-amber-500/30 grid place-items-center shrink-0">
                       ✓
                     </span>
-                    <span className="text-sm font-semibold">{item.item_key}</span>
+                    <span className="text-sm font-semibold">{item.item_label || item.item_key}{item.note ? <span className="app-muted"> — توضیح: {item.note}</span> : null}</span>
                   </button>
                 ))}
               </section>
