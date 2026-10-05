@@ -372,13 +372,14 @@ export function useVoiceCall({
         const sdpMid = candidateRecord.sdpMid;
         const sdpMLineIndex = candidateRecord.sdpMLineIndex;
         const usernameFragment = candidateRecord.usernameFragment;
-        if (typeof sdpMid === 'string' || sdpMid === null) candidateInit.sdpMid = sdpMid;
-        if (typeof sdpMLineIndex === 'number' || sdpMLineIndex === null) candidateInit.sdpMLineIndex = sdpMLineIndex;
-        if (typeof usernameFragment === 'string' || usernameFragment === null) candidateInit.usernameFragment = usernameFragment;
+        const candidateWithOptionalFields: RTCIceCandidateInit = { ...candidateInit };
+        if (typeof sdpMid === 'string' || sdpMid === null) candidateWithOptionalFields.sdpMid = sdpMid;
+        if (typeof sdpMLineIndex === 'number' || sdpMLineIndex === null) candidateWithOptionalFields.sdpMLineIndex = sdpMLineIndex;
+        if (typeof usernameFragment === 'string' || usernameFragment === null) candidateWithOptionalFields.usernameFragment = usernameFragment;
 
         void (async () => {
-          if (pcRef.current?.remoteDescription) await pcRef.current.addIceCandidate(candidateInit);
-          else pendingIceRef.current.push(candidateInit);
+          if (pcRef.current?.remoteDescription) await pcRef.current.addIceCandidate(candidateWithOptionalFields);
+          else pendingIceRef.current.push(candidateWithOptionalFields);
         })().catch(() => {});
       })
       .on('broadcast', { event: 'voice_hello' }, (payload) => {
