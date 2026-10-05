@@ -84,6 +84,7 @@ jobs:
           ]) {
             test(`runtime boot: ${baseURL}`, async ({ page }) => {
               const errors = [];
+              const scriptResponses = [];
               page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
               page.on('console', (message) => {
                 if (message.type() === 'error') errors.push(`console: ${message.text()}`);
@@ -94,13 +95,19 @@ jobs:
                   errors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
                 }
               });
+              page.on('response', (response) => {
+                const url = response.url();
+                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                  scriptResponses.push(`${response.status()} ${response.headers()['content-type'] || 'NO_CONTENT_TYPE'} ${url}`);
+                }
+              });
 
               await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 30000 });
               await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
               await expect(page.locator('#root')).toBeAttached();
               await expect.poll(
                 async () => (await page.locator('#root').innerText()).trim(),
-                { timeout: 15000, message: 'React did not render visible content into #root' },
+                { timeout: 15000, message: `React did not render visible content into #root\\nErrors: ${errors.join(' | ') || 'none'}\\nScripts: ${scriptResponses.join(' | ') || 'none'}` },
               ).not.toBe('');
 
               if (errors.length) {
