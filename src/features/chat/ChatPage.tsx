@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
-import{ArrowRight,Bell,BellOff,Check,CheckCheck,Hash,MessageCircle,Mic,MicOff,MoreVertical,Paperclip,Plus,ScanText,Search,Send,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
+import{ArrowRight,Bell,BellOff,Check,CheckCheck,Hash,MessageCircle,Mic,MicOff,MoreVertical,Paperclip,Phone,Plus,ScanText,Search,Send,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
@@ -169,6 +169,8 @@ export const ChatPage:React.FC=()=>{
  const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);setMenu(null);if(selectedId)await load(selectedId)}catch(e){setError(err(e))}};
  const runSearch=async()=>{if(!query.trim()){setResults([]);return}try{setResults(await searchChat(query,selectedId??undefined))}catch(e){setError(err(e))}};
  const selected=conversations.find(c=>c.conversation_id===selectedId)??null;
+ const voice=useVoiceCall({userId:user?.id,organizationId:profile?.organization_id,conversationId:selected?.conversation_id??null,peerUserId:selected?.type==='direct'?selected.display_user_id??null:null,peerName:selected?.display_name||title(selected??({type:'direct',title:null,updated_at:'',conversation_id:'',last_message_id:null,last_message_body:null,last_message_created_at:null,unread_count:0,muted_until:null} as any))});
+ useEffect(()=>{if(voice.error)setError(voice.error)},[voice.error]);
  const unread=useMemo(()=>conversations.reduce((n,c)=>n+Number(c.unread_count??0),0),[conversations]);
  const messageMap=useMemo(()=>new Map(messages.map(m=>[m.id,m])),[messages]);
  const filteredPeople=useMemo(()=>{
@@ -214,6 +216,7 @@ export const ChatPage:React.FC=()=>{
       <div className="text-[12px] app-muted truncate">{selected.type==='direct'?(typingUsers.length?'در حال نوشتن…':selected.display_phone||'گفتگوی مستقیم'):(typingUsers.length?'در حال نوشتن…':realtimeState==='subscribed'?'متصل':'در حال همگام‌سازی')}</div>
      </div>
      {selected&&(selected.type==="group"||selected.type==="company_channel")&&<button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title="افزودن عضو" onClick={()=>void openPeople("member")}><UserPlus size={16}/></button>}
+     {selected.type==="direct"&&selected.display_user_id&&voice.canCall&&<button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-[var(--primary)] hover:bg-[var(--primary)]/10" title="تماس صوتی زنده" onClick={()=>void voice.startCall()}><Phone size={18}/></button>}
      <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title={pushReady?"اعلان‌های پیام فعال است":"فعال‌سازی اعلان پیام"} onClick={()=>void enablePush()} disabled={pushBusy}>{pushReady?<Bell size={17}/>:<BellOff size={17}/>}</button>
      {online&&realtimeState==="subscribed"?<Wifi size={16}/>:<WifiOff size={16}/>}
     </header>
@@ -298,6 +301,8 @@ export const ChatPage:React.FC=()=>{
     <button disabled={!channelTitle.trim()} onClick={()=>void createChannel()} className="w-full min-h-11 rounded-xl bg-[var(--primary)] text-white font-bold mt-4 disabled:opacity-40">ایجاد</button>
    </div>
   </div>}
+
+  <VoiceCallPanel controller={voice}/>
 
   {error&&<div className="fixed bottom-4 left-3 right-3 md:left-4 md:right-auto z-[700] max-w-md rounded-2xl border app-border bg-[var(--surface)] p-3 shadow-xl text-sm">{error}<button className="block text-xs mt-2 app-muted" onClick={()=>setError(null)}>بستن</button></div>}
  </div>;
