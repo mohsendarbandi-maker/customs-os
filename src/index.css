@@ -231,13 +231,6 @@ main.min-h-screen.overflow-hidden.text-white.relative{background:var(--bg)!impor
 
 /* CHAT MOBILE — WhatsApp-style full-viewport mode */
 @media (max-width: 767px){
-  html, body, #root{
-    width:100%;
-    max-width:100%;
-    height:100%;
-    min-height:100%;
-    overflow:hidden;
-  }
   .chat-standalone{
     position:fixed;
     inset:0;
