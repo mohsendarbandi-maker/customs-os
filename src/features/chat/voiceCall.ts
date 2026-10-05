@@ -150,6 +150,7 @@ export function useVoiceCall({
   const ringTimerRef = useRef<number | null>(null);
   const disconnectTimerRef = useRef<number | null>(null);
   const heartbeatTimerRef = useRef<number | null>(null);
+  const incomingPollRef = useRef<number | null>(null);
   const disposedRef = useRef(false);
 
   const setPhase = useCallback((next: VoicePhase) => {
@@ -316,7 +317,7 @@ export function useVoiceCall({
           broadcast('voice_offer', {
             call_id: row.id,
             from_user_id: userId,
-            description: peer.localDescription,
+            description: peer.localDescription?.toJSON() ?? null,
           });
           setPhase('connecting');
         })().catch((error) => setErrorState(callError(error)));
@@ -338,7 +339,7 @@ export function useVoiceCall({
           broadcast('voice_answer', {
             call_id: row.id,
             from_user_id: userId,
-            description: peer.localDescription,
+            description: peer.localDescription?.toJSON() ?? null,
           });
           setPhase('connecting');
         })().catch((error) => setErrorState(callError(error)));
@@ -380,6 +381,13 @@ export function useVoiceCall({
           else pendingIceRef.current.push(candidateInit);
         })().catch(() => {});
       })
+      .on('broadcast', { event: 'voice_hello' }, (payload) => {
+        const record = asRecord(payload.payload);
+        if (stringValue(record, 'call_id') !== row.id || stringValue(record, 'from_user_id') === userId) return;
+        if (role === 'callee') {
+          broadcast('voice_ready', { call_id: row.id, from_user_id: userId });
+        }
+      })
       .on('broadcast', { event: 'voice_hangup' }, (payload) => {
         const record = asRecord(payload.payload);
         if (stringValue(record, 'call_id') !== row.id) return;
@@ -387,8 +395,11 @@ export function useVoiceCall({
         void cleanupTransport();
       })
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED' && role === 'callee') {
-          broadcast('voice_ready', { call_id: row.id, from_user_id: userId });
+        if (status === 'SUBSCRIBED') {
+          broadcast('voice_hello', { call_id: row.id, from_user_id: userId });
+          if (role === 'callee') {
+            broadcast('voice_ready', { call_id: row.id, from_user_id: userId });
+          }
         }
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           setErrorState('کانال تماس وصل نشد. اتصال اینترنت را بررسی کنید.');
@@ -556,57 +567,59 @@ export function useVoiceCall({
       try {
         await supabase.realtime.setAuth();
 
+        const acceptInvite = async (incoming: BroadcastPayload) => {
+          const incomingId = stringValue(incoming, 'call_id');
+          const callerId = stringValue(incoming, 'caller_id');
+          const incomingConversationId = stringValue(incoming, 'conversation_id');
+
+          if (!incomingId || !callerId || !incomingConversationId || callerId === userId || disposedRef.current) return;
+
+          if (phaseRef.current !== 'idle') {
+            void updateStatus(incomingId, 'rejected').catch(() => {});
+            return;
+          }
+
+          try {
+            const explicitName = stringValue(incoming, 'caller_name');
+            const name = explicitName || await getProfileName(callerId);
+            const row: VoiceCallRow = {
+              id: incomingId,
+              organization_id: stringValue(incoming, 'organization_id') || organizationId || '',
+              conversation_id: incomingConversationId,
+              caller_id: callerId,
+              callee_id: userId,
+              status: 'ringing',
+            };
+
+            setCall(row, 'callee', name);
+            setPhase('incoming');
+
+            if ('vibrate' in navigator) navigator.vibrate?.([300, 150, 300, 150, 300]);
+
+            if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
+              try {
+                new Notification(`تماس صوتی از ${name}`, { body: 'برای پاسخ وارد Customs OS شوید.' });
+              } catch {
+                // Notification permission is optional; the in-app call panel remains authoritative.
+              }
+            }
+
+            if (ringTimerRef.current !== null) window.clearTimeout(ringTimerRef.current);
+            ringTimerRef.current = window.setTimeout(() => {
+              if (phaseRef.current === 'incoming' && callRef.current?.id === incomingId) {
+                void updateStatus(incomingId, 'missed').catch(() => {});
+                void cleanupTransport();
+              }
+            }, 45000);
+          } catch (error) {
+            setErrorState(callError(error));
+          }
+        };
+
         channel = supabase
           .channel(`chat-voice-user:${userId}`, { config: { private: true } })
           .on('broadcast', { event: 'voice_invite' }, (payload) => {
-            const incoming = asRecord(payload.payload);
-            const incomingId = stringValue(incoming, 'call_id');
-            const callerId = stringValue(incoming, 'caller_id');
-            const incomingConversationId = stringValue(incoming, 'conversation_id');
-
-            if (!incomingId || !callerId || !incomingConversationId || callerId === userId || disposedRef.current) return;
-
-            if (phaseRef.current !== 'idle') {
-              void updateStatus(incomingId, 'rejected').catch(() => {});
-              return;
-            }
-
-            void (async () => {
-              try {
-                const explicitName = stringValue(incoming, 'caller_name');
-                const name = explicitName || await getProfileName(callerId);
-                const row: VoiceCallRow = {
-                  id: incomingId,
-                  organization_id: stringValue(incoming, 'organization_id') || organizationId || '',
-                  conversation_id: incomingConversationId,
-                  caller_id: callerId,
-                  callee_id: userId,
-                  status: 'ringing',
-                };
-
-                setCall(row, 'callee', name);
-                setPhase('incoming');
-
-                if ('vibrate' in navigator) navigator.vibrate?.([300, 150, 300, 150, 300]);
-
-                if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
-                  try {
-                    new Notification(`تماس صوتی از ${name}`, { body: 'برای پاسخ وارد Customs OS شوید.' });
-                  } catch {
-                    // Notification permission is optional; the in-app call panel remains authoritative.
-                  }
-                }
-
-                ringTimerRef.current = window.setTimeout(() => {
-                  if (phaseRef.current === 'incoming' && callRef.current?.id === incomingId) {
-                    void updateStatus(incomingId, 'missed').catch(() => {});
-                    void cleanupTransport();
-                  }
-                }, 45000);
-              } catch (error) {
-                setErrorState(callError(error));
-              }
-            })();
+            void acceptInvite(asRecord(payload.payload));
           })
           .on('broadcast', { event: 'voice_status' }, (payload) => {
             const incoming = asRecord(payload.payload);
@@ -634,6 +647,35 @@ export function useVoiceCall({
           .subscribe(() => {});
 
         userChannelRef.current = channel;
+
+        const pollIncomingCalls = async () => {
+          if (disposedRef.current || phaseRef.current !== 'idle') return;
+
+          const result = await supabase
+            .from('chat_voice_calls')
+            .select('id,organization_id,conversation_id,caller_id,callee_id,status')
+            .eq('callee_id', userId)
+            .eq('status', 'ringing')
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (result.error || !Array.isArray(result.data) || result.data.length === 0) return;
+
+          const row = result.data[0];
+          await acceptInvite({
+            call_id: row.id,
+            organization_id: row.organization_id,
+            conversation_id: row.conversation_id,
+            caller_id: row.caller_id,
+            callee_id: row.callee_id,
+            status: row.status,
+          });
+        };
+
+        void pollIncomingCalls();
+        incomingPollRef.current = window.setInterval(() => {
+          void pollIncomingCalls();
+        }, 4000);
       } catch (error) {
         setErrorState(callError(error));
       }
@@ -641,6 +683,10 @@ export function useVoiceCall({
 
     return () => {
       disposedRef.current = true;
+      if (incomingPollRef.current !== null) {
+        window.clearInterval(incomingPollRef.current);
+        incomingPollRef.current = null;
+      }
       if (channel) void supabase.removeChannel(channel);
       userChannelRef.current = null;
 
