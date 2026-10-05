@@ -1,4 +1,6 @@
 import React,{lazy,Suspense} from 'react';
+import { LoginPage } from './pages/LoginPage';
+import { DesktopHomePage } from './pages/DesktopHomePage';
 import { BrowserRouter,Routes,Route,Navigate,useSearchParams,useLocation } from 'react-router-dom';
 import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider,UserRole,useAuth } from './context/AuthContext';
