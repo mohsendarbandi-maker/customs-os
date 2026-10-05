@@ -10,6 +10,7 @@ export type ChatConversation = {
   muted_until: string | null;
   display_name?: string | null;
   display_phone?: string | null;
+  display_user_id?: string | null;
 };
 
 export type ChatMessage = {
