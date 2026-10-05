@@ -6,9 +6,24 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const migrationsDir = path.resolve(__dirname, '../supabase/migrations');
+const legacyMigrationsDir = path.resolve(__dirname, '../supabase/legacy-migrations');
 
-function readMigration(name: string) { return fs.readFileSync(path.join(migrationsDir, name), 'utf8'); }
-function readAllMigrations() { return fs.readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort().map((name) => ({ name, sql: readMigration(name) })); }
+function migrationFilePath(name: string) {
+  const primary = path.join(migrationsDir, name);
+  if (fs.existsSync(primary)) return primary;
+  const legacy = path.join(legacyMigrationsDir, name);
+  if (fs.existsSync(legacy)) return legacy;
+  throw new Error(`Migration file not found: ${name}`);
+}
+function readMigration(name: string) { return fs.readFileSync(migrationFilePath(name), 'utf8'); }
+function readAllMigrations() {
+  const names = new Set<string>();
+  for (const dir of [migrationsDir, legacyMigrationsDir]) {
+    if (!fs.existsSync(dir)) continue;
+    for (const name of fs.readdirSync(dir)) if (name.endsWith('.sql')) names.add(name);
+  }
+  return [...names].sort().map((name) => ({ name, sql: readMigration(name) }));
+}
 
 describe('STATIC TESTS -- Database Invariant Verification', () => {
   const migrations = readAllMigrations();
