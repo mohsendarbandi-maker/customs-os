@@ -203,6 +203,11 @@ export async function sendMessage(conversationId: string, clientUuid: string, bo
   return unwrap(result) as ChatMessage;
 }
 
+export async function setMessageMentions(messageId:string,userIds:string[]):Promise<number>{
+  const result=await supabase.rpc('chat_set_message_mentions',{p_message_id:messageId,p_user_ids:userIds});
+  return unwrap(result) as number;
+}
+
 export async function markRead(conversationId: string, messageId: string): Promise<void> {
   const result = await supabase.rpc('chat_mark_read', { p_conversation_id: conversationId, p_message_id: messageId });
   if (result.error) throw new Error(result.error.message);
