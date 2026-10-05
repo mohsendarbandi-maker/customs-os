@@ -416,7 +416,7 @@ export function useVoiceCall({
 
             void (async () => {
               try {
-                const name = await getProfileName(callerId);
+                const name = String(incoming.caller_name || await getProfileName(callerId));
                 const row: VoiceCallRow = {
                   id: incomingId,
                   organization_id: String(incoming.organization_id || organizationId || ''),
