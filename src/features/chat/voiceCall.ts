@@ -138,12 +138,14 @@ export function useVoiceCall({
   conversationId,
   peerUserId,
   peerName,
+  requestedCallId = null,
 }: {
   userId: string | undefined;
   organizationId: string | null | undefined;
   conversationId: string | null;
   peerUserId: string | null | undefined;
   peerName: string;
+  requestedCallId?: string | null;
 }) {
   const [phase, setPhaseState] = useState<VoicePhase>('idle');
   const [callId, setCallIdState] = useState<string | null>(null);
@@ -666,13 +668,15 @@ export function useVoiceCall({
         const pollIncomingCalls = async () => {
           if (disposedRef.current || phaseRef.current !== 'idle') return;
 
-          const result = await supabase
+          const query = supabase
             .from('chat_voice_calls')
             .select('id,organization_id,conversation_id,caller_id,callee_id,status')
             .eq('callee_id', userId)
-            .eq('status', 'ringing')
-            .order('created_at', { ascending: false })
-            .limit(1);
+            .eq('status', 'ringing');
+
+          const result = requestedCallId
+            ? await query.eq('id', requestedCallId).limit(1)
+            : await query.order('created_at', { ascending: false }).limit(1);
 
           if (result.error || !Array.isArray(result.data) || result.data.length === 0) return;
 
@@ -711,7 +715,7 @@ export function useVoiceCall({
 
       void cleanupTransport();
     };
-  }, [cleanupTransport, organizationId, setCall, setPhase, updateStatus, userId]);
+  }, [cleanupTransport, organizationId, requestedCallId, setCall, setPhase, updateStatus, userId]);
 
   const selectConversationPeer = useMemo(() => ({
     canCall: phase === 'idle' && Boolean(conversationId && peerUserId && peerUserId !== userId),
