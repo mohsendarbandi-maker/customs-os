@@ -143,7 +143,7 @@ export default {
     if (isHtmlNavigation && (url.pathname.startsWith('/chat') || isChatHost) && response.ok) {
       const html = await response.text();
       const chatManifestPath = isChatHost
-        ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v1'
+        ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2'
         : '/chat-app-v4.webmanifest?v=20261005-chat-v4';
       const chatHtml = html
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
