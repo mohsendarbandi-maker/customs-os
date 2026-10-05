@@ -3,18 +3,20 @@
   "name": "Customs OS — چت سازمانی",
   "short_name": "چت سازمانی",
   "description": "چت سازمانی Customs OS",
-  "start_url": "/chat?source=pwa",
+  "start_url": "/chat",
   "scope": "/chat",
   "display": "standalone",
   "dir": "rtl",
   "lang": "fa",
   "theme_color": "#0B7EA4",
   "background_color": "#F3F6F9",
-  "icons":[
-      {"src":"/chat-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"},
-      {"src":"/pwa/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
-      {"src":"/pwa/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"}
-    ],
+  "icons": [
+    {"src":"/chat-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"},
+    {"src":"/pwa/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/pwa/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"/pwa/icon-192-maskable.png","sizes":"192x192","type":"image/png","purpose":"maskable"},
+    {"src":"/pwa/icon-512-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ],
   "shortcuts": [
     {"name":"چت سازمانی","short_name":"چت","url":"/chat","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]}
   ]
