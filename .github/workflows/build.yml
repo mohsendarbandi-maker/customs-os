@@ -104,7 +104,8 @@ jobs:
             if grep -qi '<!doctype html' /tmp/app.js; then echo "Deployed module returned HTML instead of JavaScript"; exit 1; fi
 
             echo "Checking dedicated chat entrypoint"
-            curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat"
+            smoke_qs="?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
+            curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat${smoke_qs}"
             grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat.html
             grep -q 'chat-app-v4.webmanifest?v=20261005-chat-v4' /tmp/chat.html
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-icon.svg "$base/chat-icon.svg${smoke_qs}"
@@ -116,7 +117,6 @@ jobs:
             grep -q '"id": "/chat"' /tmp/chat-manifest.json
             ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
             test "$ice_status" = 401
-
             echo "Checking dedicated chat subdomain"
           chat_base="https://chat.darbandicommercial.ir"
           curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat-subdomain.html "$chat_base/?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
