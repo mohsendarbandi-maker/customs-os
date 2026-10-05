@@ -9,9 +9,9 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "run_worker_first": true,
+    "run_worker_first": ["/api/edge/*"],
     "html_handling": "none",
-    "not_found_handling": "none"
+    "not_found_handling": "single-page-application"
   },
   "routes": [
     {
