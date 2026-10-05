@@ -48,7 +48,7 @@ export async function listConversations(): Promise<ChatConversation[]> {
     }
   }
 
-  return conversations
+  const regular = conversations
     .filter((conversation) => conversation.type !== 'direct' || partnerMap.has(conversation.conversation_id))
     .map((conversation) => {
       const person = conversation.type === 'direct' ? partnerMap.get(conversation.conversation_id) : undefined;
@@ -56,6 +56,34 @@ export async function listConversations(): Promise<ChatConversation[]> {
         ? { ...conversation, display_name: person.full_name || null, display_phone: person.phone, display_user_id: members.data?.find((item) => item.conversation_id === conversation.conversation_id)?.user_id ?? null }
         : conversation;
     });
+
+  const hierarchy = await listChatHierarchy();
+
+  const hierarchyConversations: ChatConversation[] = hierarchy.map((item) => ({
+    conversation_id: item.conversation_id,
+    type: item.type,
+    title: item.title,
+    updated_at: item.updated_at,
+    last_message_id: item.last_message_id,
+    last_message_body: item.last_message_body,
+    last_message_created_at: item.last_message_created_at,
+    unread_count: item.unread_count,
+    muted_until: item.muted_until,
+    hierarchy_kind: item.hierarchy_kind,
+    parent_conversation_id: item.parent_conversation_id,
+    cargo_owner_id: item.cargo_owner_id,
+    shipment_id: item.shipment_id,
+    shipment_display_name: item.shipment_display_name,
+    shipment_bl_number: item.shipment_bl_number,
+    shipment_status: item.shipment_status,
+  }));
+
+  return [...regular, ...hierarchyConversations].sort((a,b) => {
+    if ((a.hierarchy_kind === 'owner_group') !== (b.hierarchy_kind === 'owner_group')) {
+      return a.hierarchy_kind === 'owner_group' ? -1 : 1;
+    }
+    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+  });
 }
 
 export async function listMessages(conversationId: string, cursor?: { createdAt: string; id: string }): Promise<ChatMessage[]> {
