@@ -21,7 +21,7 @@ export default {
     if (request.method === 'GET' && url.pathname === '/' && url.searchParams.get('source') === 'pwa') {
       const chatUrl = new URL(request.url);
       chatUrl.pathname = '/chat';
-      chatUrl.search = '?source=pwa';
+      chatUrl.search = '';
       return new Response(null, {
         status: 302,
         headers: {
