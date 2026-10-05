@@ -113,10 +113,14 @@ export default {
 
     const accept = request.headers.get('Accept') || '';
     const referer = request.headers.get('Referer') || '';
+    const hostname = url.hostname.toLowerCase();
+    const isChatHost = hostname === 'chat.darbandicommercial.ir';
     const isManifestRequest =
       url.pathname === '/manifest.webmanifest' ||
       url.pathname === '/manifest-chat.webmanifest' ||
       url.pathname === '/chat-manifest.webmanifest' ||
+      url.pathname === '/chat-app-v4.webmanifest' ||
+      url.pathname === '/chat-subdomain.webmanifest' ||
       url.pathname === '/manifest-reminders.webmanifest';
 
     const isStaticAsset =
@@ -126,7 +130,7 @@ export default {
       request.method === 'GET' &&
       !url.pathname.startsWith('/api/') &&
       !isStaticAsset &&
-      (url.pathname === '/' || url.pathname.startsWith('/chat') || accept.includes('text/html'));
+      (url.pathname === '/' || url.pathname.startsWith('/chat') || isChatHost || accept.includes('text/html'));
     const assetBase = new URL(request.url);
     assetBase.hostname = 'customs.mohsen-darbandi.workers.dev';
     const assetRequest = new Request(assetBase, request);
@@ -134,9 +138,11 @@ export default {
       ? await env.ASSETS.fetch(new URL('/index.html', assetBase))
       : await env.ASSETS.fetch(assetRequest);
 
-    if (isHtmlNavigation && url.pathname.startsWith('/chat') && response.ok) {
+    if (isHtmlNavigation && (url.pathname.startsWith('/chat') || isChatHost) && response.ok) {
       const html = await response.text();
-      const chatManifestPath = '/chat-app-v4.webmanifest?v=20261005-chat-v4';
+      const chatManifestPath = isChatHost
+        ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v1'
+        : '/chat-app-v4.webmanifest?v=20261005-chat-v4';
       const chatHtml = html
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
         .replace(/href="\/manifest\.webmanifest"/i, 'href="' + chatManifestPath + '"')
