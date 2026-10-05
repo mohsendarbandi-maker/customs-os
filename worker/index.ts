@@ -18,6 +18,11 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const isChatHost = url.hostname === 'chat.darbandicommercial.ir';
+    const chatNavigation =
+      isChatHost ||
+      url.pathname === '/chat' ||
+      url.pathname.startsWith('/chat/');
     if (request.method === 'GET' && url.pathname === '/' && url.searchParams.get('source') === 'pwa') {
       const chatUrl = new URL(request.url);
       chatUrl.pathname = '/chat';
@@ -117,6 +122,7 @@ export default {
       url.pathname === '/manifest.webmanifest' ||
       url.pathname === '/manifest-chat.webmanifest' ||
       url.pathname === '/chat-manifest.webmanifest' ||
+      url.pathname === '/chat-subdomain.webmanifest' ||
       url.pathname === '/manifest-reminders.webmanifest';
 
     const isStaticAsset =
@@ -126,7 +132,7 @@ export default {
       request.method === 'GET' &&
       !url.pathname.startsWith('/api/') &&
       !isStaticAsset &&
-      (url.pathname === '/' || url.pathname.startsWith('/chat') || accept.includes('text/html'));
+      (url.pathname === '/' || chatNavigation || accept.includes('text/html'));
     const assetBase = new URL(request.url);
     assetBase.hostname = 'customs.mohsen-darbandi.workers.dev';
     const assetRequest = new Request(assetBase, request);
@@ -134,9 +140,11 @@ export default {
       ? await env.ASSETS.fetch(new URL('/index.html', assetBase))
       : await env.ASSETS.fetch(assetRequest);
 
-    if (isHtmlNavigation && url.pathname.startsWith('/chat') && response.ok) {
+    if (isHtmlNavigation && chatNavigation && response.ok) {
       const html = await response.text();
-      const chatManifestPath = '/chat-app-v4.webmanifest?v=20261005-chat-v4';
+      const chatManifestPath = isChatHost
+        ? '/chat-subdomain.webmanifest?v=20261005-chat-subdomain'
+        : '/chat-app-v4.webmanifest?v=20261005-chat-v4';
       const chatHtml = html
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
         .replace(/href="\/manifest\.webmanifest"/i, 'href="' + chatManifestPath + '"')
@@ -160,7 +168,11 @@ export default {
       manifestHeaders.set('Pragma', 'no-cache');
       manifestHeaders.set('Vary', 'Referer, Accept-Encoding');
 
-      if (url.pathname === '/manifest.webmanifest' && referer.includes('/chat')) {
+      if (
+        url.pathname === '/manifest.webmanifest' &&
+        (referer.includes('/chat') ||
+          referer.includes('chat.darbandicommercial.ir'))
+      ) {
         const chatManifestPath = '/chat-app-v4.webmanifest?v=20261005-chat-v4';
         const chatResponse = await env.ASSETS.fetch(new URL(chatManifestPath + '?from=chat&v=20261005', assetBase));
         if (chatResponse.ok) {
@@ -195,7 +207,7 @@ export default {
       response = await fetch(new Request(canonical, request));
     }
 
-    if (request.method === 'GET' && (url.pathname === '/' || accept.includes('text/html') || isHtmlNavigation)) {
+    if (request.method === 'GET' && (url.pathname === '/' || chatNavigation || accept.includes('text/html') || isHtmlNavigation)) {
       const headers = new Headers(response.headers);
       headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       headers.set('Pragma', 'no-cache');
