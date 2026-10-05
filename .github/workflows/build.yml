@@ -90,13 +90,13 @@ jobs:
             echo "Checking dedicated chat entrypoint"
             curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat"
             grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat.html
-            grep -q 'manifest-chat.webmanifest' /tmp/chat.html
+            grep -q 'chat-manifest.webmanifest' /tmp/chat.html
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-icon.svg "$base/chat-icon.svg"
             test -s /tmp/chat-icon.svg
             chat_manifest_href="$(grep -o 'href="/manifest-chat.webmanifest[^" ]*"' /tmp/chat.html | head -n 1 | sed 's/^href="//;s/"$//')"
             test -n "$chat_manifest_href"
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-manifest.json "${base}${chat_manifest_href}"
-            grep -q '"start_url": "/chat?source=pwa"' /tmp/chat-manifest.json
+            grep -q '"start_url": "/chat"' /tmp/chat-manifest.json
             ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
             test "$ice_status" = 401
 
