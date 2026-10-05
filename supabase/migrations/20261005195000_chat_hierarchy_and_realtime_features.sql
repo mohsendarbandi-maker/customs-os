@@ -201,9 +201,9 @@ begin
     c.parent_conversation_id,
     c.cargo_owner_id,
     c.shipment_id,
-    s.display_name,
-    s.bill_of_lading_no,
-    s.current_status
+    s.display_name::text,
+    s.bill_of_lading_no::text,
+    s.current_status::text
   from public.chat_conversations c
   join public.chat_conversation_members me
     on me.conversation_id=c.id
