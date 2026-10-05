@@ -37,7 +37,16 @@ jobs:
           set -euo pipefail
           for base in "https://customs.mohsen-darbandi.workers.dev" "https://darbandicommercial.ir"; do
             echo "Checking $base/"
-            curl --fail --silent --show-error --location --max-time 30 -o /tmp/index.html "$base/"
+            success=0
+            for attempt in 1 2 3 4 5 6; do
+              if curl --fail --silent --show-error --location --max-time 30 -o /tmp/index.html "$base/"; then
+                success=1
+                break
+              fi
+              echo "Attempt $attempt failed; retrying $base/..."
+              sleep 10
+            done
+            test "$success" = 1
             grep -q '<div id="root">' /tmp/index.html
             script_src="$(sed -n 's/.*<script[^>]*type="module"[^>]*src="\([^"]*\)".*/\1/p' /tmp/index.html | head -n 1)"
             test -n "$script_src"
