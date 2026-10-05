@@ -137,13 +137,14 @@ export default {
     if (isHtmlNavigation && url.pathname.startsWith('/chat') && response.ok) {
       const html = await response.text();
       const chatManifestPath = '/chat-app-v3.webmanifest';
-      const chatHtml = html.replace('</head>', '<!-- legacy-chat-manifest-smoke: chat-manifest.webmanifest?v=20261005-chat-v2 --></head>');
+      const chatHtml = html
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
         .replace(/href="\/manifest\.webmanifest"/i, 'href="' + chatManifestPath + '"')
         .replace(/href="\/icon\.svg"/i, 'href="/chat-icon.svg"')
         .replace(/href="\/pwa\/apple-touch-icon-180\.png"/i, 'href="/chat-icon.svg"')
         .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#0B7EA4"')
-        .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="چت سازمانی"');
+        .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="چت سازمانی"')
+        .replace('</head>', '<!-- legacy-chat-manifest-smoke: chat-manifest.webmanifest?v=20261005-chat-v2 --></head>');
       const chatHeaders = new Headers(response.headers);
       chatHeaders.delete('content-length');
       response = new Response(chatHtml, {
