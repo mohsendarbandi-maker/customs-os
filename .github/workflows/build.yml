@@ -118,8 +118,10 @@ jobs:
             test "$ice_status" = 401
 
             echo "Checking PWA legacy launch URL canonicalization"
-            pwa_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/pwa.html -w '%{url_effective}' "${base}/?source=pwa")"
-            test "$pwa_status" = "${base}/chat?source=pwa"
+            pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "${base}/?source=pwa")"
+            pwa_location="$(printf '%s\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
+            echo "PWA redirect Location: $pwa_location"
+            test "$pwa_location" = "${base}/chat?source=pwa"
 
             echo "Checking live-voice code is present in compiled bundle"
             grep -R -F -q 'تماس صوتی زنده' dist/assets
