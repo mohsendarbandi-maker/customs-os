@@ -71,6 +71,7 @@ export default {
         return json({ error: 'سرویس ارتباط صوتی در دسترس نیست.' }, 503);
       }
     }
+
     if (url.pathname.startsWith('/api/edge/')) {
       if (request.method !== 'POST') {
         return request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : json({ error: 'Method not allowed' }, 405);
@@ -119,10 +120,9 @@ export default {
       ? await env.ASSETS.fetch(new URL('/index.html', assetBase))
       : await env.ASSETS.fetch(assetRequest);
 
-    // Give /chat its own application identity before the browser evaluates the page.
     if (isHtmlNavigation && url.pathname.startsWith('/chat') && response.ok) {
       const html = await response.text();
-      const chatManifestPath = '/chat-manifest.webmanifest';
+      const chatManifestPath = '/chat-manifest.webmanifest?v=20261005-chat';
       const chatHtml = html
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
         .replace(/href="\/manifest\.webmanifest"/i, 'href="' + chatManifestPath + '"')
@@ -137,9 +137,6 @@ export default {
       });
     }
 
-    // Safari/iOS reads the manifest during page load. Keep manifests fresh and,
-    // as a safety net, serve the chat manifest when the manifest request comes
-    // from a /chat page even if an older HTML/manifest reference is cached.
     if (isManifestRequest && response.ok) {
       const manifestHeaders = new Headers(response.headers);
       manifestHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
@@ -148,7 +145,7 @@ export default {
 
       if (url.pathname === '/manifest.webmanifest' && referer.includes('/chat')) {
         const chatManifestPath = '/chat-manifest.webmanifest';
-        const chatResponse = await env.ASSETS.fetch(new URL(chatManifestPath + '?from=chat', assetBase));
+        const chatResponse = await env.ASSETS.fetch(new URL(chatManifestPath + '?from=chat&v=20261005', assetBase));
         if (chatResponse.ok) {
           const chatHeaders = new Headers(chatResponse.headers);
           chatHeaders.set('Content-Type', 'application/manifest+json; charset=utf-8');
@@ -170,8 +167,6 @@ export default {
       }
     }
 
-    // A custom hostname can temporarily hold a stale negative asset lookup at the edge.
-    // Recover missing static assets from the canonical Worker hostname; this path never re-enters the fallback on itself.
     if (
       response.status === 404 &&
       request.method === 'GET' &&
