@@ -1,0 +1,3 @@
+-- Migration history compatibility marker.
+-- This migration version is already present in the production migration history.
+-- No schema change is executed here; the repository's canonical migrations remain authoritative.
