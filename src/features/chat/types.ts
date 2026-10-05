@@ -11,6 +11,33 @@ export type ChatConversation = {
   display_name?: string | null;
   display_phone?: string | null;
   display_user_id?: string | null;
+  hierarchy_kind?: 'regular' | 'owner_group' | 'shipment_group';
+  parent_conversation_id?: string | null;
+  cargo_owner_id?: string | null;
+  shipment_id?: string | null;
+  shipment_display_name?: string | null;
+  shipment_bl_number?: string | null;
+  shipment_status?: string | null;
+};
+
+export type ChatReaction = {
+  id: string;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+};
+
+export type ChatMessageUserState = {
+  starred_at: string | null;
+  deleted_at: string | null;
+};
+
+export type ChatMessageReceipt = {
+  user_id: string;
+  status: string;
+  delivered_at: string | null;
+  read_at: string | null;
 };
 
 export type ChatMessage = {
@@ -32,6 +59,10 @@ export type ChatMessage = {
   updated_at: string;
   sender_name?: string | null;
   attachments?: ChatAttachment[];
+  reactions?: ChatReaction[];
+  starred?: boolean;
+  pinned?: boolean;
+  receipts?: ChatMessageReceipt[];
 };
 
 
