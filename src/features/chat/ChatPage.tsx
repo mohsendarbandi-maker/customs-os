@@ -164,6 +164,7 @@ export const ChatPage:React.FC=()=>{
 
  const send=async()=>{
   const body=normalizeFaText(text);if(!body||!selectedId||sending)return;
+  if(editId){await editCurrent();return}
   setSending(true);broadcastTyping(false);
   const clientUuid=makeClientId();
   const optimistic:ChatMessage={id:'optimistic-'+clientUuid,organization_id:profile?.organization_id??'',conversation_id:selectedId,sender_id:user?.id??'',client_uuid:clientUuid,message_type:'text',body,reply_to_message_id:reply?.id??null,forwarded_from_message_id:null,thread_root_message_id:null,delivery_status:'sending',edited_at:null,deleted_at:null,deleted_for_all_at:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
@@ -173,6 +174,11 @@ export const ChatPage:React.FC=()=>{
  };
  const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);setMenu(null);if(selectedId)await load(selectedId)}catch(e){setError(err(e))}};
  const runSearch=async()=>{if(!query.trim()){setResults([]);return}try{setResults(await searchChat(query,selectedId??undefined))}catch(e){setError(err(e))}};
+ const react=async(m:ChatMessage,emoji:string)=>{try{await toggleChatReaction(m.id,emoji);if(selectedId)await load(selectedId);setMenu(null)}catch(e){setError(err(e))}};
+ const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);setMenu(null);if(selectedId)await load(selectedId)}catch(e){setError(err(e))}};
+ const editCurrent=async()=>{if(!editId||!selectedId)return;const body=normalizeFaText(text);if(!body)return;try{await editChatMessage(editId,body);setEditId(null);setText('');await load(selectedId)}catch(e){setError(err(e))}};
+ const forwardCurrent=async(targetId:string)=>{if(!forwardId)return;try{await forwardChatMessage(forwardId,targetId);setForwardId(null);if(selectedId)await load(selectedId);await refresh();setError('پیام ارسال شد.')}catch(e){setError(err(e))}};
+ const publishShipmentUpdate=async()=>{if(!selectedId||!selected?.shipment_id)return;try{await shareShipmentUpdate(selectedId,selected.shipment_id,shipmentStatus,shipmentNote.trim()||undefined);setShipmentUpdateOpen(false);setShipmentNote('');await load(selectedId);await refresh()}catch(e){setError(err(e))}};
  const selected=conversations.find(c=>c.conversation_id===selectedId)??null;
  const voice=useVoiceCall({userId:user?.id,organizationId:profile?.organization_id,conversationId:selected?.conversation_id??null,peerUserId:selected?.type==='direct'?selected.display_user_id??null:null,peerName:selected?.display_name||selected?.title||'همکار',requestedCallId});
  useEffect(()=>{if(voice.error)setError(voice.error)},[voice.error]);
@@ -206,6 +212,7 @@ export const ChatPage:React.FC=()=>{
       <b className="block truncate text-[16px]">{title(selected)}</b>
       <div className="text-[12px] app-muted truncate">{selected.type==='direct'?(typingUsers.length?'در حال نوشتن…':selected.display_phone||'گفتگوی مستقیم'):(typingUsers.length?'در حال نوشتن…':realtimeState==='subscribed'?'متصل':'در حال همگام‌سازی')}</div>
      </div>
+     {selected?.shipment_id&&<button type="button" className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>setShipmentUpdateOpen(true)} aria-label="وضعیت محموله"><PackageCheck size={17}/></button>}
      {selected&&(selected.type==="group"||selected.type==="company_channel")&&<button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title="افزودن عضو" onClick={()=>void openPeople("member")}><UserPlus size={16}/></button>}
      {selected.type==="direct"&&selected.display_user_id&&voice.canCall&&<button className="h-12 w-12 shrink-0 rounded-full flex items-center justify-center text-white bg-[var(--primary)] hover:opacity-90 shadow-sm" title="تماس صوتی زنده" aria-label="تماس صوتی زنده" onClick={()=>void voice.startCall()}><Phone size={19}/></button>}
      <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title={pushReady?"اعلان‌های پیام فعال است":"فعال‌سازی اعلان پیام"} onClick={()=>void enablePush()} disabled={pushBusy}>{pushReady?<Bell size={17}/>:<BellOff size={17}/>}</button>
@@ -226,15 +233,21 @@ export const ChatPage:React.FC=()=>{
           {quoted&&<button className={"w-full text-right mb-2 px-2 py-1 rounded-lg border border-current/20 text-[10px] opacity-80"} onClick={()=>{const el=document.getElementById("msg-"+quoted.id);el?.scrollIntoView({behavior:"smooth",block:"center"})}}>{quoted.body||'پیام پیوست‌دار'}</button>}
           {deleted?<div className="text-sm italic opacity-80">این پیام حذف شده است.</div>:m.body&&<div className="text-[17px] leading-8 whitespace-pre-wrap break-words">{m.body}</div>}
           {!deleted&&(m.attachments??[]).map(a=>a.security_status==="clean"&&a.url?(a.mime_type.startsWith("audio/")?<audio key={a.id} controls src={a.url} className="mt-2 w-full max-w-[280px]"/>:<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline"><Paperclip size={14}/><span className="truncate">{a.original_name}</span></a>):<div key={a.id} className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs">{a.security_status==="blocked"?"فایل مسدود شد.":"فایل در حال بررسی امنیتی است…"}</div>)}
+          {(m.reactions??[]).length>0&&<div className="flex flex-wrap gap-1 mt-2">{Array.from(new Set((m.reactions??[]).map(r=>r.emoji))).map(emoji=><button type="button" key={emoji} onClick={()=>void react(m,emoji)} className="rounded-full px-2 py-1 text-[11px] bg-black/10 dark:bg-white/10">{emoji} {((m.reactions??[]).filter(r=>r.emoji===emoji)).length}</button>)}</div>}
           <div className={"flex items-center justify-end gap-1 mt-1 text-[11px] "+(own?"text-white/75":"app-muted")}>
            {m.edited_at&&<span>ویرایش‌شده</span>}<span>{chatTime(m.created_at)}</span>
            {own&&(m.delivery_status==='sent'?<Check size={12}/>:m.delivery_status==='delivered'||m.delivery_status==='read'?<CheckCheck size={13}/>:<span className="opacity-70">در حال ارسال</span>)}
            {!deleted&&<button onClick={()=>setMenu(menu===m.id?null:m.id)} aria-label="گزینه‌های پیام"><MoreVertical size={14}/></button>}
           </div>
-          {menu===m.id&&<div className="absolute z-20 left-1 bottom-7 rounded-xl border app-border bg-[var(--surface)] text-[var(--text)] shadow-xl p-1 min-w-36">
-           <button className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setReply(m);setMenu(null)}}>پاسخ</button>
-           <button className="w-full text-right px-3 py-2 text-xs" onClick={()=>void remove(m,false)}><Trash2 size={13} className="inline ml-1"/>حذف برای من</button>
-           {own&&<button className="w-full text-right px-3 py-2 text-xs" onClick={()=>void remove(m,true)}>حذف برای همه</button>}
+          {menu===m.id&&<div className="absolute z-20 left-1 bottom-7 rounded-2xl border app-border bg-[var(--surface)] text-[var(--text)] shadow-xl p-1 min-w-48">
+           <div className="flex gap-1 p-1 border-b app-border">{['❤️','👍','😂','😮','😢','🔥'].map(emoji=><button type="button" key={emoji} onClick={()=>void react(m,emoji)} className="h-8 w-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/10" aria-label={emoji}>{emoji}</button>)}</div>
+           <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setReply(m);setMenu(null)}}>پاسخ</button>
+           {own&&<button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setEditId(m.id);setText(m.body??'');setReply(null);setMenu(null)}}>ویرایش</button>}
+           <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>void toggleChatStar(m.id).then(()=>{setMenu(null);return selectedId?load(selectedId):Promise.resolve()}).catch(e=>setError(err(e)))}><Star size={13} className="inline ml-1"/>ستاره</button>
+           <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>void toggleChatPin(m.id).then(()=>{setMenu(null);return selectedId?load(selectedId):Promise.resolve()}).catch(e=>setError(err(e)))}><Pin size={13} className="inline ml-1"/>سنجاق</button>
+           <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setForwardId(m.id);setMenu(null)}}>ارسال مجدد</button>
+           <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>void remove(m,false)}><Trash2 size={13} className="inline ml-1"/>حذف برای من</button>
+           {own&&<button type="button" className="w-full text-right px-3 py-2 text-xs text-red-600" onClick={()=>void remove(m,true)}>حذف برای همه</button>}
           </div>}
          </div>
         </div>
@@ -244,7 +257,7 @@ export const ChatPage:React.FC=()=>{
      <div ref={bottom}/>
     </div>
 
-    {reply&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">پاسخ به: {reply.body||'پیام پیوست‌دار'}</div><button className="icon-btn" onClick={()=>setReply(null)} aria-label="لغو پاسخ"><X size={15}/></button></div>}
+    {(reply||editId)&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">{editId?'در حال ویرایش پیام':'پاسخ به: '+(reply?.body||'پیام پیوست‌دار')}</div><button type="button" className="icon-btn" onClick={()=>{setReply(null);setEditId(null);setText('')}} aria-label="لغو"><X size={15}/></button></div>
 
     <div className="shrink-0 border-t app-border p-3 md:p-3 bg-[var(--surface)]">
     {!pushReady&&<button type="button" onClick={()=>void enablePush()} disabled={pushBusy} className="mb-2 w-full min-h-12 rounded-2xl border app-border bg-[var(--primary)]/10 px-4 flex items-center gap-3 text-right disabled:opacity-50">
@@ -290,6 +303,22 @@ export const ChatPage:React.FC=()=>{
     </div>
     {channelType==="shared_company"&&<select value={selectedConnection} onChange={e=>setSelectedConnection(e.target.value)} className="w-full min-h-11 rounded-xl border app-border bg-transparent px-3 mt-3"><option value="">انتخاب سازمان متصل</option>{sharedConnections.map(x=><option key={x.id} value={x.id}>{x.target_name}</option>)}</select>}
     <button disabled={!channelTitle.trim()} onClick={()=>void createChannel()} className="w-full min-h-11 rounded-xl bg-[var(--primary)] text-white font-bold mt-4 disabled:opacity-40">ایجاد</button>
+   </div>
+  </div>}
+
+  {forwardId&&<div className="fixed inset-0 z-[620] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>setForwardId(null)}>
+   <div dir="rtl" className="w-full md:max-w-lg max-h-[82vh] overflow-hidden rounded-t-3xl md:rounded-2xl bg-[var(--surface)] border app-border shadow-2xl" onClick={e=>e.stopPropagation()}>
+    <div className="p-4 border-b app-border flex items-center justify-between"><b>ارسال مجدد پیام</b><button type="button" onClick={()=>setForwardId(null)}><X size={16}/></button></div>
+    <div className="max-h-[60vh] overflow-y-auto p-2">{conversations.filter(c=>c.conversation_id!==selectedId).map(c=><button type="button" key={c.conversation_id} onClick={()=>void forwardCurrent(c.conversation_id)} className="w-full min-h-[62px] rounded-xl px-3 py-2 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5"><div className="h-10 w-10 rounded-full bg-[var(--primary)] text-white flex items-center justify-center">{c.type==='company_channel'?<Hash size={16}/>:<Users size={16}/>}</div><div className="min-w-0 flex-1"><b className="block truncate text-sm">{title(c)}</b><span className="block truncate text-xs app-muted mt-1">{c.last_message_body||'گفتگو'}</span></div></button>)}</div>
+   </div>
+  </div>}
+
+  {shipmentUpdateOpen&&selected?.shipment_id&&<div className="fixed inset-0 z-[630] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>setShipmentUpdateOpen(false)}>
+   <div dir="rtl" className="w-full md:max-w-md rounded-t-3xl md:rounded-2xl bg-[var(--surface)] border app-border shadow-2xl p-4" onClick={e=>e.stopPropagation()}>
+    <div className="flex items-center justify-between"><div><b>به‌روزرسانی محموله</b><div className="text-xs app-muted mt-1">{selected.shipment_bl_number||selected.shipment_display_name||'محموله'}</div></div><button type="button" onClick={()=>setShipmentUpdateOpen(false)}><X size={16}/></button></div>
+    <select value={shipmentStatus} onChange={e=>setShipmentStatus(e.target.value)} className="w-full h-11 rounded-xl border app-border bg-transparent px-3 mt-4">{['در انتظار','در حال بررسی','در مسیر','رسیده به بندر','در گمرک','ترخیص شده','تحویل شده','تاخیر'].map(status=><option key={status} value={status}>{status}</option>)}</select>
+    <textarea value={shipmentNote} onChange={e=>setShipmentNote(e.target.value)} placeholder="توضیح وضعیت" rows={4} className="w-full mt-3 rounded-xl border app-border bg-transparent p-3 outline-none text-sm resize-none"/>
+    <button type="button" onClick={()=>void publishShipmentUpdate()} className="w-full h-11 rounded-xl bg-[var(--primary)] text-white font-bold mt-3">ارسال وضعیت در کانال محموله</button>
    </div>
   </div>}
 
