@@ -1,6 +1,8 @@
 export interface Env {
   ASSETS: { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
   SUPABASE_URL: string;
+  TURN_API_TOKEN?: string;
+  TURN_KEY_ID?: string;
 }
 
 const EDGE_FUNCTIONS = new Set([
@@ -17,6 +19,56 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+
+    if (url.pathname === '/api/webrtc/ice') {
+      if (request.method !== 'GET') {
+        return request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : json({ error: 'Method not allowed' }, 405);
+      }
+
+      const authorization = request.headers.get('Authorization') || request.headers.get('authorization') || '';
+      const apikey = request.headers.get('apikey') || '';
+      if (!authorization || !apikey) return json({ error: 'احراز هویت تماس انجام نشد.' }, 401);
+
+      try {
+        const authCheck = await fetch(env.SUPABASE_URL.replace(/\/$/, '') + '/auth/v1/user', {
+          headers: { Authorization: authorization, apikey },
+        });
+        if (!authCheck.ok) return json({ error: 'نشست کاربر معتبر نیست.' }, 401);
+
+        const iceServers: RTCIceServer[] = [
+          { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] },
+        ];
+
+        if (env.TURN_API_TOKEN && env.TURN_KEY_ID) {
+          const turnResponse = await fetch(
+            'https://rtc.live.cloudflare.com/v1/turn/keys/' + encodeURIComponent(env.TURN_KEY_ID) + '/credentials/generate-ice-servers',
+            {
+              method: 'POST',
+              headers: {
+                Authorization: 'Bearer ' + env.TURN_API_TOKEN,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ ttl: 3600 }),
+            },
+          );
+          if (!turnResponse.ok) {
+            const detail = await turnResponse.text().catch(() => '');
+            console.error('[WebRTC] TURN credential generation failed:', turnResponse.status, detail.slice(0, 500));
+            return json({ error: 'سرویس ارتباط صوتی آماده نیست.' }, 503);
+          }
+          const turnData = await turnResponse.json() as { iceServers?: RTCIceServer[] };
+          if (Array.isArray(turnData.iceServers)) iceServers.push(...turnData.iceServers);
+        }
+
+        return new Response(JSON.stringify({ iceServers, expires_in: 3600 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        });
+      } catch (error) {
+        console.error('[WebRTC] ICE endpoint failed:', error);
+        return json({ error: 'سرویس ارتباط صوتی در دسترس نیست.' }, 503);
+      }
+    }
     if (url.pathname.startsWith('/api/edge/')) {
       if (request.method !== 'POST') {
         return request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : json({ error: 'Method not allowed' }, 405);
