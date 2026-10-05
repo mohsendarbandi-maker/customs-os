@@ -33,9 +33,17 @@ export const ChatPage:React.FC=()=>{
   const previousTitle=document.title;
   const icon=document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   const previousIcon=icon?.getAttribute('href')??null;
+  const previousOverflow=document.body.style.overflow;
   document.title='چت سازمانی | Customs OS';
   if(icon)icon.href='/chat-icon.svg';
-  return()=>{document.title=previousTitle;if(icon&&previousIcon)icon.href=previousIcon;};
+  document.body.style.overflow='hidden';
+  document.documentElement.style.overflow='hidden';
+  return()=>{
+    document.title=previousTitle;
+    if(icon&&previousIcon)icon.href=previousIcon;
+    document.body.style.overflow=previousOverflow;
+    document.documentElement.style.overflow='';
+  };
  },[]);
  const[conversations,setConversations]=useState<ChatConversation[]>([]);
  const[selectedId,setSelectedId]=useState<string|null>(null);
