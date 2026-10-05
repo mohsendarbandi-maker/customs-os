@@ -12,7 +12,9 @@
     <script>
       (() => {
         const path = window.location.pathname;
-        const manifest = path.startsWith('/chat') ? '/chat-app-v4.webmanifest?v=20261005-chat-v4' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest' : '/manifest.webmanifest';
+        const host = window.location.hostname.toLowerCase();
+        const chatHost = host === 'chat.darbandicommercial.ir';
+        const manifest = chatHost ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' : path.startsWith('/chat') ? '/chat-app-v4.webmanifest?v=20261005-chat-v4' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest' : '/manifest.webmanifest';
         const link = document.querySelector('link[rel="manifest"]');
         if (link) link.setAttribute('href', manifest);
       })();

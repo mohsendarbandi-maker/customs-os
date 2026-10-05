@@ -19,7 +19,7 @@ self.addEventListener('push',(event)=>{
  const data=(event.data?.json?.()??{}) as PushData;
  event.waitUntil(self.registration.showNotification(data.title??(isVoicePush(data)?'تماس صوتی ورودی':'یادآور گمرکی'),{
   body:data.body??(isVoicePush(data)?'تماس صوتی ورودی دارید. برای پاسخ وارد چت سازمانی شوید.':'یک یادآور برای شما ثبت شده است.'),tag:data.tag??(isVoicePush(data)?'customs-os-voice-call':'customs-os-reminder'),
-  icon:data.icon??(isVoicePush(data)?'/chat-icon.svg':'/pwa/icon-192.png'),badge:data.badge??'/pwa/monochrome-96.png',dir:'rtl',lang:'fa',
+  icon:data.icon??(isVoicePush(data)?'/pwa/chat-apple-touch-icon-180.png':'/pwa/icon-192.png'),badge:data.badge??'/pwa/monochrome-96.png',dir:'rtl',lang:'fa',
   requireInteraction:data.requireInteraction??isVoicePush(data),
   ...(data.actions?{actions:data.actions}:{actions:isVoicePush(data)?[{action:'open-call',title:'باز کردن تماس'}]:[{action:'done',title:'انجام شد'},{action:'snooze10',title:'۱۰ دقیقه بعد'},{action:'tomorrow9',title:'فردا ۹ صبح'}]}),
   data:{...(data.data??{}),url:data.url??'/reminders'}

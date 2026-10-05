@@ -106,10 +106,10 @@ jobs:
             echo "Checking dedicated chat entrypoint"
             curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat"
             grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat.html
-            grep -q 'chat-manifest.webmanifest?v=20261005-chat-v4' /tmp/chat.html
+            grep -q 'chat-app-v4.webmanifest?v=20261005-chat-v4' /tmp/chat.html
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-icon.svg "$base/chat-icon.svg"
             test -s /tmp/chat-icon.svg
-            chat_manifest_href="/chat-manifest.webmanifest?v=20261005-chat-v4"
+            chat_manifest_href="/chat-app-v4.webmanifest?v=20261005-chat-v4"
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-manifest.json "${base}${chat_manifest_href}"
             grep -q '"start_url": "/chat"' /tmp/chat-manifest.json
             grep -q '"scope": "/chat"' /tmp/chat-manifest.json
@@ -117,7 +117,17 @@ jobs:
             ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
             test "$ice_status" = 401
 
-            echo "Checking PWA legacy launch URL canonicalization"
+            echo "Checking dedicated chat subdomain"
+          chat_base="https://chat.darbandicommercial.ir"
+          curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat-subdomain.html "$chat_base/"
+          grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat-subdomain.html
+          grep -q 'chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' /tmp/chat-subdomain.html
+          curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-subdomain-manifest.json "$chat_base/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2"
+          grep -q '"start_url": "/"' /tmp/chat-subdomain-manifest.json
+          grep -q '"scope": "/"' /tmp/chat-subdomain-manifest.json
+          grep -q '"id": "/"' /tmp/chat-subdomain-manifest.json
+
+          echo "Checking PWA legacy launch URL canonicalization"
             pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "${base}/?source=pwa")"
             pwa_location="$(printf '%s\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
             echo "PWA redirect Location: $pwa_location"

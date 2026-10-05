@@ -1,6 +1,6 @@
 import{useSearchParams}from'react-router-dom';
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
-import{ArrowRight,Bell,BellOff,Check,CheckCheck,Hash,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Star,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
+import{ArrowRight,Bell,BellOff,Bot,Check,CheckCheck,Hash,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Settings,Star,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
@@ -188,7 +188,22 @@ export const ChatPage:React.FC=()=>{
   return people.filter(person=>person.id!==user?.id&&!q||person.id!==user?.id&&(normalizeFaText(person.full_name).toLowerCase().includes(q)||(person.phone??'').includes(q)));
  },[people,personQuery,user?.id]);
 
- return <div dir="rtl" className="chat-standalone w-full h-dvh min-h-[560px] flex gap-0 md:gap-3 bg-[var(--surface)]">
+ return <div dir="rtl" className="chat-standalone w-full h-dvh min-h-[560px] flex flex-col gap-0 bg-[var(--surface)]" data-chat-wallpaper="plain">
+  <nav className="chat-action-bar shrink-0 border-b app-border bg-[var(--surface)]" aria-label="ابزارهای چت">
+   <div className="chat-action-scroll">
+    <button type="button" onClick={()=>void openPeople("direct")} className="chat-action-item"><Plus size={19}/><span>پیام جدید</span></button>
+    <button type="button" onClick={()=>{if(selected?.type==="direct"&&voice.canCall)void voice.startCall();else void openPeople("direct")}} className="chat-action-item"><Phone size={19}/><span>تماس</span></button>
+    <button type="button" onClick={()=>{setChannelType("group");setChannelOpen(true)}} className="chat-action-item"><Users size={19}/><span>گروه</span></button>
+    <button type="button" onClick={()=>{setChannelType("company_channel");setChannelOpen(true)}} className="chat-action-item"><Hash size={19}/><span>کانال</span></button>
+    <button type="button" onClick={()=>{
+      const owner=conversations.find(c=>c.hierarchy_kind==="owner_group");
+      if(owner)setSelectedId(owner.conversation_id);else setError("برای این حساب هنوز گروه صاحب کالا ساخته نشده است.");
+    }} className="chat-action-item"><Users size={19}/><span>صاحب کالا</span></button>
+    <button type="button" onClick={()=>document.querySelector<HTMLButtonElement>(".ai-operator-launcher")?.click()} className="chat-action-item"><Bot size={19}/><span>هوش مصنوعی</span></button>
+    <button type="button" onClick={()=>setSettingsOpen(true)} className="chat-action-item"><Settings size={19}/><span>تنظیمات</span></button>
+   </div>
+  </nav>
+  <div className="chat-content flex flex-1 min-h-0 gap-0 md:gap-3">
   <section className={(selectedId?"hidden md:flex":"flex")+" w-full md:w-[360px] shrink-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
    <header className="h-[76px] shrink-0 px-4 border-b app-border flex items-center gap-3">
     <ChatBrandLogo size={48}/>
@@ -220,7 +235,7 @@ export const ChatPage:React.FC=()=>{
 
     {results.length>0&&<div className="border-b app-border px-3 py-2 max-h-40 overflow-y-auto">{results.map(r=><button key={r.id} className="block w-full text-right p-2 rounded-lg hover:bg-black/5" onClick={()=>setResults([])}><b className="text-sm">{r.title}</b><div className="text-xs app-muted truncate">{r.snippet}</div></button>)}</div>}
 
-    <div className="flex-1 min-h-0 overflow-y-auto px-3 py-5 md:px-5 md:py-6 overscroll-contain bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(0,0,0,.025),transparent_18%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,.02),transparent_18%)]">
+    <div className="chat-message-area flex-1 min-h-0 overflow-y-auto px-3 py-5 md:px-5 md:py-6 overscroll-contain bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(0,0,0,.025),transparent_18%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,.02),transparent_18%)]">
      {messages.map((m,index)=>{
       const own=m.sender_id===user?.id;const deleted=Boolean(m.deleted_for_all_at);const previous=messages[index-1];const showDay=!previous||dayKey(previous.created_at)!==dayKey(m.created_at);const quoted=m.reply_to_message_id?messageMap.get(m.reply_to_message_id):null;
       return <React.Fragment key={m.id}>
@@ -230,7 +245,7 @@ export const ChatPage:React.FC=()=>{
          <div className={"relative rounded-2xl px-4 py-2.5 shadow-sm "+(own?"bg-[var(--primary)] text-white rounded-br-md":"bg-black/5 dark:bg-white/10 rounded-bl-md")}>
           {!own&&selected.type!=="direct"&&m.sender_name&&<div className={"text-[10px] font-bold mb-1 "+(own?"opacity-80":"app-muted")}>{m.sender_name}</div>}
           {quoted&&<button className={"w-full text-right mb-2 px-2 py-1 rounded-lg border border-current/20 text-[10px] opacity-80"} onClick={()=>{const el=document.getElementById("msg-"+quoted.id);el?.scrollIntoView({behavior:"smooth",block:"center"})}}>{quoted.body||'پیام پیوست‌دار'}</button>}
-          {deleted?<div className="text-sm italic opacity-80">این پیام حذف شده است.</div>:m.body&&<div className="text-[17px] leading-8 whitespace-pre-wrap break-words">{m.body}</div>}
+          {deleted?<div className="text-sm italic opacity-80">این پیام حذف شده است.</div>:m.body&&<div className="chat-message-text text-[17px] leading-8 whitespace-pre-wrap break-words">{m.body}</div>}
           {!deleted&&(m.attachments??[]).map(a=>a.security_status==="clean"&&a.url?(a.mime_type.startsWith("audio/")?<audio key={a.id} controls src={a.url} className="mt-2 w-full max-w-[280px]"/>:<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline"><Paperclip size={14}/><span className="truncate">{a.original_name}</span></a>):<div key={a.id} className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs">{a.security_status==="blocked"?"فایل مسدود شد.":"فایل در حال بررسی امنیتی است…"}</div>)}
           {(m.reactions??[]).length>0&&<div className="flex flex-wrap gap-1 mt-2">{Array.from(new Set((m.reactions??[]).map(r=>r.emoji))).map(emoji=><button type="button" key={emoji} onClick={()=>void react(m,emoji)} className="rounded-full px-2 py-1 text-[11px] bg-black/10 dark:bg-white/10">{emoji} {((m.reactions??[]).filter(r=>r.emoji===emoji)).length}</button>)}</div>}
           <div className={"flex items-center justify-end gap-1 mt-1 text-[11px] "+(own?"text-white/75":"app-muted")}>
@@ -276,6 +291,10 @@ export const ChatPage:React.FC=()=>{
     </div>
    </>:<div className="flex-1 items-center justify-center app-muted">یک گفتگو را انتخاب کنید.</div>}
   </section>
+  </div>
+
+  <AIOperatorPanel pageContext="chat — آمار محموله‌ها، پرونده‌ها و عملیات سازمانی"/>
+  <ChatSettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)}/>
 
   {peopleOpen&&<div className="fixed inset-0 z-[600] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>setPeopleOpen(false)}>
    <div dir="rtl" className="w-full md:max-w-lg max-h-[86vh] overflow-hidden rounded-t-3xl md:rounded-2xl bg-[var(--surface)] border app-border shadow-2xl" onClick={e=>e.stopPropagation()}>
