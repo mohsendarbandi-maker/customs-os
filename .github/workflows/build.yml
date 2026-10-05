@@ -47,14 +47,21 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/calls/turn_keys"
-          response="$(curl --fail --silent --show-error --max-time 30 -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" --data '{"name":"customs-os-production"}' "$api")"
-          key_id="$(printf '%s' "$response" | jq -r '.result.uid // empty')"
-          turn_key="$(printf '%s' "$response" | jq -r '.result.key // empty')"
-          test -n "$key_id"
-          test -n "$turn_key"
-          printf '%s' "$key_id" | npx wrangler@4 secret put TURN_KEY_ID_V2 --name customs
-          printf '%s' "$turn_key" | npx wrangler@4 secret put TURN_API_TOKEN_V2 --name customs
+          secret_names="$(npx wrangler@4 secret list --name customs --format json)"
+          has_key_id="$(printf '%s' "$secret_names" | jq -r 'any(.[]; .name == "TURN_KEY_ID_V2")')"
+          has_api_token="$(printf '%s' "$secret_names" | jq -r 'any(.[]; .name == "TURN_API_TOKEN_V2")')"
+          if [ "$has_key_id" = "true" ] && [ "$has_api_token" = "true" ]; then
+            echo "Cloudflare TURN credentials already exist; keeping the current key."
+          else
+            api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/calls/turn_keys"
+            response="$(curl --fail --silent --show-error --max-time 30 -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" --data '{"name":"customs-os-production"}' "$api")"
+            key_id="$(printf '%s' "$response" | jq -r '.result.uid // empty')"
+            turn_key="$(printf '%s' "$response" | jq -r '.result.key // empty')"
+            test -n "$key_id"
+            test -n "$turn_key"
+            printf '%s' "$key_id" | npx wrangler@4 secret put TURN_KEY_ID_V2 --name customs
+            printf '%s' "$turn_key" | npx wrangler@4 secret put TURN_API_TOKEN_V2 --name customs
+          fi
       - name: Smoke test live Worker and custom domain
         shell: bash
         run: |
