@@ -136,7 +136,7 @@ export default {
 
     if (isHtmlNavigation && url.pathname.startsWith('/chat') && response.ok) {
       const html = await response.text();
-      const chatManifestPath = '/chat-manifest.webmanifest?v=20261005-chat-v2';
+      const chatManifestPath = '/chat-app-v3.webmanifest';
       const chatHtml = html
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
         .replace(/href="\/manifest\.webmanifest"/i, 'href="' + chatManifestPath + '"')
@@ -160,7 +160,7 @@ export default {
       manifestHeaders.set('Vary', 'Referer, Accept-Encoding');
 
       if (url.pathname === '/manifest.webmanifest' && referer.includes('/chat')) {
-        const chatManifestPath = '/chat-manifest.webmanifest';
+        const chatManifestPath = '/chat-app-v3.webmanifest';
         const chatResponse = await env.ASSETS.fetch(new URL(chatManifestPath + '?from=chat&v=20261005', assetBase));
         if (chatResponse.ok) {
           const chatHeaders = new Headers(chatResponse.headers);
