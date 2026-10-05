@@ -9,13 +9,23 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/", "/api/edge/*", "/api/webrtc/*", "/chat", "/chat/*"],
+    "run_worker_first": [
+      "/",
+      "/api/edge/*",
+      "/api/webrtc/*",
+      "/chat",
+      "/chat/*"
+    ],
     "html_handling": "none",
     "not_found_handling": "single-page-application"
   },
   "routes": [
     {
       "pattern": "darbandicommercial.ir",
+      "custom_domain": true
+    },
+    {
+      "pattern": "chat.darbandicommercial.ir",
       "custom_domain": true
     }
   ]
