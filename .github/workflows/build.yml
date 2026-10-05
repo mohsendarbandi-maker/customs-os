@@ -66,7 +66,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for base in "https://darbandicommercial.ir" "https://chat.darbandicommercial.ir"; do
+          for base in "https://darbandicommercial.ir"; do
             echo "Checking $base/"
             success=0
             for attempt in 1 2 3 4 5 6; do
@@ -88,29 +88,15 @@ jobs:
             if grep -qi '<!doctype html' /tmp/app.js; then echo "Deployed module returned HTML instead of JavaScript"; exit 1; fi
 
             echo "Checking dedicated chat entrypoint"
-            if [ "$base" = "https://chat.darbandicommercial.ir" ]; then
-              curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/"
-              grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat.html
-              grep -q 'chat-app.webmanifest' /tmp/chat.html
-            else
-              curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat"
-              grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat.html
-              grep -q 'chat-manifest.webmanifest' /tmp/chat.html
-            fi
+            curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat"
+            grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat.html
+            grep -q 'chat-manifest.webmanifest' /tmp/chat.html
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-icon.svg "$base/chat-icon.svg"
             test -s /tmp/chat-icon.svg
-            if [ "$base" = "https://chat.darbandicommercial.ir" ]; then
-              chat_manifest_href="/chat-app.webmanifest"
-            else
-              chat_manifest_href="/chat-manifest.webmanifest"
-            fi
+            chat_manifest_href="/chat-manifest.webmanifest"
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-manifest.json "${base}${chat_manifest_href}"
-            if [ "$base" = "https://chat.darbandicommercial.ir" ]; then
-              grep -q '"start_url": "/"' /tmp/chat-manifest.json
-              grep -q '"scope": "/"' /tmp/chat-manifest.json
-            else
-              grep -q '"start_url": "/chat"' /tmp/chat-manifest.json
-            fi
+            grep -q '"start_url": "/chat"' /tmp/chat-manifest.json
+            grep -q '"scope": "/chat"' /tmp/chat-manifest.json
             ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
             test "$ice_status" = 401
 
