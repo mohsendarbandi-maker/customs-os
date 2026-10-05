@@ -374,3 +374,36 @@ main.min-h-screen.overflow-hidden.text-white.relative{background:var(--bg)!impor
  .chat-standalone section:first-child>div:nth-child(2){padding:7px 9px!important}
  .chat-standalone section:first-child button{min-height:76px}
 }
+
+
+/* CHAT APP CHROME — keep iOS status area visually separate from the application. */
+.chat-safe-top{flex:0 0 env(safe-area-inset-top);min-height:0;background:var(--surface-2);border-bottom:1px solid var(--border)}
+.chat-app-header{flex:0 0 64px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;z-index:20}
+.chat-app-header-main{width:100%;display:flex;align-items:center;gap:12px;min-width:0}
+.chat-app-brand{min-width:0;border:0;background:transparent;color:var(--text);display:flex;align-items:center;gap:10px;text-align:right;padding:4px 2px;cursor:pointer;touch-action:manipulation}
+.chat-app-brand>span{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.chat-app-brand b{font-size:15px;line-height:1.2;white-space:nowrap}
+.chat-app-brand small{font-size:9px;color:var(--text-muted);white-space:nowrap}
+.chat-app-header-status{margin-inline-start:auto;display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:var(--text-muted)}
+.chat-app-status-dot{width:8px;height:8px;border-radius:999px;background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.12)}
+.chat-app-status-dot.is-online{background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.12)}
+.chat-home-navigation{border-bottom:1px solid var(--border);background:var(--surface);z-index:19}
+.chat-directory-embedded{height:100%;min-height:0;display:flex;flex-direction:column;background:var(--surface);overflow:hidden}
+.chat-directory-embedded .chat-directory-panel{box-shadow:none}
+@media(max-width:767px){
+  .chat-standalone{padding:0!important}
+  .chat-safe-top{flex-basis:env(safe-area-inset-top);background:var(--surface-2)}
+  .chat-app-header{flex-basis:58px;height:58px;padding:0 10px}
+  .chat-app-header-main{gap:8px}
+  .chat-app-brand b{font-size:14px}
+  .chat-app-brand small{font-size:8px}
+  .chat-app-header-status{font-size:9px}
+  .chat-standalone[data-chat-selected="true"] .chat-app-header{display:none}
+  .chat-standalone[data-chat-selected="true"] .chat-content{padding-top:0}
+  .chat-home-navigation{border-bottom:1px solid var(--border)}
+  .chat-home-navigation .chat-quick-nav{padding-top:6px;padding-bottom:6px}
+  .chat-directory-embedded{height:calc(100dvh - env(safe-area-inset-top) - 58px - 51px)}
+}
+@media(min-width:768px){
+  .chat-app-header{padding-inline:16px}
+}
