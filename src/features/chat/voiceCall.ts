@@ -12,15 +12,64 @@ type VoiceCallRow = {
   status: string;
 };
 
-export type VoiceCallController = ReturnType<typeof useVoiceCall>;
+type BroadcastPayload = Record<string, unknown>;
 
-const voiceTable = () => (supabase as any).from('chat_voice_calls');
+type StartVoiceCallResponse = {
+  created: boolean;
+  call: VoiceCallRow;
+};
+
+export type VoiceCallController = ReturnType<typeof useVoiceCall>;
 
 const callError = (value: unknown) =>
   value instanceof Error ? value.message : 'تماس صوتی برقرار نشد. دوباره تلاش کنید.';
 
 const isTerminal = (status: string) =>
   status === 'rejected' || status === 'cancelled' || status === 'ended' || status === 'missed';
+
+const asRecord = (value: unknown): BroadcastPayload => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value));
+};
+
+const stringValue = (record: BroadcastPayload, key: string): string => {
+  const value = record[key];
+  return typeof value === 'string' ? value : '';
+};
+
+const booleanValue = (record: BroadcastPayload, key: string): boolean | null => {
+  const value = record[key];
+  return typeof value === 'boolean' ? value : null;
+};
+
+const parseVoiceCallRow = (value: unknown): VoiceCallRow | null => {
+  const record = asRecord(value);
+  const id = stringValue(record, 'id');
+  const organizationId = stringValue(record, 'organization_id');
+  const conversationId = stringValue(record, 'conversation_id');
+  const callerId = stringValue(record, 'caller_id');
+  const calleeId = stringValue(record, 'callee_id');
+  const status = stringValue(record, 'status');
+
+  if (!id || !organizationId || !conversationId || !callerId || !calleeId || !status) return null;
+
+  return {
+    id,
+    organization_id: organizationId,
+    conversation_id: conversationId,
+    caller_id: callerId,
+    callee_id: calleeId,
+    status,
+  };
+};
+
+const parseStartVoiceCallResponse = (value: unknown): StartVoiceCallResponse | null => {
+  const record = asRecord(value);
+  const created = booleanValue(record, 'created');
+  const call = parseVoiceCallRow(record.call);
+  if (created === null || !call) return null;
+  return { created, call };
+};
 
 const getIceServers = async (): Promise<RTCConfiguration> => {
   const session = (await supabase.auth.getSession()).data.session;
@@ -30,21 +79,38 @@ const getIceServers = async (): Promise<RTCConfiguration> => {
     method: 'GET',
     headers: {
       Authorization: 'Bearer ' + session.access_token,
-      apikey: String((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || ''),
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
     },
     cache: 'no-store',
   });
 
-  const payload = await response.json().catch(() => ({})) as { iceServers?: RTCIceServer[]; error?: string };
-  if (!response.ok || !Array.isArray(payload.iceServers) || !payload.iceServers.length) {
-    throw new Error(payload.error || 'تنظیمات ارتباط صوتی دریافت نشد.');
+  const payload = asRecord(await response.json().catch(() => ({})));
+  const rawIceServers = payload.iceServers;
+
+  if (!response.ok || !Array.isArray(rawIceServers) || rawIceServers.length === 0) {
+    const message = stringValue(payload, 'error');
+    throw new Error(message || 'تنظیمات ارتباط صوتی دریافت نشد.');
   }
 
-  return { iceServers: payload.iceServers };
+  const iceServers = rawIceServers.filter((value): value is RTCIceServer => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    const record = asRecord(value);
+    const urls = record.urls;
+    return typeof urls === 'string' || (Array.isArray(urls) && urls.every((url) => typeof url === 'string'));
+  });
+
+  if (!iceServers.length) throw new Error('تنظیمات شبکه تماس صوتی معتبر نیست.');
+  return { iceServers };
 };
 
 const getProfileName = async (userId: string) => {
-  const result = await supabase.from('profiles').select('full_name').eq('id', userId).eq('is_active', true).maybeSingle();
+  const result = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', userId)
+    .eq('is_active', true)
+    .maybeSingle();
+
   if (result.error) throw new Error(result.error.message);
   return result.data?.full_name || 'همکار';
 };
@@ -80,6 +146,7 @@ export function useVoiceCall({
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
   const ringTimerRef = useRef<number | null>(null);
   const disconnectTimerRef = useRef<number | null>(null);
+  const heartbeatTimerRef = useRef<number | null>(null);
   const disposedRef = useRef(false);
 
   const setPhase = useCallback((next: VoicePhase) => {
@@ -109,15 +176,22 @@ export function useVoiceCall({
       window.clearTimeout(disconnectTimerRef.current);
       disconnectTimerRef.current = null;
     }
+    if (heartbeatTimerRef.current !== null) {
+      window.clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
+    }
   }, []);
 
   const cleanupTransport = useCallback(async () => {
     clearTimers();
+
     try {
       if (callChannelRef.current) {
         await supabase.removeChannel(callChannelRef.current);
       }
-    } catch {}
+    } catch {
+      // Transport cleanup must not surface as a second user-facing error.
+    }
     callChannelRef.current = null;
 
     if (pcRef.current) {
@@ -147,16 +221,29 @@ export function useVoiceCall({
   }, [clearTimers, setPhase]);
 
   const updateStatus = useCallback(async (id: string, status: string) => {
-    const result = await voiceTable().update({ status }).eq('id', id).select('id,status').single();
+    const result = await supabase
+      .from('chat_voice_calls')
+      .update({ status })
+      .eq('id', id)
+      .select('id,status')
+      .single();
+
     if (result.error) throw new Error(result.error.message);
     return result.data;
   }, []);
 
-  const broadcast = useCallback((event: string, payload: Record<string, unknown>) => {
+  const broadcast = useCallback((event: string, payload: BroadcastPayload) => {
     const channel = callChannelRef.current;
     if (!channel) return;
     void channel.send({ type: 'broadcast', event, payload });
   }, []);
+
+  const startHeartbeat = useCallback((id: string) => {
+    if (heartbeatTimerRef.current !== null) window.clearInterval(heartbeatTimerRef.current);
+    heartbeatTimerRef.current = window.setInterval(() => {
+      void updateStatus(id, 'active').catch(() => {});
+    }, 20000);
+  }, [updateStatus]);
 
   const setupPeer = useCallback(async (
     row: VoiceCallRow,
@@ -191,13 +278,14 @@ export function useVoiceCall({
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
+
       if (state === 'connected') {
         if (disconnectTimerRef.current !== null) {
           window.clearTimeout(disconnectTimerRef.current);
           disconnectTimerRef.current = null;
         }
         setPhase('connected');
-        void updateStatus(row.id, 'active').catch(() => {});
+        void updateStatus(row.id, 'active').then(() => startHeartbeat(row.id)).catch(() => startHeartbeat(row.id));
       } else if (state === 'disconnected') {
         if (disconnectTimerRef.current === null) {
           disconnectTimerRef.current = window.setTimeout(() => {
@@ -215,8 +303,8 @@ export function useVoiceCall({
 
     const channel = supabase
       .channel(`voice:${row.id}`, { config: { private: true } })
-      .on('broadcast', { event: 'voice_ready' }, () => {
-        if (role !== 'caller' || !pcRef.current || pcRef.current.localDescription) return;
+      .on('broadcast', { event: 'voice_ready' }, (payload) => {
+        if (role !== 'caller' || payload.payload?.call_id !== row.id || !pcRef.current) return;
         void (async () => {
           const peer = pcRef.current;
           if (!peer) return;
@@ -235,9 +323,11 @@ export function useVoiceCall({
         void (async () => {
           const peer = pcRef.current;
           if (!peer) return;
-          const description = payload.payload?.description as RTCSessionDescriptionInit | undefined;
-          if (!description) return;
-          await peer.setRemoteDescription(description);
+          const descriptionRecord = asRecord(payload.payload?.description);
+          const type = stringValue(descriptionRecord, 'type');
+          const sdp = stringValue(descriptionRecord, 'sdp');
+          if (!type || !sdp) return;
+          await peer.setRemoteDescription({ type: type as RTCSdpType, sdp });
           for (const candidate of pendingIceRef.current.splice(0)) await peer.addIceCandidate(candidate);
           const answer = await peer.createAnswer();
           await peer.setLocalDescription(answer);
@@ -252,25 +342,43 @@ export function useVoiceCall({
       .on('broadcast', { event: 'voice_answer' }, (payload) => {
         if (role !== 'caller' || payload.payload?.call_id !== row.id || !pcRef.current) return;
         void (async () => {
-          const description = payload.payload?.description as RTCSessionDescriptionInit | undefined;
-          if (!description) return;
-          await pcRef.current?.setRemoteDescription(description);
+          const descriptionRecord = asRecord(payload.payload?.description);
+          const type = stringValue(descriptionRecord, 'type');
+          const sdp = stringValue(descriptionRecord, 'sdp');
+          if (!type || !sdp) return;
+          await pcRef.current?.setRemoteDescription({ type: type as RTCSdpType, sdp });
           for (const candidate of pendingIceRef.current.splice(0)) {
             await pcRef.current?.addIceCandidate(candidate);
           }
         })().catch((error) => setErrorState(callError(error)));
       })
       .on('broadcast', { event: 'voice_ice' }, (payload) => {
-        if (payload.payload?.call_id !== row.id || payload.payload?.from_user_id === userId || !pcRef.current) return;
-        const candidate = payload.payload?.candidate as RTCIceCandidateInit | undefined;
-        if (!candidate) return;
+        const record = asRecord(payload.payload);
+        if (stringValue(record, 'call_id') !== row.id || stringValue(record, 'from_user_id') === userId || !pcRef.current) return;
+
+        const candidateRecord = asRecord(record.candidate);
+        const candidate = candidateRecord.candidate;
+        if (typeof candidate !== 'string' && candidate !== null) return;
+
+        const candidateInit: RTCIceCandidateInit = {
+          candidate: typeof candidate === 'string' ? candidate : '',
+        };
+        const sdpMid = candidateRecord.sdpMid;
+        const sdpMLineIndex = candidateRecord.sdpMLineIndex;
+        const usernameFragment = candidateRecord.usernameFragment;
+        if (typeof sdpMid === 'string' || sdpMid === null) candidateInit.sdpMid = sdpMid;
+        if (typeof sdpMLineIndex === 'number' || sdpMLineIndex === null) candidateInit.sdpMLineIndex = sdpMLineIndex;
+        if (typeof usernameFragment === 'string' || usernameFragment === null) candidateInit.usernameFragment = usernameFragment;
+
         void (async () => {
-          if (pcRef.current?.remoteDescription) await pcRef.current.addIceCandidate(candidate);
-          else pendingIceRef.current.push(candidate);
+          if (pcRef.current?.remoteDescription) await pcRef.current.addIceCandidate(candidateInit);
+          else pendingIceRef.current.push(candidateInit);
         })().catch(() => {});
       })
       .on('broadcast', { event: 'voice_hangup' }, (payload) => {
-        if (payload.payload?.call_id !== row.id) return;
+        const record = asRecord(payload.payload);
+        if (stringValue(record, 'call_id') !== row.id) return;
+        void updateStatus(row.id, 'ended').catch(() => {});
         void cleanupTransport();
       })
       .subscribe((status) => {
@@ -283,12 +391,13 @@ export function useVoiceCall({
       });
 
     callChannelRef.current = channel;
-  }, [broadcast, cleanupTransport, setPhase, updateStatus, userId]);
+  }, [broadcast, cleanupTransport, setPhase, startHeartbeat, updateStatus, userId]);
 
   const acquireMicrophone = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error('مرورگر این دستگاه از دسترسی زنده به میکروفن پشتیبانی نمی‌کند.');
     }
+
     return navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
@@ -304,52 +413,83 @@ export function useVoiceCall({
     if (phaseRef.current !== 'idle' || !userId || !organizationId || !conversationId || !peerUserId) return;
 
     setErrorState(null);
+
+    let stream: MediaStream | null = null;
+
     try {
-      const stream = await acquireMicrophone();
+      stream = await acquireMicrophone();
 
-      const result = await voiceTable()
-        .insert({
-          organization_id: organizationId,
-          conversation_id: conversationId,
-          caller_id: userId,
-          callee_id: peerUserId,
-          status: 'ringing',
-        })
-        .select('*')
-        .single();
+      const rpcResult = await supabase.rpc('start_chat_voice_call', {
+        p_organization_id: organizationId,
+        p_conversation_id: conversationId,
+        p_callee_id: peerUserId,
+      });
 
-      if (result.error || !result.data) {
+      if (rpcResult.error) {
         stream.getTracks().forEach((track) => track.stop());
-        throw new Error(result.error?.message || 'تماس دیگری در حال برقراری است.');
+        throw new Error(rpcResult.error.message);
       }
 
-      const row = result.data as VoiceCallRow;
+      const result = parseStartVoiceCallResponse(rpcResult.data);
+      if (!result) {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new Error('پاسخ ایجاد تماس معتبر نیست.');
+      }
+
+      if (!result.created) {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new Error('این مخاطب هم‌اکنون یک تماس فعال با شما دارد. ابتدا همان تماس را پاسخ دهید یا پایان دهید.');
+      }
+
+      const row = result.call;
       setCall(row, 'caller', peerName || 'همکار');
       setPhase('outgoing');
       await supabase.realtime.setAuth();
       await setupPeer(row, 'caller', stream);
+      stream = null;
 
       ringTimerRef.current = window.setTimeout(() => {
         if (phaseRef.current === 'outgoing' && callRef.current?.id === row.id) {
           void updateStatus(row.id, 'cancelled').catch(() => {});
+          broadcast('voice_hangup', { call_id: row.id, from_user_id: userId });
           void cleanupTransport();
         }
       }, 30000);
     } catch (error) {
+      stream?.getTracks().forEach((track) => track.stop());
       setErrorState(callError(error));
       await cleanupTransport();
     }
-  }, [acquireMicrophone, cleanupTransport, conversationId, organizationId, peerName, peerUserId, setCall, setPhase, setupPeer, updateStatus, userId]);
+  }, [
+    acquireMicrophone,
+    broadcast,
+    cleanupTransport,
+    conversationId,
+    organizationId,
+    peerName,
+    peerUserId,
+    setCall,
+    setPhase,
+    setupPeer,
+    updateStatus,
+    userId,
+  ]);
 
   const acceptIncoming = useCallback(async () => {
     const call = callRef.current;
     if (!call || call.role !== 'callee' || phaseRef.current !== 'incoming') return;
 
     setErrorState(null);
+
     try {
-      const rowResult = await voiceTable().select('*').eq('id', call.id).maybeSingle();
+      const rowResult = await supabase
+        .from('chat_voice_calls')
+        .select('id,organization_id,conversation_id,caller_id,callee_id,status')
+        .eq('id', call.id)
+        .maybeSingle();
+
       if (rowResult.error) throw new Error(rowResult.error.message);
-      const row = rowResult.data as VoiceCallRow | null;
+      const row = parseVoiceCallRow(rowResult.data);
       if (!row || row.status !== 'ringing') throw new Error('این تماس دیگر فعال نیست.');
 
       await updateStatus(row.id, 'accepted');
@@ -370,12 +510,14 @@ export function useVoiceCall({
     if (!call || call.role !== 'callee') return;
     setErrorState(null);
     await updateStatus(call.id, 'rejected').catch((error) => setErrorState(callError(error)));
+    broadcast('voice_hangup', { call_id: call.id, from_user_id: userId || '' });
     await cleanupTransport();
-  }, [cleanupTransport, updateStatus]);
+  }, [broadcast, cleanupTransport, updateStatus, userId]);
 
   const hangup = useCallback(async () => {
     const call = callRef.current;
     if (!call) return;
+
     const status = phaseRef.current === 'outgoing' ? 'cancelled' : 'ended';
     broadcast('voice_hangup', { call_id: call.id, from_user_id: userId || '' });
     await updateStatus(call.id, status).catch((error) => setErrorState(callError(error)));
@@ -385,6 +527,7 @@ export function useVoiceCall({
   const toggleMute = useCallback(() => {
     const stream = localStreamRef.current;
     if (!stream) return;
+
     const next = !muted;
     stream.getAudioTracks().forEach((track) => {
       track.enabled = !next;
@@ -403,17 +546,21 @@ export function useVoiceCall({
     if (!userId) return;
 
     let channel: ReturnType<typeof supabase.channel> | null = null;
+
     void (async () => {
       try {
         await supabase.realtime.setAuth();
+
         channel = supabase
           .channel(`chat-voice-user:${userId}`, { config: { private: true } })
           .on('broadcast', { event: 'voice_invite' }, (payload) => {
-            const incoming = payload.payload as Record<string, unknown>;
-            const incomingId = String(incoming.call_id || '');
-            const callerId = String(incoming.caller_id || '');
-            const incomingConversationId = String(incoming.conversation_id || '');
+            const incoming = asRecord(payload.payload);
+            const incomingId = stringValue(incoming, 'call_id');
+            const callerId = stringValue(incoming, 'caller_id');
+            const incomingConversationId = stringValue(incoming, 'conversation_id');
+
             if (!incomingId || !callerId || !incomingConversationId || callerId === userId || disposedRef.current) return;
+
             if (phaseRef.current !== 'idle') {
               void updateStatus(incomingId, 'rejected').catch(() => {});
               return;
@@ -421,24 +568,28 @@ export function useVoiceCall({
 
             void (async () => {
               try {
-                const name = String(incoming.caller_name || await getProfileName(callerId));
+                const explicitName = stringValue(incoming, 'caller_name');
+                const name = explicitName || await getProfileName(callerId);
                 const row: VoiceCallRow = {
                   id: incomingId,
-                  organization_id: String(incoming.organization_id || organizationId || ''),
+                  organization_id: stringValue(incoming, 'organization_id') || organizationId || '',
                   conversation_id: incomingConversationId,
                   caller_id: callerId,
                   callee_id: userId,
                   status: 'ringing',
                 };
+
                 setCall(row, 'callee', name);
                 setPhase('incoming');
-                if ('vibrate' in navigator) {
-                  navigator.vibrate?.([300, 150, 300, 150, 300]);
-                }
+
+                if ('vibrate' in navigator) navigator.vibrate?.([300, 150, 300, 150, 300]);
+
                 if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
                   try {
                     new Notification(`تماس صوتی از ${name}`, { body: 'برای پاسخ وارد Customs OS شوید.' });
-                  } catch {}
+                  } catch {
+                    // Notification permission is optional; the in-app call panel remains authoritative.
+                  }
                 }
 
                 ringTimerRef.current = window.setTimeout(() => {
@@ -453,13 +604,15 @@ export function useVoiceCall({
             })();
           })
           .on('broadcast', { event: 'voice_status' }, (payload) => {
-            const incoming = payload.payload as Record<string, unknown>;
-            const incomingId = String(incoming.call_id || '');
+            const incoming = asRecord(payload.payload);
+            const incomingId = stringValue(incoming, 'call_id');
             if (!incomingId || incomingId !== callRef.current?.id) return;
-            const status = String(incoming.status || '');
+
+            const status = stringValue(incoming, 'status');
             if (status === 'accepted' && phaseRef.current === 'outgoing') {
               setPhase('connecting');
             }
+
             if (isTerminal(status)) {
               setErrorState(
                 status === 'rejected'
@@ -473,9 +626,7 @@ export function useVoiceCall({
               void cleanupTransport();
             }
           })
-          .subscribe((status) => {
-            if (status !== 'SUBSCRIBED' && status !== 'TIMED_OUT' && status !== 'CHANNEL_ERROR') return;
-          });
+          .subscribe(() => {});
 
         userChannelRef.current = channel;
       } catch (error) {
@@ -487,9 +638,11 @@ export function useVoiceCall({
       disposedRef.current = true;
       if (channel) void supabase.removeChannel(channel);
       userChannelRef.current = null;
+
       if (callRef.current) {
         void updateStatus(callRef.current.id, phaseRef.current === 'outgoing' ? 'cancelled' : 'ended').catch(() => {});
       }
+
       void cleanupTransport();
     };
   }, [cleanupTransport, organizationId, setCall, setPhase, updateStatus, userId]);
