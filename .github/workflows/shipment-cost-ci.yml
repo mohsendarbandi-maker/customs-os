@@ -1,0 +1,43 @@
+name: Shipment Cost CI
+
+on:
+  pull_request:
+    paths:
+      - 'src/features/finance/**'
+      - 'src/pages/FinancePage.tsx'
+      - 'src/pages/FinanceShipmentPage.tsx'
+      - 'src/lib/jalali.ts'
+      - 'supabase/migrations/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/shipment-cost-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: shipment-cost-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_SUPABASE_URL: https://bjngfgiecvihofemptub.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_pIh0y6FQScQ-IAa_FkbjWA_qTSm83Sr
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - name: Verify Supabase client configuration was embedded
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R -F -q "$VITE_SUPABASE_URL" dist/assets
+          grep -R -F -q "$VITE_SUPABASE_ANON_KEY" dist/assets
