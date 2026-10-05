@@ -209,7 +209,7 @@ export const ChatPage:React.FC=()=>{
   return people.filter(person=>person.id!==user?.id&&!q||person.id!==user?.id&&(normalizeFaText(person.full_name).toLowerCase().includes(q)||(person.phone??'').includes(q)));
  },[people,personQuery,user?.id]);
 
- return <div dir="rtl" className="chat-standalone w-full h-dvh min-h-[560px] flex flex-col gap-0 bg-[var(--surface)]" data-chat-wallpaper="plain">
+ return <div dir="rtl" className="chat-standalone w-full h-dvh min-h-[560px] flex flex-col gap-0 bg-[var(--surface)]" data-chat-wallpaper="plain" data-chat-selected={selectedId?"true":"false"}>
   <div className="chat-safe-top" aria-hidden="true"/>
   <header className="chat-app-header shrink-0">
    <div className="chat-app-header-main">
@@ -223,10 +223,10 @@ export const ChatPage:React.FC=()=>{
   <div className={selectedId?"hidden md:flex shrink-0":"chat-home-navigation shrink-0"}>
    <ChatQuickNav people={people} conversations={conversations} onNewMessage={()=>void openPeople("direct")} onOpenDirectory={openDirectory} onOpenAi={()=>document.querySelector<HTMLButtonElement>(".ai-operator-launcher")?.click()} onOpenSettings={()=>setSettingsOpen(true)}/>
   </div>
-  {directoryOpen&&!selectedId&&<div className="chat-home-directory">
+  {directoryOpen&&<div className="chat-home-directory flex-1 min-h-0">
     <ChatDirectoryPanel embedded open={directoryOpen} mode={directoryMode} organizationId={profile?.organization_id} people={people} conversations={conversations} onClose={()=>setDirectoryOpen(false)} onSelectConversation={id=>{setSelectedId(id);setMessages([]);setResults([]);setMenu(null);setDirectoryOpen(false)}} onNewMessage={()=>void openPeople("direct")} onStartDirect={openDirectoryDirect} onCreateGroup={()=>{setDirectoryOpen(false);setChannelType("group");setChannelOpen(true)}}/>
   </div>}
-  <div className={directoryOpen&&!selectedId?"hidden":"chat-content flex flex-1 min-h-0 gap-0 md:gap-3"}>
+  <div className={directoryOpen?"hidden":"chat-content flex flex-1 min-h-0 gap-0 md:gap-3"}>
   <section className={(selectedId?"hidden md:flex":"flex")+" w-full md:w-[360px] shrink-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
    <header className="h-[60px] shrink-0 px-3 border-b app-border flex items-center gap-2">
     <div className="min-w-0 flex-1"><b className="block text-sm">گفتگوها</b><div className="text-[10px] app-muted truncate">{unread?String(unread)+' پیام خوانده‌نشده':'فهرست گفتگوهای سازمان'}</div></div>
