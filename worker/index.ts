@@ -5,6 +5,8 @@ export interface Env {
   TURN_KEY_ID_V2?: string;
 }
 
+const BUILD_SIGNATURE = '20261006-cloudflare-chat-fix-1';
+
 const EDGE_FUNCTIONS = new Set([
   'ai-assistant', 'ai-core', 'ai-operator', 'ai-voice', 'knowledge-ai',
   'owner-console', 'scan-chat-file', 'send-chat-push', 'send-reminders',
@@ -203,11 +205,14 @@ export default {
 
     if (request.method === 'GET' && (url.pathname === '/' || accept.includes('text/html') || isHtmlNavigation)) {
       const headers = new Headers(response.headers);
+      headers.set('X-Customs-OS-Build', BUILD_SIGNATURE);
       headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       headers.set('Pragma', 'no-cache');
       headers.set('Vary', 'Accept-Encoding');
       return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
     }
-    return response;
+    const finalHeaders = new Headers(response.headers);
+    finalHeaders.set('X-Customs-OS-Build', BUILD_SIGNATURE);
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers: finalHeaders });
   },
 };
