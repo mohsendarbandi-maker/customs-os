@@ -9,6 +9,8 @@ import { recognize } from 'tesseract.js';
 import{supabase}from'../../lib/supabase';
 import type{ChatConversation,ChatMessage}from'./types';
 import {ChatBrandLogo} from './ChatBrandLogo';
+import {useVoiceCall} from './voiceCall';
+import {VoiceCallPanel} from './VoiceCallPanel';
 
 type Person={id:string;full_name:string;phone:string|null;role:string};
 type PresenceUser={user_id:string;typing?:boolean};
