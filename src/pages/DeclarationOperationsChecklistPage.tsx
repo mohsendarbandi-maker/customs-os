@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
-import{AlertTriangle,ArrowLeft,BrainCircuit,Check,ChevronDown,ChevronUp,Info,Loader2,Plus,Save,Trash2}from'lucide-react';
+import{AlertTriangle,ArrowLeft,BrainCircuit,Check,Info,Loader2,Plus,Save,Trash2}from'lucide-react';
 import{Link,useSearchParams}from'react-router-dom';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
@@ -8,7 +8,6 @@ type Decl={id:string;shipment_id:string|null;case_id:string|null;kottaj_number:s
 type Item={id:string;item_key:string;item_label:string;completed:boolean;note:string|null;sort_order:number;source:string;is_active:boolean};
 type Rule={id:string;rule_name:string;hs_code_prefix:string;customs_path:string;transport_mode:string;checklist_counts:Record<string,number>;field_counts:Record<string,number>;workflow_stages:number[];evidence_count:number;confidence:number;source:string;is_active:boolean};
 
-const BASE_ITEMS=['مالیات علی الحساب','درخواست ضمانتنامه حقوق ورودی و ارزش افزوده','ارزیابی','آزمایشگاه','مجوز استاندارد','نوبت کارشناسی','کد ساتا','تبصره دو منطقه آزاد'];
 const PATH_LABELS:Record<string,string>={green:'سبز',yellow:'زرد',red:'قرمز'};
 const FIELD_LABELS:Record<string,string>={
  tariff_code:'HS Code',customs_path:'مسیر گمرکی',kottaj_number:'شماره کوتاژ',declaration_date:'تاریخ اظهار',
