@@ -21,6 +21,9 @@ type StartVoiceCallResponse = {
 
 export type VoiceCallController = ReturnType<typeof useVoiceCall>;
 
+const isSdpType = (value: string): value is RTCSdpType =>
+  value === 'offer' || value === 'answer' || value === 'pranswer' || value === 'rollback';
+
 const callError = (value: unknown) =>
   value instanceof Error ? value.message : 'تماس صوتی برقرار نشد. دوباره تلاش کنید.';
 
@@ -327,7 +330,8 @@ export function useVoiceCall({
           const type = stringValue(descriptionRecord, 'type');
           const sdp = stringValue(descriptionRecord, 'sdp');
           if (!type || !sdp) return;
-          await peer.setRemoteDescription({ type: type as RTCSdpType, sdp });
+          if (!isSdpType(type)) return;
+          await peer.setRemoteDescription({ type, sdp });
           for (const candidate of pendingIceRef.current.splice(0)) await peer.addIceCandidate(candidate);
           const answer = await peer.createAnswer();
           await peer.setLocalDescription(answer);
@@ -346,7 +350,8 @@ export function useVoiceCall({
           const type = stringValue(descriptionRecord, 'type');
           const sdp = stringValue(descriptionRecord, 'sdp');
           if (!type || !sdp) return;
-          await pcRef.current?.setRemoteDescription({ type: type as RTCSdpType, sdp });
+          if (!isSdpType(type)) return;
+          await pcRef.current?.setRemoteDescription({ type, sdp });
           for (const candidate of pendingIceRef.current.splice(0)) {
             await pcRef.current?.addIceCandidate(candidate);
           }
