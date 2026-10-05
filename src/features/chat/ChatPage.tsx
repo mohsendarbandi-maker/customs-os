@@ -14,6 +14,8 @@ import {ChatHierarchyPanel} from './ChatHierarchyPanel';
 import {parseRealtimeMessage,parseRealtimeReaction,parseRealtimeRead,parseRealtimeTyping}from'./realtimeProtocol';
 import {useVoiceCall} from './voiceCall';
 import {VoiceCallPanel} from './VoiceCallPanel';
+import {ChatSettingsPanel} from './ChatSettingsPanel';
+import {AIOperatorPanel} from '../../components/AIOperatorPanel';
 
 type Person={id:string;full_name:string;phone:string|null;role:string};
 type PresenceUser={user_id:string;typing?:boolean};
@@ -66,7 +68,7 @@ export const ChatPage:React.FC=()=>{
  const[personQuery,setPersonQuery]=useState('');
  const[query,setQuery]=useState('');
  const[results,setResults]=useState<Array<{kind:string;id:string;conversation_id:string;title:string;snippet:string;created_at:string}>>([]);
- const[reply,setReply]=useState<ChatMessage|null>(null),[editId,setEditId]=useState<string|null>(null),[forwardId,setForwardId]=useState<string|null>(null),[shipmentUpdateOpen,setShipmentUpdateOpen]=useState(false),[shipmentStatus,setShipmentStatus]=useState('در حال بررسی'),[shipmentNote,setShipmentNote]=useState(''),[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct'),[channelOpen,setChannelOpen]=useState(false),[channelTitle,setChannelTitle]=useState(''),[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel'),[sharedConnections,setSharedConnections]=useState<Array<{id:string,target_organization_id:string,target_name:string}>>([]),[selectedConnection,setSelectedConnection]=useState(''),[attachmentBusy,setAttachmentBusy]=useState(false),[recording,setRecording]=useState(false),[ocrBusy,setOcrBusy]=useState(false),[pushReady,setPushReady]=useState(false),[pushBusy,setPushBusy]=useState(false);
+ const[reply,setReply]=useState<ChatMessage|null>(null),[editId,setEditId]=useState<string|null>(null),[forwardId,setForwardId]=useState<string|null>(null),[shipmentUpdateOpen,setShipmentUpdateOpen]=useState(false),[shipmentStatus,setShipmentStatus]=useState('در حال بررسی'),[shipmentNote,setShipmentNote]=useState(''),[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct'),[channelOpen,setChannelOpen]=useState(false),[channelTitle,setChannelTitle]=useState(''),[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel'),[sharedConnections,setSharedConnections]=useState<Array<{id:string,target_organization_id:string,target_name:string}>>([]),[selectedConnection,setSelectedConnection]=useState(''),[attachmentBusy,setAttachmentBusy]=useState(false),[recording,setRecording]=useState(false),[ocrBusy,setOcrBusy]=useState(false),[pushReady,setPushReady]=useState(false),[pushBusy,setPushBusy]=useState(false),[settingsOpen,setSettingsOpen]=useState(false);
  const[menu,setMenu]=useState<string|null>(null);
  const bottom=useRef<HTMLDivElement|null>(null);const fileInput=useRef<HTMLInputElement|null>(null);const recorderRef=useRef<MediaRecorder|null>(null);const streamRef=useRef<MediaStream|null>(null);const voiceChunks=useRef<Blob[]>([]);
  const channel=useRef<ReturnType<typeof supabase.channel>|null>(null);
