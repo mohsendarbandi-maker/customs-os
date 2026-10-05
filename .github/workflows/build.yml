@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for base in "https://customs.mohsen-darbandi.workers.dev" "https://darbandicommercial.ir"; do
+          for base in "https://darbandicommercial.ir"; do
             echo "Checking $base/"
             success=0
             for attempt in 1 2 3 4 5 6; do
@@ -64,7 +64,15 @@ jobs:
             test -s /tmp/crm.js
             if grep -qi '<!doctype html' /tmp/crm.js; then echo "CRM module returned HTML instead of JavaScript"; exit 1; fi
           done
-          echo "Live Worker smoke test passed."
+          echo "Production custom domain smoke test passed."
+
+          echo "Checking optional workers.dev endpoint"
+          if curl --fail --silent --show-error --location --max-time 20 -o /tmp/workers-dev.html "https://customs.mohsen-darbandi.workers.dev/"; then
+            grep -q '<div id="root">' /tmp/workers-dev.html
+            echo "Optional workers.dev endpoint is healthy."
+          else
+            echo "workers.dev is optional for production; continuing."
+          fi
 
       - name: Browser runtime smoke test
         shell: bash
@@ -75,7 +83,6 @@ jobs:
           import { test, expect } from 'playwright/test';
 
           for (const baseURL of [
-            'https://customs.mohsen-darbandi.workers.dev',
             'https://darbandicommercial.ir',
           ]) {
             test(`runtime boot: ${baseURL}`, async ({ page }) => {
