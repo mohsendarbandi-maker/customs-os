@@ -17,6 +17,25 @@
         if (link) link.setAttribute('href', manifest);
       })();
     </script>
+    <script>
+      (() => {
+        const key = 'customs-os-sw-reset-v2';
+        if (!('serviceWorker' in navigator) || !('caches' in window)) return;
+        try {
+          if (sessionStorage.getItem(key) === '1') return;
+        } catch {
+          return;
+        }
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          if (!registrations.length) return;
+          try { sessionStorage.setItem(key, '1'); } catch {}
+          return Promise.all(registrations.map((registration) => registration.unregister()))
+            .then(() => caches.keys())
+            .then((names) => Promise.all(names.map((name) => caches.delete(name))))
+            .then(() => window.location.reload());
+        }).catch(() => undefined);
+      })();
+    </script>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon-180.png" />
     <title>Customs OS | سیستم مدیریت گمرک</title>

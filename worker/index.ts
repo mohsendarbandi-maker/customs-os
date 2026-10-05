@@ -43,9 +43,23 @@ export default {
     }
 
     const isHtmlNavigation = request.method === 'GET' && (url.pathname === '/' || (request.headers.get('Accept') || '').includes('text/html'));
-    const response = isHtmlNavigation
+    let response = isHtmlNavigation
       ? await env.ASSETS.fetch(new URL('/index.html', request.url))
       : await env.ASSETS.fetch(request);
+
+    // A custom hostname can temporarily hold a stale negative asset lookup at the edge.
+    // Recover missing static assets from the canonical Worker hostname; this path never re-enters the fallback on itself.
+    if (
+      response.status === 404 &&
+      request.method === 'GET' &&
+      url.pathname.startsWith('/assets/') &&
+      url.hostname !== 'customs.mohsen-darbandi.workers.dev'
+    ) {
+      const canonical = new URL(request.url);
+      canonical.hostname = 'customs.mohsen-darbandi.workers.dev';
+      response = await fetch(new Request(canonical, request));
+    }
+
     const accept = request.headers.get('Accept') || '';
     if (request.method === 'GET' && (url.pathname === '/' || accept.includes('text/html'))) {
       const headers = new Headers(response.headers);
