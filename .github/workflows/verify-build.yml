@@ -26,7 +26,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Production build
+      - name: Production build (attempt 2)
         run: npm run build
 
       - name: Assert AI Operator static import
