@@ -373,3 +373,88 @@ export async function sendFileMessage(
     throw error;
   }
 }
+
+
+export type ChatHierarchyItem = {
+  conversation_id: string;
+  type: string;
+  title: string | null;
+  updated_at: string;
+  last_message_id: string | null;
+  last_message_body: string | null;
+  last_message_created_at: string | null;
+  unread_count: number;
+  muted_until: string | null;
+  hierarchy_kind: 'regular' | 'owner_group' | 'shipment_group';
+  parent_conversation_id: string | null;
+  cargo_owner_id: string | null;
+  shipment_id: string | null;
+  shipment_display_name: string | null;
+  shipment_bl_number: string | null;
+  shipment_status: string | null;
+};
+
+export async function listChatHierarchy(): Promise<ChatHierarchyItem[]> {
+  const result = await supabase.rpc('chat_hierarchy_list', { p_limit: 200 });
+  return unwrap(result) as ChatHierarchyItem[];
+}
+
+export async function editChatMessage(messageId: string, body: string): Promise<ChatMessage> {
+  const result = await supabase.rpc('chat_edit_message', {
+    p_message_id: messageId,
+    p_body: body,
+  });
+  return unwrap(result) as ChatMessage;
+}
+
+export async function forwardChatMessage(
+  messageId: string,
+  targetConversationId: string,
+): Promise<ChatMessage> {
+  const result = await supabase.rpc('chat_forward_message', {
+    p_message_id: messageId,
+    p_target_conversation_id: targetConversationId,
+    p_client_uuid: makeClientId(),
+  });
+  return unwrap(result) as ChatMessage;
+}
+
+export async function shareShipmentUpdate(
+  conversationId: string,
+  shipmentId: string,
+  status: string,
+  note?: string,
+): Promise<ChatMessage> {
+  const result = await supabase.rpc('chat_share_shipment_update', {
+    p_conversation_id: conversationId,
+    p_shipment_id: shipmentId,
+    p_status: status,
+    p_note: note ?? null,
+  });
+  return unwrap(result) as ChatMessage;
+}
+
+export async function toggleChatReaction(
+  messageId: string,
+  emoji: string,
+): Promise<boolean> {
+  const result = await supabase.rpc('chat_toggle_reaction', {
+    p_message_id: messageId,
+    p_emoji: emoji,
+  });
+  return unwrap(result) as boolean;
+}
+
+export async function toggleChatPin(messageId: string): Promise<boolean> {
+  const result = await supabase.rpc('chat_toggle_pin', {
+    p_message_id: messageId,
+  });
+  return unwrap(result) as boolean;
+}
+
+export async function toggleChatStar(messageId: string): Promise<boolean> {
+  const result = await supabase.rpc('chat_toggle_star', {
+    p_message_id: messageId,
+  });
+  return unwrap(result) as boolean;
+}
