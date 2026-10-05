@@ -169,7 +169,7 @@ export const ChatPage:React.FC=()=>{
  const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);setMenu(null);if(selectedId)await load(selectedId)}catch(e){setError(err(e))}};
  const runSearch=async()=>{if(!query.trim()){setResults([]);return}try{setResults(await searchChat(query,selectedId??undefined))}catch(e){setError(err(e))}};
  const selected=conversations.find(c=>c.conversation_id===selectedId)??null;
- const voice=useVoiceCall({userId:user?.id,organizationId:profile?.organization_id,conversationId:selected?.conversation_id??null,peerUserId:selected?.type==='direct'?selected.display_user_id??null:null,peerName:selected?.display_name||title(selected??({type:'direct',title:null,updated_at:'',conversation_id:'',last_message_id:null,last_message_body:null,last_message_created_at:null,unread_count:0,muted_until:null} as any))});
+ const voice=useVoiceCall({userId:user?.id,organizationId:profile?.organization_id,conversationId:selected?.conversation_id??null,peerUserId:selected?.type==='direct'?selected.display_user_id??null:null,peerName:selected?.display_name||selected?.title||'همکار'});
  useEffect(()=>{if(voice.error)setError(voice.error)},[voice.error]);
  const unread=useMemo(()=>conversations.reduce((n,c)=>n+Number(c.unread_count??0),0),[conversations]);
  const messageMap=useMemo(()=>new Map(messages.map(m=>[m.id,m])),[messages]);
