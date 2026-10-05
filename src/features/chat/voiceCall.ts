@@ -40,6 +40,18 @@ const stringValue = (record: BroadcastPayload, key: string): string => {
   return typeof value === 'string' ? value : '';
 };
 
+const nullableStringValue = (record: BroadcastPayload, key: string): string | null | undefined => {
+  const value = record[key];
+  if (value === null || typeof value === 'string') return value;
+  return undefined;
+};
+
+const nullableNumberValue = (record: BroadcastPayload, key: string): number | null | undefined => {
+  const value = record[key];
+  if (value === null || typeof value === 'number') return value;
+  return undefined;
+};
+
 const booleanValue = (record: BroadcastPayload, key: string): boolean | null => {
   const value = record[key];
   return typeof value === 'boolean' ? value : null;
@@ -369,13 +381,13 @@ export function useVoiceCall({
         const candidateInit: RTCIceCandidateInit = {
           candidate: typeof candidate === 'string' ? candidate : '',
         };
-        const sdpMidValue = candidateRecord.sdpMid;
-        const sdpMLineIndexValue = candidateRecord.sdpMLineIndex;
-        const usernameFragmentValue = candidateRecord.usernameFragment;
+        const sdpMidValue = nullableStringValue(candidateRecord, 'sdpMid');
+        const sdpMLineIndexValue = nullableNumberValue(candidateRecord, 'sdpMLineIndex');
+        const usernameFragmentValue = nullableStringValue(candidateRecord, 'usernameFragment');
         const candidateWithOptionalFields: RTCIceCandidateInit = { ...candidateInit };
-        if (typeof sdpMidValue === 'string' || sdpMidValue === null) candidateWithOptionalFields.sdpMid = sdpMidValue;
-        if (typeof sdpMLineIndexValue === 'number' || sdpMLineIndexValue === null) candidateWithOptionalFields.sdpMLineIndex = sdpMLineIndexValue;
-        if (typeof usernameFragmentValue === 'string' || usernameFragmentValue === null) candidateWithOptionalFields.usernameFragment = usernameFragmentValue;
+        if (sdpMidValue !== undefined) candidateWithOptionalFields.sdpMid = sdpMidValue;
+        if (sdpMLineIndexValue !== undefined) candidateWithOptionalFields.sdpMLineIndex = sdpMLineIndexValue;
+        if (usernameFragmentValue !== undefined) candidateWithOptionalFields.usernameFragment = usernameFragmentValue;
 
         void (async () => {
           if (pcRef.current?.remoteDescription) await pcRef.current.addIceCandidate(candidateWithOptionalFields);
