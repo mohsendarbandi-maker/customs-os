@@ -10,5 +10,5 @@ export default defineConfig({
     devOptions:{enabled:false},injectManifest:{globPatterns:['**/*.{js,css,html,ico,png,svg,woff2}']}
   })],
   resolve:{alias:{'@':path.resolve(__dirname,'./src')}},
-  build:{outDir:'dist',sourcemap:false,rollupOptions:{output:{entryFileNames:`assets/[name]-${buildId}-[hash].js`,chunkFileNames:`assets/[name]-${buildId}-[hash].js`,assetFileNames:`assets/[name]-${buildId}-[hash][extname]`}}}
+  build:{outDir:'dist',sourcemap:false,rollupOptions:{output:{inlineDynamicImports:true,entryFileNames:`assets/[name]-${buildId}-[hash].js`,chunkFileNames:`assets/[name]-${buildId}-[hash].js`,assetFileNames:`assets/[name]-${buildId}-[hash][extname]`}}}
 });
