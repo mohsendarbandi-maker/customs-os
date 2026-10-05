@@ -18,7 +18,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
@@ -26,7 +25,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Production build (attempt 2)
+      - name: Production build (attempt 3)
         run: npm run build
 
       - name: Assert AI Operator static import
