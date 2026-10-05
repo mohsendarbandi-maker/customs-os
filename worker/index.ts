@@ -125,7 +125,7 @@ export default {
       const html = await response.text();
       const chatHtml = html
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
-        .replace(/href="\/manifest\.webmanifest"/i, 'href="/manifest-chat.webmanifest?app=chat-v3"')
+        .replace(/href="\/manifest\.webmanifest"/i, 'href="/chat-manifest.webmanifest"')
         .replace(/href="\/icon\.svg"/i, 'href="/chat-icon.svg"')
         .replace(/href="\/pwa\/apple-touch-icon-180\.png"/i, 'href="/chat-icon.svg"')
         .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#0B7EA4"')
