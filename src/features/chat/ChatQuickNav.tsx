@@ -42,11 +42,12 @@ type DirectoryProps={
  onNewMessage:()=>void;
  onStartDirect:(userId:string)=>void;
  onCreateGroup:()=>void;
+ embedded?:boolean;
 };
 
 type CallRow={id:string;conversation_id:string;caller_id:string;callee_id:string;status:string;created_at:string;answered_at:string|null;ended_at:string|null};
 
-export const ChatDirectoryPanel:React.FC<DirectoryProps>=({open,mode,organizationId,people,conversations,onClose,onSelectConversation,onNewMessage,onStartDirect,onCreateGroup})=>{
+export const ChatDirectoryPanel:React.FC<DirectoryProps>=({open,mode,organizationId,people,conversations,onClose,onSelectConversation,onNewMessage,onStartDirect,onCreateGroup,embedded=false})=>{
  const[hierarchy,setHierarchy]=useState<ChatHierarchyItem[]>([]);
  const[expanded,setExpanded]=useState<Record<string,boolean>>({});
  const[calls,setCalls]=useState<CallRow[]>([]);
@@ -95,8 +96,8 @@ export const ChatDirectoryPanel:React.FC<DirectoryProps>=({open,mode,organizatio
  const callLabel=(status:string)=>status==='missed'?'بی‌پاسخ':status==='rejected'?'رد شده':status==='cancelled'?'لغو شده':status==='ringing'?'در حال تماس':'تماس';
  const title=mode==='groups'?'گروه‌ها و کانال‌ها':mode==='owners'?'صاحب کالاها':mode==='calls'?'تماس‌ها':'اعضای داخلی شرکت';
  const subtitle=mode==='groups'?'گروه، کانال و گفتگوی سازمانی':mode==='owners'?'صاحب کالا ← محموله‌ها':mode==='calls'?'تاریخچه تماس‌های صوتی':'کاربران فعال همین سازمان';
- return <div className="fixed inset-0 z-[700] bg-black/45 backdrop-blur-[2px] flex items-end md:items-center justify-center" onClick={onClose}>
-  <section className="chat-directory-panel w-full md:w-[620px] md:max-h-[82dvh] max-h-[92dvh] rounded-t-3xl md:rounded-3xl border app-border bg-[var(--surface)] shadow-2xl overflow-hidden" onClick={e=>e.stopPropagation()} dir="rtl">
+ return <div className={embedded?"chat-directory-embedded":"fixed inset-0 z-[700] bg-black/45 backdrop-blur-[2px] flex items-end md:items-center justify-center"} onClick={onClose}>
+  <section className={(embedded?"chat-directory-panel w-full h-full min-h-0 border-0 rounded-none":"chat-directory-panel w-full md:w-[620px] md:max-h-[82dvh] max-h-[92dvh] rounded-t-3xl md:rounded-3xl border app-border")+" bg-[var(--surface)] shadow-2xl overflow-hidden"} onClick={e=>e.stopPropagation()} dir="rtl">
    <header className="px-4 py-3 border-b app-border flex items-center gap-3">
     <div className="h-11 w-11 rounded-2xl bg-[var(--primary)] text-white flex items-center justify-center">{mode==='calls'?<Phone size={18}/>:mode==='members'?<UserPlus size={18}/>:mode==='owners'?<UserRound size={18}/>:<Users size={18}/>}</div>
     <div className="min-w-0 flex-1"><b className="block text-[16px]">{title}</b><span className="block text-[11px] app-muted mt-0.5 truncate">{subtitle}</span></div>
