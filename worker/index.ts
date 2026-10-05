@@ -54,9 +54,9 @@ export default {
     if (isHtmlNavigation && url.pathname.startsWith('/chat') && response.ok) {
       const html = await response.text();
       const chatHtml = html
-        .replace(/<title>[^<]*<\\/title>/i, '<title>چت سازمانی | Customs OS<\\/title>')
-        .replace(/href="\\/manifest\\.webmanifest"/i, 'href="/manifest-chat.webmanifest"')
-        .replace(/href="\\/icon\\.svg"/i, 'href="/chat-icon.svg"')
+        .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
+        .replace(/href="\/manifest\.webmanifest"/i, 'href="/manifest-chat.webmanifest"')
+        .replace(/href="\/icon\.svg"/i, 'href="/chat-icon.svg"')
         .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="چت سازمانی"');
       response = new Response(chatHtml, {
         status: response.status,
