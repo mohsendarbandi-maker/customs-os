@@ -190,6 +190,12 @@ jobs:
                 { timeout: 15000, message: 'Chat route did not render visible content into #root' },
               ).not.toBe('');
               await expect(chatPage).toHaveTitle(/چت سازمانی/);
+              await expect(chatPage.locator('.chat-standalone')).toBeVisible();
+              await expect(chatPage.getByText('چت سازمانی', { exact: true }).first()).toBeVisible();
+              const manifestHref = await chatPage.locator('link[rel="manifest"]').getAttribute('href');
+              if (!manifestHref?.includes('/chat-manifest.webmanifest')) {
+                throw new Error('Chat page is not using the dedicated chat manifest');
+              }
               await chatPage.close();
 
               if (errors.length) {
