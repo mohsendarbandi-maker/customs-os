@@ -213,7 +213,7 @@ export const ChatPage:React.FC=()=>{
   <div className="chat-safe-top" aria-hidden="true"/>
   <header className="chat-app-header shrink-0">
    <div className="chat-app-header-main">
-    <button type="button" className="chat-app-brand" onClick={()=>{if(selectedId){setSelectedId(null);setMessages([]);setReply(null);return}void openPeople("direct")}} aria-label={selectedId?"بازگشت به فهرست گفتگوها":"گفتگوی جدید"}>
+    <button type="button" className="chat-app-brand" onClick={()=>{if(selectedId){setSelectedId(null);setMessages([]);setReply(null)}}} aria-label={selectedId?"بازگشت به فهرست گفتگوها":"صفحه اصلی چت"}>
       {selectedId?<ArrowRight size={18}/>:<ChatBrandLogo size={34}/>}
       <span><b>چت سازمانی</b><small>{selectedId?"گفتگو":"مرکز ارتباطات داخلی Customs OS"}</small></span>
     </button>
