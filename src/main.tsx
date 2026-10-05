@@ -143,12 +143,31 @@ if (!rootElement) {
   throw new Error('Root element #root was not found');
 }
 
-rootElement.replaceChildren();
+const normalizeLegacyPwaLaunch = () => {
+  if (typeof window === 'undefined') return false;
 
-ReactDOM.createRoot(rootElement).render(
-  <React.StrictMode>
-    <AppErrorBoundary>
-      <App />
-    </AppErrorBoundary>
-  </React.StrictMode>,
-);
+  try {
+    const current = new URL(window.location.href);
+    if (current.pathname !== '/' || current.searchParams.get('source') !== 'pwa') return false;
+
+    current.pathname = '/chat';
+    current.search = '?source=pwa';
+    window.location.replace(current.toString());
+    return true;
+  } catch (error) {
+    console.warn('[Customs OS] Legacy PWA launch normalization failed:', error);
+    return false;
+  }
+};
+
+if (!normalizeLegacyPwaLaunch()) {
+  rootElement.replaceChildren();
+
+  ReactDOM.createRoot(rootElement).render(
+    <React.StrictMode>
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
+    </React.StrictMode>,
+  );
+}
