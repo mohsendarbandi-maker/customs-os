@@ -22,20 +22,25 @@ const callError = (value: unknown) =>
 const isTerminal = (status: string) =>
   status === 'rejected' || status === 'cancelled' || status === 'ended' || status === 'missed';
 
-const buildIceServers = (): RTCConfiguration => {
-  const servers: RTCIceServer[] = [
-    { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] },
-  ];
+const getIceServers = async (): Promise<RTCConfiguration> => {
+  const session = (await supabase.auth.getSession()).data.session;
+  if (!session?.access_token) throw new Error('نشست کاربر منقضی شده است. دوباره وارد شوید.');
 
-  const turnUrl = String((import.meta as any).env?.VITE_WEBRTC_TURN_URL || '').trim();
-  const turnUsername = String((import.meta as any).env?.VITE_WEBRTC_TURN_USERNAME || '').trim();
-  const turnCredential = String((import.meta as any).env?.VITE_WEBRTC_TURN_CREDENTIAL || '').trim();
+  const response = await fetch('/api/webrtc/ice', {
+    method: 'GET',
+    headers: {
+      Authorization: 'Bearer ' + session.access_token,
+      apikey: String((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || ''),
+    },
+    cache: 'no-store',
+  });
 
-  if (turnUrl && turnUsername && turnCredential) {
-    servers.push({ urls: turnUrl, username: turnUsername, credential: turnCredential });
+  const payload = await response.json().catch(() => ({})) as { iceServers?: RTCIceServer[]; error?: string };
+  if (!response.ok || !Array.isArray(payload.iceServers) || !payload.iceServers.length) {
+    throw new Error(payload.error || 'تنظیمات ارتباط صوتی دریافت نشد.');
   }
 
-  return { iceServers: servers };
+  return { iceServers: payload.iceServers };
 };
 
 const getProfileName = async (userId: string) => {
@@ -160,7 +165,7 @@ export function useVoiceCall({
   ) => {
     if (!userId) throw new Error('کاربر احراز هویت نشده است.');
 
-    const pc = new RTCPeerConnection(buildIceServers());
+    const pc = new RTCPeerConnection(await getIceServers());
     pcRef.current = pc;
     localStreamRef.current = stream;
 
