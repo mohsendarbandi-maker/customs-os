@@ -134,4 +134,5 @@ end;
 $function$;
 
 revoke execute on function public.start_chat_voice_call(uuid, uuid, uuid) from public;
+revoke execute on function public.start_chat_voice_call(uuid, uuid, uuid) from anon;
 grant execute on function public.start_chat_voice_call(uuid, uuid, uuid) to authenticated;
