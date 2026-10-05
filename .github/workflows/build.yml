@@ -104,25 +104,25 @@ jobs:
             if grep -qi '<!doctype html' /tmp/app.js; then echo "Deployed module returned HTML instead of JavaScript"; exit 1; fi
 
             echo "Checking dedicated chat entrypoint"
-            curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat"
+            smoke_qs="?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
+            curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat${smoke_qs}"
             grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat.html
             grep -q 'chat-app-v4.webmanifest?v=20261005-chat-v4' /tmp/chat.html
-            curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-icon.svg "$base/chat-icon.svg"
+            curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-icon.svg "$base/chat-icon.svg${smoke_qs}"
             test -s /tmp/chat-icon.svg
             chat_manifest_href="/chat-app-v4.webmanifest?v=20261005-chat-v4"
-            curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-manifest.json "${base}${chat_manifest_href}"
+            curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-manifest.json "${base}${chat_manifest_href}&__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
             grep -q '"start_url": "/chat"' /tmp/chat-manifest.json
             grep -q '"scope": "/chat"' /tmp/chat-manifest.json
             grep -q '"id": "/chat"' /tmp/chat-manifest.json
             ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
             test "$ice_status" = 401
-
             echo "Checking dedicated chat subdomain"
           chat_base="https://chat.darbandicommercial.ir"
-          curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat-subdomain.html "$chat_base/"
+          curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat-subdomain.html "$chat_base/?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
           grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat-subdomain.html
           grep -q 'chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' /tmp/chat-subdomain.html
-          curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-subdomain-manifest.json "$chat_base/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2"
+          curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-subdomain-manifest.json "$chat_base/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2&__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
           grep -q '"start_url": "/"' /tmp/chat-subdomain-manifest.json
           grep -q '"scope": "/"' /tmp/chat-subdomain-manifest.json
           grep -q '"id": "/"' /tmp/chat-subdomain-manifest.json
