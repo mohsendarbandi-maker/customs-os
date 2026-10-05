@@ -15,6 +15,7 @@ import {parseRealtimeMessage,parseRealtimeReaction,parseRealtimeRead,parseRealti
 import {useVoiceCall} from './voiceCall';
 import {VoiceCallPanel} from './VoiceCallPanel';
 import {ChatSettingsPanel} from './ChatSettingsPanel';
+import {ChatDirectoryPanel,ChatQuickNav,type ChatDirectoryMode} from './ChatQuickNav';
 import {CustomsAIOperatorPanel as ChatAIOperatorPanel} from '../../components/AIOperatorPanel';
 
 type Person={id:string;full_name:string;phone:string|null;role:string};
@@ -71,6 +72,7 @@ export const ChatPage:React.FC=()=>{
  const[results,setResults]=useState<Array<{kind:string;id:string;conversation_id:string;title:string;snippet:string;created_at:string}>>([]);
  const[reply,setReply]=useState<ChatMessage|null>(null),[editId,setEditId]=useState<string|null>(null),[forwardId,setForwardId]=useState<string|null>(null),[shipmentUpdateOpen,setShipmentUpdateOpen]=useState(false),[shipmentStatus,setShipmentStatus]=useState('در حال بررسی'),[shipmentNote,setShipmentNote]=useState(''),[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct'),[channelOpen,setChannelOpen]=useState(false),[channelTitle,setChannelTitle]=useState(''),[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel'),[sharedConnections,setSharedConnections]=useState<Array<{id:string,target_organization_id:string,target_name:string}>>([]),[selectedConnection,setSelectedConnection]=useState(''),[attachmentBusy,setAttachmentBusy]=useState(false),[recording,setRecording]=useState(false),[ocrBusy,setOcrBusy]=useState(false),[pushReady,setPushReady]=useState(false),[pushBusy,setPushBusy]=useState(false),[settingsOpen,setSettingsOpen]=useState(false);
  const[menu,setMenu]=useState<string|null>(null);
+ const[directoryOpen,setDirectoryOpen]=useState(false),[directoryMode,setDirectoryMode]=useState<ChatDirectoryMode>('groups');
  const bottom=useRef<HTMLDivElement|null>(null);const fileInput=useRef<HTMLInputElement|null>(null);const recorderRef=useRef<MediaRecorder|null>(null);const streamRef=useRef<MediaStream|null>(null);const voiceChunks=useRef<Blob[]>([]);
  const channel=useRef<ReturnType<typeof supabase.channel>|null>(null);
  const pollTimer=useRef<number|null>(null);
@@ -158,6 +160,8 @@ export const ChatPage:React.FC=()=>{
   const{data,error:e}=await supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',profile.organization_id).eq('is_active',true).order('full_name');
   if(e){setError(err(e));return}setPeople((data??[])as Person[]);setPersonQuery('');setPeopleMode(mode);setPeopleOpen(true);
  };
+ const openDirectory=(mode:ChatDirectoryMode)=>{setDirectoryMode(mode);setDirectoryOpen(true)};
+ const openDirectoryDirect=(id:string)=>{setDirectoryOpen(false);void newChat(id)};
  const newChat=async(id:string)=>{try{const c=await createDirectConversation(id);await refresh();setSelectedId(c.conversation_id);setPeopleOpen(false)}catch(e){setError(err(e))}};
  const addMember=async(id:string)=>{if(!selectedId)return;try{await addConversationMember(selectedId,id);setPeopleOpen(false);await refresh()}catch(e){setError(err(e))}};
  const createChannel=async()=>{const name=channelTitle.trim();if(!name)return;if(channelType==='shared_company'&&!selectedConnection){setError('برای کانال مشترک، سازمان متصل را انتخاب کنید.');return}try{const conn=sharedConnections.find(x=>x.id===selectedConnection);const c=await createConversation({type:channelType,title:name,sharedWithOrganizationId:conn?.target_organization_id??null,orgConnectionId:conn?.id??null});setChannelTitle('');setChannelOpen(false);await refresh();setSelectedId(c.id)}catch(e){setError(err(e))}};
@@ -206,20 +210,6 @@ export const ChatPage:React.FC=()=>{
  },[people,personQuery,user?.id]);
 
  return <div dir="rtl" className="chat-standalone w-full h-dvh min-h-[560px] flex flex-col gap-0 bg-[var(--surface)]" data-chat-wallpaper="plain">
-  <nav className="chat-action-bar shrink-0 border-b app-border bg-[var(--surface)]" aria-label="ابزارهای چت">
-   <div className="chat-action-scroll">
-    <button type="button" onClick={()=>void openPeople("direct")} className="chat-action-item"><Plus size={19}/><span>پیام جدید</span></button>
-    <button type="button" onClick={()=>{if(selected?.type==="direct"&&voice.canCall)void voice.startCall();else void openPeople("direct")}} className="chat-action-item"><Phone size={19}/><span>تماس</span></button>
-    <button type="button" onClick={()=>{setChannelType("group");setChannelOpen(true)}} className="chat-action-item"><Users size={19}/><span>گروه</span></button>
-    <button type="button" onClick={()=>{setChannelType("company_channel");setChannelOpen(true)}} className="chat-action-item"><Hash size={19}/><span>کانال</span></button>
-    <button type="button" onClick={()=>{
-      const owner=conversations.find(c=>c.hierarchy_kind==="owner_group");
-      if(owner)setSelectedId(owner.conversation_id);else setError("برای این حساب هنوز گروه صاحب کالا ساخته نشده است.");
-    }} className="chat-action-item"><Users size={19}/><span>صاحب کالا</span></button>
-    <button type="button" onClick={()=>document.querySelector<HTMLButtonElement>(".ai-operator-launcher")?.click()} className="chat-action-item"><Bot size={19}/><span>هوش مصنوعی</span></button>
-    <button type="button" onClick={()=>setSettingsOpen(true)} className="chat-action-item"><Settings size={19}/><span>تنظیمات</span></button>
-   </div>
-  </nav>
   <div className="chat-content flex flex-1 min-h-0 gap-0 md:gap-3">
   <section className={(selectedId?"hidden md:flex":"flex")+" w-full md:w-[360px] shrink-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
    <header className="h-[76px] shrink-0 px-4 border-b app-border flex items-center gap-3">
@@ -249,6 +239,9 @@ export const ChatPage:React.FC=()=>{
      <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title={pushReady?"اعلان‌های پیام فعال است":"فعال‌سازی اعلان پیام"} onClick={()=>void enablePush()} disabled={pushBusy}>{pushReady?<Bell size={17}/>:<BellOff size={17}/>}</button>
      {online&&realtimeState==="subscribed"?<Wifi size={16}/>:<WifiOff size={16}/>}
     </header>
+    <div className="md:hidden shrink-0 border-b app-border px-2 py-1.5 bg-[var(--surface)]">
+     <ChatQuickNav people={people} conversations={conversations} onNewMessage={()=>void openPeople("direct")} onOpenDirectory={openDirectory} onOpenAi={()=>document.querySelector<HTMLButtonElement>(".ai-operator-launcher")?.click()} onOpenSettings={()=>setSettingsOpen(true)}/>
+    </div>
 
     {results.length>0&&<div className="border-b app-border px-3 py-2 max-h-40 overflow-y-auto">{results.map(r=><button key={r.id} className="block w-full text-right p-2 rounded-lg hover:bg-black/5" onClick={()=>setResults([])}><b className="text-sm">{r.title}</b><div className="text-xs app-muted truncate">{r.snippet}</div></button>)}</div>}
 
@@ -310,6 +303,7 @@ export const ChatPage:React.FC=()=>{
   </section>
   </div>
 
+   <ChatDirectoryPanel open={directoryOpen} mode={directoryMode} organizationId={profile?.organization_id} people={people} conversations={conversations} onClose={()=>setDirectoryOpen(false)} onSelectConversation={id=>{setSelectedId(id);setMessages([]);setResults([]);setMenu(null)}} onNewMessage={()=>void openPeople("direct")} onCreateGroup={()=>{setDirectoryOpen(false);setChannelType("group");setChannelOpen(true)}}/>
   <ChatAIOperatorPanel pageContext="chat — آمار محموله‌ها، پرونده‌ها و عملیات سازمانی"/>
   <ChatSettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)}/>
 
