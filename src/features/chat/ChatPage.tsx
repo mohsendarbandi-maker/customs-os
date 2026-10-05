@@ -303,7 +303,7 @@ export const ChatPage:React.FC=()=>{
   </section>
   </div>
 
-   <ChatDirectoryPanel open={directoryOpen} mode={directoryMode} organizationId={profile?.organization_id} people={people} conversations={conversations} onClose={()=>setDirectoryOpen(false)} onSelectConversation={id=>{setSelectedId(id);setMessages([]);setResults([]);setMenu(null)}} onNewMessage={()=>void openPeople("direct")} onCreateGroup={()=>{setDirectoryOpen(false);setChannelType("group");setChannelOpen(true)}}/>
+   <ChatDirectoryPanel open={directoryOpen} mode={directoryMode} organizationId={profile?.organization_id} people={people} conversations={conversations} onClose={()=>setDirectoryOpen(false)} onSelectConversation={id=>{setSelectedId(id);setMessages([]);setResults([]);setMenu(null)}} onNewMessage={()=>void openPeople("direct")} onStartDirect={openDirectoryDirect} onCreateGroup={()=>{setDirectoryOpen(false);setChannelType("group");setChannelOpen(true)}}/>
   <ChatAIOperatorPanel pageContext="chat — آمار محموله‌ها، پرونده‌ها و عملیات سازمانی"/>
   <ChatSettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)}/>
 
