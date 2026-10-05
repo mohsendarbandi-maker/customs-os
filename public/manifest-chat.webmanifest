@@ -3,7 +3,7 @@
   "name": "Customs OS — چت سازمانی",
   "short_name": "چت سازمانی",
   "description": "چت سازمانی Customs OS",
-  "start_url": "/chat",
+  "start_url": "/chat?source=pwa",
   "scope": "/chat",
   "display": "standalone",
   "dir": "rtl",
