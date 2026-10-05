@@ -14,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 15
+    env:
+      VITE_SUPABASE_URL: https://bjngfgiecvihofemptub.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_pIh0yF6SQcQ-IAa_FkbjWA_qTSm83Sr
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,6 +27,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+      - name: Verify Supabase client configuration was embedded
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R -F -q "$VITE_SUPABASE_URL" dist/assets
+          grep -R -F -q "$VITE_SUPABASE_ANON_KEY" dist/assets
       - name: Force a fresh Cloudflare asset manifest
         run: echo "${GITHUB_SHA}-${GITHUB_RUN_ID}" > dist/build-marker.txt
       - name: Deploy Worker to Cloudflare
