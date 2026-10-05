@@ -12,7 +12,7 @@
     <script>
       (() => {
         const path = window.location.pathname;
-        const manifest = path.startsWith('/chat') ? '/chat-manifest.webmanifest?v=20261005-chat' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest' : '/manifest.webmanifest';
+        const manifest = path.startsWith('/chat') ? '/chat-app-v3.webmanifest' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest' : '/manifest.webmanifest';
         const link = document.querySelector('link[rel="manifest"]');
         if (link) link.setAttribute('href', manifest);
       })();
