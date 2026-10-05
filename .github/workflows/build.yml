@@ -111,7 +111,7 @@ jobs:
             test -s /tmp/chat-icon.svg
             chat_manifest_href="/chat-manifest.webmanifest?v=20261005-chat"
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-manifest.json "${base}${chat_manifest_href}"
-            grep -q '"start_url": "/chat?source=pwa"' /tmp/chat-manifest.json
+            grep -q '"start_url": "/chat"' /tmp/chat-manifest.json
             grep -q '"scope": "/chat"' /tmp/chat-manifest.json
             grep -q '"id": "/chat"' /tmp/chat-manifest.json
             ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
@@ -121,7 +121,7 @@ jobs:
             pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "${base}/?source=pwa")"
             pwa_location="$(printf '%s\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
             echo "PWA redirect Location: $pwa_location"
-            test "$pwa_location" = "${base}/chat?source=pwa"
+            test "$pwa_location" = "${base}/chat"
 
             echo "Checking live-voice code is present in compiled bundle"
             grep -R -F -q 'تماس صوتی زنده' dist/assets
