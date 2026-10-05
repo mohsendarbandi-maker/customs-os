@@ -31,7 +31,7 @@ export const VoiceCallPanel: React.FC<{ controller: VoiceCallController }> = ({ 
       <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" aria-hidden="true" />
       <div
         dir="rtl"
-        className="fixed z-[800] inset-x-3 top-[calc(12px+env(safe-area-inset-top))] md:inset-x-auto md:right-5 md:top-5 md:w-[390px] rounded-3xl border shadow-2xl overflow-hidden chat-call-panel"
+        className="fixed z-[800] inset-x-3 top-[calc(12px+env(safe-area-inset-top))] md:inset-x-auto md:right-5 md:top-5 md:w-[390px] rounded-3xl border shadow-2xl overflow-hidden chat-call-panel bg-[var(--surface)] text-[var(--text)] border-[var(--border)]"
       >
         <div className="p-5 md:p-6">
           <div className="flex items-center gap-4">
