@@ -86,7 +86,7 @@ jobs:
             echo "Checking $base/"
             success=0
             for attempt in 1 2 3 4 5 6; do
-              if curl --fail --silent --show-error --location --max-time 30 -o /tmp/index.html "$base/"; then
+              if curl --fail --silent --show-error --location --max-time 30 -o /tmp/index.html "$base/?__smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"; then
                 success=1
                 break
               fi

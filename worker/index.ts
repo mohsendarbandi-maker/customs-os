@@ -136,8 +136,9 @@ export default {
     const assetBase = new URL(request.url);
     assetBase.hostname = 'customs.mohsen-darbandi.workers.dev';
     const assetRequest = new Request(assetBase, request);
+    const htmlAssetUrl = new URL('/index.html?__customs_build=' + encodeURIComponent(BUILD_SIGNATURE), assetBase);
     let response = isHtmlNavigation
-      ? await env.ASSETS.fetch(new URL('/index.html', assetBase))
+      ? await env.ASSETS.fetch(htmlAssetUrl)
       : await env.ASSETS.fetch(assetRequest);
 
     if (isHtmlNavigation && (url.pathname.startsWith('/chat') || isChatHost) && response.ok) {
