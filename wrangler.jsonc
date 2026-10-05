@@ -17,10 +17,6 @@
     {
       "pattern": "darbandicommercial.ir",
       "custom_domain": true
-    },
-    {
-      "pattern": "chat.darbandicommercial.ir",
-      "custom_domain": true
     }
   ]
 }
