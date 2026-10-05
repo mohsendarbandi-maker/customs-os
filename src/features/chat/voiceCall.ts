@@ -369,13 +369,13 @@ export function useVoiceCall({
         const candidateInit: RTCIceCandidateInit = {
           candidate: typeof candidate === 'string' ? candidate : '',
         };
-        const sdpMid = candidateRecord.sdpMid;
-        const sdpMLineIndex = candidateRecord.sdpMLineIndex;
-        const usernameFragment = candidateRecord.usernameFragment;
+        const sdpMidValue = candidateRecord.sdpMid;
+        const sdpMLineIndexValue = candidateRecord.sdpMLineIndex;
+        const usernameFragmentValue = candidateRecord.usernameFragment;
         const candidateWithOptionalFields: RTCIceCandidateInit = { ...candidateInit };
-        if (typeof sdpMid === 'string' || sdpMid === null) candidateWithOptionalFields.sdpMid = sdpMid;
-        if (typeof sdpMLineIndex === 'number' || sdpMLineIndex === null) candidateWithOptionalFields.sdpMLineIndex = sdpMLineIndex;
-        if (typeof usernameFragment === 'string' || usernameFragment === null) candidateWithOptionalFields.usernameFragment = usernameFragment;
+        if (typeof sdpMidValue === 'string' || sdpMidValue === null) candidateWithOptionalFields.sdpMid = sdpMidValue;
+        if (typeof sdpMLineIndexValue === 'number' || sdpMLineIndexValue === null) candidateWithOptionalFields.sdpMLineIndex = sdpMLineIndexValue;
+        if (typeof usernameFragmentValue === 'string' || usernameFragmentValue === null) candidateWithOptionalFields.usernameFragment = usernameFragmentValue;
 
         void (async () => {
           if (pcRef.current?.remoteDescription) await pcRef.current.addIceCandidate(candidateWithOptionalFields);
