@@ -4,9 +4,11 @@ import{readFileSync}from'node:fs';
 const operator=readFileSync(new URL('../supabase/functions/ai-operator/index.ts',import.meta.url),'utf8');
 const app=readFileSync(new URL('../src/App.tsx',import.meta.url),'utf8');
 const advanced=readFileSync(new URL('../src/pages/AdvancedSettingsPage.tsx',import.meta.url),'utf8');
-const migration=readFileSync(new URL('../supabase/migrations/20260929160000_ai_operator_and_advanced_settings.sql',import.meta.url),'utf8');
-const ledgerMigration=readFileSync(new URL('../supabase/migrations/20260929170000_ai_operator_command_ledger_immutable.sql',import.meta.url),'utf8');
-const ownerProfileMigration=readFileSync(new URL('../supabase/migrations/20260929200000_harden_owner_profile_auth_user.sql',import.meta.url),'utf8');
+const migrationPath=(name:string)=>{const primary=new URL('../supabase/migrations/'+name,import.meta.url);const legacy=new URL('../supabase/legacy-migrations/'+name,import.meta.url);return readFileExists(primary)?primary:legacy};
+const readFileExists=(url:URL)=>{try{readFileSync(url);return true}catch{return false}};
+const migration=readFileSync(migrationPath('20260929160000_ai_operator_and_advanced_settings.sql'),'utf8');
+const ledgerMigration=readFileSync(migrationPath('20260929170000_ai_operator_command_ledger_immutable.sql'),'utf8');
+const ownerProfileMigration=readFileSync(migrationPath('20260929200000_harden_owner_profile_auth_user.sql'),'utf8');
 
 describe('AI Operator security invariants',()=>{
  it('never references a service-role secret or raw SQL execution',()=>{
