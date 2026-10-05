@@ -40,6 +40,23 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Provision Cloudflare TURN for WebRTC
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/calls/turn_keys"
+          response="$(curl --fail --silent --show-error --max-time 30 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" "$api")"
+          key_id="$(printf '%s' "$response" | jq -r '.result[0].uid // empty')"
+          if [ -z "$key_id" ]; then
+            response="$(curl --fail --silent --show-error --max-time 30 -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" --data '{"name":"customs-os-production"}' "$api")"
+            key_id="$(printf '%s' "$response" | jq -r '.result.uid // empty')"
+          fi
+          test -n "$key_id"
+          printf '%s' "$key_id" | npx wrangler@4 secret put TURN_KEY_ID --name customs
+          printf '%s' "$CLOUDFLARE_API_TOKEN" | npx wrangler@4 secret put TURN_API_TOKEN --name customs
       - name: Smoke test live Worker and custom domain
         shell: bash
         run: |
@@ -71,6 +88,12 @@ jobs:
             grep -q 'manifest-chat.webmanifest' /tmp/chat.html
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-icon.svg "$base/chat-icon.svg"
             test -s /tmp/chat-icon.svg
+            chat_manifest_href="$(grep -o 'href="/manifest-chat.webmanifest[^" ]*"' /tmp/chat.html | head -n 1 | sed 's/^href="//;s/"$//')"
+            test -n "$chat_manifest_href"
+            curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-manifest.json "${base}${chat_manifest_href}"
+            grep -q '"start_url": "/chat?source=pwa"' /tmp/chat-manifest.json
+            ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
+            test "$ice_status" = 401
 
             echo "Checking live-voice code is present in compiled bundle"
             grep -R -F -q 'تماس صوتی زنده' dist/assets
