@@ -57,16 +57,19 @@ export default {
               body: JSON.stringify({ ttl: 3600 }),
             },
           );
-          if (!turnResponse.ok) {
+          if (turnResponse.ok) {
+            const turnData = await turnResponse.json() as { iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }> };
+            if (Array.isArray(turnData.iceServers)) {
+              iceServers.push(...turnData.iceServers);
+              turnAvailable = turnData.iceServers.length > 0;
+            }
+          } else {
             const detail = await turnResponse.text().catch(() => '');
             console.error('[WebRTC] TURN credential generation failed:', turnResponse.status, detail.slice(0, 500));
-            return json({ error: 'سرویس ارتباط صوتی آماده نیست.' }, 503);
           }
-          const turnData = await turnResponse.json() as { iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }> };
-          if (Array.isArray(turnData.iceServers)) iceServers.push(...turnData.iceServers);
         }
 
-        return new Response(JSON.stringify({ iceServers, expires_in: 3600 }), {
+        return new Response(JSON.stringify({ iceServers, turn_available: turnAvailable, expires_in: 3600 }), {
           status: 200,
           headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
         });
