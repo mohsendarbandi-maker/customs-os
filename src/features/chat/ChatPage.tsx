@@ -210,13 +210,27 @@ export const ChatPage:React.FC=()=>{
  },[people,personQuery,user?.id]);
 
  return <div dir="rtl" className="chat-standalone w-full h-dvh min-h-[560px] flex flex-col gap-0 bg-[var(--surface)]" data-chat-wallpaper="plain">
-  <div className="chat-content flex flex-1 min-h-0 gap-0 md:gap-3">
+  <div className="chat-safe-top" aria-hidden="true"/>
+  <header className="chat-app-header shrink-0">
+   <div className="chat-app-header-main">
+    <button type="button" className="chat-app-brand" onClick={()=>{if(selectedId){setSelectedId(null);setMessages([]);setReply(null);return}void openPeople("direct")}} aria-label={selectedId?"بازگشت به فهرست گفتگوها":"گفتگوی جدید"}>
+      {selectedId?<ArrowRight size={18}/>:<ChatBrandLogo size={34}/>}
+      <span><b>چت سازمانی</b><small>{selectedId?"گفتگو":"مرکز ارتباطات داخلی Customs OS"}</small></span>
+    </button>
+    <div className="chat-app-header-status"><span className={"chat-app-status-dot "+(online?"is-online":"is-offline")}/><span>{online?"آنلاین":"آفلاین"}</span></div>
+   </div>
+  </header>
+  <div className={(selectedId?"":"chat-home-navigation ")+"shrink-0"}>
+   <ChatQuickNav people={people} conversations={conversations} onNewMessage={()=>void openPeople("direct")} onOpenDirectory={openDirectory} onOpenAi={()=>document.querySelector<HTMLButtonElement>(".ai-operator-launcher")?.click()} onOpenSettings={()=>setSettingsOpen(true)}/>
+  </div>
+  {directoryOpen&&!selectedId&&<div className="chat-home-directory">
+    <ChatDirectoryPanel embedded open={directoryOpen} mode={directoryMode} organizationId={profile?.organization_id} people={people} conversations={conversations} onClose={()=>setDirectoryOpen(false)} onSelectConversation={id=>{setSelectedId(id);setMessages([]);setResults([]);setMenu(null);setDirectoryOpen(false)}} onNewMessage={()=>void openPeople("direct")} onStartDirect={openDirectoryDirect} onCreateGroup={()=>{setDirectoryOpen(false);setChannelType("group");setChannelOpen(true)}}/>
+  </div>}
+  <div className={directoryOpen&&!selectedId?"hidden":"chat-content flex flex-1 min-h-0 gap-0 md:gap-3"}>
   <section className={(selectedId?"hidden md:flex":"flex")+" w-full md:w-[360px] shrink-0 rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex-col"}>
-   <header className="h-[76px] shrink-0 px-4 border-b app-border flex items-center gap-3">
-    <ChatBrandLogo size={48}/>
-    <div className="flex-1 min-w-0"><b className="block text-[17px]">چت سازمانی</b><div className="text-[12px] app-muted truncate">{unread?String(unread)+' پیام خوانده‌نشده':'ارتباط داخلی Customs OS'}</div></div>
-    <button className="h-12 w-12 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>void openPeople("direct")} aria-label="گفتگوی جدید"><Plus size={19}/></button>
-    <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>{setChannelType("company_channel");setChannelOpen(true)}} aria-label="گروه یا کانال جدید"><Hash size={18}/></button>
+   <header className="h-[60px] shrink-0 px-3 border-b app-border flex items-center gap-2">
+    <div className="min-w-0 flex-1"><b className="block text-sm">گفتگوها</b><div className="text-[10px] app-muted truncate">{unread?String(unread)+' پیام خوانده‌نشده':'فهرست گفتگوهای سازمان'}</div></div>
+    <button className="h-10 w-10 shrink-0 rounded-xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>void openPeople("direct")} aria-label="گفتگوی جدید"><Plus size={18}/></button>
    </header>
    <div className="px-3 py-2 border-b app-border">
     <div className="h-12 rounded-2xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div>
@@ -239,10 +253,6 @@ export const ChatPage:React.FC=()=>{
      <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title={pushReady?"اعلان‌های پیام فعال است":"فعال‌سازی اعلان پیام"} onClick={()=>void enablePush()} disabled={pushBusy}>{pushReady?<Bell size={17}/>:<BellOff size={17}/>}</button>
      {online&&realtimeState==="subscribed"?<Wifi size={16}/>:<WifiOff size={16}/>}
     </header>
-    <div className="md:hidden shrink-0 border-b app-border px-2 py-1.5 bg-[var(--surface)]">
-     <ChatQuickNav people={people} conversations={conversations} onNewMessage={()=>void openPeople("direct")} onOpenDirectory={openDirectory} onOpenAi={()=>document.querySelector<HTMLButtonElement>(".ai-operator-launcher")?.click()} onOpenSettings={()=>setSettingsOpen(true)}/>
-    </div>
-
     {results.length>0&&<div className="border-b app-border px-3 py-2 max-h-40 overflow-y-auto">{results.map(r=><button key={r.id} className="block w-full text-right p-2 rounded-lg hover:bg-black/5" onClick={()=>setResults([])}><b className="text-sm">{r.title}</b><div className="text-xs app-muted truncate">{r.snippet}</div></button>)}</div>}
 
     <div className="chat-message-area flex-1 min-h-0 overflow-y-auto px-3 py-5 md:px-5 md:py-6 overscroll-contain bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(0,0,0,.025),transparent_18%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,.02),transparent_18%)]">
@@ -284,12 +294,6 @@ export const ChatPage:React.FC=()=>{
     {(reply||editId)&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">{editId?'در حال ویرایش پیام':'پاسخ به: '+(reply?.body||'پیام پیوست‌دار')}</div><button type="button" className="icon-btn" onClick={()=>{setReply(null);setEditId(null);setText('')}} aria-label="لغو"><X size={15}/></button></div>}
 
     <div className="shrink-0 border-t app-border p-3 md:p-3 bg-[var(--surface)]">
-    {!pushReady&&<button type="button" onClick={()=>void enablePush()} disabled={pushBusy} className="mb-2 w-full min-h-12 rounded-2xl border app-border bg-[var(--primary)]/10 px-4 flex items-center gap-3 text-right disabled:opacity-50">
-      <span className="h-10 w-10 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center"><Bell size={19}/></span>
-      <span className="min-w-0 flex-1"><b className="block text-sm">اعلان پیام‌ها را فعال کنید</b><span className="block text-xs app-muted mt-0.5">برای دریافت پیام جدید مثل واتساپ</span></span>
-      <span className="text-xs font-bold text-[var(--primary)]">{pushBusy?'در حال فعال‌سازی…':'فعال‌سازی'}</span>
-    </button>}
-
      <input ref={fileInput} type="file" className="hidden" accept="image/*,application/pdf,text/plain,.doc,.docx,.xls,.xlsx" onChange={e=>{const f=e.target.files?.[0];e.currentTarget.value="";void chooseAttachment(f)}}/>
      <div className="flex items-end gap-1.5 md:gap-2">
       <button type="button" className="h-12 w-12 shrink-0 rounded-full border app-border flex items-center justify-center disabled:opacity-40" disabled={attachmentBusy} onClick={()=>fileInput.current?.click()} aria-label="پیوست"><Paperclip size={18}/></button>
@@ -303,7 +307,6 @@ export const ChatPage:React.FC=()=>{
   </section>
   </div>
 
-   <ChatDirectoryPanel open={directoryOpen} mode={directoryMode} organizationId={profile?.organization_id} people={people} conversations={conversations} onClose={()=>setDirectoryOpen(false)} onSelectConversation={id=>{setSelectedId(id);setMessages([]);setResults([]);setMenu(null)}} onNewMessage={()=>void openPeople("direct")} onStartDirect={openDirectoryDirect} onCreateGroup={()=>{setDirectoryOpen(false);setChannelType("group");setChannelOpen(true)}}/>
   <ChatAIOperatorPanel pageContext="chat — آمار محموله‌ها، پرونده‌ها و عملیات سازمانی"/>
   <ChatSettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)}/>
 
