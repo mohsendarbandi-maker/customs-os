@@ -1,3 +1,4 @@
+import{useSearchParams}from'react-router-dom';
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
 import{ArrowRight,Bell,BellOff,Check,CheckCheck,Hash,MessageCircle,Mic,MicOff,MoreVertical,Paperclip,Phone,Plus,ScanText,Search,Send,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
@@ -29,6 +30,8 @@ const dayLabel=(value:string)=>{
 
 export const ChatPage:React.FC=()=>{
  const{user,profile}=useAuth();
+ const[searchParams]=useSearchParams();
+ const requestedConversationId=searchParams.get('conversation');
  useEffect(()=>{
   const previousTitle=document.title;
   const icon=document.querySelector<HTMLLinkElement>('link[rel="icon"]');
@@ -135,6 +138,10 @@ export const ChatPage:React.FC=()=>{
  },[selectedId,user?.id,load,refresh,schedulePoll]);
 
  useEffect(()=>{messageIdsRef.current=new Set(messages.map(m=>m.id));bottom.current?.scrollIntoView({behavior:'smooth'})},[messages,selectedId]);
+ useEffect(()=>{
+  if(requestedConversationId&&conversations.some(c=>c.conversation_id===requestedConversationId))setSelectedId(requestedConversationId);
+ },[requestedConversationId,conversations]);
+
  useEffect(()=>{let alive=true;void hasChatPushSubscription().then(value=>{if(alive)setPushReady(value)}).catch(()=>{});return()=>{alive=false}},[]);
 
  const enablePush=async()=>{
@@ -226,7 +233,7 @@ export const ChatPage:React.FC=()=>{
       <div className="text-[12px] app-muted truncate">{selected.type==='direct'?(typingUsers.length?'در حال نوشتن…':selected.display_phone||'گفتگوی مستقیم'):(typingUsers.length?'در حال نوشتن…':realtimeState==='subscribed'?'متصل':'در حال همگام‌سازی')}</div>
      </div>
      {selected&&(selected.type==="group"||selected.type==="company_channel")&&<button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title="افزودن عضو" onClick={()=>void openPeople("member")}><UserPlus size={16}/></button>}
-     {selected.type==="direct"&&selected.display_user_id&&voice.canCall&&<button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-[var(--primary)] hover:bg-[var(--primary)]/10" title="تماس صوتی زنده" onClick={()=>void voice.startCall()}><Phone size={18}/></button>}
+     {selected.type==="direct"&&selected.display_user_id&&voice.canCall&&<button className="h-12 w-12 shrink-0 rounded-full flex items-center justify-center text-white bg-[var(--primary)] hover:opacity-90 shadow-sm" title="تماس صوتی زنده" aria-label="تماس صوتی زنده" onClick={()=>void voice.startCall()}><Phone size={19}/></button>}
      <button className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" title={pushReady?"اعلان‌های پیام فعال است":"فعال‌سازی اعلان پیام"} onClick={()=>void enablePush()} disabled={pushBusy}>{pushReady?<Bell size={17}/>:<BellOff size={17}/>}</button>
      {online&&realtimeState==="subscribed"?<Wifi size={16}/>:<WifiOff size={16}/>}
     </header>
