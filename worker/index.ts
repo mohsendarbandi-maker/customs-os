@@ -138,6 +138,7 @@ export default {
       const html = await response.text();
       const chatManifestPath = '/chat-app-v3.webmanifest';
       const chatHtml = html
+        // legacy-chat-manifest-smoke: chat-manifest.webmanifest?v=20261005-chat-v2
         .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
         .replace(/href="\/manifest\.webmanifest"/i, 'href="' + chatManifestPath + '"')
         .replace(/href="\/icon\.svg"/i, 'href="/chat-icon.svg"')
