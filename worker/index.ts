@@ -18,6 +18,12 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === 'GET' && url.pathname === '/' && url.searchParams.get('source') === 'pwa') {
+      const chatUrl = new URL(request.url);
+      chatUrl.pathname = '/chat';
+      chatUrl.search = '?source=pwa';
+      return Response.redirect(chatUrl.toString(), 302);
+    }
     if (url.pathname === '/api/webrtc/ice') {
       if (request.method !== 'GET') {
         return request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : json({ error: 'Method not allowed' }, 405);
@@ -37,11 +43,9 @@ export default {
           { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] },
         ];
 
-        if (!env.TURN_API_TOKEN_V2 || !env.TURN_KEY_ID_V2) {
-          return json({ error: 'سرویس ارتباط صوتی هنوز پیکربندی نشده است.' }, 503);
-        }
+        let turnAvailable = false;
 
-        {
+        if (env.TURN_API_TOKEN_V2 && env.TURN_KEY_ID_V2) {
           const turnResponse = await fetch(
             'https://rtc.live.cloudflare.com/v1/turn/keys/' + encodeURIComponent(env.TURN_KEY_ID_V2) + '/credentials/generate-ice-servers',
             {
@@ -130,10 +134,12 @@ export default {
         .replace(/href="\/pwa\/apple-touch-icon-180\.png"/i, 'href="/chat-icon.svg"')
         .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#0B7EA4"')
         .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="چت سازمانی"');
+      const chatHeaders = new Headers(response.headers);
+      chatHeaders.delete('content-length');
       response = new Response(chatHtml, {
         status: response.status,
         statusText: response.statusText,
-        headers: response.headers,
+        headers: chatHeaders,
       });
     }
 
