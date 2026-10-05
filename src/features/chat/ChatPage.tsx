@@ -220,7 +220,7 @@ export const ChatPage:React.FC=()=>{
     <div className="chat-app-header-status"><span className={"chat-app-status-dot "+(online?"is-online":"is-offline")}/><span>{online?"آنلاین":"آفلاین"}</span></div>
    </div>
   </header>
-  <div className={selectedId?"hidden md:flex shrink-0":"chat-home-navigation shrink-0"}>
+  <div className={selectedId?"hidden":"chat-home-navigation shrink-0"}>
    <ChatQuickNav people={people} conversations={conversations} onNewMessage={()=>void openPeople("direct")} onOpenDirectory={openDirectory} onOpenAi={()=>document.querySelector<HTMLButtonElement>(".ai-operator-launcher")?.click()} onOpenSettings={()=>setSettingsOpen(true)}/>
   </div>
   {directoryOpen&&<div className="chat-home-directory flex-1 min-h-0">
