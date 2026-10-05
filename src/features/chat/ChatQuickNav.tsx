@@ -10,7 +10,6 @@ type QuickNavProps={
  people:Person[];
  conversations:ChatConversation[];
  onNewMessage:()=>void;
- onStartDirect:(userId:string)=>void;
  onOpenDirectory:(mode:ChatDirectoryMode)=>void;
  onOpenAi:()=>void;
  onOpenSettings:()=>void;
