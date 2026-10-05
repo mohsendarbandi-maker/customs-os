@@ -15,7 +15,7 @@ import {parseRealtimeMessage,parseRealtimeReaction,parseRealtimeRead,parseRealti
 import {useVoiceCall} from './voiceCall';
 import {VoiceCallPanel} from './VoiceCallPanel';
 import {ChatSettingsPanel} from './ChatSettingsPanel';
-const ChatAIOperatorPanel=React.lazy(async()=>{const mod=await import('../../components/AIOperatorPanel');return{default:mod.AIOperatorPanel};});
+import {AIOperatorPanel as ChatAIOperatorPanel} from '../../components/AIOperatorPanel';
 
 type Person={id:string;full_name:string;phone:string|null;role:string};
 type PresenceUser={user_id:string;typing?:boolean};
@@ -295,7 +295,7 @@ export const ChatPage:React.FC=()=>{
   </section>
   </div>
 
-  <React.Suspense fallback={null}><ChatAIOperatorPanel pageContext="chat — آمار محموله‌ها، پرونده‌ها و عملیات سازمانی"/></React.Suspense>
+  <ChatAIOperatorPanel pageContext="chat — آمار محموله‌ها، پرونده‌ها و عملیات سازمانی"/>
   <ChatSettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)}/>
 
   {peopleOpen&&<div className="fixed inset-0 z-[600] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>setPeopleOpen(false)}>
