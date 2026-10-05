@@ -40,7 +40,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Provision Cloudflare TURN for WebRTC
+      - name: Ensure Cloudflare TURN for WebRTC when account permissions allow it
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -52,16 +52,32 @@ jobs:
           has_api_token="$(printf '%s' "$secret_names" | jq -r 'any(.[]; .name == "TURN_API_TOKEN_V2")')"
           if [ "$has_key_id" = "true" ] && [ "$has_api_token" = "true" ]; then
             echo "Cloudflare TURN credentials already exist; keeping the current key."
-          else
-            api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/calls/turn_keys"
-            response="$(curl --fail --silent --show-error --max-time 30 -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" --data '{"name":"customs-os-production"}' "$api")"
-            key_id="$(printf '%s' "$response" | jq -r '.result.uid // empty')"
-            turn_key="$(printf '%s' "$response" | jq -r '.result.key // empty')"
-            test -n "$key_id"
-            test -n "$turn_key"
-            printf '%s' "$key_id" | npx wrangler@4 secret put TURN_KEY_ID_V2 --name customs
-            printf '%s' "$turn_key" | npx wrangler@4 secret put TURN_API_TOKEN_V2 --name customs
+            exit 0
           fi
+
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/calls/turn_keys"
+          http_code="$(curl --silent --show-error --max-time 30 -o /tmp/turn-response.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{"name":"customs-os-production"}' "$api")"
+
+          if [ "$http_code" = "403" ]; then
+            echo "::warning::Cloudflare TURN key creation is forbidden for the current API token. WebRTC will use the secured STUN fallback until Calls:Edit permission is granted."
+            exit 0
+          fi
+
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "Cloudflare TURN key creation failed with HTTP $http_code"
+            cat /tmp/turn-response.json
+            exit 1
+          fi
+
+          key_id="$(jq -r '.result.uid // empty' /tmp/turn-response.json)"
+          turn_key="$(jq -r '.result.key // empty' /tmp/turn-response.json)"
+          test -n "$key_id"
+          test -n "$turn_key"
+          printf '%s' "$key_id" | npx wrangler@4 secret put TURN_KEY_ID_V2 --name customs
+          printf '%s' "$turn_key" | npx wrangler@4 secret put TURN_API_TOKEN_V2 --name customs
       - name: Smoke test live Worker and custom domain
         shell: bash
         run: |
@@ -100,6 +116,10 @@ jobs:
             grep -q '"id": "/chat"' /tmp/chat-manifest.json
             ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
             test "$ice_status" = 401
+
+            echo "Checking PWA legacy launch URL canonicalization"
+            pwa_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/pwa.html -w '%{url_effective}' "${base}/?source=pwa")"
+            test "$pwa_status" = "${base}/chat?source=pwa"
 
             echo "Checking live-voice code is present in compiled bundle"
             grep -R -F -q 'تماس صوتی زنده' dist/assets
