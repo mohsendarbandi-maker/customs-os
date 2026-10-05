@@ -3,7 +3,7 @@ import{registerSW}from'virtual:pwa-register';
 import{useLocation}from'react-router-dom';
 const isIos=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)&&!/android/i.test(navigator.userAgent);
 const standalone=()=>window.matchMedia('(display-mode: standalone)').matches||Boolean((navigator as Navigator&{standalone?:boolean}).standalone);
-const CHAT_MANIFEST='/chat-manifest.webmanifest?v=20261005-chat-v2';
+const CHAT_MANIFEST='/chat-app-v3.webmanifest';
 export const PwaLifecycle:React.FC=()=>{
  const[installEvent,setInstallEvent]=useState<BeforeInstallPromptEvent|null>(null),[update,setUpdate]=useState(false),[iosGuide,setIosGuide]=useState(false),[online,setOnline]=useState(()=>navigator.onLine),[updateSW,setUpdateSW]=useState<((reloadPage?:boolean)=>Promise<void>)|null>(null);
  const location=useLocation();
