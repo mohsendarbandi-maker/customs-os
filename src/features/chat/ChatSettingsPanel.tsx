@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useState}from'react';
-import{Bell,BellOff,Check,Image,Languages,Palette,Phone,Save,Send,Sun,Moon,Type,UserRound,Volume2,VolumeX,X}from'lucide-react';
+import{Bell,Check,Image,Languages,Palette,Phone,Save,Send,Sun,Moon,Type,Volume2,VolumeX,X}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
 import{supabase}from'../../lib/supabase';
 import{readUserSettings,userChatPreferencesStorageKey,writeUserSettings}from'../../lib/userSettingsStorage';
