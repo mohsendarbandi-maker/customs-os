@@ -38,7 +38,7 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
  const[prefs,setPrefs]=useState<ChatPreferences>(()=>readLocal(user?.id));
  const[serverSettings,setServerSettings]=useState<Record<string,unknown>>({});
  const[busy,setBusy]=useState(false);
- const[saved,setSaved]=useState(false);
+ const[saved,setSaved]=useState(false);const[error,setError]=useState<string|null>(null);
 
  const apply=useCallback((next:ChatPreferences)=>{
   const root=document.querySelector<HTMLElement>('.chat-standalone');
@@ -82,7 +82,7 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
  const update=(patch:Partial<ChatPreferences>)=>setPrefs(v=>({...v,...patch}));
 
  const save=async()=>{
-  setBusy(true);
+  setBusy(true);setError(null);
   try{
    if(!user?.id)throw new Error('ابتدا وارد سیستم شوید.');
    try{localStorage.setItem(userChatPreferencesStorageKey(user.id),JSON.stringify(prefs))}catch{}
@@ -103,6 +103,8 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
    writeUserSettings(user.id,settings);
    setSaved(true);
    setTimeout(()=>setSaved(false),1400);
+  }catch(errorValue){
+   setError(errorValue instanceof Error?errorValue.message:'ذخیره تنظیمات انجام نشد.');
   }finally{setBusy(false)}
  };
 
@@ -285,6 +287,7 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
      </div>
     </div>
 
+    {error&&<div className="mx-4 mb-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 p-3 text-xs">{error}</div>}
     <footer
      className="sticky bottom-0 p-4 border-t app-border bg-[var(--surface)]"
      style={{paddingBottom:'max(16px,env(safe-area-inset-bottom))'}}
