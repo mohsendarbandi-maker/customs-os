@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(__dirname, '..');
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20260915210000_security_and_rbac_hardening.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/legacy-migrations/20260915210000_security_and_rbac_hardening.sql'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'src/App.tsx'), 'utf8');
 const shell = fs.readFileSync(path.join(root, 'src/components/AppShell.tsx'), 'utf8');
 const shipping = fs.readFileSync(path.join(root, 'src/pages/ShippingManagementPage.tsx'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/build.yml'), 'utf8');
-const reminderMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20261002010000_reminders_full_model.sql'), 'utf8');
-const readMigration = (name:string) => fs.readFileSync(path.join(root, 'supabase/migrations', name), 'utf8');
+const reminderMigration = fs.readFileSync(path.join(root, 'supabase/legacy-migrations/20261002010000_reminders_full_model.sql'), 'utf8');
+const readMigration = (name:string) => fs.readFileSync(path.join(root, 'supabase/legacy-migrations', name), 'utf8');
 
 describe('Customs OS security hardening', () => {
   it('scopes shipment documents and extraction to client-owned shipments', () => {
