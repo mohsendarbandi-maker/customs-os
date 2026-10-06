@@ -1,6 +1,7 @@
 import React,{useMemo}from'react';
 import{Bot,Phone,Plus,Settings,UserPlus,UserRound,Users}from'lucide-react';
 import type{ChatConversation}from'./types';
+import{supabase}from'../../lib/supabase';
 import type{UserRole}from'../../context/AuthContext';
 
 export type ChatDirectoryMode='calls'|'members';
@@ -44,7 +45,6 @@ type DirectoryProps={
  organizationId?:string|null;
  currentUserId?:string|null;
  people:Person[];
- conversations:ChatConversation[];
  onClose:()=>void;
  onSelectConversation:(id:string)=>void;
  onNewMessage:()=>void;
@@ -54,7 +54,7 @@ type DirectoryProps={
 const roleLabel=(role:string)=>({owner:'مالک',admin:'مدیر',broker:'کارگزار',accountant:'حسابدار',warehouse:'انبار',client:'صاحب کالا'}as Record<string,string>)[role]||role||'کاربر';
 
 export const ChatDirectoryPanel:React.FC<DirectoryProps>=({
- open,mode,organizationId,currentUserId,people,conversations,onClose,onSelectConversation,onNewMessage,onStartDirect,
+ open,mode,organizationId,currentUserId,people,onClose,onSelectConversation,onNewMessage,onStartDirect,
 })=>{
  const[calls,setCalls]=React.useState<CallRow[]>([]);
  const[query,setQuery]=React.useState('');
@@ -68,7 +68,7 @@ export const ChatDirectoryPanel:React.FC<DirectoryProps>=({
   setLoading(true);
   void(async()=>{
    try{
-    const{data,error}=await (await import('../../lib/supabase')).supabase
+    const{data,error}=await supabase
       .from('chat_voice_calls')
       .select('id,conversation_id,caller_id,callee_id,status,created_at,answered_at,ended_at')
       .eq('organization_id',organizationId)
