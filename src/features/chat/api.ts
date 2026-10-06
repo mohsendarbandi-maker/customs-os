@@ -500,6 +500,7 @@ export type ChatHierarchyItem = {
   hierarchy_kind: 'regular' | 'owner_group' | 'shipment_group';
   parent_conversation_id: string | null;
   cargo_owner_id: string | null;
+  shipment_id: string | null;
   shipment_display_name: string | null;
   shipment_bl_number: string | null;
   shipment_status: string | null;
