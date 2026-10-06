@@ -1,6 +1,6 @@
 import React,{createContext,useContext,useEffect,useMemo,useState}from'react';
 import{useAuth}from'./AuthContext';
-import{readUserSettings,userSettingsStorageKey,writeUserSettings}from'../lib/userSettingsStorage';
+import{readUserSettings,writeUserSettings}from'../lib/userSettingsStorage';
 
 type ThemeMode='light'|'dark';
 type ComfortMode='normal'|'soft'|'warm'|'reading';
