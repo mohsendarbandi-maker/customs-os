@@ -283,6 +283,16 @@ export async function markPlayed(messageId: string): Promise<void> {
   if (result.error) throw new Error(result.error.message);
 }
 
+export async function markChatFocus(conversationId: string): Promise<void> {
+  const result = await supabase.rpc('chat_mark_focus', { p_conversation_id: conversationId });
+  if (result.error) throw new Error(result.error.message);
+}
+
+export async function clearChatFocus(): Promise<void> {
+  const result = await supabase.rpc('chat_clear_focus');
+  if (result.error) throw new Error(result.error.message);
+}
+
 export async function createDirectConversation(userId: string): Promise<ChatConversation> {
   const result = await supabase.rpc('chat_create_conversation', {
     p_type: 'direct',
