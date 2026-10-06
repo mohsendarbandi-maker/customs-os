@@ -275,7 +275,7 @@ export const ChatPage:React.FC=()=>{
   if(!id||id===user?.id)return;
   try{
    const conversation=await createDirectConversation(id);
-   const conversationId='id' in conversation?conversation.id:conversation.conversation_id;
+   const conversationId=conversation.id;
    if(!conversationId)throw new Error('گفتگوی مستقیم ایجاد نشد.');
    await refresh();
    setSelectedId(conversationId);
@@ -436,6 +436,7 @@ export const ChatPage:React.FC=()=>{
    {!selectedId&&<ChatQuickNav
  people={people.filter(person=>person.id!==user?.id)}
  conversations={conversations}
+ selectedFolder={folder==='groups'||folder==='owners'?folder:'all'}
  role={profile?.role}
  onNewMessage={()=>void openPeople('direct')}
  onSelectFolder={nextFolder=>setFolder(nextFolder)}
