@@ -1,0 +1,3 @@
+-- Migration history compatibility marker.
+-- This remote migration version is already present in production history.
+-- No schema change is executed here.
