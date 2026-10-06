@@ -24,6 +24,10 @@ describe('shared chat offline queue', () => {
     expect(classifyChatError({ status: 400, message: 'invalid message' })).toBe('VALIDATION_ERROR');
   });
 
+  it('does not schedule retries for permanent failure states', () => {
+    expect(retryDelayMs(99)).toBe(30000);
+  });
+
   it('identifies only the existing chat insertion RPC as a chat queue item', () => {
     expect(isChatQueueItem({
       id: '1',
