@@ -82,6 +82,7 @@ export const ChatPage:React.FC=()=>{
  const requestedConversationId=searchParams.get('conversation');const requestedCallId=searchParams.get('call');
  const[conversations,setConversations]=useState<ChatConversation[]>([]);const[selectedId,setSelectedId]=useState<string|null>(null);
  const[messages,setMessages]=useState<ChatMessage[]>([]);const[queueItems,setQueueItems]=useState<QueuedRpc[]>([]);
+ const messagesRef=useRef<ChatMessage[]>([]);
  const[text,setText]=useState('');const[error,setError]=useState<string|null>(null);
  const[loading,setLoading]=useState(true);const[online,setOnline]=useState(()=>navigator.onLine);
  const[realtimeState,setRealtimeState]=useState<RealtimeState>(()=>navigator.onLine?'connecting':'offline');
@@ -106,6 +107,7 @@ export const ChatPage:React.FC=()=>{
  const olderLoadingRef=useRef(false);const initialScrollRef=useRef(false);const seenMessageCountRef=useRef(0);const flushBusyRef=useRef(false);
 
  useEffect(()=>{queueSyncRef.current=queueItems},[queueItems]);
+ useEffect(()=>{messagesRef.current=messages},[messages]);
  useEffect(()=>{latestMessageRef.current=[...messages].filter(m=>!m.id.startsWith('local-')).pop()??latestMessageRef.current},[messages]);
 
  const refresh=useCallback(async()=>{
@@ -132,7 +134,7 @@ export const ChatPage:React.FC=()=>{
 
  const syncAfter=useCallback(async(id:string)=>{
   try{
-   const last=[...messages].reverse().find(m=>!m.id.startsWith('local-'));
+   const last=[...messagesRef.current].reverse().find(m=>!m.id.startsWith('local-'));
    if(!last){await loadConversation(id,true);return 0;}
    const incoming=await listMessagesAfter(id,{createdAt:last.created_at,id:last.id});
    if(!incoming.length)return 0;
@@ -142,7 +144,7 @@ export const ChatPage:React.FC=()=>{
    if(!nearBottomRef.current){setNewMessageCount(count=>count+incoming.length)}else{scrollBottom(true)}
    return incoming.length;
   }catch(e){setError(err(e));return 0}
- },[messages,loadConversation,scrollBottom,user?.id]);
+ },[loadConversation,scrollBottom,user?.id]);
 
  const flushChatOutbox=useCallback(async()=>{
   if(flushBusyRef.current)return;flushBusyRef.current=true;
