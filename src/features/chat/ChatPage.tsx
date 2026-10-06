@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
-import{AlertCircle,ArrowRight,Bell,BellOff,Bot,Check,CheckCheck,ChevronDown,ChevronLeft,Clock,Hash,LoaderCircle,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Settings,Star,Trash2,UserPlus,UserRound,Users,Volume2,VolumeX,Wifi,WifiOff,X}from'lucide-react';
+import{AlertCircle,ArrowRight,Bell,BellOff,Check,CheckCheck,ChevronDown,Clock,Hash,LoaderCircle,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Star,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useSearchParams}from'react-router-dom';
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
@@ -8,7 +8,7 @@ import{subscribeOfflineQueue,flushOfflineQueue,isChatQueueItem,chatClientUuid,re
 import{enableChatPush,hasChatPushSubscription}from'./push';
 import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,listMessageReceipts,listMessages,listMessagesAfter,listOrgConnections,markDelivered,markPlayed,markRead,searchChat,sendFileMessage,sendMessage,setMessageMentions,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
 import{supabase}from'../../lib/supabase';
-import type{ChatConversation,ChatMessage,ChatMessageReceipt}from'./types';
+import type{ChatConversation,ChatMessage}from'./types';
 import{ChatBrandLogo}from'./ChatBrandLogo';
 import{ChatHierarchyPanel}from'./ChatHierarchyPanel';
 import{ChatQuickNav,ChatDirectoryPanel,type ChatDirectoryMode}from'./ChatQuickNav';
@@ -104,7 +104,7 @@ export const ChatPage:React.FC=()=>{
  const fileInput=useRef<HTMLInputElement|null>(null);const recorderRef=useRef<MediaRecorder|null>(null);const streamRef=useRef<MediaStream|null>(null);const voiceChunks=useRef<Blob[]>([]);
  const typingTimer=useRef<number|null>(null);const lastTypingSent=useRef(0);const readTimer=useRef<number|null>(null);const readIndexRef=useRef(-1);
  const queueSyncRef=useRef(queueItems);const latestMessageRef=useRef<ChatMessage|null>(null);const nearBottomRef=useRef(true);const pendingScrollMessage=useRef<string|null>(null);
- const olderLoadingRef=useRef(false);const initialScrollRef=useRef(false);const seenMessageCountRef=useRef(0);const flushBusyRef=useRef(false);
+ const olderLoadingRef=useRef(false);const flushBusyRef=useRef(false);
 
  useEffect(()=>{queueSyncRef.current=queueItems},[queueItems]);
  useEffect(()=>{messagesRef.current=messages},[messages]);
@@ -126,7 +126,7 @@ export const ChatPage:React.FC=()=>{
    setHasOlder(data.length>=50);
    setLoading(false);
    if(initial){
-    initialScrollRef.current=true;readIndexRef.current=-1;nearBottomRef.current=true;setNewMessageCount(0);
+    readIndexRef.current=-1;nearBottomRef.current=true;setNewMessageCount(0);
     requestAnimationFrame(()=>scrollBottom(false));
    }
   }catch(e){setError(err(e));setLoading(false)}
@@ -162,7 +162,10 @@ export const ChatPage:React.FC=()=>{
  },[flushChatOutbox,selectedId]);
 
  useEffect(()=>{
-  if(profile?.organization_id)void listOrgConnections().then(setSharedConnections).catch(()=>setSharedConnections([]));
+  if(!profile?.organization_id)return;
+  void supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',profile.organization_id).eq('is_active',true).order('full_name')
+    .then(({data})=>setPeople((data??[])as Person[])).catch(()=>setPeople([]));
+  void listOrgConnections().then(setSharedConnections).catch(()=>setSharedConnections([]));
   void refresh();
   const on=()=>{setOnline(true);setRealtimeState('connecting');void flushChatOutbox();if(selectedId)void loadConversation(selectedId,false)};
   const off=()=>{setOnline(false);setRealtimeState('offline')};
@@ -173,7 +176,7 @@ export const ChatPage:React.FC=()=>{
  useEffect(()=>{
   if(!selectedId||!user?.id)return;
   let active=true;
-  setRealtimeState(online?'connecting':'offline');setRealtimeReady(false);setTypingUsers([]);readIndexRef.current=-1;initialScrollRef.current=false;
+  setRealtimeState(online?'connecting':'offline');setRealtimeReady(false);setTypingUsers([]);readIndexRef.current=-1;
   void loadConversation(selectedId,true);
   if(channel.current)void supabase.removeChannel(channel.current);
   void(async()=>{
@@ -480,7 +483,7 @@ export const ChatPage:React.FC=()=>{
      <textarea value={text} onChange={e=>{setText(e.target.value);broadcastTyping(Boolean(e.target.value.trim()))}} onBlur={()=>broadcastTyping(false)} onKeyDown={e=>{const sendOnEnter=document.querySelector<HTMLElement>('.chat-standalone')?.dataset.chatSendOnEnter!=='false';if(e.key==='Enter'&&!e.shiftKey&&sendOnEnter){e.preventDefault();void send()}}} placeholder={online?'پیام بنویسید…':'آفلاین؛ پیام در صف ارسال می‌ماند…'} rows={1} className="flex-1 resize-none min-h-12 max-h-32 rounded-[24px] border app-border bg-transparent px-4 py-3 outline-none text-[15px]"/>
      <button type="button" className="h-12 w-12 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center disabled:opacity-40" disabled={!text.trim()||attachmentBusy} onClick={()=>void send()} aria-label="ارسال"><Send size={18}/></button>
     </div>
-    {mediaState!=='idle'&&<div className="mt-2 px-1 text-[10px] app-muted flex items-center gap-2">{mediaState==='recording'?'در حال ضبط صدا…':mediaState==='preparing'?'در حال آماده‌سازی…':mediaState==='uploading'?'در حال بارگذاری فایل…':'فایل ارسال شد.'}{mediaState==='uploading'&&<span className="h-1.5 flex-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden"><span className="block h-full w-1/3 bg-[var(--primary)] animate-pulse"/></span>}</div>}
+    {mediaState!=='idle'&&<div className="mt-2 px-1 text-[10px] app-muted flex items-center gap-2">{mediaState==='recording'?'در حال ضبط صدا…':mediaState==='preparing'?'در حال آماده‌سازی…':mediaState==='uploading'?'در حال بارگذاری فایل…':'فایل ارسال شد.'}{mediaState==='uploading'&&<span className="h-1.5 flex-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden"><span className="block h-full w-full bg-[var(--primary)] animate-pulse"/></span>}</div>}
     {ocrBusy&&<div className="text-[10px] app-muted mt-1 px-1">در حال OCR تصویر…</div>}
    </div>
   </section>}
