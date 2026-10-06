@@ -36,7 +36,7 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 let supabaseClient: SupabaseClient | null = null;
 const listeners = new Set<QueueListener>();
 let flushing = false;
-let chatFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let chatFlushTimer: number | null = null;
 
 export const attachSupabaseClient = (client: SupabaseClient) => {
   supabaseClient = client;
@@ -211,6 +211,8 @@ export const classifyChatError = (error: unknown): ChatErrorCode => {
 
 const isRetryableChatError = (code: ChatErrorCode) =>
   code === 'NETWORK_ERROR' || code === 'SERVER_ERROR' || code === 'RATE_LIMIT';
+
+const isNetworkError = (error: unknown) => classifyChatError(error) === 'NETWORK_ERROR';
 
 export const enqueueRpc = async (
   functionName: string,
