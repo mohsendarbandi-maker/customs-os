@@ -55,13 +55,7 @@ SET settings = COALESCE(settings, '{}'::jsonb)
       'numberingDigits',
       'numberingYear',
       'numberingMonth',
-      'duplicateClients',
-      'casePrefix',
-      'documentPrefix',
-      'shipmentPrefix',
-      'storageRetentionDays',
-      'transactionPrefix',
-      'vesselRefresh'
+      'duplicateClients'
     ]::text[],
     updated_at = now()
 WHERE settings IS NOT NULL;
