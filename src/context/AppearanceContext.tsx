@@ -37,7 +37,9 @@ const readAppearance=(userId:string|null|undefined):StoredAppearance=>{
   const settings=readUserSettings<Record<string,unknown>>(userId,{});
   return{
    theme:settings.theme==='light'?'light':'dark',
-   comfort:settings.comfort==='reading'||settings.comfort==='soft'||settings.comfort==='warm'?'normal' : 'normal',
+   comfort:settings.comfort==='reading'||settings.comfort==='soft'||settings.comfort==='warm'||settings.comfort==='normal'
+    ? settings.comfort
+    : defaults.comfort,
    density:settings.density==='compact'?'compact':'comfortable',
    sidebarCollapsed:settings.sidebarCollapsed===true,
   };
