@@ -12,8 +12,14 @@ const sections:Section[]=[{id:'profile',title:'پروفایل',group:'حساب',
 const groups=['حساب','سازمان','عملیات','مالی','سیستم'];
 const base={theme:'dark',density:'comfortable',comfort:'normal',sidebarCollapsed:false,calendar:'jalali',timezone:'Asia/Tehran',currency:'IRR',defaultPort:'بندر شهید رجایی',defaultCustomsOffice:'گمرک شهید رجایی',numberPrefix:'DB',vatRate:10,reminderEnabled:true,desktopNotifications:true,sessionTimeout:60,documentMaxMb:25,retentionDays:3650};
 const personalSettingKeys=['theme','density','comfort','sidebarCollapsed','calendar','timezone','reminderEnabled','desktopNotifications','sessionTimeout','chat','fontSize','animations','reducedMotion','stickyHeader','zebraRows','hoverRows','autoSave','quietHours','quietFrom','quietTo'];
-const organizationSettingKeys=Object.keys(base).filter(key=>!personalSettingKeys.includes(key));
+const organizationOnlyKeys=[
+ 'defaultPort','defaultCustomsOffice','defaultWorkflow','currency','exchangeMode','vatRate',
+ 'documentMaxMb','retentionDays','vesselAutoRefresh','numberPrefix','numberingPrefix',
+ 'numberingDigits','numberingYear','numberingMonth','duplicateClients','casePrefix',
+ 'documentPrefix','shipmentPrefix','storageRetentionDays','transactionPrefix','vesselRefresh'
+];
 const pickSettings=(source:Record<string,any>,keys:string[])=>Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(source,key)).map(key=>[key,source[key]]));
+const withoutSettingsKeys=(source:Record<string,any>,keys:string[])=>Object.fromEntries(Object.entries(source).filter(([key])=>!keys.includes(key)));
 const input='w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm outline-none focus:border-[var(--primary)]';
 const Card=({title,desc,children}:{title:string;desc?:string;children:React.ReactNode})=><section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><h2 className="font-black">{title}</h2>{desc&&<p className="text-xs app-muted mt-1">{desc}</p>}<div className="mt-4">{children}</div></section>;
 const Field=({label,children}:{label:string;children:React.ReactNode})=><label className="block"><span className="block text-xs font-bold mb-1.5">{label}</span>{children}</label>;
@@ -41,8 +47,8 @@ export const SettingsEnterprisePage:React.FC=()=>{const loc=useLocation(),nav=us
   if(!user?.id)return;
   setBusy(true);
   try{
-   const personal={...pickSettings(userServerSettings,personalSettingKeys),...pickSettings(settings,personalSettingKeys)};
-   const organization={...pickSettings(orgServerSettings,organizationSettingKeys),...pickSettings(settings,organizationSettingKeys)};
+   const personal=withoutSettingsKeys({...userServerSettings,...settings},organizationOnlyKeys);
+   const organization=withoutSettingsKeys({...orgServerSettings,...settings},personalSettingKeys);
    writeUserSettings(user.id,{...readUserSettings<Record<string,unknown>>(user.id,{}),...personal});
    appearance.setTheme(settings.theme==='light'?'light':'dark');
    appearance.setDensity(settings.density==='compact'?'compact':'comfortable');
