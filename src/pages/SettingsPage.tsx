@@ -3,6 +3,7 @@ import {useLocation,useNavigate} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
 import {useAuth} from '../context/AuthContext';
 import {useAppearance} from '../context/AppearanceContext';
+import {readUserSettings,writeUserSettings} from '../lib/userSettingsStorage';
 import {
  Activity,AlertTriangle,Archive,ArrowDownToLine,ArrowLeftRight,BarChart3,Bell,Bolt,Box,Building2,Calendar,Check,ChevronDown,ChevronLeft,
  ChevronRight,ClipboardList,Cloud,Database,Download,FileCheck2,FileText,FlaskConical,FolderCog,Globe,HardDrive,History,KeyRound,LayoutDashboard,
@@ -74,15 +75,15 @@ export const SettingsPage:React.FC=()=>{
  const [query,setQuery]=useState(''); const [mobileNav,setMobileNav]=useState(false); const [saved,setSaved]=useState<'idle'|'saving'|'saved'|'error'>('idle');
  const [org,setOrg]=useState<{name:string;economic_code:string} | null>(null);
  const [orgDraft,setOrgDraft]=useState({name:'',economic_code:''});
- const [settings,setSettings]=useState<Record<string,any>>(()=>{try{return {...defaultSettings,...JSON.parse(localStorage.getItem('customs-settings')||'{}')}}catch{return {...defaultSettings}}});
+ const [settings,setSettings]=useState<Record<string,any>>(()=>({...defaultSettings,...readUserSettings<Record<string,any>>(user?.id,{})}));
  const [showSecret,setShowSecret]=useState(false);
  const setSetting=(key:string,value:any)=>setSettings(s=>({...s,[key]:value}));
  useEffect(()=>{try{appearance.setTheme(settings.theme);appearance.setDensity(settings.density);appearance.setComfort(settings.comfort);appearance.setSidebarCollapsed(Boolean(settings.sidebarCollapsed))}catch{}},[settings.theme,settings.density,settings.comfort,settings.sidebarCollapsed]);
  useEffect(()=>{if(!profile?.organization_id)return; (async()=>{const{data}=await supabase.from('organizations').select('name,economic_code').eq('id',profile.organization_id).maybeSingle();if(data){setOrg(data);setOrgDraft(data)}})()},[profile?.organization_id]);
  const filtered=useMemo(()=>items.filter(x=>!x.roles||x.roles.includes(profile?.role||'client')).filter(x=>!query||`${x.label} ${x.en}`.toLowerCase().includes(query.toLowerCase())),[query,profile?.role]);
- const saveSettings=async()=>{setSaved('saving');try{localStorage.setItem('customs-settings',JSON.stringify(settings)); if(settings.theme) appearance.setTheme(settings.theme); if(settings.density) appearance.setDensity(settings.density); if(settings.comfort) appearance.setComfort(settings.comfort); appearance.setSidebarCollapsed(Boolean(settings.sidebarCollapsed)); if(user?.id&&profile?.organization_id){await supabase.from('audit_logs').insert({organization_id:profile.organization_id,user_id:user.id,action:'settings_update',table_name:'settings',record_id:null,old_data:null,new_data:{keys:Object.keys(settings)}})} setSaved('saved');setTimeout(()=>setSaved('idle'),1800)}catch{setSaved('error')}};
+ const saveSettings=async()=>{setSaved('saving');try{writeUserSettings(user?.id,settings); if(settings.theme) appearance.setTheme(settings.theme); if(settings.density) appearance.setDensity(settings.density); if(settings.comfort) appearance.setComfort(settings.comfort); appearance.setSidebarCollapsed(Boolean(settings.sidebarCollapsed)); if(user?.id&&profile?.organization_id){await supabase.from('audit_logs').insert({organization_id:profile.organization_id,user_id:user.id,action:'settings_update',table_name:'settings',record_id:null,old_data:null,new_data:{keys:Object.keys(settings)}})} setSaved('saved');setTimeout(()=>setSaved('idle'),1800)}catch{setSaved('error')}};
  const saveOrg=async()=>{if(!profile?.organization_id)return;setSaved('saving');const{data,error}=await supabase.from('organizations').update({name:orgDraft.name.trim(),economic_code:orgDraft.economic_code.trim()}).eq('id',profile.organization_id).select('name,economic_code').maybeSingle();if(error){setSaved('error');return}setOrg(data);setSaved('saved');setTimeout(()=>setSaved('idle'),1800)};
- const resetSettings=()=>{setSettings({...defaultSettings});localStorage.setItem('customs-settings',JSON.stringify(defaultSettings));setSaved('saved');};
+ const resetSettings=()=>{setSettings({...defaultSettings});writeUserSettings(user?.id,defaultSettings);setSaved('saved');};
  const navigateSetting=(s:string)=>{navigate(`/settings${s?`/${s}`:''}`);setMobileNav(false);window.scrollTo({top:0,behavior:'smooth'})};
  const sectionTitle=active.label, sectionDesc=active.en==='Overview'?'مرکز کنترل همه تنظیمات حساب، سازمان، عملیات و سیستم':`تنظیمات ${active.label}`;
  const basicSaveBar=<div className="sticky bottom-3 z-20 mt-5 flex items-center justify-between gap-3 rounded-2xl border app-border bg-[color-mix(in_srgb,var(--surface)_94%,transparent)] backdrop-blur-xl px-4 py-3 shadow-lg"><div className="text-xs app-muted">{saved==='saving'?'در حال ذخیره…':saved==='saved'?'تنظیمات ذخیره شد':saved==='error'?'ذخیره انجام نشد':'تغییرات را ذخیره کنید'}</div><div className="flex gap-2"><button type="button" onClick={resetSettings} className="px-3 py-2 rounded-xl border app-border text-sm">بازنشانی</button><button type="button" disabled={saved==='saving'} onClick={saveSettings} className="px-4 py-2 rounded-xl bg-[var(--primary)] text-white text-sm font-bold inline-flex items-center gap-2"><Save size={15}/> ذخیره</button></div></div>;
