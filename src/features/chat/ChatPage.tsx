@@ -6,7 +6,7 @@ import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
 import{subscribeOfflineQueue,flushOfflineQueue,isChatQueueItem,chatClientUuid,retryChatMessage,type QueuedRpc}from'../../lib/offlineQueue';
 import{enableChatPush,hasChatPushSubscription}from'./push';
-import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,listMessageReceipts,listMessages,listMessagesAfter,listOrgConnections,markDelivered,markPlayed,markRead,searchChat,sendFileMessage,sendMessage,setMessageMentions,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
+import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,getMessageById,listMessageReceipts,listMessages,listMessagesAfter,listOrgConnections,markDelivered,markPlayed,markRead,searchChat,sendFileMessage,sendMessage,setMessageMentions,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
 import{supabase}from'../../lib/supabase';
 import type{ChatConversation,ChatMessage}from'./types';
 import{ChatBrandLogo}from'./ChatBrandLogo';
@@ -367,12 +367,20 @@ export const ChatPage:React.FC=()=>{
  },[markVisibleRead,messages]);
 
  useEffect(()=>{
-  if(!selectedId||loading)return;
-  if(pendingScrollMessage.current){
-   const id=pendingScrollMessage.current;pendingScrollMessage.current=null;
-   requestAnimationFrame(()=>document.getElementById('msg-'+id)?.scrollIntoView({behavior:'smooth',block:'center'}));
-  }
- },[loading,messages,selectedId]);
+  if(!selectedId||loading||!pendingScrollMessage.current)return;
+  const id=pendingScrollMessage.current;
+  const jump=()=>{
+   const element=document.getElementById('msg-'+id);
+   if(element){pendingScrollMessage.current=null;element.scrollIntoView({behavior:'smooth',block:'center'});return;}
+   void getMessageById(id).then(message=>{
+    if(!message||message.conversation_id!==selectedId)return;
+    setMessages(previous=>mergeMessages(previous,[message],queueSyncRef.current.filter(item=>String(item.args.p_conversation_id)===selectedId)));
+    requestAnimationFrame(()=>document.getElementById('msg-'+id)?.scrollIntoView({behavior:'smooth',block:'center'}));
+    pendingScrollMessage.current=null;
+   }).catch(()=>{pendingScrollMessage.current=null});
+  };
+  requestAnimationFrame(jump);
+ },[getMessageById,loading,messages,selectedId]);
 
  useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape'){setMenu(null);setForwardId(null);setPeopleOpen(false);setChannelOpen(false);setDirectoryOpen(false);setSettingsOpen(false)}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[]);
 
