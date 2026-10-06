@@ -230,6 +230,74 @@ export const persistFailedChatRpc = async (args: Record<string, unknown>, error:
   });
 };
 
+export const removeQueuedRpc = async (id: string) => {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const items = await listQueue();
+  if (!items.some((item) => item.id === id && item.userId === userId)) return;
+  await deleteQueueItem(id);
+  await emit();
+};
+
+export const sendChatRpc = async (
+  args: Record<string, unknown>,
+): Promise<{ data: unknown; queued: boolean; queueId: string }> => {
+  if (!supabaseClient) throw new Error('Supabase client is not attached');
+  const userId = await currentUserId();
+  if (!userId) throw new Error('ابتدا وارد سیستم شوید.');
+
+  const queueId = await enqueueRpc(CHAT_RPC, args, {
+    state: navigator.onLine ? 'sending' : 'queued',
+    nextAttemptAt: navigator.onLine ? Date.now() : Date.now(),
+  });
+
+  if (!navigator.onLine) return { data: null, queued: true, queueId };
+
+  try {
+    const result = await supabaseClient.rpc(CHAT_RPC, args);
+    if (!result.error) {
+      await removeQueuedRpc(queueId);
+      return { data: result.data, queued: false, queueId };
+    }
+
+    const code = classifyChatError(result.error);
+    const item = (await listQueue()).find((value) => value.id === queueId);
+    if (item) {
+      item.attempts += 1;
+      item.lastError = result.error.message;
+      item.lastErrorCode = code;
+      item.state = isRetryableChatError(code) && item.attempts < CHAT_MAX_AUTO_RETRIES ? 'queued' : 'failed';
+      item.nextAttemptAt = item.state === 'queued'
+        ? Date.now() + retryDelayMs(item.attempts - 1)
+        : Number.MAX_SAFE_INTEGER;
+      await putQueueItem(item);
+      await emit();
+    }
+
+    if (isRetryableChatError(code)) {
+      return { data: null, queued: true, queueId };
+    }
+
+    throw Object.assign(new Error(result.error.message), result.error);
+  } catch (error) {
+    const code = classifyChatError(error);
+    const item = (await listQueue()).find((value) => value.id === queueId);
+    if (item) {
+      item.attempts += 1;
+      item.lastError = String((error as any)?.message || error || 'ارسال انجام نشد');
+      item.lastErrorCode = code;
+      item.state = isRetryableChatError(code) && item.attempts < CHAT_MAX_AUTO_RETRIES ? 'queued' : 'failed';
+      item.nextAttemptAt = item.state === 'queued'
+        ? Date.now() + retryDelayMs(item.attempts - 1)
+        : Number.MAX_SAFE_INTEGER;
+      await putQueueItem(item);
+      await emit();
+    }
+    if (isRetryableChatError(code)) return { data: null, queued: true, queueId };
+    throw error;
+  }
+};
+
 const isNetworkError = (error: unknown) => classifyChatError(error) === 'NETWORK_ERROR';
 
 export const flushOfflineQueue = async () => {
