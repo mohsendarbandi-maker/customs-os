@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase';
 import { makeClientId } from '../../lib/clientId';
+import { sendChatRpc } from '../../lib/offlineQueue';
 import type { ChatConversation, ChatMessage, ChatMessageReceipt } from './types';
 
 const unwrap = <T>(result: { data: T | null; error: { message: string } | null }): T => {
@@ -234,7 +235,7 @@ export async function sendMessage(
   body: string,
   replyToMessageId?: string | null,
 ): Promise<ChatMessage | { queued: true; queueId: string }> {
-  const result = await supabase.rpc('chat_insert_message', {
+  const result = await sendChatRpc({
     p_conversation_id: conversationId,
     p_client_uuid: clientUuid,
     p_message_type: 'text',
@@ -244,9 +245,8 @@ export async function sendMessage(
     p_thread_root_message_id: null,
   });
 
-  if (result.error) throw Object.assign(new Error(result.error.message), result.error);
-  if (result.queued && result.queueId) return { queued: true, queueId: result.queueId };
-  return unwrap(result) as ChatMessage;
+  if (result.queued) return { queued: true, queueId: result.queueId };
+  return result.data as ChatMessage;
 }
 
 export async function setMessageMentions(messageId: string, userIds: string[]): Promise<number> {
