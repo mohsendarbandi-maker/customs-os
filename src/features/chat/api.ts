@@ -419,17 +419,17 @@ export async function sendFileMessage(
   messageType: 'file' | 'voice' = 'file',
 ): Promise<ChatMessage> {
   const clientUuid = makeClientId();
-  const message = unwrap(
-    await supabase.rpc('chat_insert_message', {
-      p_conversation_id: conversationId,
-      p_client_uuid: clientUuid,
-      p_message_type: messageType,
-      p_body: null,
-      p_reply_to_message_id: null,
-      p_forwarded_from_message_id: null,
-      p_thread_root_message_id: null,
-    }),
-  ) as ChatMessage;
+  const result = await sendChatRpc({
+    p_conversation_id: conversationId,
+    p_client_uuid: clientUuid,
+    p_message_type: messageType,
+    p_body: null,
+    p_reply_to_message_id: null,
+    p_forwarded_from_message_id: null,
+    p_thread_root_message_id: null,
+  }, { durable: false });
+
+  const message = result.data as ChatMessage;
 
   const objectId = makeClientId();
   const storagePath = `quarantine/${organizationId}/${conversationId}/${objectId}`;
