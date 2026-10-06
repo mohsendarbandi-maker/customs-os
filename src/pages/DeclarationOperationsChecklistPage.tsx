@@ -3,6 +3,7 @@ import{AlertTriangle,ArrowLeft,BrainCircuit,Check,Info,Loader2,Plus,Save,Trash2}
 import{Link,useSearchParams}from'react-router-dom';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
+import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 
 type Decl={id:string;shipment_id:string|null;case_id:string|null;kottaj_number:string;declaration_date:string;customs_path:string|null;payment_reference:string|null;total_duties_irr:number|null;declaration_file_name:string|null};
 type Item={id:string;item_key:string;item_label:string;completed:boolean;note:string|null;sort_order:number;source:string;is_active:boolean};
@@ -201,6 +202,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
     </div>;
    })}
    <div className="p-5"><button disabled={busy||!canEdit} onClick={()=>void complete()} className="rounded-xl bg-[var(--primary)] text-white px-6 py-3 font-bold disabled:opacity-40">{busy?<><Loader2 className="inline ml-2 animate-spin" size={16}/>در حال انتقال...</>:pending.length===0?'تکمیل عملیات گمرکی و ورود به مرحله ۵ · درب خروج':'ورود به مرحله ۵ با ثبت هشدار موارد ناقص'}</button>{pending.length>0&&<div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs"><div className="font-bold mb-2 flex items-center gap-2"><AlertTriangle size={14}/> موارد ناقص قبل از خروج</div>{pending.map(x=><div key={x.id} className="py-1">{x.item_label}{x.note?` — ${x.note}`:''}</div>)}</div>}</div>
-  </section>
+  {decl?.shipment_id&&<ShipmentStageCosts stage="STAGE_4_CUSTOMS_OPERATIONS" shipmentId={decl.shipment_id}/>}
+</section>
  </div></main>;
 };
