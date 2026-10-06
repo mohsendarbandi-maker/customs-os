@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {CloudOff,Cloud,RefreshCw} from 'lucide-react';
-import {flushOfflineQueue,listQueue,startOfflineQueue,subscribeOfflineQueue} from '../lib/offlineQueue';
+import {flushOfflineQueue,listQueue,subscribeOfflineQueue} from '../lib/offlineQueue';
 
 export const OfflineQueueStatus:React.FC=()=>{
  const [online,setOnline]=useState(()=>navigator.onLine);
@@ -11,8 +11,8 @@ export const OfflineQueueStatus:React.FC=()=>{
   const off=subscribeOfflineQueue(items=>setCount(items.length));
   const on=()=>setOnline(true),offLine=()=>setOnline(false);
   window.addEventListener('online',on);window.addEventListener('offline',offLine);
-  const stop=startOfflineQueue();void refresh();
-  return()=>{off();stop();window.removeEventListener('online',on);window.removeEventListener('offline',offLine)};
+  void refresh();
+  return()=>{off();window.removeEventListener('online',on);window.removeEventListener('offline',offLine)};
  },[]);
  const sync=async()=>{setSyncing(true);try{await flushOfflineQueue()}finally{setSyncing(false)}};
  return <div className="offline-queue-status fixed left-4 bottom-4 z-50 flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/95 px-3 py-2 text-xs text-slate-200 shadow-2xl backdrop-blur">
