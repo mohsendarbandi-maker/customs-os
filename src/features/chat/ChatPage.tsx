@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
-import{AlertCircle,ArrowRight,Bell,BellOff,Check,CheckCheck,ChevronDown,Clock,Hash,LoaderCircle,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Star,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
+import{AlertCircle,ArrowRight,Bell,BellOff,Check,CheckCheck,ChevronDown,Clock,Hash,Loader2,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Star,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useSearchParams}from'react-router-dom';
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
@@ -164,8 +164,12 @@ export const ChatPage:React.FC=()=>{
 
  useEffect(()=>{
   if(!profile?.organization_id)return;
-  void supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',profile.organization_id).eq('is_active',true).order('full_name')
-    .then(({data})=>setPeople((data??[])as Person[])).catch(()=>setPeople([]));
+  void (async()=>{
+    try{
+      const {data}=await supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',profile.organization_id).eq('is_active',true).order('full_name');
+      setPeople((data??[])as Person[]);
+    }catch{setPeople([])}
+  })();
   void listOrgConnections().then(setSharedConnections).catch(()=>setSharedConnections([]));
   void refresh();
   const on=()=>{setOnline(true);setRealtimeState('connecting');void flushChatOutbox();if(selectedId)void loadConversation(selectedId,false)};
@@ -323,11 +327,12 @@ export const ChatPage:React.FC=()=>{
   setMessages(previous=>[...previous,optimistic]);setText('');setReply(null);nearBottomRef.current=true;scrollBottom(true);
   try{
    const result=await sendMessage(selectedId,clientUuid,body,optimistic.reply_to_message_id);
-   if('queued'in result&&result.queued){
+   if('queueId' in result){
     return;
    }
-   const mentionIds=await resolveMentionUserIds(body);if(mentionIds.length)await setMessageMentions(result.id,mentionIds);
-   setMessages(previous=>mergeMessages(previous,[result],queueSyncRef.current.filter(item=>String(item.args.p_conversation_id)===selectedId)));
+   const sentMessage=result;
+   const mentionIds=await resolveMentionUserIds(body);if(mentionIds.length)await setMessageMentions(sentMessage.id,mentionIds);
+   setMessages(previous=>mergeMessages(previous,[sentMessage],queueSyncRef.current.filter(item=>String(item.args.p_conversation_id)===selectedId)));
    void refresh();
   }catch(e){setError(err(e));setMessages(previous=>previous.map(message=>message.client_uuid===clientUuid?{...message,delivery_status:'failed'}:message))}
  };
@@ -396,7 +401,7 @@ export const ChatPage:React.FC=()=>{
  const folderLabels:Record<ChatFolder,string>={all:'همه',coworkers:'همکاران',groups:'گروه‌ها',owners:'صاحب کالا',shipments:'محموله‌ها',unread:'خوانده‌نشده'};
  const statusView=(m:ChatMessage)=>{
   if(m.delivery_status==='queued')return<Clock size={13} aria-label="در صف ارسال"/>;
-  if(m.delivery_status==='sending')return<LoaderCircle size={13} className="animate-spin" aria-label="در حال ارسال"/>;
+  if(m.delivery_status==='sending')return<Loader2 size={13} className="animate-spin" aria-label="در حال ارسال"/>;
   if(m.delivery_status==='sent')return<Check size={13} aria-label="ارسال شد"/>;
   if(m.delivery_status==='delivered')return<CheckCheck size={13} className="opacity-80" aria-label="تحویل شد"/>;
   if(m.delivery_status==='read')return<CheckCheck size={13} className="text-sky-400" aria-label="خوانده شد"/>;
@@ -445,7 +450,7 @@ export const ChatPage:React.FC=()=>{
    </header>
 
    <div ref={messageArea} onScroll={onScroll} className="chat-message-area relative flex-1 min-h-0 overflow-y-auto px-3 py-5 md:px-5 md:py-6 overscroll-contain bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(0,0,0,.025),transparent_18%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,.02),transparent_18%)]">
-    {olderLoading&&<div className="absolute top-2 left-0 right-0 z-10 flex justify-center"><span className="px-3 py-1 rounded-full bg-[var(--surface)] border app-border text-[10px] app-muted shadow-sm"><LoaderCircle size={11} className="inline ml-1 animate-spin"/>در حال دریافت پیام‌های قدیمی…</span></div>}
+    {olderLoading&&<div className="absolute top-2 left-0 right-0 z-10 flex justify-center"><span className="px-3 py-1 rounded-full bg-[var(--surface)] border app-border text-[10px] app-muted shadow-sm"><Loader2 size={11} className="inline ml-1 animate-spin"/>در حال دریافت پیام‌های قدیمی…</span></div>}
     {!hasOlder&&messages.length>0&&<div className="text-center text-[10px] app-muted pb-2">ابتدای گفتگو</div>}
     {messages.map((m,index)=>{
       const own=m.sender_id===user?.id;const local=m.id.startsWith('local-');const deleted=Boolean(m.deleted_for_all_at);const previous=messages[index-1];const showDay=!previous||dayKey(previous.created_at)!==dayKey(m.created_at);const quoted=m.reply_to_message_id?messages.find(message=>message.id===m.reply_to_message_id):null;
