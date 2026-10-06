@@ -159,7 +159,7 @@ export const ChatPage:React.FC=()=>{
    setMessages(previous=>mergeMessages(previous,[],chatItems.filter(item=>String(item.args.p_conversation_id)===selectedId)));
   });
   void flushChatOutbox();
-  return unsubscribe;
+  return()=>{unsubscribe()};
  },[flushChatOutbox,selectedId]);
 
  useEffect(()=>{
