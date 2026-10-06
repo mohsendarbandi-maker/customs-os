@@ -95,7 +95,7 @@ export const ChatPage:React.FC=()=>{
  const[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel');const[sharedConnections,setSharedConnections]=useState<Array<{id:string;target_organization_id:string;target_name:string}>>([]);
  const[selectedConnection,setSelectedConnection]=useState('');const[attachmentBusy,setAttachmentBusy]=useState(false);const[mediaState,setMediaState]=useState<MediaState>('idle');
  const[recording,setRecording]=useState(false);const[ocrBusy,setOcrBusy]=useState(false);const[pushReady,setPushReady]=useState(false);const[pushBusy,setPushBusy]=useState(false);const[settingsOpen,setSettingsOpen]=useState(false);
- const[menu,setMenu]=useState<string|null>(null);const[directoryOpen,setDirectoryOpen]=useState(false);const[directoryMode,setDirectoryMode]=useState<ChatDirectoryMode>('groups');
+ const[menu,setMenu]=useState<string|null>(null);const[directoryOpen,setDirectoryOpen]=useState(false);const[directoryMode,setDirectoryMode]=useState<ChatDirectoryMode>('members');
  const[folder,setFolder]=useState<ChatFolder>('all');const[newMessageCount,setNewMessageCount]=useState(0);
  const[olderLoading,setOlderLoading]=useState(false);const[hasOlder,setHasOlder]=useState(true);
  const[realtimeReady,setRealtimeReady]=useState(false);
