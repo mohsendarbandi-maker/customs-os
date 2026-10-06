@@ -84,20 +84,23 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
  const save=async()=>{
   setBusy(true);
   try{
-   try{localStorage.setItem('customs-chat-preferences',JSON.stringify(prefs))}catch{}
-   if(user?.id){
-    await supabase.from('user_settings').upsert({
-      user_id:user.id,
-      settings:{
-        ...serverSettings,
-        chat:{
-          ...((serverSettings.chat as Record<string,unknown>|undefined)||{}),
-          preferences:prefs
-        }
-      },
-      updated_at:new Date().toISOString()
-    },{onConflict:'user_id'});
-   }
+   if(!user?.id)throw new Error('ابتدا وارد سیستم شوید.');
+   try{localStorage.setItem(userChatPreferencesStorageKey(user.id),JSON.stringify(prefs))}catch{}
+   const currentSettings=readUserSettings<Record<string,unknown>>(user.id,{...serverSettings});
+   const settings={
+    ...currentSettings,
+    chat:{
+     ...((currentSettings.chat as Record<string,unknown>|undefined)||{}),
+     preferences:prefs,
+    },
+   };
+   const{error}=await supabase.from('user_settings').upsert({
+    user_id:user.id,
+    settings,
+    updated_at:new Date().toISOString()
+   },{onConflict:'user_id'});
+   if(error)throw error;
+   writeUserSettings(user.id,settings);
    setSaved(true);
    setTimeout(()=>setSaved(false),1400);
   }finally{setBusy(false)}
