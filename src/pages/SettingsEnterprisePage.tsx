@@ -11,7 +11,8 @@ type Role='owner'|'admin'|'broker'|'accountant'|'warehouse'|'client';type Sectio
 const sections:Section[]=[{id:'profile',title:'پروفایل',group:'حساب',icon:Users},{id:'appearance',title:'ظاهر و شخصی‌سازی',group:'حساب',icon:Palette},{id:'notifications',title:'اعلان‌ها',group:'حساب',icon:Bell},{id:'security',title:'امنیت',group:'حساب',icon:Lock},{id:'organization',title:'سازمان و شعب',group:'سازمان',icon:Building2,admin:true},{id:'users',title:'کاربران',group:'سازمان',icon:Users,admin:true},{id:'roles',title:'نقش و دسترسی',group:'سازمان',icon:ShieldCheck,admin:true},{id:'customs',title:'گمرک و EPL',group:'عملیات',icon:FileText},{id:'shipping',title:'کشتیرانی و کشتی‌ها',group:'عملیات',icon:Ship},{id:'transport',title:'حمل و نقل',group:'عملیات',icon:Activity},{id:'warehouse',title:'انبار',group:'عملیات',icon:Database},{id:'documents',title:'اسناد و چاپ',group:'عملیات',icon:FileText},{id:'workflow',title:'Workflow و وضعیت',group:'عملیات',icon:Activity},{id:'finance',title:'مالی و ارز',group:'مالی',icon:Wallet},{id:'calendar',title:'تقویم و تاریخ',group:'مالی',icon:Calendar},{id:'integrations',title:'API و Integration',group:'سیستم',icon:Plug,admin:true},{id:'webhooks',title:'Webhooks',group:'سیستم',icon:Webhook,admin:true},{id:'storage',title:'Storage',group:'سیستم',icon:HardDrive,admin:true},{id:'backup',title:'Backup / Export',group:'سیستم',icon:Database,admin:true},{id:'audit',title:'Audit Log',group:'سیستم',icon:Server,admin:true},{id:'advanced',title:'پیشرفته',group:'سیستم',icon:Settings2,admin:true,ownerOnly:true},{id:'about',title:'درباره سیستم',group:'سیستم',icon:Globe}];
 const groups=['حساب','سازمان','عملیات','مالی','سیستم'];
 const base={theme:'dark',density:'comfortable',comfort:'normal',sidebarCollapsed:false,calendar:'jalali',timezone:'Asia/Tehran',currency:'IRR',defaultPort:'بندر شهید رجایی',defaultCustomsOffice:'گمرک شهید رجایی',numberPrefix:'DB',vatRate:10,reminderEnabled:true,desktopNotifications:true,sessionMinutes:60,documentMaxMb:25,retentionDays:3650};
-const personalSettingKeys=['theme','density','comfort','sidebarCollapsed','calendar','timezone','reminderEnabled','desktopNotifications','sessionMinutes'];
+const personalSettingKeys=['theme','density','comfort','sidebarCollapsed','calendar','timezone','reminderEnabled','desktopNotifications','sessionMinutes','chat','fontSize','animations','reducedMotion','stickyHeader','zebraRows','hoverRows','autoSave','quietHours','quietFrom','quietTo'];
+const organizationSettingKeys=Object.keys(base).filter(key=>!personalSettingKeys.includes(key));
 const pickSettings=(source:Record<string,any>,keys:string[])=>Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(source,key)).map(key=>[key,source[key]]));
 const input='w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm outline-none focus:border-[var(--primary)]';
 const Card=({title,desc,children}:{title:string;desc?:string;children:React.ReactNode})=><section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><h2 className="font-black">{title}</h2>{desc&&<p className="text-xs app-muted mt-1">{desc}</p>}<div className="mt-4">{children}</div></section>;
@@ -40,8 +41,8 @@ export const SettingsEnterprisePage:React.FC=()=>{const loc=useLocation(),nav=us
   if(!user?.id)return;
   setBusy(true);
   try{
-   const personal={...userServerSettings,...pickSettings(settings,personalSettingKeys)};
-   const organization={...orgServerSettings,...Object.fromEntries(Object.entries(settings).filter(([key])=>!personalSettingKeys.includes(key)))};
+   const personal={...pickSettings(userServerSettings,personalSettingKeys),...pickSettings(settings,personalSettingKeys)};
+   const organization={...pickSettings(orgServerSettings,organizationSettingKeys),...pickSettings(settings,organizationSettingKeys)};
    writeUserSettings(user.id,{...readUserSettings<Record<string,unknown>>(user.id,{}),...personal});
    appearance.setTheme(settings.theme==='light'?'light':'dark');
    appearance.setDensity(settings.density==='compact'?'compact':'comfortable');
