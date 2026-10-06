@@ -229,6 +229,14 @@ export async function listMessageReceipts(messageIds: string[]): Promise<ChatMes
   return result.data as ChatMessageReceipt[];
 }
 
+export async function getMessageById(messageId: string): Promise<ChatMessage | null> {
+  const result = await supabase.from('chat_messages').select('*').eq('id', messageId).maybeSingle();
+  if (result.error) throw new Error(result.error.message);
+  if (!result.data) return null;
+  const messages = await enrichMessages([result.data as ChatMessage]);
+  return messages[0] ?? null;
+}
+
 export async function sendMessage(
   conversationId: string,
   clientUuid: string,
