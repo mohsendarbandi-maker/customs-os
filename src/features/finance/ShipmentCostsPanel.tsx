@@ -4,22 +4,22 @@ import{supabase}from'../../lib/supabase';
 import{formatJalali}from'../../lib/jalali';
 import{formatMoney}from'../../lib/finance';
 import{createReceiptPath,displayReceiptName,formatIrr,jalaliInputToIso,isoToJalaliInput,parseAmount,SHIPMENT_COST_STAGES,ShipmentCost,ShipmentCostCategory,ShipmentCostStage,STAGE_LABELS,sumApprovedByStage,todayIso,toReceiptMetadata,validateCostDraft,validateReceiptFile,WORKFLOW_LABELS}from'./shipmentCosts';
-type Props={shipment:any;profile:any;onChanged:()=>Promise<void>|void};
+type Props={shipment:any;profile:any;onChanged:()=>Promise<void>|void;fixedStage?:ShipmentCostStage};
 type Filter={stage:''|ShipmentCostStage;status:''|ShipmentCost['workflow_status'];from:string;to:string;min:string;max:string;query:string};
 type Draft={clientId:string;stage:ShipmentCostStage;categoryId:string;categoryName:string;description:string;amount:string;currency:'IRR'|'USD'|'EUR';exchangeRate:string;paymentDate:string;paidBy:'our_company'|'client_direct';notes:string};
 const roleCanWrite=(role:string)=>['owner','admin','broker','warehouse','accountant'].includes(role);
 const roleCanManage=(role:string)=>['owner','admin'].includes(role);
-const initialDraft=(shipment:any):Draft=>({clientId:shipment.client_id||'',stage:'MISC',categoryId:'',categoryName:'متفرقه',description:'',amount:'',currency:'IRR',exchangeRate:'1',paymentDate:todayIso(),paidBy:'our_company',notes:''});
+const initialDraft=(shipment:any,fixedStage?:ShipmentCostStage):Draft=>({clientId:shipment.client_id||'',stage:fixedStage||'STAGE_1_SHIPMENT',categoryId:'',categoryName:'متفرقه',description:'',amount:'',currency:'IRR',exchangeRate:'1',paymentDate:todayIso(),paidBy:'our_company',notes:''});
 const JalaliDateInput=({value,onChange,label,placeholder='۱۴۰۵/۰۷/۱۳'}:{value:string;onChange:(iso:string)=>void;label:string;placeholder?:string})=>{
  const[text,setText]=useState(isoToJalaliInput(value));const[invalid,setInvalid]=useState(false);
  React.useEffect(()=>setText(isoToJalaliInput(value)),[value]);
  const commit=()=>{if(!text.trim()){setInvalid(true);return}try{const iso=jalaliInputToIso(text);if(!iso)throw new Error();onChange(iso);setInvalid(false)}catch{setInvalid(true)}};
  return <label className="text-xs app-muted">{label}<div className="relative mt-1"><input className="input" dir="ltr" inputMode="numeric" value={text} placeholder={placeholder} onChange={e=>{setText(e.target.value);setInvalid(false)}} onBlur={commit}/><span className="absolute left-3 top-3 text-[10px] app-muted">جلالی</span></div>{invalid&&<span className="text-[10px] text-red-700">تاریخ جلالی معتبر نیست.</span>}</label>;
 };
-export const ShipmentCostsPanel:React.FC<Props>=({shipment,profile,onChanged})=>{
+export const ShipmentCostsPanel:React.FC<Props>=({shipment,profile,onChanged,fixedStage})=>{
  const[costs,setCosts]=useState<ShipmentCost[]>([]),[categories,setCategories]=useState<ShipmentCostCategory[]>([]),[canApprove,setCanApprove]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState(''),[error,setError]=useState('');
- const[filter,setFilter]=useState<Filter>({stage:'',status:'',from:'',to:'',min:'',max:'',query:''});
- const[open,setOpen]=useState(false),[draft,setDraft]=useState<Draft>(initialDraft(shipment)),[files,setFiles]=useState<File[]>([]),[drag,setDrag]=useState(false),[saving,setSaving]=useState(false),[editing,setEditing]=useState<ShipmentCost|null>(null),[decision,setDecision]=useState<ShipmentCost|null>(null),[decisionReason,setDecisionReason]=useState(''),[busyId,setBusyId]=useState(''),[preview,setPreview]=useState<{url:string;type:string;name:string}|null>(null);
+ const[filter,setFilter]=useState<Filter>({stage:fixedStage||'',status:'',from:'',to:'',min:'',max:'',query:''});
+ const[open,setOpen]=useState(false),[draft,setDraft]=useState<Draft>(initialDraft(shipment,fixedStage)),[files,setFiles]=useState<File[]>([]),[drag,setDrag]=useState(false),[saving,setSaving]=useState(false),[editing,setEditing]=useState<ShipmentCost|null>(null),[decision,setDecision]=useState<ShipmentCost|null>(null),[decisionReason,setDecisionReason]=useState(''),[busyId,setBusyId]=useState(''),[preview,setPreview]=useState<{url:string;type:string;name:string}|null>(null);
  const inputRef=React.useRef<HTMLInputElement|null>(null);
  const load=async()=>{
   if(!shipment?.id||!profile?.organization_id)return;setLoading(true);setError('');
@@ -31,10 +31,11 @@ export const ShipmentCostsPanel:React.FC<Props>=({shipment,profile,onChanged})=>
   if(re)setError(re.message);if(ce)setError(ce.message);setCosts((rows||[]) as ShipmentCost[]);setCategories((cats||[]) as ShipmentCostCategory[]);setCanApprove(Boolean(perm?.approve_other_expenses)||roleCanManage(profile.role));setLoading(false);
  };
  React.useEffect(()=>{void load()},[shipment?.id,profile?.organization_id,profile?.id]);
+ React.useEffect(()=>{setFilter(f=>({...f,stage:fixedStage||''}));setDraft(d=>({...d,stage:fixedStage||d.stage}))},[fixedStage]);
  const visible=React.useMemo(()=>costs.filter(x=>{if(x.deleted_at)return false;if(filter.stage&&x.cost_type!==filter.stage)return false;if(filter.status&&x.workflow_status!==filter.status)return false;if(filter.from&&x.payment_date<filter.from)return false;if(filter.to&&x.payment_date>filter.to)return false;const total=Number(x.amount_irr||0)+Number(x.vat_amount||0);if(filter.min&&total<parseAmount(filter.min))return false;if(filter.max&&total>parseAmount(filter.max))return false;if(filter.query&&!(x.cost_category+' '+x.description).toLowerCase().includes(filter.query.trim().toLowerCase()))return false;return true}),[costs,filter]);
  const stageTotals=sumApprovedByStage(costs);const grandTotal=Object.values(stageTotals).reduce((a,b)=>a+b,0);
  const canWrite=roleCanWrite(profile?.role||'');const canManage=roleCanManage(profile?.role||'')||canApprove;
- const resetForm=()=>{setDraft(initialDraft(shipment));setFiles([]);setEditing(null);setError('')};
+ const resetForm=()=>{setDraft(initialDraft(shipment,fixedStage));setFiles([]);setEditing(null);setError('')};
  const chooseCategory=(id:string)=>{const cat=categories.find(c=>c.id===id);setDraft(d=>({...d,categoryId:id,categoryName:cat?.name_fa||d.categoryName}))};
  const addFiles=async(incoming:File[])=>{const next=[...files];for(const file of incoming){if(next.some(f=>f.name===file.name&&f.size===file.size&&f.lastModified===file.lastModified))continue;const checked=await validateReceiptFile(file);if(!checked.ok){setError(checked.error);continue}next.push(file)}setFiles(next)};
  const removeNewFile=(i:number)=>setFiles(v=>v.filter((_,index)=>index!==i));
@@ -68,11 +69,11 @@ export const ShipmentCostsPanel:React.FC<Props>=({shipment,profile,onChanged})=>
  const previewUrl=async(path:string,type:string,name:string)=>{const{data,error:e}=await supabase.storage.from('finance-receipts').createSignedUrl(path,600);if(e){setError(e.message);return}setPreview({url:data.signedUrl,type,name})};
 
  return <section className="space-y-4">
-  <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">{SHIPMENT_COST_STAGES.map(stage=><div key={stage} className="app-surface border app-border rounded-2xl p-4"><div className="text-xs app-muted">{STAGE_LABELS[stage]}</div><div className="font-black mt-2" dir="ltr">{formatIrr(stageTotals[stage])} <span className="text-xs font-normal">ریال</span></div></div>)}<div className="app-surface border app-border rounded-2xl p-4"><div className="text-xs app-muted">جمع کل تأییدشده</div><div className="font-black mt-2" dir="ltr">{formatIrr(grandTotal)} <span className="text-xs font-normal">ریال</span></div></div></div>
+  <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">{(fixedStage?[fixedStage]:SHIPMENT_COST_STAGES).map(stage=><div key={stage} className="app-surface border app-border rounded-2xl p-4"><div className="text-xs app-muted">{STAGE_LABELS[stage]}</div><div className="font-black mt-2" dir="ltr">{formatIrr(stageTotals[stage])} <span className="text-xs font-normal">ریال</span></div></div>)}<div className="app-surface border app-border rounded-2xl p-4"><div className="text-xs app-muted">جمع کل تأییدشده</div><div className="font-black mt-2" dir="ltr">{formatIrr(grandTotal)} <span className="text-xs font-normal">ریال</span></div></div></div>
   <div className="app-surface border app-border rounded-2xl p-4">
-   <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black flex items-center gap-2"><FileText size={18}/>هزینه‌های محموله</h2><p className="app-muted text-xs mt-1">ثبت هزینه در هر مرحله عملیات + فیش پرداختی + تأیید مالی</p></div>{canWrite&&<button onClick={()=>{resetForm();setOpen(true)}} className="px-4 py-3 rounded-xl bg-[var(--primary)] text-white font-bold text-sm inline-flex items-center gap-2"><Plus size={16}/>ثبت هزینه</button>}</div>
+   <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black flex items-center gap-2"><FileText size={18}/>هزینه‌های محموله</h2><p className="app-muted text-xs mt-1">{fixedStage?'ثبت مستقیم هزینه برای همین مرحله عملیاتی + فیش پرداختی + تأیید مالی':'ثبت هزینه در هر مرحله عملیات + فیش پرداختی + تأیید مالی'}</p></div>{canWrite&&<button onClick={()=>{resetForm();setOpen(true)}} className="px-4 py-3 rounded-xl bg-[var(--primary)] text-white font-bold text-sm inline-flex items-center gap-2"><Plus size={16}/>ثبت هزینه</button>}</div>
    <div className="grid md:grid-cols-4 xl:grid-cols-7 gap-2 mt-4">
-    <select className="input" value={filter.stage} onChange={e=>setFilter(f=>({...f,stage:e.target.value as Filter['stage']}))}><option value="">همه مراحل</option>{SHIPMENT_COST_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select>
+    {!fixedStage&&<select className="input" value={filter.stage} onChange={e=>setFilter(f=>({...f,stage:e.target.value as Filter['stage']}))}><option value="">همه مراحل</option>{SHIPMENT_COST_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select>}
     <select className="input" value={filter.status} onChange={e=>setFilter(f=>({...f,status:e.target.value as Filter['status']}))}><option value="">همه وضعیت‌ها</option>{(['DRAFT','SUBMITTED','APPROVED','REJECTED'] as const).map(s=><option key={s} value={s}>{WORKFLOW_LABELS[s]}</option>)}</select>
     <JalaliDateInput label="از تاریخ" value={filter.from} onChange={iso=>setFilter(f=>({...f,from:iso}))}/>
     <JalaliDateInput label="تا تاریخ" value={filter.to} onChange={iso=>setFilter(f=>({...f,to:iso}))}/>
@@ -95,7 +96,7 @@ export const ShipmentCostsPanel:React.FC<Props>=({shipment,profile,onChanged})=>
 
   {open&&<div className="fixed inset-0 z-[120] bg-black/60 p-4 grid place-items-center"><div className="w-full max-w-4xl max-h-[94vh] overflow-auto rounded-3xl border app-border bg-[var(--surface)] p-5 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-black">{editing?'ویرایش هزینه':'ثبت هزینه جدید'}</h3><p className="text-xs app-muted mt-1">{shipment.display_name||shipment.bill_of_lading_no||'محموله'} · فیش پرداختی خصوصی ذخیره می‌شود</p></div><button className="icon-btn" onClick={()=>{setOpen(false);resetForm()}}><X size={18}/></button></div>
    <div className="grid md:grid-cols-2 gap-3 mt-5">
-    <label className="text-xs app-muted">مرحله هزینه<select className="input mt-1" value={draft.stage} onChange={e=>setDraft(d=>({...d,stage:e.target.value as ShipmentCostStage}))}>{SHIPMENT_COST_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select></label>
+    <label className="text-xs app-muted">مرحله هزینه<select className="input mt-1" disabled={!!fixedStage} value={draft.stage} onChange={e=>setDraft(d=>({...d,stage:e.target.value as ShipmentCostStage}))}>{SHIPMENT_COST_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select></label>
     <label className="text-xs app-muted">دسته هزینه<select className="input mt-1" value={draft.categoryId} onChange={e=>chooseCategory(e.target.value)}><option value="">انتخاب دسته</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name_fa}</option>)}</select></label>
     <label className="text-xs app-muted md:col-span-2">عنوان دسته<input className="input mt-1" list="shipment-cost-categories" value={draft.categoryName} onChange={e=>setDraft(d=>({...d,categoryName:e.target.value}))}/></label><datalist id="shipment-cost-categories">{categories.map(c=><option key={c.id} value={c.name_fa}/>)}</datalist>
     <label className="text-xs app-muted md:col-span-2">شرح کامل*<textarea className="input mt-1 min-h-28" value={draft.description} onChange={e=>setDraft(d=>({...d,description:e.target.value}))} placeholder="علت هزینه، مرجع پرداخت، محل خدمت و توضیح کامل…"/></label>
