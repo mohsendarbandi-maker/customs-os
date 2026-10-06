@@ -13,6 +13,7 @@ type QuickNavProps={
  conversations:ChatConversation[];
  role:UserRole|null|undefined;
  onNewMessage:()=>void;
+ selectedFolder:'all'|'groups'|'owners';
  onSelectFolder:(folder:'groups'|'owners')=>void;
  onOpenDirectory:(mode:ChatDirectoryMode)=>void;
  onOpenAi:()=>void;
@@ -20,7 +21,7 @@ type QuickNavProps={
 };
 
 export const ChatQuickNav:React.FC<QuickNavProps>=({
- people,conversations,role,onNewMessage,onSelectFolder,onOpenDirectory,onOpenAi,onOpenSettings,
+ people,conversations,role,onNewMessage,selectedFolder,onSelectFolder,onOpenDirectory,onOpenAi,onOpenSettings,
 })=>{
  const groupCount=useMemo(()=>conversations.filter(c=>['group','company_channel','shared_company'].includes(c.type)&&!['owner_group','shipment_group'].includes(c.hierarchy_kind??'')).length,[conversations]);
  const ownerCount=useMemo(()=>conversations.filter(c=>c.hierarchy_kind==='owner_group').length,[conversations]);
@@ -28,8 +29,8 @@ export const ChatQuickNav:React.FC<QuickNavProps>=({
 
  return <div className="chat-quick-nav" role="toolbar" aria-label="دسترسی سریع چت">
   <button type="button" className="chat-quick-nav-item" onClick={onNewMessage} title="پیام جدید"><Plus size={16}/><span>جدید</span></button>
-  <button type="button" className="chat-quick-nav-item" onClick={()=>onSelectFolder('groups')} title="گروه‌ها و کانال‌ها"><Users size={16}/><span>گروه‌ها</span>{groupCount>0&&<em>{groupCount}</em>}</button>
-  <button type="button" className="chat-quick-nav-item" onClick={()=>onSelectFolder('owners')} title="صاحب کالاها"><UserRound size={16}/><span>صاحب کالا</span>{ownerCount>0&&<em>{ownerCount}</em>}</button>
+  <button type="button" className={"chat-quick-nav-item "+(selectedFolder==='groups'?'is-active':'')} onClick={()=>onSelectFolder('groups')} title="گروه‌ها و کانال‌ها"><Users size={16}/><span>گروه‌ها</span>{groupCount>0&&<em>{groupCount}</em>}</button>
+  <button type="button" className={"chat-quick-nav-item "+(selectedFolder==='owners'?'is-active':'')} onClick={()=>onSelectFolder('owners')} title="صاحب کالاها"><UserRound size={16}/><span>صاحب کالا</span>{ownerCount>0&&<em>{ownerCount}</em>}</button>
   <button type="button" className="chat-quick-nav-item" onClick={()=>onOpenDirectory('calls')} title="لیست تماس‌ها"><Phone size={16}/><span>تماس</span></button>
   {canManageDirectory&&<button type="button" className="chat-quick-nav-item" onClick={()=>onOpenDirectory('members')} title="اعضای داخلی شرکت"><UserPlus size={16}/><span>اعضا</span>{people.length>0&&<em>{people.length}</em>}</button>}
   <button type="button" className="chat-quick-nav-item" onClick={onOpenAi} title="هوش مصنوعی"><Bot size={16}/><span>AI</span></button>
