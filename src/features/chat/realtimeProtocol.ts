@@ -19,9 +19,10 @@ export type RealtimeReaction = {
 export type RealtimeRead = {
   message_id: string;
   user_id: string;
-  status: string;
+  status: 'delivered' | 'read';
   read_at: string | null;
   delivered_at: string | null;
+  played_at: string | null;
 };
 
 export type RealtimeTyping = {
@@ -99,12 +100,15 @@ export function parseRealtimeRead(value: unknown): RealtimeRead | null {
   if (!messageId || !userId || !status) return null;
   const readAtValue = source.read_at;
   const deliveredAtValue = source.delivered_at;
+  const playedAtValue = source.played_at;
+  if (status !== 'delivered' && status !== 'read') return null;
   return {
     message_id: messageId,
     user_id: userId,
     status,
     read_at: typeof readAtValue === 'string' ? readAtValue : null,
     delivered_at: typeof deliveredAtValue === 'string' ? deliveredAtValue : null,
+    played_at: typeof playedAtValue === 'string' ? playedAtValue : null,
   };
 }
 
