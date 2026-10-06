@@ -13,7 +13,7 @@ describe('chat architecture invariants',()=>{
 
   it('opens member DMs from the canonical conversation id',()=>{
     const page=read('src/features/chat/ChatPage.tsx');
-    expect(page).toContain("const conversationId='id' in conversation ? conversation.id : conversation.conversation_id;");
+    expect(page).toContain('const conversationId=conversation.id;');
     expect(page).not.toContain("setSelectedId(c.conversation_id)");
   });
 
