@@ -36,6 +36,7 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 let supabaseClient: SupabaseClient | null = null;
 const listeners = new Set<QueueListener>();
 let flushing = false;
+let chatFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const attachSupabaseClient = (client: SupabaseClient) => {
   supabaseClient = client;
@@ -141,6 +142,25 @@ export const isChatQueueItem = (item: QueuedRpc) =>
   typeof item.args.client_uuid === 'string' &&
   typeof item.args.p_conversation_id === 'string';
 
+const scheduleNextChatFlush = () => {
+  if (typeof window === 'undefined' || !navigator.onLine || chatFlushTimer !== null) return;
+  void listQueue().then((items) => {
+    const next = items
+      .filter((item) => isChatQueueItem(item) && item.state !== 'failed')
+      .map((item) => item.nextAttemptAt ?? 0)
+      .filter((value) => Number.isFinite(value))
+      .sort((a, b) => a - b)[0];
+
+    if (next === undefined) return;
+
+    const delay = Math.max(0, Math.min(next - Date.now(), 60000));
+    chatFlushTimer = window.setTimeout(() => {
+      chatFlushTimer = null;
+      void flushOfflineQueue();
+    }, delay);
+  }).catch(() => {});
+};
+
 export const chatClientUuid = (item: QueuedRpc) =>
   isChatQueueItem(item) ? String(item.args.client_uuid) : null;
 
@@ -216,6 +236,7 @@ export const enqueueRpc = async (
   };
   await putQueueItem(item);
   await emit();
+  scheduleNextChatFlush();
   return item.id;
 };
 
@@ -385,6 +406,8 @@ export const flushOfflineQueue = async () => {
   } finally {
     flushing = false;
     await emit();
+    chatFlushTimer = null;
+    scheduleNextChatFlush();
   }
 };
 
