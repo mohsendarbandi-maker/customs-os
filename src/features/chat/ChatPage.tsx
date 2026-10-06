@@ -6,7 +6,7 @@ import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
 import{subscribeOfflineQueue,flushOfflineQueue,isChatQueueItem,chatClientUuid,retryChatMessage,type QueuedRpc}from'../../lib/offlineQueue';
 import{enableChatPush,hasChatPushSubscription}from'./push';
-import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,getMessageById,listMessageReceipts,listMessages,listMessagesAfter,listOrgConnections,markDelivered,markPlayed,markRead,searchChat,sendFileMessage,sendMessage,setMessageMentions,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
+import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,getMessageById,listMessageReceipts,listMessages,listMessagesAfter,listOrgConnections,markChatFocus,markDelivered,markPlayed,markRead,clearChatFocus,searchChat,sendFileMessage,sendMessage,setMessageMentions,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
 import{supabase}from'../../lib/supabase';
 import type{ChatConversation,ChatMessage}from'./types';
 import{ChatBrandLogo}from'./ChatBrandLogo';
@@ -82,7 +82,7 @@ export const ChatPage:React.FC=()=>{
  const requestedConversationId=searchParams.get('conversation');const requestedCallId=searchParams.get('call');
  const[conversations,setConversations]=useState<ChatConversation[]>([]);const[selectedId,setSelectedId]=useState<string|null>(null);
  const[messages,setMessages]=useState<ChatMessage[]>([]);const[queueItems,setQueueItems]=useState<QueuedRpc[]>([]);
- const messagesRef=useRef<ChatMessage[]>([]);
+ const messagesRef=useRef<ChatMessage[]>([]);const selectedIdRef=useRef<string|null>(null);
  const[text,setText]=useState('');const[error,setError]=useState<string|null>(null);
  const[loading,setLoading]=useState(true);const[online,setOnline]=useState(()=>navigator.onLine);
  const[realtimeState,setRealtimeState]=useState<RealtimeState>(()=>navigator.onLine?'connecting':'offline');
@@ -108,6 +108,7 @@ export const ChatPage:React.FC=()=>{
 
  useEffect(()=>{queueSyncRef.current=queueItems},[queueItems]);
  useEffect(()=>{messagesRef.current=messages},[messages]);
+ useEffect(()=>{selectedIdRef.current=selectedId},[selectedId]);
  useEffect(()=>{latestMessageRef.current=[...messages].filter(m=>!m.id.startsWith('local-')).pop()??latestMessageRef.current},[messages]);
 
  const refresh=useCallback(async()=>{
@@ -176,6 +177,8 @@ export const ChatPage:React.FC=()=>{
  useEffect(()=>{
   if(!selectedId||!user?.id)return;
   let active=true;
+  void markChatFocus(selectedId).catch(()=>{});
+  const focusTimer=window.setInterval(()=>{if(document.visibilityState==='visible')void markChatFocus(selectedId).catch(()=>{})},30000);
   setRealtimeState(online?'connecting':'offline');setRealtimeReady(false);setTypingUsers([]);readIndexRef.current=-1;
   void loadConversation(selectedId,true);
   if(channel.current)void supabase.removeChannel(channel.current);
@@ -204,7 +207,7 @@ export const ChatPage:React.FC=()=>{
     });
    channel.current=ch;
   })();
-  return()=>{active=false;if(channel.current)void supabase.removeChannel(channel.current);channel.current=null};
+  return()=>{active=false;window.clearInterval(focusTimer);void clearChatFocus().catch(()=>{});if(channel.current)void supabase.removeChannel(channel.current);channel.current=null};
  },[flushChatOutbox,loadConversation,online,refresh,selectedId,syncAfter,user?.id]);
 
  useEffect(()=>{
@@ -214,9 +217,9 @@ export const ChatPage:React.FC=()=>{
    try{await supabase.realtime.setAuth()}catch{}
    const ch=supabase.channel('chat-inbox-user:'+user.id,{config:{private:true,broadcast:{self:false}}})
     .on('broadcast',{event:'message:new'},payload=>{
-     const parsed=parseRealtimeMessage(payload.payload);if(!parsed||parsed.sender_id===user.id)return;
-     void markDelivered(parsed.id).catch(()=>{});
-     if(parsed.conversation_id===selectedId)void syncAfter(parsed.conversation_id);
+     const parsed=parseRealtimeMessage(payload.payload);if(!parsed)return;
+     if(parsed.sender_id!==user.id)void markDelivered(parsed.id).catch(()=>{});
+     if(parsed.conversation_id===selectedIdRef.current)void syncAfter(parsed.conversation_id);
      void refresh();
     })
     .on('broadcast',{event:'message:update'},payload=>{
@@ -237,7 +240,7 @@ export const ChatPage:React.FC=()=>{
    inboxChannel.current=ch;
   })();
   return()=>{active=false;if(inboxChannel.current)void supabase.removeChannel(inboxChannel.current);inboxChannel.current=null};
- },[flushChatOutbox,refresh,selectedId,syncAfter,user?.id]);
+ },[flushChatOutbox,refresh,syncAfter,user?.id]);
 
  useEffect(()=>{
   if(!user?.id)return;
