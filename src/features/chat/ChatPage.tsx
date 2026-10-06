@@ -534,7 +534,6 @@ export const ChatPage:React.FC=()=>{
  organizationId={profile?.organization_id}
  currentUserId={user?.id}
  people={people.filter(person=>person.id!==user?.id)}
- conversations={conversations}
  onClose={()=>setDirectoryOpen(false)}
  onSelectConversation={id=>{setDirectoryOpen(false);setSelectedId(id)}}
  onNewMessage={()=>{setDirectoryOpen(false);void openPeople('direct')}}
