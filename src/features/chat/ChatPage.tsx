@@ -428,6 +428,7 @@ export const ChatPage:React.FC=()=>{
      {selectedId?<ArrowRight size={18}/>:<ChatBrandLogo size={34}/>}<span><b>چت سازمانی</b><small>{selectedId?'گفتگو':'مرکز ارتباطات داخلی Customs OS'}</small></span>
     </button>
     <div className="chat-app-header-status"><span className={"chat-app-status-dot "+(online?'is-online':'is-offline')}/><span>{realtimeState==='offline'?'آفلاین':realtimeState==='syncing'?'همگام‌سازی…':realtimeState==='connecting'?'در حال اتصال…':realtimeState==='degraded'?'اتصال ناپایدار':'آنلاین'}</span></div>
+    {!selectedId&&<div className="hidden md:flex items-center gap-2 min-w-0 text-right"><div className="h-9 w-9 rounded-full bg-[var(--primary)] text-white grid place-items-center font-black">{(profile?.full_name||'ک').slice(0,1)}</div><div className="min-w-0"><b className="block text-xs truncate">{profile?.full_name||'کاربر'}</b><span className="block text-[10px] app-muted truncate">{profile?.role||''}</span></div></div>}
    </div>
   </header>
 
@@ -449,6 +450,7 @@ export const ChatPage:React.FC=()=>{
     <header className="h-[60px] shrink-0 px-3 border-b app-border flex items-center gap-2">
      <div className="min-w-0 flex-1"><b className="block text-sm">گفتگوها</b><div className="text-[10px] app-muted truncate">{unread?String(unread)+' پیام خوانده‌نشده':'فهرست گفتگوهای سازمان'}</div></div>
      <button type="button" className="h-10 w-10 shrink-0 rounded-xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>void openPeople('direct')} aria-label="پیام جدید"><Plus size={18}/></button>
+     {profile?.role!=='client'&&<button type="button" className="h-10 px-3 shrink-0 rounded-xl flex items-center justify-center gap-1 border app-border text-xs font-bold" onClick={()=>{setChannelType('group');setChannelOpen(true)}} aria-label="گروه جدید"><Users size={15}/>گروه جدید</button>}
     </header>
     <div className="px-3 py-2 border-b app-border"><div className="h-12 rounded-2xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو در گفتگوها" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div></div>
     <div className="chat-folder-strip px-3 py-2 border-b app-border overflow-x-auto flex gap-2">{Object.entries(folderLabels).map(([key,label])=><button type="button" key={key} onClick={()=>setFolder(key as ChatFolder)} className={"shrink-0 min-h-10 px-3 rounded-xl text-xs font-bold border app-border "+(folder===key?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]')} aria-pressed={folder===key}>{label}{key==='unread'&&unread>0?<span className="mr-1">({unread})</span>:null}</button>)}</div>
