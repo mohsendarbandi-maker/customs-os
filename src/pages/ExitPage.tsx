@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, Check, Loader2, Upload } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 
 const EXIT_ITEMS = [
   ['warehouse_invoice_initial', 'صورت‌حساب انبارداری اولیه'],
@@ -464,7 +465,9 @@ export const ExitPage: React.FC = () => {
                 </div>
               </div>
             )}
-            {remainingChecklist.length > 0 && (
+            {shipmentId&&<><ShipmentStageCosts stage="STAGE_5_EXIT_PREPARATION" shipmentId={shipmentId}/><ShipmentStageCosts stage="STAGE_6_EXIT" shipmentId={shipmentId}/></>}
+
+{remainingChecklist.length > 0 && (
               <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
                 <div className="p-5 border-b border-amber-500/20">
                   <h2 className="font-black">موارد باقی‌مانده عملیات گمرکی</h2>
