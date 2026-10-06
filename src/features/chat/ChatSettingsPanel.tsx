@@ -1,7 +1,8 @@
 import React,{useCallback,useEffect,useState}from'react';
-import{Bell,BellOff,Check,Image,Languages,Palette,Phone,Save,Send,Sun,Moon,Type,UserRound,Volume2,VolumeX,X}from'lucide-react';
+import{Bell,Check,Image,Languages,Palette,Phone,Save,Send,Sun,Moon,Type,Volume2,VolumeX,X}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
 import{supabase}from'../../lib/supabase';
+import{readUserSettings,userChatPreferencesStorageKey,writeUserSettings}from'../../lib/userSettingsStorage';
 
 export type ChatPreferences={
  theme:'light'|'dark';
@@ -23,9 +24,9 @@ export const DEFAULT_CHAT_PREFERENCES:ChatPreferences={
  notificationsEnabled:true,soundsEnabled:true,vibrationEnabled:true,sendOnEnter:true,compactMode:false,showSenderNames:true,showMessagePreview:true
 };
 
-const readLocal=():ChatPreferences=>{
+const readLocal=(userId?:string|null):ChatPreferences=>{
  try{
-  const raw=localStorage.getItem('customs-chat-preferences');
+  const raw=localStorage.getItem(userChatPreferencesStorageKey(userId));
   return raw?{...DEFAULT_CHAT_PREFERENCES,...JSON.parse(raw)}:DEFAULT_CHAT_PREFERENCES;
  }catch{return DEFAULT_CHAT_PREFERENCES}
 };
@@ -33,11 +34,11 @@ const readLocal=():ChatPreferences=>{
 const fontScale=(v:ChatPreferences['fontSize'])=>v==='small'?'0.92':v==='large'?'1.12':'1';
 
 export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,onClose})=>{
- const{user}=useAuth();
- const[prefs,setPrefs]=useState<ChatPreferences>(readLocal);
+ const{user,profile}=useAuth();
+ const[prefs,setPrefs]=useState<ChatPreferences>(()=>readLocal(user?.id));
  const[serverSettings,setServerSettings]=useState<Record<string,unknown>>({});
  const[busy,setBusy]=useState(false);
- const[saved,setSaved]=useState(false);
+ const[saved,setSaved]=useState(false);const[error,setError]=useState<string|null>(null);
 
  const apply=useCallback((next:ChatPreferences)=>{
   const root=document.querySelector<HTMLElement>('.chat-standalone');
@@ -57,7 +58,7 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
  },[]);
 
  useEffect(()=>{
-  const local=readLocal();
+  const local=readLocal(user?.id);
   setPrefs(local);
   apply(local);
   let alive=true;
@@ -67,7 +68,7 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
     if(alive&&server){
       const merged={...DEFAULT_CHAT_PREFERENCES,...server} as ChatPreferences;
       setPrefs(merged);
-      try{localStorage.setItem('customs-chat-preferences',JSON.stringify(merged))}catch{}
+      try{localStorage.setItem(userChatPreferencesStorageKey(user.id),JSON.stringify(merged))}catch{}
       apply(merged);
     }
     if(alive&&data?.settings)setServerSettings((data.settings||{}) as Record<string,unknown>);
@@ -81,24 +82,29 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
  const update=(patch:Partial<ChatPreferences>)=>setPrefs(v=>({...v,...patch}));
 
  const save=async()=>{
-  setBusy(true);
+  setBusy(true);setError(null);
   try{
-   try{localStorage.setItem('customs-chat-preferences',JSON.stringify(prefs))}catch{}
-   if(user?.id){
-    await supabase.from('user_settings').upsert({
-      user_id:user.id,
-      settings:{
-        ...serverSettings,
-        chat:{
-          ...((serverSettings.chat as Record<string,unknown>|undefined)||{}),
-          preferences:prefs
-        }
-      },
-      updated_at:new Date().toISOString()
-    },{onConflict:'user_id'});
-   }
+   if(!user?.id)throw new Error('ابتدا وارد سیستم شوید.');
+   try{localStorage.setItem(userChatPreferencesStorageKey(user.id),JSON.stringify(prefs))}catch{}
+   const currentSettings=readUserSettings<Record<string,unknown>>(user.id,{...serverSettings});
+   const settings={
+    ...currentSettings,
+    chat:{
+     ...((currentSettings.chat as Record<string,unknown>|undefined)||{}),
+     preferences:prefs,
+    },
+   };
+   const{error}=await supabase.from('user_settings').upsert({
+    user_id:user.id,
+    settings,
+    updated_at:new Date().toISOString()
+   },{onConflict:'user_id'});
+   if(error)throw error;
+   writeUserSettings(user.id,settings);
    setSaved(true);
    setTimeout(()=>setSaved(false),1400);
+  }catch(errorValue){
+   setError(errorValue instanceof Error?errorValue.message:'ذخیره تنظیمات انجام نشد.');
   }finally{setBusy(false)}
  };
 
@@ -131,6 +137,20 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
     </header>
 
     <div className="p-4 space-y-4">
+     <div className="rounded-2xl border app-border p-4">
+      <div className="flex items-center gap-3">
+       <div className="h-12 w-12 rounded-full bg-[var(--chat-accent)] text-white grid place-items-center font-black">
+        {(profile?.full_name||'کاربر').slice(0,1)}
+       </div>
+       <div className="min-w-0 flex-1">
+        <b className="block truncate">{profile?.full_name||'کاربر'}</b>
+        <div className="text-[11px] app-muted mt-1 truncate">{profile?.phone||'شماره ثبت نشده'} • {profile?.role||''}</div>
+       </div>
+      </div>
+      <div className="text-[10px] app-muted mt-3">این تنظیمات فقط برای همین حساب کاربری ذخیره می‌شود.</div>
+     </div>
+
+
      <div className="rounded-2xl border app-border p-4">
       <div className="flex items-center gap-2 font-bold text-sm"><Sun size={16}/> نور / حالت نمایش</div>
       <div className="grid grid-cols-2 gap-2 mt-3">
@@ -267,6 +287,7 @@ export const ChatSettingsPanel:React.FC<{open:boolean;onClose:()=>void}>=({open,
      </div>
     </div>
 
+    {error&&<div className="mx-4 mb-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 p-3 text-xs">{error}</div>}
     <footer
      className="sticky bottom-0 p-4 border-t app-border bg-[var(--surface)]"
      style={{paddingBottom:'max(16px,env(safe-area-inset-bottom))'}}

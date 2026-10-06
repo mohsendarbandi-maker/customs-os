@@ -95,7 +95,7 @@ export const ChatPage:React.FC=()=>{
  const[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel');const[sharedConnections,setSharedConnections]=useState<Array<{id:string;target_organization_id:string;target_name:string}>>([]);
  const[selectedConnection,setSelectedConnection]=useState('');const[attachmentBusy,setAttachmentBusy]=useState(false);const[mediaState,setMediaState]=useState<MediaState>('idle');
  const[recording,setRecording]=useState(false);const[ocrBusy,setOcrBusy]=useState(false);const[pushReady,setPushReady]=useState(false);const[pushBusy,setPushBusy]=useState(false);const[settingsOpen,setSettingsOpen]=useState(false);
- const[menu,setMenu]=useState<string|null>(null);const[directoryOpen,setDirectoryOpen]=useState(false);const[directoryMode,setDirectoryMode]=useState<ChatDirectoryMode>('groups');
+ const[menu,setMenu]=useState<string|null>(null);const[directoryOpen,setDirectoryOpen]=useState(false);const[directoryMode,setDirectoryMode]=useState<ChatDirectoryMode>('members');
  const[folder,setFolder]=useState<ChatFolder>('all');const[newMessageCount,setNewMessageCount]=useState(0);
  const[olderLoading,setOlderLoading]=useState(false);const[hasOlder,setHasOlder]=useState(true);
  const[realtimeReady,setRealtimeReady]=useState(false);
@@ -271,7 +271,18 @@ export const ChatPage:React.FC=()=>{
   const{data,error:e}=await supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',profile.organization_id).eq('is_active',true).order('full_name');
   if(e){setError(err(e));return}setPeople((data??[])as Person[]);setPersonQuery('');setPeopleMode(mode);setPeopleOpen(true);
  };
- const newChat=async(id:string)=>{try{const c=await createDirectConversation(id);await refresh();setSelectedId(c.conversation_id);setPeopleOpen(false)}catch(e){setError(err(e))}};
+ const newChat=async(id:string)=>{
+  if(!id||id===user?.id)return;
+  try{
+   const conversation=await createDirectConversation(id);
+   const conversationId=conversation.id;
+   if(!conversationId)throw new Error('گفتگوی مستقیم ایجاد نشد.');
+   await refresh();
+   setSelectedId(conversationId);
+   setPeopleOpen(false);
+   setDirectoryOpen(false);
+  }catch(e){setError(err(e))}
+};
  const openDirectory=(mode:ChatDirectoryMode)=>{setDirectoryMode(mode);setDirectoryOpen(true)};
  const addMember=async(id:string)=>{if(!selectedId)return;try{await addConversationMember(selectedId,id);setPeopleOpen(false);await refresh()}catch(e){setError(err(e))}};
  const createChannel=async()=>{
@@ -417,11 +428,22 @@ export const ChatPage:React.FC=()=>{
      {selectedId?<ArrowRight size={18}/>:<ChatBrandLogo size={34}/>}<span><b>چت سازمانی</b><small>{selectedId?'گفتگو':'مرکز ارتباطات داخلی Customs OS'}</small></span>
     </button>
     <div className="chat-app-header-status"><span className={"chat-app-status-dot "+(online?'is-online':'is-offline')}/><span>{realtimeState==='offline'?'آفلاین':realtimeState==='syncing'?'همگام‌سازی…':realtimeState==='connecting'?'در حال اتصال…':realtimeState==='degraded'?'اتصال ناپایدار':'آنلاین'}</span></div>
+    {!selectedId&&<div className="hidden md:flex items-center gap-2 min-w-0 text-right"><div className="h-9 w-9 rounded-full bg-[var(--primary)] text-white grid place-items-center font-black">{(profile?.full_name||'ک').slice(0,1)}</div><div className="min-w-0"><b className="block text-xs truncate">{profile?.full_name||'کاربر'}</b><span className="block text-[10px] app-muted truncate">{profile?.role||''}</span></div></div>}
    </div>
   </header>
 
   <div className={selectedId?'hidden md:flex':'flex'} style={{height:selectedId?'0':'auto',minHeight:selectedId?'0':undefined}}>
-   {!selectedId&&<ChatQuickNav people={people.filter(person=>person.id!==user?.id)} conversations={conversations} onNewMessage={()=>void openPeople('direct')} onOpenDirectory={openDirectory} onOpenAi={()=>setError('پنل هوش مصنوعی در پایین صفحه باز است.')} onOpenSettings={()=>setSettingsOpen(true)}/>}
+   {!selectedId&&<ChatQuickNav
+ people={people.filter(person=>person.id!==user?.id)}
+ conversations={conversations}
+ selectedFolder={folder==='groups'||folder==='owners'?folder:'all'}
+ role={profile?.role}
+ onNewMessage={()=>void openPeople('direct')}
+ onSelectFolder={nextFolder=>setFolder(nextFolder)}
+ onOpenDirectory={openDirectory}
+ onOpenAi={()=>setError('پنل هوش مصنوعی در پایین صفحه باز است.')}
+ onOpenSettings={()=>setSettingsOpen(true)}
+/>}
   </div>
 
   {!selectedId&&<div className="flex-1 min-h-0 flex flex-col px-2 md:px-4 pb-2">
@@ -429,11 +451,12 @@ export const ChatPage:React.FC=()=>{
     <header className="h-[60px] shrink-0 px-3 border-b app-border flex items-center gap-2">
      <div className="min-w-0 flex-1"><b className="block text-sm">گفتگوها</b><div className="text-[10px] app-muted truncate">{unread?String(unread)+' پیام خوانده‌نشده':'فهرست گفتگوهای سازمان'}</div></div>
      <button type="button" className="h-10 w-10 shrink-0 rounded-xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>void openPeople('direct')} aria-label="پیام جدید"><Plus size={18}/></button>
+     {profile?.role!=='client'&&<button type="button" className="h-10 px-3 shrink-0 rounded-xl flex items-center justify-center gap-1 border app-border text-xs font-bold" onClick={()=>{setChannelType('group');setChannelOpen(true)}} aria-label="گروه جدید"><Users size={15}/>گروه جدید</button>}
     </header>
     <div className="px-3 py-2 border-b app-border"><div className="h-12 rounded-2xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو در گفتگوها" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div></div>
     <div className="chat-folder-strip px-3 py-2 border-b app-border overflow-x-auto flex gap-2">{Object.entries(folderLabels).map(([key,label])=><button type="button" key={key} onClick={()=>setFolder(key as ChatFolder)} className={"shrink-0 min-h-10 px-3 rounded-xl text-xs font-bold border app-border "+(folder===key?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]')} aria-pressed={folder===key}>{label}{key==='unread'&&unread>0?<span className="mr-1">({unread})</span>:null}</button>)}</div>
     {results.length>0&&<div className="border-b app-border max-h-48 overflow-y-auto">{results.map(r=><button type="button" key={r.id} onClick={()=>jumpToSearchResult(r)} className="w-full text-right px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5"><b className="text-xs block truncate">{r.title}</b><span className="text-[10px] app-muted block truncate mt-1">{r.snippet}</span></button>)}</div>}
-    <ChatHierarchyPanel selectedId={selectedId} onSelect={id=>{setSelectedId(id);setMessages([]);setResults([]);setMenu(null)}} fallback={conversations} folder={folder}/>
+    <ChatHierarchyPanel selectedId={selectedId} onSelect={id=>{setSelectedId(id);setMessages([]);setResults([]);setMenu(null)}} conversations={conversations} folder={folder}/>
    </section>
   </div>}
 
@@ -508,7 +531,17 @@ export const ChatPage:React.FC=()=>{
   <ChatFeatureBoundary><ChatSettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)}/></ChatFeatureBoundary>
   <ChatFeatureBoundary><VoiceCallPanel controller={voice}/></ChatFeatureBoundary>
 
-  <ChatDirectoryPanel open={directoryOpen} mode={directoryMode} organizationId={profile?.organization_id} people={people.filter(person=>person.id!==user?.id)} conversations={conversations} onClose={()=>setDirectoryOpen(false)} onSelectConversation={id=>{setDirectoryOpen(false);setSelectedId(id)}} onNewMessage={()=>{setDirectoryOpen(false);void openPeople('direct')}} onStartDirect={id=>void newChat(id)} onCreateGroup={()=>{setDirectoryOpen(false);setChannelType('group');setChannelOpen(true)}}/>
+  <ChatDirectoryPanel
+ open={directoryOpen}
+ mode={directoryMode}
+ organizationId={profile?.organization_id}
+ currentUserId={user?.id}
+ people={people.filter(person=>person.id!==user?.id)}
+ onClose={()=>setDirectoryOpen(false)}
+ onSelectConversation={id=>{setDirectoryOpen(false);setSelectedId(id)}}
+ onNewMessage={()=>{setDirectoryOpen(false);void openPeople('direct')}}
+ onStartDirect={id=>void newChat(id)}
+/>
 
   {peopleOpen&&<div className="fixed inset-0 z-[600] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>setPeopleOpen(false)}>
    <div dir="rtl" className="w-full md:max-w-lg max-h-[86vh] overflow-hidden rounded-t-3xl md:rounded-2xl bg-[var(--surface)] border app-border shadow-2xl" onClick={e=>e.stopPropagation()}>
