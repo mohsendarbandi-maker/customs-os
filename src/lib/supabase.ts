@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { attachSupabaseClient, rpcWithOfflineQueue } from './offlineQueue';
+import { attachSupabaseClient, rpcWithOfflineQueue, startOfflineQueue } from './offlineQueue';
 
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
 const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
@@ -26,6 +26,7 @@ const baseClient = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 attachSupabaseClient(baseClient);
+if (typeof window !== 'undefined') startOfflineQueue();
 
 // Keep the existing Supabase API unchanged while transparently queueing only
 // replay-safe workflow RPCs when the browser is offline or loses the connection.
