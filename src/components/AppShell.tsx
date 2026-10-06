@@ -9,4 +9,4 @@ export const AppShell:React.FC<{children:React.ReactNode}>=({children})=>{const 
 <button type="button" className="app-nav-item w-full text-right" onClick={()=>{setUserMenuOpen(false);navigate('/chat')}}><MessageCircle size={17}/><span>چت من</span></button>
 <button type="button" className="app-nav-item w-full text-right" onClick={()=>{setUserMenuOpen(false);void signOut()}}><LogOut size={17}/><span>خروج</span></button>
 </div>}
-</div></div></header><div className="app-content"><div key={location.pathname+location.search} className="future-route-stage">{children}</div></div></main><AIWorkspace pageContext={location.pathname+location.search}/></div>};
+</div></div></div></header><div className="app-content"><div key={location.pathname+location.search} className="future-route-stage">{children}</div></div></main><AIWorkspace pageContext={location.pathname+location.search}/></div>};
