@@ -293,7 +293,7 @@ export async function clearChatFocus(): Promise<void> {
   if (result.error) throw new Error(result.error.message);
 }
 
-export async function createDirectConversation(userId: string): Promise<ChatConversation> {
+export async function createDirectConversation(userId: string): Promise<ChatConversation & { id: string }> {
   const result = await supabase.rpc('chat_create_conversation', {
     p_type: 'direct',
     p_title: null,
@@ -303,7 +303,7 @@ export async function createDirectConversation(userId: string): Promise<ChatConv
     p_org_connection_id: null,
     p_direct_user_id: userId,
   });
-  return unwrap(result) as ChatConversation;
+  return unwrap(result) as ChatConversation & { id: string };
 }
 
 export async function deleteForMe(messageId: string): Promise<void> {
