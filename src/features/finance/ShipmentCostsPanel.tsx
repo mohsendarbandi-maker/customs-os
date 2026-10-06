@@ -3,10 +3,10 @@ import{Check,Eye,FileText,Image as ImageIcon,Plus,RefreshCw,Save,Send,Trash2,Upl
 import{supabase}from'../../lib/supabase';
 import{formatJalali}from'../../lib/jalali';
 import{formatMoney}from'../../lib/finance';
-import{createReceiptPath,displayReceiptName,formatIrr,jalaliInputToIso,isoToJalaliInput,parseAmount,SHIPMENT_COST_STAGES,ShipmentCost,ShipmentCostCategory,ShipmentCostStage,STAGE_LABELS,sumApprovedByStage,todayIso,toReceiptMetadata,validateCostDraft,validateReceiptFile,WORKFLOW_LABELS}from'./shipmentCosts';
+import{ALL_SHIPMENT_COST_STAGES,createReceiptPath,displayReceiptName,formatIrr,jalaliInputToIso,isoToJalaliInput,parseAmount,SHIPMENT_COST_STAGES,ShipmentCost,ShipmentCostCategory,ShipmentCostStage,ShipmentCostType,STAGE_LABELS,sumApprovedByStage,todayIso,toReceiptMetadata,validateCostDraft,validateReceiptFile,WORKFLOW_LABELS}from'./shipmentCosts';
 type Props={shipment:any;profile:any;onChanged:()=>Promise<void>|void;fixedStage?:ShipmentCostStage};
-type Filter={stage:''|ShipmentCostStage;status:''|ShipmentCost['workflow_status'];from:string;to:string;min:string;max:string;query:string};
-type Draft={clientId:string;stage:ShipmentCostStage;categoryId:string;categoryName:string;description:string;amount:string;currency:'IRR'|'USD'|'EUR';exchangeRate:string;paymentDate:string;paidBy:'our_company'|'client_direct';notes:string};
+type Filter={stage:''|ShipmentCostType;status:''|ShipmentCost['workflow_status'];from:string;to:string;min:string;max:string;query:string};
+type Draft={clientId:string;stage:ShipmentCostType;categoryId:string;categoryName:string;description:string;amount:string;currency:'IRR'|'USD'|'EUR';exchangeRate:string;paymentDate:string;paidBy:'our_company'|'client_direct';notes:string};
 const roleCanWrite=(role:string)=>['owner','admin','broker','warehouse','accountant'].includes(role);
 const roleCanManage=(role:string)=>['owner','admin'].includes(role);
 const initialDraft=(shipment:any,fixedStage?:ShipmentCostStage):Draft=>({clientId:shipment.client_id||'',stage:fixedStage||'STAGE_1_SHIPMENT',categoryId:'',categoryName:'متفرقه',description:'',amount:'',currency:'IRR',exchangeRate:'1',paymentDate:todayIso(),paidBy:'our_company',notes:''});
@@ -73,7 +73,7 @@ export const ShipmentCostsPanel:React.FC<Props>=({shipment,profile,onChanged,fix
   <div className="app-surface border app-border rounded-2xl p-4">
    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black flex items-center gap-2"><FileText size={18}/>هزینه‌های محموله</h2><p className="app-muted text-xs mt-1">{fixedStage?'ثبت مستقیم هزینه برای همین مرحله عملیاتی + فیش پرداختی + تأیید مالی':'ثبت هزینه در هر مرحله عملیات + فیش پرداختی + تأیید مالی'}</p></div>{canWrite&&<button onClick={()=>{resetForm();setOpen(true)}} className="px-4 py-3 rounded-xl bg-[var(--primary)] text-white font-bold text-sm inline-flex items-center gap-2"><Plus size={16}/>ثبت هزینه</button>}</div>
    <div className="grid md:grid-cols-4 xl:grid-cols-7 gap-2 mt-4">
-    {!fixedStage&&<select className="input" value={filter.stage} onChange={e=>setFilter(f=>({...f,stage:e.target.value as Filter['stage']}))}><option value="">همه مراحل</option>{SHIPMENT_COST_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select>}
+    {!fixedStage&&<select className="input" value={filter.stage} onChange={e=>setFilter(f=>({...f,stage:e.target.value as Filter['stage']}))}><option value="">همه مراحل</option>{ALL_SHIPMENT_COST_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select>}
     <select className="input" value={filter.status} onChange={e=>setFilter(f=>({...f,status:e.target.value as Filter['status']}))}><option value="">همه وضعیت‌ها</option>{(['DRAFT','SUBMITTED','APPROVED','REJECTED'] as const).map(s=><option key={s} value={s}>{WORKFLOW_LABELS[s]}</option>)}</select>
     <JalaliDateInput label="از تاریخ" value={filter.from} onChange={iso=>setFilter(f=>({...f,from:iso}))}/>
     <JalaliDateInput label="تا تاریخ" value={filter.to} onChange={iso=>setFilter(f=>({...f,to:iso}))}/>
@@ -96,7 +96,7 @@ export const ShipmentCostsPanel:React.FC<Props>=({shipment,profile,onChanged,fix
 
   {open&&<div className="fixed inset-0 z-[120] bg-black/60 p-4 grid place-items-center"><div className="w-full max-w-4xl max-h-[94vh] overflow-auto rounded-3xl border app-border bg-[var(--surface)] p-5 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-black">{editing?'ویرایش هزینه':'ثبت هزینه جدید'}</h3><p className="text-xs app-muted mt-1">{shipment.display_name||shipment.bill_of_lading_no||'محموله'} · فیش پرداختی خصوصی ذخیره می‌شود</p></div><button className="icon-btn" onClick={()=>{setOpen(false);resetForm()}}><X size={18}/></button></div>
    <div className="grid md:grid-cols-2 gap-3 mt-5">
-    <label className="text-xs app-muted">مرحله هزینه<select className="input mt-1" disabled={!!fixedStage} value={draft.stage} onChange={e=>setDraft(d=>({...d,stage:e.target.value as ShipmentCostStage}))}>{SHIPMENT_COST_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select></label>
+    <label className="text-xs app-muted">مرحله هزینه<select className="input mt-1" disabled={!!fixedStage} value={draft.stage} onChange={e=>setDraft(d=>({...d,stage:e.target.value as ShipmentCostStage}))}>{ALL_SHIPMENT_COST_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select></label>
     <label className="text-xs app-muted">دسته هزینه<select className="input mt-1" value={draft.categoryId} onChange={e=>chooseCategory(e.target.value)}><option value="">انتخاب دسته</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name_fa}</option>)}</select></label>
     <label className="text-xs app-muted md:col-span-2">عنوان دسته<input className="input mt-1" list="shipment-cost-categories" value={draft.categoryName} onChange={e=>setDraft(d=>({...d,categoryName:e.target.value}))}/></label><datalist id="shipment-cost-categories">{categories.map(c=><option key={c.id} value={c.name_fa}/>)}</datalist>
     <label className="text-xs app-muted md:col-span-2">شرح کامل*<textarea className="input mt-1 min-h-28" value={draft.description} onChange={e=>setDraft(d=>({...d,description:e.target.value}))} placeholder="علت هزینه، مرجع پرداخت، محل خدمت و توضیح کامل…"/></label>
