@@ -146,7 +146,7 @@ const scheduleNextChatFlush = () => {
   if (typeof window === 'undefined' || !navigator.onLine || chatFlushTimer !== null) return;
   void listQueue().then((items) => {
     const next = items
-      .filter((item) => isChatQueueItem(item) && item.state !== 'failed')
+      .filter((item) => isChatQueueItem(item) && item.state === 'queued')
       .map((item) => item.nextAttemptAt ?? 0)
       .filter((value) => Number.isFinite(value))
       .sort((a, b) => a - b)[0];
@@ -297,6 +297,7 @@ export const sendChatRpc = async (
         : Number.MAX_SAFE_INTEGER;
       await putQueueItem(item);
       await emit();
+      scheduleNextChatFlush();
     }
     if (isRetryableChatError(code)) return { data: null, queued: true, queueId };
     throw error;
