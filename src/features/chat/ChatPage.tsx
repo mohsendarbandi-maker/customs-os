@@ -271,7 +271,18 @@ export const ChatPage:React.FC=()=>{
   const{data,error:e}=await supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',profile.organization_id).eq('is_active',true).order('full_name');
   if(e){setError(err(e));return}setPeople((data??[])as Person[]);setPersonQuery('');setPeopleMode(mode);setPeopleOpen(true);
  };
- const newChat=async(id:string)=>{try{const c=await createDirectConversation(id);await refresh();setSelectedId(c.conversation_id);setPeopleOpen(false)}catch(e){setError(err(e))}};
+ const newChat=async(id:string)=>{
+  if(!id||id===user?.id)return;
+  try{
+   const conversation=await createDirectConversation(id);
+   const conversationId='id' in conversation?conversation.id:conversation.conversation_id;
+   if(!conversationId)throw new Error('گفتگوی مستقیم ایجاد نشد.');
+   await refresh();
+   setSelectedId(conversationId);
+   setPeopleOpen(false);
+   setDirectoryOpen(false);
+  }catch(e){setError(err(e))}
+};
  const openDirectory=(mode:ChatDirectoryMode)=>{setDirectoryMode(mode);setDirectoryOpen(true)};
  const addMember=async(id:string)=>{if(!selectedId)return;try{await addConversationMember(selectedId,id);setPeopleOpen(false);await refresh()}catch(e){setError(err(e))}};
  const createChannel=async()=>{
@@ -421,7 +432,16 @@ export const ChatPage:React.FC=()=>{
   </header>
 
   <div className={selectedId?'hidden md:flex':'flex'} style={{height:selectedId?'0':'auto',minHeight:selectedId?'0':undefined}}>
-   {!selectedId&&<ChatQuickNav people={people.filter(person=>person.id!==user?.id)} conversations={conversations} onNewMessage={()=>void openPeople('direct')} onOpenDirectory={openDirectory} onOpenAi={()=>setError('پنل هوش مصنوعی در پایین صفحه باز است.')} onOpenSettings={()=>setSettingsOpen(true)}/>}
+   {!selectedId&&<ChatQuickNav
+ people={people.filter(person=>person.id!==user?.id)}
+ conversations={conversations}
+ role={profile?.role}
+ onNewMessage={()=>void openPeople('direct')}
+ onSelectFolder={nextFolder=>setFolder(nextFolder)}
+ onOpenDirectory={openDirectory}
+ onOpenAi={()=>setError('پنل هوش مصنوعی در پایین صفحه باز است.')}
+ onOpenSettings={()=>setSettingsOpen(true)}
+/>}
   </div>
 
   {!selectedId&&<div className="flex-1 min-h-0 flex flex-col px-2 md:px-4 pb-2">
@@ -508,7 +528,18 @@ export const ChatPage:React.FC=()=>{
   <ChatFeatureBoundary><ChatSettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)}/></ChatFeatureBoundary>
   <ChatFeatureBoundary><VoiceCallPanel controller={voice}/></ChatFeatureBoundary>
 
-  <ChatDirectoryPanel open={directoryOpen} mode={directoryMode} organizationId={profile?.organization_id} people={people.filter(person=>person.id!==user?.id)} conversations={conversations} onClose={()=>setDirectoryOpen(false)} onSelectConversation={id=>{setDirectoryOpen(false);setSelectedId(id)}} onNewMessage={()=>{setDirectoryOpen(false);void openPeople('direct')}} onStartDirect={id=>void newChat(id)} onCreateGroup={()=>{setDirectoryOpen(false);setChannelType('group');setChannelOpen(true)}}/>
+  <ChatDirectoryPanel
+ open={directoryOpen}
+ mode={directoryMode}
+ organizationId={profile?.organization_id}
+ currentUserId={user?.id}
+ people={people.filter(person=>person.id!==user?.id)}
+ conversations={conversations}
+ onClose={()=>setDirectoryOpen(false)}
+ onSelectConversation={id=>{setDirectoryOpen(false);setSelectedId(id)}}
+ onNewMessage={()=>{setDirectoryOpen(false);void openPeople('direct')}}
+ onStartDirect={id=>void newChat(id)}
+/>
 
   {peopleOpen&&<div className="fixed inset-0 z-[600] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>setPeopleOpen(false)}>
    <div dir="rtl" className="w-full md:max-w-lg max-h-[86vh] overflow-hidden rounded-t-3xl md:rounded-2xl bg-[var(--surface)] border app-border shadow-2xl" onClick={e=>e.stopPropagation()}>
