@@ -64,7 +64,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,fallback,f
  });
  const visibleOwners=owners.filter(owner=>{
   if(folder==='groups'||folder==='coworkers')return false;
-  if(folder==='shipments')return false;
+  if(folder==='shipments')return true;
   if(folder==='unread'){
    const children=shipmentsByOwner.get(owner.conversation_id)??[];
    return Number(owner.unread_count)>0||children.some(item=>Number(item.unread_count)>0);
