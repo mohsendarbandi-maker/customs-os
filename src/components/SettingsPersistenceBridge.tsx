@@ -1,7 +1,7 @@
 import React,{useEffect,useRef}from'react';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
-import{readUserSettings,userSettingsStorageKey,writeUserSettings}from'../lib/userSettingsStorage';
+import{readUserSettings,writeUserSettings}from'../lib/userSettingsStorage';
 
 export const SettingsPersistenceBridge:React.FC=()=>{
  const{user}=useAuth();
