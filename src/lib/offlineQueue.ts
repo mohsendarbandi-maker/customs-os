@@ -202,7 +202,8 @@ export const classifyChatError = (error: unknown): ChatErrorCode => {
     return 'VALIDATION_ERROR';
   }
   if (status !== undefined && status >= 500) return 'SERVER_ERROR';
-  if (/network|fetch|failed to fetch|offline|timeout|timed out|connection|اتصال/.test(message) || !navigator.onLine) {
+  const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  if (/network|fetch|failed to fetch|offline|timeout|timed out|connection|اتصال/.test(message) || browserOffline) {
     return 'NETWORK_ERROR';
   }
   return 'UNKNOWN';
