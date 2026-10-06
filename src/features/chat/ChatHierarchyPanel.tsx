@@ -4,13 +4,16 @@ import type{ChatConversation}from'./types';
 import{listChatHierarchy,type ChatHierarchyItem}from'./api';
 import{normalizeFaText}from'../../lib/jalali';
 
+type ChatFolder = 'all' | 'coworkers' | 'groups' | 'owners' | 'shipments' | 'unread';
+
 type Props={
  selectedId:string|null;
  onSelect:(id:string)=>void;
  fallback:ChatConversation[];
+ folder?:ChatFolder;
 };
 
-export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,fallback})=>{
+export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,fallback,folder='all'})=>{
  const[items,setItems]=useState<ChatHierarchyItem[]>([]);
  const[open,setOpen]=useState<Record<string,boolean>>({});
  const[loading,setLoading]=useState(true);
@@ -52,7 +55,23 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,fallback})
   return result;
  },[items]);
 
- const regular=fallback.filter(item=>item.hierarchy_kind!=='owner_group'&&item.hierarchy_kind!=='shipment_group');
+ const regular=fallback.filter(item=>{
+  if(item.hierarchy_kind==='owner_group'||item.hierarchy_kind==='shipment_group')return false;
+  if(folder==='coworkers')return item.type==='direct';
+  if(folder==='groups')return ['group','company_channel','shared_company'].includes(item.type);
+  if(folder==='unread')return Number(item.unread_count)>0;
+  return true;
+ });
+ const visibleOwners=owners.filter(owner=>{
+  if(folder==='groups'||folder==='coworkers')return false;
+  if(folder==='shipments')return true;
+  if(folder==='unread'){
+   const children=shipmentsByOwner.get(owner.conversation_id)??[];
+   return Number(owner.unread_count)>0||children.some(item=>Number(item.unread_count)>0);
+  }
+  return folder==='all'||folder==='owners';
+ });
+
 
  return <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
   <div className="px-3 py-2 flex items-center justify-between border-b app-border">
@@ -72,7 +91,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,fallback})
    :owners.length===0
     ?<div className="p-5 app-muted text-sm">برای این حساب هنوز گروه محموله‌ای ساخته نشده است.</div>
     :<div className="p-2">
-      {owners.map(owner=>{
+      {visibleOwners.map(owner=>{
        const children=shipmentsByOwner.get(owner.conversation_id)??[];
        const expanded=open[owner.conversation_id]??true;
        const selectedOwner=selectedId===owner.conversation_id;
@@ -90,7 +109,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,fallback})
          </button>
         </div>
 
-        {expanded&&<div className="mr-5 pr-2 border-r app-border">
+        {(expanded && folder!=='owners')&&<div className="mr-5 pr-2 border-r app-border">
          {children.map(shipment=>{
           const selected=selectedId===shipment.conversation_id;
           const name=shipment.shipment_display_name||shipment.title||'محموله';

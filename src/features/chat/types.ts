@@ -35,9 +35,10 @@ export type ChatMessageUserState = {
 
 export type ChatMessageReceipt = {
   user_id: string;
-  status: string;
+  status: 'delivered' | 'read';
   delivered_at: string | null;
   read_at: string | null;
+  played_at: string | null;
 };
 
 export type ChatMessage = {
@@ -51,7 +52,7 @@ export type ChatMessage = {
   reply_to_message_id: string | null;
   forwarded_from_message_id: string | null;
   thread_root_message_id: string | null;
-  delivery_status: string;
+  delivery_status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'queued';
   edited_at: string | null;
   deleted_at: string | null;
   deleted_for_all_at: string | null;

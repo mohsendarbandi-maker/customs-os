@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { makeClientId } from './clientId';
 
-type QueuedRpc = {
+export type QueuedRpcState = 'queued' | 'sending' | 'failed';
+
+export type QueuedRpc = {
   id: string;
   createdAt: string;
   userId: string;
@@ -9,29 +11,32 @@ type QueuedRpc = {
   args: Record<string, unknown>;
   attempts: number;
   lastError?: string;
+  lastErrorCode?: string;
+  nextAttemptAt?: number;
+  state?: QueuedRpcState;
 };
 
 type QueueListener = (items: QueuedRpc[]) => void;
 
 const DB_NAME = 'customs-os-offline';
 const STORE_NAME = 'rpc_queue';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
+export const CHAT_RPC = 'chat_insert_message';
+export const CHAT_MAX_AUTO_RETRIES = 8;
 
-// Only mutations that are safe to replay without creating duplicate business events.
-// Maritime tracking is deliberately excluded because every execution inserts a new event.
-// Login/session RPCs, read RPCs, and case creation are also excluded.
 export const OFFLINE_QUEUEABLE_RPCS = new Set([
   'attach_registration_order',
   'update_case_operational_data',
   'update_shipment_maritime_data',
   'create_operational_reminder',
-  'chat_insert_message',
+  CHAT_RPC,
 ]);
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 let supabaseClient: SupabaseClient | null = null;
 const listeners = new Set<QueueListener>();
 let flushing = false;
+let chatFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const attachSupabaseClient = (client: SupabaseClient) => {
   supabaseClient = client;
@@ -57,16 +62,20 @@ const openDb = () => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
+      const transaction = request.transaction;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
         store.createIndex('createdAt', 'createdAt', { unique: false });
         store.createIndex('userId', 'userId', { unique: false });
-      } else {
-        const store = request.transaction?.objectStore(STORE_NAME);
-        if (store && !store.indexNames.contains('userId')) {
-          store.createIndex('userId', 'userId', { unique: false });
-        }
+        store.createIndex('state', 'state', { unique: false });
+        store.createIndex('nextAttemptAt', 'nextAttemptAt', { unique: false });
+        return;
       }
+      const store = transaction?.objectStore(STORE_NAME);
+      if (!store) return;
+      if (!store.indexNames.contains('userId')) store.createIndex('userId', 'userId', { unique: false });
+      if (!store.indexNames.contains('state')) store.createIndex('state', 'state', { unique: false });
+      if (!store.indexNames.contains('nextAttemptAt')) store.createIndex('nextAttemptAt', 'nextAttemptAt', { unique: false });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error('IndexedDB unavailable'));
@@ -79,7 +88,7 @@ const emit = async () => {
     const items = await listQueue();
     listeners.forEach((listener) => listener(items));
   } catch {
-    // Storage failure must never break the application UI.
+    // Storage failures never break the messenger.
   }
 };
 
@@ -92,6 +101,11 @@ export const listQueue = async (): Promise<QueuedRpc[]> => {
     request.onsuccess = () => {
       const items = (request.result as QueuedRpc[])
         .filter((item) => item.userId === userId)
+        .map((item) => ({
+          ...item,
+          state: item.state ?? 'queued',
+          nextAttemptAt: item.nextAttemptAt ?? 0,
+        }))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       resolve(items);
     };
@@ -123,56 +137,268 @@ export const subscribeOfflineQueue = (listener: QueueListener) => {
   return () => listeners.delete(listener);
 };
 
-export const enqueueRpc = async (functionName: string, args: Record<string, unknown>) => {
+export const isChatQueueItem = (item: QueuedRpc) =>
+  item.functionName === CHAT_RPC &&
+  typeof item.args.client_uuid === 'string' &&
+  typeof item.args.p_conversation_id === 'string';
+
+const scheduleNextChatFlush = () => {
+  if (typeof window === 'undefined' || !navigator.onLine || chatFlushTimer !== null) return;
+  void listQueue().then((items) => {
+    const next = items
+      .filter((item) => isChatQueueItem(item) && item.state === 'queued')
+      .map((item) => item.nextAttemptAt ?? 0)
+      .filter((value) => Number.isFinite(value))
+      .sort((a, b) => a - b)[0];
+
+    if (next === undefined) return;
+
+    const delay = Math.max(0, Math.min(next - Date.now(), 60000));
+    chatFlushTimer = window.setTimeout(() => {
+      chatFlushTimer = null;
+      void flushOfflineQueue();
+    }, delay);
+  }).catch(() => {});
+};
+
+export const chatClientUuid = (item: QueuedRpc) =>
+  isChatQueueItem(item) ? String(item.args.client_uuid) : null;
+
+export const retryDelayMs = (attempts: number) => {
+  const safe = Math.max(0, Math.min(attempts, CHAT_MAX_AUTO_RETRIES));
+  return Math.min(30000, 1000 * (2 ** safe));
+};
+
+export type ChatErrorCode =
+  | 'NETWORK_ERROR'
+  | 'AUTH_ERROR'
+  | 'PERMISSION_ERROR'
+  | 'VALIDATION_ERROR'
+  | 'SERVER_ERROR'
+  | 'RATE_LIMIT'
+  | 'UNKNOWN';
+
+export const classifyChatError = (error: unknown): ChatErrorCode => {
+  const value = error as { code?: unknown; status?: unknown; message?: unknown };
+  const code = typeof value?.code === 'string' ? value.code.toUpperCase() : '';
+  const status = typeof value?.status === 'number' ? value.status : undefined;
+  const message = typeof value?.message === 'string' ? value.message.toLowerCase() : '';
+
+  if (code === 'PGRST301' || status === 401 || /jwt|session|not authenticated|احراز هویت|نشست/.test(message)) {
+    return 'AUTH_ERROR';
+  }
+  if (code === '42501' || status === 403 || /permission|forbidden|not allowed|دسترسی|مجاز نیست/.test(message)) {
+    return 'PERMISSION_ERROR';
+  }
+  if (status === 429 || /rate limit|too many requests|محدودیت درخواست/.test(message)) {
+    return 'RATE_LIMIT';
+  }
+  if (
+    code === '22P02' ||
+    code === '23514' ||
+    status === 400 ||
+    /invalid|validation|نامعتبر|الزامی|طولانی‌تر/.test(message)
+  ) {
+    return 'VALIDATION_ERROR';
+  }
+  if (status !== undefined && status >= 500) return 'SERVER_ERROR';
+  const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  if (/network|fetch|failed to fetch|offline|timeout|timed out|connection|اتصال/.test(message) || browserOffline) {
+    return 'NETWORK_ERROR';
+  }
+  return 'UNKNOWN';
+};
+
+const isRetryableChatError = (code: ChatErrorCode) =>
+  code === 'NETWORK_ERROR' || code === 'SERVER_ERROR' || code === 'RATE_LIMIT';
+
+export const enqueueRpc = async (
+  functionName: string,
+  args: Record<string, unknown>,
+  options?: Partial<Pick<QueuedRpc, 'state' | 'attempts' | 'lastError' | 'lastErrorCode' | 'nextAttemptAt'>>,
+) => {
   if (!OFFLINE_QUEUEABLE_RPCS.has(functionName)) {
     throw new Error(`RPC is not eligible for offline queue: ${functionName}`);
   }
   const userId = await currentUserId();
-  if (!userId) {
-    throw new Error('Authenticated user required for offline queue');
-  }
+  if (!userId) throw new Error('Authenticated user required for offline queue');
+
   const item: QueuedRpc = {
     id: makeId(),
     createdAt: new Date().toISOString(),
     userId,
     functionName,
     args,
-    attempts: 0,
+    attempts: options?.attempts ?? 0,
+    state: options?.state ?? 'queued',
+    lastError: options?.lastError,
+    lastErrorCode: options?.lastErrorCode,
+    nextAttemptAt: options?.nextAttemptAt ?? Date.now(),
   };
   await putQueueItem(item);
   await emit();
+  scheduleNextChatFlush();
   return item.id;
 };
 
-const isNetworkError = (error: unknown) => {
-  const message = String((error as any)?.message || error || '').toLowerCase();
-  return !navigator.onLine || /network|fetch|failed to fetch|offline|timeout|connection/i.test(message);
+export const persistFailedChatRpc = async (args: Record<string, unknown>, error: unknown) => {
+  const code = classifyChatError(error);
+  return enqueueRpc(CHAT_RPC, args, {
+    state: 'failed',
+    attempts: 1,
+    lastError: String((error as any)?.message || error || 'ارسال انجام نشد'),
+    lastErrorCode: code,
+    nextAttemptAt: Number.MAX_SAFE_INTEGER,
+  });
+};
+
+export const removeQueuedRpc = async (id: string) => {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const items = await listQueue();
+  if (!items.some((item) => item.id === id && item.userId === userId)) return;
+  await deleteQueueItem(id);
+  await emit();
+};
+
+export const sendChatRpc = async (
+  args: Record<string, unknown>,
+  options: { durable?: boolean } = {},
+): Promise<{ data: unknown; queued: boolean; queueId: string }> => {
+  if (!supabaseClient) throw new Error('Supabase client is not attached');
+  const userId = await currentUserId();
+  if (!userId) throw new Error('ابتدا وارد سیستم شوید.');
+
+  if (options.durable === false) {
+    const result = await supabaseClient.rpc(CHAT_RPC, args);
+    if (result.error) throw Object.assign(new Error(result.error.message), result.error);
+    return { data: result.data, queued: false, queueId: '' };
+  }
+
+  const queueId = await enqueueRpc(CHAT_RPC, args, {
+    state: navigator.onLine ? 'sending' : 'queued',
+    nextAttemptAt: Date.now(),
+  });
+
+  if (!navigator.onLine) return { data: null, queued: true, queueId };
+
+  let result;
+  try {
+    result = await supabaseClient.rpc(CHAT_RPC, args);
+  } catch (error) {
+    const code = classifyChatError(error);
+    const item = (await listQueue()).find((value) => value.id === queueId);
+    if (item) {
+      item.attempts += 1;
+      item.lastError = String((error as any)?.message || error || 'ارسال انجام نشد');
+      item.lastErrorCode = code;
+      item.state = isRetryableChatError(code) && item.attempts < CHAT_MAX_AUTO_RETRIES ? 'queued' : 'failed';
+      item.nextAttemptAt = item.state === 'queued'
+        ? Date.now() + retryDelayMs(item.attempts - 1)
+        : Number.MAX_SAFE_INTEGER;
+      await putQueueItem(item);
+      await emit();
+      scheduleNextChatFlush();
+    }
+    if (isRetryableChatError(code)) return { data: null, queued: true, queueId };
+    throw error;
+  }
+
+  if (!result.error) {
+    await removeQueuedRpc(queueId);
+    return { data: result.data, queued: false, queueId };
+  }
+
+  const code = classifyChatError(result.error);
+  const item = (await listQueue()).find((value) => value.id === queueId);
+  if (item) {
+    item.attempts += 1;
+    item.lastError = result.error.message;
+    item.lastErrorCode = code;
+    item.state = isRetryableChatError(code) && item.attempts < CHAT_MAX_AUTO_RETRIES ? 'queued' : 'failed';
+    item.nextAttemptAt = item.state === 'queued'
+      ? Date.now() + retryDelayMs(item.attempts - 1)
+      : Number.MAX_SAFE_INTEGER;
+    await putQueueItem(item);
+    await emit();
+  }
+
+  if (isRetryableChatError(code)) return { data: null, queued: true, queueId };
+  throw Object.assign(new Error(result.error.message), result.error);
 };
 
 export const flushOfflineQueue = async () => {
   if (flushing || !navigator.onLine || !supabaseClient) return;
   const userId = await currentUserId();
   if (!userId) return;
+
   flushing = true;
   try {
     const items = await listQueue();
     for (const item of items) {
       if (item.userId !== userId) continue;
+
       if (!OFFLINE_QUEUEABLE_RPCS.has(item.functionName)) {
         await deleteQueueItem(item.id);
         continue;
       }
+
+      if (item.state === 'failed') continue;
+      if ((item.nextAttemptAt ?? 0) > Date.now()) continue;
+
+      if (isChatQueueItem(item)) {
+        item.state = 'sending';
+        await putQueueItem(item);
+        await emit();
+      }
+
       try {
         const { error } = await supabaseClient.rpc(item.functionName, item.args);
-        if (error) {
-          item.attempts += 1;
-          item.lastError = error.message;
-          await putQueueItem(item);
-          if (isNetworkError(error)) break;
+        if (!error) {
+          await deleteQueueItem(item.id);
+          await emit();
           continue;
         }
-        await deleteQueueItem(item.id);
+
+        if (isChatQueueItem(item)) {
+          const code = classifyChatError(error);
+          item.attempts += 1;
+          item.lastError = error.message;
+          item.lastErrorCode = code;
+          if (isRetryableChatError(code) && item.attempts < CHAT_MAX_AUTO_RETRIES) {
+            item.state = 'queued';
+            item.nextAttemptAt = Date.now() + retryDelayMs(item.attempts - 1);
+          } else {
+            item.state = 'failed';
+            item.nextAttemptAt = Number.MAX_SAFE_INTEGER;
+          }
+          await putQueueItem(item);
+          await emit();
+          continue;
+        }
+
+        item.attempts += 1;
+        item.lastError = error.message;
+        await putQueueItem(item);
+        if (isNetworkError(error)) break;
       } catch (error) {
+        if (isChatQueueItem(item)) {
+          const code = classifyChatError(error);
+          item.attempts += 1;
+          item.lastError = String((error as any)?.message || error);
+          item.lastErrorCode = code;
+          if (isRetryableChatError(code) && item.attempts < CHAT_MAX_AUTO_RETRIES) {
+            item.state = 'queued';
+            item.nextAttemptAt = Date.now() + retryDelayMs(item.attempts - 1);
+          } else {
+            item.state = 'failed';
+            item.nextAttemptAt = Number.MAX_SAFE_INTEGER;
+          }
+          await putQueueItem(item);
+          await emit();
+          continue;
+        }
+
         item.attempts += 1;
         item.lastError = String((error as any)?.message || error);
         await putQueueItem(item);
@@ -182,7 +408,33 @@ export const flushOfflineQueue = async () => {
   } finally {
     flushing = false;
     await emit();
+    chatFlushTimer = null;
+    scheduleNextChatFlush();
   }
+};
+
+export const retryQueuedRpc = async (id: string) => {
+  const userId = await currentUserId();
+  if (!userId) throw new Error('ابتدا وارد سیستم شوید.');
+  const items = await listQueue();
+  const item = items.find((value) => value.id === id && value.userId === userId);
+  if (!item) throw new Error('پیام در صف پیدا نشد.');
+  item.state = 'queued';
+  item.attempts = 0;
+  item.lastError = undefined;
+  item.lastErrorCode = undefined;
+  item.nextAttemptAt = Date.now();
+  await putQueueItem(item);
+  await emit();
+  await flushOfflineQueue();
+};
+
+export const retryChatMessage = async (clientUuid: string) => {
+  const items = await listQueue();
+  const item = items.find((value) => isChatQueueItem(value) && chatClientUuid(value) === clientUuid);
+  if (!item) return false;
+  await retryQueuedRpc(item.id);
+  return true;
 };
 
 export const startOfflineQueue = () => {
@@ -199,9 +451,10 @@ export const startOfflineQueue = () => {
 export const rpcWithOfflineQueue = async (
   functionName: string,
   args: Record<string, unknown>,
-  options?: { queueWhenOffline?: boolean }
+  options?: { queueWhenOffline?: boolean },
 ) => {
   if (!supabaseClient) throw new Error('Supabase client is not attached');
+
   const queueWhenOffline = options?.queueWhenOffline ?? OFFLINE_QUEUEABLE_RPCS.has(functionName);
   const queueable = OFFLINE_QUEUEABLE_RPCS.has(functionName);
 
@@ -217,5 +470,6 @@ export const rpcWithOfflineQueue = async (
     const id = await enqueueRpc(functionName, args);
     return { data: null, error: null, queued: true as const, queueId: id };
   }
+
   return { ...result, queued: false as const };
 };
