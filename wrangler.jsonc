@@ -14,7 +14,9 @@
       "/api/edge/*",
       "/api/webrtc/*",
       "/chat",
-      "/chat/*"
+      "/chat/*",
+      "/api/messenger/*",
+      "/webhooks/messenger/*"
     ],
     "html_handling": "none",
     "not_found_handling": "single-page-application"

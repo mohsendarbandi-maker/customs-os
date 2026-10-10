@@ -88,6 +88,25 @@ export default {
       }
     }
 
+    if (url.pathname.startsWith('/api/messenger/') || url.pathname.startsWith('/webhooks/messenger/')) {
+      const target = env.SUPABASE_URL.replace(/\\/$/, '') + '/functions/v1/messenger-gateway' + url.search;
+      const headers = new Headers(request.headers);
+      const originalLength = headers.get('content-length');
+      if (originalLength && !headers.has('x-file-size')) headers.set('x-file-size', originalLength);
+      headers.delete('host');
+      headers.delete('content-length');
+      headers.set('x-messenger-path', url.pathname);
+      try {
+        const upstream = await fetch(target, { method: request.method, headers, body: ['GET','HEAD','OPTIONS'].includes(request.method) ? undefined : request.body });
+        const responseHeaders = new Headers(upstream.headers);
+        responseHeaders.set('Cache-Control', 'no-store, private');
+        responseHeaders.delete('content-length');
+        return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: responseHeaders });
+      } catch {
+        return json({ error: 'درگاه پیام‌رسان در دسترس نیست.' }, 502);
+      }
+    }
+
     if (url.pathname.startsWith('/api/edge/')) {
       if (request.method !== 'POST') {
         return request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : json({ error: 'Method not allowed' }, 405);
