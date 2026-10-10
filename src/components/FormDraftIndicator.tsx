@@ -28,8 +28,9 @@ export const FormDraftIndicator: React.FC<FormDraftIndicatorProps> = ({ status, 
       <span>{label}</span>
       <button
         type="button"
+        disabled={status === 'restoring'}
         onClick={() => { onSave(); }}
-        className="inline-flex items-center gap-1 rounded-lg border app-border px-2.5 py-1.5 font-bold text-[var(--text)] hover:bg-[var(--surface-2)]"
+        className="inline-flex items-center gap-1 rounded-lg border app-border px-2.5 py-1.5 font-bold text-[var(--text)] hover:bg-[var(--surface-2)] disabled:opacity-50"
       >
         <Save size={13} />
         ذخیره پیش‌نویس
