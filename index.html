@@ -5,12 +5,10 @@
       // Keep persisted auth sessions on one secure origin. Local development is exempt.
       (() => {
         const host = window.location.hostname.toLowerCase();
-        const isLocal =
-          host === 'localhost' ||
-          host === '127.0.0.1' ||
-          host === '[::1]' ||
-          host.endsWith('.localhost');
-        if (window.location.protocol !== 'http:' || isLocal) return;
+        const isPrimaryProductionHost =
+          host === 'darbandicommercial.ir' ||
+          host === 'www.darbandicommercial.ir';
+        if (window.location.protocol !== 'http:' || !isPrimaryProductionHost) return;
 
         const secureUrl = new URL(window.location.href);
         secureUrl.protocol = 'https:';
