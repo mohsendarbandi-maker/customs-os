@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {ArrowRight,Eye,FileSearch,Loader2,Upload,RefreshCw} from 'lucide-react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
+import {safeStorageFilename} from '../lib/safeStorageFilename';
 import * as pdfjsLib from 'pdfjs-dist';
 import {createWorker} from 'tesseract.js';
 
@@ -70,7 +71,7 @@ export const DocumentExtractionPage:React.FC=()=>{
   try{
    const{data:{user}}=await supabase.auth.getUser();if(!user)throw new Error('کاربر وارد نشده است.');
    const{data:p}=await supabase.from('profiles').select('organization_id').eq('id',user.id).single();if(!p?.organization_id)throw new Error('سازمان کاربر مشخص نیست.');
-   const id=crypto.randomUUID();const path=`${p.organization_id}/${selectedShipment}/${id}-${file.name.replace(/[^\\w.\\-]+/g,'_')}`;
+   const id=crypto.randomUUID();const path=`${p.organization_id}/${selectedShipment}/${id}-${safeStorageFilename(file.name)}`;
    setProgress('در حال ذخیره سند...');const{error:up}=await supabase.storage.from('customs_documents').upload(path,file,{upsert:false,contentType:file.type});if(up)throw up;
    const name=window.prompt('نام نمایشی سند را وارد کنید:',file.name)?.trim()||file.name;
    const{data:doc,error:de}=await supabase.from('customs_documents').insert({id,organization_id:p.organization_id,shipment_id:selectedShipment,original_name:file.name,display_name:name,storage_path:path,mime_type:file.type||'application/octet-stream',size_bytes:file.size,created_by:user.id,status:'review',tags:[]}).select('*').single();
