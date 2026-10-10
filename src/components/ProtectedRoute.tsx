@@ -34,13 +34,39 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     );
   }
 
-  // Gate 2: User is not logged into Supabase Auth
+  // Gate 2: A temporary Auth/network failure is not a logout. Show recovery
+  // controls before considering redirecting a user with no in-memory session.
+  if (error && !hasCurrentProfile) {
+    return (
+      <div dir="rtl" className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-4">
+        <div className="bg-[var(--surface)] p-6 rounded-2xl shadow-lg border app-border text-center max-w-sm w-full">
+          <h2 className="text-[var(--text)] font-bold text-lg mb-2">بازیابی نشست</h2>
+          <p className="app-muted text-sm mb-6">{error}</p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => void refreshProfile()}
+              className="w-full bg-[var(--primary)] text-white text-sm py-2.5 rounded-lg font-semibold transition"
+            >
+              تلاش دوباره
+            </button>
+            <button
+              onClick={() => void signOut()}
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm py-2.5 rounded-lg transition"
+            >
+              خروج از حساب کاربری
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Gate 3: No active session and no recoverable Auth error.
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // A background refresh failure must not destroy an already-authorized page.
-  // Show the blocking error only when no valid profile for the current user exists.
   if (error && !hasCurrentProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dir-rtl font-sans p-4">
@@ -49,13 +75,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
           <p className="text-gray-600 text-sm mb-6">{error}</p>
           <div className="flex flex-col gap-3">
             <button
-              onClick={() => refreshProfile()}
+              onClick={() => void refreshProfile()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg font-semibold transition"
             >
               تلاش دوباره
             </button>
             <button
-              onClick={() => signOut()}
+              onClick={() => void signOut()}
               className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm py-2.5 rounded-lg transition"
             >
               خروج
@@ -82,10 +108,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
           <h2 className="text-gray-900 font-bold text-lg mb-2">حساب غیرفعال است</h2>
           <p className="text-gray-500 text-sm mb-6">دسترسی این حساب توسط مدیر غیرفعال شده است.</p>
           <button
-            onClick={() => signOut()}
+            onClick={() => void signOut()}
             className="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2.5 rounded-lg font-semibold transition"
           >
-            Sign Out
+            خروج از حساب کاربری
           </button>
         </div>
       </div>
