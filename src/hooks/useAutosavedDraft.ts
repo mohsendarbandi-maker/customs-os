@@ -129,7 +129,7 @@ export function useAutosavedDraft<T>(
     }
   }, [key, serialized, updateStatus, updateHasDraft]);
 
-  const clearDraft = useCallback((skipNextValueWrite = false) => {
+  const clearDraft = useCallback((skipNextValueWrite = false, nextValue?: T) => {
     if (!key) return;
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
@@ -140,12 +140,12 @@ export function useAutosavedDraft<T>(
       updateHasDraft(false);
       updateStatus('idle');
       // Suppress only a programmatic reset/hydration state change, never the next real user edit.
-      skipNextPersistRef.current = skipNextValueWrite;
+      skipNextPersistRef.current = skipNextValueWrite && nextValue !== undefined && JSON.stringify(nextValue) !== serialized;
     } catch (error) {
       console.warn('[FormDraft] Local draft could not be cleared:', error);
       updateStatus('error');
     }
-  }, [key, updateStatus, updateHasDraft]);
+  }, [key, serialized, updateStatus, updateHasDraft]);
 
   return { status, hasDraft, statusRef, hasDraftRef, saveDraftNow, clearDraft };
 }
