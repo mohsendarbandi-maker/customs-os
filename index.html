@@ -1,6 +1,23 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
   <head>
+    <script>
+      // Keep persisted auth sessions on one secure origin. Local development is exempt.
+      (() => {
+        const host = window.location.hostname.toLowerCase();
+        const isLocal =
+          host === 'localhost' ||
+          host === '127.0.0.1' ||
+          host === '[::1]' ||
+          host.endsWith('.localhost');
+        if (window.location.protocol !== 'http:' || isLocal) return;
+
+        const secureUrl = new URL(window.location.href);
+        secureUrl.protocol = 'https:';
+        if (secureUrl.port === '80') secureUrl.port = '';
+        window.location.replace(secureUrl.toString());
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0F4C81" />
