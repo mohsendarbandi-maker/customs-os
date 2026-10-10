@@ -465,7 +465,7 @@ export const ExitPage: React.FC = () => {
                 </div>
               </div>
             )}
-            {shipmentId&&<><ShipmentStageCosts stage="STAGE_5_EXIT_PREPARATION" shipmentId={shipmentId}/><ShipmentStageCosts stage="STAGE_6_EXIT" shipmentId={shipmentId}/></>}
+            {shipmentId&&<><ShipmentStageCosts stage="STAGE_5_EXIT_PREPARATION" shipmentId={shipmentId} allowStageSelection/></>}
 
 {remainingChecklist.length > 0 && (
               <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">

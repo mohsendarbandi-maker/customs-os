@@ -1,34 +1,35 @@
-import React,{useEffect,useState}from'react';
-import{useAuth}from'../../context/AuthContext';
-import{supabase}from'../../lib/supabase';
-import{ShipmentCostsPanel}from'./ShipmentCostsPanel';
-import type{ShipmentCostStage}from'./shipmentCosts';
+import React from 'react';
+import { Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import type { ShipmentCostStage } from './shipmentCosts';
 
-type Props={stage:ShipmentCostStage;shipmentId?:string;shipment?:any};
+type Props = { stage: ShipmentCostStage; shipmentId?: string; shipment?: { id?: string | null } | null; allowStageSelection?: boolean };
 
-export const ShipmentStageCosts:React.FC<Props>=({stage,shipmentId,shipment})=>{
- const{profile}=useAuth();
- const[resolved,setResolved]=useState<any>(shipment||null);
- const[loading,setLoading]=useState(!shipment);
- const[error,setError]=useState('');
- useEffect(()=>{
-  if(shipment?.id){setResolved(shipment);setLoading(false);return}
-  if(!shipmentId||!profile?.organization_id){setResolved(null);setLoading(false);return}
-  let active=true;
-  setLoading(true);setError('');
-  void supabase.from('shipments')
-   .select('id,organization_id,client_id,case_id,display_name,bill_of_lading_no')
-   .eq('id',shipmentId).eq('organization_id',profile.organization_id).maybeSingle()
-   .then(({data,error:e})=>{
-    if(!active)return;
-    if(e){setError(e.message);setResolved(null)}else{setResolved(data);setError('')}
-    setLoading(false);
-   });
-  return()=>{active=false};
- },[shipment?.id,shipmentId,profile?.organization_id]);
- if(!profile||(!shipmentId&&!shipment))return null;
- if(loading)return <section className="app-surface border app-border rounded-2xl p-4"><div className="text-xs app-muted">در حال بارگذاری هزینه‌های مرحله…</div></section>;
- if(error)return <section className="app-surface border border-red-500/30 rounded-2xl p-4"><div className="text-xs text-red-700">{error}</div></section>;
- if(!resolved)return null;
- return <ShipmentCostsPanel shipment={resolved} profile={profile} fixedStage={stage} onChanged={async()=>{}}/>;
+const COST_ENTRY_ROLES = ['owner', 'admin', 'broker', 'accountant', 'warehouse'];
+
+export const ShipmentStageCosts: React.FC<Props> = ({ stage, shipmentId, shipment, allowStageSelection = false }) => {
+  const navigate = useNavigate();
+  const { profile } = useAuth();
+  const id = shipment?.id || shipmentId;
+
+  if (!id || !profile || !COST_ENTRY_ROLES.includes(profile.role)) return null;
+
+  const openCostEntry = () => {
+    const query = new URLSearchParams({ stage, new: '1', ...(allowStageSelection ? { selectStage: '1' } : {}) });
+    navigate(`/finance/shipments/${encodeURIComponent(id)}?${query.toString()}`);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={openCostEntry}
+      aria-label="ثبت هزینه برای این مرحله"
+      title="ثبت هزینه برای این مرحله"
+      className="inline-flex items-center gap-1.5 rounded-lg border app-border px-3 py-2 text-xs font-bold app-muted transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+    >
+      <Plus size={14} aria-hidden="true" />
+      ثبت هزینه
+    </button>
+  );
 };
