@@ -27,5 +27,31 @@ export function isUnrecoverableAuthSessionError(error: unknown): boolean {
   );
 }
 
+
+/** True when a protected API response indicates an expired or invalid access JWT. */
+export function isAuthTokenExpiredError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+
+  const candidate = error as {
+    status?: unknown;
+    code?: unknown;
+    message?: unknown;
+  };
+  const status = Number(candidate.status);
+  const code = String(candidate.code ?? '').trim().toLowerCase();
+  const message = String(candidate.message ?? '').trim().toLowerCase();
+
+  if (status === 401) return true;
+  if (['pgrst301', 'pgrst302', 'jwt_expired', 'invalid_jwt'].includes(code)) {
+    return true;
+  }
+
+  return (
+    /jwt.{0,30}(expired|invalid)/.test(message) ||
+    /(expired|invalid).{0,30}jwt/.test(message) ||
+    /no authorization header|authorization header required/.test(message)
+  );
+}
+
 export const AUTH_SESSION_RETRY_MESSAGE =
   'ارتباط با سرویس احراز هویت موقتاً برقرار نشد. نشست ذخیره‌شده حذف نشده است؛ اتصال را بررسی کنید و دوباره تلاش کنید.';

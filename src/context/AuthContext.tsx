@@ -11,6 +11,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
 import {
   AUTH_SESSION_RETRY_MESSAGE,
+  isAuthTokenExpiredError,
   isUnrecoverableAuthSessionError,
 } from '../lib/authSessionErrors';
 
@@ -63,6 +64,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [error, setError] = useState<string | null>(null);
 
   const currentFetchId = useRef(0);
+  const sessionRefreshPromise = useRef<Promise<void> | null>(null);
+  const activeUserId = useRef<string | null>(null);
+  const activeProfileId = useRef<string | null>(null);
+  const activeAuthError = useRef<string | null>(null);
   const isMounted = useRef(false);
   const initialized = useRef(false);
 
@@ -74,6 +79,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
+  useEffect(() => {
+    activeUserId.current = user?.id ?? null;
+    activeProfileId.current = profile?.id ?? null;
+    activeAuthError.current = error;
+  }, [user?.id, profile?.id, error]);
+
+  const refreshSessionForUser = useCallback(async (userId: string) => {
+    let pending = sessionRefreshPromise.current;
+
+    if (!pending) {
+      pending = (async () => {
+        const { data, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) throw refreshError;
+
+        const refreshedSession = data.session;
+        if (!refreshedSession?.user || refreshedSession.user.id !== userId) {
+          throw new Error(AUTH_SESSION_RETRY_MESSAGE);
+        }
+
+        if (isMounted.current) {
+          setSession(refreshedSession);
+          setUser(refreshedSession.user);
+          setError(null);
+        }
+      })();
+      sessionRefreshPromise.current = pending;
+    }
+
+    try {
+      await pending;
+    } finally {
+      if (sessionRefreshPromise.current === pending) {
+        sessionRefreshPromise.current = null;
+      }
+    }
+  }, []);
+
   const fetchProfile = useCallback(async (userId: string) => {
     const fetchId = ++currentFetchId.current;
 
@@ -82,19 +124,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      const loadProfile = () =>
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+
+      let profileResult = await loadProfile();
+
+      // An idle/background tab can resume with an expired access token before
+      // the SDK's foreground refresh cycle has completed. Refresh once and retry.
+      if (isAuthTokenExpiredError(profileResult.error)) {
+        await refreshSessionForUser(userId);
+
+        if (!isMounted.current || fetchId !== currentFetchId.current) {
+          return;
+        }
+
+        profileResult = await loadProfile();
+        if (isAuthTokenExpiredError(profileResult.error)) {
+          throw new Error(AUTH_SESSION_RETRY_MESSAGE);
+        }
+      }
 
       if (!isMounted.current || fetchId !== currentFetchId.current) {
         return;
       }
 
-      if (fetchError) {
-        throw fetchError;
+      if (profileResult.error) {
+        throw profileResult.error;
       }
+
+      const { data } = profileResult;
 
       if (!data) {
         setProfile(null);
@@ -110,10 +172,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
-      const message =
-        err instanceof Error
-          ? err.message
-          : 'خطا در دریافت اطلاعات کاربر';
+      if (isUnrecoverableAuthSessionError(err)) {
+        // An actually invalid/revoked refresh token cannot be recovered. Clear
+        // this browser's credentials locally; transient network failures never do.
+        clearLocalAuthStorage();
+        currentFetchId.current++;
+        initialized.current = true;
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setNeedsOnboarding(false);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
+      const errorRecord = err && typeof err === 'object'
+        ? (err as { message?: unknown })
+        : null;
+      const rawMessage = err instanceof Error
+        ? err.message
+        : typeof errorRecord?.message === 'string'
+          ? errorRecord.message
+          : '';
+      const retryableAuthFailure =
+        isAuthTokenExpiredError(err) ||
+        rawMessage === AUTH_SESSION_RETRY_MESSAGE ||
+        /failed to fetch|network error|timed? ?out|gateway timeout/i.test(rawMessage);
+      const message = retryableAuthFailure
+        ? AUTH_SESSION_RETRY_MESSAGE
+        : rawMessage || 'خطا در دریافت اطلاعات کاربر';
 
       console.error('[Auth] fetchProfile failed:', err);
 
@@ -126,7 +214,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setLoading(false);
       }
     }
-  }, []);
+  }, [refreshSessionForUser]);
 
   /*
    * Never await Supabase database requests inside onAuthStateChange().
@@ -257,11 +345,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     });
 
+    const handleVisibilityChange = () => {
+      if (
+        !active ||
+        !isMounted.current ||
+        !initialized.current ||
+        document.visibilityState !== 'visible'
+      ) {
+        return;
+      }
+
+      // getSession() refreshes expired sessions when possible. This runs outside
+      // onAuthStateChange so it cannot wait on the SDK's auth lock from a callback.
+      void supabase.auth.getSession().then(({ data: { session: visibleSession }, error: sessionError }) => {
+        if (!active || !isMounted.current) return;
+
+        if (sessionError) {
+          console.warn('[Auth] visible session recovery failed:', sessionError);
+
+          if (isUnrecoverableAuthSessionError(sessionError)) {
+            clearLocalAuthStorage();
+            currentFetchId.current++;
+            initialized.current = true;
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            setNeedsOnboarding(false);
+            setError(null);
+            setLoading(false);
+          } else if (!activeProfileId.current) {
+            setError(AUTH_SESSION_RETRY_MESSAGE);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!visibleSession?.user) return;
+
+        const visibleUserId = visibleSession.user.id;
+        setSession(visibleSession);
+        setUser(visibleSession.user);
+
+        if (
+          activeUserId.current !== visibleUserId ||
+          activeProfileId.current !== visibleUserId ||
+          activeAuthError.current
+        ) {
+          setProfile((previous) => (previous?.id === visibleUserId ? previous : null));
+          setLoading(true);
+          void fetchProfile(visibleUserId);
+        } else {
+          setError(null);
+        }
+      }).catch((err: unknown) => {
+        console.warn('[Auth] visible session recovery exception:', err);
+        if (active && isMounted.current && !activeProfileId.current) {
+          setError(AUTH_SESSION_RETRY_MESSAGE);
+          setLoading(false);
+        }
+      });
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     subscription = authSubscription;
     void loadInitialSession();
 
     return () => {
       active = false;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       subscription?.unsubscribe();
     };
   }, [fetchProfile]);
