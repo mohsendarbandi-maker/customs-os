@@ -16,17 +16,23 @@ export const FinanceShipmentPage:React.FC=()=>{
  const canClose=!!profile&&['owner','admin','accountant'].includes(profile.role);
  const load=async()=>{
   if(!id||!profile?.organization_id)return;
-  const[{data:sh,error},{data:iv},{data:pr},{data:pa},{data:vr}]=await Promise.all([
-   supabase.from('shipments').select('*').eq('id',id).single(),
-   supabase.from('finance_invoice_shipments').select('invoice_id,finance_invoices(id,invoice_no,status,total_amount,currency,issue_date)').eq('shipment_id',id),
-   supabase.from('finance_payment_requests').select('*').eq('shipment_id',id).order('request_date',{ascending:false}),
-   supabase.from('finance_payments').select('*').eq('shipment_id',id).order('payment_date',{ascending:false}),
-   supabase.from('customs_accounting_vouchers').select('id,case_id,voucher_number,kottaj_number,debit_total,credit_total,created_at').order('created_at',{ascending:false})
-  ]);
-  if(error)setMsg(error.message);setS(sh);setInvoices((iv||[]).map((x:any)=>x.finance_invoices).filter(Boolean));setRequests(pr||[]);setPayments(pa||[]);setVouchers((vr||[]).filter((x:any)=>x.case_id===sh?.case_id));
+  const{data:sh,error:shipmentError}=await supabase.from('shipments').select('*').eq('id',id).eq('organization_id',profile.organization_id).single();
+  if(shipmentError){setMsg(shipmentError.message);setS(undefined);return}
+  setS(sh);
+  if(canViewFinance){
+   const[{data:iv},{data:pr},{data:pa},{data:vr}]=await Promise.all([
+    supabase.from('finance_invoice_shipments').select('invoice_id,finance_invoices(id,invoice_no,status,total_amount,currency,issue_date)').eq('shipment_id',id),
+    supabase.from('finance_payment_requests').select('*').eq('shipment_id',id).order('request_date',{ascending:false}),
+    supabase.from('finance_payments').select('*').eq('shipment_id',id).order('payment_date',{ascending:false}),
+    supabase.from('customs_accounting_vouchers').select('id,case_id,voucher_number,kottaj_number,debit_total,credit_total,created_at').order('created_at',{ascending:false})
+   ]);
+   setInvoices((iv||[]).map((x:any)=>x.finance_invoices).filter(Boolean));setRequests(pr||[]);setPayments(pa||[]);setVouchers((vr||[]).filter((x:any)=>x.case_id===sh?.case_id));
+  }else{
+   setInvoices([]);setRequests([]);setPayments([]);setVouchers([]);
+  }
   if(sh?.client_id){const{data:cl}=await supabase.from('clients').select('id,name').eq('id',sh.client_id).maybeSingle();setC(cl)}
  };
- useEffect(()=>{void load()},[id,profile?.organization_id]);
+ useEffect(()=>{void load()},[id,profile?.organization_id,canViewFinance]);
  const advance=payments.filter(x=>x.payment_type==='advance'&&x.direction==='received').reduce((a,x)=>a+Number(x.amount_irr||0),0);const refund=payments.filter(x=>x.payment_type==='advance_refund'&&x.direction==='paid').reduce((a,x)=>a+Number(x.amount_irr||0),0);const advanceBalance=advance-refund;
  const openInvoices=invoices.filter(x=>['draft','issued','partially_paid'].includes(x.status));const openRequests=requests.filter(x=>['draft','sent','issued','partially_paid'].includes(x.status));const closeReady=s?.finance_status==='ready'&&!openInvoices.length&&!openRequests.length&&advanceBalance===0;
  const close=async()=>{if(!canClose||!s)return;if(!closeReady)return setMsg('برای بستن مالی، صورتحساب‌ها و درخواست‌های وجه باز و مانده تنخواه باید تعیین تکلیف شوند.');setMsg('در حال بستن مالی...');const{error}=await supabase.from('shipments').update({finance_status:'closed',finance_closed_at:new Date().toISOString(),finance_closed_by:profile!.id,updated_at:new Date().toISOString()}).eq('id',s.id).eq('finance_status','ready');if(error)return setMsg(error.message);if(s.case_id){const ce=await supabase.from('cases').update({status:'archived',updated_at:new Date().toISOString()}).eq('id',s.case_id);if(ce.error)return setMsg('مالی بسته شد ولی بایگانی پرونده انجام نشد: '+ce.error.message)}setMsg('مالی بسته شد و پرونده به بایگانی منتقل شد.');await load()};
