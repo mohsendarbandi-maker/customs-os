@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {Link} from 'react-router-dom';
-import {ArrowUpLeft,Bell,Briefcase,Building2,CloudSun,FileCheck2,FileText,FolderOpen,Search,Settings,Ship,Wallet,Wind,Activity,Plus,Clock3} from 'lucide-react';
+import {ArrowUpLeft,Briefcase,Building2,CloudSun,FileCheck2,FileText,FolderOpen,Search,Settings,Ship,Wallet,Wind,Activity,Plus,Clock3} from 'lucide-react';
 import {supabase} from '../lib/supabase';
 import {LatestShipmentStatuses} from '../components/LatestShipmentStatuses';
 import {RemindersHomeCard} from '../features/reminders/RemindersHomeCard';
@@ -22,7 +22,6 @@ export const DesktopHomePage:React.FC=()=>{
    <header className="flex flex-wrap items-center justify-between gap-4 mb-7">
     <div><div className="text-xs font-bold text-[var(--primary)] mb-2">CUSTOMS OS · CONTROL DESK</div><h1 className="text-2xl lg:text-3xl font-black tracking-tight">میزکار عملیاتی</h1><p className="text-xs app-muted mt-2">{faDate.format(now)} · {faTime.format(now)}</p></div>
     <div className="flex items-center gap-2">
-      <Link to="/reminders" className="icon-btn" aria-label="یادآورها"><Bell size={17}/></Link>
       <Link to="/settings" className="icon-btn" aria-label="تنظیمات"><Settings size={17}/></Link>
       <Link to="/operations?tab=pre-declaration" className="px-4 h-10 inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] text-white text-xs font-black shadow-lg"><Plus size={15}/>ثبت محموله</Link>
     </div>
