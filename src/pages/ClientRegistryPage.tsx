@@ -2,6 +2,9 @@ import React,{useEffect,useState} from 'react';
 import {ArrowRight,Building2,Loader2,Plus,Printer,Save,Trash2} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
+import{useAuth}from'../context/AuthContext';
+import{useAutosavedDraft,formDraftKey}from'../hooks/useAutosavedDraft';
+import{FormDraftIndicator}from'../components/FormDraftIndicator';
 
 type ClientForm={name:string;nationalId:string;notes:string};
 const emptyForm:ClientForm={name:'',nationalId:'',notes:''};
