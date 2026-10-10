@@ -11,8 +11,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   const { user, profile, loading, needsOnboarding, error, signOut, refreshProfile } = useAuth();
   const location = useLocation();
 
-  // Gate 1: App is initializing or fetching profile
-  if (loading) {
+  // Revalidating the same signed-in user's profile is background work. Do not
+  // unmount a page (and erase its in-memory form state) during that refresh.
+  // A newly signed-in account still waits for its own profile to avoid cross-user data.
+  const hasCurrentProfile = Boolean(user && profile?.id === user.id);
+
+  // Gate 1: Initial session/profile lookup only. Existing matching sessions stay mounted.
+  if (loading && !hasCurrentProfile) {
     return (
       <div
         dir="rtl"
@@ -34,8 +39,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Gate 3: Network or Database Error during profile fetch
-  if (error) {
+  // A background refresh failure must not destroy an already-authorized page.
+  // Show the blocking error only when no valid profile for the current user exists.
+  if (error && !hasCurrentProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dir-rtl font-sans p-4">
         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 text-center max-w-sm w-full">

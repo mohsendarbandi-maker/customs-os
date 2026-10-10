@@ -113,7 +113,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       console.error('[Auth] fetchProfile failed:', err);
 
-      setProfile(null);
+      // Do not discard an already loaded profile when a background refresh fails.
+      // The current route and its form must remain mounted; on a true account switch,
+      // the SIGNED_IN handler below clears a profile that belongs to another user.
       setNeedsOnboarding(false);
       setError(message);
     } finally {
@@ -235,6 +237,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
        */
       if (event === 'SIGNED_IN') {
         const userId = currentSession.user.id;
+        // Avoid briefly showing one account's data after an actual account switch,
+        // while keeping the already-mounted page for the same account.
+        setProfile((previous) => previous?.id === userId ? previous : null);
         setLoading(true);
 
         setTimeout(() => {
