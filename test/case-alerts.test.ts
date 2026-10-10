@@ -3,13 +3,9 @@ import {alertCounts,buildCaseAlerts} from '../src/lib/caseAlerts';
 
 describe('case alert engine',()=>{
  const base={id:'case-1',case_number:'CASE-1',status:'documents_ready',valuation_status:null,release_status:'pending'};
- it('warns when required base documents are not approved',()=>{
-  const alerts=buildCaseAlerts([base],[
-   {case_id:'case-1',document_type:'PROFORMA_INVOICE',status:'approved'},
-   {case_id:'case-1',document_type:'COMMERCIAL_INVOICE',status:'approved'}
-  ],[],[]);
-  expect(alerts.some(a=>a.id==='case-1-docs')).toBe(true);
-  expect(alertCounts(alerts).warning).toBeGreaterThan(0);
+ it('does not warn about missing base documents when documents are uploaded generically',()=>{
+  const alerts=buildCaseAlerts([base],[],[],[]);
+  expect(alerts.some(a=>a.id==='case-1-docs'||a.title==='نقص اسناد پایه')).toBe(false);
  });
  it('removes the base-document alert when all five are approved',()=>{
   const types=['PROFORMA_INVOICE','COMMERCIAL_INVOICE','PACKING_LIST','BILL_OF_LADING','CERTIFICATE_OF_ORIGIN'];
