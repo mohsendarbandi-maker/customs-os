@@ -40,6 +40,7 @@ export function useAutosavedDraft<T>(
   setValueRef.current = setValue;
   const restoredKeyRef = useRef('');
   const skipNextPersistRef = useRef(false);
+  const timerRef = useRef<number | null>(null);
   const serialized = JSON.stringify(value);
 
   const [status, setStatus] = useState<AutosavedDraftStatus>(key ? 'restoring' : 'idle');
@@ -89,7 +90,9 @@ export function useAutosavedDraft<T>(
     }
 
     updateStatus('saving');
-    const timer = window.setTimeout(() => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
       try {
         localStorage.setItem(key, serialized);
         updateHasDraft(true);
@@ -100,11 +103,20 @@ export function useAutosavedDraft<T>(
       }
     }, delayMs);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [key, serialized, delayMs, updateStatus, updateHasDraft]);
 
   const saveDraftNow = useCallback(() => {
     if (!key) return false;
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     try {
       localStorage.setItem(key, serialized);
       updateHasDraft(true);
@@ -119,6 +131,10 @@ export function useAutosavedDraft<T>(
 
   const clearDraft = useCallback(() => {
     if (!key) return;
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     try {
       localStorage.removeItem(key);
       updateHasDraft(false);
