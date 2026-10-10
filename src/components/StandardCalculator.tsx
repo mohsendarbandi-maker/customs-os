@@ -112,7 +112,7 @@ export const StandardCalculator: React.FC<StandardCalculatorProps> = ({ open, on
 
   const toggleSign = () => {
     setExpression((current) => {
-      const match = current.match(/(−?)(\\d+(?:\\.\\d*)?|\\.\\d+)(%?)$/);
+      const match = current.match(/(−?)(\d+(?:\.\d*)?|\.\d+)(%?)$/);
       if (!match) return current ? current + '−' : '−';
       const start = current.length - match[0].length;
       const replacement = match[1] ? match[0].slice(1) : '−' + match[0];
