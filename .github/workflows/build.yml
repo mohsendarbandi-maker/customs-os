@@ -34,7 +34,17 @@ jobs:
           grep -R -F -q "$VITE_SUPABASE_URL" dist/assets
           grep -R -F -q "$VITE_SUPABASE_ANON_KEY" dist/assets
       - name: Force a fresh Cloudflare asset manifest
-        run: echo "${GITHUB_SHA}-${GITHUB_RUN_ID}" > dist/build-marker.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_id="${GITHUB_SHA}-${GITHUB_RUN_ID}"
+          echo "$build_id" > dist/build-marker.txt
+          sed -i -E "s/const BUILD_SIGNATURE = '[^']*';/const BUILD_SIGNATURE = '$build_id';/" worker/index.ts
+          grep -F -q "const BUILD_SIGNATURE = '$build_id';" worker/index.ts
+          script_src="$(sed -n 's/.*<script[^>]*type="module"[^>]*src="\([^"]*\)".*/\1/p' dist/index.html | head -n 1)"
+          test -n "$script_src"
+          case "$script_src" in /assets/*.js) ;; *) echo "Invalid local module path: $script_src"; exit 1;; esac
+          test -s "dist${script_src%%\?*}"
       - name: Deploy Worker to Cloudflare
         run: npx wrangler@4 deploy
         env:
@@ -117,6 +127,10 @@ jobs:
             grep -q '"id": "/chat-v4"' /tmp/chat-manifest.json
             ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
             test "$ice_status" = 401
+
+            echo "Checking Cloudflare-to-Supabase messenger webhook routing"
+            gateway_status="$(curl --silent --show-error --max-time 20 -o /tmp/messenger-gateway.json -w '%{http_code}' "$base/webhooks/messenger/telegram/00000000-0000-4000-8000-000000000000")"
+            test "$gateway_status" = 404
             echo "Checking dedicated chat subdomain"
           chat_base="https://chat.darbandicommercial.ir"
           curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat-subdomain.html "$chat_base/?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
