@@ -127,6 +127,10 @@ jobs:
             grep -q '"id": "/chat-v4"' /tmp/chat-manifest.json
             ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
             test "$ice_status" = 401
+
+            echo "Checking Cloudflare-to-Supabase messenger webhook routing"
+            gateway_status="$(curl --silent --show-error --max-time 20 -o /tmp/messenger-gateway.json -w '%{http_code}' "$base/webhooks/messenger/telegram/00000000-0000-4000-8000-000000000000")"
+            test "$gateway_status" = 404
             echo "Checking dedicated chat subdomain"
           chat_base="https://chat.darbandicommercial.ir"
           curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat-subdomain.html "$chat_base/?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"

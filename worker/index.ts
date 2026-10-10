@@ -1,6 +1,7 @@
 export interface Env {
   ASSETS: { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
   SUPABASE_URL: string;
+  SUPABASE_ANON_KEY?: string;
   TURN_API_TOKEN_V2?: string;
   TURN_KEY_ID_V2?: string;
 }
@@ -95,6 +96,7 @@ export default {
       if (originalLength && !headers.has('x-file-size')) headers.set('x-file-size', originalLength);
       headers.delete('host');
       headers.delete('content-length');
+      if (!headers.has('apikey') && env.SUPABASE_ANON_KEY) headers.set('apikey', env.SUPABASE_ANON_KEY);
       headers.set('x-messenger-path', url.pathname);
       try {
         const upstream = await fetch(target, { method: request.method, headers, body: ['GET','HEAD','OPTIONS'].includes(request.method) ? undefined : request.body });
