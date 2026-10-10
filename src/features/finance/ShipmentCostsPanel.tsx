@@ -4,7 +4,7 @@ import{supabase}from'../../lib/supabase';
 import{formatJalali}from'../../lib/jalali';
 import{formatMoney}from'../../lib/finance';
 import{ALL_SHIPMENT_COST_STAGES,createReceiptPath,displayReceiptName,formatIrr,jalaliInputToIso,isoToJalaliInput,parseAmount,SHIPMENT_COST_STAGES,ShipmentCost,ShipmentCostCategory,ShipmentCostStage,ShipmentCostType,STAGE_LABELS,sumApprovedByStage,todayIso,toReceiptMetadata,validateCostDraft,validateReceiptFile,WORKFLOW_LABELS}from'./shipmentCosts';
-type Props={shipment:any;profile:any;onChanged:()=>Promise<void>|void;fixedStage?:ShipmentCostStage;autoOpenOnMount?:boolean};
+type Props={shipment:any;profile:any;onChanged:()=>Promise<void>|void;fixedStage?:ShipmentCostStage;initialStage?:ShipmentCostStage;autoOpenOnMount?:boolean};
 type Filter={stage:''|ShipmentCostType;status:''|ShipmentCost['workflow_status'];from:string;to:string;min:string;max:string;query:string};
 type Draft={clientId:string;stage:ShipmentCostType;categoryId:string;categoryName:string;description:string;amount:string;currency:'IRR'|'USD'|'EUR';exchangeRate:string;paymentDate:string;paidBy:'our_company'|'client_direct';notes:string};
 const roleCanWrite=(role:string)=>['owner','admin','broker','warehouse','accountant'].includes(role);
@@ -16,10 +16,10 @@ const JalaliDateInput=({value,onChange,label,placeholder='۱۴۰۵/۰۷/۱۳'}:{
  const commit=()=>{if(!text.trim()){setInvalid(true);return}try{const iso=jalaliInputToIso(text);if(!iso)throw new Error();onChange(iso);setInvalid(false)}catch{setInvalid(true)}};
  return <label className="text-xs app-muted">{label}<div className="relative mt-1"><input className="input" dir="ltr" inputMode="numeric" value={text} placeholder={placeholder} onChange={e=>{setText(e.target.value);setInvalid(false)}} onBlur={commit}/><span className="absolute left-3 top-3 text-[10px] app-muted">جلالی</span></div>{invalid&&<span className="text-[10px] text-red-700">تاریخ جلالی معتبر نیست.</span>}</label>;
 };
-export const ShipmentCostsPanel:React.FC<Props>=({shipment,profile,onChanged,fixedStage,autoOpenOnMount=false})=>{
+export const ShipmentCostsPanel:React.FC<Props>=({shipment,profile,onChanged,fixedStage,initialStage,autoOpenOnMount=false})=>{
  const[costs,setCosts]=useState<ShipmentCost[]>([]),[categories,setCategories]=useState<ShipmentCostCategory[]>([]),[canApprove,setCanApprove]=useState(false),[loading,setLoading]=useState(true),[message,setMessage]=useState(''),[error,setError]=useState('');
  const[filter,setFilter]=useState<Filter>({stage:fixedStage||'',status:'',from:'',to:'',min:'',max:'',query:''});
- const[open,setOpen]=useState(false),[draft,setDraft]=useState<Draft>(initialDraft(shipment,fixedStage)),[files,setFiles]=useState<File[]>([]),[drag,setDrag]=useState(false),[saving,setSaving]=useState(false),[editing,setEditing]=useState<ShipmentCost|null>(null),[decision,setDecision]=useState<ShipmentCost|null>(null),[decisionReason,setDecisionReason]=useState(''),[busyId,setBusyId]=useState(''),[preview,setPreview]=useState<{url:string;type:string;name:string}|null>(null);
+ const[open,setOpen]=useState(false),[draft,setDraft]=useState<Draft>(initialDraft(shipment,fixedStage||initialStage)),[files,setFiles]=useState<File[]>([]),[drag,setDrag]=useState(false),[saving,setSaving]=useState(false),[editing,setEditing]=useState<ShipmentCost|null>(null),[decision,setDecision]=useState<ShipmentCost|null>(null),[decisionReason,setDecisionReason]=useState(''),[busyId,setBusyId]=useState(''),[preview,setPreview]=useState<{url:string;type:string;name:string}|null>(null);
  const inputRef=React.useRef<HTMLInputElement|null>(null);
  const load=async()=>{
   if(!shipment?.id||!profile?.organization_id)return;setLoading(true);setError('');
@@ -36,7 +36,7 @@ export const ShipmentCostsPanel:React.FC<Props>=({shipment,profile,onChanged,fix
  const stageTotals=sumApprovedByStage(costs);const grandTotal=Object.values(stageTotals).reduce((a,b)=>a+b,0);
  const canWrite=roleCanWrite(profile?.role||'');const canManage=roleCanManage(profile?.role||'')||canApprove;
  const resetForm=()=>{setDraft(initialDraft(shipment,fixedStage));setFiles([]);setEditing(null);setError('')};
- React.useEffect(()=>{if(!autoOpenOnMount||!shipment?.id)return;setDraft(initialDraft(shipment,fixedStage));setFiles([]);setEditing(null);setError('');setOpen(true)},[autoOpenOnMount,shipment?.id,fixedStage]);
+ React.useEffect(()=>{if(!autoOpenOnMount||!shipment?.id)return;setDraft(initialDraft(shipment,fixedStage||initialStage));setFiles([]);setEditing(null);setError('');setOpen(true)},[autoOpenOnMount,shipment?.id,fixedStage,initialStage]);
  const chooseCategory=(id:string)=>{const cat=categories.find(c=>c.id===id);setDraft(d=>({...d,categoryId:id,categoryName:cat?.name_fa||d.categoryName}))};
  const addFiles=async(incoming:File[])=>{const next=[...files];for(const file of incoming){if(next.some(f=>f.name===file.name&&f.size===file.size&&f.lastModified===file.lastModified))continue;const checked=await validateReceiptFile(file);if(!checked.ok){setError(checked.error);continue}next.push(file)}setFiles(next)};
  const removeNewFile=(i:number)=>setFiles(v=>v.filter((_,index)=>index!==i));
