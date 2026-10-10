@@ -10,8 +10,8 @@ export function normalizeCalculatorExpression(value: string): string {
     .replace(/٬/g, '')
     .replace(/[،٫,]/g, '.')
     .replace(/[xX*]/g, '×')
-    .replace(/[\\/]/g, '÷')
-    .replace(/[\\-–—]/g, '−')
+    .replace(/\//g, '÷')
+    .replace(/[\-–—]/g, '−')
     .replace(/[^0-9.+−×÷%()]/g, '');
 }
 
@@ -37,7 +37,7 @@ export function evaluateCalculatorExpression(value: string): number {
     const start = index;
     while (index < source.length && /[0-9.]/.test(source[index])) index += 1;
     const token = source.slice(start, index);
-    if (!/^(?:\\d+(?:\\.\\d*)?|\\.\\d+)$/.test(token)) throw new Error('Expected a number');
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(token)) throw new Error('Expected a number');
 
     const number = Number(token);
     if (!Number.isFinite(number)) throw new Error('Invalid number');
