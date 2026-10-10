@@ -49,3 +49,6 @@ verify_jwt = false
 
 [functions.scan-chat-file]
 verify_jwt = false
+
+[functions.messenger-gateway]
+verify_jwt = false

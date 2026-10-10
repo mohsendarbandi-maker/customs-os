@@ -33,6 +33,14 @@ jobs:
 
       - name: Production build (final messenger)
         run: npm run build
+      - name: Messenger gateway Deno check
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check Supabase messenger function
+        run: deno check supabase/functions/messenger-gateway/index.ts
+      - name: Cloudflare Worker dry run
+        run: npx wrangler@4 deploy --dry-run
 
       - name: Assert AI Operator is statically wired
         run: |
