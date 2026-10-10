@@ -154,7 +154,19 @@ export const StandardCalculator: React.FC<StandardCalculatorProps> = ({ open, on
     }
 
     const target = event.target;
-    if (target === inputRef.current) return;
+    if (target === inputRef.current) {
+      if (justEvaluated && /^[0-9]$/.test(key)) {
+        event.preventDefault();
+        appendToken(key);
+        return;
+      }
+      if (justEvaluated && (key === '.' || key === ',')) {
+        event.preventDefault();
+        appendDecimal();
+        return;
+      }
+      return;
+    }
 
     if (/^[0-9]$/.test(key)) {
       event.preventDefault();
