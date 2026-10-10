@@ -9,6 +9,10 @@ import React, {
 } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
+import {
+  AUTH_SESSION_RETRY_MESSAGE,
+  isUnrecoverableAuthSessionError,
+} from '../lib/authSessionErrors';
 
 const clearLocalAuthStorage = () => {
   try {
@@ -113,9 +117,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       console.error('[Auth] fetchProfile failed:', err);
 
-      // Do not discard an already loaded profile when a background refresh fails.
-      // The current route and its form must remain mounted; on a true account switch,
-      // the SIGNED_IN handler below clears a profile that belongs to another user.
+      // Keep a previously loaded profile and its page mounted if a background
+      // request fails. A new account never inherits another user's profile.
       setNeedsOnboarding(false);
       setError(message);
     } finally {
@@ -126,13 +129,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   /*
-   * IMPORTANT:
-   * Never await Supabase database requests directly inside
-   * onAuthStateChange().
-   *
-   * Supabase can internally hold auth locks while emitting the
-   * auth event. Waiting for another Supabase request here can
-   * cause initialization/session races and white-screen states.
+   * Never await Supabase database requests inside onAuthStateChange().
+   * Supabase may hold auth locks while emitting an event; waiting for another
+   * Supabase request there can cause initialization/session races.
    */
   useEffect(() => {
     let active = true;
@@ -149,15 +148,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         if (sessionError) {
           console.error('[Auth] getSession failed:', sessionError);
-          if (/refresh_token_not_found|invalid refresh token|refresh token/i.test(sessionError.message)) {
+
+          if (isUnrecoverableAuthSessionError(sessionError)) {
+            // Only remove persisted credentials when Auth says the token/session
+            // is invalid or revoked. A network outage must not look like logout.
             clearLocalAuthStorage();
+            currentFetchId.current++;
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            setNeedsOnboarding(false);
+            setError(null);
+            initialized.current = true;
+          } else {
+            // Preserve stored credentials and show recovery controls instead of
+            // redirecting the user to login after a temporary connectivity error.
+            setError(AUTH_SESSION_RETRY_MESSAGE);
           }
 
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setNeedsOnboarding(false);
-          setError(sessionError.message);
           setLoading(false);
           return;
         }
@@ -180,28 +188,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (!active || !isMounted.current) return;
 
         console.error('[Auth] initialization failed:', err);
-        if (/refresh_token_not_found|invalid refresh token|refresh token/i.test(String((err as any)?.message || err))) {
+
+        if (isUnrecoverableAuthSessionError(err)) {
           clearLocalAuthStorage();
+          currentFetchId.current++;
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setNeedsOnboarding(false);
+          setError(null);
+          initialized.current = true;
+        } else {
+          // Do not discard the persistent session because getSession failed
+          // transiently (offline, timeout, or Auth service unavailable).
+          setError(AUTH_SESSION_RETRY_MESSAGE);
         }
 
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        setNeedsOnboarding(false);
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'خطا در راه‌اندازی احراز هویت',
-        );
         setLoading(false);
       }
     };
 
-    /*
-     * Register the listener immediately.
-     * The callback only updates auth state.
-     * Profile loading is scheduled outside the callback.
-     */
     const {
       data: { subscription: authSubscription },
     } = supabase.auth.onAuthStateChange((event, currentSession) => {
@@ -209,8 +215,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       console.log('[Auth] state changed:', event);
 
-      // Supabase emits INITIAL_SESSION while getSession() is still resolving.
-      // Do not turn that transient event into a login redirect.
+      // INITIAL_SESSION can fire before getSession() settles. Ignore that
+      // transient event so it cannot erase the retry state during bootstrap.
       if (event === 'INITIAL_SESSION' && !initialized.current) {
         return;
       }
@@ -226,20 +232,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setNeedsOnboarding(false);
         setError(null);
         setLoading(false);
-
         return;
       }
 
-      /*
-       * Do NOT await anything here.
-       * Defer profile loading until Supabase has finished
-       * processing the auth event.
-       */
+      // Do not await anything inside the auth callback.
       if (event === 'SIGNED_IN') {
         const userId = currentSession.user.id;
-        // Avoid briefly showing one account's data after an actual account switch,
-        // while keeping the already-mounted page for the same account.
-        setProfile((previous) => previous?.id === userId ? previous : null);
+
+        // Do not briefly show one account's profile after a real account switch.
+        setProfile((previous) => (previous?.id === userId ? previous : null));
         setLoading(true);
 
         setTimeout(() => {
@@ -248,9 +249,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }, 0);
       }
 
-      // A token refresh is a background auth maintenance event.
-      // Keep the current UI mounted; it must never look like the app is
-      // logging the user out or re-checking the session.
+      // Token refresh is routine session maintenance, not a reason to unmount
+      // the current page or clear form state.
       if (event === 'TOKEN_REFRESHED') {
         initialized.current = true;
         setError(null);
@@ -258,18 +258,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     subscription = authSubscription;
-
-    /*
-     * Initial getSession is intentionally performed separately.
-     */
     void loadInitialSession();
 
     return () => {
       active = false;
-
-      if (subscription) {
-        subscription.unsubscribe();
-      }
+      subscription?.unsubscribe();
     };
   }, [fetchProfile]);
 
@@ -289,6 +282,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (err) {
       console.error('[Auth] signOut exception:', err);
     } finally {
+      // Logout is explicit: clear this browser's saved session even when the
+      // network is unavailable and the server-side request cannot complete.
+      clearLocalAuthStorage();
+
       if (isMounted.current) {
         setUser(null);
         setSession(null);
@@ -303,15 +300,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const refreshProfile = useCallback(async () => {
     const currentUserId = user?.id;
 
-    if (!currentUserId) {
-      setProfile(null);
-      setNeedsOnboarding(false);
+    setLoading(true);
+    setError(null);
+
+    if (currentUserId) {
+      await fetchProfile(currentUserId);
       return;
     }
 
-    setLoading(true);
+    // The recovery button must retry the session itself when the initial
+    // auth bootstrap failed before it could populate user/profile state.
+    try {
+      const {
+        data: { session: recoveredSession },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-    await fetchProfile(currentUserId);
+      if (sessionError) {
+        console.error('[Auth] session recovery failed:', sessionError);
+
+        if (isUnrecoverableAuthSessionError(sessionError)) {
+          clearLocalAuthStorage();
+          currentFetchId.current++;
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setNeedsOnboarding(false);
+          setError(null);
+          initialized.current = true;
+        } else {
+          setError(AUTH_SESSION_RETRY_MESSAGE);
+        }
+        return;
+      }
+
+      initialized.current = true;
+      setSession(recoveredSession);
+      setUser(recoveredSession?.user ?? null);
+
+      if (recoveredSession?.user) {
+        await fetchProfile(recoveredSession.user.id);
+      } else {
+        currentFetchId.current++;
+        setProfile(null);
+        setNeedsOnboarding(false);
+        setError(null);
+      }
+    } catch (err: unknown) {
+      console.error('[Auth] session recovery exception:', err);
+
+      if (isUnrecoverableAuthSessionError(err)) {
+        clearLocalAuthStorage();
+        currentFetchId.current++;
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setNeedsOnboarding(false);
+        setError(null);
+        initialized.current = true;
+      } else {
+        setError(AUTH_SESSION_RETRY_MESSAGE);
+      }
+    } finally {
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
   }, [user?.id, fetchProfile]);
 
   const contextValue = useMemo<AuthContextType>(
