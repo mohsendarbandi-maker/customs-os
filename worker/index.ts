@@ -5,7 +5,7 @@ export interface Env {
   TURN_KEY_ID_V2?: string;
 }
 
-const BUILD_SIGNATURE = '20261006-cloudflare-chat-fix-1';
+const BUILD_SIGNATURE = '20261011-messenger-gateway-cache-fix';
 
 const EDGE_FUNCTIONS = new Set([
   'ai-assistant', 'ai-core', 'ai-operator', 'ai-voice', 'knowledge-ai',

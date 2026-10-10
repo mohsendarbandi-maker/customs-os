@@ -34,7 +34,17 @@ jobs:
           grep -R -F -q "$VITE_SUPABASE_URL" dist/assets
           grep -R -F -q "$VITE_SUPABASE_ANON_KEY" dist/assets
       - name: Force a fresh Cloudflare asset manifest
-        run: echo "${GITHUB_SHA}-${GITHUB_RUN_ID}" > dist/build-marker.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_id="${GITHUB_SHA}-${GITHUB_RUN_ID}"
+          echo "$build_id" > dist/build-marker.txt
+          sed -i -E "s/const BUILD_SIGNATURE = '[^']*';/const BUILD_SIGNATURE = '$build_id';/" worker/index.ts
+          grep -F -q "const BUILD_SIGNATURE = '$build_id';" worker/index.ts
+          script_src="$(sed -n 's/.*<script[^>]*type="module"[^>]*src="\([^"]*\)".*/\1/p' dist/index.html | head -n 1)"
+          test -n "$script_src"
+          case "$script_src" in /assets/*.js) ;; *) echo "Invalid local module path: $script_src"; exit 1;; esac
+          test -s "dist${script_src%%\?*}"
       - name: Deploy Worker to Cloudflare
         run: npx wrangler@4 deploy
         env:
