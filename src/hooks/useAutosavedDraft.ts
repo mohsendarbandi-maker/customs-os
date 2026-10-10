@@ -44,13 +44,23 @@ export function useAutosavedDraft<T>(
 
   const [status, setStatus] = useState<AutosavedDraftStatus>(key ? 'restoring' : 'idle');
   const [hasDraft, setHasDraft] = useState(() => readStoredDraft(key) !== null);
+  const statusRef = useRef<AutosavedDraftStatus>(key ? 'restoring' : 'idle');
+  const hasDraftRef = useRef(readStoredDraft(key) !== null);
+  const updateStatus = useCallback((next: AutosavedDraftStatus) => {
+    statusRef.current = next;
+    setStatus(next);
+  }, []);
+  const updateHasDraft = useCallback((next: boolean) => {
+    hasDraftRef.current = next;
+    setHasDraft(next);
+  }, []);
 
   useEffect(() => {
     if (!key) {
       restoredKeyRef.current = '';
       skipNextPersistRef.current = false;
-      setStatus('idle');
-      setHasDraft(false);
+      updateStatus('idle');
+      updateHasDraft(false);
       return;
     }
 
@@ -60,13 +70,13 @@ export function useAutosavedDraft<T>(
     const stored = readStoredDraft(key);
     if (stored !== null) {
       setValueRef.current(stored as T);
-      setHasDraft(true);
-      setStatus('restored');
+      updateHasDraft(true);
+      updateStatus('restored');
     } else {
-      setHasDraft(false);
-      setStatus('idle');
+      updateHasDraft(false);
+      updateStatus('idle');
     }
-  }, [key]);
+  }, [key, updateStatus, updateHasDraft]);
 
   useEffect(() => {
     if (!key || restoredKeyRef.current !== key) return;
@@ -78,48 +88,48 @@ export function useAutosavedDraft<T>(
       return;
     }
 
-    setStatus('saving');
+    updateStatus('saving');
     const timer = window.setTimeout(() => {
       try {
         localStorage.setItem(key, serialized);
-        setHasDraft(true);
-        setStatus('saved');
+        updateHasDraft(true);
+        updateStatus('saved');
       } catch (error) {
         console.warn('[FormDraft] Local draft could not be saved:', error);
-        setStatus('error');
+        updateStatus('error');
       }
     }, delayMs);
 
     return () => window.clearTimeout(timer);
-  }, [key, serialized, delayMs]);
+  }, [key, serialized, delayMs, updateStatus, updateHasDraft]);
 
   const saveDraftNow = useCallback(() => {
     if (!key) return false;
     try {
       localStorage.setItem(key, serialized);
-      setHasDraft(true);
-      setStatus('saved');
+      updateHasDraft(true);
+      updateStatus('saved');
       return true;
     } catch (error) {
       console.warn('[FormDraft] Local draft could not be saved:', error);
-      setStatus('error');
+      updateStatus('error');
       return false;
     }
-  }, [key, serialized]);
+  }, [key, serialized, updateStatus, updateHasDraft]);
 
   const clearDraft = useCallback(() => {
     if (!key) return;
     try {
       localStorage.removeItem(key);
-      setHasDraft(false);
-      setStatus('idle');
+      updateHasDraft(false);
+      updateStatus('idle');
       // A deliberate reset should remain cleared until the user types again.
       skipNextPersistRef.current = true;
     } catch (error) {
       console.warn('[FormDraft] Local draft could not be cleared:', error);
-      setStatus('error');
+      updateStatus('error');
     }
-  }, [key]);
+  }, [key, updateStatus, updateHasDraft]);
 
-  return { status, hasDraft, saveDraftNow, clearDraft };
+  return { status, hasDraft, statusRef, hasDraftRef, saveDraftNow, clearDraft };
 }
