@@ -66,32 +66,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // A background refresh failure must not destroy an already-authorized page.
-  if (error && !hasCurrentProfile) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dir-rtl font-sans p-4">
-        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 text-center max-w-sm w-full">
-          <h2 className="text-red-600 font-bold text-lg mb-2">خطای اتصال</h2>
-          <p className="text-gray-600 text-sm mb-6">{error}</p>
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => void refreshProfile()}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg font-semibold transition"
-            >
-              تلاش دوباره
-            </button>
-            <button
-              onClick={() => void signOut()}
-              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm py-2.5 rounded-lg transition"
-            >
-              خروج
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // Gate 4: Registered but missing Tenant/Profile records
   if (needsOnboarding && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
