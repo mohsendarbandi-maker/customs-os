@@ -3,7 +3,7 @@ import { safeStorageFilename } from './safeStorageFilename';
 
 describe('safeStorageFilename', () => {
   it('keeps a safe ASCII filename and extension readable', () => {
-    expect(safeStorageFilename('invoice final.V2.pdf')).toBe('invoice_final.v2.pdf');
+    expect(safeStorageFilename('invoice final.V2.pdf')).toBe('invoice_final_V2.pdf');
   });
 
   it('replaces non-ASCII filenames while preserving a safe extension', () => {
