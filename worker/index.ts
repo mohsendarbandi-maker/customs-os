@@ -89,7 +89,7 @@ export default {
     }
 
     if (url.pathname.startsWith('/api/messenger/') || url.pathname.startsWith('/webhooks/messenger/')) {
-      const target = env.SUPABASE_URL.replace(/\\/$/, '') + '/functions/v1/messenger-gateway' + url.search;
+      const target = env.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/messenger-gateway' + url.search;
       const headers = new Headers(request.headers);
       const originalLength = headers.get('content-length');
       if (originalLength && !headers.has('x-file-size')) headers.set('x-file-size', originalLength);
