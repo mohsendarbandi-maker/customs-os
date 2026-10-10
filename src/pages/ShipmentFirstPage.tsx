@@ -55,7 +55,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  useEffect(()=>{void loadDocs(selected)},[selected]);
  const chooseLine=(name:string)=>{set('shippingLine',name);const line=lines.find(x=>same(x.name,name)||same(x.name_fa||'',name));if(line&&!form.vessel){const v=vessels.find(x=>x.shipping_line_id===line.id);if(v){set('vessel',v.name);set('imo',v.imo_number||'');set('flag',v.flag_code||'')}}};
  const chooseVessel=(name:string)=>{set('vessel',name);const v=vessels.find(x=>same(x.name,name));if(v){set('imo',v.imo_number||'');set('flag',v.flag_code||'')}};
- const reset=()=>{formDraft.clearDraft();setSelected('');setForm(empty);setDocs([]);setMessage('محموله جدید آماده ثبت است.')};
+ const reset=()=>{formDraft.clearDraft(true);setSelected('');setForm(empty);setDocs([]);setMessage('محموله جدید آماده ثبت است.')};
  const edit=(r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_id);setSelected(r.id);setForm({ownerId:r.client_id||'',shippingLine:r.shipping_line||'',billOfLading:r.bill_of_lading_no||'',year:String(r.bill_of_lading_year||new Date().getFullYear()),voyage:r.voyage_no||'',vessel:v?.name||'',imo:v?.imo_number||'',flag:v?.flag_code||'',originPort:r.origin_port||'',destinationPort:r.destination_port||'',count:r.cargo_count==null?'':String(r.cargo_count),unit:r.cargo_count_unit||'رول',net:r.net_weight_kg==null?'':String(r.net_weight_kg),gross:r.gross_weight_kg==null?'':String(r.gross_weight_kg),status:r.current_status||'draft',location:r.current_location||'',transportDocumentsStatus:r.transport_documents_status||'not_ready',releaseInvoicePaymentStatus:r.release_invoice_payment_status||'unpaid'});setMessage('محموله برای مدیریت انتخاب شد.')};
  const ensureVessel=async()=>{
   const name=form.vessel.trim();if(!name)throw new Error('نام کشتی الزامی است.');
