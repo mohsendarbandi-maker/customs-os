@@ -1,0 +1,1 @@
+begin; alter table public.message_logs drop constraint if exists message_logs_status_check; alter table public.message_logs add constraint message_logs_status_check check(status in ('queued','sending','sent','delivered','read','failed','unknown','received')); commit;
