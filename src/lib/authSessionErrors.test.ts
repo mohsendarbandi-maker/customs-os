@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { isUnrecoverableAuthSessionError } from './authSessionErrors';
+import { isAuthTokenExpiredError, isUnrecoverableAuthSessionError } from './authSessionErrors';
+
+describe('isAuthTokenExpiredError', () => {
+  it('recognizes expired JWT and unauthorized profile responses', () => {
+    expect(isAuthTokenExpiredError({ status: 401, message: 'JWT expired' })).toBe(true);
+    expect(isAuthTokenExpiredError({ code: 'PGRST301', message: 'JWT expired' })).toBe(true);
+    expect(isAuthTokenExpiredError({ message: 'Invalid JWT' })).toBe(true);
+  });
+
+  it('does not mistake ordinary profile or network errors for an expired JWT', () => {
+    expect(isAuthTokenExpiredError({ status: 500, message: 'Database unavailable' })).toBe(false);
+    expect(isAuthTokenExpiredError(new Error('Failed to fetch'))).toBe(false);
+    expect(isAuthTokenExpiredError(null)).toBe(false);
+  });
+});
 
 describe('isUnrecoverableAuthSessionError', () => {
   it('identifies revoked or invalid refresh tokens', () => {
