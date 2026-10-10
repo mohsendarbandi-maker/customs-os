@@ -3,6 +3,8 @@ import{Download,ExternalLink,Plus,RefreshCw,Save,ShieldCheck,Ship,Upload}from'lu
 import{Link}from'react-router-dom';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
+import { useAutosavedDraft, formDraftKey } from '../hooks/useAutosavedDraft';
+import { FormDraftIndicator } from '../components/FormDraftIndicator';
 import{buildShipmentDisplayName}from'../lib/displayNames';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 
@@ -22,6 +24,14 @@ export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
  const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
+ const formDraft=useAutosavedDraft(
+  formDraftKey(profile?.id,`shipment-first:${profile?.organization_id||''}`),
+  {selected,form},
+  (draft:{selected?:string;form?:Form})=>{
+   setSelected(draft.selected||'');
+   setForm({...empty,...(draft.form||{})});
+  },
+ );
  const set=(k:keyof Form,v:string)=>setForm(p=>({...p,[k]:v}));
  const loadDocs=async(id:string)=>{
   if(!id){setDocs([]);return}
@@ -45,7 +55,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  useEffect(()=>{void loadDocs(selected)},[selected]);
  const chooseLine=(name:string)=>{set('shippingLine',name);const line=lines.find(x=>same(x.name,name)||same(x.name_fa||'',name));if(line&&!form.vessel){const v=vessels.find(x=>x.shipping_line_id===line.id);if(v){set('vessel',v.name);set('imo',v.imo_number||'');set('flag',v.flag_code||'')}}};
  const chooseVessel=(name:string)=>{set('vessel',name);const v=vessels.find(x=>same(x.name,name));if(v){set('imo',v.imo_number||'');set('flag',v.flag_code||'')}};
- const reset=()=>{setSelected('');setForm(empty);setDocs([]);setMessage('محموله جدید آماده ثبت است.')};
+ const reset=()=>{formDraft.clearDraft();setSelected('');setForm(empty);setDocs([]);setMessage('محموله جدید آماده ثبت است.')};
  const edit=(r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_id);setSelected(r.id);setForm({ownerId:r.client_id||'',shippingLine:r.shipping_line||'',billOfLading:r.bill_of_lading_no||'',year:String(r.bill_of_lading_year||new Date().getFullYear()),voyage:r.voyage_no||'',vessel:v?.name||'',imo:v?.imo_number||'',flag:v?.flag_code||'',originPort:r.origin_port||'',destinationPort:r.destination_port||'',count:r.cargo_count==null?'':String(r.cargo_count),unit:r.cargo_count_unit||'رول',net:r.net_weight_kg==null?'':String(r.net_weight_kg),gross:r.gross_weight_kg==null?'':String(r.gross_weight_kg),status:r.current_status||'draft',location:r.current_location||'',transportDocumentsStatus:r.transport_documents_status||'not_ready',releaseInvoicePaymentStatus:r.release_invoice_payment_status||'unpaid'});setMessage('محموله برای مدیریت انتخاب شد.')};
  const ensureVessel=async()=>{
   const name=form.vessel.trim();if(!name)throw new Error('نام کشتی الزامی است.');
@@ -102,7 +112,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  const openPre=selected?'/operations?tab=pre-declaration&shipmentId='+encodeURIComponent(selected):'/operations';
  const vesselSearch=selected?'/vessel-search?name='+encodeURIComponent(vessel?.name||form.vessel)+'&imo='+encodeURIComponent(vessel?.imo_number||form.imo)+'&bl='+encodeURIComponent(form.billOfLading):'#';
  return <main dir="rtl" className="min-h-screen p-4 md:p-6" style={{background:'var(--bg)',color:'var(--text)'}}><div className="max-w-[1500px] mx-auto space-y-4">
-  <header className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs app-muted">مرحله ۱</div><h1 className="text-2xl font-black">شروع عملیات</h1><p className="text-xs app-muted mt-1">محموله، صاحب کالا، کشتی، وضعیت کشتی و اسناد محموله در یک مرحله.</p></div><div className="flex gap-2"><button onClick={()=>void load()} className="icon-btn" title="بروزرسانی"><RefreshCw size={16}/></button><button onClick={reset} className="px-4 py-2 rounded-xl border app-border"><Plus size={16} className="inline ml-1"/>محموله جدید</button></div></header>
+  <header className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs app-muted">مرحله ۱</div><h1 className="text-2xl font-black">شروع عملیات</h1><p className="text-xs app-muted mt-1">محموله، صاحب کالا، کشتی، وضعیت کشتی و اسناد محموله در یک مرحله.</p><div className="mt-2"><FormDraftIndicator status={formDraft.status} onSave={formDraft.saveDraftNow}/></div></div><div className="flex gap-2"><button onClick={()=>void load()} className="icon-btn" title="بروزرسانی"><RefreshCw size={16}/></button><button onClick={reset} className="px-4 py-2 rounded-xl border app-border"><Plus size={16} className="inline ml-1"/>محموله جدید</button></div></header>
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="grid lg:grid-cols-4 gap-3">
    <label className="text-xs app-muted lg:col-span-2">صاحب کالا<select value={form.ownerId} onChange={e=>set('ownerId',e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب صاحب کالا</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.national_id?' — '+c.national_id:''}</option>)}</select></label>
    <label className="text-xs app-muted">کشتیرانی<select value={form.shippingLine} onChange={e=>chooseLine(e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب کشتیرانی</option>{lines.map(l=><option key={l.id} value={l.name}>{l.name_fa||l.name}</option>)}</select></label><label className="text-xs app-muted">B/L<input value={form.billOfLading} onChange={e=>set('billOfLading',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
