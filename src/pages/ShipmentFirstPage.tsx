@@ -33,6 +33,25 @@ export const ShipmentFirstPage:React.FC=()=>{
   },
  );
  const set=(k:keyof Form,v:string)=>setForm(p=>({...p,[k]:v}));
+ const ensureFreshSession=async()=>{
+  const{data:{session},error:sessionError}=await supabase.auth.getSession();
+  if(sessionError){
+   console.error('[ShipmentFirstPage] session lookup failed:',sessionError);
+   throw new Error('بررسی نشست ورود ناموفق بود. یک‌بار دوباره وارد شوید؛ پیش‌نویس فرم پاک نمی‌شود.');
+  }
+  if(!session?.user||session.user.id!==profile?.id){
+   throw new Error('نشست ورود معتبر نیست یا منقضی شده است. دوباره وارد شوید؛ پیش‌نویس فرم روی همین مرورگر باقی می‌ماند.');
+  }
+  // Refresh before the first database write when the access token is expired
+  // or close to expiry, avoiding a partial shipment workflow caused by JWT 401s.
+  if(!session.expires_at||session.expires_at<=Math.floor(Date.now()/1000)+180){
+   const{data,error:refreshError}=await supabase.auth.refreshSession();
+   if(refreshError||!data.session?.access_token||data.session.user.id!==profile.id){
+    console.error('[ShipmentFirstPage] session refresh failed:',refreshError);
+    throw new Error('تمدید نشست ورود انجام نشد. دوباره وارد شوید و سپس ذخیره را بزنید؛ اطلاعات فرم حذف نمی‌شود.');
+   }
+  }
+ };
  const loadDocs=async(id:string)=>{
   if(!id){setDocs([]);return}
   const{data,error}=await supabase.from('shipment_documents').select('id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,created_at').eq('shipment_id',id).order('created_at',{ascending:false});
@@ -73,6 +92,7 @@ export const ShipmentFirstPage:React.FC=()=>{
   if(!form.count.trim()||!form.net.trim()||!form.gross.trim())return setMessage('تعداد، وزن خالص و وزن ناخالص را تکمیل کنید.');
   setBusy(true);setMessage('در حال ذخیره شروع عملیات...');
   try{
+   await ensureFreshSession();
    const vessel=await ensureVessel();const owner=clients.find(c=>c.id===form.ownerId);
    const display=buildShipmentDisplayName({cargo_count:num(form.count),cargo_count_unit:form.unit||'رول',client_name:owner?.name,vessel_name:vessel.name});
    const payload={organization_id:profile.organization_id,client_id:form.ownerId,vessel_id:vessel.id,transport_mode:'sea',shipping_line:form.shippingLine||null,bill_of_lading_no:form.billOfLading.trim()||null,bill_of_lading_year:form.billOfLading.trim()?num(form.year):null,voyage_no:form.voyage||null,origin_port:form.originPort||null,destination_port:form.destinationPort||null,cargo_count:num(form.count),cargo_count_unit:form.unit||'رول',net_weight_kg:num(form.net),gross_weight_kg:num(form.gross),current_status:form.status||'draft',current_location:form.location||null,transport_documents_status:form.transportDocumentsStatus,release_invoice_payment_status:form.releaseInvoicePaymentStatus,display_name:display};
