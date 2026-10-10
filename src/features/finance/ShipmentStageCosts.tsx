@@ -4,11 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import type { ShipmentCostStage } from './shipmentCosts';
 
-type Props = { stage: ShipmentCostStage; shipmentId?: string; shipment?: { id?: string | null } | null };
+type Props = { stage: ShipmentCostStage; shipmentId?: string; shipment?: { id?: string | null } | null; allowStageSelection?: boolean };
 
 const COST_ENTRY_ROLES = ['owner', 'admin', 'broker', 'accountant', 'warehouse'];
 
-export const ShipmentStageCosts: React.FC<Props> = ({ stage, shipmentId, shipment }) => {
+export const ShipmentStageCosts: React.FC<Props> = ({ stage, shipmentId, shipment, allowStageSelection = false }) => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const id = shipment?.id || shipmentId;
@@ -16,7 +16,7 @@ export const ShipmentStageCosts: React.FC<Props> = ({ stage, shipmentId, shipmen
   if (!id || !profile || !COST_ENTRY_ROLES.includes(profile.role)) return null;
 
   const openCostEntry = () => {
-    const query = new URLSearchParams({ stage, new: '1' });
+    const query = new URLSearchParams({ stage, new: '1', ...(allowStageSelection ? { selectStage: '1' } : {}) });
     navigate(`/finance/shipments/${encodeURIComponent(id)}?${query.toString()}`);
   };
 
