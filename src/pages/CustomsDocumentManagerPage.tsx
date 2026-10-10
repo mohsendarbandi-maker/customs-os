@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 
-import { makeClientId } from '../lib/clientId';import {
+import { makeClientId } from '../lib/clientId';
+import { safeStorageFilename } from '../lib/safeStorageFilename';
+import {
   Download,
   Eye,
   FileText,
@@ -316,7 +318,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           throw new Error(`فرمت «${f.name}» پشتیبانی نمی‌شود. فقط PDF/JPG/PNG.`);
         }
         if (f.size > 50 * 1024 * 1024) throw new Error(`حجم «${f.name}» بیشتر از 50 MB است.`);
-        const safe = f.name.replace(/[^\w.\-\u0600-\u06ff]+/g, '_');
+        const safe = safeStorageFilename(f.name);
         const mime = f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : /\.png$/i.test(f.name) ? 'image/png' : 'image/jpeg');
         const path = `${org}/${current.id}/${makeClientId()}-${safe}`;
         const { error: ue } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: mime, cacheControl: '3600', upsert: false });
