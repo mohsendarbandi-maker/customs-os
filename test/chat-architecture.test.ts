@@ -133,6 +133,8 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('number(snapshot.payments_received_total_irr)');
     expect(gateway).toContain('number(snapshot.payments_paid_total_irr)');
     expect(gateway).toContain('number(snapshot.overdue_reminders)');
+    expect(gateway).toContain('const statusFa=(value:unknown)=>');
+    expect(gateway).toContain('item.current_status?"وضعیت: "+statusFa(item.current_status):""');
   });
 
 });
