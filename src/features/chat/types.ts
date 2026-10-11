@@ -45,7 +45,13 @@ export type ChatMessage = {
   id: string;
   organization_id: string;
   conversation_id: string;
-  sender_id: string;
+  sender_id: string | null;
+  external_platform?: string | null;
+  external_connection_id?: string | null;
+  external_chat_id?: string | null;
+  external_message_id?: string | null;
+  external_sender_id?: string | null;
+  external_sender_name?: string | null;
   client_uuid: string;
   message_type: string;
   body: string | null;
