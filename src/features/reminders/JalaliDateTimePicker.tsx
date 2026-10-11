@@ -6,11 +6,11 @@ type Props={value:Date;onChange:(value:Date)=>void;onClose:()=>void;allDay:boole
 const pad=(n:number)=>String(n).padStart(2,'0');
 const same=(a:Date,b:Date)=>startOfTehranDay(a).getTime()===startOfTehranDay(b).getTime();
 export const JalaliDateTimePicker:React.FC<Props>=({value,onChange,onClose,allDay,onAllDayChange})=>{
- const now=new Date(),jv=toJalali(value),[month,setMonth]=useState(jv.month),[year,setYear]=useState(jv.year),[hour,setHour]=useState(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',hour12:false,hourCycle:'h23',hour:'2-digit'}).format(value))),[minute,setMinute]=useState(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',minute:'2-digit'}).format(value)));
- useEffect(()=>{const j=toJalali(value);setMonth(j.month);setYear(j.year);},[value]);
+ const now=new Date(),jv=toJalali(value),[month,setMonth]=useState(jv.month),[year,setYear]=useState(jv.year),[selectedDay,setSelectedDay]=useState(jv.day),[hour,setHour]=useState(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',hour12:false,hourCycle:'h23',hour:'2-digit'}).format(value))),[minute,setMinute]=useState(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',minute:'2-digit'}).format(value)));
+ useEffect(()=>{const j=toJalali(value);setMonth(j.month);setYear(j.year);setSelectedDay(j.day);},[value]);
  const days=useMemo(()=>{const len=jalaliMonthLength(year,month),first=zonedJalaliToDate(year,month,1);const offset=jalaliWeekday(first);return Array.from({length:offset+len},(_,i)=>i<offset?null:i-offset+1);},[year,month]);
  const choose=(day:number,h=hour,m=minute)=>onChange(zonedJalaliToDate(year,month,day,allDay?9:h,allDay?0:m));
- const shift=(amount:number)=>{let m=month+amount,y=year;if(m<1){m=12;y--}if(m>12){m=1;y++}setMonth(m);setYear(y);}
+ const shift=(amount:number)=>{let m=month+amount,y=year;if(m<1){m=12;y--}if(m>12){m=1;y++}setMonth(m);setYear(y);setSelectedDay(d=>Math.min(d,jalaliMonthLength(y,m)));}
  const currentDay=toJalali(now).day;
  const shortcuts=[
   ['امروز عصر',()=>{const j=toJalali(now);onChange(zonedJalaliToDate(j.year,j.month,j.day,17,0));}],
@@ -29,11 +29,11 @@ export const JalaliDateTimePicker:React.FC<Props>=({value,onChange,onClose,allDa
       <button onClick={()=>shift(1)} className="min-w-11 min-h-11 rounded-xl"><ChevronLeft size={18}/></button>
     </div>
     <div className="grid grid-cols-7 text-center text-[10px] app-muted mb-1">{['شنبه','یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه'].map(d=><div key={d} className="py-1">{d[0]}</div>)}</div>
-    <div className="grid grid-cols-7 gap-1">{days.map((day,i)=>day===null?<div key={'e'+i} className="aspect-square"/>:<button key={day} onClick={()=>choose(day)} className={'aspect-square rounded-xl text-sm '+(day===currentDay&&year===toJalali(now).year&&month===toJalali(now).month?'ring-2 ring-[var(--primary)] ':'')+(day===jv.day&&month===jv.month&&year===jv.year?'bg-[var(--primary)] text-white font-black':'bg-[var(--surface-2)]')}>{pad(day).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)])}</button>)}</div>
+    <div className="grid grid-cols-7 gap-1">{days.map((day,i)=>day===null?<div key={'e'+i} className="aspect-square"/>:<button key={day} onClick={()=>{setSelectedDay(day);choose(day)}} className={'aspect-square rounded-xl text-sm '+(day===currentDay&&year===toJalali(now).year&&month===toJalali(now).month?'ring-2 ring-[var(--primary)] ':'')+(day===selectedDay?'bg-[var(--primary)] text-white font-black':'bg-[var(--surface-2)]')}>{pad(day).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)])}</button>)}</div>
     <div className="mt-4 rounded-2xl border app-border p-3">
       <label className="flex items-center justify-between gap-3 min-h-11"><span className="flex items-center gap-2 text-sm font-bold"><CalendarDays size={16}/>تمام‌روز</span><input type="checkbox" checked={allDay} onChange={e=>onAllDayChange(e.target.checked)} className="w-5 h-5"/></label>
       {!allDay&&<div className="grid grid-cols-2 gap-3 mt-2"><label className="flex items-center gap-2 border app-border bg-[var(--surface-2)] rounded-xl px-3 min-h-12"><Clock3 size={15}/><select value={hour} onChange={e=>setHour(Number(e.target.value))} className="bg-transparent outline-none flex-1">{Array.from({length:24},(_,h)=><option key={h} value={h}>{pad(h)}</option>)}</select></label><label className="flex items-center gap-2 border app-border bg-[var(--surface-2)] rounded-xl px-3 min-h-12"><Clock3 size={15}/><select value={minute} onChange={e=>setMinute(Math.round(Number(e.target.value)/5)*5%60)} className="bg-transparent outline-none flex-1">{Array.from({length:12},(_,i)=>{const m=i*5;return <option key={m} value={m}>{pad(m)}</option>})}</select></label></div>}
-      <button onClick={()=>choose(jv.day,hour,minute)} className="w-full mt-3 min-h-12 rounded-xl bg-[var(--primary)] text-white font-black">تأیید</button>
+      <button onClick={()=>choose(selectedDay,hour,minute)} className="w-full mt-3 min-h-12 rounded-xl bg-[var(--primary)] text-white font-black">تأیید</button>
     </div>
    </div>
  </div>;
