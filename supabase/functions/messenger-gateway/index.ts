@@ -85,8 +85,7 @@ async function sendText(req:Request,p:Profile){
  if(!mapped?.enabled)return bad("CHAT_NOT_ALLOWED",403,req);
  try{
   const msgId=await sendTextToPlatform(c,chat,message);
-  const {error:logError}=await db.from("message_logs").insert({organization_id:p.organization_id,connection_id:c.id,direction:"outbound",message_type:"text",external_message_id:msgId,external_chat_id:chat,status:"sent",payload_summary:{charCount:message.length,text:message.slice(0,4000)},sent_at:new Date().toISOString()});
-  if(logError)throw new Error("MESSAGE_LOG_SAVE_FAILED");
+  await db.from("message_logs").insert({organization_id:p.organization_id,connection_id:c.id,direction:"outbound",message_type:"text",external_message_id:msgId,external_chat_id:chat,status:"sent",payload_summary:{charCount:message.length,text:message.slice(0,4000)},sent_at:new Date().toISOString()});
   return out({ok:true,status:"sent",externalMessageId:msgId},200,req);
  }catch(e){
   const code=errorCode(e);
@@ -167,10 +166,9 @@ async function processMessengerOutbox(req:Request){
    const textValue=String(message.body||"").trim();
    if(!textValue)throw new Error("EMPTY_MESSAGE_BODY");
    const externalMessageId=await sendTextToPlatform(c as Conn,String(chat.external_chat_id),textValue.slice(0,4000));
-   const {error:logError}=await db.from("message_logs").insert({organization_id:row.organization_id,connection_id:row.connection_id,direction:"outbound",message_type:"text",external_message_id:externalMessageId,external_chat_id:String(chat.external_chat_id),chat_message_id:row.chat_message_id,status:"sent",payload_summary:{source:"customs_chat",text:textValue.slice(0,4000),charCount:textValue.length,outboxId:row.id},sent_at:now});
-   if(logError)throw new Error("OUTBOUND_LOG_SAVE_FAILED");
    const {error:updateError}=await db.from("messenger_delivery_outbox").update({status:"sent",external_message_id:externalMessageId,last_error_code:null,sent_at:now,updated_at:now}).eq("id",row.id).eq("status","sending");
    if(updateError)throw new Error("OUTBOX_STATUS_UPDATE_FAILED");
+   await db.from("message_logs").insert({organization_id:row.organization_id,connection_id:row.connection_id,direction:"outbound",message_type:"text",external_message_id:externalMessageId,external_chat_id:String(chat.external_chat_id),chat_message_id:row.chat_message_id,status:"sent",payload_summary:{source:"customs_chat",text:textValue.slice(0,4000),charCount:textValue.length,outboxId:row.id},sent_at:now});
    sent++;
   }catch(e){
    const code=errorCode(e),attempt=Number(row.attempt_count||1),delay=Math.min(3600000,15000*Math.pow(2,Math.min(attempt,7))),retryAt=new Date(Date.now()+delay).toISOString();
