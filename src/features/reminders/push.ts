@@ -26,9 +26,9 @@ export async function enablePush(){
  return {status:'granted' as const,endpoint:sub.endpoint};
 }
 export async function disablePush(){
- const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(!sub)return;
- const endpoint=sub.endpoint;await sub.unsubscribe();
- const {error}=await supabase.from('push_subscriptions').delete().eq('endpoint',endpoint);if(error)throw error; await setNotificationPreferences({push_enabled:false});
+ const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();
+ if(sub){const endpoint=sub.endpoint;await sub.unsubscribe();const {error}=await supabase.from('push_subscriptions').delete().eq('endpoint',endpoint);if(error)throw error;}
+ await setNotificationPreferences({push_enabled:false});
 }
 export async function testPush(){
  const {error}=await invokeEdgeFunction('send-reminders',{body:{mode:'test'}});if(error)throw error;
