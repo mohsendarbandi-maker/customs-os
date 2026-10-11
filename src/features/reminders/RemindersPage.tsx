@@ -38,7 +38,7 @@ export const RemindersPage:React.FC=()=>{
   queryKey:['reminders',filter,kind,search,page,user?.id],
   queryFn:async()=>{
    if(!profile?.organization_id)return{rows:[],count:0};let q=supabase.from('operational_reminders').select('*',{count:'exact'}).order('due_at',{ascending:true}).range(page*PAGE_SIZE,page*PAGE_SIZE+PAGE_SIZE-1);
-   q=q.eq('organization_id',profile.organization_id);
+   q=q.eq('organization_id',profile.organization_id).is('deleted_at',null);
    if(filter==='today'){const[r1,r2]=todayRange();q=q.gte('due_at',r1.toISOString()).lt('due_at',r2.toISOString()).eq('status','open');}
    if(filter==='scheduled')q=q.eq('status','open').gte('due_at',new Date().toISOString());
    if(filter==='overdue')q=q.eq('status','open').lt('due_at',new Date().toISOString());
@@ -82,7 +82,7 @@ export const RemindersPage:React.FC=()=>{
  const openPush=async()=>{setPushOpen(true);if(pushAllowed){try{setPushDevices(await listPushDevices())}catch{setPushDevices([])}}};
  useEffect(()=>{if(!toast)return;const t=window.setTimeout(()=>setToast(null),5000);return()=>window.clearTimeout(t);},[toast]);
  useEffect(()=>{const onOnline=()=>void qc.invalidateQueries({queryKey:['reminders']});window.addEventListener('online',onOnline);return()=>window.removeEventListener('online',onOnline);},[qc]);
- useEffect(()=>{const nav=navigator as Navigator & {setAppBadge?:(contents?:number)=>Promise<void>;clearAppBadge?:()=>Promise<void>};const badger=async()=>{try{const [{data:over}] = await Promise.all([supabase.from('operational_reminders').select('id',{count:'exact',head:true}).eq('status','open').lt('due_at',new Date().toISOString())]);if(nav.setAppBadge)await nav.setAppBadge(over?.length??0);}catch{}};void badger();},[reminders.length]);
+ useEffect(()=>{const nav=navigator as Navigator & {setAppBadge?:(contents?:number)=>Promise<void>;clearAppBadge?:()=>Promise<void>};const badger=async()=>{try{const [{count:overCount,error}] = await Promise.all([supabase.from('operational_reminders').select('id',{count:'exact',head:true}).eq('organization_id',profile?.organization_id??'00000000-0000-0000-0000-000000000000').is('deleted_at',null).eq('status','open').lt('due_at',new Date().toISOString())]);if(error)throw error;if(nav.setAppBadge)await nav.setAppBadge(overCount??0);}catch{}};void badger();},[reminders.length]);
  useEffect(()=>{const channel=supabase.channel('reminders-live').on('postgres_changes',{event:'*',schema:'public',table:'operational_reminders'},()=>{void qc.invalidateQueries({queryKey:['reminders']});}).subscribe();return()=>{void supabase.removeChannel(channel);};},[qc]);
 
  const groups=useMemo(()=>{const out:Array<{label:string;rows:Reminder[]}>=[];for(const r of reminders){const label=groupDayLabel(new Date(r.due_at));const existing=out.find(x=>x.label===label);if(existing)existing.rows.push(r);else out.push({label,rows:[r]});}return out;},[reminders]);
@@ -154,23 +154,23 @@ export const RemindersPage:React.FC=()=>{
 };
 
 const ReminderEditor:React.FC<{reminder:Reminder;onClose:()=>void;onSaved:()=>void;onPicker:()=>void}>=({reminder,onClose,onSaved,onPicker})=>{
- const [title,setTitle]=useState(reminder.title),[notes,setNotes]=useState(reminder.notes??''),[priority,setPriority]=useState(reminder.priority),[kind,setKind]=useState(reminder.kind),[visibility,setVisibility]=useState(reminder.visibility),[recurrence,setRecurrence]=useState(reminder.recurrence_rule??''),[offsets,setOffsets]=useState<number[]>(reminder.alarm_offsets_min?.length?reminder.alarm_offsets_min:[0]),[tagText,setTagText]=useState(reminder.tags.join(' ')),[items,setItems]=useState<Array<{id:string;title:string;is_done:boolean}>>([]),[check,setCheck]=useState(''),[saving,setSaving]=useState(false),[assigneeId,setAssigneeId]=useState(reminder.assignee_id??''),[people,setPeople]=useState<Array<{id:string;full_name:string;role:string}>>([]),[entitySearch,setEntitySearch]=useState(''),[entity,setEntity]=useState<{type:ReminderEntityType;id:string;label:string}|null>(reminder.entity_type&&reminder.entity_id?{type:reminder.entity_type,id:reminder.entity_id,label:'موجودیت پیوندشده'}:null),[entityResults,setEntityResults]=useState<Array<{type:ReminderEntityType;id:string;label:string}>>([]);
+ const [title,setTitle]=useState(reminder.title),[notes,setNotes]=useState(reminder.notes??''),[priority,setPriority]=useState(reminder.priority),[kind,setKind]=useState(reminder.kind),[visibility,setVisibility]=useState(reminder.visibility),[recurrence,setRecurrence]=useState(reminder.recurrence_rule??''),[offsets,setOffsets]=useState<number[]>(reminder.alarm_offsets_min?.length?reminder.alarm_offsets_min:[0]),[tagText,setTagText]=useState(reminder.tags.join(' ')),[items,setItems]=useState<Array<{id:string;title:string;is_done:boolean}>>([]),[check,setCheck]=useState(''),[saving,setSaving]=useState(false),[assigneeId,setAssigneeId]=useState(reminder.assignee_id??''),[people,setPeople]=useState<Array<{id:string;full_name:string;role:string}>>([]),[entitySearch,setEntitySearch]=useState(''),[entity,setEntity]=useState<{type:ReminderEntityType;id:string;label:string;caseId?:string|null}|null>(reminder.entity_type&&reminder.entity_id?{type:reminder.entity_type,id:reminder.entity_id,label:'موجودیت پیوندشده',caseId:reminder.entity_type==='shipments'?reminder.case_id:null}:reminder.shipment_id?{type:'shipments',id:reminder.shipment_id,label:'محموله مرتبط',caseId:reminder.case_id}:null),[entityResults,setEntityResults]=useState<Array<{type:ReminderEntityType;id:string;label:string;caseId?:string|null}>>([]);
  useEffect(()=>{void (async()=>{const {data}=await supabase.from('profiles').select('id,full_name,role').eq('is_active',true).neq('role','client').order('full_name');setPeople((data??[]) as Array<{id:string;full_name:string;role:string}>);})();if(!reminder.id)return;void (async()=>{const {data}=await supabase.from('reminder_checklist_items').select('id,title,is_done').eq('reminder_id',reminder.id).order('position');setItems((data??[]) as Array<{id:string;title:string;is_done:boolean}>);})();},[reminder.id]);
- const save=async()=>{if(!reminder.id){onClose();return;}setSaving(true);const {error}=await supabase.from('operational_reminders').update({title:title.trim()||'یادآور جدید',notes:notes.trim()||null,priority,kind,visibility,assignee_id:assigneeId||null,entity_type:entity?.type??null,entity_id:entity?.id??null,alarm_offsets_min:offsets,recurrence_rule:recurrence.trim()?recurrence.trim():null,tags:tagText.split(/\s+/).filter(Boolean)}).eq('id',reminder.id);setSaving(false);if(error)return;onSaved();};
+ const save=async()=>{if(!reminder.id){onClose();return;}setSaving(true);const {error}=await supabase.from('operational_reminders').update({title:title.trim()||'یادآور جدید',notes:notes.trim()||null,priority,kind,visibility,assignee_id:assigneeId||null,entity_type:entity?.type??null,entity_id:entity?.id??null,shipment_id:entity?.type==='shipments'?entity.id:null,case_id:entity?.type==='shipments'?(entity.caseId??null):(reminder.shipment_id?null:reminder.case_id),alarm_offsets_min:offsets,recurrence_rule:recurrence.trim()?recurrence.trim():null,tags:tagText.split(/\s+/).filter(Boolean)}).eq('id',reminder.id);setSaving(false);if(error)return;onSaved();};
  const addCheck=async()=>{if(!check.trim()||!reminder.id)return;const {data,error}=await supabase.from('reminder_checklist_items').insert({reminder_id:reminder.id,title:check.trim(),position:items.length}).select('id,title,is_done').single();if(!error&&data){setItems(x=>[...x,data as {id:string;title:string;is_done:boolean}]);setCheck('');}};
  const toggleCheck=async(item:{id:string;title:string;is_done:boolean})=>{const next=!item.is_done;setItems(x=>x.map(i=>i.id===item.id?{...i,is_done:next}:i));await supabase.from('reminder_checklist_items').update({is_done:next}).eq('id',item.id);};
  const removeCheck=async(id:string)=>{setItems(x=>x.filter(i=>i.id!==id));await supabase.from('reminder_checklist_items').delete().eq('id',id);};
  const searchEntities=async(raw:string)=>{
-  const q=raw.trim();
+  const q=normalizeFaText(raw).replace(/[%,_()]/g,' ').trim();
   setEntitySearch(raw);
-  if(q.length<2){setEntityResults([]);return;}
+  if(q.length<2||!reminder.organization_id){setEntityResults([]);return;}
   const [s,d]=await Promise.all([
-   supabase.from('shipments').select('id,display_name,bill_of_lading_no').or('display_name.ilike.%'+q+'%,bill_of_lading_no.ilike.%'+q+'%').limit(5),
-   supabase.from('customs_documents').select('id,display_name,original_name,document_number').or('display_name.ilike.%'+q+'%,original_name.ilike.%'+q+'%,document_number.ilike.%'+q+'%').limit(5)
+   supabase.from('shipments').select('id,display_name,bill_of_lading_no,case_id').eq('organization_id',reminder.organization_id).or('display_name.ilike.%'+q+'%,bill_of_lading_no.ilike.%'+q+'%').limit(5),
+   supabase.from('customs_documents').select('id,display_name,original_name,document_number').eq('organization_id',reminder.organization_id).or('display_name.ilike.%'+q+'%,original_name.ilike.%'+q+'%,document_number.ilike.%'+q+'%').limit(5)
   ]);
-  const results:Array<{type:ReminderEntityType;id:string;label:string}>=[];
-  for(const x of (s.data??[]) as Array<{id:string;display_name:string|null;bill_of_lading_no:string|null}>)
-   results.push({type:'shipments',id:x.id,label:x.display_name??x.bill_of_lading_no??'محموله'});
+  const results:Array<{type:ReminderEntityType;id:string;label:string;caseId?:string|null}>=[];
+  for(const x of (s.data??[]) as Array<{id:string;display_name:string|null;bill_of_lading_no:string|null;case_id:string|null}>)
+   results.push({type:'shipments',id:x.id,label:x.display_name??x.bill_of_lading_no??'محموله',caseId:x.case_id});
   for(const x of (d.data??[]) as Array<{id:string;display_name:string|null;original_name:string;document_number:string|null}>)
    results.push({type:'customs_documents',id:x.id,label:x.display_name??x.original_name});
   setEntityResults(results);
