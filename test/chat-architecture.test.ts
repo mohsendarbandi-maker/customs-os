@@ -111,4 +111,14 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('previousStatus!=="failed"&&!staleSending');
   });
 
+  it('refreshes the canonical open chat when attachment security status changes',()=>{
+    const migration=read('supabase/migrations/20261011184000_chat_attachment_realtime_refresh.sql');
+    const page=read('src/features/chat/ChatPage.tsx');
+    expect(migration).toContain('trg_chat_attachment_realtime_update');
+    expect(migration).toContain("'attachment:update'");
+    expect(migration).toContain("security_status, security_checked_at, security_error");
+    expect(page).toContain("event:'attachment:update'");
+    expect(page).toContain('void loadConversation(selectedId,false)');
+  });
+
 });
