@@ -97,7 +97,7 @@ describe('chat architecture invariants',()=>{
   it('keeps existing daily-report destinations eligible for two-way linked chat delivery',()=>{
     const migration=read('supabase/migrations/20261011181000_messenger_daily_reports_and_dual_role.sql');
     expect(migration).toContain("mc.purpose in ('inbox','daily_report','shipment_notifications','shipment')");
-    expect(migration).toContain('mc.conversation_id = new.conversation_id');
+    expect(migration).toContain('and mc.conversation_id=new.conversation_id');
   });
 
 });
