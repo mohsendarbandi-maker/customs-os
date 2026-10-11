@@ -292,6 +292,16 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
  return out({ok:true,claimed:rows.length,sent,failed},200,req);
 }function formatDailyReport(snapshot:Record<string,any>){
  const number=(value:unknown)=>new Intl.NumberFormat("fa-IR").format(Number(value||0));
+ const statusFa=(value:unknown)=>{
+  const statuses:Record<string,string>={
+   draft:"پیش‌نویس",booking_confirmed:"رزرو تأییدشده",loading:"در حال بارگیری",
+   loaded:"بارگیری‌شده",departed:"حرکت‌کرده",in_transit:"در مسیر",
+   approaching_destination:"نزدیک مقصد",anchorage:"لنگرگاه",berthing:"در حال پهلوگیری",
+   discharging:"در حال تخلیه",discharged:"تخلیه‌شده",completed:"تکمیل‌شده",
+   delayed:"با تأخیر",cancelled:"لغوشده"
+  };
+  return statuses[String(value||"").toLowerCase()]||"وضعیت نامشخص";
+ };
  const rawDate=String(snapshot.report_date||"");
  const parsedDate=new Date(rawDate+"T12:00:00+03:30");
  const dateLabel=Number.isNaN(parsedDate.getTime())?rawDate:new Intl.DateTimeFormat("fa-IR-u-ca-persian",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(parsedDate);
@@ -326,7 +336,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
     item.bill_of_lading_no?"بارنامه: "+item.bill_of_lading_no:"",
     item.case_number?"پرونده: "+item.case_number:"",
     item.client_name?"صاحب کالا: "+item.client_name:"",
-    item.current_status?"وضعیت: "+item.current_status:"",
+    item.current_status?"وضعیت: "+statusFa(item.current_status):"",
     item.current_location?"موقعیت: "+item.current_location:"",
     item.cargo_description?"کالا: "+item.cargo_description:""
    ].filter(Boolean);
