@@ -26,7 +26,7 @@ export async function enablePush(){
  return {status:'granted' as const,endpoint:sub.endpoint};
 }
 export async function disablePush(){
- const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(!sub)return;
+ const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(!sub){await setNotificationPreferences({push_enabled:false});return;}
  const endpoint=sub.endpoint;await sub.unsubscribe();
  const {error}=await supabase.from('push_subscriptions').delete().eq('endpoint',endpoint);if(error)throw error; await setNotificationPreferences({push_enabled:false});
 }
@@ -34,7 +34,8 @@ export async function testPush(){
  const {error}=await invokeEdgeFunction('send-reminders',{body:{mode:'test'}});if(error)throw error;
 }
 export async function listPushDevices(){
- const {data,error}=await supabase.from('push_subscriptions').select('id,endpoint,user_agent,platform,created_at,last_seen_at,last_success_at,is_active,failure_count').order('last_seen_at',{ascending:false});
+ const current=(await supabase.auth.getUser()).data.user;if(!current)return [];
+ const {data,error}=await supabase.from('push_subscriptions').select('id,endpoint,user_agent,platform,created_at,last_seen_at,last_success_at,is_active,failure_count').eq('user_id',current.id).order('last_seen_at',{ascending:false});
  if(error)throw error; return data??[];
 }
 export async function setNotificationPreferences(values:Record<string,unknown>){
