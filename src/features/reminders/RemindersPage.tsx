@@ -195,13 +195,93 @@ const ReminderEditor:React.FC<{reminder:Reminder;onClose:()=>void;onSaved:()=>vo
 
 const PushSettings:React.FC<{allowed:boolean;devices:Array<{id:string;platform:string|null;user_agent:string|null;last_seen_at:string;is_active:boolean;failure_count:number}>;busy:boolean;onClose:()=>void;setBusy:(v:boolean)=>void;reloadDevices:()=>Promise<void>}>=({allowed,devices,busy,onClose,setBusy,reloadDevices})=>{
  const [permission,setPermission]=useState<NotificationPermission>(typeof Notification==='undefined'?'default':Notification.permission);
+ const [enabled,setEnabled]=useState(false);
  const [hide,setHide]=useState(false);
- const toggle=async()=>{setBusy(true);try{if(permission==='granted'){await disablePush();setPermission('default');}else{const r=await enablePush();setPermission(r.status==='granted'?'granted':r.status as NotificationPermission);}}catch(e){alert(errorFa(e));}finally{setBusy(false);void reloadDevices();}};
- const test=async()=>{setBusy(true);try{await testPush();}catch(e){alert(errorFa(e));}finally{setBusy(false);}};
- const saveHide=async(v:boolean)=>{setHide(v);try{await setNotificationPreferences({hide_content:v})}catch{}};
- return <div className="fixed inset-0 z-[180] bg-black/55 flex items-end md:items-center justify-center" dir="rtl"><div className="w-full md:max-w-lg max-h-[90vh] overflow-auto rounded-t-[28px] md:rounded-[28px] border app-border bg-[var(--surface)] p-4 pb-[calc(18px+env(safe-area-inset-bottom))]"><div className="flex items-center justify-between"><div><b className="text-lg">اعلان‌ها</b><div className="text-xs app-muted mt-1">اعلان واقعی دستگاه‌های شما</div></div><button onClick={onClose} className="min-w-11 min-h-11 border app-border rounded-xl"><X size={17}/></button></div>
-  {!allowed?<div className="mt-4 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-sm">برای حساب صاحب کالا اعلان داخلی فعال نمی‌شود.</div>:<><div className="mt-4 rounded-2xl border app-border p-3"><div className="flex items-center gap-3"><div className="flex-1"><div className="font-bold text-sm">وضعیت اعلان</div><div className="text-xs app-muted mt-1">{permission==='granted'?'فعال':'فعال نیست'}</div></div><button disabled={busy} onClick={()=>void toggle()} className={'min-h-11 px-4 rounded-xl font-bold '+(permission==='granted'?'border app-border':'bg-[var(--primary)] text-white')}>{permission==='granted'?'غیرفعال‌سازی':'فعال‌سازی'}</button></div><button disabled={busy||permission!=='granted'} onClick={()=>void test()} className="w-full min-h-11 rounded-xl border app-border mt-2 disabled:opacity-40">ارسال اعلان آزمایشی</button></div>
-   <label className="flex items-center gap-3 mt-3 p-3 rounded-2xl border app-border"><input type="checkbox" checked={hide} onChange={e=>void saveHide(e.target.checked)} className="w-5 h-5"/><span><b className="block text-sm">پنهان کردن متن اعلان</b><span className="text-xs app-muted">به‌جای عنوان، متن عمومی نمایش داده می‌شود.</span></span></label>
-   <div className="mt-4"><div className="font-bold text-sm mb-2 flex items-center gap-1"><Users size={15}/>دستگاه‌ها</div>{devices.length?devices.map(d=><div key={d.id} className="rounded-xl border app-border p-3 mb-2"><div className="text-sm font-bold">{d.platform==='ios'?'آیفون':d.platform==='android'?'اندروید':'رایانه'}</div><div className="text-[11px] app-muted mt-1">{new Intl.DateTimeFormat('fa-IR-u-ca-persian',{dateStyle:'medium',timeZone:'Asia/Tehran'}).format(new Date(d.last_seen_at))}</div></div>):<div className="text-xs app-muted border app-border rounded-xl p-4">هنوز دستگاهی ثبت نشده است.</div>}</div></>}
- </div></div>;
+ const [quietStart,setQuietStart]=useState('22:00');
+ const [quietEnd,setQuietEnd]=useState('07:00');
+ const [digestTime,setDigestTime]=useState('08:30');
+ const [loadingSettings,setLoadingSettings]=useState(true);
+ const [savingSettings,setSavingSettings]=useState(false);
+
+ useEffect(()=>{
+  let alive=true;
+  void (async()=>{
+   try{
+    const {data:{user}}=await supabase.auth.getUser();
+    if(!user)return;
+    const {data,error}=await supabase.from('notification_preferences').select('push_enabled,hide_content,quiet_start,quiet_end,morning_digest_time,timezone').eq('user_id',user.id).maybeSingle();
+    if(error)throw error;
+    if(!alive)return;
+    setHide(Boolean(data?.hide_content));
+    setQuietStart(String(data?.quiet_start??'22:00:00').slice(0,5));
+    setQuietEnd(String(data?.quiet_end??'07:00:00').slice(0,5));
+    setDigestTime(String(data?.morning_digest_time??'08:30:00').slice(0,5));
+    try{
+     const registration=await navigator.serviceWorker.ready;
+     const subscription=await registration.pushManager.getSubscription();
+     if(alive)setEnabled(Boolean(subscription)&&Boolean(data?.push_enabled));
+    }catch{if(alive)setEnabled(false);}
+   }catch(error){if(alive)alert(errorFa(error));}
+   finally{if(alive)setLoadingSettings(false);}
+  })();
+  return()=>{alive=false;};
+ },[]);
+
+ const toggle=async()=>{
+  setBusy(true);
+  try{
+   if(enabled){await disablePush();setEnabled(false);}
+   else{const result=await enablePush();const granted=result.status==='granted';setPermission(typeof Notification==='undefined'?'default':Notification.permission);setEnabled(granted);if(!granted)alert(result.status==='denied'?'اجازه اعلان در تنظیمات مرورگر مسدود شده است.':'اجازه اعلان صادر نشد.');}
+  }catch(error){alert(errorFa(error));}
+  finally{setBusy(false);void reloadDevices();}
+ };
+ const test=async()=>{setBusy(true);try{await testPush();alert('درخواست اعلان آزمایشی ارسال شد. رسیدن آن به دستگاه را بررسی کنید.');}catch(error){alert(errorFa(error));}finally{setBusy(false);}};
+ const saveHide=async(v:boolean)=>{setHide(v);try{await setNotificationPreferences({hide_content:v,timezone:'Asia/Tehran'});}catch(error){setHide(!v);alert(errorFa(error));}};
+ const saveSchedule=async()=>{
+  setSavingSettings(true);
+  try{
+   await setNotificationPreferences({quiet_start:quietStart+':00',quiet_end:quietEnd+':00',morning_digest_time:digestTime+':00',hide_content:hide,timezone:'Asia/Tehran'});
+   alert('تنظیمات اعلان ذخیره شد.');
+  }catch(error){alert(errorFa(error));}
+  finally{setSavingSettings(false);}
+ };
+
+ return <div className="fixed inset-0 z-[180] bg-black/55 flex items-end md:items-center justify-center" dir="rtl" role="dialog" aria-modal="true">
+  <div className="w-full md:max-w-lg max-h-[90vh] overflow-auto rounded-t-[28px] md:rounded-[28px] border app-border bg-[var(--surface)] p-4 pb-[calc(18px+env(safe-area-inset-bottom))]">
+   <div className="flex items-center justify-between gap-3">
+    <div><b className="text-lg">اعلان‌ها</b><div className="text-xs app-muted mt-1">اعلان واقعی دستگاه‌ها · زمان تهران</div></div>
+    <button onClick={onClose} className="min-w-11 min-h-11 border app-border rounded-xl" aria-label="بستن"><X size={17}/></button>
+   </div>
+   {!allowed
+    ? <div className="mt-4 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-sm">برای حساب صاحب کالا اعلان داخلی فعال نمی‌شود.</div>
+    : <>
+     <div className="mt-4 rounded-2xl border app-border p-3">
+      <div className="flex items-center gap-3">
+       <div className="flex-1 min-w-0">
+        <div className="font-bold text-sm">وضعیت این دستگاه</div>
+        <div className="text-xs app-muted mt-1">{loadingSettings?'در حال بررسی…':enabled?'اشتراک اعلان فعال است':permission==='denied'?'اجازه اعلان از مرورگر مسدود است':permission==='granted'?'اجازه صادر شده؛ اشتراک دستگاه فعال نیست':'اعلان هنوز فعال نشده است'}</div>
+       </div>
+       <button disabled={busy||loadingSettings} onClick={()=>void toggle()} className={'min-h-11 px-4 rounded-xl font-bold '+(enabled?'border app-border':'bg-[var(--primary)] text-white')}>{busy?'در حال انجام…':enabled?'غیرفعال‌سازی':'فعال‌سازی'}</button>
+      </div>
+      <button disabled={busy||!enabled} onClick={()=>void test()} className="w-full min-h-11 rounded-xl border app-border mt-2 disabled:opacity-40">ارسال اعلان آزمایشی</button>
+      {!enabled&&<div className="text-[11px] app-muted mt-2">در آیفون، اعلان وب فقط برای نسخه افزوده‌شده به صفحه اصلی و از Safari قابل فعال‌سازی است.</div>}
+     </div>
+
+     <div className="mt-3 rounded-2xl border app-border p-3 space-y-3">
+      <div className="font-bold text-sm">ساعات سکوت و خلاصه روزانه</div>
+      <div className="grid grid-cols-2 gap-2">
+       <label className="block text-xs font-bold">شروع ساعات سکوت<input type="time" value={quietStart} onChange={e=>setQuietStart(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3"/></label>
+       <label className="block text-xs font-bold">پایان ساعات سکوت<input type="time" value={quietEnd} onChange={e=>setQuietEnd(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3"/></label>
+      </div>
+      <label className="block text-xs font-bold">زمان ارسال خلاصه صبحگاهی<input type="time" value={digestTime} onChange={e=>setDigestTime(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3"/></label>
+      <label className="flex items-center gap-3 p-2 rounded-xl bg-[var(--surface-2)]"><input type="checkbox" checked={hide} onChange={e=>void saveHide(e.target.checked)} className="w-5 h-5"/><span><b className="block text-sm">پنهان کردن متن اعلان</b><span className="text-xs app-muted">برای حریم خصوصی، عنوان کار روی صفحه قفل نمایش داده نشود.</span></span></label>
+      <button disabled={savingSettings||loadingSettings} onClick={()=>void saveSchedule()} className="w-full min-h-11 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50">{savingSettings?'در حال ذخیره…':'ذخیره تنظیمات اعلان'}</button>
+     </div>
+
+     <div className="mt-4"><div className="font-bold text-sm mb-2 flex items-center gap-1"><Users size={15}/>دستگاه‌های ثبت‌شده</div>
+      {devices.length?devices.filter(d=>d.is_active).map(d=><div key={d.id} className="rounded-xl border app-border p-3 mb-2"><div className="flex items-center gap-2"><div className="text-sm font-bold flex-1">{d.platform==='ios'?'آیفون':d.platform==='android'?'اندروید':'رایانه'}</div><span className="text-[10px] app-muted">ناموفق: {fa(d.failure_count)}</span></div><div className="text-[11px] app-muted mt-1">آخرین فعالیت: {new Intl.DateTimeFormat('fa-IR-u-ca-persian',{dateStyle:'medium',timeZone:'Asia/Tehran'}).format(new Date(d.last_seen_at))}</div></div>):<div className="text-xs app-muted border app-border rounded-xl p-4">هنوز دستگاه فعالی ثبت نشده است.</div>}
+     </div>
+    </>}
+  </div>
+ </div>;
 };
