@@ -139,7 +139,7 @@ const ReminderEditor:React.FC<{reminder:Reminder;onClose:()=>void;onSaved:()=>vo
  const removeCheck=async(id:string)=>{setItems(x=>x.filter(i=>i.id!==id));await supabase.from('reminder_checklist_items').delete().eq('id',id);};
  const searchEntities=async(raw:string)=>{
   setEntitySearch(raw);setEntityError('');
-  const q=raw.trim().replace(/[,()%_*]/g,' ').replace(/\\s+/g,' ').trim();
+  const q=raw.trim().replace(/[,()%_*]/g,' ').replace(/\s+/g,' ').trim();
   if(q.length<2){setEntityResults([]);return;}
   if(!profile?.organization_id){setEntityResults([]);setEntityError('سازمان فعال برای جستجوی موارد مرتبط پیدا نشد.');return;}
   try{
