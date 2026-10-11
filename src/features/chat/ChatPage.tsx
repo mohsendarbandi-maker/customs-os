@@ -191,6 +191,7 @@ export const ChatPage:React.FC=()=>{
    const ch=supabase.channel('chat:'+selectedId,{config:{private:true,broadcast:{self:false,ack:true},presence:{key:user.id}}})
     .on('broadcast',{event:'message:new'},payload=>{const parsed=parseRealtimeMessage(payload.payload);if(parsed?.conversation_id===selectedId){void syncAfter(selectedId);void refresh();}})
     .on('broadcast',{event:'message:update'},payload=>{const parsed=parseRealtimeMessage(payload.payload);if(parsed?.conversation_id===selectedId){void syncAfter(selectedId);void refresh();}})
+    .on('broadcast',{event:'attachment:update'},payload=>{const parsed=parseRealtimeMessage(payload.payload);if(parsed?.conversation_id===selectedId){void loadConversation(selectedId,false);void refresh();}})
     .on('broadcast',{event:'reaction:change'},payload=>{if(parseRealtimeReaction(payload.payload))void loadConversation(selectedId,false)})
     .on('broadcast',{event:'receipt:change'},payload=>{const parsed=parseRealtimeRead(payload.payload);if(!parsed||parsed.user_id===user.id)return;void listMessageReceipts([parsed.message_id]).then(receipts=>{
       if(!active)return;
