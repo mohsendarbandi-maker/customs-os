@@ -39,6 +39,9 @@ jobs:
           set -euo pipefail
           build_id="${GITHUB_SHA}-${GITHUB_RUN_ID}"
           echo "$build_id" > dist/build-marker.txt
+          mkdir -p "dist/__builds/$build_id"
+          cp dist/index.html "dist/__builds/$build_id/index.html"
+          test -s "dist/__builds/$build_id/index.html"
           sed -i -E "s/const BUILD_SIGNATURE = '[^']*';/const BUILD_SIGNATURE = '$build_id';/" worker/index.ts
           grep -F -q "const BUILD_SIGNATURE = '$build_id';" worker/index.ts
           script_src="$(sed -n 's/.*<script[^>]*type="module"[^>]*src="\([^"]*\)".*/\1/p' dist/index.html | head -n 1)"
@@ -96,11 +99,15 @@ jobs:
             echo "Checking $base/"
             success=0
             for attempt in 1 2 3 4 5 6; do
-              if curl --fail --silent --show-error --location --max-time 30 -o /tmp/index.html "$base/?__smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"; then
-                success=1
-                break
+              if curl --fail --silent --show-error --location --max-time 30 -D /tmp/index.headers -o /tmp/index.html "$base/?__smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"; then
+                if grep -Fqi "X-Customs-OS-Build: ${GITHUB_SHA}-${GITHUB_RUN_ID}" /tmp/index.headers; then
+                  success=1
+                  break
+                fi
+                echo "Live Worker is serving a different build signature; retrying..."
+              else
+                echo "Attempt $attempt failed; retrying $base/..."
               fi
-              echo "Attempt $attempt failed; retrying $base/..."
               sleep 10
             done
             test "$success" = 1
@@ -110,17 +117,17 @@ jobs:
             case "$script_src" in /assets/*.js) ;; *) echo "Invalid deployed module path: $script_src"; exit 1;; esac
             echo "Checking $base$script_src"
             asset_success=0
-            for attempt in 1 2 3 4 5 6; do
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
               : > /tmp/app.content-type
               if curl --fail --silent --show-error --location --max-time 30 -o /tmp/app.js -w '%{content_type}' "$base$script_src" > /tmp/app.content-type; then
                 content_type="$(cat /tmp/app.content-type)"
-                if test -s /tmp/app.js && [[ "$content_type" =~ ^(application|text)/javascript ]] && ! grep -qi '<!doctype html' /tmp/app.js; then
+                if test -s /tmp/app.js && [[ "$content_type" =~ ^(application|text)/(javascript|ecmascript) ]] && ! grep -qi '<!doctype html' /tmp/app.js; then
                   asset_success=1
                   break
                 fi
               fi
               echo "JavaScript asset not ready or returned an unexpected response (attempt $attempt); retrying..."
-              sleep 3
+              sleep 5
             done
             test "$asset_success" = 1
 
