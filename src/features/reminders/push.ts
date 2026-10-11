@@ -22,13 +22,14 @@ export async function enablePush(){
  const json={endpoint:sub.endpoint,keys:{p256dh:sub.getKey('p256dh')?btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')!))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''): '',auth:sub.getKey('auth')?btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth')!))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''):''}};
  const {error}=await supabase.rpc('upsert_push_subscription',{p_endpoint:json.endpoint,p_p256dh:json.keys.p256dh,p_auth:json.keys.auth,p_user_agent:navigator.userAgent,p_platform:/iphone|ipad|ipod/i.test(navigator.userAgent)?'ios':/android/i.test(navigator.userAgent)?'android':'desktop'});
  if(error)throw error;
+ await setNotificationPreferences({push_enabled:true,timezone:'Asia/Tehran'});
  await navigator.serviceWorker.ready;
  return {status:'granted' as const,endpoint:sub.endpoint};
 }
 export async function disablePush(){
- const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(!sub)return;
- const endpoint=sub.endpoint;await sub.unsubscribe();
- const {error}=await supabase.from('push_subscriptions').delete().eq('endpoint',endpoint);if(error)throw error; await setNotificationPreferences({push_enabled:false});
+ const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();
+ if(sub){const endpoint=sub.endpoint;await sub.unsubscribe();const {error}=await supabase.from('push_subscriptions').delete().eq('endpoint',endpoint);if(error)throw error;}
+ await setNotificationPreferences({push_enabled:false});
 }
 export async function testPush(){
  const {error}=await invokeEdgeFunction('send-reminders',{body:{mode:'test'}});if(error)throw error;

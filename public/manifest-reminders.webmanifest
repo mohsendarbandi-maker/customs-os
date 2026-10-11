@@ -1,16 +1,17 @@
 {
   "id": "/reminders",
-  "name": "Customs OS — یادآورها",
+  "name": "یادآورهای دربندی",
   "short_name": "یادآورها",
-  "description": "یادآورهای عملیاتی Customs OS",
-  "start_url": "/reminders",
-  "scope": "/",
+  "description": "یادآورهای مستقل و عملیاتی با تقویم شمسی",
+  "start_url": "/reminders?source=pwa-reminders",
+  "scope": "/reminders",
   "display": "standalone",
   "dir": "rtl",
   "lang": "fa",
   "theme_color": "#0F4C81",
   "background_color": "#0b1220",
   "icons":[
+  {"src":"/pwa/reminders-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"},
   {"src":"/pwa/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
   {"src":"/pwa/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
   {"src":"/pwa/icon-192-maskable.png","sizes":"192x192","type":"image/png","purpose":"maskable"},
@@ -20,6 +21,6 @@
   "shortcuts": [
     {"name":"یادآور جدید","short_name":"یادآور جدید","url":"/reminders?new=1","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]},
     {"name":"امروز","short_name":"امروز","url":"/reminders?view=today","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]},
-    {"name":"چت سازمانی","short_name":"چت","url":"/chat","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]}
+    {"name":"موعدهای معوق","short_name":"معوق","url":"/reminders?view=overdue","icons":[{"src":"/pwa/reminders-icon.svg","sizes":"any","type":"image/svg+xml"}]}
   ]
 }

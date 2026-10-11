@@ -1,11 +1,11 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {useSearchParams} from 'react-router-dom';
-import {Bell,CalendarDays,Check,ChevronLeft,ChevronRight,Clock3,MoreHorizontal,Plus,RefreshCw,Search,Trash2,Undo2,X,Users,Repeat2,ListChecks,Mic,MicOff} from 'lucide-react';
+import {Bell,CalendarDays,Check,ChevronLeft,ChevronRight,Clock3,MoreHorizontal,Plus,RefreshCw,Search,SlidersHorizontal,Trash2,Undo2,X,Users,Repeat2,ListChecks,Mic,MicOff} from 'lucide-react';
 import {supabase} from '../../lib/supabase';
 import {rpcWithOfflineQueue} from '../../lib/offlineQueue';
 import {useAuth} from '../../context/AuthContext';
-import {addJalaliDays,formatJalaliDateTime,formatRelativeFa,groupDayLabel,startOfTehranDay,toJalali,zonedJalaliToDate} from '../../lib/jalali';
+import {addJalaliDays,formatJalaliDateTime,formatRelativeFa,groupDayLabel,normalizeFaText,startOfTehranDay,toJalali,zonedJalaliToDate} from '../../lib/jalali';
 import {JalaliDateTimePicker} from './JalaliDateTimePicker';
 import {disablePush,enablePush,listPushDevices,setNotificationPreferences,testPush} from './push';
 import {parseReminder,resolveAssignee,resolveLink,type Reminder,type ReminderKind,type ReminderPriority,ReminderEntityType} from './reminderCore';
@@ -24,7 +24,7 @@ function errorFa(error:unknown){const m=error instanceof Error?error.message:Str
 
 type SpeechRecognitionLike={lang:string;interimResults:boolean;resultIndex:number;onresult:(event:SpeechRecognitionEventLike)=>void;onerror:()=>void;onend:()=>void;start:()=>void;stop:()=>void};type SpeechRecognitionEventLike={resultIndex:number;results:ArrayLike<{0:{transcript?:string}} & ArrayLike<{transcript?:string}>>};
 export const RemindersPage:React.FC=()=>{
- const {profile,user}=useAuth();const qc=useQueryClient();const [params,setParams]=useSearchParams();const [filter,setFilter]=useState<Filter>((params.get('view') as Filter)||'today');const [kind,setKind]=useState<ReminderKind|null>(null);const [search,setSearch]=useState('');const [page,setPage]=useState(0);const [composer,setComposer]=useState('');const [selected,setSelected]=useState<string[]>([]);const [editor,setEditor]=useState<Reminder|null>(null);const [showPicker,setShowPicker]=useState(false);const [toast,setToast]=useState<{text:string;undo?:()=>void}|null>(null);const [pushOpen,setPushOpen]=useState(false);const [pushDevices,setPushDevices]=useState<Array<{id:string;platform:string|null;user_agent:string|null;last_seen_at:string;is_active:boolean;failure_count:number}>>([]);const [pushBusy,setPushBusy]=useState(false);
+ const {profile,user}=useAuth();const qc=useQueryClient();const [params,setParams]=useSearchParams();const [filter,setFilter]=useState<Filter>((params.get('view') as Filter)||'today');const [kind,setKind]=useState<ReminderKind|null>(null);const [search,setSearch]=useState('');const [page,setPage]=useState(0);const [composer,setComposer]=useState('');const [quickDetailsOpen,setQuickDetailsOpen]=useState(false);const [quickDueAt,setQuickDueAt]=useState<Date|null>(null);const [quickAllDay,setQuickAllDay]=useState(false);const [showQuickPicker,setShowQuickPicker]=useState(false);const [quickShipmentId,setQuickShipmentId]=useState<string|null>(null);const [quickCaseId,setQuickCaseId]=useState<string|null>(null);const [quickShipmentSearch,setQuickShipmentSearch]=useState('');const [quickShipmentLabel,setQuickShipmentLabel]=useState('');const [quickShipments,setQuickShipments]=useState<Array<{id:string;display_name:string|null;bill_of_lading_no:string|null;case_id:string|null}>>([]);const [quickNotes,setQuickNotes]=useState('');const [quickPriority,setQuickPriority]=useState<ReminderPriority|null>(null);const [selected,setSelected]=useState<string[]>([]);const [editor,setEditor]=useState<Reminder|null>(null);const [showPicker,setShowPicker]=useState(false);const [toast,setToast]=useState<{text:string;undo?:()=>void}|null>(null);const [pushOpen,setPushOpen]=useState(false);const [pushDevices,setPushDevices]=useState<Array<{id:string;platform:string|null;user_agent:string|null;last_seen_at:string;is_active:boolean;failure_count:number}>>([]);const [pushBusy,setPushBusy]=useState(false);
  const pushAllowed=profile?.role!=='client';
  const [recording,setRecording]=useState(false);
  const [menuId,setMenuId]=useState<string|null>(null);
@@ -38,7 +38,7 @@ export const RemindersPage:React.FC=()=>{
   queryKey:['reminders',filter,kind,search,page,user?.id],
   queryFn:async()=>{
    if(!profile?.organization_id)return{rows:[],count:0};let q=supabase.from('operational_reminders').select('*',{count:'exact'}).order('due_at',{ascending:true}).range(page*PAGE_SIZE,page*PAGE_SIZE+PAGE_SIZE-1);
-   q=q.eq('organization_id',profile.organization_id);
+   q=q.eq('organization_id',profile.organization_id).is('deleted_at',null);
    if(filter==='today'){const[r1,r2]=todayRange();q=q.gte('due_at',r1.toISOString()).lt('due_at',r2.toISOString()).eq('status','open');}
    if(filter==='scheduled')q=q.eq('status','open').gte('due_at',new Date().toISOString());
    if(filter==='overdue')q=q.eq('status','open').lt('due_at',new Date().toISOString());
@@ -52,14 +52,14 @@ export const RemindersPage:React.FC=()=>{
  const reminders=query.data?.rows??[];
  const upsertVisible=(fn:(rows:Reminder[])=>Reminder[])=>{qc.setQueriesData<QueryResult>({queryKey:['reminders']},old=>old?{...old,rows:fn(old.rows)}:old);};
  const create=useMutation({
-  mutationFn:async({parsed,clientUuid}:{parsed:ReturnType<typeof parseReminder>;clientUuid:string})=>{
-   const payload={title:parsed.title,due_at:parsed.dueAt.toISOString(),priority:parsed.priority,kind:parsed.kind,recurrence_rule:parsed.recurrenceRule,alarm_offsets_min:parsed.alarmOffsets,visibility:'private',all_day:false,timezone:'Asia/Tehran',client_uuid:clientUuid};
+  mutationFn:async({parsed,clientUuid,shipmentId,caseId,dueAt,allDay,notes,priority}:{parsed:ReturnType<typeof parseReminder>;clientUuid:string;shipmentId?:string|null;caseId?:string|null;dueAt?:Date|null;allDay?:boolean;notes?:string;priority?:ReminderPriority|null})=>{
+   const payload={title:parsed.title,due_at:(dueAt??parsed.dueAt).toISOString(),priority:priority??parsed.priority,kind:parsed.kind,recurrence_rule:parsed.recurrenceRule,alarm_offsets_min:parsed.alarmOffsets,visibility:'private',all_day:allDay??false,timezone:'Asia/Tehran',client_uuid:clientUuid,notes:notes?.trim()||null,shipment_id:shipmentId??null,case_id:caseId??null,...(shipmentId?{entity_type:'shipments',entity_id:shipmentId}:{})};
    const result=await rpcWithOfflineQueue('create_operational_reminder',{p_payload:payload}) as {data:Reminder|null;error:{message:string}|null;queued?:boolean};
    if(result.error)throw new Error(result.error.message);
-   if(result.data){const link=await resolveLink(parsed.linkQuery,parsed.kind).catch(()=>null);const assignee=await resolveAssignee(parsed.assigneeName).catch(()=>null);if(link||assignee){await supabase.from('operational_reminders').update({...link,...(assignee?{assignee_id:assignee}: {})}).eq('id',result.data.id);}}
+   if(result.data){const link=shipmentId?null:await resolveLink(parsed.linkQuery,parsed.kind).catch(()=>null);const assignee=await resolveAssignee(parsed.assigneeName).catch(()=>null);if(link||assignee){await supabase.from('operational_reminders').update({...link,...(assignee?{assignee_id:assignee}: {})}).eq('id',result.data.id);}}
    return result;
   },
-  onMutate:async({parsed,clientUuid})=>{await qc.cancelQueries({queryKey:['reminders']});const temp={id:'local-'+clientUuid,organization_id:profile?.organization_id??null,case_id:null,shipment_id:null,title:parsed.title,description:null,due_at:parsed.dueAt.toISOString(),priority:parsed.priority,status:'open',created_by:user?.id??null,completed_at:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),due_precision:'day',source_key:null,is_system:false,kind:parsed.kind,entity_type:null,entity_id:null,assignee_id:user?.id??null,visibility:'private',all_day:false,timezone:'Asia/Tehran',alarm_offsets_min:parsed.alarmOffsets,recurrence_rule:parsed.recurrenceRule,recurrence_until:null,series_id:null,occurrence_key:null,snoozed_until:null,snooze_count:0,tags:[],notes:null,client_uuid:clientUuid,deleted_at:null,completed_by:null} as Reminder;upsertVisible(rows=>[temp,...rows]);return{tempId:temp.id};},
+  onMutate:async({parsed,clientUuid,shipmentId,caseId,dueAt,allDay,notes,priority})=>{await qc.cancelQueries({queryKey:['reminders']});const temp={id:'local-'+clientUuid,organization_id:profile?.organization_id??null,case_id:caseId??null,shipment_id:shipmentId??null,title:parsed.title,description:null,due_at:(dueAt??parsed.dueAt).toISOString(),priority:priority??parsed.priority,status:'open',created_by:user?.id??null,completed_at:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),due_precision:'day',source_key:null,is_system:false,kind:parsed.kind,entity_type:shipmentId?'shipments':null,entity_id:shipmentId??null,assignee_id:user?.id??null,visibility:'private',all_day:allDay??false,timezone:'Asia/Tehran',alarm_offsets_min:parsed.alarmOffsets,recurrence_rule:parsed.recurrenceRule,recurrence_until:null,series_id:null,occurrence_key:null,snoozed_until:null,snooze_count:0,tags:[],notes:notes?.trim()||null,client_uuid:clientUuid,deleted_at:null,completed_by:null} as Reminder;upsertVisible(rows=>[temp,...rows]);return{tempId:temp.id};},
   onError:(e,_v,ctx)=>{if(ctx?.tempId)upsertVisible(rows=>rows.filter(x=>x.id!==ctx.tempId));setToast({text:errorFa(e)});},
   onSettled:()=>{void qc.invalidateQueries({queryKey:['reminders']});}
  });
@@ -69,7 +69,9 @@ export const RemindersPage:React.FC=()=>{
   onError:(e,v,ctx)=>{if(ctx?.old)upsertVisible(rows=>rows.map(x=>x.id===v.id?ctx.old!:x));setToast({text:errorFa(e)});},
   onSettled:()=>{void qc.invalidateQueries({queryKey:['reminders']});}
  });
- const createQuick=async(text:string)=>{const parsed=parseReminder(text);const clientUuid=crypto.randomUUID();setComposer('');await create.mutateAsync({parsed,clientUuid}).catch(()=>{});};
+ const searchQuickShipments=async(raw:string)=>{setQuickShipmentSearch(raw);const term=normalizeFaText(raw).replace(/[%,_()]/g,' ').trim();if(term.length<2||!profile?.organization_id){setQuickShipments([]);return;}const columns='id,display_name,bill_of_lading_no,case_id';const [byName,byBill]=await Promise.all([supabase.from('shipments').select(columns).eq('organization_id',profile.organization_id).ilike('display_name',`%${term}%`).limit(5),supabase.from('shipments').select(columns).eq('organization_id',profile.organization_id).ilike('bill_of_lading_no',`%${term}%`).limit(5)]);if(byName.error||byBill.error){setQuickShipments([]);setToast({text:'جستجوی محموله انجام نشد.'});return;}const rows=[...((byName.data??[]) as Array<{id:string;display_name:string|null;bill_of_lading_no:string|null;case_id:string|null}>),...((byBill.data??[]) as Array<{id:string;display_name:string|null;bill_of_lading_no:string|null;case_id:string|null}>)];setQuickShipments(rows.filter((x,i)=>rows.findIndex(y=>y.id===x.id)===i).slice(0,8));};
+ const resetQuickDetails=()=>{setQuickDueAt(null);setQuickAllDay(false);setQuickShipmentId(null);setQuickCaseId(null);setQuickShipmentLabel('');setQuickShipmentSearch('');setQuickShipments([]);setQuickNotes('');setQuickPriority(null);};
+ const createQuick=async(text:string)=>{const parsed=parseReminder(text);try{const result=await create.mutateAsync({parsed,clientUuid:crypto.randomUUID(),shipmentId:quickShipmentId,caseId:quickCaseId,dueAt:quickDueAt,allDay:quickAllDay,notes:quickNotes,priority:quickPriority});setComposer('');resetQuickDetails();setQuickDetailsOpen(false);setToast({text:result?.queued?'یادآور در صف ثبت آفلاین قرار گرفت.':'یادآور ثبت شد.'});}catch{ /* onError presents a localized message; retain text for retry. */ }};
  const toggleDone=(r:Reminder)=>{if(r.id.startsWith('local-'))return;update.mutate({id:r.id,patch:r.status==='done'?{status:'open',completed_at:null,completed_by:null}:{status:'done',completed_at:new Date().toISOString(),completed_by:user?.id??null}});};
  const softDelete=(r:Reminder)=>{const deletedAt=new Date().toISOString();update.mutate({id:r.id,patch:{deleted_at:deletedAt,status:'dismissed'}});setToast({text:'یادآور به سطل پنهان منتقل شد.',undo:()=>update.mutate({id:r.id,patch:{deleted_at:null,status:'open'}})});};
  const snooze=(r:Reminder,minutes:number)=>update.mutate({id:r.id,patch:{snoozed_until:new Date(Date.now()+minutes*60000).toISOString(),snooze_count:r.snooze_count+1}});
@@ -80,7 +82,7 @@ export const RemindersPage:React.FC=()=>{
  const openPush=async()=>{setPushOpen(true);if(pushAllowed){try{setPushDevices(await listPushDevices())}catch{setPushDevices([])}}};
  useEffect(()=>{if(!toast)return;const t=window.setTimeout(()=>setToast(null),5000);return()=>window.clearTimeout(t);},[toast]);
  useEffect(()=>{const onOnline=()=>void qc.invalidateQueries({queryKey:['reminders']});window.addEventListener('online',onOnline);return()=>window.removeEventListener('online',onOnline);},[qc]);
- useEffect(()=>{const nav=navigator as Navigator & {setAppBadge?:(contents?:number)=>Promise<void>;clearAppBadge?:()=>Promise<void>};const badger=async()=>{try{const [{data:over}] = await Promise.all([supabase.from('operational_reminders').select('id',{count:'exact',head:true}).eq('status','open').lt('due_at',new Date().toISOString())]);if(nav.setAppBadge)await nav.setAppBadge(over?.length??0);}catch{}};void badger();},[reminders.length]);
+ useEffect(()=>{const nav=navigator as Navigator & {setAppBadge?:(contents?:number)=>Promise<void>;clearAppBadge?:()=>Promise<void>};const badger=async()=>{try{const [{count:overCount,error}] = await Promise.all([supabase.from('operational_reminders').select('id',{count:'exact',head:true}).eq('organization_id',profile?.organization_id??'00000000-0000-0000-0000-000000000000').is('deleted_at',null).eq('status','open').lt('due_at',new Date().toISOString())]);if(error)throw error;if(nav.setAppBadge)await nav.setAppBadge(overCount??0);}catch{}};void badger();},[reminders.length]);
  useEffect(()=>{const channel=supabase.channel('reminders-live').on('postgres_changes',{event:'*',schema:'public',table:'operational_reminders'},()=>{void qc.invalidateQueries({queryKey:['reminders']});}).subscribe();return()=>{void supabase.removeChannel(channel);};},[qc]);
 
  const groups=useMemo(()=>{const out:Array<{label:string;rows:Reminder[]}>=[];for(const r of reminders){const label=groupDayLabel(new Date(r.due_at));const existing=out.find(x=>x.label===label);if(existing)existing.rows.push(r);else out.push({label,rows:[r]});}return out;},[reminders]);
@@ -107,9 +109,9 @@ export const RemindersPage:React.FC=()=>{
    {query.isError&&<div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm">{errorFa(query.error)}</div>}
 
    <div className="mt-3 space-y-5">
-    {groups.map(group=><section key={group.label}><div className="px-2 mb-2 text-sm font-black">{group.label}</div><div className="space-y-2">{group.rows.map(r=><article key={r.id} onPointerDown={e=>{onCardPointerDown(r.id,e);setPointerStart({x:e.clientX})}} onPointerUp={e=>{onCardPointerUp(r.id,e);if(pointerStart){performSwipe(r,e,pointerStart);setPointerStart(null)}}} className={'relative overflow-hidden rounded-2xl border app-border bg-[var(--surface)] p-3 transition '+(selected.includes(r.id)?'ring-2 ring-[var(--primary)] ':'')} style={{contentVisibility:'auto',containIntrinsicSize:'0 96px'}}>
+    {groups.map(group=><section key={group.label}><div className="px-2 mb-2 text-sm font-black">{group.label}</div><div className="space-y-2">{group.rows.map(r=><article key={r.id} onPointerDown={e=>{onCardPointerDown(r.id,e);setPointerStart({x:e.clientX})}} onPointerUp={e=>{onCardPointerUp(r.id,e);if(pointerStart){performSwipe(r,e,pointerStart);setPointerStart(null)}}} className={'relative overflow-visible rounded-2xl border app-border bg-[var(--surface)] p-3 transition '+(selected.includes(r.id)?'ring-2 ring-[var(--primary)] ':'')} style={{contentVisibility:'auto',containIntrinsicSize:'0 96px'}}>
       <div className="flex items-start gap-3"><button aria-label={r.status==='done'?'بازگرداندن':'انجام شد'} onClick={()=>toggleDone(r)} className={'min-w-11 min-h-11 rounded-xl grid place-items-center border app-border '+(r.status==='done'?'bg-emerald-600 text-white':'bg-[var(--surface-2)]')}>{r.status==='done'?<Check size={18}/>:<span className="w-5 h-5 rounded-full border-2 border-current"/>}</button>
-       <div className="flex-1 min-w-0"><div className={'font-black text-sm leading-6 '+(r.status==='done'?'line-through opacity-60':'')}>{r.title}</div><div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] app-muted"><span><Clock3 size={12} className="inline ml-1"/>{formatRelativeFa(new Date(r.due_at))} · {formatJalaliDateTime(new Date(r.due_at))}</span><span>{priorityLabel[r.priority]}</span><span>{kinds.find(x=>x[0]===r.kind)?.[1]??'سایر'}</span>{r.assignee_id&&r.assignee_id===user?.id&&<span>به من</span>}</div>{(r.case_id||r.shipment_id)&&<div className="text-[11px] mt-1 text-[var(--primary)]">{r.case_id?'پرونده مرتبط':'محموله مرتبط'}</div>}{r.notes&&<div className="text-xs app-muted mt-1 line-clamp-2">{r.notes}</div>}</div>
+       <div className="flex-1 min-w-0"><div className={'font-black text-sm leading-6 '+(r.status==='done'?'line-through opacity-60':'')}>{r.title}</div><div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] app-muted"><span><Clock3 size={12} className="inline ml-1"/>موعد: {formatRelativeFa(new Date(r.due_at))} · {formatJalaliDateTime(new Date(r.due_at))}</span><span>{priorityLabel[r.priority]}</span><span>{kinds.find(x=>x[0]===r.kind)?.[1]??'سایر'}</span>{r.assignee_id&&r.assignee_id===user?.id&&<span>به من</span>}</div>{(r.case_id||r.shipment_id)&&<div className="text-[11px] mt-1 text-[var(--primary)]">{r.case_id?'پرونده مرتبط':'محموله مرتبط'}</div>}{r.notes&&<div className="text-xs app-muted mt-1 line-clamp-2">{r.notes}</div>}</div>
        <button onClick={()=>setMenuId(menuId===r.id?null:r.id)} className="min-w-11 min-h-11 rounded-xl border app-border bg-[var(--surface-2)]"><MoreHorizontal size={18}/></button>{menuId===r.id&&<div className="absolute left-3 top-14 z-20 w-44 rounded-2xl border app-border bg-[var(--surface)] p-2 shadow-xl"><button onClick={()=>{snooze(r,10);setMenuId(null)}} className="w-full min-h-10 rounded-xl text-right px-3 text-xs">۱۰ دقیقه بعد</button><button onClick={()=>{snooze(r,60);setMenuId(null)}} className="w-full min-h-10 rounded-xl text-right px-3 text-xs">۱ ساعت بعد</button><button onClick={()=>{update.mutate({id:r.id,patch:{snoozed_until:tomorrow().toISOString(),snooze_count:r.snooze_count+1}});setMenuId(null)}} className="w-full min-h-10 rounded-xl text-right px-3 text-xs">فردا ۹ صبح</button><button onClick={()=>{softDelete(r);setMenuId(null)}} className="w-full min-h-10 rounded-xl text-right px-3 text-xs text-red-500">پنهان‌کردن</button><button onClick={()=>{setEditor(r);setMenuId(null)}} className="w-full min-h-10 rounded-xl text-right px-3 text-xs">ویرایش</button></div>}
       </div>
      </article>)}</div></section>)}
@@ -118,8 +120,32 @@ export const RemindersPage:React.FC=()=>{
    <div className="flex items-center justify-between mt-5 pb-10"><button disabled={page===0} onClick={()=>setPage(x=>x-1)} className="min-h-11 px-3 rounded-xl border app-border disabled:opacity-40"><ChevronRight size={17}/></button><span className="text-xs app-muted">{fa(page+1)} از {fa(totalPages)}</span><button disabled={page+1>=totalPages} onClick={()=>setPage(x=>x+1)} className="min-h-11 px-3 rounded-xl border app-border disabled:opacity-40"><ChevronLeft size={17}/></button></div>
   </section>
 
-  <form onSubmit={submitComposer} className="fixed bottom-0 inset-x-0 z-30 px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-2 bg-gradient-to-t from-[var(--bg)] via-[var(--bg)]/95 to-transparent"><div className="max-w-6xl mx-auto flex items-end gap-2"><button type="button" onClick={()=>document.getElementById('reminder-quick-input')?.focus()} className="min-w-12 min-h-12 rounded-2xl bg-[var(--primary)] text-white grid place-items-center shadow-xl" aria-label="یادآور جدید"><Plus size={21}/></button><button type="button" onClick={()=>{if(!recording)startDictation()}} className="min-w-12 min-h-12 rounded-2xl border app-border bg-[var(--surface)] grid place-items-center" aria-label="دیکته صوتی">{recording?<MicOff size={18}/>:<Mic size={18}/>}</button><input id="reminder-quick-input" value={composer} onChange={e=>setComposer(e.target.value)} onKeyDown={e=>{if(e.key==='n'&&e.metaKey)setComposer('')}} placeholder="مثلاً: فردا ساعت ۹ صبح پیگیری ترخیص کوتاژ ۱۲۳" className="flex-1 min-h-14 rounded-2xl border app-border bg-[var(--surface)] shadow-xl px-4 outline-none focus:ring-2 focus:ring-[var(--primary)]/30" enterKeyHint="done"/><button type="submit" disabled={!composer.trim()||create.isPending} className="min-w-12 min-h-12 rounded-2xl bg-[var(--text)] text-[var(--surface)] disabled:opacity-40 grid place-items-center"><Plus size={20}/></button></div></form>
+  <form onSubmit={submitComposer} className="fixed bottom-0 inset-x-0 z-30 px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-2 bg-gradient-to-t from-[var(--bg)] via-[var(--bg)]/95 to-transparent">
+   <div className="max-w-6xl mx-auto">
+    {quickDetailsOpen&&<div className="mb-2 max-h-[42vh] overflow-y-auto rounded-2xl border app-border bg-[var(--surface)] p-3 shadow-xl space-y-2">
+     <div className="grid grid-cols-2 gap-2">
+      <button type="button" onClick={()=>{setQuickDueAt(quickDueAt??preview?.dueAt??new Date(Date.now()+3600000));setShowQuickPicker(true)}} className="min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-right text-xs"><CalendarDays size={15} className="inline ml-1"/>{formatJalaliDateTime(quickDueAt??preview?.dueAt??new Date(Date.now()+3600000))}<span className="block app-muted mt-1">تقویم شمسی</span></button>
+      <label className="min-h-11 flex items-center gap-2 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-xs font-bold"><span className="flex-1">اولویت</span><select value={quickPriority??''} onChange={e=>setQuickPriority((e.target.value||null) as ReminderPriority|null)} className="max-w-[110px] bg-transparent outline-none"><option value="">از متن</option><option value="low">کم</option><option value="normal">عادی</option><option value="high">زیاد</option><option value="urgent">فوری</option></select></label>
+     </div>
+     <div className="space-y-2">
+      <div className="text-xs font-bold">اتصال اختیاری به محموله</div>
+      {quickShipmentId&&<div className="flex items-center gap-2 rounded-xl bg-[var(--primary)]/10 p-2 text-xs"><span className="flex-1 min-w-0 truncate">{quickShipmentLabel}</span><button type="button" onClick={()=>{setQuickShipmentId(null);setQuickCaseId(null);setQuickShipmentLabel('')}} className="min-h-9 px-2 rounded-lg border app-border">برداشتن</button></div>}
+      <input value={quickShipmentSearch} onChange={e=>void searchQuickShipments(e.target.value)} placeholder="نام محموله یا شماره بارنامه را جستجو کنید…" className="w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3 text-sm outline-none"/>
+      {quickShipments.length>0&&<div className="rounded-xl border app-border overflow-hidden divide-y app-border">{quickShipments.map(sh=><button key={sh.id} type="button" onClick={()=>{setQuickShipmentId(sh.id);setQuickCaseId(sh.case_id);setQuickShipmentLabel(sh.display_name??sh.bill_of_lading_no??'محموله');setQuickShipmentSearch('');setQuickShipments([])}} className="w-full min-h-11 p-2 text-right text-xs hover:bg-[var(--surface-2)]"><span className="block font-bold">{sh.display_name??'محموله بدون نام'}</span><span className="app-muted">{sh.bill_of_lading_no??'بدون شماره بارنامه'}</span></button>)}</div>}
+     </div>
+     <textarea value={quickNotes} onChange={e=>setQuickNotes(e.target.value)} rows={2} placeholder="توضیح تکمیلی (اختیاری)" className="w-full rounded-xl border app-border bg-[var(--surface-2)] p-3 text-sm outline-none"/>
+     <div className="text-[10px] app-muted">تاریخ و ارتباط با محموله اختیاری است؛ در صورت خالی ماندن، زمان متن سریع ثبت استفاده می‌شود.</div>
+    </div>}
+    <div className="flex items-end gap-2">
+     <button type="button" onClick={()=>setQuickDetailsOpen(v=>!v)} className={'min-w-12 min-h-12 rounded-2xl border app-border grid place-items-center '+(quickDetailsOpen?'bg-[var(--primary)] text-white':'bg-[var(--surface)]')} aria-label="تنظیم موعد و اتصال به محموله" title="موعد و محموله"><SlidersHorizontal size={19}/></button>
+     <button type="button" onClick={()=>{if(!recording)startDictation()}} className="min-w-12 min-h-12 rounded-2xl border app-border bg-[var(--surface)] grid place-items-center" aria-label="دیکته صوتی">{recording?<MicOff size={18}/>:<Mic size={18}/>}</button>
+     <input id="reminder-quick-input" value={composer} onChange={e=>setComposer(e.target.value)} onKeyDown={e=>{if(e.key==='n'&&e.metaKey)setComposer('')}} placeholder="مثلاً: فردا ساعت ۹ صبح پیگیری ترخیص…" className="flex-1 min-w-0 min-h-14 rounded-2xl border app-border bg-[var(--surface)] shadow-xl px-4 outline-none focus:ring-2 focus:ring-[var(--primary)]/30" enterKeyHint="done"/>
+     <button type="submit" disabled={!composer.trim()||create.isPending} className="min-h-12 rounded-2xl bg-[var(--text)] text-[var(--surface)] disabled:opacity-40 flex items-center justify-center gap-1.5 px-3 font-bold text-sm"><Plus size={18}/><span>ثبت</span></button>
+    </div>
+   </div>
+  </form>
 
+  {showQuickPicker&&<JalaliDateTimePicker value={quickDueAt??preview?.dueAt??new Date(Date.now()+3600000)} onChange={setQuickDueAt} allDay={quickAllDay} onAllDayChange={setQuickAllDay} onClose={()=>setShowQuickPicker(false)}/>}
   {editor&&<ReminderEditor reminder={editor} onClose={()=>setEditor(null)} onSaved={()=>{setEditor(null);void qc.invalidateQueries({queryKey:['reminders']})}} onPicker={()=>setShowPicker(true)}/>}
   {showPicker&&editor&&<JalaliDateTimePicker value={new Date(editor.due_at)} onChange={d=>setEditor({...editor,due_at:d.toISOString()})} allDay={editor.all_day} onAllDayChange={v=>setEditor({...editor,all_day:v})} onClose={()=>setShowPicker(false)}/>}
   {pushOpen&&<PushSettings allowed={pushAllowed} devices={pushDevices} busy={pushBusy} onClose={()=>setPushOpen(false)} setBusy={setPushBusy} reloadDevices={async()=>setPushDevices(await listPushDevices())}/>}
@@ -128,23 +154,23 @@ export const RemindersPage:React.FC=()=>{
 };
 
 const ReminderEditor:React.FC<{reminder:Reminder;onClose:()=>void;onSaved:()=>void;onPicker:()=>void}>=({reminder,onClose,onSaved,onPicker})=>{
- const [title,setTitle]=useState(reminder.title),[notes,setNotes]=useState(reminder.notes??''),[priority,setPriority]=useState(reminder.priority),[kind,setKind]=useState(reminder.kind),[visibility,setVisibility]=useState(reminder.visibility),[recurrence,setRecurrence]=useState(reminder.recurrence_rule??''),[offsets,setOffsets]=useState<number[]>(reminder.alarm_offsets_min?.length?reminder.alarm_offsets_min:[0]),[tagText,setTagText]=useState(reminder.tags.join(' ')),[items,setItems]=useState<Array<{id:string;title:string;is_done:boolean}>>([]),[check,setCheck]=useState(''),[saving,setSaving]=useState(false),[assigneeId,setAssigneeId]=useState(reminder.assignee_id??''),[people,setPeople]=useState<Array<{id:string;full_name:string;role:string}>>([]),[entitySearch,setEntitySearch]=useState(''),[entity,setEntity]=useState<{type:ReminderEntityType;id:string;label:string}|null>(reminder.entity_type&&reminder.entity_id?{type:reminder.entity_type,id:reminder.entity_id,label:'موجودیت پیوندشده'}:null),[entityResults,setEntityResults]=useState<Array<{type:ReminderEntityType;id:string;label:string}>>([]);
+ const [title,setTitle]=useState(reminder.title),[notes,setNotes]=useState(reminder.notes??''),[priority,setPriority]=useState(reminder.priority),[kind,setKind]=useState(reminder.kind),[visibility,setVisibility]=useState(reminder.visibility),[recurrence,setRecurrence]=useState(reminder.recurrence_rule??''),[offsets,setOffsets]=useState<number[]>(reminder.alarm_offsets_min?.length?reminder.alarm_offsets_min:[0]),[tagText,setTagText]=useState(reminder.tags.join(' ')),[items,setItems]=useState<Array<{id:string;title:string;is_done:boolean}>>([]),[check,setCheck]=useState(''),[saving,setSaving]=useState(false),[assigneeId,setAssigneeId]=useState(reminder.assignee_id??''),[people,setPeople]=useState<Array<{id:string;full_name:string;role:string}>>([]),[entitySearch,setEntitySearch]=useState(''),[entity,setEntity]=useState<{type:ReminderEntityType;id:string;label:string;caseId?:string|null}|null>(reminder.entity_type&&reminder.entity_id?{type:reminder.entity_type,id:reminder.entity_id,label:'موجودیت پیوندشده',caseId:reminder.entity_type==='shipments'?reminder.case_id:null}:reminder.shipment_id?{type:'shipments',id:reminder.shipment_id,label:'محموله مرتبط',caseId:reminder.case_id}:null),[entityResults,setEntityResults]=useState<Array<{type:ReminderEntityType;id:string;label:string;caseId?:string|null}>>([]);
  useEffect(()=>{void (async()=>{const {data}=await supabase.from('profiles').select('id,full_name,role').eq('is_active',true).neq('role','client').order('full_name');setPeople((data??[]) as Array<{id:string;full_name:string;role:string}>);})();if(!reminder.id)return;void (async()=>{const {data}=await supabase.from('reminder_checklist_items').select('id,title,is_done').eq('reminder_id',reminder.id).order('position');setItems((data??[]) as Array<{id:string;title:string;is_done:boolean}>);})();},[reminder.id]);
- const save=async()=>{if(!reminder.id){onClose();return;}setSaving(true);const {error}=await supabase.from('operational_reminders').update({title:title.trim()||'یادآور جدید',notes:notes.trim()||null,priority,kind,visibility,assignee_id:assigneeId||null,entity_type:entity?.type??null,entity_id:entity?.id??null,alarm_offsets_min:offsets,recurrence_rule:recurrence.trim()?recurrence.trim():null,tags:tagText.split(/\s+/).filter(Boolean)}).eq('id',reminder.id);setSaving(false);if(error)return;onSaved();};
+ const save=async()=>{if(!reminder.id){onClose();return;}setSaving(true);const {error}=await supabase.from('operational_reminders').update({title:title.trim()||'یادآور جدید',notes:notes.trim()||null,priority,kind,visibility,assignee_id:assigneeId||null,entity_type:entity?.type??null,entity_id:entity?.id??null,shipment_id:entity?.type==='shipments'?entity.id:null,case_id:entity?.type==='shipments'?(entity.caseId??null):(reminder.shipment_id?null:reminder.case_id),alarm_offsets_min:offsets,recurrence_rule:recurrence.trim()?recurrence.trim():null,tags:tagText.split(/\s+/).filter(Boolean)}).eq('id',reminder.id);setSaving(false);if(error)return;onSaved();};
  const addCheck=async()=>{if(!check.trim()||!reminder.id)return;const {data,error}=await supabase.from('reminder_checklist_items').insert({reminder_id:reminder.id,title:check.trim(),position:items.length}).select('id,title,is_done').single();if(!error&&data){setItems(x=>[...x,data as {id:string;title:string;is_done:boolean}]);setCheck('');}};
  const toggleCheck=async(item:{id:string;title:string;is_done:boolean})=>{const next=!item.is_done;setItems(x=>x.map(i=>i.id===item.id?{...i,is_done:next}:i));await supabase.from('reminder_checklist_items').update({is_done:next}).eq('id',item.id);};
  const removeCheck=async(id:string)=>{setItems(x=>x.filter(i=>i.id!==id));await supabase.from('reminder_checklist_items').delete().eq('id',id);};
  const searchEntities=async(raw:string)=>{
-  const q=raw.trim();
+  const q=normalizeFaText(raw).replace(/[%,_()]/g,' ').trim();
   setEntitySearch(raw);
-  if(q.length<2){setEntityResults([]);return;}
+  if(q.length<2||!reminder.organization_id){setEntityResults([]);return;}
   const [s,d]=await Promise.all([
-   supabase.from('shipments').select('id,display_name,bill_of_lading_no').or('display_name.ilike.%'+q+'%,bill_of_lading_no.ilike.%'+q+'%').limit(5),
-   supabase.from('customs_documents').select('id,display_name,original_name,document_number').or('display_name.ilike.%'+q+'%,original_name.ilike.%'+q+'%,document_number.ilike.%'+q+'%').limit(5)
+   supabase.from('shipments').select('id,display_name,bill_of_lading_no,case_id').eq('organization_id',reminder.organization_id).or('display_name.ilike.%'+q+'%,bill_of_lading_no.ilike.%'+q+'%').limit(5),
+   supabase.from('customs_documents').select('id,display_name,original_name,document_number').eq('organization_id',reminder.organization_id).or('display_name.ilike.%'+q+'%,original_name.ilike.%'+q+'%,document_number.ilike.%'+q+'%').limit(5)
   ]);
-  const results:Array<{type:ReminderEntityType;id:string;label:string}>=[];
-  for(const x of (s.data??[]) as Array<{id:string;display_name:string|null;bill_of_lading_no:string|null}>)
-   results.push({type:'shipments',id:x.id,label:x.display_name??x.bill_of_lading_no??'محموله'});
+  const results:Array<{type:ReminderEntityType;id:string;label:string;caseId?:string|null}>=[];
+  for(const x of (s.data??[]) as Array<{id:string;display_name:string|null;bill_of_lading_no:string|null;case_id:string|null}>)
+   results.push({type:'shipments',id:x.id,label:x.display_name??x.bill_of_lading_no??'محموله',caseId:x.case_id});
   for(const x of (d.data??[]) as Array<{id:string;display_name:string|null;original_name:string;document_number:string|null}>)
    results.push({type:'customs_documents',id:x.id,label:x.display_name??x.original_name});
   setEntityResults(results);
@@ -169,13 +195,93 @@ const ReminderEditor:React.FC<{reminder:Reminder;onClose:()=>void;onSaved:()=>vo
 
 const PushSettings:React.FC<{allowed:boolean;devices:Array<{id:string;platform:string|null;user_agent:string|null;last_seen_at:string;is_active:boolean;failure_count:number}>;busy:boolean;onClose:()=>void;setBusy:(v:boolean)=>void;reloadDevices:()=>Promise<void>}>=({allowed,devices,busy,onClose,setBusy,reloadDevices})=>{
  const [permission,setPermission]=useState<NotificationPermission>(typeof Notification==='undefined'?'default':Notification.permission);
+ const [enabled,setEnabled]=useState(false);
  const [hide,setHide]=useState(false);
- const toggle=async()=>{setBusy(true);try{if(permission==='granted'){await disablePush();setPermission('default');}else{const r=await enablePush();setPermission(r.status==='granted'?'granted':r.status as NotificationPermission);}}catch(e){alert(errorFa(e));}finally{setBusy(false);void reloadDevices();}};
- const test=async()=>{setBusy(true);try{await testPush();}catch(e){alert(errorFa(e));}finally{setBusy(false);}};
- const saveHide=async(v:boolean)=>{setHide(v);try{await setNotificationPreferences({hide_content:v})}catch{}};
- return <div className="fixed inset-0 z-[180] bg-black/55 flex items-end md:items-center justify-center" dir="rtl"><div className="w-full md:max-w-lg max-h-[90vh] overflow-auto rounded-t-[28px] md:rounded-[28px] border app-border bg-[var(--surface)] p-4 pb-[calc(18px+env(safe-area-inset-bottom))]"><div className="flex items-center justify-between"><div><b className="text-lg">اعلان‌ها</b><div className="text-xs app-muted mt-1">اعلان واقعی دستگاه‌های شما</div></div><button onClick={onClose} className="min-w-11 min-h-11 border app-border rounded-xl"><X size={17}/></button></div>
-  {!allowed?<div className="mt-4 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-sm">برای حساب صاحب کالا اعلان داخلی فعال نمی‌شود.</div>:<><div className="mt-4 rounded-2xl border app-border p-3"><div className="flex items-center gap-3"><div className="flex-1"><div className="font-bold text-sm">وضعیت اعلان</div><div className="text-xs app-muted mt-1">{permission==='granted'?'فعال':'فعال نیست'}</div></div><button disabled={busy} onClick={()=>void toggle()} className={'min-h-11 px-4 rounded-xl font-bold '+(permission==='granted'?'border app-border':'bg-[var(--primary)] text-white')}>{permission==='granted'?'غیرفعال‌سازی':'فعال‌سازی'}</button></div><button disabled={busy||permission!=='granted'} onClick={()=>void test()} className="w-full min-h-11 rounded-xl border app-border mt-2 disabled:opacity-40">ارسال اعلان آزمایشی</button></div>
-   <label className="flex items-center gap-3 mt-3 p-3 rounded-2xl border app-border"><input type="checkbox" checked={hide} onChange={e=>void saveHide(e.target.checked)} className="w-5 h-5"/><span><b className="block text-sm">پنهان کردن متن اعلان</b><span className="text-xs app-muted">به‌جای عنوان، متن عمومی نمایش داده می‌شود.</span></span></label>
-   <div className="mt-4"><div className="font-bold text-sm mb-2 flex items-center gap-1"><Users size={15}/>دستگاه‌ها</div>{devices.length?devices.map(d=><div key={d.id} className="rounded-xl border app-border p-3 mb-2"><div className="text-sm font-bold">{d.platform==='ios'?'آیفون':d.platform==='android'?'اندروید':'رایانه'}</div><div className="text-[11px] app-muted mt-1">{new Intl.DateTimeFormat('fa-IR-u-ca-persian',{dateStyle:'medium',timeZone:'Asia/Tehran'}).format(new Date(d.last_seen_at))}</div></div>):<div className="text-xs app-muted border app-border rounded-xl p-4">هنوز دستگاهی ثبت نشده است.</div>}</div></>}
- </div></div>;
+ const [quietStart,setQuietStart]=useState('22:00');
+ const [quietEnd,setQuietEnd]=useState('07:00');
+ const [digestTime,setDigestTime]=useState('08:30');
+ const [loadingSettings,setLoadingSettings]=useState(true);
+ const [savingSettings,setSavingSettings]=useState(false);
+
+ useEffect(()=>{
+  let alive=true;
+  void (async()=>{
+   try{
+    const {data:{user}}=await supabase.auth.getUser();
+    if(!user)return;
+    const {data,error}=await supabase.from('notification_preferences').select('push_enabled,hide_content,quiet_start,quiet_end,morning_digest_time,timezone').eq('user_id',user.id).maybeSingle();
+    if(error)throw error;
+    if(!alive)return;
+    setHide(Boolean(data?.hide_content));
+    setQuietStart(String(data?.quiet_start??'22:00:00').slice(0,5));
+    setQuietEnd(String(data?.quiet_end??'07:00:00').slice(0,5));
+    setDigestTime(String(data?.morning_digest_time??'08:30:00').slice(0,5));
+    try{
+     const registration=await navigator.serviceWorker.ready;
+     const subscription=await registration.pushManager.getSubscription();
+     if(alive)setEnabled(Boolean(subscription)&&Boolean(data?.push_enabled));
+    }catch{if(alive)setEnabled(false);}
+   }catch(error){if(alive)alert(errorFa(error));}
+   finally{if(alive)setLoadingSettings(false);}
+  })();
+  return()=>{alive=false;};
+ },[]);
+
+ const toggle=async()=>{
+  setBusy(true);
+  try{
+   if(enabled){await disablePush();setEnabled(false);}
+   else{const result=await enablePush();const granted=result.status==='granted';setPermission(typeof Notification==='undefined'?'default':Notification.permission);setEnabled(granted);if(!granted)alert(result.status==='denied'?'اجازه اعلان در تنظیمات مرورگر مسدود شده است.':'اجازه اعلان صادر نشد.');}
+  }catch(error){alert(errorFa(error));}
+  finally{setBusy(false);void reloadDevices();}
+ };
+ const test=async()=>{setBusy(true);try{await testPush();alert('درخواست اعلان آزمایشی ارسال شد. رسیدن آن به دستگاه را بررسی کنید.');}catch(error){alert(errorFa(error));}finally{setBusy(false);}};
+ const saveHide=async(v:boolean)=>{setHide(v);try{await setNotificationPreferences({hide_content:v,timezone:'Asia/Tehran'});}catch(error){setHide(!v);alert(errorFa(error));}};
+ const saveSchedule=async()=>{
+  setSavingSettings(true);
+  try{
+   await setNotificationPreferences({quiet_start:quietStart+':00',quiet_end:quietEnd+':00',morning_digest_time:digestTime+':00',hide_content:hide,timezone:'Asia/Tehran'});
+   alert('تنظیمات اعلان ذخیره شد.');
+  }catch(error){alert(errorFa(error));}
+  finally{setSavingSettings(false);}
+ };
+
+ return <div className="fixed inset-0 z-[180] bg-black/55 flex items-end md:items-center justify-center" dir="rtl" role="dialog" aria-modal="true">
+  <div className="w-full md:max-w-lg max-h-[90vh] overflow-auto rounded-t-[28px] md:rounded-[28px] border app-border bg-[var(--surface)] p-4 pb-[calc(18px+env(safe-area-inset-bottom))]">
+   <div className="flex items-center justify-between gap-3">
+    <div><b className="text-lg">اعلان‌ها</b><div className="text-xs app-muted mt-1">اعلان واقعی دستگاه‌ها · زمان تهران</div></div>
+    <button onClick={onClose} className="min-w-11 min-h-11 border app-border rounded-xl" aria-label="بستن"><X size={17}/></button>
+   </div>
+   {!allowed
+    ? <div className="mt-4 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-sm">برای حساب صاحب کالا اعلان داخلی فعال نمی‌شود.</div>
+    : <>
+     <div className="mt-4 rounded-2xl border app-border p-3">
+      <div className="flex items-center gap-3">
+       <div className="flex-1 min-w-0">
+        <div className="font-bold text-sm">وضعیت این دستگاه</div>
+        <div className="text-xs app-muted mt-1">{loadingSettings?'در حال بررسی…':enabled?'اشتراک اعلان فعال است':permission==='denied'?'اجازه اعلان از مرورگر مسدود است':permission==='granted'?'اجازه صادر شده؛ اشتراک دستگاه فعال نیست':'اعلان هنوز فعال نشده است'}</div>
+       </div>
+       <button disabled={busy||loadingSettings} onClick={()=>void toggle()} className={'min-h-11 px-4 rounded-xl font-bold '+(enabled?'border app-border':'bg-[var(--primary)] text-white')}>{busy?'در حال انجام…':enabled?'غیرفعال‌سازی':'فعال‌سازی'}</button>
+      </div>
+      <button disabled={busy||!enabled} onClick={()=>void test()} className="w-full min-h-11 rounded-xl border app-border mt-2 disabled:opacity-40">ارسال اعلان آزمایشی</button>
+      {!enabled&&<div className="text-[11px] app-muted mt-2">در آیفون، اعلان وب فقط برای نسخه افزوده‌شده به صفحه اصلی و از Safari قابل فعال‌سازی است.</div>}
+     </div>
+
+     <div className="mt-3 rounded-2xl border app-border p-3 space-y-3">
+      <div className="font-bold text-sm">ساعات سکوت و خلاصه روزانه</div>
+      <div className="grid grid-cols-2 gap-2">
+       <label className="block text-xs font-bold">شروع ساعات سکوت<input type="time" value={quietStart} onChange={e=>setQuietStart(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3"/></label>
+       <label className="block text-xs font-bold">پایان ساعات سکوت<input type="time" value={quietEnd} onChange={e=>setQuietEnd(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3"/></label>
+      </div>
+      <label className="block text-xs font-bold">زمان ارسال خلاصه صبحگاهی<input type="time" value={digestTime} onChange={e=>setDigestTime(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3"/></label>
+      <label className="flex items-center gap-3 p-2 rounded-xl bg-[var(--surface-2)]"><input type="checkbox" checked={hide} onChange={e=>void saveHide(e.target.checked)} className="w-5 h-5"/><span><b className="block text-sm">پنهان کردن متن اعلان</b><span className="text-xs app-muted">برای حریم خصوصی، عنوان کار روی صفحه قفل نمایش داده نشود.</span></span></label>
+      <button disabled={savingSettings||loadingSettings} onClick={()=>void saveSchedule()} className="w-full min-h-11 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50">{savingSettings?'در حال ذخیره…':'ذخیره تنظیمات اعلان'}</button>
+     </div>
+
+     <div className="mt-4"><div className="font-bold text-sm mb-2 flex items-center gap-1"><Users size={15}/>دستگاه‌های ثبت‌شده</div>
+      {devices.length?devices.filter(d=>d.is_active).map(d=><div key={d.id} className="rounded-xl border app-border p-3 mb-2"><div className="flex items-center gap-2"><div className="text-sm font-bold flex-1">{d.platform==='ios'?'آیفون':d.platform==='android'?'اندروید':'رایانه'}</div><span className="text-[10px] app-muted">ناموفق: {fa(d.failure_count)}</span></div><div className="text-[11px] app-muted mt-1">آخرین فعالیت: {new Intl.DateTimeFormat('fa-IR-u-ca-persian',{dateStyle:'medium',timeZone:'Asia/Tehran'}).format(new Date(d.last_seen_at))}</div></div>):<div className="text-xs app-muted border app-border rounded-xl p-4">هنوز دستگاه فعالی ثبت نشده است.</div>}
+     </div>
+    </>}
+  </div>
+ </div>;
 };
