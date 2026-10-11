@@ -240,6 +240,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
    if(!c||!c.enabled||!chat||!chat.enabled||!chat.conversation_id||chat.conversation_id!==message?.conversation_id)throw new Error("DESTINATION_NO_LONGER_LINKED");
    if(!message||message.deleted_at||message.external_platform)throw new Error("MESSAGE_NOT_ELIGIBLE_FOR_EXTERNAL_DELIVERY");
    let externalMessageId="",fileAssetId:string|null=null,logType="text",payloadSummary:Record<string,any>={source:"customs_chat",outboxId:row.id};
+   let pendingAsset:{result:any;mime:string;size:number;name:string}|null=null;
    const bodyText=String(message.body||"").trim();
    if(message.message_type==="text"){
     if(!bodyText)throw new Error("EMPTY_MESSAGE_BODY");
@@ -262,14 +263,23 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
     if(actualSize<=0||actualSize>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
     const mime=cleanMime(String(attachment.mime_type||file.type||"application/octet-stream")),name=cleanName(String(attachment.original_name||"attachment.bin"));
     const result=await uploadStream(c as Conn,String(chat.external_chat_id),name,mime,actualSize,file.stream(),message.message_type==="voice"?"voice":"file");
-    fileAssetId=await storeAsset(row.organization_id,String(message.sender_id||"")||null,c as Conn,String(chat.external_chat_id),result,mime,actualSize,"website",chat.shipment_id||null,false);
     externalMessageId=result.messageId;
+    pendingAsset={result,mime,size:actualSize,name};
     logType="document";
     payloadSummary={...payloadSummary,name,mimeType:mime,sizeBytes:actualSize,sourceMessageType:message.message_type};
    }else throw new Error("UNSUPPORTED_MESSAGE_TYPE");
 
+   // Once the external platform accepts a message, commit delivery before writing optional file metadata.
+   // This prevents a transient file_assets/file_locations failure from duplicating a sent file on retry.
    const {error:updateError}=await db.from("messenger_delivery_outbox").update({status:"sent",external_message_id:externalMessageId,last_error_code:null,sent_at:now,updated_at:now}).eq("id",row.id).eq("status","sending");
    if(updateError)throw new Error("OUTBOX_STATUS_UPDATE_FAILED");
+   if(pendingAsset){
+    try{
+     fileAssetId=await storeAsset(row.organization_id,String(message.sender_id||"")||null,c as Conn,String(chat.external_chat_id),pendingAsset.result,pendingAsset.mime,pendingAsset.size,"website",chat.shipment_id||null,false);
+    }catch(assetError){
+     payloadSummary={...payloadSummary,assetMetadataError:errorCode(assetError)};
+    }
+   }
    await db.from("message_logs").insert({organization_id:row.organization_id,connection_id:row.connection_id,direction:"outbound",message_type:logType,external_message_id:externalMessageId,external_chat_id:String(chat.external_chat_id),chat_message_id:row.chat_message_id,file_asset_id:fileAssetId,status:"sent",payload_summary:payloadSummary,sent_at:now});
    sent++;
   }catch(e){
