@@ -79,4 +79,25 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('ATTACHMENT_BLOCKED_BY_SECURITY_SCAN');
   });
 
+  it('sends one real daily report per Tehran-local date and skips duplicates',()=>{
+    const migration=read('supabase/migrations/20261011181000_messenger_daily_reports_and_dual_role.sql');
+    const retryMigration=read('supabase/migrations/20261011182000_messenger_daily_report_retry_cap.sql');
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(migration).toContain('messenger_report_snapshot');
+    expect(migration).toContain('unique (messenger_chat_id, report_date)');
+    expect(migration).toContain("p_timezone text default 'Asia/Tehran'");
+    expect(migration).toContain('messenger-daily-report-retry-every-15-minutes');
+    expect(retryMigration).toContain('attempt_count < 8');
+    expect(gateway).toContain('path==="/api/messenger/reports/daily"');
+    expect(gateway).toContain('messenger_claim_daily_report');
+    expect(gateway).toContain('payload_summary:{source:"daily_report"');
+    expect(gateway).toContain('function formatDailyReport');
+  });
+
+  it('keeps existing daily-report destinations eligible for two-way linked chat delivery',()=>{
+    const migration=read('supabase/migrations/20261011181000_messenger_daily_reports_and_dual_role.sql');
+    expect(migration).toContain("mc.purpose in ('inbox','daily_report','shipment_notifications','shipment')");
+    expect(migration).toContain('mc.conversation_id = new.conversation_id');
+  });
+
 });
