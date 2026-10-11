@@ -280,8 +280,94 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
   }
  }
  return out({ok:true,claimed:rows.length,sent,failed},200,req);
-}async function tgWebhook(req:Request,c:Conn,secretPath?:string){const s=await secret(c.webhook_secret_ref);if(c.platform==="telegram"){if(!s||!equal(req.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",s))return bad("WEBHOOK_AUTH_FAILED",401,req);}else if(!s||!secretPath||!equal(s,secretPath))return bad("WEBHOOK_AUTH_FAILED",401,req);let b:any;try{b=JSON.parse(await readText(req,1024*1024));}catch(e){return bad(errorCode(e),400,req);}const updateId=String(b.update_id??b.updateId??"");if(!updateId)return bad("WEBHOOK_EVENT_ID_MISSING",400,req);const eid=await event(c,updateId,c.platform+"-update");if(!eid)return out({ok:true,duplicate:true},200,req);try{const m=b.message||b.channel_post||b.edited_message||b.edited_channel_post||{},chat=String(m.chat?.id??""),mid=String(m.message_id??"");if(chat&&mid)await inbound(c,chat,mid,tgMedia(m),String((typeof m.text==="string"?m.text:"")||m.caption||""),String(m.from?.id||""),String([m.from?.first_name,m.from?.last_name].filter(Boolean).join(" ")||m.from?.username||""));await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);return out({ok:true},200,req);}catch(e){await db.from("webhook_events").update({status:"failed",attempt_count:1,error_code:errorCode(e)}).eq("id",eid);return bad("WEBHOOK_PROCESSING_FAILED",500,req);}}
+}function formatDailyReport(snapshot:Record<string,any>){
+ const number=(value:unknown)=>new Intl.NumberFormat("fa-IR").format(Number(value||0));
+ const rawDate=String(snapshot.report_date||"");
+ const parsedDate=new Date(rawDate+"T12:00:00+03:30");
+ const dateLabel=Number.isNaN(parsedDate.getTime())?rawDate:new Intl.DateTimeFormat("fa-IR-u-ca-persian",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(parsedDate);
+ const lines=[
+  "📊 گزارش روزانه عملیات گمرکی",
+  "📅 تاریخ گزارش: "+dateLabel,
+  "",
+  "📦 مجموع محموله‌ها: "+number(snapshot.total_shipments),
+  "🔄 محموله‌های به‌روزشده در روز گزارش: "+number(snapshot.shipments_updated),
+  "📁 مجموع پرونده‌ها: "+number(snapshot.total_cases),
+  "🆕 پرونده‌های جدید: "+number(snapshot.cases_created),
+  "🛃 اظهارهای ثبت‌شده: "+number(snapshot.declarations_created),
+  "🚢 محموله‌های با پاس کشتی ثبت‌نشده: "+number(snapshot.ship_pass_pending)
+ ];
+ const latest=Array.isArray(snapshot.latest_shipments)?snapshot.latest_shipments:[];
+ if(latest.length){
+  lines.push("","آخرین تغییرات محموله‌ها:");
+  for(const [index,item] of latest.slice(0,8).entries()){
+   const label=String(item.display_name||item.bill_of_lading_no||"محموله");
+   const fields=[
+    item.bill_of_lading_no?"بارنامه: "+item.bill_of_lading_no:"",
+    item.case_number?"پرونده: "+item.case_number:"",
+    item.client_name?"صاحب کالا: "+item.client_name:"",
+    item.current_status?"وضعیت: "+item.current_status:"",
+    item.current_location?"موقعیت: "+item.current_location:"",
+    item.cargo_description?"کالا: "+item.cargo_description:""
+   ].filter(Boolean);
+   lines.push(number(index+1)+". "+label+(fields.length?" — "+fields.join(" · "):""));
+  }
+ }else{
+  lines.push("","در روز گزارش، محموله‌ای به‌روزرسانی نشده است.");
+ }
+ lines.push("","گزارش تولیدشده توسط Customs OS");
+ return lines.join("\n").slice(0,3800);
+}
+async function processDailyReports(req:Request){
+ const {data:expected,error:secretError}=await db.rpc("internal_get_reminder_secret",{p_name:"messenger_outbox_cron_secret"});
+ if(secretError||typeof expected!=="string"||!expected||!equal(req.headers.get("x-messenger-outbox-cron-secret")||"",expected))return bad("UNAUTHORIZED",401,req);
+ const {data:destinations,error:destinationError}=await db.from("messenger_chats").select("id,organization_id,connection_id,external_chat_id,display_name,enabled,purpose").eq("enabled",true).eq("purpose","daily_report").order("created_at",{ascending:true});
+ if(destinationError)return bad("DAILY_REPORT_DESTINATIONS_UNAVAILABLE",500,req);
+ let considered=0,claimed=0,sent=0,failed=0,skipped=0;
+ for(const destination of destinations||[]){
+  considered++;
+  let reportRunId:string|null=null;
+  try{
+   const c=await readConn(String(destination.connection_id));
+   if(!c||!c.enabled||c.organization_id!==destination.organization_id){skipped++;continue;}
+   const {data:snapshot,error:snapshotError}=await db.rpc("messenger_report_snapshot",{p_organization_id:destination.organization_id,p_timezone:"Asia/Tehran"});
+   if(snapshotError||!snapshot||typeof snapshot!=="object")throw new Error("DAILY_REPORT_SNAPSHOT_FAILED");
+   const reportDate=String((snapshot as Record<string,any>).report_date||"");
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(reportDate))throw new Error("DAILY_REPORT_DATE_INVALID");
+   const {data:claimRows,error:claimError}=await db.rpc("messenger_claim_daily_report",{
+    p_organization_id:destination.organization_id,p_messenger_chat_id:destination.id,
+    p_connection_id:destination.connection_id,p_report_date:reportDate
+   });
+   if(claimError)throw new Error("DAILY_REPORT_CLAIM_FAILED");
+   const run=Array.isArray(claimRows)?claimRows[0]:claimRows;
+   if(!run?.id){skipped++;continue;}
+   reportRunId=String(run.id);claimed++;
+   const content=formatDailyReport(snapshot as Record<string,any>);
+   const externalMessageId=await sendTextToPlatform(c,String(destination.external_chat_id),content);
+   const {error:updateError}=await db.from("messenger_report_runs").update({
+    status:"sent",external_message_id:externalMessageId,error_code:null,
+    report_snapshot:snapshot,sent_at:new Date().toISOString(),updated_at:new Date().toISOString()
+   }).eq("id",reportRunId).eq("status","sending");
+   if(updateError)throw new Error("DAILY_REPORT_STATUS_SAVE_FAILED");
+   await db.from("message_logs").insert({
+    organization_id:destination.organization_id,connection_id:destination.connection_id,
+    direction:"outbound",message_type:"text",external_message_id:externalMessageId,
+    external_chat_id:String(destination.external_chat_id),status:"sent",
+    payload_summary:{source:"daily_report",reportDate,preview:content.slice(0,3500)},sent_at:new Date().toISOString()
+   });
+   sent++;
+  }catch(e){
+   failed++;
+   if(reportRunId){
+    await db.from("messenger_report_runs").update({
+     status:"failed",error_code:errorCode(e),updated_at:new Date().toISOString()
+    }).eq("id",reportRunId).eq("status","sending");
+   }
+  }
+ }
+ return out({ok:true,considered,claimed,sent,failed,skipped},200,req);
+}
+async function tgWebhook(req:Request,c:Conn,secretPath?:string){const s=await secret(c.webhook_secret_ref);if(c.platform==="telegram"){if(!s||!equal(req.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",s))return bad("WEBHOOK_AUTH_FAILED",401,req);}else if(!s||!secretPath||!equal(s,secretPath))return bad("WEBHOOK_AUTH_FAILED",401,req);let b:any;try{b=JSON.parse(await readText(req,1024*1024));}catch(e){return bad(errorCode(e),400,req);}const updateId=String(b.update_id??b.updateId??"");if(!updateId)return bad("WEBHOOK_EVENT_ID_MISSING",400,req);const eid=await event(c,updateId,c.platform+"-update");if(!eid)return out({ok:true,duplicate:true},200,req);try{const m=b.message||b.channel_post||b.edited_message||b.edited_channel_post||{},chat=String(m.chat?.id??""),mid=String(m.message_id??"");if(chat&&mid)await inbound(c,chat,mid,tgMedia(m),String((typeof m.text==="string"?m.text:"")||m.caption||""),String(m.from?.id||""),String([m.from?.first_name,m.from?.last_name].filter(Boolean).join(" ")||m.from?.username||""));await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);return out({ok:true},200,req);}catch(e){await db.from("webhook_events").update({status:"failed",attempt_count:1,error_code:errorCode(e)}).eq("id",eid);return bad("WEBHOOK_PROCESSING_FAILED",500,req);}}
 async function waWebhook(req:Request,c:Conn){if(req.method==="GET"){const u=new URL(req.url),s=await secret(c.verify_token_ref),challenge=u.searchParams.get("hub.challenge");if(u.searchParams.get("hub.mode")!=="subscribe"||!s||!equal(u.searchParams.get("hub.verify_token")||"",s)||challenge===null)return bad("WEBHOOK_VERIFICATION_FAILED",403,req);return new Response(challenge,{status:200,headers:{...noStore,"Content-Type":"text/plain"}});}const raw=await readText(req,1024*1024),app=await secret(c.app_secret_ref);if(!app||!await checkHmac(app,raw,req.headers.get("X-Hub-Signature-256")||""))return bad("WEBHOOK_SIGNATURE_INVALID",401,req);let b:any;try{b=JSON.parse(raw);}catch{return bad("INVALID_JSON",400,req);}try{for(const entry of b.entry||[])for(const change of entry.changes||[]){const value=change.value||{};for(const m of value.messages||[]){const id=String(m.id||"");if(!id)continue;const eid=await event(c,id,"whatsapp-message");if(!eid)continue;const type=String(m.type||"unknown"),media=m[type];const normalized=media?.id?{id:String(media.id),unique:null,name:media.filename||(type==="image"?"image.jpg":type+".bin"),mime:media.mime_type||(type==="image"?"image/jpeg":"application/octet-stream"),size:null,voice:type==="audio"}:null;await inbound(c,String(m.from||""),id,normalized,String(m.text?.body||""),String(m.from||""),String((value.contacts||[]).find((contact:any)=>String(contact.wa_id||"")===String(m.from||""))?.profile?.name||""));await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);}for(const s of value.statuses||[]){const id=String(s.id||"");if(!id)continue;const eid=await event(c,id,"whatsapp-status-"+String(s.status||"unknown"));if(!eid)continue;await db.from("message_logs").update({status:["sent","delivered","read","failed"].includes(s.status)?s.status:"unknown"}).eq("organization_id",c.organization_id).eq("connection_id",c.id).eq("external_message_id",id);await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);}}}catch(e){return bad("WEBHOOK_PROCESSING_FAILED_"+errorCode(e),500,req);}return out({ok:true},200,req);}
 async function webhook(req:Request,path:string){const m=path.match(/^\/webhooks\/messenger\/(telegram|bale|whatsapp)\/([0-9a-f-]{36})(?:\/([A-Za-z0-9_-]+))?$/i);if(!m)return bad("WEBHOOK_NOT_FOUND",404,req);const platform=m[1].toLowerCase() as Platform,c=await readConn(m[2]);if(!c||c.platform!==platform)return bad("CONNECTION_NOT_FOUND",404,req);if(platform==="whatsapp")return await waWebhook(req,c);if(req.method!=="POST")return bad("METHOD_NOT_ALLOWED",405,req);return await tgWebhook(req,c,m[3]);}
 async function route(req:Request,path:string){const ctx=await context(req),p=ctx.p;if(req.method==="GET"&&path==="/api/messenger/health")return out({ok:true,platforms:{telegram:{supported:true,maxUploadBytes:TG_UPLOAD_LIMIT,maxDownloadBytes:TG_DOWNLOAD_LIMIT},bale:{supported:true,webhookAuth:"secret_path"},whatsapp:{supported:true,maxDocumentUploadBytes:100*1024*1024,metaSetupRequired:true},rubika:{supported:false,reason:"PUBLIC_BOT_API_NOT_VERIFIED"}}},200,req);if(path==="/api/messenger/connections"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_connections").select("id,organization_id,platform,external_account_id,display_name,config,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CONNECTION_LIST_FAILED",500,req);return out({ok:true,connections:data||[]},200,req);}if(path==="/api/messenger/connections"&&req.method==="POST")return await addConnection(req,p,ctx.userId);if(path==="/api/messenger/chats"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_chats").select("id,connection_id,external_chat_id,chat_type,purpose,display_name,shipment_id,conversation_id,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CHAT_LIST_FAILED",500,req);return out({ok:true,chats:data||[]},200,req);}if(path==="/api/messenger/chats"&&req.method==="POST")return await createChat(req,p,ctx.userId);const test=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/test$/i);if(req.method==="POST"&&test){onlyManager(p);const c=await ownedConn(test[1],p.organization_id,true);try{return out({ok:true,account:await probe(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}const hook=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/register-webhook$/i);if(req.method==="POST"&&hook){onlyManager(p);const c=await ownedConn(hook[1],p.organization_id,true);try{return out({ok:true,webhookUrl:await registerHook(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}if(path==="/api/messenger/messages"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("message_logs").select("id,connection_id,direction,message_type,external_message_id,external_chat_id,status,payload_summary,created_at,file_asset_id,chat_message_id").eq("organization_id",p.organization_id).order("created_at",{ascending:false}).limit(100);if(error)return bad("MESSAGE_LIST_FAILED",500,req);return out({ok:true,messages:data||[]},200,req);}if(path==="/api/messenger/messages"&&req.method==="POST")return await sendText(req,p);const up=path.match(/^\/api\/messenger\/uploads\/([0-9a-f-]{36})$/i);if(up&&req.method==="POST")return await upload(req,p,ctx.userId,up[1]);const down=path.match(/^\/api\/messenger\/files\/([0-9a-f-]{36})\/download$/i);if(down&&req.method==="GET")return await download(req,p,down[1]);if(path==="/api/messenger/transfers"&&req.method==="POST")return await transfer(req,p,ctx.userId);return bad("ROUTE_NOT_FOUND",404,req);}
-Deno.serve(async(req:Request)=>{const path=req.headers.get("x-messenger-path")||new URL(req.url).pathname;if(req.method==="OPTIONS"){const h=new Headers(noStore),o=req.headers.get("Origin")||"";if(ORIGINS.has(o)){h.set("Access-Control-Allow-Origin",o);h.set("Vary","Origin");h.set("Access-Control-Allow-Headers","authorization, apikey, content-type, x-file-name, x-file-size, idempotency-key");h.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");}return new Response(null,{status:204,headers:h});}try{if(!SB||!ANON||!SERVICE)return bad("GATEWAY_CONFIGURATION_MISSING",503,req);if(path==="/api/messenger/outbox/process"&&req.method==="POST")return await processMessengerOutbox(req);if(path.startsWith("/webhooks/messenger/"))return await webhook(req,path);if(path.startsWith("/api/messenger/"))return await route(req,path);return bad("ROUTE_NOT_FOUND",404,req);}catch(e){const c=errorCode(e),status=c==="MANAGER_REQUIRED"?403:c.startsWith("AUTH_")?401:c==="CONNECTION_NOT_FOUND"||c==="FILE_NOT_FOUND"?404:400;return bad(c,status,req);}});
+Deno.serve(async(req:Request)=>{const path=req.headers.get("x-messenger-path")||new URL(req.url).pathname;if(req.method==="OPTIONS"){const h=new Headers(noStore),o=req.headers.get("Origin")||"";if(ORIGINS.has(o)){h.set("Access-Control-Allow-Origin",o);h.set("Vary","Origin");h.set("Access-Control-Allow-Headers","authorization, apikey, content-type, x-file-name, x-file-size, idempotency-key");h.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");}return new Response(null,{status:204,headers:h});}try{if(!SB||!ANON||!SERVICE)return bad("GATEWAY_CONFIGURATION_MISSING",503,req);if(path==="/api/messenger/outbox/process"&&req.method==="POST")return await processMessengerOutbox(req);if(path==="/api/messenger/reports/daily"&&req.method==="POST")return await processDailyReports(req);if(path.startsWith("/webhooks/messenger/"))return await webhook(req,path);if(path.startsWith("/api/messenger/"))return await route(req,path);return bad("ROUTE_NOT_FOUND",404,req);}catch(e){const c=errorCode(e),status=c==="MANAGER_REQUIRED"?403:c.startsWith("AUTH_")?401:c==="CONNECTION_NOT_FOUND"||c==="FILE_NOT_FOUND"?404:400;return bad(c,status,req);}});
