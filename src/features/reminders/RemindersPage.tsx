@@ -94,7 +94,7 @@ export const RemindersPage:React.FC=()=>{
  const performSwipe=(r:Reminder,e:React.PointerEvent,start:{x:number})=>{const dx=e.clientX-start.x;if(Math.abs(dx)>70){if(dx>70)toggleDone(r);else snooze(r,10);}};
  const [pointerStart,setPointerStart]=useState<{x:number}|null>(null);
 
- return <main dir="rtl" className="min-h-[calc(100vh-64px)] pb-28">
+ return <main dir="rtl" className="reminders-page min-h-[calc(100vh-64px)] pb-28">
   <section className="mx-auto max-w-6xl px-2 sm:px-4 pt-2 sm:pt-5">
    <header className="sticky top-0 z-20 rounded-3xl border app-border bg-[color-mix(in_srgb,var(--surface)_90%,transparent)] backdrop-blur-xl px-3 py-3 shadow-sm">
     <div className="flex items-center gap-2"><div className="flex-1 min-w-0"><h1 className="text-2xl sm:text-3xl font-black">یادآورها</h1><div className="text-xs app-muted mt-1">{fa(query.data?.count??0)} مورد · سریع، شمسی و متصل به عملیات</div></div><button onClick={()=>void openPush()} className="min-w-11 min-h-11 rounded-xl border app-border bg-[var(--surface-2)]" title="اعلان‌ها"><Bell size={18}/></button><button onClick={()=>void query.refetch()} className="min-w-11 min-h-11 rounded-xl border app-border bg-[var(--surface-2)]" title="تازه‌سازی"><RefreshCw size={17} className={query.isFetching?'animate-spin':''}/></button></div>
