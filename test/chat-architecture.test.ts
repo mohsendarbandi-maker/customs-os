@@ -100,4 +100,15 @@ describe('chat architecture invariants',()=>{
     expect(migration).toContain('and mc.conversation_id=new.conversation_id');
   });
 
+  it('separates the daily report time from retry-only processing',()=>{
+    const schedule=read('supabase/migrations/20261011183000_messenger_daily_report_schedule.sql');
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(schedule).toContain("'0 15 * * *'");
+    expect(schedule).toContain('"mode":"scheduled"');
+    expect(schedule).toContain('"mode":"retry"');
+    expect(schedule).toContain('messenger-daily-report-every-day-1830-tehran');
+    expect(gateway).toContain('requestBody.mode==="retry"?"retry":"scheduled"');
+    expect(gateway).toContain('previousStatus!=="failed"&&!staleSending');
+  });
+
 });
