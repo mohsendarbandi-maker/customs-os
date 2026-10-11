@@ -62,7 +62,7 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('security_status==="clean"');
     expect(gateway).toContain('startsWith("quarantine/")');
     expect(gateway).toContain('ATTACHMENT_NOT_CLEAN_OR_NOT_READY');
-    expect(scanner).toContain("security_status:'clean'");
+    expect(scanner).toContain('security_status:"clean"');
     expect(scanner).toContain('from("chat-files").move(quarantinePath,finalPath)');
   });
 
