@@ -109,9 +109,20 @@ jobs:
             test -n "$script_src"
             case "$script_src" in /assets/*.js) ;; *) echo "Invalid deployed module path: $script_src"; exit 1;; esac
             echo "Checking $base$script_src"
-            curl --fail --silent --show-error --location --max-time 30 -o /tmp/app.js "$base$script_src"
-            test -s /tmp/app.js
-            if grep -qi '<!doctype html' /tmp/app.js; then echo "Deployed module returned HTML instead of JavaScript"; exit 1; fi
+            asset_success=0
+            for attempt in 1 2 3 4 5 6; do
+              : > /tmp/app.content-type
+              if curl --fail --silent --show-error --location --max-time 30 -o /tmp/app.js -w '%{content_type}' "$base$script_src" > /tmp/app.content-type; then
+                content_type="$(cat /tmp/app.content-type)"
+                if test -s /tmp/app.js && [[ "$content_type" =~ ^(application|text)/javascript ]] && ! grep -qi '<!doctype html' /tmp/app.js; then
+                  asset_success=1
+                  break
+                fi
+              fi
+              echo "JavaScript asset not ready or returned an unexpected response (attempt $attempt); retrying..."
+              sleep 3
+            done
+            test "$asset_success" = 1
 
             echo "Checking dedicated chat entrypoint"
             smoke_qs="?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
