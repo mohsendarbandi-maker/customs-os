@@ -1,10 +1,10 @@
 {
   "id": "/reminders",
-  "name": "Customs OS — یادآورها",
+  "name": "یادآورهای دربندی",
   "short_name": "یادآورها",
   "description": "یادآورهای عملیاتی Customs OS",
-  "start_url": "/reminders",
-  "scope": "/",
+  "start_url": "/reminders?source=pwa-reminders",
+  "scope": "/reminders",
   "display": "standalone",
   "dir": "rtl",
   "lang": "fa",
