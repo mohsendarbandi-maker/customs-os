@@ -320,6 +320,8 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
 async function processDailyReports(req:Request){
  const {data:expected,error:secretError}=await db.rpc("internal_get_reminder_secret",{p_name:"messenger_outbox_cron_secret"});
  if(secretError||typeof expected!=="string"||!expected||!equal(req.headers.get("x-messenger-outbox-cron-secret")||"",expected))return bad("UNAUTHORIZED",401,req);
+ const requestBody=await bodyJson(req);
+ const mode=requestBody.mode==="retry"?"retry":"scheduled";
  const {data:destinations,error:destinationError}=await db.from("messenger_chats").select("id,organization_id,connection_id,external_chat_id,display_name,enabled,purpose").eq("enabled",true).eq("purpose","daily_report").order("created_at",{ascending:true});
  if(destinationError)return bad("DAILY_REPORT_DESTINATIONS_UNAVAILABLE",500,req);
  let considered=0,claimed=0,sent=0,failed=0,skipped=0;
@@ -333,6 +335,13 @@ async function processDailyReports(req:Request){
    if(snapshotError||!snapshot||typeof snapshot!=="object")throw new Error("DAILY_REPORT_SNAPSHOT_FAILED");
    const reportDate=String((snapshot as Record<string,any>).report_date||"");
    if(!/^\d{4}-\d{2}-\d{2}$/.test(reportDate))throw new Error("DAILY_REPORT_DATE_INVALID");
+   if(mode==="retry"){
+    const {data:previousRun,error:previousRunError}=await db.from("messenger_report_runs").select("status,updated_at,attempt_count").eq("messenger_chat_id",destination.id).eq("report_date",reportDate).maybeSingle();
+    if(previousRunError)throw new Error("DAILY_REPORT_RETRY_LOOKUP_FAILED");
+    const previousStatus=String(previousRun?.status||"");
+    const staleSending=previousStatus==="sending"&&Date.now()-Date.parse(String(previousRun?.updated_at||""))>10*60*1000;
+    if(!previousRun||(previousStatus!=="failed"&&!staleSending)){skipped++;continue;}
+   }
    const {data:claimRows,error:claimError}=await db.rpc("messenger_claim_daily_report",{
     p_organization_id:destination.organization_id,p_messenger_chat_id:destination.id,
     p_connection_id:destination.connection_id,p_report_date:reportDate
@@ -364,7 +373,7 @@ async function processDailyReports(req:Request){
    }
   }
  }
- return out({ok:true,considered,claimed,sent,failed,skipped},200,req);
+ return out({ok:true,mode,considered,claimed,sent,failed,skipped},200,req);
 }
 async function tgWebhook(req:Request,c:Conn,secretPath?:string){const s=await secret(c.webhook_secret_ref);if(c.platform==="telegram"){if(!s||!equal(req.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",s))return bad("WEBHOOK_AUTH_FAILED",401,req);}else if(!s||!secretPath||!equal(s,secretPath))return bad("WEBHOOK_AUTH_FAILED",401,req);let b:any;try{b=JSON.parse(await readText(req,1024*1024));}catch(e){return bad(errorCode(e),400,req);}const updateId=String(b.update_id??b.updateId??"");if(!updateId)return bad("WEBHOOK_EVENT_ID_MISSING",400,req);const eid=await event(c,updateId,c.platform+"-update");if(!eid)return out({ok:true,duplicate:true},200,req);try{const m=b.message||b.channel_post||b.edited_message||b.edited_channel_post||{},chat=String(m.chat?.id??""),mid=String(m.message_id??"");if(chat&&mid)await inbound(c,chat,mid,tgMedia(m),String((typeof m.text==="string"?m.text:"")||m.caption||""),String(m.from?.id||""),String([m.from?.first_name,m.from?.last_name].filter(Boolean).join(" ")||m.from?.username||""));await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);return out({ok:true},200,req);}catch(e){await db.from("webhook_events").update({status:"failed",attempt_count:1,error_code:errorCode(e)}).eq("id",eid);return bad("WEBHOOK_PROCESSING_FAILED",500,req);}}
 async function waWebhook(req:Request,c:Conn){if(req.method==="GET"){const u=new URL(req.url),s=await secret(c.verify_token_ref),challenge=u.searchParams.get("hub.challenge");if(u.searchParams.get("hub.mode")!=="subscribe"||!s||!equal(u.searchParams.get("hub.verify_token")||"",s)||challenge===null)return bad("WEBHOOK_VERIFICATION_FAILED",403,req);return new Response(challenge,{status:200,headers:{...noStore,"Content-Type":"text/plain"}});}const raw=await readText(req,1024*1024),app=await secret(c.app_secret_ref);if(!app||!await checkHmac(app,raw,req.headers.get("X-Hub-Signature-256")||""))return bad("WEBHOOK_SIGNATURE_INVALID",401,req);let b:any;try{b=JSON.parse(raw);}catch{return bad("INVALID_JSON",400,req);}try{for(const entry of b.entry||[])for(const change of entry.changes||[]){const value=change.value||{};for(const m of value.messages||[]){const id=String(m.id||"");if(!id)continue;const eid=await event(c,id,"whatsapp-message");if(!eid)continue;const type=String(m.type||"unknown"),media=m[type];const normalized=media?.id?{id:String(media.id),unique:null,name:media.filename||(type==="image"?"image.jpg":type+".bin"),mime:media.mime_type||(type==="image"?"image/jpeg":"application/octet-stream"),size:null,voice:type==="audio"}:null;await inbound(c,String(m.from||""),id,normalized,String(m.text?.body||""),String(m.from||""),String((value.contacts||[]).find((contact:any)=>String(contact.wa_id||"")===String(m.from||""))?.profile?.name||""));await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);}for(const s of value.statuses||[]){const id=String(s.id||"");if(!id)continue;const eid=await event(c,id,"whatsapp-status-"+String(s.status||"unknown"));if(!eid)continue;await db.from("message_logs").update({status:["sent","delivered","read","failed"].includes(s.status)?s.status:"unknown"}).eq("organization_id",c.organization_id).eq("connection_id",c.id).eq("external_message_id",id);await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);}}}catch(e){return bad("WEBHOOK_PROCESSING_FAILED_"+errorCode(e),500,req);}return out({ok:true},200,req);}
