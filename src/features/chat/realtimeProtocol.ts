@@ -1,8 +1,7 @@
 export type RealtimeMessage = {
   id: string;
   conversation_id: string;
-  sender_id: string | null;
-  external_sender_name: string | null;
+  sender_id: string;
   body: string | null;
   message_type: string;
   created_at: string;
@@ -51,12 +50,13 @@ export function parseRealtimeMessage(value: unknown): RealtimeMessage | null {
   const messageType = stringField(source,'message_type');
   const createdAt = stringField(source,'created_at');
   const updatedAt = stringField(source,'updated_at');
-  if (!id || !conversationId || !senderId || !messageType || !createdAt || !updatedAt) return null;
+  if (!id || !conversationId || !Object.prototype.hasOwnProperty.call(source,'sender_id') || !messageType || !createdAt || !updatedAt) return null;
   const bodyValue = source.body;
   return {
     id,
     conversation_id: conversationId,
     sender_id: senderId,
+    external_sender_name: stringField(source,'external_sender_name'),
     body: typeof bodyValue === 'string' ? bodyValue : null,
     message_type: messageType,
     created_at: createdAt,
