@@ -137,19 +137,32 @@ const ReminderEditor:React.FC<{reminder:Reminder;onClose:()=>void;onSaved:()=>vo
  const toggleCheck=async(item:{id:string;title:string;is_done:boolean})=>{const next=!item.is_done;setItems(x=>x.map(i=>i.id===item.id?{...i,is_done:next}:i));await supabase.from('reminder_checklist_items').update({is_done:next}).eq('id',item.id);};
  const removeCheck=async(id:string)=>{setItems(x=>x.filter(i=>i.id!==id));await supabase.from('reminder_checklist_items').delete().eq('id',id);};
  const searchEntities=async(raw:string)=>{
-  const q=raw.trim();
-  setEntitySearch(raw);
+  setEntitySearch(raw);setEntityError('');
+  const q=raw.trim().replace(/[,()%_*]/g,' ').replace(/\\s+/g,' ').trim();
   if(q.length<2){setEntityResults([]);return;}
-  const [s,d]=await Promise.all([
-   supabase.from('shipments').select('id,display_name,bill_of_lading_no').or('display_name.ilike.%'+q+'%,bill_of_lading_no.ilike.%'+q+'%').limit(5),
-   supabase.from('customs_documents').select('id,display_name,original_name,document_number').or('display_name.ilike.%'+q+'%,original_name.ilike.%'+q+'%,document_number.ilike.%'+q+'%').limit(5)
-  ]);
-  const results:Array<{type:ReminderEntityType;id:string;label:string}>=[];
-  for(const x of (s.data??[]) as Array<{id:string;display_name:string|null;bill_of_lading_no:string|null}>)
-   results.push({type:'shipments',id:x.id,label:x.display_name??x.bill_of_lading_no??'محموله'});
-  for(const x of (d.data??[]) as Array<{id:string;display_name:string|null;original_name:string;document_number:string|null}>)
-   results.push({type:'customs_documents',id:x.id,label:x.display_name??x.original_name});
-  setEntityResults(results);
+  if(!profile?.organization_id){setEntityResults([]);setEntityError('سازمان فعال برای جستجوی موارد مرتبط پیدا نشد.');return;}
+  try{
+   const org=profile.organization_id,pattern=(fields:string[])=>fields.map(f=>f+'.ilike.%'+q+'%').join(',');
+   const [s,c,cd,sd,docs,inv,cl]=await Promise.all([
+    supabase.from('shipments').select('id,display_name,bill_of_lading_no,case_id').eq('organization_id',org).or(pattern(['display_name','bill_of_lading_no'])).limit(4),
+    supabase.from('cases').select('id,display_name,case_number,registration_order_no,proforma_no').eq('organization_id',org).or(pattern(['display_name','case_number','registration_order_no','proforma_no'])).limit(4),
+    supabase.from('customs_documents').select('id,display_name,original_name,document_number,case_id,shipment_id').eq('organization_id',org).or(pattern(['display_name','original_name','document_number'])).limit(4),
+    supabase.from('shipment_documents').select('id,document_name,original_file_name,shipment_id').eq('organization_id',org).or(pattern(['document_name','original_file_name'])).limit(4),
+    supabase.from('documents').select('id,file_name,doc_type,case_id').eq('organization_id',org).ilike('file_name','%'+q+'%').limit(4),
+    supabase.from('finance_invoices').select('id,invoice_no,client_id').eq('organization_id',org).ilike('invoice_no','%'+q+'%').limit(4),
+    supabase.from('clients').select('id,name,economic_code,national_id').eq('organization_id',org).or(pattern(['name','economic_code','national_id'])).limit(4)
+   ]);
+   const results:ReminderEntitySelection[]=[];let failed=false;
+   if(s.error)failed=true;else for(const x of (s.data??[]) as Array<{id:string;display_name:string|null;bill_of_lading_no:string|null;case_id:string|null}>)results.push({type:'shipments',id:x.id,label:x.display_name??x.bill_of_lading_no??'محموله',caseId:x.case_id,shipmentId:x.id});
+   if(c.error)failed=true;else for(const x of (c.data??[]) as Array<{id:string;display_name:string|null;case_number:string|null;registration_order_no:string|null;proforma_no:string|null}>)results.push({type:'cases',id:x.id,label:x.display_name??(x.case_number?'پرونده '+x.case_number:x.registration_order_no?'ثبت سفارش '+x.registration_order_no:x.proforma_no?'پروفورما '+x.proforma_no:'پرونده'),caseId:x.id,shipmentId:null});
+   if(cd.error)failed=true;else for(const x of (cd.data??[]) as Array<{id:string;display_name:string|null;original_name:string|null;document_number:string|null;case_id:string|null;shipment_id:string|null}>)results.push({type:'customs_documents',id:x.id,label:x.display_name??x.original_name??x.document_number??'سند گمرکی',caseId:x.case_id,shipmentId:x.shipment_id});
+   if(sd.error)failed=true;else for(const x of (sd.data??[]) as Array<{id:string;document_name:string|null;original_file_name:string|null;shipment_id:string|null}>)results.push({type:'shipment_documents',id:x.id,label:x.document_name??x.original_file_name??'سند محموله',caseId:null,shipmentId:x.shipment_id});
+   if(docs.error)failed=true;else for(const x of (docs.data??[]) as Array<{id:string;file_name:string;doc_type:string|null;case_id:string|null}>)results.push({type:'documents',id:x.id,label:x.file_name||x.doc_type||'سند پرونده',caseId:x.case_id,shipmentId:null});
+   if(inv.error)failed=true;else for(const x of (inv.data??[]) as Array<{id:string;invoice_no:string|null;client_id:string|null}>)results.push({type:'finance_invoices',id:x.id,label:x.invoice_no?'فاکتور '+x.invoice_no:'فاکتور مالی',caseId:null,shipmentId:null});
+   if(cl.error)failed=true;else for(const x of (cl.data??[]) as Array<{id:string;name:string;economic_code:string|null;national_id:string|null}>)results.push({type:'clients',id:x.id,label:x.name,caseId:null,shipmentId:null});
+   setEntityResults(results);
+   if(failed)setEntityError('برخی انواع مورد مرتبط به‌دلیل محدودیت دسترسی یا خطای جستجو نمایش داده نشدند.');
+  }catch{setEntityResults([]);setEntityError('جستجوی موارد مرتبط انجام نشد؛ اتصال و دسترسی را بررسی کنید.');}
  };
  return <div className="fixed inset-0 z-[160] bg-black/55 flex items-end md:items-center justify-center" dir="rtl"><div className="w-full md:max-w-lg max-h-[94vh] overflow-auto rounded-t-[28px] md:rounded-[28px] border app-border bg-[var(--surface)] p-4 pb-[calc(18px+env(safe-area-inset-bottom))] shadow-2xl"><div className="flex items-center justify-between gap-3 mb-3"><div><b className="text-lg">ویرایش یادآور</b><div className="text-xs app-muted mt-1">{formatJalaliDateTime(new Date(reminder.due_at))}</div></div><button onClick={onClose} className="min-w-11 min-h-11 rounded-xl border app-border"><X size={17}/></button></div>
   <div className="space-y-3">
