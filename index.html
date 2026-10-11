@@ -29,9 +29,13 @@
         const path = window.location.pathname;
         const host = window.location.hostname.toLowerCase();
         const chatHost = host === 'chat.darbandicommercial.ir';
-        const manifest = chatHost ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' : path.startsWith('/chat') ? '/chat-app-v4.webmanifest?v=20261005-chat-v4' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest' : '/manifest.webmanifest';
+        const manifest = chatHost ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' : path.startsWith('/chat') ? '/chat-app-v4.webmanifest?v=20261005-chat-v4' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest?v=20261011-reminders-v2' : '/manifest.webmanifest';
         const link = document.querySelector('link[rel="manifest"]');
         if (link) link.setAttribute('href', manifest);
+        if (path.startsWith('/reminders')) {
+          const appTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+          if (appTitle) appTitle.setAttribute('content', 'یادآورها');
+        }
       })();
     </script>
     <script>
