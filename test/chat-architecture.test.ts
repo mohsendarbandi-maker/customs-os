@@ -121,4 +121,18 @@ describe('chat architecture invariants',()=>{
     expect(page).toContain('void loadConversation(selectedId,false)');
   });
 
+  it('includes finance and operational reminder metrics in daily reports',()=>{
+    const migration=read('supabase/migrations/20261011185000_messenger_report_finance_reminder_metrics.sql');
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(migration).toContain("'overdue_invoices', v_overdue_invoices");
+    expect(migration).toContain("'payments_received_total_irr', v_received_total_irr");
+    expect(migration).toContain("'payments_paid_total_irr', v_paid_total_irr");
+    expect(migration).toContain("'overdue_reminders', v_overdue_reminders");
+    expect(migration).toContain("'urgent_reminders', v_urgent_reminders");
+    expect(gateway).toContain('number(snapshot.overdue_invoices)');
+    expect(gateway).toContain('number(snapshot.payments_received_total_irr)');
+    expect(gateway).toContain('number(snapshot.payments_paid_total_irr)');
+    expect(gateway).toContain('number(snapshot.overdue_reminders)');
+  });
+
 });
