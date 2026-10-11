@@ -24,3 +24,82 @@
   .app-content{padding-inline:28px}
 }
 @media(prefers-reduced-motion:reduce){.app-nav-item{transition:none!important}}
+
+/* Mobile readability: avoid micro-labels and undersized touch targets in the operational UI. */
+@media (max-width: 767px) {
+  .app-content [class~="text-[9px]"] { font-size: 11px !important; line-height: 1.4; }
+  .app-content [class~="text-[10px]"] { font-size: 12px !important; line-height: 1.45; }
+  .app-content [class~="text-[11px]"] { font-size: 12px !important; line-height: 1.45; }
+  .app-content [class~="text-[12px]"] { font-size: 13px !important; }
+  .app-content [class~="text-xs"] { font-size: 13px; }
+  .app-content table { font-size: 13px; }
+  .app-content th, .app-content td { line-height: 1.55; }
+
+  /* Chat is a standalone route, so give it its own readable mobile scale. */
+  .chat-standalone {
+    font-size: 16px !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+  .chat-standalone .chat-app-header {
+    flex-basis: 64px !important;
+    height: 64px !important;
+    min-height: 64px !important;
+    padding-inline: 12px !important;
+  }
+  .chat-standalone .chat-app-brand b { font-size: 16px !important; }
+  .chat-standalone .chat-app-brand small { font-size: 11px !important; }
+  .chat-standalone .chat-app-header-status { font-size: 11px !important; }
+  .chat-standalone .chat-quick-nav {
+    gap: 7px !important;
+    padding: 8px 10px !important;
+  }
+  .chat-standalone .chat-quick-nav-item {
+    min-width: 72px !important;
+    min-height: 48px !important;
+    height: 48px !important;
+    padding-inline: 11px !important;
+    gap: 6px !important;
+    font-size: 12px !important;
+  }
+  .chat-standalone .chat-quick-nav-item svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  .chat-standalone .chat-quick-nav-item em { font-size: 10px !important; min-width: 18px; height: 18px; }
+  .chat-standalone .chat-folder-strip button {
+    min-height: 44px !important;
+    padding-inline: 14px !important;
+    font-size: 13px !important;
+  }
+  .chat-standalone [class~="text-[9px]"] { font-size: 11px !important; line-height: 1.45; }
+  .chat-standalone [class~="text-[10px]"] { font-size: 12px !important; line-height: 1.5; }
+  .chat-standalone [class~="text-[11px]"] { font-size: 12px !important; line-height: 1.5; }
+  .chat-standalone [class~="text-[12px]"] { font-size: 13px !important; }
+  .chat-standalone .chat-message-text,
+  .chat-standalone [class~="text-[17px]"] {
+    font-size: 18px !important;
+    line-height: 1.8 !important;
+  }
+  .chat-standalone textarea {
+    min-height: 52px !important;
+    max-height: 140px !important;
+    font-size: 17px !important;
+  }
+  .chat-standalone .chat-message-area {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .chat-standalone section:first-child button:not(.chat-quick-nav-item) {
+    min-height: 64px;
+  }
+}
+
+@media (max-width: 380px) {
+  .chat-standalone .chat-quick-nav { gap: 5px !important; padding-inline: 7px !important; }
+  .chat-standalone .chat-quick-nav-item { min-width: 68px !important; padding-inline: 8px !important; }
+}
