@@ -304,7 +304,18 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
   "📁 مجموع پرونده‌ها: "+number(snapshot.total_cases),
   "🆕 پرونده‌های جدید: "+number(snapshot.cases_created),
   "🛃 اظهارهای ثبت‌شده: "+number(snapshot.declarations_created),
-  "🚢 محموله‌های با پاس کشتی ثبت‌نشده: "+number(snapshot.ship_pass_pending)
+  "🚢 محموله‌های با پاس کشتی ثبت‌نشده: "+number(snapshot.ship_pass_pending),
+  "",
+  "🧾 فاکتورهای صادرشده در روز گزارش: "+number(snapshot.invoices_issued),
+  "📂 فاکتورهای باز: "+number(snapshot.open_invoices),
+  "⏰ فاکتورهای سررسیدگذشته: "+number(snapshot.overdue_invoices),
+  "💵 دریافتی‌های ثبت‌شده: "+number(snapshot.payments_received_count)+" مورد · "+number(snapshot.payments_received_total_irr)+" ریال",
+  "💸 پرداخت‌های ثبت‌شده: "+number(snapshot.payments_paid_count)+" مورد · "+number(snapshot.payments_paid_total_irr)+" ریال",
+  "",
+  "🔔 یادآورهای باز: "+number(snapshot.open_reminders),
+  "⌛ یادآورهای عقب‌افتاده: "+number(snapshot.overdue_reminders),
+  "📅 یادآورهای موعد امروز: "+number(snapshot.reminders_due_today),
+  "🚨 یادآورهای فوری: "+number(snapshot.urgent_reminders)
  ];
  const latest=Array.isArray(snapshot.latest_shipments)?snapshot.latest_shipments:[];
  if(latest.length){
