@@ -98,7 +98,7 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  if(c.platform==="rubika")throw new Error("PLATFORM_TRANSPORT_UNVERIFIED");
  const max=c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT;
  if(size!==null&&size>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
- const voice=mediaKind==="voice";
+ const voice=mediaKind==="voice"&&(c.platform!=="telegram"||mime==="audio/ogg"||mime==="audio/opus");
  const boundary="----CustomsOS"+token(16),filename=cleanName(name).replace(/["\r\n]/g,"_");
  const prefix=c.platform==="whatsapp"
   ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\"messaging_product\"\r\n\r\nwhatsapp\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\"type\"\r\n\r\n"+mime+"\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\"file\"; filename=\""+filename+"\"\r\nContent-Type: "+mime+"\r\n\r\n"
@@ -146,6 +146,10 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
  const {data:chat,error:chatError}=await db.from("messenger_chats").select("enabled,shipment_id,conversation_id,purpose").eq("organization_id",c.organization_id).eq("connection_id",c.id).eq("external_chat_id",chatId).maybeSingle();
  if(chatError)throw new Error("CHAT_MAPPING_READ_FAILED");
  if(!chat?.enabled)return;
+ if(chat.conversation_id){
+  const {data:duplicate}=await db.from("chat_messages").select("id").eq("organization_id",c.organization_id).eq("external_connection_id",c.id).eq("external_chat_id",chatId).eq("external_message_id",msgId).maybeSingle();
+  if(duplicate?.id)return;
+ }
  let fileAssetId:string|null=null,internalStoragePath:string|null=null,mirrorErrorCode:string|null=null;
  const cleanExternalName=media?cleanName(String(media.name||"document.bin")):null;
  if(media){
