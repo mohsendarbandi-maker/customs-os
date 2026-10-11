@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: customs-os-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -48,12 +48,27 @@ jobs:
           test -n "$script_src"
           case "$script_src" in /assets/*.js) ;; *) echo "Invalid local module path: $script_src"; exit 1;; esac
           test -s "dist${script_src%%\?*}"
+      - name: Confirm deployment commit is still latest main
+        id: freshness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --quiet
+          latest_sha="$(git rev-parse FETCH_HEAD)"
+          if [ "$latest_sha" != "$GITHUB_SHA" ]; then
+            echo "Superseded build $GITHUB_SHA; latest main is $latest_sha. Validation may finish, but this commit will not deploy."
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Deploy Worker to Cloudflare
+        if: steps.freshness.outputs.is_latest == 'true'
         run: npx wrangler@4 deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Ensure Cloudflare TURN for WebRTC when account permissions allow it
+        if: steps.freshness.outputs.is_latest == 'true'
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -92,6 +107,7 @@ jobs:
           printf '%s' "$key_id" | npx wrangler@4 secret put TURN_KEY_ID_V2 --name customs
           printf '%s' "$turn_key" | npx wrangler@4 secret put TURN_API_TOKEN_V2 --name customs
       - name: Smoke test live Worker and custom domain
+        if: steps.freshness.outputs.is_latest == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -184,6 +200,7 @@ jobs:
           fi
 
       - name: Browser runtime smoke test
+        if: steps.freshness.outputs.is_latest == 'true'
         shell: bash
         run: |
           set -euo pipefail
