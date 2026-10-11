@@ -103,3 +103,117 @@
   .chat-standalone .chat-quick-nav { gap: 5px !important; padding-inline: 7px !important; }
   .chat-standalone .chat-quick-nav-item { min-width: 68px !important; padding-inline: 8px !important; }
 }
+
+/* Dedicated mobile layout for the standalone reminders workspace. */
+@media (max-width: 767px) {
+  .reminders-page {
+    width: calc(100% + 20px) !important;
+    max-width: none !important;
+    margin-inline: -10px !important;
+    min-height: calc(100dvh - 58px) !important;
+    padding-bottom: calc(136px + env(safe-area-inset-bottom)) !important;
+    font-size: 16px !important;
+  }
+  .reminders-page > section {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 8px 10px 20px !important;
+  }
+  .reminders-page > section > header {
+    border-radius: 20px !important;
+    padding: 13px !important;
+    gap: 2px !important;
+  }
+  .reminders-page h1 { font-size: 26px !important; line-height: 1.35 !important; }
+  .reminders-page [class~="text-[9px]"] { font-size: 12px !important; line-height: 1.6 !important; }
+  .reminders-page [class~="text-[10px]"] { font-size: 13px !important; line-height: 1.65 !important; }
+  .reminders-page [class~="text-[11px]"] { font-size: 13px !important; line-height: 1.7 !important; }
+  .reminders-page [class~="text-[12px]"] { font-size: 14px !important; line-height: 1.7 !important; }
+  .reminders-page [class~="text-xs"] { font-size: 14px !important; line-height: 1.7 !important; }
+  .reminders-page [class~="text-sm"] { font-size: 15px !important; line-height: 1.75 !important; }
+  .reminders-page [class~="text-base"] { font-size: 17px !important; line-height: 1.6 !important; }
+
+  .reminders-page header button {
+    min-height: 44px !important;
+    font-size: 14px !important;
+    flex-shrink: 0;
+  }
+  .reminders-page header input {
+    min-height: 50px !important;
+    font-size: 16px !important;
+  }
+  .reminders-page header .overflow-x-auto {
+    max-width: 100%;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .reminders-page header .overflow-x-auto::-webkit-scrollbar { display: none; }
+
+  .reminders-page article {
+    padding: 14px !important;
+    border-radius: 18px !important;
+  }
+  .reminders-page article .font-black {
+    font-size: 16px !important;
+    line-height: 1.75 !important;
+    overflow-wrap: anywhere;
+  }
+  .reminders-page article button {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    flex-shrink: 0;
+  }
+  .reminders-page article svg { vertical-align: -2px; }
+
+  .reminders-page input,
+  .reminders-page select,
+  .reminders-page textarea {
+    font-size: 16px !important;
+    min-height: 48px;
+  }
+  .reminders-page form {
+    padding-inline: 10px !important;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+  }
+  .reminders-page form > div { gap: 8px !important; }
+  .reminders-page #reminder-quick-input {
+    min-height: 56px !important;
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+    padding-inline: 12px !important;
+  }
+  .reminders-page form button {
+    min-height: 48px !important;
+    min-width: 46px !important;
+  }
+
+  .reminders-page > div.fixed.inset-0 > div,
+  .reminders-page > div[role="dialog"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: calc(100dvh - 8px) !important;
+    overflow-y: auto !important;
+    border-radius: 24px 24px 0 0 !important;
+    padding: 16px 14px calc(18px + env(safe-area-inset-bottom)) !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .reminders-page > div.fixed.inset-0 label,
+  .reminders-page > div.fixed.inset-0 [class~="text-[11px]"] {
+    font-size: 13px !important;
+    line-height: 1.7 !important;
+  }
+  .reminders-page > div.fixed.inset-0 button {
+    min-height: 44px !important;
+    font-size: 14px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .reminders-page > section { padding-inline: 7px !important; }
+  .reminders-page > section > header { padding: 10px !important; }
+  .reminders-page article { padding: 11px !important; }
+  .reminders-page > section > header .overflow-x-auto button { padding-inline: 10px !important; }
+  .reminders-page form { gap: 5px !important; padding-inline: 6px !important; }
+  .reminders-page form > div { gap: 5px !important; }
+}
