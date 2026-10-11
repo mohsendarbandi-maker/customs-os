@@ -225,6 +225,23 @@ export default {
       response = await fetch(new Request(canonical, request));
     }
 
+    // Never let the SPA fallback return HTML for a fingerprinted static asset.
+    if (request.method === 'GET' && url.pathname.startsWith('/assets/')) {
+      const contentType = response.headers.get('content-type') || '';
+      const javascriptPath = /\\.(?:js|mjs)$/i.test(url.pathname);
+      const cssPath = /\\.css$/i.test(url.pathname);
+      const invalidAsset = !response.ok ||
+        /text\\/html/i.test(contentType) ||
+        (javascriptPath && !/(?:java|ecma)script/i.test(contentType)) ||
+        (cssPath && !/text\\/css/i.test(contentType));
+      if (invalidAsset) {
+        return new Response('Static asset not found in the active build.', {
+          status: 404,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+        });
+      }
+    }
+
     if (request.method === 'GET' && (url.pathname === '/' || accept.includes('text/html') || isHtmlNavigation)) {
       const headers = new Headers(response.headers);
       headers.set('X-Customs-OS-Build', BUILD_SIGNATURE);
