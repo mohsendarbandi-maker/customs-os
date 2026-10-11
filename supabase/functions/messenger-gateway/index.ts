@@ -237,7 +237,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
     db.from("messenger_chats").select("*").eq("id",row.messenger_chat_id).eq("organization_id",row.organization_id).maybeSingle(),
     db.from("chat_messages").select("id,organization_id,conversation_id,sender_id,body,deleted_at,external_platform,message_type").eq("id",row.chat_message_id).eq("organization_id",row.organization_id).maybeSingle()
    ]);
-   if(!c||!c.enabled||!chat||!chat.enabled||chat.purpose!=="inbox"||chat.conversation_id!==message?.conversation_id)throw new Error("DESTINATION_NO_LONGER_LINKED");
+   if(!c||!c.enabled||!chat||!chat.enabled||!chat.conversation_id||chat.conversation_id!==message?.conversation_id)throw new Error("DESTINATION_NO_LONGER_LINKED");
    if(!message||message.deleted_at||message.external_platform)throw new Error("MESSAGE_NOT_ELIGIBLE_FOR_EXTERNAL_DELIVERY");
    let externalMessageId="",fileAssetId:string|null=null,logType="text",payloadSummary:Record<string,any>={source:"customs_chat",outboxId:row.id};
    const bodyText=String(message.body||"").trim();
