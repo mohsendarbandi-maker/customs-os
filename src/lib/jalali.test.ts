@@ -9,5 +9,6 @@ describe('تقویم جلالی یادآورها',()=>{
  it('۲۹ اسفند در همه سال‌ها معتبر است و ۳۰ فقط در کبیسه',()=>{for(let y=1300;y<=1500;y++){expect(()=>toGregorian(y,12,29)).not.toThrow();if(isJalaliLeap(y))expect(()=>toGregorian(y,12,30)).not.toThrow();else expect(()=>toGregorian(y,12,30)).toThrow();}});
  it('مرز ماه‌ها رفت و برگشت دارد',()=>{for(let y=1390;y<=1410;y++){for(let m=1;m<=11;m++){const a=toGregorian(y,m,jalaliMonthLength(y,m));const b=toGregorian(y,m+1,1);const da=Date.UTC(a.gy,a.gm-1,a.gd),db=Date.UTC(b.gy,b.gm-1,b.gd);expect((db-da)/86400000).toBe(1);}}});
  it('زمان محلی تهران را به UTC درست تبدیل می‌کند',()=>{const d=zonedJalaliToDate(1405,7,10,9,0);const j=toJalali(d);expect(j).toEqual({year:1405,month:7,day:10});});
+ it('ساعات ابتدایی روز تهران را به روز شمسی اشتباه قبل برنمی‌گرداند',()=>{for(const hour of [0,1,2,3])expect(toJalali(zonedJalaliToDate(1405,7,10,hour,0))).toEqual({year:1405,month:7,day:10});});
  it('افزودن روزهای جلالی از روی ماه عبور می‌کند',()=>{const d=zonedJalaliToDate(1405,6,31,10,0);expect(toJalali(addJalaliDays(d,1))).toEqual({year:1405,month:7,day:1});});
 });
