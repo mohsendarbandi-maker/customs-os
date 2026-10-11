@@ -177,7 +177,7 @@ async function enrichMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
 
   return messages.map((message) => ({
     ...message,
-    sender_name: senderNames.get(message.sender_id) ?? null,
+    sender_name: message.external_sender_name ?? senderNames.get(message.sender_id ?? '') ?? null,
     attachments: byMessage.get(message.id) ?? [],
     reactions: reactionMap.get(message.id) ?? [],
     pinned: pinnedIds.has(message.id),
