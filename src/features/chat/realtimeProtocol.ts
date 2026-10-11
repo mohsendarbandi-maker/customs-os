@@ -1,7 +1,8 @@
 export type RealtimeMessage = {
   id: string;
   conversation_id: string;
-  sender_id: string;
+  sender_id: string | null;
+  external_sender_name: string | null;
   body: string | null;
   message_type: string;
   created_at: string;
