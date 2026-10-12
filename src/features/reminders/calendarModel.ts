@@ -1,6 +1,4 @@
 import {
-  JALALI_MONTHS,
-  WEEK_DAYS,
   jalaliMonthLength,
   jalaliWeekday,
   startOfTehranDay,
@@ -115,4 +113,3 @@ export function buildJalaliMonthGrid(
   });
 }
 
-export const jalaliCalendarLabels = { months: JALALI_MONTHS, weekdays: WEEK_DAYS } as const;
