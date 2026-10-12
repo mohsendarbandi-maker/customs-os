@@ -63,7 +63,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
 
   // Gate 3: No active session and no recoverable Auth error.
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    const loginPath = location.pathname.startsWith('/reminders') ? '/reminders/login' : '/login';
+    return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
 
   // Gate 4: Registered but missing Tenant/Profile records
