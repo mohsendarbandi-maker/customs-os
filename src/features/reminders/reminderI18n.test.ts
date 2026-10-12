@@ -13,13 +13,13 @@ describe('reminder bilingual presentation',()=>{
   expect(reminderText('یادآور جدید\\n\\nبدون سررسید','en')).toBe('New reminder No due date');
  });
  it('translates interface strings but preserves user-entered reminder data verbatim',()=>{
-  const html=renderToStaticMarkup(React.createElement(ReminderLocaleTree,{language:'en'},
+  const html=renderToStaticMarkup(React.createElement(ReminderLocaleTree,{language:'en',children:
    React.createElement(React.Fragment,null,
     React.createElement('h1',null,'یادآورها'),
     React.createElement('p',{'data-user-content':'true',dir:'auto'},'پیگیری محموله اسناد'),
     React.createElement('p',{'data-user-content':'true',dir:'auto'},'شرکت دربندی')
    )
-  ));
+  }));
   expect(html).toContain('Reminders');
   expect(html).toContain('پیگیری محموله اسناد');
   expect(html).toContain('شرکت دربندی');
