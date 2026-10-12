@@ -138,13 +138,15 @@ export default {
     const referer = request.headers.get('Referer') || '';
     const hostname = url.hostname.toLowerCase();
     const isChatHost = hostname === 'chat.darbandicommercial.ir';
+    const isRemindersHost = hostname === 'reminders.darbandicommercial.ir';
     const isManifestRequest =
       url.pathname === '/manifest.webmanifest' ||
       url.pathname === '/manifest-chat.webmanifest' ||
       url.pathname === '/chat-manifest.webmanifest' ||
       url.pathname === '/chat-app-v4.webmanifest' ||
       url.pathname === '/chat-subdomain.webmanifest' ||
-      url.pathname === '/manifest-reminders.webmanifest';
+      url.pathname === '/manifest-reminders.webmanifest' ||
+      url.pathname === '/reminders-subdomain.webmanifest';
 
     const isStaticAsset =
       url.pathname.startsWith('/assets/') ||
@@ -181,6 +183,24 @@ export default {
         status: response.status,
         statusText: response.statusText,
         headers: chatHeaders,
+      });
+    }
+
+    if (isRemindersHost && isHtmlNavigation && response.ok) {
+      const html = await response.text();
+      const remindersHtml = html
+        .replace(/<title>[^<]*<\/title>/i, '<title>Reminders | Customs OS</title>')
+        .replace(/href="\/manifest\.webmanifest"/i, 'href="/reminders-subdomain.webmanifest?v=20261012-reminders-v1"')
+        .replace(/href="\/icon\.svg"/i, 'href="/pwa/reminders-icon.svg"')
+        .replace(/href="\/pwa\/apple-touch-icon-180\.png(?:\?[^"]*)?"/i, 'href="/pwa/reminders-icon-180.png?v=20261012-reminders-v1"')
+        .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#06265F"')
+        .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="Reminders"');
+      const remindersHeaders = new Headers(response.headers);
+      remindersHeaders.delete('content-length');
+      response = new Response(remindersHtml, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: remindersHeaders,
       });
     }
 

@@ -1,0 +1,69 @@
+{
+  "id": "/",
+  "name": "Reminders | Customs OS",
+  "short_name": "Reminders",
+  "description": "Independent Customs OS operational reminders app",
+  "start_url": "/?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "portrait-primary",
+  "dir": "ltr",
+  "lang": "en",
+  "theme_color": "#06265F",
+  "background_color": "#F3F7FC",
+  "icons": [
+    {
+      "src": "/pwa/reminders-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa/reminders-icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New reminder",
+      "short_name": "New",
+      "url": "/?new=1",
+      "icons": [
+        {
+          "src": "/pwa/reminders-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Today's reminders",
+      "short_name": "Today",
+      "url": "/?view=today",
+      "icons": [
+        {
+          "src": "/pwa/reminders-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Completed",
+      "short_name": "Done",
+      "url": "/?view=done",
+      "icons": [
+        {
+          "src": "/pwa/reminders-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
+}
