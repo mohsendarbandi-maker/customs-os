@@ -184,7 +184,7 @@ const ENGLISH:Record<string,string>={
  'اتصال اینترنت قطع است؛ ثبت یادآور جدید در صف می‌ماند؛ ویرایش، تغییر وضعیت و اعلان‌ها به اتصال اینترنت نیاز دارند.':'You are offline. New reminders are queued; editing, status changes, and notifications need an internet connection.'
 };
 export const reminderText=(value:string,language:ReminderLanguage):string=>{
- const normalized=value.replace(/\\n/g,' ').replace(/\s+/g,' ').trim();
+ const normalized=value.replace(/\\+n/gi,' ').replace(/\\+r/gi,' ').replace(/\s+/g,' ').trim();
  if(language==='fa')return normalized;
  if(!normalized)return '';
  const exact=ENGLISH[normalized];
