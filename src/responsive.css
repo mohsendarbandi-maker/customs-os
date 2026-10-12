@@ -410,3 +410,9 @@
  .reminders-mobile-nav>button{min-height:58px;font-size:12px}
 }
 @media(prefers-reduced-motion:reduce){.reminders-app-standalone *,.reminders-app-standalone *::before,.reminders-app-standalone *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+/* One create action is available per breakpoint: header on desktop, dock on compact screens. */
+.reminders-header-add{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:46px;padding:0 15px;border:1px solid color-mix(in srgb,var(--primary) 70%,var(--border));border-radius:15px;background:var(--primary);color:#fff;font-size:14px;font-weight:900;white-space:nowrap;box-shadow:0 6px 20px color-mix(in srgb,var(--primary) 20%,transparent);transition:transform .18s cubic-bezier(.2,.8,.2,1),box-shadow .18s ease,filter .18s ease}
+.reminders-header-add:hover{filter:brightness(1.05);box-shadow:0 9px 24px color-mix(in srgb,var(--primary) 25%,transparent)}
+.reminders-header-add:active{transform:scale(.97)}
+@media(max-width:1023px){.reminders-header-add{display:none}}
