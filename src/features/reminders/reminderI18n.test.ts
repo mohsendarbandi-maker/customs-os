@@ -9,6 +9,10 @@ describe('reminder bilingual presentation',()=>{
   expect(reminderText('ثبت یادآور','en')).toBe('Create reminder');
   expect(reminderText('یادآورهای در انتظار همگام‌سازی','en')).toBe('Reminders waiting to sync');
   expect(reminderText('در صف','en')).toBe('Queued');
+  expect(reminderText('عملیات گروهی','en')).toBe('Bulk actions');
+  expect(reminderText('انتخاب یادآور','en')).toBe('Select reminder');
+  expect(reminderText('لغو انتخاب','en')).toBe('Clear selection');
+  expect(reminderText('انتخاب همهٔ این صفحه','en')).toBe('Select all on this page');
   expect(reminderText('یادآور جدید\n\nبدون سررسید','fa')).toBe('یادآور جدید بدون سررسید');
   expect(reminderText('یادآور جدید\\n\\nبدون سررسید','fa')).toBe('یادآور جدید بدون سررسید');
   expect(reminderText('یادآور جدید\n\nبدون سررسید','en')).toBe('New reminder No due date');
