@@ -1,40 +1,38 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {CalendarDays,ChevronLeft,ChevronRight,Clock3,Sunrise} from 'lucide-react';
-import {JALALI_MONTHS,jalaliMonthLength,jalaliWeekday,startOfTehranDay,toJalali,toGregorian,zonedJalaliToDate,addJalaliDays} from '../../lib/jalali';
-
-type Props={value:Date;onChange:(value:Date)=>void;onClose:()=>void;allDay:boolean;onAllDayChange:(v:boolean)=>void};
+import {CalendarDays,ChevronLeft,ChevronRight,Clock3,Sunrise,X} from 'lucide-react';
+import {JALALI_MONTHS,jalaliMonthLength,jalaliWeekday,toJalali,toGregorian,zonedJalaliToDate,addJalaliDays} from '../../lib/jalali';
+import {reminderNumber,reminderText,type ReminderLanguage} from './reminderI18n';
+type Props={value:Date;onChange:(value:Date)=>void;onClose:()=>void;allDay:boolean;onAllDayChange:(v:boolean)=>void;language?:ReminderLanguage;onClear?:()=>void;onApply?:()=>void};
 const pad=(n:number)=>String(n).padStart(2,'0');
-const same=(a:Date,b:Date)=>startOfTehranDay(a).getTime()===startOfTehranDay(b).getTime();
-export const JalaliDateTimePicker:React.FC<Props>=({value,onChange,onClose,allDay,onAllDayChange})=>{
- const now=new Date(),jv=toJalali(value),[month,setMonth]=useState(jv.month),[year,setYear]=useState(jv.year),[selectedDay,setSelectedDay]=useState(jv.day),[hour,setHour]=useState(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',hour12:false,hourCycle:'h23',hour:'2-digit'}).format(value))),[minute,setMinute]=useState(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',minute:'2-digit'}).format(value)));
- useEffect(()=>{const j=toJalali(value);setMonth(j.month);setYear(j.year);setSelectedDay(j.day);},[value]);
- const days=useMemo(()=>{const len=jalaliMonthLength(year,month),first=zonedJalaliToDate(year,month,1);const offset=jalaliWeekday(first);return Array.from({length:offset+len},(_,i)=>i<offset?null:i-offset+1);},[year,month]);
- const choose=(day:number,h=hour,m=minute)=>onChange(zonedJalaliToDate(year,month,day,allDay?9:h,allDay?0:m));
- const shift=(amount:number)=>{let m=month+amount,y=year;if(m<1){m=12;y--}if(m>12){m=1;y++}setMonth(m);setYear(y);setSelectedDay(d=>Math.min(d,jalaliMonthLength(y,m)));}
- const currentDay=toJalali(now).day;
- const shortcuts=[
-  ['امروز عصر',()=>{const j=toJalali(now);onChange(zonedJalaliToDate(j.year,j.month,j.day,17,0));}],
-  ['فردا صبح',()=>{const j=toJalali(addJalaliDays(now,1));onChange(zonedJalaliToDate(j.year,j.month,j.day,9,0));}],
-  ['آخر هفته',()=>{let d=addJalaliDays(now,1);for(let i=0;i<7;i++){if(jalaliWeekday(d)===6){const j=toJalali(d);onChange(zonedJalaliToDate(j.year,j.month,j.day,17,0));break;}d=addJalaliDays(d,1);}}],
-  ['هفته بعد',()=>{const j=toJalali(addJalaliDays(now,7));onChange(zonedJalaliToDate(j.year,j.month,j.day,hour,minute));}],
-  ['ماه بعد',()=>{let m=toJalali(now).month+1,y=toJalali(now).year;if(m===13){m=1;y++}onChange(zonedJalaliToDate(y,m,Math.min(toJalali(now).day,jalaliMonthLength(y,m)),hour,minute));}]
- ] as const;
- return <div className="fixed inset-0 z-[170] bg-black/55 flex items-end md:items-center justify-center" dir="rtl" role="dialog" aria-modal="true">
-   <div className="w-full md:max-w-lg rounded-t-[26px] md:rounded-[26px] border app-border bg-[var(--surface)] p-4 pb-[calc(16px+env(safe-area-inset-bottom))] shadow-2xl max-h-[92vh] overflow-auto">
-    <div className="flex items-center justify-between gap-3 mb-3"><div><b className="text-base">انتخاب تاریخ و زمان</b><div className="text-[11px] app-muted mt-1">ذخیره‌سازی در سامانه همیشه به زمان هماهنگ جهانی انجام می‌شود.</div></div><button onClick={onClose} className="min-w-11 min-h-11 rounded-xl border app-border">بستن</button></div>
-    <div className="grid grid-cols-3 gap-2 mb-3">{shortcuts.map(([label,fn])=><button key={label} onClick={fn} className="min-h-11 rounded-xl border app-border bg-[var(--surface-2)] text-xs font-bold flex items-center justify-center gap-1"><Sunrise size={14}/>{label}</button>)}</div>
-    <div className="flex items-center justify-between rounded-2xl bg-[var(--surface-2)] px-2 py-2 mb-3">
-      <button onClick={()=>shift(-1)} className="min-w-11 min-h-11 rounded-xl"><ChevronRight size={18}/></button>
-      <div className="text-center font-black">{JALALI_MONTHS[month-1]} {year}</div>
-      <button onClick={()=>shift(1)} className="min-w-11 min-h-11 rounded-xl"><ChevronLeft size={18}/></button>
-    </div>
-    <div className="grid grid-cols-7 text-center text-[10px] app-muted mb-1">{['شنبه','یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه'].map(d=><div key={d} className="py-1">{d[0]}</div>)}</div>
-    <div className="grid grid-cols-7 gap-1">{days.map((day,i)=>day===null?<div key={'e'+i} className="aspect-square"/>:<button key={day} onClick={()=>{setSelectedDay(day);choose(day)}} className={'aspect-square rounded-xl text-sm '+(day===currentDay&&year===toJalali(now).year&&month===toJalali(now).month?'ring-2 ring-[var(--primary)] ':'')+(day===selectedDay?'bg-[var(--primary)] text-white font-black':'bg-[var(--surface-2)]')}>{pad(day).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)])}</button>)}</div>
-    <div className="mt-4 rounded-2xl border app-border p-3">
-      <label className="flex items-center justify-between gap-3 min-h-11"><span className="flex items-center gap-2 text-sm font-bold"><CalendarDays size={16}/>تمام‌روز</span><input type="checkbox" checked={allDay} onChange={e=>onAllDayChange(e.target.checked)} className="w-5 h-5"/></label>
-      {!allDay&&<div className="grid grid-cols-2 gap-3 mt-2"><label className="flex items-center gap-2 border app-border bg-[var(--surface-2)] rounded-xl px-3 min-h-12"><Clock3 size={15}/><select value={hour} onChange={e=>setHour(Number(e.target.value))} className="bg-transparent outline-none flex-1">{Array.from({length:24},(_,h)=><option key={h} value={h}>{pad(h)}</option>)}</select></label><label className="flex items-center gap-2 border app-border bg-[var(--surface-2)] rounded-xl px-3 min-h-12"><Clock3 size={15}/><select value={minute} onChange={e=>setMinute(Math.round(Number(e.target.value)/5)*5%60)} className="bg-transparent outline-none flex-1">{Array.from({length:12},(_,i)=>{const m=i*5;return <option key={m} value={m}>{pad(m)}</option>})}</select></label></div>}
-      <button onClick={()=>choose(selectedDay,hour,minute)} className="w-full mt-3 min-h-12 rounded-xl bg-[var(--primary)] text-white font-black">تأیید</button>
-    </div>
-   </div>
- </div>;
+const EN_MONTHS=['Farvardin','Ordibehesht','Khordad','Tir','Mordad','Shahrivar','Mehr','Aban','Azar','Dey','Bahman','Esfand'],EN_WEEKDAYS=['Sat','Sun','Mon','Tue','Wed','Thu','Fri'];
+const TEHRAN_TIME=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',hour12:false,hourCycle:'h23',hour:'2-digit',minute:'2-digit'});
+const timeFrom=(date:Date)=>{const p=TEHRAN_TIME.formatToParts(date);return{hour:Number(p.find(x=>x.type==='hour')?.value??0),minute:Number(p.find(x=>x.type==='minute')?.value??0)};};
+export const JalaliDateTimePicker:React.FC<Props>=({value,onChange,onClose,allDay,onAllDayChange,language='fa',onClear,onApply})=>{
+ const now=new Date(),initial=toJalali(value),initialTime=timeFrom(value);
+ const [month,setMonth]=useState(initial.month),[year,setYear]=useState(initial.year),[selectedDay,setSelectedDay]=useState(initial.day),[hour,setHour]=useState(initialTime.hour),[minute,setMinute]=useState(initialTime.minute);
+ const t=(v:string)=>reminderText(v,language);
+ useEffect(()=>{const j=toJalali(value),time=timeFrom(value);setMonth(j.month);setYear(j.year);setSelectedDay(j.day);setHour(time.hour);setMinute(time.minute);},[value]);
+ const days=useMemo(()=>{const len=jalaliMonthLength(year,month),first=zonedJalaliToDate(year,month,1),offset=jalaliWeekday(first);return Array.from({length:offset+len},(_,i)=>i<offset?null:i-offset+1);},[year,month]);
+ const shift=(amount:number)=>{let m=month+amount,y=year;if(m<1){m=12;y--}if(m>12){m=1;y++}setMonth(m);setYear(y);setSelectedDay(d=>Math.min(d,jalaliMonthLength(y,m)));};
+ const setDraft=(date:Date)=>{const j=toJalali(date),time=timeFrom(date);setMonth(j.month);setYear(j.year);setSelectedDay(j.day);setHour(time.hour);setMinute(time.minute);};
+ const nowJ=toJalali(now),months=language==='fa'?JALALI_MONTHS:EN_MONTHS;
+ const shortcuts:Array<[string,()=>void]>=[
+ ['امروز عصر',()=>{const j=toJalali(now);setDraft(zonedJalaliToDate(j.year,j.month,j.day,17,0));}],
+ ['فردا صبح',()=>{const j=toJalali(addJalaliDays(now,1));setDraft(zonedJalaliToDate(j.year,j.month,j.day,9,0));}],
+ ['آخر هفته',()=>{let d=addJalaliDays(now,1);for(let i=0;i<7;i++){const j=toJalali(d),g=toGregorian(j.year,j.month,j.day);if(new Date(Date.UTC(g.gy,g.gm-1,g.gd)).getUTCDay()===5){setDraft(zonedJalaliToDate(j.year,j.month,j.day,17,0));break;}d=addJalaliDays(d,1);}}],
+ ['هفته بعد',()=>{const j=toJalali(addJalaliDays(now,7));setDraft(zonedJalaliToDate(j.year,j.month,j.day,hour,minute));}],
+ ['ماه بعد',()=>{let m=nowJ.month+1,y=nowJ.year;if(m===13){m=1;y++}setDraft(zonedJalaliToDate(y,m,Math.min(nowJ.day,jalaliMonthLength(y,m)),hour,minute));}]
+ ];
+ const apply=()=>{onChange(zonedJalaliToDate(year,month,selectedDay,allDay?9:hour,allDay?0:minute));onApply?.();};
+ return <div className="reminders-calendar-backdrop fixed inset-0 z-[170] flex items-end md:items-center justify-center" dir={language==='fa'?'rtl':'ltr'} role="dialog" aria-modal="true" aria-label={t('انتخاب تاریخ و زمان')}>
+ <div className="reminders-calendar-panel w-full md:max-w-lg rounded-t-[26px] md:rounded-[26px] border app-border bg-[var(--surface)] p-4 pb-[calc(16px+env(safe-area-inset-bottom))] shadow-2xl max-h-[94dvh] overflow-auto">
+ <div className="flex items-start justify-between gap-3 mb-4"><div><b className="text-lg">{t('انتخاب تاریخ و زمان')}</b><div className="text-sm app-muted mt-1">{t('ذخیره‌سازی در سامانه همیشه به زمان هماهنگ جهانی انجام می‌شود.')}</div></div><button type="button" onClick={onClose} aria-label={t('بستن')} className="reminder-icon-button"><X size={19}/></button></div>
+ <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">{shortcuts.map(([label,fn])=><button type="button" key={label} onClick={fn} className="reminders-calendar-shortcut"><Sunrise size={16}/>{t(label)}</button>)}</div>
+ <div className="flex items-center justify-between rounded-2xl bg-[var(--surface-2)] px-2 py-2 mb-3"><button type="button" onClick={()=>shift(-1)} aria-label={language==='fa'?'ماه قبل':'Previous month'} className="reminder-icon-button"><ChevronLeft size={18}/></button><div className="text-center font-black text-base">{months[month-1]} {reminderNumber(year,language)}</div><button type="button" onClick={()=>shift(1)} aria-label={language==='fa'?'ماه بعد':'Next month'} className="reminder-icon-button"><ChevronRight size={18}/></button></div>
+ <div className="grid grid-cols-7 text-center text-xs app-muted mb-2">{(language==='fa'?['شنبه','یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه']:EN_WEEKDAYS).map((d,i)=><div key={i} className="py-2">{language==='fa'?d[0]:d}</div>)}</div>
+ <div className="grid grid-cols-7 gap-1.5">{days.map((day,i)=>day===null?<div key={'e'+i} className="aspect-square"/>:<button type="button" key={day} aria-pressed={day===selectedDay} onClick={()=>setSelectedDay(day)} className={'reminders-calendar-day '+(day===nowJ.day&&year===nowJ.year&&month===nowJ.month?'is-today ':'')+(day===selectedDay?'is-selected':'')}>{reminderNumber(day,language)}</button>)}</div>
+ <div className="mt-4 rounded-2xl border app-border p-3"><label className="flex items-center justify-between gap-3 min-h-12"><span className="flex items-center gap-2 text-sm font-bold"><CalendarDays size={17}/>{t('تمام‌روز')}</span><input type="checkbox" checked={allDay} onChange={e=>onAllDayChange(e.target.checked)} className="w-5 h-5 accent-[var(--primary)]"/></label>
+ {!allDay&&<div className="grid grid-cols-2 gap-3 mt-2"><label className="flex items-center gap-2 border app-border bg-[var(--surface-2)] rounded-xl px-3 min-h-12"><Clock3 size={16}/><select aria-label={language==='fa'?'ساعت':'Hour'} value={hour} onChange={e=>setHour(Number(e.target.value))} className="bg-transparent outline-none flex-1 text-base">{Array.from({length:24},(_,h)=><option key={h} value={h}>{reminderNumber(h,language)}</option>)}</select></label><label className="flex items-center gap-2 border app-border bg-[var(--surface-2)] rounded-xl px-3 min-h-12"><Clock3 size={16}/><select aria-label={language==='fa'?'دقیقه':'Minute'} value={minute} onChange={e=>setMinute(Math.round(Number(e.target.value)/5)*5%60)} className="bg-transparent outline-none flex-1 text-base">{Array.from({length:12},(_,i)=>{const m=i*5;return <option key={m} value={m}>{pad(m)}</option>})}</select></label></div>}
+ <div className="grid grid-cols-2 gap-2 mt-3"><button type="button" onClick={apply} className="min-h-12 rounded-xl bg-[var(--primary)] text-white font-black">{t('تأیید')}</button>{onClear&&<button type="button" onClick={()=>{onClear();onClose();}} className="min-h-12 rounded-xl border app-border font-bold">{t('پاک‌کردن تاریخ')}</button>}</div>
+ </div></div></div>;
 };
