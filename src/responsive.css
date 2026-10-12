@@ -217,3 +217,79 @@
   .reminders-page form { gap: 5px !important; padding-inline: 6px !important; }
   .reminders-page form > div { gap: 5px !important; }
 }
+
+/* High-visibility operational reminders dashboard: distinct desktop and phone layout. */
+.reminders-page .reminders-overview {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  align-items: stretch;
+}
+.reminders-page .reminder-stat-card {
+  display: flex;
+  min-width: 0;
+  min-height: 154px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  text-align: right;
+  border-radius: 20px;
+}
+.reminders-page .reminder-stat-card::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset-inline-end: -35px;
+  bottom: -48px;
+  width: 118px;
+  height: 118px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  pointer-events: none;
+}
+.reminders-page .reminder-stat-card[aria-pressed="true"] {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.reminders-page .reminder-stat-value {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+@media (min-width: 768px) and (max-width: 1279px) {
+  .reminders-page .reminders-overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 767px) {
+  .reminders-page .reminders-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-top: 12px !important;
+  }
+  .reminders-page .reminder-stat-card {
+    min-height: 132px !important;
+    padding: 13px !important;
+    border-radius: 18px !important;
+  }
+  .reminders-page .reminder-stat-icon {
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 40px;
+  }
+  .reminders-page .reminder-stat-value {
+    font-size: 25px !important;
+    line-height: 1.2 !important;
+  }
+}
+@media (max-width: 380px) {
+  .reminders-page .reminders-overview { gap: 7px !important; }
+  .reminders-page .reminder-stat-card { min-height: 124px !important; padding: 10px !important; }
+  .reminders-page .reminder-stat-icon { width: 36px !important; height: 36px !important; flex-basis: 36px; }
+  .reminders-page .reminder-stat-value { font-size: 23px !important; }
+}
+
