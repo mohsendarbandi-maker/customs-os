@@ -23,8 +23,8 @@
       "purpose": "any"
     },
     {
-      "src": "/pwa/reminders-icon-192.png",
-      "sizes": "192x192",
+      "src": "/pwa/reminders-icon-180.png",
+      "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
     }
@@ -36,9 +36,9 @@
       "url": "/reminders?new=1",
       "icons": [
         {
-          "src": "/pwa/reminders-icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
+          "src": "/pwa/reminders-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
         }
       ]
     },
@@ -48,9 +48,9 @@
       "url": "/reminders?view=today",
       "icons": [
         {
-          "src": "/pwa/reminders-icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
+          "src": "/pwa/reminders-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
         }
       ]
     },
@@ -60,9 +60,9 @@
       "url": "/reminders?view=done",
       "icons": [
         {
-          "src": "/pwa/reminders-icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
+          "src": "/pwa/reminders-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
         }
       ]
     }
