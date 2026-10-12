@@ -7,6 +7,7 @@ import {rpcWithOfflineQueue} from '../../lib/offlineQueue';
 import {useAuth} from '../../context/AuthContext';
 import {addJalaliDays,formatJalali,formatJalaliDateTime,formatRelativeFa,groupDayLabel,startOfTehranDay,toJalali,zonedJalaliToDate} from '../../lib/jalali';
 import {JalaliDateTimePicker} from './JalaliDateTimePicker';
+import {readReminderLanguage,reminderText,formatReminderDate,formatReminderDateTime,formatReminderRelative,reminderNumber,type ReminderLanguage} from './reminderI18n';
 import {disablePush,enablePush,listPushDevices,setNotificationPreferences,testPush} from './push';
 import {parseReminder,resolveAssignee,resolveLink,type Reminder,type ReminderKind,type ReminderPriority,ReminderEntityType} from './reminderCore';
 
@@ -29,8 +30,11 @@ export const RemindersPage:React.FC=()=>{
  const {profile,user}=useAuth();const qc=useQueryClient();const [params,setParams]=useSearchParams();const initialView=params.get('view');const [filter,setFilter]=useState<Filter>(initialView&&( ['today','scheduled','overdue','all','done','assigned'] as string[]).includes(initialView)?initialView as Filter:'all');const [kind,setKind]=useState<ReminderKind|null>(null);const [search,setSearch]=useState('');const [page,setPage]=useState(0);const [composer,setComposer]=useState('');const [selected,setSelected]=useState<string[]>([]);const [editor,setEditor]=useState<Reminder|null>(null);const [showPicker,setShowPicker]=useState(false);const [toast,setToast]=useState<{text:string;undo?:()=>void}|null>(null);const [pushOpen,setPushOpen]=useState(false);const [pushDevices,setPushDevices]=useState<Array<{id:string;platform:string|null;user_agent:string|null;last_seen_at:string;is_active:boolean;failure_count:number}>>([]);const [pushBusy,setPushBusy]=useState(false);
  const pushAllowed=profile?.role!=='client';
  const [recording,setRecording]=useState(false);const [composerOpen,setComposerOpen]=useState(false);
- const [menuId,setMenuId]=useState<string|null>(null);
+ const [menuId,setMenuId]=useState<string|null>(null);const [menuPosition,setMenuPosition]=useState<{top:number;left:number;width:number}|null>(null);
+ const [language,setLanguage]=useState<ReminderLanguage>(()=>readReminderLanguage());const [quickDueAt,setQuickDueAt]=useState<Date|null>(null);const [quickAllDay,setQuickAllDay]=useState(false);const [showQuickPicker,setShowQuickPicker]=useState(false);
+ const t=(value:string)=>reminderText(value,language);
  const preview=useMemo(()=>composer.trim()?parseReminder(composer):null,[composer]);
+ useEffect(()=>{const root=document.documentElement,oldDir=root.dir,oldLang=root.lang;root.dir=language==='fa'?'rtl':'ltr';root.lang=language;try{localStorage.setItem('customs-reminders-language-v1',language);}catch{}return()=>{root.dir=oldDir;root.lang=oldLang;}},[language]);
 
  useEffect(()=>{const onKey=(e:KeyboardEvent)=>{const target=e.target as HTMLElement|null;if(e.key.toLowerCase()==='n'&&target&&![HTMLInputElement,HTMLTextAreaElement].some(C=>target instanceof C)){e.preventDefault();document.getElementById('reminder-quick-input')?.focus();}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey);},[]);
  useEffect(()=>{if(params.get('new')==='1'){setComposerOpen(true);window.setTimeout(()=>document.getElementById('reminder-quick-input')?.focus(),100);setParams({}, {replace:true});}},[params,setParams]);
@@ -39,7 +43,7 @@ export const RemindersPage:React.FC=()=>{
  const query=useQuery<QueryResult>({
   queryKey:['reminders',filter,kind,search,page,user?.id],
   queryFn:async()=>{
-   if(!profile?.organization_id)return{rows:[],count:0};let q=supabase.from('operational_reminders').select('*',{count:'exact'}).order('due_at',{ascending:true}).range(page*PAGE_SIZE,page*PAGE_SIZE+PAGE_SIZE-1);
+   if(!profile?.organization_id)return{rows:[],count:0};let q=supabase.from('operational_reminders').select('*',{count:'exact'}).order('due_at',{ascending:true,nullsFirst:false}).range(page*PAGE_SIZE,page*PAGE_SIZE+PAGE_SIZE-1);
    q=q.eq('organization_id',profile.organization_id);q=q.is('deleted_at',null);
    if(filter==='today'){const[r1,r2]=todayRange();q=q.gte('due_at',r1.toISOString()).lt('due_at',r2.toISOString()).eq('status','open');}
    if(filter==='scheduled')q=q.eq('status','open').gte('due_at',new Date().toISOString());
@@ -56,13 +60,13 @@ export const RemindersPage:React.FC=()=>{
  const upsertVisible=(fn:(rows:Reminder[])=>Reminder[])=>{qc.setQueriesData<QueryResult>({queryKey:['reminders']},old=>old?{...old,rows:fn(old.rows)}:old);};
  const create=useMutation({
   mutationFn:async({parsed,clientUuid}:{parsed:ReturnType<typeof parseReminder>;clientUuid:string})=>{
-   const payload={title:parsed.title,due_at:parsed.dueAt.toISOString(),priority:parsed.priority,kind:parsed.kind,recurrence_rule:parsed.recurrenceRule,alarm_offsets_min:parsed.alarmOffsets,visibility:'private',all_day:false,timezone:'Asia/Tehran',client_uuid:clientUuid};
+   const payload={title:parsed.title,due_at:parsed.dueAt?.toISOString()??null,priority:parsed.priority,kind:parsed.kind,recurrence_rule:parsed.recurrenceRule,alarm_offsets_min:parsed.alarmOffsets,visibility:'private',all_day:parsed.dueAt?quickAllDay:false,timezone:'Asia/Tehran',client_uuid:clientUuid};
    const result=await rpcWithOfflineQueue('create_operational_reminder',{p_payload:payload}) as {data:Reminder|null;error:{message:string}|null;queued?:boolean};
    if(result.error)throw new Error(result.error.message);
    if(result.data){const link=await resolveLink(parsed.linkQuery,parsed.kind).catch(()=>null);const assignee=await resolveAssignee(parsed.assigneeName).catch(()=>null);if(link||assignee){const {data:linked,error:linkError}=await supabase.from('operational_reminders').update({...link,...(assignee?{assignee_id:assignee}: {})}).eq('id',result.data.id).select('id').maybeSingle();if(linkError)throw linkError;if(!linked)throw new Error('پیوند محموله یا مسئول ذخیره نشد.');}}
    return result;
   },
-  onMutate:async({parsed,clientUuid})=>{await qc.cancelQueries({queryKey:['reminders']});const temp={id:'local-'+clientUuid,organization_id:profile?.organization_id??null,case_id:null,shipment_id:null,title:parsed.title,description:null,due_at:parsed.dueAt.toISOString(),priority:parsed.priority,status:'open',created_by:user?.id??null,completed_at:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),due_precision:'day',source_key:null,is_system:false,kind:parsed.kind,entity_type:null,entity_id:null,assignee_id:user?.id??null,visibility:'private',all_day:false,timezone:'Asia/Tehran',alarm_offsets_min:parsed.alarmOffsets,recurrence_rule:parsed.recurrenceRule,recurrence_until:null,series_id:null,occurrence_key:null,snoozed_until:null,snooze_count:0,tags:[],notes:null,client_uuid:clientUuid,deleted_at:null,completed_by:null} as Reminder;upsertVisible(rows=>[temp,...rows]);return{tempId:temp.id};},
+  onMutate:async({parsed,clientUuid})=>{await qc.cancelQueries({queryKey:['reminders']});const temp={id:'local-'+clientUuid,organization_id:profile?.organization_id??null,case_id:null,shipment_id:null,title:parsed.title,description:null,due_at:parsed.dueAt?.toISOString()??null,priority:parsed.priority,status:'open',created_by:user?.id??null,completed_at:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),due_precision:'day',source_key:null,is_system:false,kind:parsed.kind,entity_type:null,entity_id:null,assignee_id:user?.id??null,visibility:'private',all_day:false,timezone:'Asia/Tehran',alarm_offsets_min:parsed.alarmOffsets,recurrence_rule:parsed.recurrenceRule,recurrence_until:null,series_id:null,occurrence_key:null,snoozed_until:null,snooze_count:0,tags:[],notes:null,client_uuid:clientUuid,deleted_at:null,completed_by:null} as Reminder;upsertVisible(rows=>[temp,...rows]);return{tempId:temp.id};},
   onError:(e,_v,ctx)=>{if(ctx?.tempId)upsertVisible(rows=>rows.filter(x=>x.id!==ctx.tempId));setToast({text:errorFa(e)});},
   onSettled:()=>{void qc.invalidateQueries({queryKey:['reminders']});void qc.invalidateQueries({queryKey:['reminder-overview']});}
  });
