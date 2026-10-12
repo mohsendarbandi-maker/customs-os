@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 import './responsive.css';
+import './styles/mobile-polish.css';
 import { startOfflineQueue } from './lib/offlineQueue';
 
 type BoundaryState = { hasError: boolean; message: string };
