@@ -264,14 +264,14 @@ jobs:
               remindersPage.on('pageerror', (error) => remindersErrors.push(`pageerror: ${error.message}`));
               remindersPage.on('requestfailed', (request) => {
                 const url = request.url();
-                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                if (url.includes('.js') || url.includes('.mjs')) {
                   remindersErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
                 }
               });
 
               await remindersPage.goto(baseURL + '/reminders', { waitUntil: 'domcontentloaded', timeout: 30000 });
               await remindersPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
-              await expect(remindersPage).toHaveURL(/\\/reminders\\/login(?:\\?.*)?$/, { timeout: 15000 });
+              await expect.poll(async () => new URL(remindersPage.url()).pathname, { timeout: 15000, message: 'Reminders did not stay inside its app scope' }).toBe('/reminders/login');
               await expect(remindersPage).toHaveTitle(/یادآورها/);
               await expect(remindersPage.locator('#root')).not.toBeEmpty();
               await expect(remindersPage.locator('.app-sidebar')).toHaveCount(0);
@@ -309,7 +309,7 @@ jobs:
               ) {
                 throw new Error(`Reminders PWA manifest/icon validation failed: ${JSON.stringify(manifestCheck)}`);
               }
-              if (remindersErrors.length) throw new Error(remindersErrors.join('\\n'));
+              if (remindersErrors.length) throw new Error(remindersErrors.join('; '));
               console.log('Reminders standalone mobile route passed:', JSON.stringify(manifestCheck));
               await remindersPage.close();
 
