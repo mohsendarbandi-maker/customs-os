@@ -359,7 +359,7 @@ jobs:
                 async () => new URL(remindersSubdomainPage.url()).pathname,
                 { timeout: 20000, message: 'Unauthenticated reminders subdomain did not remain on its login route' },
               ).toBe('/login');
-              await expect(remindersSubdomainPage).toHaveTitle(/Reminders \\| Customs OS/);
+              await expect(remindersSubdomainPage).toHaveTitle(/Reminders \| Customs OS/);
               await expect(remindersSubdomainPage.locator('#root')).not.toBeEmpty();
               await expect(remindersSubdomainPage.locator('.app-sidebar')).toHaveCount(0);
               await expect(remindersSubdomainPage.locator('.app-topbar')).toHaveCount(0);
