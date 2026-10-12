@@ -194,7 +194,7 @@ jobs:
           grep -Fq 'reminders-icon-180.png' /tmp/reminders-subdomain.html
           curl --fail --silent --show-error --location --max-time 30 -o /tmp/reminders-subdomain-manifest.json "${reminders_base}/reminders-subdomain.webmanifest?v=20261012-reminders-v1&__smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
           grep -Fq '"id": "/"' /tmp/reminders-subdomain-manifest.json
-          grep -Fq '"start_url": "/"' /tmp/reminders-subdomain-manifest.json
+          grep -Fq '"start_url": "/?app=1"' /tmp/reminders-subdomain-manifest.json
           grep -Fq '"scope": "/"' /tmp/reminders-subdomain-manifest.json
           grep -Fq '"display": "standalone"' /tmp/reminders-subdomain-manifest.json
           grep -Fq '"short_name": "Reminders"' /tmp/reminders-subdomain-manifest.json
