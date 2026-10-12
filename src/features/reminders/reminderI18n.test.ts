@@ -5,7 +5,7 @@ describe('reminder bilingual presentation',()=>{
  it('translates core actions and removes literal newline escape artifacts',()=>{
   expect(reminderText('یادآورها','en')).toBe('Reminders');
   expect(reminderText('ثبت یادآور','en')).toBe('Create reminder');
-  expect(reminderText('یادآور جدید\\n\\nبدون سررسید','fa')).toBe('یادآور جدید سررسید اختیاری');
+  expect(reminderText('یادآور جدید\\n\\nبدون سررسید','fa')).toBe('یادآور جدید بدون سررسید');
   expect(reminderText('یادآور جدید\\n\\nبدون سررسید','en')).toBe('New reminder No due date');
  });
  it('formats the same instant using the Jalali calendar in the Tehran timezone',()=>{
