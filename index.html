@@ -59,12 +59,16 @@
     <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/pwa/apple-touch-icon-180.png?v=20261006-brand" />
     <script>
       (() => {
-        if (!window.location.pathname.startsWith("/reminders")) return;
+        const host = window.location.hostname.toLowerCase();
+        const isRemindersHost = host === "reminders.darbandicommercial.ir";
+        const isRemindersPath = window.location.pathname.startsWith("/reminders");
+        if (!isRemindersHost && !isRemindersPath) return;
         const icon = "/pwa/reminders-icon-180.png?v=20261012-reminders-v1";
+        const appLabel = isRemindersHost ? "Reminders" : "یادآورها";
         document.querySelectorAll('link[rel*="apple-touch-icon"]').forEach((node) => node.setAttribute("href", icon));
-        document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", "یادآورها");
+        document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", appLabel);
         document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#06265F");
-        document.title = "یادآورها | Customs OS";
+        document.title = appLabel + " | Customs OS";
       })();
     </script>
     <title>Customs OS | سیستم مدیریت گمرک</title>

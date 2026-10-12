@@ -3,12 +3,15 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { CustomsLogo } from '../components/CustomsLogo';
+import { readReminderLanguage, type ReminderLanguage } from '../features/reminders/reminderI18n';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isRemindersHost = typeof window !== 'undefined' && window.location.hostname.toLowerCase() === 'reminders.darbandicommercial.ir';
+  const [remindersLanguage] = useState<ReminderLanguage>(() => readReminderLanguage());
   const { user, needsOnboarding, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,15 +52,22 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="future-auth min-h-screen flex items-center justify-center dir-rtl font-sans p-4">
+    <div className="future-auth min-h-screen flex items-center justify-center font-sans p-4" dir={isRemindersHost && remindersLanguage === 'en' ? 'ltr' : 'rtl'}>
       <div className="future-auth-card w-full max-w-md">
         <div className="text-center mb-8 future-auth-head">
           <div className="flex justify-center mb-5">
-            <CustomsLogo size={64} showWordmark />
+            {isRemindersHost ? (
+              <img src="/pwa/reminders-icon-180.png?v=20261012-reminders-v1" width="72" height="72" className="rounded-2xl shadow-lg" alt={remindersLanguage === 'en' ? 'Reminders' : 'یادآورها'} />
+            ) : (
+              <CustomsLogo size={64} showWordmark />
+            )}
           </div>
-          <h1 className="text-2xl font-black mb-2">ورود به سیستم</h1>
+          <div className="text-[10px] font-black tracking-widest app-muted mb-2">
+            {isRemindersHost ? (remindersLanguage === 'en' ? 'CUSTOMS OS · REMINDERS' : 'یادآورهای عملیاتی · CUSTOMS OS') : ''}
+          </div>
+          <h1 className="text-2xl font-black mb-2">{isRemindersHost ? (remindersLanguage === 'en' ? 'Sign in to Reminders' : 'ورود به یادآورها') : 'ورود به سیستم'}</h1>
           <p className="text-sm app-muted">
-            نرم‌افزار جامع مدیریت ترخیص و لجستیک گمرکی
+            {isRemindersHost ? (remindersLanguage === 'en' ? 'Your operational reminders, connected to your Customs OS account.' : 'یادآورهای عملیاتی شما، متصل به حساب اصلی Customs OS.') : 'نرم‌افزار جامع مدیریت ترخیص و لجستیک گمرکی'}
           </p>
         </div>
 
