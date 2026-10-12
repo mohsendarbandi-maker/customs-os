@@ -7,6 +7,8 @@ describe('reminder bilingual presentation',()=>{
  it('translates core actions and removes literal newline escape artifacts',()=>{
   expect(reminderText('یادآورها','en')).toBe('Reminders');
   expect(reminderText('ثبت یادآور','en')).toBe('Create reminder');
+  expect(reminderText('یادآورهای در انتظار همگام‌سازی','en')).toBe('Reminders waiting to sync');
+  expect(reminderText('در صف','en')).toBe('Queued');
   expect(reminderText('یادآور جدید\n\nبدون سررسید','fa')).toBe('یادآور جدید بدون سررسید');
   expect(reminderText('یادآور جدید\\n\\nبدون سررسید','fa')).toBe('یادآور جدید بدون سررسید');
   expect(reminderText('یادآور جدید\n\nبدون سررسید','en')).toBe('New reminder No due date');
