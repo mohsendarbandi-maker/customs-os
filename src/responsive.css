@@ -459,3 +459,54 @@
 @media(max-width:767px){.reminders-hub-screen{gap:15px}.reminders-hub-identity .reminders-brand-icon{width:46px;height:46px;flex-basis:46px}.reminders-hub-identity h1{font-size:26px}.reminders-hub-identity p{font-size:10px}.reminders-hub-actions{gap:4px}.reminders-hub-actions button{width:34px;height:38px;flex-basis:34px;border-radius:12px}.reminders-hub-hero{grid-template-columns:minmax(0,1fr) 88px;min-height:180px;gap:5px;padding:18px 15px;border-radius:22px}.reminders-hub-hero h2{font-size:20px}.reminders-hub-hero p{font-size:12px;line-height:1.7}.reminders-hub-hero p strong{font-size:18px}.reminders-hub-hero-art{min-height:130px;transform:scale(.78);transform-origin:center}.reminders-hub-eyebrow{font-size:10px}.reminders-smart-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.reminders-smart-card{min-height:138px;padding:13px;border-radius:19px}.reminders-smart-icon{width:40px;height:40px;border-radius:13px}.reminders-smart-card>strong{font-size:27px}.reminders-smart-label{font-size:12px}.reminders-smart-card>small{font-size:11px}.reminders-section-title h2{font-size:16px}.reminders-section-title p{font-size:11px}.reminders-category-grid{grid-template-columns:1fr;gap:10px}.reminders-category-card{min-height:142px;padding:16px;border-radius:19px}.reminders-subpage-heading h1{font-size:24px}}
 @media(max-width:370px){.reminders-hub-identity{gap:7px}.reminders-hub-identity .reminders-brand-icon{width:40px;height:40px;flex-basis:40px}.reminders-hub-identity h1{font-size:22px}.reminders-hub-actions button{width:31px;height:36px;flex-basis:31px}.reminders-hub-hero{grid-template-columns:minmax(0,1fr) 60px}.reminders-hub-hero-art{transform:scale(.62)}.reminders-smart-card{padding:10px}}
 @media(prefers-reduced-motion:reduce){.reminders-route-screen,.reminders-smart-card,.reminders-hero-calendar,.reminders-hero-spark,.reminders-up-next-loading i{animation:none!important}.reminders-smart-card,.reminders-category-card,.reminders-hub-actions button,.reminders-hub-search,.reminders-search-launcher{transition:none!important}}
+
+
+/* Phase 2 — full month-view calendar with precise touch targets and responsive counts. */
+.reminders-calendar-month-toolbar{display:flex;align-items:center;justify-content:center;gap:10px;min-height:54px;margin:4px 0 12px;padding:7px;border:1px solid var(--border);border-radius:18px;background:var(--surface);box-shadow:0 4px 15px rgba(15,47,82,.035)}
+.reminders-calendar-month-toolbar>strong{min-width:125px;color:var(--text);font-size:17px;font-weight:950;text-align:center}
+.reminders-calendar-month-toolbar>button{display:grid;place-items:center;min-width:39px;height:39px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);transition:background .16s ease,transform .16s ease,border-color .16s ease}
+.reminders-calendar-month-toolbar>button:hover{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--surface))}
+.reminders-calendar-month-toolbar>button:active{transform:scale(.93)}
+.reminders-calendar-month-toolbar>button.reminders-calendar-today{display:block;width:auto;min-width:52px;padding:0 11px;border-color:color-mix(in srgb,var(--primary) 25%,var(--border));background:color-mix(in srgb,var(--primary) 8%,var(--surface));color:var(--primary);font-size:12px;font-weight:900}
+.reminders-calendar-month-grid{overflow:hidden;border:1px solid var(--border);border-radius:22px;background:var(--surface);box-shadow:0 5px 18px rgba(15,47,82,.04)}
+.reminders-calendar-weekdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;padding:12px 10px 9px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.reminders-calendar-weekdays>span{display:grid;place-items:center;min-width:0;min-height:26px;color:var(--text-muted);font-size:11px;font-weight:900}
+.reminders-calendar-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;padding:10px}
+.reminders-calendar-cell{position:relative;display:flex;align-items:center;flex-direction:column;justify-content:flex-start;gap:5px;min-width:0;min-height:75px;padding:8px 3px 6px;border:1px solid transparent;border-radius:14px;background:transparent;color:var(--text);transition:background .16s ease,border-color .16s ease,transform .16s ease}
+.reminders-calendar-cell.is-empty{pointer-events:none}
+.reminders-calendar-cell:not(.is-empty):hover{border-color:color-mix(in srgb,var(--primary) 35%,var(--border));background:color-mix(in srgb,var(--primary) 7%,var(--surface))}
+.reminders-calendar-cell:not(.is-empty):active{transform:scale(.94)}
+.reminders-calendar-cell:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.reminders-calendar-cell-day{display:grid;place-items:center;width:31px;height:31px;border-radius:11px;color:var(--text);font-size:14px;font-weight:850;font-variant-numeric:tabular-nums}
+.reminders-calendar-cell.is-today{border-color:color-mix(in srgb,var(--primary) 23%,var(--border));background:color-mix(in srgb,var(--primary) 6%,var(--surface))}
+.reminders-calendar-cell.is-today .reminders-calendar-cell-day{background:var(--primary);color:#fff;box-shadow:0 3px 8px color-mix(in srgb,var(--primary) 25%,transparent)}
+.reminders-calendar-cell-count{display:inline-grid;place-items:center;min-width:22px;height:19px;padding:0 5px;border-radius:7px;background:color-mix(in srgb,var(--primary) 11%,var(--surface));color:var(--primary);font-size:10px;font-weight:950;font-variant-numeric:tabular-nums}
+.reminders-calendar-cell.has-reminders .reminders-calendar-cell-day{color:var(--primary)}
+.reminders-calendar-cell.is-today.has-reminders .reminders-calendar-cell-day{color:#fff}
+.reminders-calendar-cell-dot{display:block;width:5px;height:5px;margin-top:5px;border-radius:50%;background:transparent}
+.reminders-calendar-loading{margin:10px 3px 0;color:var(--text-muted);font-size:12px;text-align:center}
+.reminders-calendar-error{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:12px;border:1px solid color-mix(in srgb,#dc4545 35%,var(--border));border-radius:14px;background:color-mix(in srgb,#dc4545 6%,var(--surface));color:var(--text);font-size:12px}
+.reminders-calendar-error>button{flex:none;min-height:35px;padding:0 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--primary);font-weight:850}
+@media(max-width:767px){
+ .reminders-calendar-month-toolbar{gap:6px;min-height:49px;border-radius:16px}
+ .reminders-calendar-month-toolbar>strong{min-width:95px;font-size:15px}
+ .reminders-calendar-month-toolbar>button{min-width:36px;height:36px;border-radius:11px}
+ .reminders-calendar-month-toolbar>button.reminders-calendar-today{min-width:45px;padding:0 8px;font-size:11px}
+ .reminders-calendar-weekdays{gap:2px;padding:10px 5px 7px}
+ .reminders-calendar-weekdays>span{font-size:10px}
+ .reminders-calendar-days{gap:3px;padding:6px}
+ .reminders-calendar-cell{min-height:61px;padding:6px 1px 4px;border-radius:11px;gap:3px}
+ .reminders-calendar-cell-day{width:28px;height:28px;border-radius:9px;font-size:13px}
+ .reminders-calendar-cell-count{min-width:18px;height:17px;padding:0 3px;border-radius:6px;font-size:9px}
+}
+@media(max-width:370px){
+ .reminders-calendar-month-toolbar{gap:4px;padding:5px}
+ .reminders-calendar-month-toolbar>strong{min-width:82px;font-size:14px}
+ .reminders-calendar-month-toolbar>button{min-width:32px;height:34px}
+ .reminders-calendar-month-toolbar>button.reminders-calendar-today{min-width:40px;padding:0 6px}
+ .reminders-calendar-cell{min-height:54px}
+ .reminders-calendar-cell-day{width:25px;height:25px;font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){
+ .reminders-calendar-month-toolbar>button,.reminders-calendar-cell{transition:none}
+}
