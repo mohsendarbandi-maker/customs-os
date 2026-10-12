@@ -202,6 +202,8 @@ function translateNode(node:React.ReactNode,language:ReminderLanguage):React.Rea
  if(Array.isArray(node))return node.map(child=>translateNode(child,language));
  if(React.isValidElement(node)){
   const props=node.props as Record<string,unknown>;
+  // User-entered content and database labels are data, never UI strings to translate.
+  if(props['data-user-content']===true||props['data-user-content']==='true')return node;
   const next:Record<string,unknown>={};
   if(Object.prototype.hasOwnProperty.call(props,'children'))next.children=translateNode(props.children as React.ReactNode,language);
   for(const name of ['placeholder','title','aria-label','aria-description','alt']){
