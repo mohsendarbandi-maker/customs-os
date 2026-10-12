@@ -76,10 +76,27 @@ export function parseRRule(rule:string|null){if(!rule)return null;const result:R
 export function recurrenceNext(from:Date,rule:string|null):Date|null{
  const r=parseRRule(rule);if(!r?.FREQ)return null;const j=local(from),minutes=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',hour12:false,hour:'2-digit',minute:'2-digit'}).formatToParts(from);const get=(t:string)=>Number(minutes.find(x=>x.type===t)?.value??0);const h=get('hour'),m=get('minute');const interval=Math.max(1,Number(r.INTERVAL??1));
  if(r.FREQ==='DAILY')return addJalaliDays(from,interval);
- if(r.FREQ==='WEEKLY'){const wanted=(r.BYDAY??'').split(',').filter(Boolean);let d=addJalaliDays(from,1);const limit=Math.max(8,7*interval+7);for(let i=0;i<limit;i++){if(wanted.length===0||wanted.includes(weekdayOf(d))){const q=local(d);return zonedJalaliToDate(q.year,q.month,q.day,h,m);}d=addJalaliDays(d,1);}return null;}
- if(r.FREQ==='MONTHLY'){const index=j.month-1+interval*Number(1),year=j.year+Math.floor(index/12),month=(index%12)+1,day=Math.min(j.day,jalaliMonthLength(year,month));return zonedJalaliToDate(year,month,day,h,m);}
+ if(r.FREQ==='WEEKLY'){const wanted=(r.BYDAY??'').split(',').filter(Boolean);if(wanted.length===0)return addJalaliDays(from,7*interval);let d=addJalaliDays(from,1);const limit=Math.max(8,7*interval+7);for(let i=0;i<limit;i++){if(wanted.includes(weekdayOf(d))){const q=local(d);return zonedJalaliToDate(q.year,q.month,q.day,h,m);}d=addJalaliDays(d,1);}return null;}
+ if(r.FREQ==='MONTHLY'){const index=j.month-1+interval,year=j.year+Math.floor(index/12),month=(index%12)+1,day=Math.min(j.day,jalaliMonthLength(year,month));return zonedJalaliToDate(year,month,day,h,m);}
  if(r.FREQ==='YEARLY'){const year=j.year+interval,day=Math.min(j.day,jalaliMonthLength(year,j.month));return zonedJalaliToDate(year,j.month,day,h,m);}
  return null;
+}
+/**
+ * Resolve the next due date for a recurrence, respecting its absolute end date.
+ * A malformed/unsupported recurrence is surfaced rather than silently ending a series.
+ */
+export function nextRecurrenceDue(dueAt:string|null, rule:string|null, until:string|null):Date|null{
+ if(!rule||!dueAt)return null;
+ const current=new Date(dueAt);
+ if(!Number.isFinite(current.getTime()))throw new Error('تاریخ یادآور برای تکرار معتبر نیست');
+ const next=recurrenceNext(current,rule);
+ if(!next||!Number.isFinite(next.getTime()))throw new Error('نوبت بعدی با قاعدهٔ تکرار فعلی قابل محاسبه نیست');
+ if(until){
+  const end=new Date(until);
+  if(!Number.isFinite(end.getTime()))throw new Error('تاریخ پایان تکرار معتبر نیست');
+  if(next.getTime()>end.getTime())return null;
+ }
+ return next;
 }
 export const tomorrowNine=(date=new Date())=>{const j=local(addJalaliDays(date,1));return zonedJalaliToDate(j.year,j.month,j.day,9,0);};
 export async function resolveLink(query:string|null,kind:ReminderKind){if(!query)return null;const {supabase} = await import('../../lib/supabase');const q=normalizeFaText(query);const table=kind==='finance'?'finance_invoices':kind==='document'?'customs_documents':'shipments';const fields=table==='shipments'?'bill_of_lading_no,display_name':table==='customs_documents'?'original_name,display_name,document_number':'invoice_no';const {data}=await supabase.from(table).select('id,case_id,shipment_id').or(fields.split(',').map(f=>f+'.ilike.%'+q+'%').join(',')).limit(1);const row=data?.[0] as {id:string;case_id?:string|null;shipment_id?:string|null}|undefined;if(!row)return null;return {entity_type:table as ReminderEntityType,entity_id:row.id,case_id:row.case_id??null,shipment_id:row.shipment_id??(table==='shipments'?row.id:null)};}
