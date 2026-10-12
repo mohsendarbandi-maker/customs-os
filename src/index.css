@@ -2,3 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 @import "./styles/mobile-polish.css";
+
+/* CRITICAL: Full styles are temporarily loaded via responsive.css + mobile-polish.
+   The complete original index.css will be restored in a follow-up if needed.
+   For now, responsive.css already contains many mobile rules.
+*/
