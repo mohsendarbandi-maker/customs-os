@@ -238,6 +238,7 @@ jobs:
           cat > live-runtime-smoke.spec.mjs <<'EOF'
           import { test, expect } from 'playwright/test';
 
+          const smokeToken = `${process.env.GITHUB_SHA || 'local'}-${process.env.GITHUB_RUN_ID || Date.now()}`;
           for (const baseURL of [
             'https://darbandicommercial.ir',
           ]) {
@@ -250,18 +251,18 @@ jobs:
               });
               page.on('requestfailed', (request) => {
                 const url = request.url();
-                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                if (/\.(js|mjs)(\?|$)/i.test(url)) {
                   errors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
                 }
               });
               page.on('response', (response) => {
                 const url = response.url();
-                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                if (/\.(js|mjs)(\?|$)/i.test(url)) {
                   scriptResponses.push(`${response.status()} ${response.headers()['content-type'] || 'NO_CONTENT_TYPE'} ${url}`);
                 }
               });
 
-              await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await page.goto(baseURL + '/?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
               await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
               await expect(page.locator('#root')).toBeAttached();
               await expect.poll(
@@ -270,7 +271,7 @@ jobs:
               ).not.toBe('');
 
               const chatPage = await page.context().newPage();
-              await chatPage.goto(baseURL + '/chat', { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await chatPage.goto(baseURL + '/chat?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
               await chatPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
               await expect(chatPage.locator('#root')).toBeAttached();
               await expect.poll(
@@ -298,7 +299,7 @@ jobs:
                 }
               });
 
-              await remindersPage.goto(baseURL + '/reminders', { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await remindersPage.goto(baseURL + '/reminders?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
               await remindersPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
               await expect.poll(async () => new URL(remindersPage.url()).pathname, { timeout: 15000, message: 'Reminders did not stay inside its app scope' }).toBe('/reminders/login');
               await expect(remindersPage).toHaveTitle(/یادآورها/);
@@ -353,7 +354,7 @@ jobs:
                   subdomainErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
                 }
               });
-              await remindersSubdomainPage.goto('https://reminders.darbandicommercial.ir/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+              await remindersSubdomainPage.goto('https://reminders.darbandicommercial.ir/?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 60000 });
               await remindersSubdomainPage.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => undefined);
               await expect.poll(
                 async () => new URL(remindersSubdomainPage.url()).pathname,
