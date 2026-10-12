@@ -212,7 +212,7 @@ function translateNode(node:React.ReactNode,language:ReminderLanguage):React.Rea
   }
   if(language==='en'&&typeof props.className==='string'){
    next.className=props.className
-    .replace(/\btext-right\b/g,'text-left').replace(/\btext-left\b/g,'text-right')
+    .replace(/\btext-right\b/g,'__TEXT_RIGHT__').replace(/\btext-left\b/g,'text-right').replace(/__TEXT_RIGHT__/g,'text-left')
     .replace(/\bright-(\d+)\b/g,'__LEFT_$1__').replace(/\bleft-(\d+)\b/g,'right-$1').replace(/__LEFT-(\d+)__/g,'left-$1')
     .replace(/\bpr-(\d+)\b/g,'__PL-$1__').replace(/\bpl-(\d+)\b/g,'pr-$1').replace(/__PL-(\d+)__/g,'pl-$1')
     .replace(/\bmr-(\d+)\b/g,'__ML-$1__').replace(/\bml-(\d+)\b/g,'mr-$1').replace(/__ML-(\d+)__/g,'ml-$1')

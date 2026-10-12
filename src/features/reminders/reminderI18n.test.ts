@@ -25,6 +25,12 @@ describe('reminder bilingual presentation',()=>{
   expect(html).toContain('شرکت دربندی');
   expect(html).not.toContain('Shipment Documents');
  });
+ it('reverses directional utility classes correctly for English LTR layouts',()=>{
+  const html=renderToStaticMarkup(React.createElement(ReminderLocaleTree,{language:'en',children:
+   React.createElement('div',{className:'text-right pr-4 mr-3 right-3'},'Action')
+  }));
+  expect(html).toContain('class="text-left pl-4 ml-3 left-3"');
+ });
  it('formats the same instant using the Jalali calendar in the Tehran timezone',()=>{
   const date=new Date('2026-03-21T08:30:00.000Z');
   expect(formatReminderDate(date,'fa')).toContain('۱۴۰۵');
