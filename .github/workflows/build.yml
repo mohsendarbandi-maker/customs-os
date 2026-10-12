@@ -257,6 +257,62 @@ jobs:
               }
               await chatPage.close();
 
+              // The reminders PWA must remain standalone even before authentication.
+              const remindersPage = await page.context().newPage();
+              await remindersPage.setViewportSize({ width: 390, height: 844 });
+              const remindersErrors = [];
+              remindersPage.on('pageerror', (error) => remindersErrors.push(`pageerror: ${error.message}`));
+              remindersPage.on('requestfailed', (request) => {
+                const url = request.url();
+                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                  remindersErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+
+              await remindersPage.goto(baseURL + '/reminders', { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await remindersPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+              await expect(remindersPage).toHaveURL(/\\/reminders\\/login(?:\\?.*)?$/, { timeout: 15000 });
+              await expect(remindersPage).toHaveTitle(/یادآورها/);
+              await expect(remindersPage.locator('#root')).not.toBeEmpty();
+              await expect(remindersPage.locator('.app-sidebar')).toHaveCount(0);
+              await expect(remindersPage.locator('.app-topbar')).toHaveCount(0);
+
+              const manifestHref = await remindersPage.locator('link[rel="manifest"]').getAttribute('href');
+              if (!manifestHref?.includes('/manifest-reminders.webmanifest')) {
+                throw new Error(`Reminders route did not select its own manifest: ${manifestHref || 'missing'}`);
+              }
+              const manifestCheck = await remindersPage.evaluate(async (href) => {
+                const response = await fetch(href);
+                if (!response.ok) throw new Error(`Reminders manifest HTTP ${response.status}`);
+                const manifest = await response.json();
+                const iconResults = await Promise.all(
+                  (manifest.icons || []).map(async (icon) => {
+                    const result = await fetch(icon.src);
+                    return { src: icon.src, status: result.status };
+                  }),
+                );
+                return {
+                  name: manifest.short_name,
+                  scope: manifest.scope,
+                  start_url: manifest.start_url,
+                  display: manifest.display,
+                  iconResults,
+                };
+              }, manifestHref);
+              if (
+                manifestCheck.name !== 'یادآورها' ||
+                manifestCheck.scope !== '/reminders' ||
+                !manifestCheck.start_url.startsWith('/reminders') ||
+                manifestCheck.display !== 'standalone' ||
+                !manifestCheck.iconResults.length ||
+                manifestCheck.iconResults.some((icon) => icon.status !== 200)
+              ) {
+                throw new Error(`Reminders PWA manifest/icon validation failed: ${JSON.stringify(manifestCheck)}`);
+              }
+              if (remindersErrors.length) throw new Error(remindersErrors.join('\\n'));
+              console.log('Reminders standalone mobile route passed:', JSON.stringify(manifestCheck));
+              await remindersPage.close();
+
               if (errors.length) {
                 throw new Error(errors.join('\n'));
               }
