@@ -6,19 +6,19 @@ const ENGLISH:Record<string,string>={
 'یادآور جدید':'New reminder','ثبت هوشمند':'Smart capture','پیش‌نمایش هوشمند':'Smart preview','نوشتن کار، تاریخ یا دستور…':'Describe a task, date, or instruction…','مثلاً: فردا ساعت ۹ صبح پیگیری ترخیص کوتاژ ۱۲۳':'e.g. Check customs entry tomorrow at 9 AM','سررسید اختیاری':'Optional due date','افزودن سررسید':'Add due date','بدون سررسید':'No due date','تاریخ انتخاب شد':'Date selected','پاک‌کردن تاریخ':'Clear date','انتخاب تاریخ':'Choose date','ثبت یادآور':'Create reminder','در حال ثبت…':'Creating…','برای ثبت سریع، متن را بنویسید؛ تاریخ فقط وقتی تعیین می‌شود که انتخاب یا در متن مشخص شده باشد.':'Describe the task. A due date is set only if chosen or recognized in your text.',
 'بستن فرم':'Close form','بازگشت به سامانه':'Back to Customs OS','تنظیم اعلان‌ها':'Notification settings','تازه‌سازی یادآورها':'Refresh reminders','فارسی':'Persian','انگلیسی':'English','خلاصهٔ عملیاتی یادآورها':'Reminder overview','انتخاب تاریخ و زمان':'Choose date and time','ذخیره‌سازی در سامانه همیشه به زمان هماهنگ جهانی انجام می‌شود.':'Dates are stored as UTC instants and displayed in Tehran time.','بستن':'Close','امروز عصر':'Today evening','فردا صبح':'Tomorrow morning','آخر هفته':'This weekend','هفته بعد':'Next week','ماه بعد':'Next month','تمام‌روز':'All day','تأیید':'Apply date','ویرایش یادآور':'Edit reminder','تغییر':'Change','اولویت':'Priority','دسته':'Category','مسئول':'Assignee','من':'Me','هشدارها':'Alerts','سر وقت':'At due time','۱۰ دقیقه قبل':'10 minutes before','۱ ساعت قبل':'1 hour before','۱ روز قبل':'1 day before','پیوند به محموله، پرونده یا سند':'Link a shipment, case, or document','حذف پیوند':'Remove link','چک‌لیست':'Checklist','ذخیره تغییرات':'Save changes','انصراف':'Cancel','اعلان‌ها':'Notifications','اعلان واقعی دستگاه‌های شما':'Push notifications for your devices','برای حساب صاحب کالا اعلان داخلی فعال نمی‌شود.':'Internal push notifications are unavailable for client accounts.','وضعیت اعلان':'Notification status','فعال':'Enabled','فعال نیست':'Not enabled','غیرفعال‌سازی':'Disable','فعال‌سازی':'Enable','ارسال اعلان آزمایشی':'Send test notification','پنهان کردن متن اعلان':'Hide notification content','به‌جای عنوان، متن عمومی نمایش داده می‌شود.':'A generic message is shown instead of the reminder title.','ساعات سکوت · به وقت تهران':'Quiet hours · Tehran time','به‌جز اعلان‌های فوری، در این بازه اعلان ارسال نمی‌شود.':'Non-urgent notifications are paused during this period.','شروع':'Start','پایان':'End','دستگاه‌ها':'Devices','آیفون':'iPhone','اندروید':'Android','رایانه':'Computer','هنوز دستگاهی ثبت نشده است.':'No devices registered yet.',
 'اطلاعات ثبت‌شده معتبر نیست':'The submitted information is invalid.','اطلاعات واردشده معتبر نیست':'The entered information is invalid.','دسترسی مجاز نیست':'Access denied.','ارتباط با سرور برقرار نشد؛ اتصال اینترنت را بررسی و دوباره تلاش کنید':'Could not reach the server. Check your connection and try again.','نشست ورود منقضی شده است؛ دوباره وارد سامانه شوید':'Your session expired. Please sign in again.','ساختار پایگاه داده با نسخهٔ برنامه هماهنگ نیست؛ مهاجرت‌های یادآورها باید بررسی شوند':'The database schema does not match this app version.','ساختار جدول یادآورها در کش API به‌روز نیست':'The reminders schema cache is outdated.','بارگذاری یا ذخیرهٔ یادآورها انجام نشد؛ اتصال، دسترسی و ساختار پایگاه داده را بررسی کنید':'Reminders could not be loaded or saved. Check connectivity and permissions.','یادآور ذخیره نشد؛ دسترسی یا وجود آن را بررسی کنید':'The reminder was not saved. Check your access.','یادآور تغییر نکرد؛ ممکن است دسترسی لازم وجود نداشته باشد.':'The reminder was not changed. You may not have permission.','یادآور به سطل پنهان منتقل شد.':'Reminder moved to hidden items.','تشخیص گفتار در این مرورگر پشتیبانی نمی‌شود.':'Speech recognition is not supported in this browser.','تشخیص گفتار انجام نشد.':'Speech recognition failed.','سازمان فعال برای جستجوی موارد مرتبط پیدا نشد.':'An active organization was not found for linked-item search.','برخی انواع مورد مرتبط به‌دلیل محدودیت دسترسی یا خطای جستجو نمایش داده نشدند.':'Some linked-item types were unavailable due to access or search errors.','جستجوی موارد مرتبط انجام نشد؛ اتصال و دسترسی را بررسی کنید.':'Linked-item search failed. Check connectivity and permissions.','شماره بارنامه، پرونده، سند، فاکتور یا صاحب کالا':'Bill of lading, case, document, invoice, or client','برچسب‌ها با فاصله':'Separate tags with spaces','مورد جدید':'New item','یادداشت':'Notes','ثبت سفارش ':'Order no. ','پروفورما ':'Pro forma ','فاکتور ':'Invoice ','موجودیت پیوندشده':'Linked item','سند گمرکی':'Customs document','سند محموله':'Shipment document','سند پرونده':'Case document','فاکتور مالی':'Finance invoice','صاحب کالا':'Client','ادامه':'Continue','ورود به سامانه':'Sign in','ورود به یادآورها':'Sign in to Reminders','ایمیل':'Email','رمز عبور':'Password','در حال ورود…':'Signing in…','ورود ناموفق بود. اطلاعات ورود را بررسی کنید.':'Sign-in failed. Check your credentials.','تاریخ':'Date','زمان':'Time','Just now':'همین الان',
-'بدون سررسید':'No due date','بدون موعد':'No due date','نیاز به تعیین تاریخ ندارد':'No date required','سررسید اختیاری':'Optional due date','انتخاب تاریخ و زمان':'Choose date and time',
-'ساعت':'Hour','دقیقه':'Minute','تاریخ انتخاب شد':'Date selected','سررسید':'Due date','ثبت یادآور':'Create reminder',
+,'بدون موعد':'No due date','نیاز به تعیین تاریخ ندارد':'No date required',,,
+'ساعت':'Hour','دقیقه':'Minute',,'سررسید':'Due date',,
 'پرونده':'Case','محموله':'Shipment','سند':'Document','یادآور پیدا نشد یا مجوز تغییر آن وجود ندارد.':'Reminder not found or permission to change it was denied.',
-'در حال بارگذاری بخش…':'Loading section…','یادآور جدید':'New reminder','یادداشت':'Notes','هر روز':'Every day','هر هفته':'Every week','هر ماه':'Every month','هر سال':'Every year',
+'در حال بارگذاری بخش…':'Loading section…',,,'هر روز':'Every day','هر هفته':'Every week','هر ماه':'Every month','هر سال':'Every year',
 'عنوان یادآور الزامی است':'A reminder title is required','پیوند محموله یا مسئول ذخیره نشد.':'The shipment link or assignee was not saved.','انتخاب‌شده':'Selected',
-'در حال ذخیره…':'Saving…','ذخیره تغییرات':'Save changes','انصراف':'Cancel','برگردان':'Undo','تازه‌سازی یادآورها':'Refresh reminders',
+'در حال ذخیره…':'Saving…',,,'برگردان':'Undo',,
 'اعلان آزمایشی':'Test notification','نسخه جدید آماده است':'A new version is ready','به‌روزرسانی':'Update',
-'برای ثبت سریع، متن را بنویسید؛ تاریخ فقط وقتی تعیین می‌شود که انتخاب یا در متن مشخص شده باشد.':'Describe the task. A due date is only set when selected or detected in the text.',
-'مثلاً: فردا ساعت ۹ صبح پیگیری ترخیص کوتاژ ۱۲۳':'e.g. Follow up on customs entry 123 tomorrow at 9 AM',
+,
+,
 'اتصال اینترنت قطع است؛ ثبت یادآور جدید در صف می‌ماند؛ ویرایش، تغییر وضعیت و اعلان‌ها به اتصال اینترنت نیاز دارند.':'You are offline. New reminders are queued; editing, status changes, and notifications need an internet connection.'
 };
 export const reminderText=(value:string,language:ReminderLanguage):string=>{
- const normalized=value.replace(/\\\\n/g,' ').replace(/\\s+/g,' ').trim();
+ const normalized=value.replace(/\\n/g,' ').replace(/\s+/g,' ').trim();
  if(language==='fa')return normalized;
  if(!normalized)return '';
  const exact=ENGLISH[normalized];
@@ -44,10 +44,10 @@ function translateNode(node:React.ReactNode,language:ReminderLanguage):React.Rea
   }
   if(language==='en'&&typeof props.className==='string'){
    next.className=props.className
-    .replace(/\\btext-right\\b/g,'text-left').replace(/\\btext-left\\b/g,'text-right')
-    .replace(/\\bright-(\\d+)\\b/g,'__LEFT_$1__').replace(/\\bleft-(\\d+)\\b/g,'right-$1').replace(/__LEFT-(\\d+)__/g,'left-$1')
-    .replace(/\\bpr-(\\d+)\\b/g,'__PL-$1__').replace(/\\bpl-(\\d+)\\b/g,'pr-$1').replace(/__PL-(\\d+)__/g,'pl-$1')
-    .replace(/\\bmr-(\\d+)\\b/g,'__ML-$1__').replace(/\\bml-(\\d+)\\b/g,'mr-$1').replace(/__ML-(\\d+)__/g,'ml-$1');
+    .replace(/\btext-right\b/g,'text-left').replace(/\btext-left\b/g,'text-right')
+    .replace(/\bright-(\d+)\b/g,'__LEFT_$1__').replace(/\bleft-(\d+)\b/g,'right-$1').replace(/__LEFT-(\d+)__/g,'left-$1')
+    .replace(/\bpr-(\d+)\b/g,'__PL-$1__').replace(/\bpl-(\d+)\b/g,'pr-$1').replace(/__PL-(\d+)__/g,'pl-$1')
+    .replace(/\bmr-(\d+)\b/g,'__ML-$1__').replace(/\bml-(\d+)\b/g,'mr-$1').replace(/__ML-(\d+)__/g,'ml-$1')
   }
   return React.cloneElement(node as React.ReactElement<any>,next);
  }
