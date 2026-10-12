@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addJalaliDays, toJalali, zonedJalaliToDate } from '../../lib/jalali';
+import { addJalaliDays, jalaliWeekday, toJalali, zonedJalaliToDate } from '../../lib/jalali';
 import {
   buildJalaliMonthGrid,
   jalaliDayKey,
@@ -16,7 +16,8 @@ describe('تقویم ماهانهٔ یادآورها', () => {
     const days = grid.filter((cell) => cell.day !== null);
     expect(days.map((cell) => cell.day)).toEqual(Array.from({ length: 30 }, (_, index) => index + 1));
     expect(grid.length % 7).toBe(0);
-    expect(grid.filter((cell, index) => cell.day === null && index < days.length + 7).length).toBeGreaterThanOrEqual(0);
+    const expectedLeading = jalaliWeekday(zonedJalaliToDate(1405, 7, 1, 12, 0));
+    expect(grid.slice(0, expectedLeading).every((cell) => cell.day === null)).toBe(true);
   });
 
   it('یادآورها را طبق روز شمسی تهران می‌شمارد و روز امروز را مشخص می‌کند', () => {
