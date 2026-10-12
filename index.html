@@ -29,7 +29,7 @@
         const path = window.location.pathname;
         const host = window.location.hostname.toLowerCase();
         const chatHost = host === 'chat.darbandicommercial.ir';
-        const manifest = chatHost ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' : path.startsWith('/chat') ? '/chat-app-v4.webmanifest?v=20261005-chat-v4' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest' : '/manifest.webmanifest';
+        const manifest = chatHost ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' : path.startsWith('/chat') ? '/chat-app-v4.webmanifest?v=20261005-chat-v4' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest?v=20261012-reminders-v1' : '/manifest.webmanifest';
         const link = document.querySelector('link[rel="manifest"]');
         if (link) link.setAttribute('href', manifest);
       })();
@@ -56,6 +56,16 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon-180.png?v=20261006-brand" />
     <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/pwa/apple-touch-icon-180.png?v=20261006-brand" />
+    <script>
+      (() => {
+        if (!window.location.pathname.startsWith("/reminders")) return;
+        const icon = "/pwa/reminders-icon-180.png?v=20261012-reminders-v1";
+        document.querySelectorAll('link[rel*="apple-touch-icon"]').forEach((node) => node.setAttribute("href", icon));
+        document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", "یادآورها");
+        document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#06265F");
+        document.title = "یادآورها | Customs OS";
+      })();
+    </script>
     <title>Customs OS | سیستم مدیریت گمرک</title>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
     <style>
