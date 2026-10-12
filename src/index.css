@@ -24,3 +24,26 @@ html,body,#root{min-height:100%;margin:0;max-width:100%;overflow-x:hidden}html{s
 .app-online-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
 .app-online-chip.is-online .app-online-dot{background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15)}
 .app-user-identity{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--text);cursor:pointer}
+
+/* Login / Auth page styles */
+.future-auth{position:relative;overflow:hidden;background:radial-gradient(circle at 50% 20%,#102d46 0,#07111f 34%,#030712 100%);color:#e8f5ff}
+.future-auth:before{content:"";position:absolute;width:60vmax;height:60vmax;border:1px solid rgba(34,211,238,.13);border-radius:50%;box-shadow:0 0 80px rgba(34,211,238,.08),inset 0 0 80px rgba(99,102,241,.05);animation:futureOrbit 18s linear infinite}
+.future-auth:after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(to bottom,black,transparent);pointer-events:none}
+@keyframes futureOrbit{to{transform:rotate(360deg)}}
+.future-auth-card{position:relative;z-index:2;padding:34px;border:1px solid rgba(125,211,252,.2);border-radius:30px;background:linear-gradient(145deg,rgba(13,31,50,.86),rgba(6,13,25,.9));box-shadow:0 30px 100px rgba(0,0,0,.48),0 0 50px rgba(6,182,212,.07);backdrop-filter:blur(24px);animation:futureCardIn .7s cubic-bezier(.22,1,.36,1) both}
+.future-auth-card:before{content:"";position:absolute;inset:1px;border-radius:29px;pointer-events:none;background:linear-gradient(120deg,rgba(103,232,249,.11),transparent 35%,rgba(129,140,248,.09));opacity:.8}
+@keyframes futureCardIn{from{opacity:0;transform:translateY(24px) scale(.96)}to{opacity:1;transform:none}}
+.future-auth-head{position:relative;z-index:1}.future-auth-head .customs-logo{filter:drop-shadow(0 0 18px rgba(34,211,238,.25))}
+.future-input{position:relative;border:1px solid rgba(148,163,184,.22);border-radius:15px;background:rgba(15,31,48,.72);color:#e8f5ff;outline:none;transition:border-color .2s,box-shadow .2s,transform .2s}
+.future-input:focus{border-color:rgba(34,211,238,.7);box-shadow:0 0 0 4px rgba(34,211,238,.08),0 0 25px rgba(34,211,238,.08);transform:translateY(-1px)}
+.future-submit{position:relative;overflow:hidden;border:1px solid rgba(103,232,249,.4);border-radius:15px;background:linear-gradient(100deg,#0e7490,#2563eb 52%,#4f46e5);color:#fff;box-shadow:0 12px 30px rgba(37,99,235,.28);transition:transform .2s,box-shadow .2s}
+.future-submit:before{content:"";position:absolute;inset:0;transform:translateX(-110%);background:linear-gradient(100deg,transparent,rgba(255,255,255,.28),transparent);animation:futureScan 3.2s ease-in-out infinite}
+.future-submit:hover{transform:translateY(-2px);box-shadow:0 16px 36px rgba(37,99,235,.35)}
+@keyframes futureScan{0%,55%{transform:translateX(-110%)}75%,100%{transform:translateX(110%)}}
+.future-switch{color:#67e8f9;background:none;border:0}.future-switch:hover{color:#a5f3fc}
+.future-error{border:1px solid rgba(248,113,113,.25);border-radius:14px;padding:12px;background:rgba(127,29,29,.2);color:#fecaca}
+.future-orb{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#67e8f9,#2563eb 48%,#312e81 100%);box-shadow:0 0 0 8px rgba(34,211,238,.05),0 0 45px rgba(34,211,238,.28);animation:futurePulse 2.8s ease-in-out infinite}
+.future-orb:after{content:"";width:28px;height:28px;border:2px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 16px rgba(255,255,255,.5)}
+@keyframes futurePulse{50%{transform:scale(1.06);box-shadow:0 0 0 14px rgba(34,211,238,.035),0 0 65px rgba(34,211,238,.38)}}
+@media(max-width:640px){.future-auth-card{padding:24px;border-radius:24px}.future-auth:before{width:85vmax;height:85vmax}.future-route-stage{animation-duration:.36s}}
+@media(prefers-reduced-motion:reduce){.future-auth-card,.future-auth:before,.future-orb,.future-submit:before{animation:none!important}.future-input,.future-submit{transition:none!important}}
