@@ -44,7 +44,7 @@ describe('chat architecture invariants',()=>{
     expect(status).not.toContain('startOfflineQueue()');
   }); 
   it('bridges external messengers into the canonical chat instead of a second inbox',()=>{
-    const migration=read('supabase/migrations/20261011173500_messenger_unified_chat_bridge.sql');
+    const migration=read('supabase/migrations/20261011164146_messenger_unified_chat_bridge.sql');
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
     const integration=read('src/pages/MessengerIntegrationsPage.tsx');
     expect(migration).toContain('messenger_chats');
@@ -67,9 +67,9 @@ describe('chat architecture invariants',()=>{
   });
 
   it('uses a durable retry queue for internal-to-external text and file delivery',()=>{
-    const migration=read('supabase/migrations/20261011173500_messenger_unified_chat_bridge.sql');
-    const scheduler=read('supabase/migrations/20261011174000_messenger_outbox_scheduler.sql');
-    const mediaMigration=read('supabase/migrations/20261011175000_messenger_media_delivery.sql');
+    const migration=read('supabase/migrations/20261011164146_messenger_unified_chat_bridge.sql');
+    const scheduler=read('supabase/migrations/20261011164554_messenger_outbox_scheduler.sql');
+    const mediaMigration=read('supabase/migrations/20261011165430_messenger_media_delivery.sql');
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
     expect(migration).toContain('messenger_delivery_outbox');
     expect(migration).toContain('for update skip locked');
@@ -80,8 +80,8 @@ describe('chat architecture invariants',()=>{
   });
 
   it('sends one real daily report per Tehran-local date and skips duplicates',()=>{
-    const migration=read('supabase/migrations/20261011181000_messenger_daily_reports_and_dual_role.sql');
-    const retryMigration=read('supabase/migrations/20261011182000_messenger_daily_report_retry_cap.sql');
+    const migration=read('supabase/migrations/20261011170619_messenger_daily_reports_and_dual_role.sql');
+    const retryMigration=read('supabase/migrations/20261011171230_messenger_daily_report_retry_cap.sql');
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
     expect(migration).toContain('messenger_report_snapshot');
     expect(migration).toContain('unique (messenger_chat_id, report_date)');
@@ -95,13 +95,13 @@ describe('chat architecture invariants',()=>{
   });
 
   it('keeps existing daily-report destinations eligible for two-way linked chat delivery',()=>{
-    const migration=read('supabase/migrations/20261011181000_messenger_daily_reports_and_dual_role.sql');
+    const migration=read('supabase/migrations/20261011170619_messenger_daily_reports_and_dual_role.sql');
     expect(migration).toContain("mc.purpose in ('inbox','daily_report','shipment_notifications','shipment')");
     expect(migration).toMatch(/and\s+mc\.conversation_id\s*=\s*new\.conversation_id/i);
   });
 
   it('separates the daily report time from retry-only processing',()=>{
-    const schedule=read('supabase/migrations/20261011183000_messenger_daily_report_schedule.sql');
+    const schedule=read('supabase/migrations/20261011171840_messenger_daily_report_schedule.sql');
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
     expect(schedule).toContain("'0 15 * * *'");
     expect(schedule).toContain('"mode":"scheduled"');
@@ -112,7 +112,7 @@ describe('chat architecture invariants',()=>{
   });
 
   it('refreshes the canonical open chat when attachment security status changes',()=>{
-    const migration=read('supabase/migrations/20261011184000_chat_attachment_realtime_refresh.sql');
+    const migration=read('supabase/migrations/20261011172209_chat_attachment_realtime_refresh.sql');
     const page=read('src/features/chat/ChatPage.tsx');
     expect(migration).toContain('trg_chat_attachment_realtime_update');
     expect(migration).toContain("'attachment:update'");
@@ -122,7 +122,7 @@ describe('chat architecture invariants',()=>{
   });
 
   it('includes finance and operational reminder metrics in daily reports',()=>{
-    const migration=read('supabase/migrations/20261011185000_messenger_report_finance_reminder_metrics.sql');
+    const migration=read('supabase/migrations/20261011172442_messenger_report_finance_reminder_metrics.sql');
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
     expect(migration).toContain("'overdue_invoices', v_overdue_invoices");
     expect(migration).toContain("'payments_received_total_irr', v_received_total_irr");
