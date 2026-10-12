@@ -10,7 +10,7 @@ describe.each(cases)('نمونه: %s',input=>{it('parser',()=>{const p=parseRemi
 it('نمونه‌های اصلی دسته و اولویت را دقیق تشخیص می‌دهد',()=>{expect(parseReminder('فردا پیگیری !! #اسناد',now)).toMatchObject({priority:'urgent',kind:'document'});expect(parseReminder('فردا پیگیری #مالی',now)).toMatchObject({kind:'finance'});});
 it('تکرار روزانه را می‌سازد',()=>{expect(parseReminder('هر روز گزارش',now).recurrenceRule).toBe('RRULE:FREQ=DAILY');});
 it('تکرار هفتگی را می‌سازد',()=>{expect(parseReminder('هر دوشنبه گزارش',now).recurrenceRule).toContain('BYDAY=MO');});
-it('تکرار بعدی روزانه را حساب می‌کند',()=>{const p=parseReminder('هر روز گزارش',now);expect(recurrenceNext(p.dueAt??now,p.recurrenceRule).not.toBeNull();});
+it('تکرار بعدی روزانه را حساب می‌کند',()=>{const p=parseReminder('هر روز گزارش',now);expect(recurrenceNext(p.dueAt??now,p.recurrenceRule)).not.toBeNull();});
 
 it('keeps the due date empty when a plain Persian or English task has no date',()=>{expect(parseReminder('پیگیری وضعیت ترخیص',now).dueAt).toBeNull();expect(parseReminder('Check customs clearance',now).dueAt).toBeNull();});
 it('supports English relative date and time syntax',()=>{const p=parseReminder('Check customs clearance tomorrow at 9 AM',now);expect(p.title).toBe('Check customs clearance');expect(p.dueAt).toBeInstanceOf(Date);if(!p.dueAt)throw new Error('Expected a due date');expect(toJalali(p.dueAt).day).toBe(toJalali(addJalaliDays(now,1)).day);});
