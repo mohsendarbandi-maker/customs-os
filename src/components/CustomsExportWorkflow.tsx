@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useState}from'react';
 import{AlertTriangle,RefreshCw,Save}from'lucide-react';
 import{supabase}from'../lib/supabase';
+import { CustomsWorkflowAuditHistory } from './CustomsWorkflowAuditHistory';
 
 type StageKey='documents'|'permits'|'declaration'|'valuation'|'loading'|'exit'|'completed';
 type Stage={key:StageKey;label:string;description:string};
@@ -106,5 +107,6 @@ export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationI
    {!editable&&<p className="text-xs app-muted">این حساب فقط اجازه مشاهده گردش‌کار را دارد.</p>}
   </div>
   {isTemp&&<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">یادآوری: برای صادرات موقت، تاریخ/مهلت بازگشت و بستن تعهد باید در مستندات پرونده ثبت شود؛ این فرم جایگزین تأیید قانونی یا سامانه EPL نیست.</div>}
- </section>
+ <CustomsWorkflowAuditHistory declarationId={declarationId} organizationId={organizationId} userId={userId}/>
+  </section>
 };
