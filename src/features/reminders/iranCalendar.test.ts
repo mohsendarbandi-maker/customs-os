@@ -34,6 +34,7 @@ describe('Iranian Jalali calendar and working days', () => {
   it('shows recurring professional occasions without falsely marking them as public holidays', () => {
     expect(getIranCalendarDayInfo(1405, 6, 1).occasions.some((x) => x.title.includes('روز پزشک'))).toBe(true);
     expect(getIranCalendarDayInfo(1405, 12, 5).occasions.some((x) => x.title.includes('روز مهندسی'))).toBe(true);
+    expect(getIranCalendarDayInfo(1405, 11, 29).occasions.some((x) => x.title.includes('روز مهندسی'))).toBe(false);
     expect(getIranCalendarDayInfo(1405, 2, 12).occasions.some((x) => x.title.includes('روز معلم'))).toBe(true);
     expect(IRAN_FIXED_OCCASIONS.length).toBeGreaterThanOrEqual(30);
     expect(getIranCalendarDayInfo(1405, 6, 1).isOfficialHoliday).toBe(false);
