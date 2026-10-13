@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { validateAdditionalRegimeStage } from '../lib/customsOtherRegimeValidation';
 
 type StageKey = 'documents' | 'permits' | 'declaration' | 'loading' | 'exit' | 'completed';
 type Props = { declarationId: string; organizationId: string; userId?: string; customsRegime: string; editable: boolean };
@@ -71,12 +72,7 @@ export const CustomsOtherRegimeWorkflow: React.FC<Props> = ({ declarationId, org
   }, [declarationId, organizationId]);
   useEffect(() => { void load(); }, [load]);
 
-  const validate = useCallback((key: StageKey): string[] => {
-    const item = stages.find(candidate => candidate.key === key);
-    if (!item) return [];
-    return item.fields.filter(field => field.required && !String(state[key]?.[field.key] ?? '').trim())
-      .map(field => '«' + field.label + '» را تکمیل کنید.');
-  }, [state]);
+  const validate = useCallback((key: StageKey): string[] => validateAdditionalRegimeStage(key, state), [state]);
 
   const save = async (next: StageKey = stage) => {
     if (!editable || !declarationId || !organizationId) return;
