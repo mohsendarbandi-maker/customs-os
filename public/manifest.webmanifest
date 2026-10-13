@@ -2,25 +2,88 @@
   "id": "/",
   "name": "Customs OS | سیستم مدیریت گمرک",
   "short_name": "Customs OS",
-  "description": "سامانه مدیریت عملیات گمرکی و لجستیک",
+  "description": "سامانه مینیمال مدیریت عملیات گمرکی و لجستیک",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "dir": "rtl",
   "lang": "fa",
-  "theme_color": "#0b568f",
-  "background_color": "#f8fafc",
+  "theme_color": "#0A4D8C",
+  "background_color": "#F8FBFF",
   "icons": [
-    {"src":"/pwa/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
-    {"src":"/pwa/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
-    {"src":"/pwa/icon-192-maskable.png","sizes":"192x192","type":"image/png","purpose":"maskable"},
-    {"src":"/pwa/icon-512-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"},
-    {"src":"/pwa/monochrome-96.png","sizes":"96x96","type":"image/png","purpose":"monochrome"}
+    {
+      "src": "/pwa/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa/monochrome-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "monochrome"
+    }
   ],
-  "shortcuts":[
-    {"name":"یادآور جدید","short_name":"یادآور جدید","url":"/reminders?new=1","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]},
-    {"name":"امروز","short_name":"امروز","url":"/reminders?view=today","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]},
-    {"name":"اسناد","short_name":"اسناد","url":"/documents","icons":[{"src":"/pwa/icon-192.png","sizes":"192x192"}]}
+  "shortcuts": [
+    {
+      "name": "یادآور جدید",
+      "short_name": "یادآور جدید",
+      "url": "/reminders?new=1",
+      "icons": [
+        {
+          "src": "/pwa/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "امروز",
+      "short_name": "امروز",
+      "url": "/reminders?view=today",
+      "icons": [
+        {
+          "src": "/pwa/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "اسناد",
+      "short_name": "اسناد",
+      "url": "/documents",
+      "icons": [
+        {
+          "src": "/pwa/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ],
-  "share_target":{"action":"/reminders/share","method":"GET","params":{"title":"title","text":"text","url":"url"}}
+  "share_target": {
+    "action": "/reminders/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
 }
