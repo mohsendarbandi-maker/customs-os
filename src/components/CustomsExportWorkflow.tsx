@@ -39,6 +39,7 @@ const fields:Record<string,{key:string;label:string;type?:string;options?:{value
 const required:Record<StageKey,string[]>={documents:['invoiceNo','goodsDescription','hsCode','quantity','unit'],permits:['status'],declaration:['kottajNumber','declarationDate'],valuation:['value','currency'],loading:['loadingFormNumber','loadingDate','loadedQuantity'],exit:['exitStatus'],completed:[]};
 const isTemporary=(regime:string)=>regime==='temporary_export';
 const empty=()=>JSON.parse(JSON.stringify(defaults)) as State;
+const isJalaliDate=(value:string)=>{const v=digits(value).trim();const m=v.match(/^(\\d{4})[/-](\\d{1,2})[/-](\\d{1,2})$/);if(!m)return false;const month=Number(m[2]),day=Number(m[3]);return month>=1&&month<=12&&day>=1&&day<=(month<=6?31:month<=11?30:30);};
 const Label:React.FC<{children:React.ReactNode}>=({children})=><label className="block text-xs app-muted">{children}</label>;
 export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationId,userId,customsRegime,editable})=>{
  const[state,setState]=useState<State>(empty);const[stage,setStage]=useState<StageKey>('documents');const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[error,setError]=useState('');const[message,setMessage]=useState('');
@@ -65,6 +66,9 @@ export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationI
   if(key==='valuation'&&state.valuation?.guaranteeStatus==='pending')missing.push('تعیین تکلیف تضمین');
   if(key==='exit'&&state.exit?.exitStatus==='pending')missing.push('تعیین وضعیت خروج');
   if(isTemp&&key==='valuation'&&!String(state.valuation?.returnDeadline||'').trim())missing.push('مهلت بازگشت');
+  if(key==='declaration'&&state.declaration?.declarationDate&&!isJalaliDate(state.declaration.declarationDate))missing.push('تاریخ اظهار با قالب شمسی مانند ۱۴۰۵/۰۷/۲۱');
+  if(key==='loading'&&state.loading?.loadingDate&&!isJalaliDate(state.loading.loadingDate))missing.push('تاریخ بارگیری با قالب شمسی مانند ۱۴۰۵/۰۷/۲۱');
+  if(isTemp&&key==='valuation'&&state.valuation?.returnDeadline&&!isJalaliDate(state.valuation.returnDeadline))missing.push('مهلت بازگشت با قالب شمسی مانند ۱۴۰۵/۰۷/۲۱');
   if(isTemp&&key==='valuation'&&state.valuation?.returnObligationRecorded!=='yes')missing.push('ثبت تعهد بازگشت');
   if(isTemp&&key==='valuation'&&state.valuation?.guaranteeStatus==='not_required'&&!String(state.valuation?.guaranteeReference||'').trim())missing.push('مرجع یا توضیح عدم نیاز به تضمین');
   return missing;
@@ -82,6 +86,8 @@ export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationI
  const advance=async()=>{
   const missing=validateStage(stage);
   if(missing.length){setError('برای رفتن به مرحله بعد، موارد زیر را تکمیل کنید: '+missing.join('، '));return}
+  const priorIssues=stages.slice(0,currentIndex).flatMap(s=>validateStage(s.key).map(issue=>s.label+': '+issue));
+  if(priorIssues.length){setError('ابتدا مراحل قبلی را تکمیل کنید: '+priorIssues.join('، '));return}
   const next=stages[Math.min(currentIndex+1,stages.length-1)].key;
   await save(next);
  };
@@ -92,7 +98,7 @@ export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationI
   {message&&<div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">{message}</div>}
   <nav className="grid grid-cols-2 md:grid-cols-4 gap-2">{stages.map((s,i)=><button key={s.key} type="button" onClick={()=>setStage(s.key)} className={`rounded-xl border p-3 text-right ${stage===s.key?'border-[var(--primary)] bg-[var(--primary)]/10':'app-border'}`}><div className="text-[11px] app-muted">مرحله {fa(i+1)}</div><div className="text-sm font-bold mt-1">{s.label}</div></button>)}</nav>
   <div className="rounded-xl border app-border p-4 space-y-4"><div><h3 className="font-bold">{stages[currentIndex].label}</h3><p className="text-xs app-muted mt-1">{stages[currentIndex].description}</p></div>
-   {fields[stage].map(field=><div key={field.key}><Label>{field.label}</Label>{field.type==='select'?<select disabled={!editable} value={state[stage]?.[field.key]??''} onChange={e=>patch(field.key,e.target.value)} className="mt-1 w-full rounded-xl border app-border bg-[var(--surface)] p-3 text-sm">{field.options?.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>:<input disabled={!editable} type={field.type==='date'?'text':'text'} inputMode={field.key==='value'||field.key==='quantity'||field.key==='loadedQuantity'||field.key==='exchangeRate'?'decimal':'text'} placeholder={field.type==='date'?'مثلاً ۱۴۰۵/۰۷/۲۱':''} value={state[stage]?.[field.key]??''} onChange={e=>patch(field.key,field.type==='date'?digits(e.target.value):e.target.value)} className="mt-1 w-full rounded-xl border app-border bg-[var(--surface)] p-3 text-sm"/>}</div>)}
+   {fields[stage].map(field=><div key={field.key}><Label>{field.label}</Label>{field.type==='select'?<select disabled={!editable} value={state[stage]?.[field.key]??''} onChange={e=>patch(field.key,e.target.value)} className="mt-1 w-full rounded-xl border app-border bg-[var(--surface)] p-3 text-sm">{field.options?.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>:<input disabled={!editable} type={field.type==='date'?'text':'text'} inputMode={field.key==='value'||field.key==='quantity'||field.key==='loadedQuantity'||field.key==='exchangeRate'?'decimal':'text'} placeholder={field.type==='date'?'مثلاً ۱۴۰۵/۰۷/۲۱':''} value={state[stage]?.[field.key]??''} onChange={e=>patch(field.key,e.target.value)} className="mt-1 w-full rounded-xl border app-border bg-[var(--surface)] p-3 text-sm"/>}</div>)}
    {isTemp&&stage==='valuation'&&<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm"><b>صادرات موقت:</b> مرجع تضمین یا توضیح مستند عدم نیاز و تعهد/مهلت بازگشت را در یادداشت ارزش ثبت کنید.</div>}
    {stage==='completed'&&<label className="flex items-start gap-2 text-sm"><input type="checkbox" disabled={!editable} checked={!!state.completed?.reviewed} onChange={e=>patch('reviewed',e.target.checked)}/><span>کنترل نهایی انجام شد و پرونده برای بستن بررسی شده است.</span></label>}
    <div className="flex flex-wrap items-center justify-between gap-2"><button type="button" disabled={!editable||saving} onClick={()=>void save()} className="inline-flex items-center gap-2 rounded-xl border app-border px-4 py-2.5 text-sm font-bold"><Save size={15}/>ذخیره مرحله</button><button type="button" disabled={!editable||saving||stage==='completed'} onClick={()=>void advance()} className="rounded-xl bg-[var(--primary)] text-white px-4 py-2.5 text-sm font-bold">{saving?'در حال ذخیره…':'اعتبارسنجی و مرحله بعد'}</button></div>
