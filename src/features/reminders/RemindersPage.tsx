@@ -265,7 +265,7 @@ export const RemindersPage:React.FC=()=>{
     <div className="flex items-center justify-between gap-2">
      <div className="flex min-w-0 items-center gap-2">
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border app-border bg-[var(--surface-2)]"><CheckCircle2 size={18}/></span>
-      <span className="min-w-0 text-sm font-bold">{reminderNumber(selectedReminders.length,language)} {t(selectedReminders.length===1?'مورد انتخاب شده':'موارد انتخاب شده')}</span>
+      <span className="min-w-0 text-sm font-bold">{reminderNumber(selectedReminders.length,language)} {t(language==='fa'?'مورد انتخاب شده':selectedReminders.length===1?'مورد انتخاب شده':'موارد انتخاب شده')}</span>
       {bulkAction&&<span className="inline-flex shrink-0 items-center gap-1 text-xs app-muted"><RefreshCw size={13} className="animate-spin"/>{t('در حال انجام عملیات…')}</span>}
      </div>
      <button type="button" onClick={()=>setSelected([])} disabled={bulkAction!==null} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1 rounded-xl border app-border px-2 sm:px-3 text-xs font-semibold disabled:opacity-50" aria-label={t('پاک‌کردن انتخاب')} title={t('پاک‌کردن انتخاب')}><X size={15}/><span className="hidden sm:inline">{t('پاک‌کردن انتخاب')}</span></button>
