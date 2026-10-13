@@ -20,7 +20,11 @@ type QueueListener = (items: QueuedRpc[]) => void;
 
 const DB_NAME = 'customs-os-offline';
 const STORE_NAME = 'rpc_queue';
-const DB_VERSION = 3;
+const QUERY_CACHE_STORE_NAME = 'query_cache';
+const DB_VERSION = 4;
+const MAX_QUERY_CACHE_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const MAX_AUTH_PROFILE_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_QUERY_CACHE_ENTRIES_PER_SCOPE = 60;
 export const CHAT_RPC = 'chat_insert_message';
 export const CHAT_MAX_AUTO_RETRIES = 8;
 
@@ -37,6 +41,7 @@ let supabaseClient: SupabaseClient | null = null;
 const listeners = new Set<QueueListener>();
 let flushing = false;
 let chatFlushTimer: number | null = null;
+let stopOfflineQueue: (() => void) | null = null;
 
 export const attachSupabaseClient = (client: SupabaseClient) => {
   supabaseClient = client;
@@ -63,24 +68,116 @@ const openDb = () => {
     request.onupgradeneeded = () => {
       const db = request.result;
       const transaction = request.transaction;
+      let store: IDBObjectStore;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
         store.createIndex('createdAt', 'createdAt', { unique: false });
         store.createIndex('userId', 'userId', { unique: false });
         store.createIndex('state', 'state', { unique: false });
         store.createIndex('nextAttemptAt', 'nextAttemptAt', { unique: false });
-        return;
+      } else {
+        const existingStore = transaction?.objectStore(STORE_NAME);
+        if (existingStore) {
+          if (!existingStore.indexNames.contains('userId')) existingStore.createIndex('userId', 'userId', { unique: false });
+          if (!existingStore.indexNames.contains('state')) existingStore.createIndex('state', 'state', { unique: false });
+          if (!existingStore.indexNames.contains('nextAttemptAt')) existingStore.createIndex('nextAttemptAt', 'nextAttemptAt', { unique: false });
+        }
       }
-      const store = transaction?.objectStore(STORE_NAME);
-      if (!store) return;
-      if (!store.indexNames.contains('userId')) store.createIndex('userId', 'userId', { unique: false });
-      if (!store.indexNames.contains('state')) store.createIndex('state', 'state', { unique: false });
-      if (!store.indexNames.contains('nextAttemptAt')) store.createIndex('nextAttemptAt', 'nextAttemptAt', { unique: false });
+      // Keep offline data and the existing RPC outbox in the same versioned database.
+      if (!db.objectStoreNames.contains(QUERY_CACHE_STORE_NAME)) {
+        db.createObjectStore(QUERY_CACHE_STORE_NAME, { keyPath: 'cacheKey' });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error('IndexedDB unavailable'));
   });
   return dbPromise;
+};
+
+type OfflineQueryCacheRecord<T> = {
+  cacheKey: string;
+  namespace: string;
+  userId: string;
+  organizationId: string;
+  updatedAt: number;
+  payload: T;
+};
+
+export type OfflineQueryCacheValue<T> = { payload: T; updatedAt: number };
+
+const makeQueryCacheKey = (namespace: string, userId: string, organizationId: string) =>
+  JSON.stringify([userId, organizationId, namespace]);
+
+/**
+ * Persist non-secret read snapshots for offline display. Keys are partitioned
+ * by authenticated user and organization; no session/token is stored in cache.
+ */
+export const saveOfflineQueryCache = async <T,>(
+  namespace: string,
+  userId: string | null | undefined,
+  organizationId: string | null | undefined,
+  payload: T,
+): Promise<boolean> => {
+  if (!namespace || !userId || !organizationId) return false;
+  if ((await currentUserId()) !== userId) return false;
+  const db = await openDb();
+  const record: OfflineQueryCacheRecord<T> = {
+    cacheKey: makeQueryCacheKey(namespace, userId, organizationId),
+    namespace,
+    userId,
+    organizationId,
+    updatedAt: Date.now(),
+    payload,
+  };
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(QUERY_CACHE_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(QUERY_CACHE_STORE_NAME);
+    store.put(record);
+    const listRequest = store.getAll();
+    listRequest.onsuccess = () => {
+      const now = Date.now();
+      const entries = listRequest.result as OfflineQueryCacheRecord<unknown>[];
+      const expired = entries.filter((entry) => !Number.isFinite(entry.updatedAt) || now - entry.updatedAt > MAX_QUERY_CACHE_AGE_MS);
+      expired.forEach((entry) => store.delete(entry.cacheKey));
+      const sameScope = entries
+        .filter((entry) => entry.userId === userId && entry.organizationId === organizationId && now - entry.updatedAt <= MAX_QUERY_CACHE_AGE_MS)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      sameScope.slice(MAX_QUERY_CACHE_ENTRIES_PER_SCOPE).forEach((entry) => store.delete(entry.cacheKey));
+    };
+    transaction.oncomplete = () => resolve(true);
+    transaction.onerror = () => reject(transaction.error || new Error('Unable to save offline query cache'));
+    transaction.onabort = () => reject(transaction.error || new Error('Offline query cache write aborted'));
+  });
+};
+
+export const readOfflineQueryCache = async <T,>(
+  namespace: string,
+  userId: string | null | undefined,
+  organizationId: string | null | undefined,
+): Promise<OfflineQueryCacheValue<T> | null> => {
+  if (!namespace || !userId || !organizationId) return null;
+  if ((await currentUserId()) !== userId) return null;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(QUERY_CACHE_STORE_NAME, 'readonly')
+      .objectStore(QUERY_CACHE_STORE_NAME)
+      .get(makeQueryCacheKey(namespace, userId, organizationId));
+    request.onsuccess = () => {
+      const value = request.result as OfflineQueryCacheRecord<T> | undefined;
+      if (
+        !value ||
+        value.userId !== userId ||
+        value.organizationId !== organizationId ||
+        !Number.isFinite(value.updatedAt) ||
+        Date.now() - value.updatedAt > (namespace === 'auth-profile' ? MAX_AUTH_PROFILE_CACHE_AGE_MS : MAX_QUERY_CACHE_AGE_MS)
+      ) {
+        resolve(null);
+        return;
+      }
+      resolve({ payload: value.payload, updatedAt: value.updatedAt });
+    };
+    request.onerror = () => reject(request.error || new Error('Unable to read offline query cache'));
+  });
 };
 
 const emit = async () => {
@@ -440,14 +537,29 @@ export const retryChatMessage = async (clientUuid: string) => {
 };
 
 export const startOfflineQueue = () => {
-  const onOnline = () => void flushOfflineQueue();
-  window.addEventListener('online', onOnline);
-  void flushOfflineQueue();
-  const timer = window.setInterval(() => void flushOfflineQueue(), 30000);
-  return () => {
-    window.removeEventListener('online', onOnline);
-    window.clearInterval(timer);
+  if (stopOfflineQueue) return stopOfflineQueue;
+  const flush = () => {
+    if (typeof navigator !== 'undefined' && navigator.onLine) void flushOfflineQueue();
   };
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') flush();
+  };
+  const onOnline = () => flush();
+  const onPageShow = () => flush();
+  window.addEventListener('online', onOnline);
+  window.addEventListener('pageshow', onPageShow);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  flush();
+  const timer = window.setInterval(flush, 30000);
+  const stop = () => {
+    window.removeEventListener('online', onOnline);
+    window.removeEventListener('pageshow', onPageShow);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.clearInterval(timer);
+    if (stopOfflineQueue === stop) stopOfflineQueue = null;
+  };
+  stopOfflineQueue = stop;
+  return stop;
 };
 
 export const rpcWithOfflineQueue = async (

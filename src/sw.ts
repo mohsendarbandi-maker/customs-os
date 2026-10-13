@@ -1,14 +1,19 @@
 /// <reference lib="webworker" />
 import {clientsClaim} from 'workbox-core';
-import {cleanupOutdatedCaches,precacheAndRoute} from 'workbox-precaching';
+import {cleanupOutdatedCaches,matchPrecache,precacheAndRoute} from 'workbox-precaching';
 import {registerRoute,setCatchHandler} from 'workbox-routing';
+import {NetworkOnly} from 'workbox-strategies';
 
 declare const self: ServiceWorkerGlobalScope;
 cleanupOutdatedCaches();
+// Register network-only navigation before the precache route, so cached HTML never
+// pins an old build. When offline, the catch handler below returns the precached app shell.
+registerRoute(({request})=>request.mode==='navigate',new NetworkOnly());
 precacheAndRoute(self.__WB_MANIFEST);
-// Navigation HTML must always come from the network; stale HTML can prevent the React bundle from booting.
-// Do not register a navigation cache route here.
-setCatchHandler(async({request})=>request.mode==='navigate'?(await caches.match('/offline.html'))??Response.error():Response.error());
+setCatchHandler(async({request})=>{
+ if(request.mode!=='navigate')return Response.error();
+ return (await matchPrecache('/index.html'))??(await matchPrecache('/offline.html'))??Response.error();
+});
 self.skipWaiting();
 clientsClaim();
 

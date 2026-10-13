@@ -12,7 +12,7 @@ const CHUNK_LOAD_PATTERN =
   /dynamically imported module|failed to fetch dynamically imported module|importing a module script failed|loading chunk|chunkloaderror/i;
 
 const recoverFromStaleApp = () => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || navigator.onLine === false) return;
 
   let shouldRecover = true;
   try {
@@ -25,25 +25,23 @@ const recoverFromStaleApp = () => {
       sessionStorage.setItem(key, String(now));
     }
   } catch {
-    // Continue with the recovery even when sessionStorage is unavailable.
+    // Continue with one recovery attempt when session storage is unavailable.
   }
 
   if (!shouldRecover) return;
 
   void (async () => {
     try {
+      // Ask the active registration to check for a fresh app shell without
+      // deleting caches or unregistering the worker that supports offline mode.
       const registrations = await navigator.serviceWorker?.getRegistrations?.();
-      await Promise.all((registrations || []).map((registration) => registration.unregister()));
+      await Promise.all((registrations || []).map((registration) => registration.update().catch(() => undefined)));
     } catch (error) {
-      console.warn('[Customs OS] Service worker cleanup failed:', error);
+      console.warn('[Customs OS] Service worker update check failed:', error);
     }
 
-    try {
-      const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map((name) => caches.delete(name)));
-    } catch (error) {
-      console.warn('[Customs OS] Cache cleanup failed:', error);
-    }
+    // A short yield lets skipWaiting/clientsClaim finish when a new worker exists.
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
 
     try {
       window.location.reload();
