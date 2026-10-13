@@ -97,7 +97,7 @@ export const IRAN_OBSERVANCES_1405: readonly IranCalendarObservance[] = [
   { date: '1405-07-07', title: 'روز آتش‌نشانی و ایمنی', category: 'professional' },
   { date: '1405-07-13', title: 'روز ملی دامپزشکی', category: 'professional' },
   { date: '1405-07-05', title: 'روز جهانی گردشگری', category: 'international' },
-  { date: '1405-07-08', title: 'روز جهانی دریانوردی', category: 'professional' },
+  { date: '1405-07-02', title: 'روز جهانی دریانوردی', category: 'professional' },
   { date: '1405-07-15', title: 'روز روستا و عشایر', category: 'national' },
   { date: '1405-07-22', title: 'روز جهانی استاندارد', category: 'professional' },
   { date: '1405-07-24', title: 'روز جهانی غذا', category: 'international' },
