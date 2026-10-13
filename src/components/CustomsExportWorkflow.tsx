@@ -58,7 +58,6 @@ export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationI
   }catch(e:any){setError(e?.message||'دریافت گردش‌کار انجام نشد')}finally{setLoading(false)}
  },[declarationId,organizationId]);
  useEffect(()=>{void load()},[load]);
- const issues=useMemo(()=>required[stage].filter(k=>!String(state[stage]?.[k]??'').trim()||((stage==='completed'&&k==='reviewed')&&!state[stage]?.reviewed)),[stage,state]);
  const validateStage=(key:StageKey):string[]=>{
   const missing=required[key].filter(k=>!String(state[key]?.[k]??'').trim());
   if(key==='completed'&&!state.completed?.reviewed)missing.push('reviewed');
