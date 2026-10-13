@@ -32,21 +32,12 @@ const recoverFromStaleApp = () => {
 
   void (async () => {
     try {
-      // Ask the active registration to check for a fresh app shell without
-      // deleting caches or unregistering the worker that supports offline mode.
+      // Refresh the worker metadata only. Never reload automatically: the page
+      // may contain user-entered data that has not yet been persisted.
       const registrations = await navigator.serviceWorker?.getRegistrations?.();
       await Promise.all((registrations || []).map((registration) => registration.update().catch(() => undefined)));
     } catch (error) {
       console.warn('[Customs OS] Service worker update check failed:', error);
-    }
-
-    // A short yield lets skipWaiting/clientsClaim finish when a new worker exists.
-    await new Promise((resolve) => window.setTimeout(resolve, 250));
-
-    try {
-      window.location.reload();
-    } catch {
-      window.location.assign(window.location.href);
     }
   })();
 };
@@ -100,7 +91,7 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, Boundary
             سامانه با خطای غیرمنتظره متوقف شد
           </div>
           <div style={{ color: '#64748b', fontSize: 13, lineHeight: 1.9 }}>
-            در حال بررسی و بازیابی نسخه جدید برنامه هستیم.
+            برای ادامه، پس از اطمینان از ذخیره‌شدن اطلاعات، صفحه را تازه‌سازی کنید.
           </div>
           {this.state.message && (
             <div style={{ marginTop: 14, color: '#b91c1c', fontSize: 11, direction: 'ltr', wordBreak: 'break-word' }}>
