@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
-import{AlertTriangle,Check,Landmark,Plus,Pencil,RefreshCw,Save,Search,Trash2,X}from'lucide-react';
+import{AlertTriangle,Landmark,Plus,Pencil,RefreshCw,Save,Search,Trash2,X}from'lucide-react';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
 
