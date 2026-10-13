@@ -393,3 +393,32 @@
   }
 }
 
+
+
+/* Force the dedicated Reminders design to win over legacy mobile polish rules. */
+body:has(.reminders-app-standalone),
+#root:has(.reminders-app-standalone) { background: #f2f9fa !important; }
+.reminders-app-standalone {
+  --primary: #087f8c !important; --bg: #f2f9fa !important;
+  --surface: #ffffff !important; --surface-2: #e8f4f5 !important;
+  --border: #cfe3e6 !important; --text: #15343b !important;
+  --text-muted: #58757d !important;
+  background: radial-gradient(ellipse at 8% 0%, rgba(8,127,140,.10), transparent 34rem), #f2f9fa !important;
+  color: #15343b !important;
+}
+.reminders-app-standalone .reminders-hub-hero {
+  background: linear-gradient(118deg, #075b70 0%, #087f8c 48%, #18a7a5 100%) !important;
+  background-size: 220% 220% !important; animation: reminders-ocean-flow 13s ease-in-out infinite !important;
+  box-shadow: 0 17px 38px rgba(8,127,140,.22) !important;
+}
+.reminders-app-standalone .reminders-up-next {
+  border: 1px solid #cfe3e6 !important; border-radius: 22px !important;
+  background: #fff !important; box-shadow: 0 9px 28px rgba(13,67,78,.08) !important;
+}
+.reminders-app-standalone .reminders-up-next .reminders-section-title {
+  background: linear-gradient(110deg, #e8f4f5, #fff) !important; border-bottom: 1px solid #cfe3e6 !important;
+}
+.reminders-app-standalone .reminders-up-next-row { background: #fff !important; border-color: #e1edef !important; }
+.reminders-app-standalone .reminders-up-next-row:hover { background: #eff9f9 !important; }
+@keyframes reminders-ocean-flow { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@media (prefers-reduced-motion: reduce) { .reminders-app-standalone .reminders-hub-hero { animation: none !important; } }
