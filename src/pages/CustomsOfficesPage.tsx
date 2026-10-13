@@ -57,7 +57,7 @@ export const CustomsOfficesPage:React.FC=()=>{
    await load();
   }catch(e:any){
    const raw=String(e?.message||'');
-   setError(/duplicate|unique/i.test(raw)?'کد گمرک تکراری است.':raw||'ذخیره گمرک انجام نشد.');
+   setError(/duplicate|unique/i.test(raw)?'کد گمرک تکراری است.':/permission|row-level security|42501/i.test(raw)?'مجوز انجام این تغییر را ندارید.':/foreign key|23503/i.test(raw)?'این گمرک به اطلاعات عملیاتی متصل است و حذف یا تغییر آن ممکن نیست.':'ذخیره اطلاعات گمرک انجام نشد؛ دسترسی و اطلاعات واردشده را بررسی کنید.');
   }finally{setBusy(false)}
  };
  const remove=async(r:Office)=>{
@@ -68,7 +68,7 @@ export const CustomsOfficesPage:React.FC=()=>{
    const{error:e}=await supabase.from('customs_offices').delete().eq('id',r.id);
    if(e)throw e;
    setRows(p=>p.filter(x=>x.id!==r.id));if(editing===r.id)reset();setMessage('گمرک حذف شد.');
-  }catch(e:any){setError(e?.message||'حذف گمرک ممکن نیست؛ احتمالاً به محموله، پرونده یا اظهارنامه متصل است.')}
+  }catch(e:any){const raw=String(e?.message||'');setError(/foreign key|23503/i.test(raw)?'این گمرک به محموله، پرونده یا اظهارنامه متصل است و حذف آن ممکن نیست.':/permission|row-level security|42501/i.test(raw)?'مجوز حذف گمرک را ندارید.':'حذف گمرک انجام نشد؛ دوباره بررسی کنید.')}
   finally{setBusy(false)}
  };
  return <main dir="rtl" className="min-h-screen p-4 sm:p-6 lg:p-8" style={{background:'var(--bg)',color:'var(--text)'}}>
