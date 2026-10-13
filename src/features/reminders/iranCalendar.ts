@@ -70,13 +70,13 @@ export const IRAN_FIXED_OCCASIONS: readonly IranCalendarOccasion[] = [
 {month:2,day:25,title:'روز بزرگداشت فردوسی',shortTitle:'بزرگداشت فردوسی',category:'culture'},
 {month:3,day:1,title:'روز بزرگداشت حکیم عمر خیام',shortTitle:'بزرگداشت خیام',category:'science'},
 {month:3,day:3,title:'روز آزادسازی خرمشهر؛ روز مقاومت، ایثار و پیروزی',shortTitle:'آزادسازی خرمشهر',category:'national'},
-{month:3,day:15,title:'روز جهانی محیط زیست',shortTitle:'محیط زیست',category:'environment'},
+
 {month:3,day:31,title:'روز بزرگداشت دکتر علی شریعتی',shortTitle:'بزرگداشت شریعتی',category:'culture'},
 {month:4,day:7,title:'روز قوه قضائیه',shortTitle:'قوه قضائیه',category:'national'},
 {month:4,day:10,title:'روز صنعت و معدن',shortTitle:'صنعت و معدن',category:'profession'},
 {month:4,day:14,title:'روز قلم',shortTitle:'روز قلم',category:'culture'},
 {month:5,day:17,title:'روز خبرنگار',shortTitle:'روز خبرنگار',category:'profession'},
-{month:5,day:28,title:'روز بزرگداشت زکریای رازی',shortTitle:'بزرگداشت رازی',category:'science'},
+
 {month:6,day:1,title:'روز بزرگداشت ابوعلی سینا و روز پزشک',shortTitle:'روز پزشک',category:'profession'},
 {month:6,day:4,title:'روز کارمند',shortTitle:'روز کارمند',category:'profession'},
 {month:6,day:5,title:'روز داروسازی و بزرگداشت زکریای رازی',shortTitle:'روز داروساز',category:'profession'},
@@ -91,7 +91,7 @@ export const IRAN_FIXED_OCCASIONS: readonly IranCalendarOccasion[] = [
 {month:9,day:30,title:'شب یلدا؛ جشن مهر و روشنایی',shortTitle:'شب یلدا',category:'culture'},
 {month:11,day:12,title:'سالروز ورود امام خمینی به ایران',shortTitle:'دهه فجر',category:'national'},
 {month:11,day:22,title:'سالروز پیروزی انقلاب اسلامی',shortTitle:'پیروزی انقلاب',category:'national'},
-{month:11,day:29,title:'روز بزرگداشت خواجه نصیرالدین طوسی',shortTitle:'بزرگداشت خواجه نصیر',category:'science'},
+
 {month:12,day:5,title:'روز مهندسی',shortTitle:'روز مهندس',category:'profession'},
 {month:12,day:15,title:'روز درختکاری',shortTitle:'روز درختکاری',category:'environment'},
 {month:12,day:29,title:'روز ملی شدن صنعت نفت ایران',shortTitle:'ملی شدن نفت',category:'national'},
