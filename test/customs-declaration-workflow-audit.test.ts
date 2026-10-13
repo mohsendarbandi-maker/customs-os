@@ -4,8 +4,8 @@ import path from 'node:path';
 
 const root = path.resolve(__dirname, '..');
 const component = fs.readFileSync(path.join(root, 'src/components/CustomsDeclarationWorkflow.tsx'), 'utf8');
-const auditMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20261013150000_customs_workflow_audit_history.sql'), 'utf8');
-const snapshotMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20261013150500_customs_workflow_history_previous_snapshot.sql'), 'utf8');
+const auditMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20261013145845_customs_workflow_audit_history.sql'), 'utf8');
+const snapshotMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20261013150033_customs_workflow_history_previous_snapshot.sql'), 'utf8');
 
 describe('customs declaration workflow audit history', () => {
   it('logs creates, stage changes, and meaningful saves from the database trigger', () => {
