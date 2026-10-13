@@ -63,7 +63,7 @@ export type IranCalendarDayInfo = {
   isFriday: boolean;
   holiday: IranCalendarHoliday | null;
   isOfficialHoliday: boolean;
-  isWorkingDay: boolean;
+  isWorkingDay: boolean | null;
   annualHolidayDataAvailable: boolean;
   override: IranDayOverride | null;
 };
@@ -109,7 +109,9 @@ export function getIranCalendarDayInfo(
   const isOfficialHoliday = Boolean(holiday);
   const isWorkingDay = override
     ? override === 'working'
-    : !isFriday && !isOfficialHoliday;
+    : !hasVerifiedIranHolidayData(year)
+      ? (isFriday ? false : null)
+      : !isFriday && !isOfficialHoliday;
 
   return {
     date,
@@ -123,7 +125,7 @@ export function getIranCalendarDayInfo(
   };
 }
 
-export function isIranWorkingDay(date: string, overrides: IranCalendarOverrides = {}): boolean {
+export function isIranWorkingDay(date: string, overrides: IranCalendarOverrides = {}): boolean | null {
   if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return false;
   const [year, month, day] = date.split('-').map(Number);
   if (!isValidJalaliDate(year, month, day)) return false;
