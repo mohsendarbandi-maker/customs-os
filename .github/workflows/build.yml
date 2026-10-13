@@ -196,7 +196,7 @@ jobs:
           grep -Fq '"start_url": "/?app=1"' /tmp/reminders-subdomain-manifest.json
           grep -Fq '"scope": "/"' /tmp/reminders-subdomain-manifest.json
           grep -Fq '"display": "standalone"' /tmp/reminders-subdomain-manifest.json
-          grep -Fq '"short_name": "Reminders"' /tmp/reminders-subdomain-manifest.json
+          grep -Fq '"short_name": "یادآورها"' /tmp/reminders-subdomain-manifest.json
           curl --fail --silent --show-error --location --max-time 20 -o /tmp/reminders-icon.svg "${reminders_base}/pwa/reminders-icon.svg"
           test -s /tmp/reminders-icon.svg
           curl --fail --silent --show-error --location --max-time 20 -o /tmp/reminders-icon.png "${reminders_base}/pwa/reminders-icon-180.png"
