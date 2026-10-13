@@ -5,6 +5,7 @@ import {
   hasVerifiedIranHolidayData,
   IRAN_CALENDAR_DATA_YEAR,
   IRAN_OFFICIAL_HOLIDAYS_1405,
+  IRAN_FIXED_OCCASIONS,
   isIranWorkingDay,
   nextIranWorkingDay,
 } from './iranCalendar';
@@ -28,6 +29,14 @@ describe('Iranian Jalali calendar and working days', () => {
     expect(day.isOfficialHoliday).toBe(true);
     expect(day.isWorkingDay).toBe(false);
     expect(day.holiday?.title).toContain('نوروز');
+  });
+
+  it('shows recurring professional occasions without falsely marking them as public holidays', () => {
+    expect(getIranCalendarDayInfo(1405, 6, 1).occasions.some((x) => x.title.includes('روز پزشک'))).toBe(true);
+    expect(getIranCalendarDayInfo(1405, 12, 5).occasions.some((x) => x.title.includes('روز مهندسی'))).toBe(true);
+    expect(getIranCalendarDayInfo(1405, 2, 12).occasions.some((x) => x.title.includes('روز معلم'))).toBe(true);
+    expect(IRAN_FIXED_OCCASIONS.length).toBeGreaterThanOrEqual(30);
+    expect(getIranCalendarDayInfo(1405, 6, 1).isOfficialHoliday).toBe(false);
   });
 
   it('lets an explicit workday exception override a Friday or holiday', () => {
