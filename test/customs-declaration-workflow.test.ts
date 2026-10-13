@@ -155,6 +155,15 @@ describe('customs workflow stage prerequisites', () => {
     );
   });
 
+  it('allows an explicitly documented insurance follow-up waiver when the policy date is not before warehouse receipt', () => {
+    const state = readyWorkflow();
+    state.port.insurance_issue_date = '1405/07/20';
+    state.port.insurance_followup_status = 'not_required';
+    expect(getWorkflowStageIssues('port_charges', state)).not.toContain(
+      'بیمه‌نامه قبل از قبض انبار نیست؛ پیگیری بیمه/پوشش تکمیلی را تکمیل کنید.',
+    );
+  });
+
   it('requires a supplemental invoice when the last truck has been loaded', () => {
     const state = readyWorkflow();
     state.port.last_truck_loaded_at = '1405/07/21';
