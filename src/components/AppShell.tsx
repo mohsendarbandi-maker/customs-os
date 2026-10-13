@@ -240,7 +240,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           className="icon-btn mobile-menu-trigger"
           aria-label="منو"
           aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen(true)}
+          onClick={() => setMobileOpen(v => !v)}
         >
           <Menu size={22} />
         </button>
