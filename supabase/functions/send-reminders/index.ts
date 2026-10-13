@@ -69,12 +69,14 @@ async function deliver(){
  const {data,error}=await admin.rpc("claim_reminder_deliveries",{p_limit:100});if(error)throw error;
  const rows=(data??[]) as Array<{reminder_id:string;user_id:string;fire_at:string;attempts:number;title:string;description:string|null;priority:string;due_at:string;timezone:string;hide_content:boolean;push_enabled:boolean}>;
  let vapid:Awaited<ReturnType<typeof ensureVapid>>|null=null;
+ const summary={claimed:rows.length,sent:0,skipped:0,failed:0,deferred:0,reasons:{} as Record<string,number>};
+ const mark=(status:"sent"|"skipped"|"failed"|"deferred",why:string)=>{summary[status]++;summary.reasons[why]=(summary.reasons[why]??0)+1;};
  for(const d of rows){
-  if(!d.push_enabled){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","push_disabled",null);continue;}
+  if(!d.push_enabled){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","push_disabled",null);mark("skipped","push_disabled");if(new Date(d.fire_at)>=new Date(d.due_at))await advance(d.reminder_id);continue;}
   const {data:prefRow}=await admin.from("notification_preferences").select("quiet_start,quiet_end,hide_content,timezone").eq("user_id",d.user_id).maybeSingle(),pref=prefRow as {quiet_start:string;quiet_end:string;hide_content:boolean;timezone:string}|null,tz=pref?.timezone||d.timezone||TZ;
-  if(d.priority!=="urgent"&&isQuiet(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00")){await finish(d.reminder_id,d.user_id,d.fire_at,"pending","quiet_hours",quietEnd(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00").toISOString());continue;}
-  const devices=await subs(d.user_id);if(!devices.length){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","no_active_device",null);continue;}
-  if(!vapid){try{vapid=await ensureVapid();}catch{const retryAt=new Date(Date.now()+backoff(d.attempts)).toISOString();if(d.attempts<4)await finish(d.reminder_id,d.user_id,d.fire_at,"pending","vapid_configuration_failed",retryAt);else{await finish(d.reminder_id,d.user_id,d.fire_at,"failed","vapid_configuration_failed",null);if(new Date(d.fire_at)>=new Date(d.due_at))await advance(d.reminder_id);}continue;}}
+  if(d.priority!=="urgent"&&isQuiet(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00")){await finish(d.reminder_id,d.user_id,d.fire_at,"pending","quiet_hours",quietEnd(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00").toISOString());mark("deferred","quiet_hours");continue;}
+  const devices=await subs(d.user_id);if(!devices.length){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","no_active_device",null);mark("skipped","no_active_device");if(new Date(d.fire_at)>=new Date(d.due_at))await advance(d.reminder_id);continue;}
+  if(!vapid){try{vapid=await ensureVapid();}catch{const retryAt=new Date(Date.now()+backoff(d.attempts)).toISOString();if(d.attempts<4){await finish(d.reminder_id,d.user_id,d.fire_at,"pending","vapid_configuration_failed",retryAt);mark("deferred","vapid_configuration_failed");}else{await finish(d.reminder_id,d.user_id,d.fire_at,"failed","vapid_configuration_failed",null);mark("failed","vapid_configuration_failed");if(new Date(d.fire_at)>=new Date(d.due_at))await advance(d.reminder_id);}continue;}}
   const hidden=d.hide_content||Boolean(pref?.hide_content),payload={title:hidden?"یادآور جدید":"یادآور گمرکی",body:hidden?"یک یادآور برای شما ثبت شده است.":d.title+(d.description?" · "+d.description:""),tag:"reminder-"+d.reminder_id,url:"/reminders?rid="+encodeURIComponent(d.reminder_id),actions:[{action:"done",title:"انجام شد"},{action:"snooze10",title:"۱۰ دقیقه بعد"},{action:"tomorrow9",title:"فردا ۹ صبح"}],data:{rid:d.reminder_id,url:"/reminders?rid="+encodeURIComponent(d.reminder_id)},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"};
   let delivered=false,transientFailure=false,lastFailure:string|null=null;
   for(const s of devices){
@@ -83,7 +85,7 @@ async function deliver(){
     if(ok!==false){delivered=true;await notePushSuccess(s.id);}
     else{lastFailure="push_provider_rejected";await admin.from("push_subscriptions").delete().eq("id",s.id);}
    }catch(err){
-    const msg=err instanceof Error?err.message:"ارسال اعلان ناموفق بود";lastFailure=msg;
+    lastFailure=err instanceof WebPushError?("webpush_http_"+String(err.statusCode??"unknown")):"push_provider_error";
     if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410)){
      await admin.from("push_subscriptions").delete().eq("id",s.id);
     }else{
@@ -91,14 +93,14 @@ async function deliver(){
     }
    }
   }
-  if(delivered)await finish(d.reminder_id,d.user_id,d.fire_at,"sent",null,null);
+  if(delivered){await finish(d.reminder_id,d.user_id,d.fire_at,"sent",null,null);mark("sent","sent");if(new Date(d.fire_at)>=new Date(d.due_at))await advance(d.reminder_id);}
   else if(transientFailure){
-   if(d.attempts<4)await finish(d.reminder_id,d.user_id,d.fire_at,"pending",lastFailure??"push_delivery_failed",new Date(Date.now()+backoff(d.attempts)).toISOString());
-   else await finish(d.reminder_id,d.user_id,d.fire_at,"failed",lastFailure??"push_delivery_failed",null);
-  }else await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",lastFailure??"no_active_device",null);
-  if(new Date(d.fire_at)>=new Date(d.due_at))await advance(d.reminder_id);
+   const why=lastFailure??"push_delivery_failed";
+   if(d.attempts<4){await finish(d.reminder_id,d.user_id,d.fire_at,"pending",why,new Date(Date.now()+backoff(d.attempts)).toISOString());mark("deferred",why);}
+   else{await finish(d.reminder_id,d.user_id,d.fire_at,"failed",why,null);mark("failed",why);if(new Date(d.fire_at)>=new Date(d.due_at))await advance(d.reminder_id);}
+  }else{const why=lastFailure??"no_active_device";await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",why,null);mark("skipped",why);if(new Date(d.fire_at)>=new Date(d.due_at))await advance(d.reminder_id);}
  }
- return rows.length;
+ return summary;
 }
 async function digest(){
  const {data,error}=await admin.from("notification_preferences").select("user_id,morning_digest_time,timezone,hide_content").eq("push_enabled",true);if(error)throw error;const now=new Date(),vapid=await ensureVapid();let sent=0;
