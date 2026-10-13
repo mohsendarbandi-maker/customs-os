@@ -46,6 +46,6 @@ describe('reminder push delivery reliability', () => {
 
   it('removes expired device subscriptions and does not leave them pending forever', () => {
     expect(sender).toContain('err.statusCode===404||err.statusCode===410');
-    expect(sender).toContain('else await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",lastFailure??"no_active_device",null)');
+    expect(sender).toContain('else{const why=lastFailure??"no_active_device";await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",why,null)');
   });
 });
