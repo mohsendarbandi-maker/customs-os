@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
 import{AlertTriangle,Clock3,RefreshCw,Save,ShieldCheck}from'lucide-react';
 import{supabase}from'../lib/supabase';
+import{compareJalaliDates,getAbandonedGoodsWarnings}from'../lib/customsDeclarationWorkflow';
 
 type WorkflowRow={
  id:string;organization_id:string;declaration_id:string;current_stage:string;
@@ -8,6 +9,7 @@ type WorkflowRow={
  loading_permit_state:Record<string,any>;exit_state:Record<string,any>;port_charges_state:Record<string,any>;
  notes:string|null;updated_at:string;
 };
+type WorkflowEvent={id:string;event_type:'created'|'stage_changed'|'saved';previous_stage:string|null;current_stage:string;changed_fields:string[];actor_id:string|null;created_at:string};
 type Props={declarationId:string;organizationId:string;userId?:string;customsRegime:string;customsPath:string;editable:boolean};
 const stages=[['evaluation','ارزیابی'],['expertise','کارشناسی و مجوزها'],['cashier','صندوق'],['loading_permit','مجوز بارگیری'],['exit','درب خروج'],['port_charges','عوارض بندری'],['abandoned','متروکه'],['completed','تکمیل']] as const;
 const emptyEvaluation={status:'not_required',evaluator_number:'',expert_requested:false,expert_request_note:''};
@@ -18,11 +20,6 @@ const emptyExit={loading_permission_status:'pending',financial_registration_stat
 const emptyPort={insurance_policy_no:'',insurance_issue_date:'',warehouse_receipt_date:'',initial_invoice_status:'pending',transport_power_of_attorney_status:'pending',loading_form_received_at:'',loading_started_at:'',supplemental_invoice_status:'not_required',last_truck_loaded_at:''};
 const digits=(v:string)=>String(v||'').replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const faDigits=(v:string|number)=>String(v??'').replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
-const dateFormat=new Intl.DateTimeFormat('en-US-u-ca-persian-nu-latn',{year:'numeric',month:'numeric',day:'numeric',timeZone:'Asia/Tehran'});
-const jalaliParts=(d:Date)=>{const p=dateFormat.formatToParts(d);const get=(k:string)=>Number(p.find(x=>x.type===k)?.value||0);return{year:get('year'),month:get('month'),day:get('day')}};
-const jalaliDateToDate=(raw:any):Date|null=>{const m=digits(String(raw||'')).trim().match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/);if(!m)return null;const target={year:Number(m[1]),month:Number(m[2]),day:Number(m[3])};if(target.month<1||target.month>12||target.day<1||target.day>31)return null;const d=new Date(target.year+621,2,1,12);for(let i=0;i<380;i++){const p=jalaliParts(d);if(p.year===target.year&&p.month===target.month&&p.day===target.day)return new Date(d.getFullYear(),d.getMonth(),d.getDate(),12);d.setDate(d.getDate()+1)}return null};
-const addMonths=(d:Date,n:number)=>{const next=new Date(d.getTime());next.setMonth(next.getMonth()+n);return next};
-const isPast=(raw:any,months:number)=>{const d=jalaliDateToDate(raw);return!!d&&Date.now()>addMonths(d,months).getTime()};
 const Label:React.FC<{children:React.ReactNode}>=({children})=><label className="block min-w-0 text-xs app-muted"><span className="block mb-1.5">{children}</span></label>;
 
 export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organizationId,userId,customsRegime,customsPath,editable})=>{
@@ -40,7 +37,16 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const[saving,setSaving]=useState(false);
  const[error,setError]=useState('');
  const[message,setMessage]=useState('');
+ const[history,setHistory]=useState<WorkflowEvent[]>([]);
+ const[historyUnavailable,setHistoryUnavailable]=useState(false);
  const isImport=customsRegime==='import_definitive';
+
+ const refreshHistory=useCallback(async()=>{
+  if(!declarationId||!organizationId){setHistory([]);return}
+  const{data,error:historyError}=await supabase.from('customs_declaration_workflow_events').select('id,event_type,previous_stage,current_stage,changed_fields,actor_id,created_at').eq('declaration_id',declarationId).eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(8);
+  if(historyError){setHistory([]);setHistoryUnavailable(true);return}
+  setHistory((data||[]) as WorkflowEvent[]);setHistoryUnavailable(false);
+ },[declarationId,organizationId]);
 
  const defaults=useCallback((data:{vesselType:string;description:string;hsCode:string})=>{
   const text=(data.description||'').toLowerCase();
@@ -95,29 +101,22 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    }else{
     setEvaluation(defaults(info).evaluation);setExpertise(defaults(info).expertise);
    }
+   await refreshHistory();
   }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'دسترسی مشاهده گردش‌کار برای این کاربر مجاز نیست.':'بارگذاری گردش‌کار گمرکی انجام نشد؛ اتصال اظهارنامه و مجوز دسترسی را بررسی کنید.')}
   finally{setLoading(false)}
- },[declarationId,organizationId,userId,editable,defaults]);
+ },[declarationId,organizationId,userId,editable,defaults,refreshHistory]);
  useEffect(()=>{void load()},[load]);
 
- const overdue=useMemo(()=>{
-  const loadingFormExpired=!!port.loading_form_received_at&&isPast(port.loading_form_received_at,1)&&!exitState.loading_completed_at;
-  const receiptExpired=!!port.warehouse_receipt_date&&isPast(port.warehouse_receipt_date,3)&&!port.loading_started_at;
-  return{loadingFormExpired,receiptExpired,any:loadingFormExpired||receiptExpired};
- },[port.loading_form_received_at,port.warehouse_receipt_date,port.loading_started_at,exitState.loading_completed_at]);
- const insuranceWarning=useMemo(()=>{const ins=jalaliDateToDate(port.insurance_issue_date);const receipt=jalaliDateToDate(port.warehouse_receipt_date);return!!ins&&!!receipt&&ins.getTime()>=receipt.getTime()},[port.insurance_issue_date,port.warehouse_receipt_date]);
+ const overdue=useMemo(()=>getAbandonedGoodsWarnings({loadingFormReceivedAt:port.loading_form_received_at,loadingCompletedAt:exitState.loading_completed_at,warehouseReceiptAt:port.warehouse_receipt_date,loadingStartedAt:port.loading_started_at}),[port.loading_form_received_at,port.warehouse_receipt_date,port.loading_started_at,exitState.loading_completed_at]);
+ const insuranceComparison=useMemo(()=>compareJalaliDates(port.insurance_issue_date,port.warehouse_receipt_date),[port.insurance_issue_date,port.warehouse_receipt_date]);
+ const insuranceWarning=insuranceComparison!==null&&insuranceComparison>=0;
 
  const save=async()=>{
   if(!row){setError('رکورد گردش‌کار هنوز آماده نیست. یک‌بار بروزرسانی کنید.');return}
   if(!editable)return;
-  if(stage==='port_charges'&&port.insurance_issue_date&&port.warehouse_receipt_date){
-   const insuranceDate=jalaliDateToDate(port.insurance_issue_date);
-   const receiptDate=jalaliDateToDate(port.warehouse_receipt_date);
-   if(!insuranceDate||!receiptDate){setError('تاریخ بیمه‌نامه یا قبض انبار معتبر نیست؛ تاریخ شمسی را به‌شکل سال/ماه/روز بررسی کنید.');return}
-   if(insuranceDate.getTime()>=receiptDate.getTime()){
-    setError('تاریخ صدور بیمه‌نامه باید قبل از تاریخ قبض انبار باشد. تاریخ‌ها را اصلاح کنید یا اگر تاریخ قبض انبار هنوز مشخص نیست، موقتاً آن را خالی بگذارید.');
-    return;
-   }
+  if(stage==='port_charges'&&(port.insurance_issue_date||port.warehouse_receipt_date)){
+   if(!port.insurance_issue_date||!port.warehouse_receipt_date||insuranceComparison===null){setError('برای کنترل بیمه، هر دو تاریخ بیمه‌نامه و قبض انبار را با قالب شمسی سال/ماه/روز و معتبر وارد کنید.');return}
+   if(insuranceComparison>=0){setError('تاریخ صدور بیمه‌نامه باید قبل از تاریخ قبض انبار باشد. تاریخ‌ها را اصلاح کنید یا تا مشخص‌شدن تاریخ قبض انبار، هر دو تاریخ را موقتاً خالی بگذارید.');return}
   }
   setSaving(true);setError('');setMessage('');
   try{
@@ -126,7 +125,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    const payload={current_stage:stage,evaluation_state:nextEvaluation,expertise_state:expertise,cashier_state:cashier,loading_permit_state:loadingPermit,exit_state:exitState,port_charges_state:port,notes:notes.trim()||null,updated_by:userId||null,updated_at:new Date().toISOString()};
    const{error:e}=await supabase.from('customs_declaration_workflow').update(payload).eq('id',row.id).eq('organization_id',organizationId);
    if(e)throw e;
-   setEvaluation(nextEvaluation);setRow({...row,...payload} as WorkflowRow);setMessage('مراحل عملیات گمرکی ذخیره شد.');
+   setEvaluation(nextEvaluation);setRow({...row,...payload} as WorkflowRow);setMessage('مراحل عملیات گمرکی ذخیره شد.');await refreshHistory();
   }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'مجوز ذخیره عملیات گمرکی را ندارید.':'ذخیره عملیات گمرکی انجام نشد؛ اطلاعات واردشده و دسترسی را بررسی کنید.')}
   finally{setSaving(false)}
  };
