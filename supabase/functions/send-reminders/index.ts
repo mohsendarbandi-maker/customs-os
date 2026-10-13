@@ -119,7 +119,7 @@ async function digest(){
 async function main(req:Request){
  if(!supabaseUrl||!serviceKey)return json({error:"تنظیمات سرور کامل نیست"},500);
  const body=(await req.json().catch(()=>({}))) as {mode?:string},mode=body.mode??"cron";
- if(mode==="cron"){const expected=await getSecret("reminder_cron_secret"),given=req.headers.get("x-reminder-cron-secret");if(!expected||given!==expected)return json({error:"دسترسی زمان‌بندی مجاز نیست"},401);const processed=await deliver();await digest().catch(()=>0);return json({ok:true,processed});}
+ if(mode==="cron"){const expected=await getSecret("reminder_cron_secret"),given=req.headers.get("x-reminder-cron-secret");if(!expected||given!==expected)return json({error:"دسترسی زمان‌بندی مجاز نیست"},401);const delivery=await deliver();let digestSent=0,digestError=false;try{digestSent=await digest();}catch{digestError=true;}return json({ok:true,processed:delivery.claimed,delivery,digest:{sent:digestSent,error:digestError}});}
  const user=await authUser(req);if(!user)return json({error:"ورود به سامانه لازم است"},401);
  const {data:profile}=await admin.from("profiles").select("organization_id,role,is_active").eq("id",user.id).maybeSingle() as {data:{organization_id:string;role:string;is_active:boolean}|null};
  if(!profile?.is_active||profile.role==="client")return json({error:"این قابلیت برای این حساب فعال نیست"},403);
