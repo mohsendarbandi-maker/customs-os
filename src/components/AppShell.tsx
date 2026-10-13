@@ -433,7 +433,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       {/* ── Main content ── */}
       <main className={`app-main ${sidebarCollapsed ? 'sidebar-compact' : ''}`}>
         <header className="app-topbar">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0"><button type="button" className="customs-desktop-menu" aria-label="باز کردن منوی اصلی" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu size={19}/><span>منو</span></button>
             <div className="hidden lg:block">
               <div className="text-[11px] app-muted">سامانه مدیریت عملیات گمرکی و لجستیک</div>
               <div className="font-bold truncate">
