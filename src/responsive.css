@@ -510,3 +510,13 @@
 @media(prefers-reduced-motion:reduce){
  .reminders-calendar-month-toolbar>button,.reminders-calendar-cell{transition:none}
 }
+
+/* Phase 8 — make dismissal reliable on every viewport.
+   The smart composer used a fixed full-screen overlay on desktop, but only the
+   mobile breakpoints hid it when closed. Without this default closed state the
+   transparent form could remain above the page after the close action.
+*/
+.reminders-app-standalone .reminders-composebar:not(.is-open) {
+  display: none !important;
+  pointer-events: none !important;
+}
