@@ -32,7 +32,7 @@ describe('offline and background-update safety', () => {
   });
 
   it('applies a waiting worker silently without forcing the open page to reload', () => {
-    expect(lifecycle).toContain('onNeedRefresh:()=>{void updater?.(false);}');
+    expect(lifecycle).toContain('onNeedRefresh:()=>{if(updater)void updater(false).catch((error)=>console.warn(\'[PWA] silent update failed:\',error));}');
     expect(lifecycle).toContain('onNeedReload:()=>undefined');
     expect(lifecycle).not.toContain('نسخه جدید آماده است');
     expect(lifecycle).not.toContain('updateSW?.(true)');
