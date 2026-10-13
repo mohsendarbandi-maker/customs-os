@@ -123,12 +123,14 @@ export const CustomsTransitReimportWorkflow: React.FC<Props> = ({ declarationId,
     const missing = (required[key] || []).filter(field => !String(values[field] ?? '').trim());
     if (key === 'permits' && values.status === 'pending') missing.push('تعیین تکلیف مجوزها');
     if (key === 'valuation' && values.guaranteeStatus === 'pending') missing.push('تعیین تکلیف تضمین');
-    if (key === 'exit' && ['pending', 'exception'].includes(values.status) && !String(values.exceptionNote || '').trim()) missing.push('شرح وضعیت / مغایرت');
+    if (key === 'exit' && values.status === 'pending') missing.push('تعیین تکلیف نتیجه عملیات');
+    if (key === 'exit' && (values.status === 'exception' || values.inspectionStatus === 'exception') && !String(values.exceptionNote || '').trim()) missing.push('شرح مغایرت و مرجع رسیدگی');
     if (key === 'completed' && !state.completed?.reviewed) missing.push('تأیید بازبینی نهایی');
     const dateFields = key === 'declaration' ? ['declarationDate'] : key === 'loading' ? ['dispatchDate', 'arrivalDeadline'] : key === 'exit' ? ['arrivalDate'] : [];
     for (const field of dateFields) if (values[field] && !validJalali(values[field])) missing.push('تاریخ شمسی معتبر برای ' + field);
     if (key === 'loading' && values.dispatchDate && values.arrivalDeadline && validJalali(values.dispatchDate) && validJalali(values.arrivalDeadline) && !orderedJalali(values.dispatchDate, values.arrivalDeadline)) missing.push('مهلت رسیدن باید در همان روز یا پس از تاریخ حرکت باشد');
-    if (key === 'exit' && values.arrivalDate && values.arrivalDeadline && validJalali(values.arrivalDate) && validJalali(values.arrivalDeadline) && !orderedJalali(values.arrivalDeadline, values.arrivalDate)) missing.push('تاریخ رسیدن واقعی پیش از تاریخ حرکت ثبت شده است؛ اطلاعات را کنترل کنید');
+    if (key === 'exit' && values.arrivalDate && state.loading?.dispatchDate && validJalali(values.arrivalDate) && validJalali(state.loading.dispatchDate) && !orderedJalali(state.loading.dispatchDate, values.arrivalDate)) missing.push('تاریخ رسیدن واقعی نمی‌تواند پیش از تاریخ حرکت باشد');
+    if (transit && key === 'exit' && values.arrivalDate && state.loading?.arrivalDeadline && validJalali(values.arrivalDate) && validJalali(state.loading.arrivalDeadline) && !orderedJalali(values.arrivalDate, state.loading.arrivalDeadline) && values.status !== 'exception') missing.push('رسیدن پس از مهلت ثبت شده است؛ وضعیت را «دارای مغایرت / تأخیر» کنید و مستندات را ثبت کنید');
     return [...new Set(missing)];
   };
 
