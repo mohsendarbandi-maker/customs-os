@@ -11,7 +11,7 @@ import {
 describe('Iranian Jalali calendar and working days', () => {
   it('bundles holiday data only for a year with a published official source', () => {
     expect(IRAN_CALENDAR_DATA_YEAR).toBe(1405);
-    expect(IRAN_OFFICIAL_HOLIDAYS_1405.length).toBe(19);
+    expect(IRAN_OFFICIAL_HOLIDAYS_1405.length).toBe(27);
     expect(hasVerifiedIranHolidayData(1405)).toBe(true);
     expect(hasVerifiedIranHolidayData(1406)).toBe(false);
   });
