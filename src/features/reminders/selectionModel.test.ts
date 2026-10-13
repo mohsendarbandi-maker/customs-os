@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {selectableReminderIds,selectVisibleReminderIds,toggleReminderSelection} from './selectionModel';
+import {areAllVisibleReminderIdsSelected,deselectVisibleReminderIds,selectableReminderIds,selectVisibleReminderIds,toggleReminderSelection} from './selectionModel';
 
 describe('reminder bulk selection',()=>{
  it('exposes only server-backed reminders for bulk actions',()=>{
@@ -18,4 +18,13 @@ describe('reminder bulk selection',()=>{
  it('adds every visible id once and preserves previous selections',()=>{
   expect(selectVisibleReminderIds(['r-2','r-1'],['r-1','r-3','r-3'])).toEqual(['r-2','r-1','r-3']);
  });
+ it('recognizes when all visible eligible reminders are selected',()=>{
+  expect(areAllVisibleReminderIdsSelected(['r-1','r-2'],['r-1','r-2','local-draft-1'])).toBe(true);
+  expect(areAllVisibleReminderIdsSelected(['r-1'],['r-1','r-2'])).toBe(false);
+  expect(areAllVisibleReminderIdsSelected(['r-1'],['local-draft-1'])).toBe(false);
+ });
+ it('deselects only the current visible page and preserves unrelated IDs',()=>{
+  expect(deselectVisibleReminderIds(['r-old','r-1','r-2'],['r-1','r-2','local-draft-1'])).toEqual(['r-old']);
+ });
+
 });

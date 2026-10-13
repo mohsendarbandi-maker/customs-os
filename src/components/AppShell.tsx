@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity, MessageCircle, BarChart3, Building2, ChevronLeft, ChevronRight,
@@ -104,20 +104,18 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     (isChatSubdomain && location.pathname === '/') ||
     (isRemindersSubdomain && location.pathname === '/');
 
-  if (bare) return <>{children}</>;
-
   const visibleNav = nav.filter((x) => canSee(x, profile?.role));
+  const query = mobileSearch.trim().toLowerCase();
+  const filteredNav = query
+    ? visibleNav.filter(
+        (item) =>
+          item.label.toLowerCase().includes(query) ||
+          item.en.toLowerCase().includes(query) ||
+          item.group.includes(query)
+      )
+    : visibleNav;
 
-  const filteredNav = useMemo(() => {
-    const q = mobileSearch.trim().toLowerCase();
-    if (!q) return visibleNav;
-    return visibleNav.filter(
-      (item) =>
-        item.label.toLowerCase().includes(q) ||
-        item.en.toLowerCase().includes(q) ||
-        item.group.includes(q)
-    );
-  }, [visibleNav, mobileSearch]);
+  if (bare) return <>{children}</>;
 
   const isActive = (to: string) => {
     const [target, qs] = to.split('?');
