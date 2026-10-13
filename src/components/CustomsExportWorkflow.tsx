@@ -39,7 +39,7 @@ const fields:Record<string,{key:string;label:string;type?:string;options?:{value
 const required:Record<StageKey,string[]>={documents:['invoiceNo','goodsDescription','hsCode','quantity','unit'],permits:['status'],declaration:['kottajNumber','declarationDate'],valuation:['value','currency'],loading:['loadingFormNumber','loadingDate','loadedQuantity'],exit:['exitStatus'],completed:[]};
 const isTemporary=(regime:string)=>regime==='temporary_export';
 const empty=()=>JSON.parse(JSON.stringify(defaults)) as State;
-const isJalaliDate=(value:string)=>{const v=digits(value).trim();const m=v.match(/^(\\d{4})[/-](\\d{1,2})[/-](\\d{1,2})$/);if(!m)return false;const month=Number(m[2]),day=Number(m[3]);return month>=1&&month<=12&&day>=1&&day<=(month<=6?31:month<=11?30:30);};
+const isJalaliDate=(value:string)=>{const v=digits(value).trim();const m=v.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);if(!m)return false;const month=Number(m[2]),day=Number(m[3]);return month>=1&&month<=12&&day>=1&&day<=(month<=6?31:month<=11?30:30);};
 const Label:React.FC<{children:React.ReactNode}>=({children})=><label className="block text-xs app-muted">{children}</label>;
 export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationId,userId,customsRegime,editable})=>{
  const[state,setState]=useState<State>(empty);const[stage,setStage]=useState<StageKey>('documents');const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[error,setError]=useState('');const[message,setMessage]=useState('');
