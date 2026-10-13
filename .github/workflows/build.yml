@@ -271,12 +271,33 @@ jobs:
               ).not.toBe('');
 
               const chatPage = await page.context().newPage();
+              const chatErrors = [];
+              const chatScripts = [];
+              chatPage.on('pageerror', (error) => chatErrors.push(`pageerror: ${error.message}`));
+              chatPage.on('console', (message) => {
+                if (message.type() === 'error') chatErrors.push(`console: ${message.text()}`);
+              });
+              chatPage.on('requestfailed', (request) => {
+                const url = request.url();
+                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                  chatErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+              chatPage.on('response', (response) => {
+                const url = response.url();
+                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                  chatScripts.push(`${response.status()} ${response.headers()['content-type'] || 'NO_CONTENT_TYPE'} ${url}`);
+                }
+              });
               await chatPage.goto(baseURL + '/chat?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
               await chatPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
               await expect(chatPage.locator('#root')).toBeAttached();
               await expect.poll(
                 async () => (await chatPage.locator('#root').innerText()).trim(),
-                { timeout: 15000, message: 'Chat route did not render visible content into #root' },
+                {
+                  timeout: 15000,
+                  message: `Chat route did not render visible content into #root\nURL: ${chatPage.url()}\nErrors: ${chatErrors.join(' | ') || 'none'}\nScripts: ${chatScripts.join(' | ') || 'none'}`,
+                },
               ).not.toBe('');
               await expect(chatPage).toHaveTitle(/چت سازمانی/);
               const chatBody = (await chatPage.locator('#root').innerText()).trim();
