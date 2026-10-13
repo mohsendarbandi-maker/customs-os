@@ -12,9 +12,27 @@ import {
 describe('Iranian Jalali calendar and working days', () => {
   it('bundles holiday data only for a year with a published official source', () => {
     expect(IRAN_CALENDAR_DATA_YEAR).toBe(1405);
-    expect(IRAN_OFFICIAL_HOLIDAYS_1405.length).toBe(27);
+    expect(IRAN_OFFICIAL_HOLIDAYS_1405.length).toBe(26);
     expect(hasVerifiedIranHolidayData(1405)).toBe(true);
     expect(hasVerifiedIranHolidayData(1406)).toBe(false);
+  });
+
+  it('shows national and professional observances without treating every observance as a public holiday', () => {
+    const doctorDay = getIranCalendarDayInfo(1405, 6, 1);
+    const engineerDay = getIranCalendarDayInfo(1405, 12, 5);
+    expect(doctorDay.observances.some((item) => item.title.includes('روز پزشک'))).toBe(true);
+    expect(doctorDay.isOfficialHoliday).toBe(false);
+    expect(engineerDay.observances.some((item) => item.title.includes('روز مهندس'))).toBe(true);
+    expect(getIranCalendarDayInfo(1405, 1, 25).holiday?.title).toContain('شهادت امام جعفر صادق');
+    expect(getIranCalendarDayInfo(1405, 1, 24).isOfficialHoliday).toBe(false);
+  });
+
+  it('returns month events with the correct weekday and public-holiday flag', async () => {
+    const { getIranCalendarMonthEvents } = await import('./iranCalendar');
+    const february = getIranCalendarMonthEvents(1405, 12);
+    expect(february.some((event) => event.date === '1405-12-05' && event.titles.some((title) => title.includes('روز مهندس')))).toBe(true);
+    expect(february.every((event) => event.weekday.length > 0)).toBe(true);
+    expect(getIranCalendarMonthEvents(1406, 12)).toEqual([]);
   });
 
   it('recognizes Friday as the weekly non-working day without treating Thursday as a weekend', () => {
