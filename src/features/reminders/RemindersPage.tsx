@@ -4,7 +4,7 @@ import {useLocation,useNavigate,useSearchParams} from 'react-router-dom';
 import {Bell,CalendarDays,CalendarClock,Check,CheckCircle2,Circle,ChevronDown,ChevronLeft,ChevronRight,Clock3,UploadCloud,MoreHorizontal,Plus,RefreshCw,Search,Trash2,Undo2,X,Users,Repeat2,ListChecks,Mic,MicOff,ExternalLink,Languages,Sparkles,Send,ArrowUpRight} from 'lucide-react';
 import {buildJalaliMonthGrid,jalaliMonthKey,parseReminderDayKey,readJalaliMonth,shiftJalaliMonth,type CalendarReminderDate} from './calendarModel';
 import {supabase} from '../../lib/supabase';
-import {removeQueuedRpc,rpcWithOfflineQueue,subscribeOfflineQueue,type QueuedRpc} from '../../lib/offlineQueue';
+import {readOfflineQueryCache,removeQueuedRpc,rpcWithOfflineQueue,saveOfflineQueryCache,subscribeOfflineQueue,type QueuedRpc} from '../../lib/offlineQueue';
 import {useAuth} from '../../context/AuthContext';
 import {addJalaliDays,formatJalali,formatJalaliDateTime,formatRelativeFa,groupDayLabel,JALALI_MONTHS,startOfTehranDay,toJalali,WEEK_DAYS,zonedJalaliToDate} from '../../lib/jalali';
 import {JalaliDateTimePicker} from './JalaliDateTimePicker';
@@ -24,7 +24,8 @@ const SECTION_KIND:Partial<Record<ReminderSection,ReminderKind>>={'list-document
 const SECTION_TITLE:Record<ReminderSection,string>={home:'یادآورها',search:'جست‌وجو',today:'امروز',scheduled:'برنامه‌ریزی‌شده',overdue:'معوق',all:'همهٔ یادآورها',done:'انجام‌شده',assigned:'واگذارشده به من',undated:'بدون سررسید',lists:'فهرست‌های من',calendar:'تقویم',settings:'تنظیمات','list-documents':'اسناد','list-shipment':'محموله و پرونده','list-finance':'مالی','list-other':'سایر',day:'برنامه روزانه'};
 const CATEGORY_ICON:Record<ReminderKind,typeof ListChecks>={document:CalendarClock,shipment:Users,finance:Check,other:ListChecks};
 const categoryRoute=(kind:ReminderKind):ReminderSection=>kind==='document'?'list-documents':('list-'+kind) as ReminderSection;
-type QueryResult={rows:Reminder[];count:number};
+type QueryResult={rows:Reminder[];count:number;offlineCached?:boolean;cacheUpdatedAt?:number};
+type ReminderOverview={total:number;today:number;overdue:number;scheduled:number;done:number;undated:number;offlineCached?:boolean;cacheUpdatedAt?:number};
 type ReminderEntitySelection={type:ReminderEntityType;id:string;label:string;caseId?:string|null;shipmentId?:string|null};
 const entityTypeLabel:Record<ReminderEntityType,string>={shipments:'محموله',cases:'پرونده',customs_documents:'سند گمرکی',shipment_documents:'سند محموله',documents:'سند پرونده',finance_invoices:'فاکتور مالی',clients:'صاحب کالا'};
 const PAGE_SIZE=50;
@@ -34,6 +35,7 @@ const filterLabel:Record<Filter,string>={today:'امروز',scheduled:'برنا�
 const todayRange=()=>{const s=startOfTehranDay();return [s,addJalaliDays(s,1)] as const;};
 const emptyForm={title:'',notes:'',dueAt:new Date(Date.now()+3600000),priority:'normal' as ReminderPriority,kind:'other' as ReminderKind,allDay:false,offsets:[0],recurrence:null as string|null,visibility:'private' as 'private'|'team',tags:''};
 
+function isOfflineReadError(error:unknown){if(typeof navigator!=='undefined'&&navigator.onLine===false)return true;const message=error instanceof Error?error.message:String(error??'');return /failed to fetch|network request failed|networkerror|load failed|connection (?:lost|reset|refused)|timed? ?out|timeout/i.test(message);}
 function errorFa(error:unknown){const m=error instanceof Error?error.message:String(error??'');const lower=m.toLowerCase();const replacements:Array<[string,string]>=[['permission denied','دسترسی مجاز نیست'],['row-level security','دسترسی این یادآور مجاز نیست؛ مجوز کاربر یا سازمان باید بررسی شود'],['violates','اطلاعات ثبت‌شده معتبر نیست'],['invalid','اطلاعات واردشده معتبر نیست'],['does not exist','ساختار پایگاه داده با نسخهٔ برنامه هماهنگ نیست؛ مهاجرت‌های یادآورها باید بررسی شوند'],['schema cache','ساختار جدول یادآورها در کش API به‌روز نیست'],['failed to fetch','ارتباط با سرور برقرار نشد؛ اتصال اینترنت را بررسی و دوباره تلاش کنید'],['network request failed','ارتباط با سرور برقرار نشد؛ اتصال اینترنت را بررسی و دوباره تلاش کنید'],['jwt','نشست ورود منقضی شده است؛ دوباره وارد سامانه شوید'],['یادآور تغییر نکرد','یادآور ذخیره نشد؛ دسترسی یا وجود آن را بررسی کنید']];for(const [a,b] of replacements)if(lower.includes(a.toLowerCase()))return b;return 'بارگذاری یا ذخیرهٔ یادآورها انجام نشد؛ اتصال، دسترسی و ساختار پایگاه داده را بررسی کنید';}
 
 type SpeechRecognitionLike={lang:string;interimResults:boolean;resultIndex:number;onresult:(event:SpeechRecognitionEventLike)=>void;onerror:()=>void;onend:()=>void;start:()=>void;stop:()=>void};type SpeechRecognitionEventLike={resultIndex:number;results:ArrayLike<{0:{transcript?:string}} & ArrayLike<{transcript?:string}>>};
@@ -63,24 +65,58 @@ export const RemindersPage:React.FC=()=>{
  useEffect(()=>{if(params.get('new')==='1'){setComposerOpen(true);window.setTimeout(()=>document.getElementById('reminder-quick-input')?.focus(),100);setParams({}, {replace:true});}},[params,setParams]);
  useEffect(()=>{const rid=params.get('rid'),act=params.get('act');if(!rid||!act)return;setParams(p=>{p.delete('rid');p.delete('act');return p},{replace:true});if(!user)return;const run=async()=>{const patch:Partial<Reminder>|null=act==='done'?{status:'done',completed_at:new Date().toISOString(),completed_by:user.id}:act==='snooze10'?{snoozed_until:new Date(Date.now()+600000).toISOString(),snooze_count:1}:act==='tomorrow9'?{snoozed_until:(()=>{const j=toJalali(addJalaliDays(new Date(),1));return zonedJalaliToDate(j.year,j.month,j.day,9,0).toISOString()})(),snooze_count:1}:null;if(!patch)return;const {data,error}=await supabase.from('operational_reminders').update(patch).eq('id',rid).select('id').maybeSingle();if(error||!data){setToast({text:error?errorFa(error):'یادآور پیدا نشد یا مجوز تغییر آن وجود ندارد.'});return;}await qc.invalidateQueries({queryKey:['reminders']});await qc.invalidateQueries({queryKey:['reminder-overview']});};void run().catch(error=>setToast({text:errorFa(error)}));},[params,qc,setParams,user]);
 
+ const reminderCacheDay=(()=>{const j=toJalali(new Date());return j.year+'-'+String(j.month).padStart(2,'0')+'-'+String(j.day).padStart(2,'0');})();
+ const reminderCacheScope=JSON.stringify(['reminders',filter,kind,search,page,user?.id,profile?.organization_id,dayKey,reminderCacheDay]);
  const query=useQuery<QueryResult>({
-  queryKey:['reminders',filter,kind,search,page,user?.id,dayKey],
+  queryKey:['reminders',filter,kind,search,page,user?.id,profile?.organization_id,dayKey,reminderCacheDay],
   queryFn:async()=>{
-   if(!profile?.organization_id)return{rows:[],count:0};let q=supabase.from('operational_reminders').select('*',{count:'exact'}).order('due_at',{ascending:true,nullsFirst:false}).range(page*PAGE_SIZE,page*PAGE_SIZE+PAGE_SIZE-1);
-   q=q.eq('organization_id',profile.organization_id);q=q.is('deleted_at',null);
-   if(filter==='today'){const[r1,r2]=todayRange();q=q.gte('due_at',r1.toISOString()).lt('due_at',r2.toISOString()).eq('status','open');}
-   if(filter==='scheduled')q=q.eq('status','open').gte('due_at',new Date().toISOString());
-   if(filter==='overdue')q=q.eq('status','open').lt('due_at',new Date().toISOString());
-   if(filter==='done')q=q.eq('status','done');
-   if(filter==='assigned')q=q.eq('assignee_id',user?.id??'00000000-0000-0000-0000-000000000000').eq('status','open');
-   if(filter==='undated')q=q.is('due_at',null).eq('status','open');
-   if(filter==='day'){const selectedDay=parseReminderDayKey(dayKey);if(!selectedDay)return{rows:[],count:0};const nextDay=addJalaliDays(selectedDay,1);q=q.gte('due_at',selectedDay.toISOString()).lt('due_at',nextDay.toISOString()).eq('status','open');}
-   if(kind)q=q.eq('kind',kind);
-   if(search.trim()){const s=search.trim().replace(/[,()]/g,' ');q=q.or('title.ilike.%'+s+'%,description.ilike.%'+s+'%,notes.ilike.%'+s+'%');}
-   const {data,error,count}=await q;if(error)throw error;return{rows:(data??[]) as Reminder[],count:count??0};
+   if(!profile?.organization_id)return{rows:[],count:0};
+   try{
+    let q=supabase.from('operational_reminders').select('*',{count:'exact'}).order('due_at',{ascending:true,nullsFirst:false}).range(page*PAGE_SIZE,page*PAGE_SIZE+PAGE_SIZE-1);
+    q=q.eq('organization_id',profile.organization_id);q=q.is('deleted_at',null);
+    if(filter==='today'){const[r1,r2]=todayRange();q=q.gte('due_at',r1.toISOString()).lt('due_at',r2.toISOString()).eq('status','open');}
+    if(filter==='scheduled')q=q.eq('status','open').gte('due_at',new Date().toISOString());
+    if(filter==='overdue')q=q.eq('status','open').lt('due_at',new Date().toISOString());
+    if(filter==='done')q=q.eq('status','done');
+    if(filter==='assigned')q=q.eq('assignee_id',user?.id??'00000000-0000-0000-0000-000000000000').eq('status','open');
+    if(filter==='undated')q=q.is('due_at',null).eq('status','open');
+    if(filter==='day'){const selectedDay=parseReminderDayKey(dayKey);if(!selectedDay)return{rows:[],count:0};const nextDay=addJalaliDays(selectedDay,1);q=q.gte('due_at',selectedDay.toISOString()).lt('due_at',nextDay.toISOString()).eq('status','open');}
+    if(kind)q=q.eq('kind',kind);
+    if(search.trim()){const s=search.trim().replace(/[,()]/g,' ');q=q.or('title.ilike.%'+s+'%,description.ilike.%'+s+'%,notes.ilike.%'+s+'%');}
+    const {data,error,count}=await q;if(error)throw error;
+    const result:QueryResult={rows:(data??[]) as Reminder[],count:count??0,offlineCached:false};
+    await saveOfflineQueryCache(reminderCacheScope,user?.id,profile.organization_id,result).catch(()=>false);
+    return result;
+   }catch(error){
+    if(isOfflineReadError(error)){
+     const cached=await readOfflineQueryCache<QueryResult>(reminderCacheScope,user?.id,profile.organization_id).catch(()=>null);
+     if(cached)return{...cached.payload,offlineCached:true,cacheUpdatedAt:cached.updatedAt};
+    }
+    throw error;
+   }
   },enabled:Boolean(profile?.organization_id),staleTime:15000,placeholderData:(old)=>old
  });
- const statsQuery=useQuery({queryKey:['reminder-overview',profile?.organization_id,user?.id],enabled:Boolean(profile?.organization_id),staleTime:0,queryFn:async()=>{if(!profile?.organization_id)return{total:0,today:0,overdue:0,scheduled:0,done:0,undated:0};const [start,end]=todayRange();const now=new Date().toISOString();const base=()=>supabase.from('operational_reminders').select('id',{count:'exact',head:true}).eq('organization_id',profile.organization_id).is('deleted_at',null);const results=await Promise.all([base(),base().eq('status','open').gte('due_at',start.toISOString()).lt('due_at',end.toISOString()),base().eq('status','open').lt('due_at',now),base().eq('status','open').gte('due_at',now),base().eq('status','done'),base().eq('status','open').is('due_at',null)]);const failed=results.find(result=>result.error);if(failed?.error)throw failed.error;return{total:results[0].count??0,today:results[1].count??0,overdue:results[2].count??0,scheduled:results[3].count??0,done:results[4].count??0,undated:results[5].count??0};}});
+ const statsCacheScope=JSON.stringify(['reminder-overview',profile?.organization_id,user?.id,reminderCacheDay]);
+ const statsQuery=useQuery<ReminderOverview>({
+  queryKey:['reminder-overview',profile?.organization_id,user?.id,reminderCacheDay],
+  enabled:Boolean(profile?.organization_id),staleTime:0,
+  queryFn:async()=>{
+   const empty:ReminderOverview={total:0,today:0,overdue:0,scheduled:0,done:0,undated:0};
+   if(!profile?.organization_id)return empty;
+   try{
+    const [start,end]=todayRange(),now=new Date().toISOString();
+    const base=()=>supabase.from('operational_reminders').select('id',{count:'exact',head:true}).eq('organization_id',profile.organization_id).is('deleted_at',null);
+    const results=await Promise.all([base(),base().eq('status','open').gte('due_at',start.toISOString()).lt('due_at',end.toISOString()),base().eq('status','open').lt('due_at',now),base().eq('status','open').gte('due_at',now),base().eq('status','done'),base().eq('status','open').is('due_at',null)]);
+    const failed=results.find(result=>result.error);if(failed?.error)throw failed.error;
+    const result:ReminderOverview={total:results[0].count??0,today:results[1].count??0,overdue:results[2].count??0,scheduled:results[3].count??0,done:results[4].count??0,undated:results[5].count??0,offlineCached:false};
+    await saveOfflineQueryCache(statsCacheScope,user?.id,profile.organization_id,result).catch(()=>false);
+    return result;
+   }catch(error){
+    if(isOfflineReadError(error)){const cached=await readOfflineQueryCache<ReminderOverview>(statsCacheScope,user?.id,profile.organization_id).catch(()=>null);if(cached)return{...cached.payload,offlineCached:true,cacheUpdatedAt:cached.updatedAt};}
+    throw error;
+   }
+  }
+ });
  const queuedDrafts=useMemo(()=>queuedReminderDrafts(offlineQueue,user?.id??null,profile?.organization_id??null),[offlineQueue,user?.id,profile?.organization_id]);
  const queuedClientUuids=useMemo(()=>new Set(queuedDrafts.map(x=>x.reminder.client_uuid).filter((x):x is string=>Boolean(x))),[queuedDrafts]);
  const reminders=(query.data?.rows??[]).filter(r=>!(r.id.startsWith('local-')&&r.client_uuid&&queuedClientUuids.has(r.client_uuid)));
@@ -212,6 +248,7 @@ export const RemindersPage:React.FC=()=>{
  const menuReminder=menuId?reminders.find(r=>r.id===menuId)??null:null;
  return <ReminderLocaleTree language={language}><main dir={language==='fa'?'rtl':'ltr'} className="reminders-page reminders-app-standalone min-h-[100dvh] pb-28" data-language={language}>
 
+  {query.data?.offlineCached&&<div role="status" className="mx-3 sm:mx-6 mt-2 text-xs app-muted">دادهٔ ذخیره‌شده · آخرین همگام‌سازی {query.data.cacheUpdatedAt?formatReminderRelative(new Date(query.data.cacheUpdatedAt),language):''}</div>}
   {queuedDrafts.length>0&&<section role="status" aria-live="polite" className="mx-3 sm:mx-6 mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3 sm:p-4 shadow-sm"><div className="flex items-start gap-3"><span className="min-w-10 min-h-10 rounded-xl border border-amber-500/30 bg-amber-500/10 grid place-items-center text-amber-700"><UploadCloud size={19}/></span><div className="min-w-0 flex-1"><div className="flex items-center flex-wrap gap-2"><h2 className="font-black text-sm">{t('یادآورهای در انتظار همگام‌سازی')}</h2><span className="rounded-full bg-amber-500/15 px-2 py-1 text-xs font-bold tabular-nums">{reminderNumber(queuedDrafts.length,language)}</span></div><p className="mt-1 text-xs app-muted">{t('این یادآورها فعلاً فقط روی همین دستگاه ذخیره شده‌اند و هنوز تأیید سرور را نگرفته‌اند.')}</p><p className="mt-1 text-xs app-muted">{online?t('با اتصال اینترنت، صف به‌صورت خودکار همگام‌سازی می‌شود.'):t('اتصال اینترنت قطع است؛ این موارد روی دستگاه باقی می‌مانند.')}</p></div></div><div className="mt-3 max-h-56 overflow-y-auto space-y-2">{queuedDrafts.map(({queueId,queueState,reminder})=><div key={queueId} className="flex items-center gap-3 rounded-xl border app-border bg-[var(--surface)] p-3"><span className="grid min-w-9 min-h-9 place-items-center rounded-lg bg-[var(--surface-2)] app-muted"><Clock3 size={16}/></span><div className="min-w-0 flex-1"><div className="font-bold text-sm truncate" data-user-content="true" dir="auto">{reminder.title}</div><div className="mt-1 text-xs app-muted">{reminder.due_at?(reminder.all_day?formatReminderDate(new Date(reminder.due_at),language):formatReminderDateTime(new Date(reminder.due_at),language)):t('بدون سررسید')}</div></div><span className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-bold bg-amber-500/10 text-amber-800">{t(queueState==='sending'?'در حال همگام‌سازی':'در صف')}</span></div>)}</div></section>}
   {isHome ? <section className="reminders-route-screen reminders-hub-screen" key={currentSection}>
     <header className="reminders-hub-header"><div className="reminders-hub-identity"><img src="/pwa/reminders-icon.svg" className="reminders-brand-icon" alt=""/><div className="min-w-0 flex-1"><div className="reminders-brand-kicker">{t('اپ مستقل · Customs OS')}</div><h1>{t('یادآورها')}</h1><p>{formatReminderDate(new Date(),language)} <span>·</span> {t('مرکز مدیریت کارها')}</p></div><div className="reminders-hub-actions"><button type="button" onClick={()=>goToSection('search')} aria-label={t('جست‌وجو')}><Search size={20}/></button><button type="button" onClick={openComposer} aria-label={t('یادآور جدید')}><Plus size={20}/></button><button type="button" onClick={()=>void openPush()} aria-label={t('اعلان‌ها')}><Bell size={20}/></button><button type="button" onClick={()=>goToSection('settings')} aria-label={t('تنظیمات')}><Languages size={20}/></button></div></div></header>
