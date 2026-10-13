@@ -34,6 +34,7 @@ export const validateAdditionalRegimeStage = (
     .map(field => '«' + field.label + '» را تکمیل کنید.');
 
   for (const field of dateFields) {
+    if (stage !== field.stage) continue;
     const value = text(state[field.stage]?.[field.key]);
     if (value && !parseJalaliDate(value)) {
       issues.push('«' + field.label + '» باید تاریخ شمسی معتبر به‌شکل سال/ماه/روز باشد.');
