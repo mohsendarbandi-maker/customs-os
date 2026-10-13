@@ -101,9 +101,13 @@ async function deliver(){
 async function digest(){
  const {data,error}=await admin.from("notification_preferences").select("user_id,morning_digest_time,timezone,hide_content").eq("push_enabled",true);if(error)throw error;const now=new Date(),vapid=await ensureVapid();let sent=0;
  for(const p of (data??[]) as Array<{user_id:string;morning_digest_time:string;timezone:string;hide_content:boolean}>){
+  const {data:profile,error:profileError}=await admin.from("profiles").select("organization_id,role,is_active").eq("id",p.user_id).maybeSingle();
+  if(profileError||!profile?.is_active||profile.role==="client"||!profile.organization_id)continue;
   const tz=p.timezone||TZ,g=getParts(now,tz,"gregory"),[hh,mm]=p.morning_digest_time.split(":").map(Number);if(g.hour!==hh||g.minute!==mm)continue;
-  const start=zonedToUtc({year:g.year,month:g.month,day:g.day,hour:0,minute:0},tz),end=zonedToUtc({year:g.year,month:g.month,day:g.day,hour:23,minute:59},tz);
-  const todayQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).eq("status","open").gte("due_at",start.toISOString()).lt("due_at",end.toISOString()),overQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).eq("status","open").lt("due_at",now.toISOString()),devices=await subs(p.user_id);
+  const start=zonedToUtc({year:g.year,month:g.month,day:g.day,hour:0,minute:0},tz),nextDay=new Date(Date.UTC(g.year,g.month-1,g.day)+86400000),end=zonedToUtc({year:nextDay.getUTCFullYear(),month:nextDay.getUTCMonth()+1,day:nextDay.getUTCDate(),hour:0,minute:0},tz);
+  const visible=(q:any)=>q.eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team");
+  const todayQ=await visible(admin.from("operational_reminders").select("id",{count:"exact",head:true}).gte("due_at",start.toISOString()).lt("due_at",end.toISOString())),overQ=await visible(admin.from("operational_reminders").select("id",{count:"exact",head:true}).not("due_at","is",null).lt("due_at",now.toISOString())),devices=await subs(p.user_id);
+  if(todayQ.error||overQ.error||!devices.length)continue;
   for(const s of devices){try{await send(s,{title:"خلاصه صبحگاهی",body:p.hide_content?"خلاصه امروز آماده است.":"امروز "+String(todayQ.count??0).replace(/\d/g,x=>"۰۱۲۳۴۵۶۷۸۹"[Number(x)])+" یادآور و "+String(overQ.count??0).replace(/\d/g,x=>"۰۱۲۳۴۵۶۷۸۹"[Number(x)])+" مورد معوق دارید.",tag:"morning-"+g.year+"-"+g.month+"-"+g.day,url:"/reminders?view=today",actions:[],data:{url:"/reminders?view=today"},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"},vapid);sent++;}catch(err){if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410))await admin.from("push_subscriptions").delete().eq("id",s.id);}}
  }
  return sent;
