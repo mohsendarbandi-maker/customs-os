@@ -113,7 +113,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
 
  const overdue=useMemo(()=>getAbandonedGoodsWarnings({loadingFormReceivedAt:port.loading_form_received_at,loadingCompletedAt:exitState.loading_completed_at,warehouseReceiptAt:port.warehouse_receipt_date,loadingStartedAt:port.loading_started_at}),[port.loading_form_received_at,port.warehouse_receipt_date,port.loading_started_at,exitState.loading_completed_at]);
  const insuranceComparison=useMemo(()=>compareJalaliDates(port.insurance_issue_date,port.warehouse_receipt_date),[port.insurance_issue_date,port.warehouse_receipt_date]);
- const insuranceWarning=insuranceComparison!==null&&insuranceComparison>=0&&port.insurance_followup_status!=='completed';
+ const insuranceWarning=insuranceComparison!==null&&insuranceComparison>=0&&!['completed','not_required'].includes(String(port.insurance_followup_status||'pending'));
 
  const save=async()=>{
   if(!row){setError('رکورد گردش‌کار هنوز آماده نیست. یک‌بار بروزرسانی کنید.');return}

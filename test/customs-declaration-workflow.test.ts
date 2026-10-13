@@ -88,6 +88,16 @@ describe('customs workflow stage prerequisites', () => {
     state.customsPath = 'red';
     expect(getWorkflowStageIssues('evaluation', state)).toHaveLength(1);
     state.evaluation.status = 'completed';
+    state.evaluation.evaluator_number = '2';
+    expect(getWorkflowStageIssues('evaluation', state)).toEqual([]);
+  });
+
+  it('requires the evaluator number when an evaluation is completed', () => {
+    const state = readyWorkflow();
+    state.customsPath = 'red';
+    state.evaluation.status = 'completed';
+    expect(getWorkflowStageIssues('evaluation', state)).toContain('شماره ارزیاب را ثبت کنید.');
+    state.evaluation.evaluator_number = '3';
     expect(getWorkflowStageIssues('evaluation', state)).toEqual([]);
   });
 
@@ -99,6 +109,7 @@ describe('customs workflow stage prerequisites', () => {
       'ارزیابی الزامی است؛ نتیجه ارزیابی را تکمیل کنید.',
     );
     state.evaluation.status = 'completed';
+    state.evaluation.evaluator_number = '1';
     expect(getWorkflowStageIssues('evaluation', state)).toEqual([]);
   });
 
@@ -137,7 +148,10 @@ describe('customs workflow stage prerequisites', () => {
     state.cashier.method = 'pending';
     expect(getWorkflowStageIssues('cashier', state)).toHaveLength(1);
     state.loadingPermit.central_bank_status = 'awaiting_sata';
-    expect(getWorkflowStageIssues('loading_permit', state)).toHaveLength(1);
+    state.loadingPermit.clause2_request_status = 'pending';
+    expect(getWorkflowStageIssues('loading_permit', state)).toContain('درخواست تبصره ۲ منطقه آزاد باید تأیید یا صریحاً غیرلازم ثبت شود.');
+    expect(getWorkflowStageIssues('loading_permit', state)).toHaveLength(2);
+    state.loadingPermit.clause2_request_status = 'not_required';
     state.loadingPermit.clearance_90_percent_requested = true;
     state.loadingPermit.comment = 'درخواست ترخیص باقیمانده بدون کد ساتا';
     expect(getWorkflowStageIssues('loading_permit', state)).toEqual([]);
@@ -150,6 +164,15 @@ describe('customs workflow stage prerequisites', () => {
       'بیمه‌نامه قبل از قبض انبار نیست؛ پیگیری بیمه/پوشش تکمیلی را تکمیل کنید.',
     );
     state.port.insurance_followup_status = 'completed';
+    expect(getWorkflowStageIssues('port_charges', state)).not.toContain(
+      'بیمه‌نامه قبل از قبض انبار نیست؛ پیگیری بیمه/پوشش تکمیلی را تکمیل کنید.',
+    );
+  });
+
+  it('allows an explicitly documented insurance follow-up waiver when the policy date is not before warehouse receipt', () => {
+    const state = readyWorkflow();
+    state.port.insurance_issue_date = '1405/07/20';
+    state.port.insurance_followup_status = 'not_required';
     expect(getWorkflowStageIssues('port_charges', state)).not.toContain(
       'بیمه‌نامه قبل از قبض انبار نیست؛ پیگیری بیمه/پوشش تکمیلی را تکمیل کنید.',
     );
