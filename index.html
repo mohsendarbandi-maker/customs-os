@@ -30,7 +30,7 @@
         const host = window.location.hostname.toLowerCase();
         const chatHost = host === 'chat.darbandicommercial.ir';
         const remindersHost = host === 'reminders.darbandicommercial.ir';
-        const manifest = chatHost ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' : remindersHost ? '/reminders-subdomain.webmanifest?v=20261012-reminders-v1' : path.startsWith('/chat') ? '/chat-app-v4.webmanifest?v=20261005-chat-v4' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest?v=20261012-reminders-v2' : '/manifest.webmanifest';
+        const manifest = chatHost ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' : remindersHost ? '/reminders-subdomain.webmanifest?v=20261014-reminders-v2' : path.startsWith('/chat') ? '/chat-app-v4.webmanifest?v=20261005-chat-v4' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest?v=20261014-reminders-v2' : '/manifest.webmanifest';
         const link = document.querySelector('link[rel="manifest"]');
         if (link) link.setAttribute('href', manifest);
       })();
@@ -45,11 +45,11 @@
         const isRemindersHost = host === "reminders.darbandicommercial.ir";
         const isRemindersPath = window.location.pathname.startsWith("/reminders");
         if (!isRemindersHost && !isRemindersPath) return;
-        const icon = "/pwa/reminders-icon-180.png?v=20261012-reminders-v1";
+        const icon = "/pwa/reminders-icon-180.png?v=20261014-reminders-v2";
         const appLabel = isRemindersHost ? "Reminders" : "یادآورها";
         document.querySelectorAll('link[rel*="apple-touch-icon"]').forEach((node) => node.setAttribute("href", icon));
         document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", appLabel);
-        document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#06265F");
+        document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#087F8C");
         document.title = appLabel + " | Customs OS";
       })();
     </script>
