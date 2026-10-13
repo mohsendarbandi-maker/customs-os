@@ -12,6 +12,15 @@ describe('reminder bilingual presentation',()=>{
   expect(reminderText('عملیات گروهی','en')).toBe('Bulk actions');
   expect(reminderText('انتخاب یادآور','en')).toBe('Select reminder');
   expect(reminderText('لغو انتخاب','en')).toBe('Clear selection');
+  expect(reminderText('مورد انتخاب شده','en')).toBe('item selected');
+  expect(reminderText('موارد انتخاب شده','en')).toBe('items selected');
+  expect(reminderText('انتخاب همهٔ موارد این صفحه','en')).toBe('Select all items on this page');
+  expect(reminderText('لغو انتخاب موارد این صفحه','en')).toBe('Deselect items on this page');
+  expect(reminderText('تکمیل موارد','en')).toBe('Complete selected');
+  expect(reminderText('تعویق ۱۰ دقیقه','en')).toBe('Snooze 10 minutes');
+  expect(reminderText('حذف از فهرست','en')).toBe('Remove from list');
+  expect(reminderText('پاک‌کردن انتخاب','en')).toBe('Clear selection');
+  expect(reminderText('بازگردانی','en')).toBe('Undo');
   expect(reminderText('انتخاب همهٔ این صفحه','en')).toBe('Select all on this page');
   expect(reminderText('انتخاب همهٔ موارد این صفحه','en')).toBe('Select all items on this page');
   expect(reminderText('لغو انتخاب موارد این صفحه','en')).toBe('Deselect items on this page');
