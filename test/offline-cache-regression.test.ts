@@ -10,6 +10,7 @@ const runtime = read('src/main.tsx');
 const lifecycle = read('src/features/reminders/PwaLifecycle.tsx');
 const queue = read('src/lib/offlineQueue.ts');
 const reminders = read('src/features/reminders/RemindersPage.tsx');
+const auth = read('src/context/AuthContext.tsx');
 
 describe('offline and background-update safety', () => {
   it('uses network-first navigation with a precached app-shell fallback', () => {
@@ -41,6 +42,7 @@ describe('offline and background-update safety', () => {
     expect(queue).toContain("const QUERY_CACHE_STORE_NAME = 'query_cache'");
     expect(queue).toContain('const DB_VERSION = 4');
     expect(queue).toContain('MAX_QUERY_CACHE_AGE_MS');
+    expect(queue).toContain('MAX_AUTH_PROFILE_CACHE_AGE_MS');
     expect(queue).toContain('MAX_QUERY_CACHE_ENTRIES_PER_SCOPE');
     expect(queue).toContain('if ((await currentUserId()) !== userId) return false');
     expect(queue).toContain('if ((await currentUserId()) !== userId) return null');
@@ -54,5 +56,8 @@ describe('offline and background-update safety', () => {
     expect(reminders).toContain('readOfflineQueryCache<CalendarReminderDate[]>');
     expect(reminders).toContain('composerDraftKey=user?.id&&profile?.organization_id');
     expect(reminders).toContain('sessionStorage.setItem(composerDraftKey');
+    expect(auth).toContain("readOfflineQueryCache<UserProfile | null>('auth-profile', userId, userId)");
+    expect(auth).toContain('offlineProfile.id === userId');
+    expect(auth).toContain('offlineProfile.is_active');
   });
 });
