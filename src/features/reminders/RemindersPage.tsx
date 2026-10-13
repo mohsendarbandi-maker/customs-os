@@ -150,10 +150,45 @@ export const RemindersPage:React.FC=()=>{
  const softDelete=(r:Reminder)=>{const deletedAt=new Date().toISOString(),previousStatus=r.status,previousDeletedAt=r.deleted_at;update.mutate({id:r.id,patch:{deleted_at:deletedAt,status:'dismissed'}});setToast({text:t('یادآور از فهرست حذف شد'),undo:()=>update.mutate({id:r.id,patch:{deleted_at:previousDeletedAt,status:previousStatus}})});};
  const snooze=(r:Reminder,minutes:number)=>update.mutate({id:r.id,patch:{snoozed_until:new Date(Date.now()+minutes*60000).toISOString(),snooze_count:r.snooze_count+1}});
  const tomorrow=()=>{const j=toJalali(addJalaliDays(new Date(),1));return zonedJalaliToDate(j.year,j.month,j.day,9,0);};
- const toggleSelected=(id:string)=>{if(id.startsWith('local-'))return;setSelected(current=>toggleReminderSelection(current,id));};
- const bulkDone=()=>{for(const item of selectedReminders){if(item.status==='done')continue;if(item.recurrence_rule&&item.due_at)completeReminder.mutate(item);else update.mutate({id:item.id,patch:{status:'done',completed_at:new Date().toISOString(),completed_by:user?.id??null}});}setSelected([]);};
- const bulkSnooze=()=>{for(const item of selectedReminders)update.mutate({id:item.id,patch:{snoozed_until:new Date(Date.now()+600000).toISOString(),snooze_count:item.snooze_count+1}});setSelected([]);};
- const bulkDismiss=()=>{const deletedAt=new Date().toISOString();for(const item of selectedReminders)update.mutate({id:item.id,patch:{status:'dismissed',deleted_at:deletedAt}});setSelected([]);};
+ const toggleSelected=(id:string)=>{if(bulkAction||id.startsWith('local-'))return;setSelected(current=>toggleReminderSelection(current,id));};
+ const bulkDone=async()=>{
+  if(bulkAction)return;
+  const batch=selectedReminders.filter(item=>item.status!=='done');
+  if(!batch.length){setSelected([]);return;}
+  setBulkAction('complete');
+  const results=await Promise.allSettled(batch.map(item=>item.recurrence_rule&&item.due_at
+   ?completeReminder.mutateAsync(item)
+   :update.mutateAsync({id:item.id,patch:{status:'done',completed_at:new Date().toISOString(),completed_by:user?.id??null}})));
+  const failed=batch.filter((_,index)=>results[index].status==='rejected');
+  setSelected(current=>current.filter(id=>failed.some(item=>item.id===id)));
+  setBulkAction(null);
+  setToast({text:summarizeReminderBulkAction('complete',batch.length-failed.length,failed.length,language)});
+ };
+ const bulkSnooze=async()=>{
+  if(bulkAction)return;
+  const batch=[...selectedReminders];
+  if(!batch.length)return;
+  setBulkAction('snooze');
+  const results=await Promise.allSettled(batch.map(item=>update.mutateAsync({id:item.id,patch:{snoozed_until:new Date(Date.now()+600000).toISOString(),snooze_count:item.snooze_count+1}})));
+  const succeeded=batch.filter((_,index)=>results[index].status==='fulfilled');
+  const failed=batch.filter((_,index)=>results[index].status==='rejected');
+  setSelected(current=>current.filter(id=>failed.some(item=>item.id===id)));
+  setBulkAction(null);
+  setToast({text:summarizeReminderBulkAction('snooze',succeeded.length,failed.length,language),...(succeeded.length?{undo:()=>{for(const item of succeeded)update.mutate({id:item.id,patch:{snoozed_until:item.snoozed_until,snooze_count:item.snooze_count}});}}:{})});
+ };
+ const bulkDismiss=async()=>{
+  if(bulkAction)return;
+  const batch=[...selectedReminders];
+  if(!batch.length)return;
+  const deletedAt=new Date().toISOString();
+  setBulkAction('remove');
+  const results=await Promise.allSettled(batch.map(item=>update.mutateAsync({id:item.id,patch:{status:'dismissed',deleted_at:deletedAt}})));
+  const succeeded=batch.filter((_,index)=>results[index].status==='fulfilled');
+  const failed=batch.filter((_,index)=>results[index].status==='rejected');
+  setSelected(current=>current.filter(id=>failed.some(item=>item.id===id)));
+  setBulkAction(null);
+  setToast({text:summarizeReminderBulkAction('remove',succeeded.length,failed.length,language),...(succeeded.length?{undo:()=>{for(const item of succeeded)update.mutate({id:item.id,patch:{status:item.status,deleted_at:item.deleted_at}});}}:{})});
+ };
  const openPush=async()=>{setPushOpen(true);if(pushAllowed){try{setPushDevices(await listPushDevices())}catch{setPushDevices([])}}};
  useEffect(()=>{if(!toast)return;const t=window.setTimeout(()=>setToast(null),5000);return()=>window.clearTimeout(t);},[toast]);
  useEffect(()=>{const onOnline=()=>{void qc.invalidateQueries({queryKey:['reminders']});void qc.invalidateQueries({queryKey:['reminder-overview']});void qc.invalidateQueries({queryKey:['reminder-calendar']});};window.addEventListener('online',onOnline);return()=>window.removeEventListener('online',onOnline);},[qc]);
