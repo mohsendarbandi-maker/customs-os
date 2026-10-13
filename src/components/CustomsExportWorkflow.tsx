@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
-import{AlertTriangle,CheckCircle2,RefreshCw,Save}from'lucide-react';
+import{AlertTriangle,RefreshCw,Save}from'lucide-react';
 import{supabase}from'../lib/supabase';
 
 type StageKey='documents'|'permits'|'declaration'|'valuation'|'loading'|'exit'|'completed';
@@ -31,7 +31,7 @@ const fields:Record<string,{key:string;label:string;type?:string;options?:{value
  documents:[{key:'invoiceNo',label:'شماره فاکتور'},{key:'goodsDescription',label:'شرح کالا'},{key:'hsCode',label:'HS Code'},{key:'originCountry',label:'کشور مقصد'},{key:'quantity',label:'مقدار'},{key:'unit',label:'واحد'},{key:'documentsNote',label:'یادداشت اسناد'}],
  permits:[{key:'status',label:'وضعیت مجوزها',type:'select',options:[{value:'pending',label:'در انتظار بررسی'},{value:'approved',label:'تأیید شده'},{value:'not_required',label:'نیاز ندارد'}]},{key:'requiredPermits',label:'مجوزهای لازم / نهاد صادرکننده'},{key:'permitReferences',label:'شماره و مرجع مجوزها'},{key:'reviewNote',label:'توضیحات'}],
  declaration:[{key:'kottajNumber',label:'شماره کوتاژ'},{key:'declarationDate',label:'تاریخ اظهار (شمسی)',type:'date'},{key:'customsPath',label:'مسیر گمرکی',type:'select',options:[{value:'green',label:'سبز'},{value:'yellow',label:'زرد'},{value:'red',label:'قرمز'}]},{key:'declarationNote',label:'توضیحات اظهار'}],
- valuation:[{key:'value',label:'ارزش اظهارشده'},{key:'currency',label:'ارز'},{key:'exchangeRate',label:'نرخ تسعیر (در صورت نیاز)'},{key:'guaranteeStatus',label:'وضعیت تضمین / تعهد',type:'select',options:[{value:'not_required',label:'نیاز ندارد'},{value:'pending',label:'در انتظار'},{value:'provided',label:'ارائه شده'}]},{key:'guaranteeReference',label:'مرجع تضمین یا تعهد'},{key:'valuationNote',label:'توضیحات ارزش'}],
+ valuation:[{key:'value',label:'ارزش اظهارشده'},{key:'currency',label:'ارز'},{key:'exchangeRate',label:'نرخ تسعیر (در صورت نیاز)'},{key:'guaranteeStatus',label:'وضعیت تضمین / تعهد',type:'select',options:[{value:'not_required',label:'نیاز ندارد'},{value:'pending',label:'در انتظار'},{value:'provided',label:'ارائه شده'}]},{key:'guaranteeReference',label:'مرجع تضمین یا تعهد'},{key:'returnDeadline',label:'مهلت بازگشت (صادرات موقت)'},{key:'returnObligationRecorded',label:'تعهد بازگشت ثبت شده',type:'select',options:[{value:'',label:'انتخاب کنید'},{value:'yes',label:'بله'},{value:'no',label:'خیر'}]},{key:'valuationNote',label:'توضیحات ارزش'}],
  loading:[{key:'loadingFormNumber',label:'شماره فرم بارگیری'},{key:'loadingDate',label:'تاریخ بارگیری (شمسی)',type:'date'},{key:'loadedQuantity',label:'مقدار بارگیری‌شده'},{key:'loadingNote',label:'توضیحات بارگیری'}],
  exit:[{key:'exitStatus',label:'وضعیت خروج',type:'select',options:[{value:'pending',label:'در انتظار'},{value:'approved',label:'خروج تأیید شد'},{value:'not_applicable',label:'قابل اعمال نیست'}]},{key:'exitDate',label:'تاریخ خروج (شمسی)',type:'date'},{key:'exitReference',label:'شماره/مرجع خروج'},{key:'exitNote',label:'توضیحات'}],
  completed:[{key:'closureNote',label:'یادداشت بستن پرونده'}]
@@ -64,6 +64,8 @@ export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationI
   if(key==='permits'&&state.permits?.status==='pending')missing.push('تعیین تکلیف مجوزها');
   if(key==='valuation'&&state.valuation?.guaranteeStatus==='pending')missing.push('تعیین تکلیف تضمین');
   if(key==='exit'&&state.exit?.exitStatus==='pending')missing.push('تعیین وضعیت خروج');
+  if(isTemp&&key==='valuation'&&!String(state.valuation?.returnDeadline||'').trim())missing.push('مهلت بازگشت');
+  if(isTemp&&key==='valuation'&&state.valuation?.returnObligationRecorded!=='yes')missing.push('ثبت تعهد بازگشت');
   if(isTemp&&key==='valuation'&&state.valuation?.guaranteeStatus==='not_required'&&!String(state.valuation?.guaranteeReference||'').trim())missing.push('مرجع یا توضیح عدم نیاز به تضمین');
   return missing;
  };
