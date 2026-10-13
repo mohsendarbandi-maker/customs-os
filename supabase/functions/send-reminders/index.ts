@@ -67,12 +67,14 @@ async function notePushFailure(id:string){
 }
 async function deliver(){
  const {data,error}=await admin.rpc("claim_reminder_deliveries",{p_limit:100});if(error)throw error;
- const rows=(data??[]) as Array<{reminder_id:string;user_id:string;fire_at:string;attempts:number;title:string;description:string|null;priority:string;due_at:string;timezone:string;hide_content:boolean;push_enabled:boolean}>,vapid=await ensureVapid();
+ const rows=(data??[]) as Array<{reminder_id:string;user_id:string;fire_at:string;attempts:number;title:string;description:string|null;priority:string;due_at:string;timezone:string;hide_content:boolean;push_enabled:boolean}>;
+ let vapid:Awaited<ReturnType<typeof ensureVapid>>|null=null;
  for(const d of rows){
   if(!d.push_enabled){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","push_disabled",null);continue;}
   const {data:prefRow}=await admin.from("notification_preferences").select("quiet_start,quiet_end,hide_content,timezone").eq("user_id",d.user_id).maybeSingle(),pref=prefRow as {quiet_start:string;quiet_end:string;hide_content:boolean;timezone:string}|null,tz=pref?.timezone||d.timezone||TZ;
   if(d.priority!=="urgent"&&isQuiet(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00")){await finish(d.reminder_id,d.user_id,d.fire_at,"pending","quiet_hours",quietEnd(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00").toISOString());continue;}
   const devices=await subs(d.user_id);if(!devices.length){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","no_active_device",null);continue;}
+  if(!vapid){try{vapid=await ensureVapid();}catch{const retryAt=new Date(Date.now()+backoff(d.attempts)).toISOString();if(d.attempts<4)await finish(d.reminder_id,d.user_id,d.fire_at,"pending","vapid_configuration_failed",retryAt);else{await finish(d.reminder_id,d.user_id,d.fire_at,"failed","vapid_configuration_failed",null);if(new Date(d.fire_at)>=new Date(d.due_at))await advance(d.reminder_id);}continue;}}
   const hidden=d.hide_content||Boolean(pref?.hide_content),payload={title:hidden?"یادآور جدید":"یادآور گمرکی",body:hidden?"یک یادآور برای شما ثبت شده است.":d.title+(d.description?" · "+d.description:""),tag:"reminder-"+d.reminder_id,url:"/reminders?rid="+encodeURIComponent(d.reminder_id),actions:[{action:"done",title:"انجام شد"},{action:"snooze10",title:"۱۰ دقیقه بعد"},{action:"tomorrow9",title:"فردا ۹ صبح"}],data:{rid:d.reminder_id,url:"/reminders?rid="+encodeURIComponent(d.reminder_id)},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"};
   let delivered=false,transientFailure=false,lastFailure:string|null=null;
   for(const s of devices){
