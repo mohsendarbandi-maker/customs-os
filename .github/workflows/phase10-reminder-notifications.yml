@@ -1,0 +1,33 @@
+name: Phase 10 Reminder Notifications
+
+on:
+  push:
+    branches:
+      - phase10/reliable-reminder-delivery
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "supabase/functions/send-reminders/**"
+      - "test/reminder-notification-regression.test.ts"
+      - "test/reminder-push-delivery.test.ts"
+      - ".github/workflows/phase10-reminder-notifications.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase10-reminder-notifications-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check reminder Edge Function
+        run: deno check --config supabase/functions/send-reminders/deno.json supabase/functions/send-reminders/index.ts

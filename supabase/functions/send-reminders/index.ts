@@ -45,15 +45,15 @@ async function authUser(req:Request){const h=req.headers.get("Authorization");if
 async function subs(userId:string){const {data,error}=await admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id",userId).eq("is_active",true);if(error)throw error;return (data??[]) as Array<{id:string;endpoint:string;p256dh:string;auth:string}>;}
 async function finish(reminderId:string,userId:string,fireAt:string,status:"sent"|"failed"|"skipped"|"pending",error:string|null,retryAt:string|null){const {error:e}=await admin.rpc("finish_reminder_delivery",{p_reminder_id:reminderId,p_user_id:userId,p_fire_at:fireAt,p_status:status,p_error:error,p_retry_at:retryAt});if(e)throw e;}
 async function advance(reminderId:string){
- const {data:r}=await admin.from("operational_reminders").select("id,due_at,recurrence_rule,recurrence_until,timezone,status,deleted_at").eq("id",reminderId).maybeSingle();if(!r||!r.recurrence_rule||r.status!=="open"||r.deleted_at)return;
+ const {data:r,error:readError}=await admin.from("operational_reminders").select("id,due_at,recurrence_rule,recurrence_until,timezone,status,deleted_at").eq("id",reminderId).maybeSingle();if(readError)throw readError;if(!r||!r.recurrence_rule||r.status!=="open"||r.deleted_at)return;
  const due=new Date(r.due_at);if(r.recurrence_until&&due>=new Date(r.recurrence_until))return;
- const rule=Object.fromEntries(r.recurrence_rule.replace(/^RRULE:/,"").split(";").map(x=>{const i=x.indexOf("=");return[i<0?x:x.slice(0,i),i<0?"":x.slice(i+1)]})),tz=r.timezone||TZ,pg=getParts(due,tz,"persian"),gg=getParts(due,tz,"gregory"),interval=Math.max(1,Number(rule.INTERVAL??1));let next:Date|null=null;
+ const rule=Object.fromEntries(r.recurrence_rule.replace(/^RRULE:/,"").split(";").map((x:string)=>{const i=x.indexOf("=");return[i<0?x:x.slice(0,i),i<0?"":x.slice(i+1)]})),tz=r.timezone||TZ,pg=getParts(due,tz,"persian"),gg=getParts(due,tz,"gregory"),interval=Math.max(1,Number(rule.INTERVAL??1));let next:Date|null=null;
  if(rule.FREQ==="DAILY"){const d=new Date(Date.UTC(gg.year,gg.month-1,gg.day)+interval*86400000);next=zonedToUtc({year:d.getUTCFullYear(),month:d.getUTCMonth()+1,day:d.getUTCDate(),hour:gg.hour,minute:gg.minute,second:gg.second},tz);}
  else if(rule.FREQ==="WEEKLY"){const wanted=String(rule.BYDAY??"").split(",").filter(Boolean),codes=["SU","MO","TU","WE","TH","FR","SA"];for(let i=1;i<=14*interval;i++){const d=new Date(Date.UTC(gg.year,gg.month-1,gg.day)+i*86400000),code=codes[d.getUTCDay()];if(!wanted.length||wanted.includes(code)){next=zonedToUtc({year:d.getUTCFullYear(),month:d.getUTCMonth()+1,day:d.getUTCDate(),hour:gg.hour,minute:gg.minute,second:gg.second},tz);break;}}}
  else if(rule.FREQ==="MONTHLY"){const idx=pg.month-1+interval,year=pg.year+Math.floor(idx/12),month=idx%12+1,day=Math.min(pg.day,monthLength(year,month)),g=persianToGregorian(year,month,day);next=zonedToUtc({year:g.year,month:g.month,day:g.day,hour:pg.hour,minute:pg.minute,second:pg.second},tz);}
  else if(rule.FREQ==="YEARLY"){const year=pg.year+interval,day=Math.min(pg.day,monthLength(year,pg.month)),g=persianToGregorian(year,pg.month,day);next=zonedToUtc({year:g.year,month:g.month,day:g.day,hour:pg.hour,minute:pg.minute,second:pg.second},tz);}
  if(!next||isNaN(next.getTime())||(r.recurrence_until&&next>new Date(r.recurrence_until)))return;
- await admin.from("operational_reminders").update({due_at:next.toISOString(),snoozed_until:null,snooze_count:0,occurrence_key:next.toISOString()}).eq("id",reminderId);
+ const {error:updateError}=await admin.from("operational_reminders").update({due_at:next.toISOString(),snoozed_until:null,snooze_count:0,occurrence_key:next.toISOString()}).eq("id",reminderId);if(updateError)throw updateError;
 }
 async function send(sub:{endpoint:string;p256dh:string;auth:string},payload:Record<string,unknown>,vapid:{publicKey:string;privateKey:string;subject:string}){return sendPushNotification(toSub(sub),rawPayload(JSON.stringify(payload)),vapid,{ttl:86400,urgency:"high"});}
 async function notePushSuccess(id:string){
@@ -67,12 +67,22 @@ async function notePushFailure(id:string){
 }
 async function deliver(){
  const {data,error}=await admin.rpc("claim_reminder_deliveries",{p_limit:100});if(error)throw error;
- const rows=(data??[]) as Array<{reminder_id:string;user_id:string;fire_at:string;attempts:number;title:string;description:string|null;priority:string;due_at:string;timezone:string;hide_content:boolean;push_enabled:boolean}>,vapid=await ensureVapid();
+ const rows=(data??[]) as Array<{reminder_id:string;user_id:string;fire_at:string;attempts:number;title:string;description:string|null;priority:string;due_at:string;timezone:string;hide_content:boolean;push_enabled:boolean}>;
+ let vapid:Awaited<ReturnType<typeof ensureVapid>>|null=null;
+ const summary={claimed:rows.length,sent:0,skipped:0,failed:0,deferred:0,reasons:{} as Record<string,number>};
+ const mark=(status:"sent"|"skipped"|"failed"|"deferred",why:string)=>{summary[status]++;summary.reasons[why]=(summary.reasons[why]??0)+1;};
+ const advanced=new Set<string>();
+ const advanceFinalOccurrence=async(d:{reminder_id:string;fire_at:string;due_at:string})=>{if(new Date(d.fire_at)<new Date(d.due_at)||advanced.has(d.reminder_id))return;try{await advance(d.reminder_id);advanced.add(d.reminder_id);}catch{summary.reasons.recurrence_advance_failed=(summary.reasons.recurrence_advance_failed??0)+1;}};
  for(const d of rows){
-  if(!d.push_enabled){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","push_disabled",null);continue;}
-  const {data:prefRow}=await admin.from("notification_preferences").select("quiet_start,quiet_end,hide_content,timezone").eq("user_id",d.user_id).maybeSingle(),pref=prefRow as {quiet_start:string;quiet_end:string;hide_content:boolean;timezone:string}|null,tz=pref?.timezone||d.timezone||TZ;
-  if(d.priority!=="urgent"&&isQuiet(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00")){await finish(d.reminder_id,d.user_id,d.fire_at,"pending","quiet_hours",quietEnd(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00").toISOString());continue;}
-  const devices=await subs(d.user_id);if(!devices.length){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","no_active_device",null);continue;}
+  if(!d.push_enabled){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","push_disabled",null);mark("skipped","push_disabled");await advanceFinalOccurrence(d);continue;}
+  const {data:prefRow,error:prefError}=await admin.from("notification_preferences").select("quiet_start,quiet_end,hide_content,timezone,push_enabled").eq("user_id",d.user_id).maybeSingle();
+  if(prefError){const why="preference_lookup_failed";if(d.attempts<4){await finish(d.reminder_id,d.user_id,d.fire_at,"pending",why,new Date(Date.now()+backoff(d.attempts)).toISOString());mark("deferred",why);}else{await finish(d.reminder_id,d.user_id,d.fire_at,"failed",why,null);mark("failed",why);await advanceFinalOccurrence(d);}continue;}
+  const pref=prefRow as {quiet_start:string;quiet_end:string;hide_content:boolean;timezone:string;push_enabled:boolean}|null;
+  if(!pref?.push_enabled){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","push_disabled",null);mark("skipped","push_disabled");await advanceFinalOccurrence(d);continue;}
+  const tz=pref.timezone||d.timezone||TZ;
+  if(d.priority!=="urgent"&&isQuiet(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00")){await finish(d.reminder_id,d.user_id,d.fire_at,"pending","quiet_hours",quietEnd(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00").toISOString());mark("deferred","quiet_hours");continue;}
+  const devices=await subs(d.user_id);if(!devices.length){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","no_active_device",null);mark("skipped","no_active_device");await advanceFinalOccurrence(d);continue;}
+  if(!vapid){try{vapid=await ensureVapid();}catch{const retryAt=new Date(Date.now()+backoff(d.attempts)).toISOString();if(d.attempts<4){await finish(d.reminder_id,d.user_id,d.fire_at,"pending","vapid_configuration_failed",retryAt);mark("deferred","vapid_configuration_failed");}else{await finish(d.reminder_id,d.user_id,d.fire_at,"failed","vapid_configuration_failed",null);mark("failed","vapid_configuration_failed");await advanceFinalOccurrence(d);}continue;}}
   const hidden=d.hide_content||Boolean(pref?.hide_content),payload={title:hidden?"یادآور جدید":"یادآور گمرکی",body:hidden?"یک یادآور برای شما ثبت شده است.":d.title+(d.description?" · "+d.description:""),tag:"reminder-"+d.reminder_id,url:"/reminders?rid="+encodeURIComponent(d.reminder_id),actions:[{action:"done",title:"انجام شد"},{action:"snooze10",title:"۱۰ دقیقه بعد"},{action:"tomorrow9",title:"فردا ۹ صبح"}],data:{rid:d.reminder_id,url:"/reminders?rid="+encodeURIComponent(d.reminder_id)},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"};
   let delivered=false,transientFailure=false,lastFailure:string|null=null;
   for(const s of devices){
@@ -81,7 +91,7 @@ async function deliver(){
     if(ok!==false){delivered=true;await notePushSuccess(s.id);}
     else{lastFailure="push_provider_rejected";await admin.from("push_subscriptions").delete().eq("id",s.id);}
    }catch(err){
-    const msg=err instanceof Error?err.message:"ارسال اعلان ناموفق بود";lastFailure=msg;
+    lastFailure=err instanceof WebPushError?("webpush_http_"+String(err.statusCode??"unknown")):"push_provider_error";
     if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410)){
      await admin.from("push_subscriptions").delete().eq("id",s.id);
     }else{
@@ -89,21 +99,24 @@ async function deliver(){
     }
    }
   }
-  if(delivered)await finish(d.reminder_id,d.user_id,d.fire_at,"sent",null,null);
+  if(delivered){await finish(d.reminder_id,d.user_id,d.fire_at,"sent",null,null);mark("sent","sent");await advanceFinalOccurrence(d);}
   else if(transientFailure){
-   if(d.attempts<4)await finish(d.reminder_id,d.user_id,d.fire_at,"pending",lastFailure??"push_delivery_failed",new Date(Date.now()+backoff(d.attempts)).toISOString());
-   else await finish(d.reminder_id,d.user_id,d.fire_at,"failed",lastFailure??"push_delivery_failed",null);
-  }else await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",lastFailure??"no_active_device",null);
-  if(new Date(d.fire_at)<=new Date(d.due_at))await advance(d.reminder_id);
+   const why=lastFailure??"push_delivery_failed";
+   if(d.attempts<4){await finish(d.reminder_id,d.user_id,d.fire_at,"pending",why,new Date(Date.now()+backoff(d.attempts)).toISOString());mark("deferred",why);}
+   else{await finish(d.reminder_id,d.user_id,d.fire_at,"failed",why,null);mark("failed",why);await advanceFinalOccurrence(d);}
+  }else{const why=lastFailure??"no_active_device";await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",why,null);mark("skipped",why);await advanceFinalOccurrence(d);}
  }
- return rows.length;
+ return summary;
 }
 async function digest(){
  const {data,error}=await admin.from("notification_preferences").select("user_id,morning_digest_time,timezone,hide_content").eq("push_enabled",true);if(error)throw error;const now=new Date(),vapid=await ensureVapid();let sent=0;
  for(const p of (data??[]) as Array<{user_id:string;morning_digest_time:string;timezone:string;hide_content:boolean}>){
+  const {data:profile,error:profileError}=await admin.from("profiles").select("organization_id,role,is_active").eq("id",p.user_id).maybeSingle();
+  if(profileError||!profile?.is_active||profile.role==="client"||!profile.organization_id)continue;
   const tz=p.timezone||TZ,g=getParts(now,tz,"gregory"),[hh,mm]=p.morning_digest_time.split(":").map(Number);if(g.hour!==hh||g.minute!==mm)continue;
-  const start=zonedToUtc({year:g.year,month:g.month,day:g.day,hour:0,minute:0},tz),end=zonedToUtc({year:g.year,month:g.month,day:g.day,hour:23,minute:59},tz);
-  const todayQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).eq("status","open").gte("due_at",start.toISOString()).lt("due_at",end.toISOString()),overQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).eq("status","open").lt("due_at",now.toISOString()),devices=await subs(p.user_id);
+  const start=zonedToUtc({year:g.year,month:g.month,day:g.day,hour:0,minute:0},tz),nextDay=new Date(Date.UTC(g.year,g.month-1,g.day)+86400000),end=zonedToUtc({year:nextDay.getUTCFullYear(),month:nextDay.getUTCMonth()+1,day:nextDay.getUTCDate(),hour:0,minute:0},tz);
+  const todayQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).gte("due_at",start.toISOString()).lt("due_at",end.toISOString()).eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team"),overQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).not("due_at","is",null).lt("due_at",now.toISOString()).eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team"),devices=await subs(p.user_id);
+  if(todayQ.error||overQ.error||!devices.length)continue;
   for(const s of devices){try{await send(s,{title:"خلاصه صبحگاهی",body:p.hide_content?"خلاصه امروز آماده است.":"امروز "+String(todayQ.count??0).replace(/\d/g,x=>"۰۱۲۳۴۵۶۷۸۹"[Number(x)])+" یادآور و "+String(overQ.count??0).replace(/\d/g,x=>"۰۱۲۳۴۵۶۷۸۹"[Number(x)])+" مورد معوق دارید.",tag:"morning-"+g.year+"-"+g.month+"-"+g.day,url:"/reminders?view=today",actions:[],data:{url:"/reminders?view=today"},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"},vapid);sent++;}catch(err){if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410))await admin.from("push_subscriptions").delete().eq("id",s.id);}}
  }
  return sent;
@@ -111,7 +124,7 @@ async function digest(){
 async function main(req:Request){
  if(!supabaseUrl||!serviceKey)return json({error:"تنظیمات سرور کامل نیست"},500);
  const body=(await req.json().catch(()=>({}))) as {mode?:string},mode=body.mode??"cron";
- if(mode==="cron"){const expected=await getSecret("reminder_cron_secret"),given=req.headers.get("x-reminder-cron-secret");if(!expected||given!==expected)return json({error:"دسترسی زمان‌بندی مجاز نیست"},401);const processed=await deliver();await digest().catch(()=>0);return json({ok:true,processed});}
+ if(mode==="cron"){const expected=await getSecret("reminder_cron_secret"),given=req.headers.get("x-reminder-cron-secret");if(!expected||given!==expected)return json({error:"دسترسی زمان‌بندی مجاز نیست"},401);const delivery=await deliver();let digestSent=0,digestError=false;try{digestSent=await digest();}catch{digestError=true;}return json({ok:true,processed:delivery.claimed,delivery,digest:{sent:digestSent,error:digestError}});}
  const user=await authUser(req);if(!user)return json({error:"ورود به سامانه لازم است"},401);
  const {data:profile}=await admin.from("profiles").select("organization_id,role,is_active").eq("id",user.id).maybeSingle() as {data:{organization_id:string;role:string;is_active:boolean}|null};
  if(!profile?.is_active||profile.role==="client")return json({error:"این قابلیت برای این حساب فعال نیست"},403);
