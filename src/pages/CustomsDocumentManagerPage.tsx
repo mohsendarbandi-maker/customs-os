@@ -22,6 +22,7 @@ import { supabase } from '../lib/supabase';
 import * as pdfjsLib from 'pdfjs-dist';
 import { createWorker } from 'tesseract.js';
 import { buildCargoName, formatCount } from '../lib/cargoNaming';
+import { AddReminderButton } from '../features/reminders/AddReminderButton';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.mjs',
@@ -688,6 +689,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
                   <button className="icon-btn flex-1" onClick={() => void download(d)} title="دانلود">
                     <Download size={15} />
                   </button>
+                  <div className="flex-1"><AddReminderButton entityType={d.source} entityId={d.id} defaultTitle={'پیگیری سند '+fileName(d)}/></div>
                 </div>
               </article>
             ))}
