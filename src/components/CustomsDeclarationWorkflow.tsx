@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
-import{AlertTriangle,CheckCircle2,Clock3,RefreshCw,Save,ShieldCheck}from'lucide-react';
+import{AlertTriangle,Clock3,RefreshCw,Save,ShieldCheck}from'lucide-react';
 import{supabase}from'../lib/supabase';
 
 type WorkflowRow={
@@ -23,7 +23,6 @@ const jalaliParts=(d:Date)=>{const p=dateFormat.formatToParts(d);const get=(k:st
 const jalaliDateToDate=(raw:any):Date|null=>{const m=digits(String(raw||'')).trim().match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/);if(!m)return null;const target={year:Number(m[1]),month:Number(m[2]),day:Number(m[3])};if(target.month<1||target.month>12||target.day<1||target.day>31)return null;const d=new Date(target.year+621,2,1,12);for(let i=0;i<380;i++){const p=jalaliParts(d);if(p.year===target.year&&p.month===target.month&&p.day===target.day)return new Date(d.getFullYear(),d.getMonth(),d.getDate(),12);d.setDate(d.getDate()+1)}return null};
 const addMonths=(d:Date,n:number)=>{const next=new Date(d.getTime());next.setMonth(next.getMonth()+n);return next};
 const isPast=(raw:any,months:number)=>{const d=jalaliDateToDate(raw);return!!d&&Date.now()>addMonths(d,months).getTime()};
-const statusOptions=[['pending','در انتظار'],['requested','درخواست ثبت شد'],['scheduled','نوبت تعیین شد'],['approved','تأیید شد'],['rejected','رد شد'],['completed','تکمیل شد'],['not_required','نیازی نیست']];
 const Label:React.FC<{children:React.ReactNode}>=({children})=><label className="block min-w-0 text-xs app-muted"><span className="block mb-1.5">{children}</span></label>;
 
 export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organizationId,userId,customsRegime,customsPath,editable})=>{
@@ -60,7 +59,10 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
   if(!declarationId||!organizationId){setLoading(false);return}
   setLoading(true);setError('');setMessage('');
   try{
-   const{data:customData,error:customError}=await supabase.from('shipment_customs_data').select('vessel_type,cargo_description,tariff_code').eq('shipment_id',(await supabase.from('customs_declarations').select('shipment_id').eq('id',declarationId).single()).data?.shipment_id||'').maybeSingle();
+   const{data:declarationRef,error:declarationRefError}=await supabase.from('customs_declarations').select('shipment_id').eq('id',declarationId).single();
+   if(declarationRefError)throw declarationRefError;
+   if(!declarationRef?.shipment_id)throw new Error('اظهارنامه به محموله متصل نیست.');
+   const{data:customData,error:customError}=await supabase.from('shipment_customs_data').select('vessel_type,cargo_description,tariff_code').eq('shipment_id',declarationRef.shipment_id).maybeSingle();
    if(customError)throw customError;
    const info={vesselType:String(customData?.vessel_type||''),description:String(customData?.cargo_description||''),hsCode:String(customData?.tariff_code||'')};
    setCommodity(info);
