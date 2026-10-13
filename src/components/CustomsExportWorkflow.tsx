@@ -1,4 +1,4 @@
-import React,{useCallback,useEffect,useMemo,useState}from'react';
+import React,{useCallback,useEffect,useState}from'react';
 import{AlertTriangle,RefreshCw,Save}from'lucide-react';
 import{supabase}from'../lib/supabase';
 
@@ -42,7 +42,7 @@ const empty=()=>JSON.parse(JSON.stringify(defaults)) as State;
 const isJalaliDate=(value:string)=>{const v=digits(value).trim();const m=v.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);if(!m)return false;const month=Number(m[2]),day=Number(m[3]);return month>=1&&month<=12&&day>=1&&day<=(month<=6?31:month<=11?30:30);};
 const Label:React.FC<{children:React.ReactNode}>=({children})=><label className="block text-xs app-muted">{children}</label>;
 export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationId,userId,customsRegime,editable})=>{
- const[state,setState]=useState<State>(empty);const[stage,setStage]=useState<StageKey>('documents');const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[error,setError]=useState('');const[message,setMessage]=useState('');
+ const[state,setState]=useState<State>(empty);const[stage,setStage]=useState<StageKey>('documents');const[savedStage,setSavedStage]=useState<StageKey>('documents');const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[error,setError]=useState('');const[message,setMessage]=useState('');
  const isTemp=isTemporary(customsRegime);
  const currentIndex=stages.findIndex(s=>s.key===stage);
  const patch=(key:string,value:any)=>setState((prev:State)=>({...prev,[stage]:{...(prev[stage]||{}),[key]:value}}));
@@ -54,7 +54,7 @@ export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationI
    if(e)throw e;
    const merged={...empty(),...(data?.procedure_state||{})};
    setState(merged);
-   if(data?.current_stage&&stages.some(s=>s.key===data.current_stage))setStage(data.current_stage as StageKey);
+   if(data?.current_stage&&stages.some(s=>s.key===data.current_stage)){setStage(data.current_stage as StageKey);setSavedStage(data.current_stage as StageKey)}
   }catch(e:any){setError(e?.message||'دریافت گردش‌کار انجام نشد')}finally{setLoading(false)}
  },[declarationId,organizationId]);
  useEffect(()=>{void load()},[load]);
@@ -74,12 +74,14 @@ export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationI
  };
  const save=async(nextStage:StageKey=stage)=>{
   if(!editable||!declarationId||!organizationId)return;
+  const targetIndex=stages.findIndex(s=>s.key===nextStage);const savedIndex=stages.findIndex(s=>s.key===savedStage);
+  if(targetIndex>savedIndex){const blocked=stages.slice(savedIndex,targetIndex).flatMap(s=>validateStage(s.key).map(issue=>s.label+': '+issue));if(blocked.length){setError('برای ثبت پیشرفت، ابتدا این موارد را تکمیل کنید: '+blocked.join('، '));return}}
   setSaving(true);setError('');setMessage('');
   try{
    const payload={organization_id:organizationId,declaration_id:declarationId,current_stage:nextStage,procedure_state:state,updated_by:userId||null};
    const{error:e}=await supabase.from('customs_declaration_workflow').upsert(payload,{onConflict:'declaration_id'});
    if(e)throw e;
-   setStage(nextStage);setMessage('گردش‌کار ذخیره شد. تغییرات در سابقه ممیزی ثبت می‌شود.');
+   setStage(nextStage);setSavedStage(nextStage);setMessage('گردش‌کار ذخیره شد. تغییرات در سابقه ممیزی ثبت می‌شود.');
   }catch(e:any){setError(e?.message||'ذخیره گردش‌کار انجام نشد')}finally{setSaving(false)}
  };
  const advance=async()=>{
