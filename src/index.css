@@ -47,3 +47,49 @@ html,body,#root{min-height:100%;margin:0;max-width:100%;overflow-x:hidden}html{s
 @keyframes futurePulse{50%{transform:scale(1.06);box-shadow:0 0 0 14px rgba(34,211,238,.035),0 0 65px rgba(34,211,238,.38)}}
 @media(max-width:640px){.future-auth-card{padding:24px;border-radius:24px}.future-auth:before{width:85vmax;height:85vmax}.future-route-stage{animation-duration:.36s}}
 @media(prefers-reduced-motion:reduce){.future-auth-card,.future-auth:before,.future-orb,.future-submit:before{animation:none!important}.future-input,.future-submit{transition:none!important}}
+
+
+/* Customs OS line-based dashboard refresh */
+.customs-home{--line-accent:#2585d7}
+.customs-home-mark{width:46px;height:46px;position:relative;display:grid;place-items:center;color:var(--line-accent);border:1px solid var(--border);border-radius:13px;background:linear-gradient(145deg,color-mix(in srgb,var(--primary) 9%,var(--surface)),var(--surface))}
+.customs-home-mark:before,.customs-home-mark:after{content:"";position:absolute;pointer-events:none;border:1px solid color-mix(in srgb,var(--line-accent) 65%,transparent);border-radius:50%;width:31px;height:31px}
+.customs-home-mark:after{width:20px;height:31px}
+.customs-home-mark span{position:absolute;bottom:8px;left:9px;right:9px;height:1px;background:var(--line-accent)}
+.customs-line-button,.customs-primary-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 13px;border-radius:10px;font-size:12px;font-weight:800;text-decoration:none;white-space:nowrap;transition:background .16s,border-color .16s}
+.customs-line-button{border:1px solid var(--border);background:transparent;color:var(--text)}
+.customs-line-button:hover{background:var(--surface-2);border-color:var(--line-accent)}
+.customs-primary-button{background:var(--primary);color:#fff;border:1px solid var(--primary)}
+.customs-primary-button:hover{filter:brightness(1.08)}
+.customs-stat-line{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--border);border-radius:13px;overflow:hidden;background:var(--surface)}
+.customs-stat{position:relative;display:grid;grid-template-columns:22px 1fr;align-items:center;gap:5px 8px;padding:15px 18px;min-width:0}
+.customs-stat strong{grid-column:2;font-size:25px;line-height:1.1;font-weight:900;font-variant-numeric:tabular-nums}
+.customs-stat-divider{position:absolute;inset-block:17px;left:0;width:1px;background:var(--border)}
+.customs-shipments-section{border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:17px 18px;min-width:0}
+.customs-status-board{padding-top:10px;min-width:0}
+.customs-status-board>*,.customs-status-board section{max-width:100%;min-width:0}
+.customs-shortcut{display:flex;align-items:center;gap:9px;min-width:0;min-height:40px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:12px;font-weight:700;text-decoration:none;transition:border-color .15s,background .15s}
+.customs-shortcut>svg:first-child{color:var(--line-accent);flex:0 0 auto}.customs-shortcut:hover{background:var(--surface-2);border-color:var(--line-accent)}
+.customs-desktop-menu{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 13px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font-size:12px;font-weight:800;flex:0 0 auto}
+.customs-desktop-menu:hover{border-color:var(--primary);background:var(--surface-2)}
+/* The navigation is a fixed overlay: opening it never changes dashboard width. */
+@media(min-width:768px){
+ .app-sidebar{display:none!important}
+ .app-main,.app-main.sidebar-compact{margin-right:0!important;width:100%;max-width:100%}
+ .app-topbar{padding-inline:20px}
+ .app-scrim.md\\:hidden{display:block!important;z-index:300}
+ .app-mobile-drawer.md\\:hidden{display:flex!important;top:12px;bottom:12px;right:12px;width:min(390px,calc(100vw - 24px));max-height:calc(100dvh - 24px);border:1px solid var(--border);border-radius:18px;z-index:301}
+}
+@media(max-width:767px){
+ .customs-desktop-menu{display:none}
+ .customs-home>div{padding-inline:12px}
+ .customs-home-mark{width:40px;height:40px;flex:0 0 40px}
+ .customs-home header{gap:12px}
+ .customs-home header h1{font-size:20px}
+ .customs-stat{padding:12px 10px;grid-template-columns:19px 1fr;gap:5px}
+ .customs-stat strong{font-size:22px}
+ .customs-stat span.text-xs{font-size:10px}
+ .customs-stat-divider{inset-block:12px}
+ .customs-shipments-section{padding:13px 11px;border-radius:12px}
+ .customs-status-board{overflow-x:auto}
+}
+@media(max-width:420px){.customs-stat{padding:10px 7px;grid-template-columns:17px 1fr;gap:5px}.customs-stat>svg{width:15px}.customs-stat strong{font-size:20px}.customs-stat span.text-xs{font-size:9px}.customs-primary-button{padding-inline:10px}.customs-home-mark{display:none}}
