@@ -23,6 +23,14 @@ describe('Iranian Jalali calendar and working days', () => {
     expect(isIranWorkingDay('1405-01-06')).toBe(true);
   });
 
+  it('shows professional and cultural observances without marking them as public holidays', () => {
+    expect(getIranCalendarDayInfo(1405, 6, 1).observance).toContain('روز پزشک');
+    expect(getIranCalendarDayInfo(1405, 12, 5).observance).toContain('روز مهندس');
+    expect(getIranCalendarDayInfo(1405, 2, 12).observance).toContain('روز معلم');
+    expect(getIranCalendarDayInfo(1405, 6, 1).isOfficialHoliday).toBe(false);
+    expect(getIranCalendarDayInfo(1406, 6, 1).observance).toBeNull();
+  });
+
   it('recognizes bundled official holidays and their labels', () => {
     const day = getIranCalendarDayInfo(1405, 1, 1);
     expect(day.isOfficialHoliday).toBe(true);
