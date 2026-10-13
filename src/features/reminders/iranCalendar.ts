@@ -56,12 +56,29 @@ const holidayByDate = new Map(
   IRAN_OFFICIAL_HOLIDAYS_1405.map((holiday) => [holiday.date, holiday]),
 );
 
+/** Non-holiday cultural and professional observances; these never imply a day off. */
+const observanceByDate = new Map<string, string>([
+  ['1405-01-01', 'آغاز سال نو؛ نوروز'],
+  ['1405-01-13', 'روز طبیعت'],
+  ['1405-02-01', 'روز بزرگداشت سعدی'],
+  ['1405-02-10', 'روز ملی خلیج فارس'],
+  ['1405-02-12', 'روز معلم'],
+  ['1405-02-25', 'روز بزرگداشت فردوسی'],
+  ['1405-03-03', 'آزادسازی خرمشهر'],
+  ['1405-06-01', 'روز پزشک؛ بزرگداشت ابن‌سینا'],
+  ['1405-07-20', 'روز بزرگداشت حافظ'],
+  ['1405-09-16', 'روز دانشجو'],
+  ['1405-10-30', 'شب یلدا'],
+  ['1405-12-05', 'روز مهندس؛ بزرگداشت خواجه نصیرالدین طوسی'],
+]);
+
 export type IranDayOverride = 'working' | 'holiday';
 export type IranCalendarDayInfo = {
   date: string;
   weekday: string;
   isFriday: boolean;
   holiday: IranCalendarHoliday | null;
+  observance: string | null;
   isOfficialHoliday: boolean;
   isWorkingDay: boolean | null;
   annualHolidayDataAvailable: boolean;
@@ -104,6 +121,7 @@ export function getIranCalendarDayInfo(
   const date = iranJalaliDateKey(year, month, day);
   const override = overrides[date] ?? null;
   const holiday = year === IRAN_CALENDAR_DATA_YEAR ? holidayByDate.get(date) ?? null : null;
+  const observance = year === IRAN_CALENDAR_DATA_YEAR ? observanceByDate.get(date) ?? null : null;
   const weekday = weekdayForJalaliDate(date);
   const isFriday = weekday === 'Fri';
   const isOfficialHoliday = Boolean(holiday);
@@ -118,6 +136,7 @@ export function getIranCalendarDayInfo(
     weekday,
     isFriday,
     holiday,
+    observance,
     isOfficialHoliday,
     isWorkingDay,
     annualHolidayDataAvailable: hasVerifiedIranHolidayData(year),
