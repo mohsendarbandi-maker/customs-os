@@ -196,21 +196,25 @@ export const getWorkflowStageIssues = (
       issues.push('بررسی کارشناس استاندارد هنوز تأیید یا از شمول خارج نشده است.');
     }
     if (!oneOf(standard.expert_review, ['not_required'])) {
-      if (!oneOf(standard.inspection_status, ['sampled', 'completed', 'not_required'])) {
+      const inspectionRequired = !oneOf(standard.inspection_status, ['not_required']);
+      if (inspectionRequired && !oneOf(standard.inspection_status, ['sampled', 'completed'])) {
         issues.push('بازدید یا نمونه‌گیری شرکت بازرسی باید تکمیل یا غیرلازم ثبت شود.');
       }
-      if (!boolValue(standard.inspection_paid)) {
-        issues.push('هزینه بازرسی باید پرداخت یا از شمول خارج شود.');
+      if (inspectionRequired && !boolValue(standard.inspection_paid)) {
+        issues.push('هزینه بازرسی باید پرداخت شود.');
       }
-      const invoiceStatus = textValue(standard.inspection_invoice_status) ||
-        (boolValue(standard.inspection_invoice_received) ? 'received' : 'pending');
-      if (!oneOf(invoiceStatus, ['received', 'not_issued', 'not_required'])) {
-        issues.push('وضعیت دریافت یا صادرنشدن فاکتور بازرسی را مشخص کنید.');
+      if (inspectionRequired) {
+        const invoiceStatus = textValue(standard.inspection_invoice_status) ||
+          (boolValue(standard.inspection_invoice_received) ? 'received' : 'pending');
+        if (!oneOf(invoiceStatus, ['received', 'not_issued', 'not_required'])) {
+          issues.push('وضعیت دریافت یا صادرنشدن فاکتور بازرسی را مشخص کنید.');
+        }
       }
-      if (!oneOf(standard.sample_status, ['received', 'not_required'])) {
-        issues.push('نتیجه آزمایش نمونه باید دریافت یا غیرلازم ثبت شود.');
+      const sampleRequired = !oneOf(standard.sample_status, ['not_required']);
+      if (sampleRequired && !oneOf(standard.sample_status, ['received'])) {
+        issues.push('نتیجه آزمایش نمونه باید دریافت شود یا صریحاً غیرلازم ثبت شود.');
       }
-      if (!boolValue(standard.results_uploaded)) {
+      if (sampleRequired && !boolValue(standard.results_uploaded)) {
         issues.push('نتایج آزمایش باید در سامانه استاندارد بارگذاری شود.');
       }
       if (!boolValue(standard.standard_fee_paid)) {
