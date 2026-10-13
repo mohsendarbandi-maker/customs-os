@@ -115,6 +115,14 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const save=async()=>{
   if(!row){setError('رکورد گردش‌کار هنوز آماده نیست. یک‌بار بروزرسانی کنید.');return}
   if(!editable)return;
+  const stageOrder=['evaluation','expertise','cashier','loading_permit','exit','port_charges','completed'];
+  const targetIndex=stageOrder.indexOf(stage);
+  const persistedIndex=stageOrder.indexOf(row.current_stage);
+  if(stage!=='abandoned'&&targetIndex>=0&&targetIndex>(persistedIndex<0?0:persistedIndex)){
+   const validationState:CustomsWorkflowValidationState={customsPath,evaluation,expertise:{...expertise,standard},cashier,loadingPermit,exit:exitState,port:{...port}};
+   const blockers=stageOrder.slice(0,targetIndex).flatMap(priorStage=>getWorkflowStageIssues(priorStage,validationState));
+   if(blockers.length){setError('برای عبور به مرحله «'+stageLabel(stage)+'»، ابتدا موارد زیر را تکمیل کنید:\n• '+blockers.join('\n• '));return}
+  }
   setSaving(true);setError('');setMessage('');
   try{
    const nextEvaluation={...evaluation};
