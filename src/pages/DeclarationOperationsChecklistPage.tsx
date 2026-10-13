@@ -1,11 +1,12 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
 import{AlertTriangle,ArrowLeft,BrainCircuit,Check,Info,Loader2,Plus,Save,Trash2}from'lucide-react';
 import{Link,useSearchParams}from'react-router-dom';
+import{CustomsDeclarationWorkflow}from'../components/CustomsDeclarationWorkflow';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 
-type Decl={id:string;shipment_id:string|null;case_id:string|null;kottaj_number:string;declaration_date:string;customs_path:string|null;payment_reference:string|null;total_duties_irr:number|null;declaration_file_name:string|null};
+type Decl={id:string;shipment_id:string|null;case_id:string|null;kottaj_number:string;declaration_date:string;customs_path:string|null;payment_reference:string|null;total_duties_irr:number|null;declaration_file_name:string|null;customs_office_id?:string|null;customs_regime?:string|null};
 type Item={id:string;item_key:string;item_label:string;completed:boolean;note:string|null;sort_order:number;source:string;is_active:boolean};
 type Rule={id:string;rule_name:string;hs_code_prefix:string;customs_path:string;transport_mode:string;checklist_counts:Record<string,number>;field_counts:Record<string,number>;workflow_stages:number[];evidence_count:number;confidence:number;source:string;is_active:boolean};
 
@@ -27,7 +28,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
  const{profile}=useAuth();
  const[params]=useSearchParams();
  const declarationId=params.get('declarationId')||'';
- const[decl,setDecl]=useState<Decl|null>(null);
+ const[decl,setDecl]=useState<Decl|null>(null);const[officeSummary,setOfficeSummary]=useState('');
  const[items,setItems]=useState<Item[]>([]);
  const[rule,setRule]=useState<Rule|null>(null);
  const[hs,setHs]=useState('');
@@ -45,9 +46,10 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   if(!declarationId)return;
   setBusy(true);setError('');setMessage('');
   try{
-   const{data:d,error:de}=await supabase.from('customs_declarations').select('id,shipment_id,case_id,kottaj_number,declaration_date,customs_path,payment_reference,total_duties_irr,declaration_file_name').eq('id',declarationId).maybeSingle();
+   const{data:d,error:de}=await supabase.from('customs_declarations').select('id,shipment_id,case_id,kottaj_number,declaration_date,customs_path,payment_reference,total_duties_irr,declaration_file_name,customs_office_id,customs_regime').eq('id',declarationId).maybeSingle();
    if(de)throw de;if(!d)throw new Error('اظهارنامه پیدا نشد.');
    setDecl(d as Decl);
+   if(d.customs_office_id){const{data:office,error:officeError}=await supabase.from('customs_offices').select('code,name,city').eq('id',d.customs_office_id).maybeSingle();if(officeError)throw officeError;setOfficeSummary(office?`${office.code} · ${office.name} — ${office.city}`:'گمرک ثبت‌شده')}else setOfficeSummary('');
 
    const[{data:sc},{data:c},{data:ro}]=await Promise.all([
     d.shipment_id?supabase.from('shipment_customs_data').select('tariff_code').eq('shipment_id',d.shipment_id).maybeSingle():Promise.resolve({data:null} as any),
@@ -167,11 +169,16 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
 
   {decl&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 md:p-5"><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-sm">
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">کوتاژ</span><div className="font-black mt-1 ltr-num">{decl.kottaj_number||'—'}</div></div>
+   <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">گمرک محل اظهار</span><div className="font-bold mt-1">{officeSummary||'ثبت نشده'}</div></div>
+   <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">رویه گمرکی</span><div className="font-bold mt-1">{decl.customs_regime==='import_definitive'?'واردات قطعی':decl.customs_regime==='export_definitive'?'صادرات قطعی':decl.customs_regime==='import_temporary'?'ورود موقت':decl.customs_regime==='temporary_processing'?'ورود موقت برای پردازش':decl.customs_regime==='external_transit'?'ترانزیت خارجی':decl.customs_regime==='internal_transit'?'ترانزیت داخلی':decl.customs_regime==='re_export'?'مرجوعی / اعاده به خارج':decl.customs_regime==='re_import'?'ورود مجدد':decl.customs_regime==='cabotage'?'کابوتاژ':decl.customs_regime==='customs_warehouse'?'ورود به انبار گمرکی':decl.customs_regime==='free_zone'?'رویه منطقه آزاد':decl.customs_regime==='other'?'سایر رویه‌ها':'ثبت نشده'}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">تاریخ اظهار</span><div className="font-bold mt-1">{new Date(decl.declaration_date).toLocaleDateString('fa-IR')}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">HS Code</span><div className="font-black mt-1 ltr-num">{hs||'ثبت نشده'}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">مسیر</span><div className="font-bold mt-1">{decl.customs_path?PATH_LABELS[decl.customs_path]||decl.customs_path:'—'}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">وضعیت چک‌لیست</span><div className="font-black mt-1">{completed} از {items.length}</div></div>
   </div></section>}
+
+  {decl?.customs_regime==='import_definitive'&&<CustomsDeclarationWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} customsPath={decl.customs_path||''} editable={canEdit}/>}
+  {decl&&decl.customs_regime!=='import_definitive'&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 text-sm"><b>گردش‌کار رویه</b><p className="app-muted mt-1">جزئیات ارزیابی تا متروکه در این مرحله ویژه واردات قطعی است. رویه انتخاب‌شده: {decl.customs_regime||'ثبت نشده'}.</p></section>}
 
   {rule&&<section className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/5 p-4 md:p-5">
    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><BrainCircuit size={19}/><div><b className="font-black">پیشنهاد یادگیرنده برای این HS</b><div className="text-xs app-muted mt-1">قاعده: {rule.rule_name} · {rule.evidence_count} نمونه · اطمینان {Math.round(rule.confidence*100)}٪</div></div></div><Link to="/permit-rules" className="text-xs font-bold text-[var(--primary)]">مشاهده قواعد</Link></div>
