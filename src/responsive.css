@@ -860,3 +860,69 @@
     animation: none !important;
   }
 }
+
+/* Calendar completeness: visible weekdays, official holidays and recurring professional occasions. */
+.reminders-app-standalone .reminders-calendar-month-grid{background:linear-gradient(145deg,color-mix(in srgb,var(--surface) 97%,#d4f5f1),var(--surface))}
+.reminders-app-standalone .reminders-calendar-weekdays{background:linear-gradient(100deg,color-mix(in srgb,var(--primary) 11%,var(--surface)),var(--surface-2))}
+.reminders-app-standalone .reminders-calendar-cell{min-height:78px;overflow:hidden;animation:reminders-day-cell-in .28s ease both}
+.reminders-app-standalone .reminders-calendar-cell.is-iran-holiday{background:linear-gradient(155deg,rgba(244,63,94,.09),rgba(244,63,94,.025))}
+.reminders-app-standalone .reminders-calendar-cell-occasion{display:block;width:100%;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;line-height:1.25;font-weight:850;text-align:center;color:var(--primary);padding:2px 3px;border-radius:5px;background:color-mix(in srgb,var(--primary) 8%,transparent)}
+.reminders-app-standalone .reminders-calendar-today-card{display:flex;align-items:center;gap:12px;margin-top:14px;padding:15px;border:1px solid color-mix(in srgb,var(--primary) 22%,var(--border));border-radius:20px;background:linear-gradient(115deg,color-mix(in srgb,var(--primary) 9%,var(--surface)),var(--surface));box-shadow:0 10px 28px rgba(8,127,140,.08);animation:reminders-event-enter .4s ease both}
+.reminders-app-standalone .reminders-calendar-today-icon{display:grid;place-items:center;flex:0 0 44px;height:44px;border-radius:15px;color:var(--primary);background:color-mix(in srgb,var(--primary) 13%,var(--surface))}
+.reminders-app-standalone .reminders-calendar-today-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.reminders-app-standalone .reminders-calendar-today-copy>span{color:var(--text-muted);font-size:11px;font-weight:800}
+.reminders-app-standalone .reminders-calendar-today-copy>strong{font-size:14px;font-weight:950;line-height:1.6;overflow-wrap:anywhere}
+.reminders-app-standalone .reminders-calendar-today-copy>small{color:var(--text-muted);font-size:11px;line-height:1.6}
+.reminders-app-standalone .reminders-calendar-today-status{flex:0 0 auto;padding:6px 9px;border-radius:999px;background:color-mix(in srgb,var(--primary) 9%,var(--surface));color:var(--primary);font-size:10px;font-weight:900}
+.reminders-app-standalone .reminders-calendar-today-status.is-holiday{color:#c52b4a;background:rgba(244,63,94,.1)}
+.reminders-app-standalone .reminders-calendar-today-status.is-weekend{color:var(--text-muted)}
+.reminders-app-standalone .reminders-calendar-events{margin-top:16px;overflow:hidden;border:1px solid var(--border);border-radius:22px;background:var(--surface);box-shadow:0 9px 28px rgba(15,47,82,.045)}
+.reminders-app-standalone .reminders-calendar-events-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;border-bottom:1px solid var(--border);background:linear-gradient(110deg,color-mix(in srgb,var(--primary) 8%,var(--surface)),var(--surface))}
+.reminders-app-standalone .reminders-calendar-events-heading>div>span{color:var(--primary);font-size:10px;font-weight:950}
+.reminders-app-standalone .reminders-calendar-events-heading h2{margin-top:3px;font-size:16px;font-weight:950}
+.reminders-app-standalone .reminders-calendar-events-heading>span{color:var(--text-muted);font-size:10px;font-weight:800}
+.reminders-app-standalone .reminders-calendar-event-row{display:flex;align-items:center;gap:12px;width:100%;min-height:67px;padding:11px 14px;border:0;border-bottom:1px solid color-mix(in srgb,var(--border) 75%,transparent);background:transparent;color:var(--text);text-align:start;transition:background .16s ease,transform .16s ease}
+.reminders-app-standalone .reminders-calendar-event-row:last-child{border-bottom:0}
+.reminders-app-standalone .reminders-calendar-event-row:hover{background:color-mix(in srgb,var(--primary) 5%,var(--surface))}
+.reminders-app-standalone .reminders-calendar-event-row.is-holiday{background:linear-gradient(90deg,rgba(244,63,94,.035),transparent 65%)}
+.reminders-app-standalone .reminders-calendar-event-date{display:flex;flex:0 0 47px;flex-direction:column;align-items:center;justify-content:center;min-height:47px;border-radius:14px;background:var(--surface-2);color:var(--primary)}
+.reminders-app-standalone .reminders-calendar-event-date strong{font-size:19px;font-weight:950;line-height:1.1}
+.reminders-app-standalone .reminders-calendar-event-date small{margin-top:4px;font-size:9px;font-weight:800;color:var(--text-muted)}
+.reminders-app-standalone .reminders-calendar-event-copy{display:flex;flex:1;min-width:0;flex-wrap:wrap;align-items:center;gap:5px}
+.reminders-app-standalone .reminders-calendar-event-copy>strong{width:100%;font-size:12px;line-height:1.6}
+.reminders-app-standalone .reminders-calendar-event-tag{display:inline-flex;max-width:100%;padding:4px 7px;border-radius:8px;background:color-mix(in srgb,var(--primary) 8%,var(--surface));color:var(--primary);font-size:11px;line-height:1.6;font-weight:800}
+.reminders-app-standalone .reminders-calendar-event-tag.is-profession{background:rgba(139,92,246,.09);color:#7850bf}
+.reminders-app-standalone .reminders-calendar-event-tag.is-science{background:rgba(14,165,233,.09);color:#0879ad}
+.reminders-app-standalone .reminders-calendar-event-tag.is-culture{background:rgba(236,72,153,.08);color:#b8327b}
+.reminders-app-standalone .reminders-calendar-event-tag.is-environment{background:rgba(34,197,94,.1);color:#16804a}
+.reminders-app-standalone .reminders-calendar-empty{padding:22px;color:var(--text-muted);text-align:center;font-size:12px}
+@keyframes reminders-day-cell-in{from{opacity:.55;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+@keyframes reminders-event-enter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+
+/* Portrait phone: dedicate a row to the date and keep voice/save controls usable. */
+@media(max-width:767px) and (orientation:portrait){
+.reminders-app-standalone .reminders-composebar.is-open{align-items:flex-end!important;padding:8px 8px calc(74px + env(safe-area-inset-bottom))!important}
+.reminders-app-standalone .reminders-compose-sheet{width:100%!important;max-width:100%!important;max-height:min(84dvh,780px)!important;overflow-x:hidden!important;overflow-y:auto!important;padding:16px 14px calc(16px + env(safe-area-inset-bottom))!important;border-radius:23px!important}
+.reminders-app-standalone .reminders-compose-heading{align-items:center;gap:9px;margin-bottom:12px}
+.reminders-app-standalone .reminders-compose-heading h2{font-size:19px}
+.reminders-app-standalone .reminders-smart-input{min-height:88px;padding:12px;font-size:16px!important}
+.reminders-app-standalone .reminders-compose-actions{display:grid!important;grid-template-columns:minmax(0,1fr) 48px!important;align-items:stretch!important;gap:8px!important;width:100%!important}
+.reminders-app-standalone .reminders-compose-actions>.reminders-date-control{grid-column:1/-1!important;grid-row:1!important;width:100%!important;min-width:0!important;max-width:100%!important;justify-content:flex-start!important;padding-inline:11px!important}
+.reminders-app-standalone .reminders-compose-actions>.reminders-date-control span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.reminders-app-standalone .reminders-compose-actions>.reminders-mic-control{grid-column:2!important;grid-row:2!important;width:48px!important;min-width:48px!important;max-width:48px!important;padding:0!important}
+.reminders-app-standalone .reminders-compose-actions>.reminders-submit-button{grid-column:1!important;grid-row:2!important;width:100%!important;min-width:0!important;max-width:100%!important;padding-inline:10px!important;white-space:normal!important}
+.reminders-app-standalone .reminders-compose-actions:has(.reminders-clear-date)>.reminders-date-control{grid-column:1!important;grid-row:1!important}
+.reminders-app-standalone .reminders-compose-actions>.reminders-clear-date{grid-column:2!important;grid-row:1!important;width:44px!important;min-width:44px!important;max-width:44px!important;min-height:48px!important;height:48px!important}
+.reminders-app-standalone .reminders-compose-actions:has(.reminders-clear-date)>.reminders-mic-control{grid-column:2!important;grid-row:2!important}
+.reminders-app-standalone .reminders-compose-actions:has(.reminders-clear-date)>.reminders-submit-button{grid-column:1/-1!important;grid-row:3!important}
+.reminders-app-standalone .reminders-calendar-today-card{align-items:flex-start;gap:9px;padding:12px}
+.reminders-app-standalone .reminders-calendar-today-icon{flex-basis:38px;height:38px;border-radius:12px}
+.reminders-app-standalone .reminders-calendar-today-status{max-width:86px;white-space:normal;text-align:center}
+.reminders-app-standalone .reminders-calendar-cell{min-height:70px;padding:5px 2px 4px;gap:3px}
+.reminders-app-standalone .reminders-calendar-cell-day{width:26px;height:26px;font-size:12px}
+.reminders-app-standalone .reminders-calendar-cell-occasion{font-size:8px}
+.reminders-app-standalone .reminders-calendar-events-heading{align-items:flex-start;padding:13px}
+.reminders-app-standalone .reminders-calendar-event-row{gap:9px;padding:10px}
+.reminders-app-standalone .reminders-calendar-event-date{flex-basis:42px;min-height:42px}
+}
+@media(prefers-reduced-motion:reduce){.reminders-app-standalone .reminders-calendar-cell,.reminders-app-standalone .reminders-calendar-today-card,.reminders-app-standalone .reminders-calendar-events{animation:none!important}}
