@@ -91,6 +91,47 @@ describe('customs workflow stage prerequisites', () => {
     expect(getWorkflowStageIssues('evaluation', state)).toEqual([]);
   });
 
+  it('requires assessment when a customs officer requests it on a green route', () => {
+    const state = readyWorkflow();
+    state.customsPath = 'green';
+    state.evaluation.expert_requested = true;
+    expect(getWorkflowStageIssues('evaluation', state)).toContain(
+      'ارزیابی الزامی است؛ نتیجه ارزیابی را تکمیل کنید.',
+    );
+    state.evaluation.status = 'completed';
+    expect(getWorkflowStageIssues('evaluation', state)).toEqual([]);
+  });
+
+  it('blocks standards release until inspection, lab results, fee and notification are recorded', () => {
+    const state = readyWorkflow();
+    state.expertise.standard = {
+      expert_review: 'approved',
+      inspection_status: 'sampled',
+      inspection_paid: true,
+      inspection_invoice_status: 'received',
+      sample_status: 'sent_to_lab',
+      results_uploaded: false,
+      standard_fee_paid: false,
+      standard_notified: false,
+    };
+    const issues = getWorkflowStageIssues('expertise', state);
+    expect(issues).toContain('نتیجه آزمایش نمونه باید دریافت شود یا صریحاً غیرلازم ثبت شود.');
+    expect(issues).toContain('نتایج آزمایش باید در سامانه استاندارد بارگذاری شود.');
+    expect(issues).toContain('پرداخت کارمزد استاندارد باید ثبت شود.');
+    expect(issues).toContain('اطلاع‌رسانی پرداخت به استاندارد باید ثبت شود.');
+    state.expertise.standard = {
+      expert_review: 'approved',
+      inspection_status: 'completed',
+      inspection_paid: true,
+      inspection_invoice_status: 'received',
+      sample_status: 'received',
+      results_uploaded: true,
+      standard_fee_paid: true,
+      standard_notified: true,
+    };
+    expect(getWorkflowStageIssues('expertise', state)).toEqual([]);
+  });
+
   it('requires cashier payment details and a selected central-bank route', () => {
     const state = readyWorkflow();
     state.cashier.method = 'pending';
