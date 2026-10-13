@@ -137,6 +137,9 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const standard={...emptyExpertise.standard,...(expertise.standard||{})};
  const setStandard=(key:string,value:any)=>setExpertise(p=>({...p,standard:{...emptyExpertise.standard,...(p.standard||{}),[key]:value}}));
  const panel=(title:string,subtitle:string,children:React.ReactNode)=><section className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5 space-y-4"><div><h3 className="font-black">{title}</h3><p className="text-xs app-muted mt-1">{subtitle}</p></div>{children}</section>;
+ const stageLabel=(key:string|null)=>stages.find(x=>x[0]===key)?.[1]||key||'—';
+ const eventLabel=(event:WorkflowEvent)=>event.event_type==='created'?'گردش‌کار ایجاد شد':event.event_type==='stage_changed'?'مرحله تغییر کرد':'اطلاعات مرحله ذخیره شد';
+ const changedFieldLabels:Record<string,string>={current_stage:'مرحله جاری',evaluation_state:'ارزیابی',expertise_state:'کارشناسی و مجوزها',cashier_state:'صندوق',loading_permit_state:'مجوز بارگیری',exit_state:'درب خروج',port_charges_state:'عوارض بندری',notes:'یادداشت‌ها'};
 
  if(!isImport)return <section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex items-start gap-3"><ShieldCheck size={20} className="mt-0.5 text-[var(--primary)]"/><div><h2 className="font-black">گردش‌کار متناسب با رویه گمرکی</h2><p className="text-sm app-muted mt-1">این گردش‌کار جزئیات ارزیابی، کارشناسی، صندوق، مجوز بارگیری، درب خروج، عوارض بندری و متروکه را برای «واردات قطعی» فعال می‌کند. رویه انتخاب‌شده این اظهارنامه: {customsRegime||'ثبت نشده'}.</p></div></div></section>;
 
@@ -221,6 +224,16 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
   </div>)}
   {!loading&&stage==='completed'&&panel('تکمیل گردش‌کار','پس از کنترل اسناد، وضعیت نهایی و توضیحات پرونده را ذخیره کنید.',<div className="grid sm:grid-cols-2 gap-3">{input('یادداشت نهایی',notes,v=>setNotes(v),'خلاصه وضعیت و موارد باقی‌مانده')}</div>)}
   {!loading&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 flex flex-wrap items-center justify-between gap-3"><div className="text-xs app-muted flex items-center gap-2"><Clock3 size={15}/>مرحله جاری: <b className="text-[var(--text)]">{stages.find(x=>x[0]===stage)?.[1]||stage}</b>{row?.updated_at&&<span>· آخرین ذخیره {new Date(row.updated_at).toLocaleString('fa-IR')}</span>}</div><button type="button" onClick={()=>void save()} disabled={!editable||saving||loading||!row} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-3 text-sm font-black text-white disabled:opacity-50"><Save size={16}/>{saving?'در حال ذخیره…':'ذخیره مرحله و وضعیت‌ها'}</button></section>}
+  {!loading&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5 space-y-4">
+   <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-black">سوابق تغییرات عملیات گمرکی</h3><p className="text-xs app-muted mt-1">تغییر مرحله و ذخیره هر بخش به‌صورت خودکار ثبت می‌شود.</p></div><span className="rounded-full border app-border px-2.5 py-1 text-xs app-muted">{faDigits(history.length)} رویداد اخیر</span></div>
+   {historyUnavailable?<p className="text-sm app-muted">تاریخچه در حال حاضر قابل دریافت نیست؛ داده‌های عملیات همچنان جداگانه ذخیره شده‌اند.</p>:history.length===0?<p className="text-sm app-muted">هنوز رویدادی ثبت نشده است. پس از اولین ذخیره، سوابق در این قسمت نمایش داده می‌شوند.</p>:<ol className="space-y-3">{history.map(event=><li key={event.id} className="relative rounded-xl border app-border bg-[var(--surface-2)] p-3">
+    <div className="flex flex-wrap items-start justify-between gap-2"><div className="font-bold text-sm">{eventLabel(event)}</div><time className="text-[11px] app-muted" dir="auto">{new Date(event.created_at).toLocaleString('fa-IR',{timeZone:'Asia/Tehran'})}</time></div>
+    <p className="text-xs app-muted mt-1">مرحله: {event.previous_stage&&event.previous_stage!==event.current_stage?stageLabel(event.previous_stage)+' ← ':''}{stageLabel(event.current_stage)}</p>
+    {event.changed_fields?.length>0&&<p className="text-xs mt-2">بخش‌های تغییرکرده: {event.changed_fields.map(key=>changedFieldLabels[key]||key).join('، ')}</p>}
+    <p className="text-[11px] app-muted mt-2">{event.actor_id&&event.actor_id===userId?'توسط شما':'توسط کاربر مجاز'}</p>
+   </li>)}</ol>}
+   <div className="flex justify-end"><button type="button" onClick={()=>void refreshHistory()} disabled={historyUnavailable} className="rounded-lg border app-border px-3 py-2 text-xs font-bold disabled:opacity-50"><RefreshCw size={13} className="inline ml-1"/>بروزرسانی سوابق</button></div>
+  </section>}
   {!editable&&<p className="text-xs app-muted">این بخش فقط برای مشاهده است؛ ثبت تغییرات به دسترسی کاربر عملیاتی نیاز دارد.</p>}
  </section>
 };
