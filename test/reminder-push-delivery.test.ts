@@ -37,11 +37,11 @@ describe('reminder push delivery reliability', () => {
 
   it('finalizes one delivery only after checking all devices, preventing mixed-result retries', () => {
     const loop = sender.indexOf('for(const s of devices)', sender.indexOf('async function deliver'));
-    const finishSent = sender.indexOf('if(delivered)await finish', loop);
+    const finishSent = sender.indexOf('if(delivered){await finish', loop);
     expect(loop).toBeGreaterThan(-1);
     expect(finishSent).toBeGreaterThan(loop);
     expect(sender).toContain('else if(transientFailure){');
-    expect(sender).toContain('else await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",lastFailure??"no_active_device",null)');
+    expect(sender).toContain('else{const why=lastFailure??"no_active_device";await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",why,null)');
   });
 
   it('removes expired device subscriptions and does not leave them pending forever', () => {
