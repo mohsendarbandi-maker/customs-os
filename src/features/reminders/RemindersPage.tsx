@@ -53,6 +53,33 @@ export const RemindersPage:React.FC=()=>{
  const [menuId,setMenuId]=useState<string|null>(null);const [menuPosition,setMenuPosition]=useState<{top:number;left:number;width:number}|null>(null);
  const [language,setLanguage]=useState<ReminderLanguage>(()=>readReminderLanguage());const [quickDueAt,setQuickDueAt]=useState<Date|null>(null);const [quickAllDay,setQuickAllDay]=useState(false);const [quickDateSource,setQuickDateSource]=useState<'manual'|'inferred'|null>(null);const [showQuickPicker,setShowQuickPicker]=useState(false);
  const t=(value:string)=>reminderText(value,language);
+ const composerDraftKey=user?.id&&profile?.organization_id?('customs-os-reminder-composer-v1:'+user.id+':'+profile.organization_id):null;
+ const [draftLoadedKey,setDraftLoadedKey]=useState<string|null>(null);
+ useEffect(()=>{
+  if(!composerDraftKey){
+   setComposer('');setQuickDueAt(null);setQuickAllDay(false);setQuickDateSource(null);setComposerOpen(false);setDraftLoadedKey(null);return;
+  }
+  try{
+   const raw=sessionStorage.getItem(composerDraftKey);
+   const saved=raw?JSON.parse(raw) as {text?:unknown;dueAt?:unknown;allDay?:unknown;dateSource?:unknown}:null;
+   const text=typeof saved?.text==='string'?saved.text:'';
+   const dueAt=typeof saved?.dueAt==='string'&&Number.isFinite(new Date(saved.dueAt).getTime())?new Date(saved.dueAt):null;
+   setComposer(text);setQuickDueAt(dueAt);setQuickAllDay(saved?.allDay===true);
+   setQuickDateSource(saved?.dateSource==='manual'||saved?.dateSource==='inferred'?saved.dateSource:null);
+   setComposerOpen(Boolean(text.trim()));
+  }catch{setComposer('');setQuickDueAt(null);setQuickAllDay(false);setQuickDateSource(null);setComposerOpen(false);}
+  setDraftLoadedKey(composerDraftKey);
+ },[composerDraftKey]);
+ useEffect(()=>{
+  if(!composerDraftKey||draftLoadedKey!==composerDraftKey)return;
+  const timer=window.setTimeout(()=>{
+   try{
+    if(!composer.trim()&&!quickDueAt&&!quickAllDay){sessionStorage.removeItem(composerDraftKey);return;}
+    sessionStorage.setItem(composerDraftKey,JSON.stringify({text:composer,dueAt:quickDueAt?.toISOString()??null,allDay:quickAllDay,dateSource:quickDateSource,savedAt:Date.now()}));
+   }catch(error){console.warn('[Reminders] draft could not be persisted:',error);}
+  },250);
+  return()=>window.clearTimeout(timer);
+ },[composerDraftKey,draftLoadedKey,composer,quickDueAt,quickAllDay,quickDateSource]);
   const goToSection=(section:ReminderSection)=>{setPage(0);navigate(section==='home'?'/reminders':('/reminders/'+section));};
   const goToDay=(key:string)=>{setPage(0);navigate('/reminders/day?day='+encodeURIComponent(key));};
   useEffect(()=>{setFilter(SECTION_FILTER[currentSection]??'all');setKind(SECTION_KIND[currentSection]??null);setPage(0);setSelected([]);},[currentSection]);
