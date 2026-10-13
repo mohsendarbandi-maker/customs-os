@@ -411,6 +411,41 @@ jobs:
               console.log('Reminders independent subdomain passed:', JSON.stringify(subdomainManifest));
               await remindersSubdomainPage.close();
 
+              // Exercise the offline shell in a real browser after the service worker has taken control.
+              await expect.poll(
+                async () => page.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
+                { timeout: 15000, message: 'Service worker did not take control before offline navigation' },
+              ).toBe(true);
+              const offlinePage = await page.context().newPage();
+              await page.context().setOffline(true);
+              try {
+                await offlinePage.goto(baseURL + '/?__offline_runtime_smoke=' + encodeURIComponent(smokeToken), {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 25000,
+                });
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  {
+                    timeout: 20000,
+                    message: 'Cached app shell did not render when the browser was offline',
+                  },
+                ).not.toBe('');
+                const offlineState = await offlinePage.evaluate(() => ({
+                  online: navigator.onLine,
+                  controlled: Boolean(navigator.serviceWorker?.controller),
+                  title: document.title,
+                  path: location.pathname,
+                  rootText: (document.querySelector('#root')?.textContent || '').trim().slice(0, 120),
+                }));
+                if (offlineState.online || !offlineState.controlled || !offlineState.rootText) {
+                  throw new Error(`Offline app-shell assertions failed: ${JSON.stringify(offlineState)}`);
+                }
+                console.log('Offline app shell rendered successfully:', JSON.stringify(offlineState));
+              } finally {
+                await page.context().setOffline(false);
+                await offlinePage.close().catch(() => undefined);
+              }
+
               if (errors.length) {
                 throw new Error(errors.join('\n'));
               }
