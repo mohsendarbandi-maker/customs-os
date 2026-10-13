@@ -218,3 +218,178 @@
     transition: none !important;
   }
 }
+
+/* Landscape phones: width-based md breakpoints alone incorrectly switch many
+   phones to the desktop sidebar when rotated. Keep the app in its touch layout
+   whenever the landscape viewport is short, regardless of its CSS width. */
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+  html,
+  body,
+  #root,
+  .app-shell {
+    min-height: 100%;
+    min-height: 100dvh;
+  }
+
+  .app-sidebar,
+  .app-topbar {
+    display: none !important;
+  }
+
+  .app-mobilebar {
+    display: grid !important;
+    grid-template-columns: 44px minmax(0, 1fr) 44px !important;
+    height: calc(54px + env(safe-area-inset-top)) !important;
+    min-height: calc(54px + env(safe-area-inset-top)) !important;
+    padding: calc(5px + env(safe-area-inset-top)) 8px 5px !important;
+  }
+
+  .app-main,
+  .app-main.sidebar-compact {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-right: 0 !important;
+  }
+
+  .app-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-inline: 12px !important;
+  }
+
+  .app-mobile-drawer {
+    display: flex !important;
+    top: env(safe-area-inset-top) !important;
+    bottom: 0 !important;
+    max-height: calc(100dvh - env(safe-area-inset-top)) !important;
+    overflow: hidden !important;
+  }
+
+  .app-scrim {
+    display: block !important;
+  }
+
+  .mobile-drawer-header {
+    padding: 8px 10px 7px;
+  }
+
+  .mobile-quick-actions {
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .mobile-quick-btn {
+    min-height: 50px;
+    padding: 5px 3px;
+    gap: 3px;
+    border-radius: 12px;
+  }
+
+  .mobile-quick-btn svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .mobile-search-wrap {
+    margin-top: 7px;
+  }
+
+  .mobile-drawer-nav {
+    min-height: 0;
+    padding-top: 5px;
+    padding-bottom: 8px;
+  }
+
+  .mobile-nav-item {
+    min-height: 44px;
+    padding-block: 5px;
+  }
+
+  .mobile-nav-icon {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+
+  .mobile-drawer-footer {
+    padding-top: 4px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
+
+  .reminders-route-screen {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .reminders-hub-screen {
+    gap: 10px;
+    padding-bottom: 10px;
+  }
+
+  .reminders-hub-identity .reminders-brand-icon {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
+
+  .reminders-hub-identity h1 {
+    font-size: 23px;
+  }
+
+  .reminders-hub-hero {
+    min-height: 132px;
+    padding: 12px 14px;
+    border-radius: 18px;
+  }
+
+  .reminders-hub-hero h2 {
+    margin-top: 6px;
+    margin-bottom: 4px;
+    font-size: 19px;
+  }
+
+  .reminders-hub-hero-copy > button {
+    min-height: 36px;
+    margin-top: 7px;
+  }
+
+  .reminders-hub-hero-art {
+    min-height: 100px;
+  }
+
+  .reminders-calendar-panel,
+  .reminders-editor-panel,
+  .reminders-push-panel {
+    max-height: calc(100dvh - 12px - env(safe-area-inset-top)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px !important;
+  }
+
+  .reminders-calendar-panel > div:first-child {
+    margin-bottom: 8px;
+  }
+
+  .reminders-calendar-shortcut {
+    min-height: 38px;
+    padding-block: 5px;
+  }
+
+  .reminders-calendar-day {
+    min-height: 34px;
+  }
+
+  .reminders-composebar.is-open {
+    padding: 6px 8px calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .reminders-composebar.is-open > div {
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
