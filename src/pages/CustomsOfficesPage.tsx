@@ -62,13 +62,13 @@ export const CustomsOfficesPage:React.FC=()=>{
  };
  const remove=async(r:Office)=>{
   if(!canManage||(r.organization_id!==null&&r.organization_id!==profile?.organization_id))return;
-  if(!window.confirm('گمرک «'+r.name+'» حذف شود؟ اگر به اظهارنامه یا پرونده متصل باشد، سامانه مانع حذف می‌شود.'))return;
+  if(!window.confirm('گمرک «'+r.name+'» حذف شود؟ اگر در محموله، قبل‌اظهار، پرونده یا اظهارنامه استفاده شده باشد، حذف نمی‌شود؛ در آن حالت گمرک را غیرفعال کنید.'))return;
   setBusy(true);setError('');setMessage('');
   try{
    const{error:e}=await supabase.from('customs_offices').delete().eq('id',r.id);
    if(e)throw e;
    setRows(p=>p.filter(x=>x.id!==r.id));if(editing===r.id)reset();setMessage('گمرک حذف شد.');
-  }catch(e:any){const raw=String(e?.message||'');setError(/foreign key|23503/i.test(raw)?'این گمرک به محموله، پرونده یا اظهارنامه متصل است و حذف آن ممکن نیست.':/permission|row-level security|42501/i.test(raw)?'مجوز حذف گمرک را ندارید.':'حذف گمرک انجام نشد؛ دوباره بررسی کنید.')}
+  }catch(e:any){const raw=String(e?.message||'');setError(/foreign key|23503/i.test(raw)?'این گمرک در محموله، قبل‌اظهار، پرونده یا اظهارنامه استفاده شده است؛ آن را غیرفعال کنید.':/permission|row-level security|42501/i.test(raw)?'مجوز حذف گمرک را ندارید.':'حذف گمرک انجام نشد؛ دوباره بررسی کنید.')}
   finally{setBusy(false)}
  };
  return <main dir="rtl" className="min-h-screen p-4 sm:p-6 lg:p-8" style={{background:'var(--bg)',color:'var(--text)'}}>
