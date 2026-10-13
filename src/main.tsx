@@ -40,14 +40,8 @@ const recoverFromStaleApp = () => {
       console.warn('[Customs OS] Service worker update check failed:', error);
     }
 
-    // A short yield lets skipWaiting/clientsClaim finish when a new worker exists.
-    await new Promise((resolve) => window.setTimeout(resolve, 250));
-
-    try {
-      window.location.reload();
-    } catch {
-      window.location.assign(window.location.href);
-    }
+    // Never reload automatically here: an open form may contain unsaved data.
+    // The error boundary keeps a deliberate, user-triggered refresh action.
   })();
 };
 
