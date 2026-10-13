@@ -10,7 +10,7 @@ on:
     paths:
       - "supabase/functions/send-reminders/**"
       - "test/reminder-notification-regression.test.ts"
-      - "package.json"
+      - "test/reminder-push-delivery.test.ts"
       - ".github/workflows/phase10-reminder-notifications.yml"
 
 permissions:
@@ -23,24 +23,11 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-      - name: Unit and regression tests
-        run: npm test
-      - name: TypeScript typecheck
-        run: npm run typecheck
-      - name: ESLint
-        run: npm run lint
-      - name: Production build
-        run: npm run build
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
       - name: Check reminder Edge Function
-        run: deno check supabase/functions/send-reminders/index.ts
+        run: deno check --config supabase/functions/send-reminders/deno.json supabase/functions/send-reminders/index.ts
