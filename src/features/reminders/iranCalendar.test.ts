@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addIranWorkingDays,
   getIranCalendarDayInfo,
   hasVerifiedIranHolidayData,
   IRAN_CALENDAR_DATA_YEAR,
@@ -38,6 +39,9 @@ describe('Iranian Jalali calendar and working days', () => {
   it('returns the next working day within the bundled year and refuses unsupported years', () => {
     expect(nextIranWorkingDay('1405-01-01')).toBe('1405-01-05');
     expect(nextIranWorkingDay('1406-01-01')).toBeNull();
+    expect(addIranWorkingDays('1405-01-01', 1)).toBe('1405-01-05');
+    expect(addIranWorkingDays('1405-01-01', 2)).toBe('1405-01-06');
+    expect(addIranWorkingDays('1406-01-01', 1)).toBeNull();
     expect(isIranWorkingDay('1405-13-01')).toBe(false);
     expect(isIranWorkingDay('1406-01-01')).toBeNull();
     expect(isIranWorkingDay('invalid')).toBe(false);
