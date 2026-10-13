@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: 22
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
       - name: Unit and regression tests
         run: npm test
       - name: TypeScript typecheck
