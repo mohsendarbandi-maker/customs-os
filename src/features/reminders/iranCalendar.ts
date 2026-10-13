@@ -91,7 +91,7 @@ export const IRAN_FIXED_OCCASIONS: readonly IranCalendarOccasion[] = [
 {month:9,day:30,title:'شب یلدا؛ جشن مهر و روشنایی',shortTitle:'شب یلدا',category:'culture'},
 {month:11,day:12,title:'سالروز ورود امام خمینی به ایران',shortTitle:'دهه فجر',category:'national'},
 {month:11,day:22,title:'سالروز پیروزی انقلاب اسلامی',shortTitle:'پیروزی انقلاب',category:'national'},
-{month:11,day:29,title:'روز بزرگداشت خواجه نصیرالدین طوسی و روز مهندس',shortTitle:'روز مهندس',category:'profession'},
+{month:11,day:29,title:'روز بزرگداشت خواجه نصیرالدین طوسی',shortTitle:'بزرگداشت خواجه نصیر',category:'science'},
 {month:12,day:5,title:'روز مهندسی',shortTitle:'روز مهندس',category:'profession'},
 {month:12,day:15,title:'روز درختکاری',shortTitle:'روز درختکاری',category:'environment'},
 {month:12,day:29,title:'روز ملی شدن صنعت نفت ایران',shortTitle:'ملی شدن نفت',category:'national'},
