@@ -233,7 +233,27 @@ export const RemindersPage:React.FC=()=>{
 
  const groups=useMemo(()=>{const out:Array<{label:string;rows:Reminder[]}>=[];const [start,end]=todayRange(),tomorrowStart=addJalaliDays(start,1),tomorrowEnd=addJalaliDays(end,1);for(const r of reminders){let label=t('بدون سررسید');if(r.due_at){const d=new Date(r.due_at);label=d>=start&&d<end?t('امروز'):d>=tomorrowStart&&d<tomorrowEnd?t('فردا'):formatReminderDate(d,language);}const existing=out.find(x=>x.label===label);if(existing)existing.rows.push(r);else out.push({label,rows:[r]});}return out;},[reminders,language]);
  const totalPages=Math.max(1,Math.ceil((query.data?.count??0)/PAGE_SIZE));
-  const calendarQuery=useQuery<CalendarReminderDate[]>({queryKey:['reminder-calendar',profile?.organization_id,calendarMonth.year,calendarMonth.month],enabled:Boolean(profile?.organization_id)&&isCalendarPage,staleTime:30000,queryFn:async()=>{if(!profile?.organization_id)return[];const nextMonth=shiftJalaliMonth(calendarMonth,1);const start=zonedJalaliToDate(calendarMonth.year,calendarMonth.month,1,0,0,0);const end=zonedJalaliToDate(nextMonth.year,nextMonth.month,1,0,0,0);const rows:CalendarReminderDate[]=[];for(let offset=0;;offset+=1000){const {data,error}=await supabase.from('operational_reminders').select('due_at').eq('organization_id',profile.organization_id).is('deleted_at',null).eq('status','open').gte('due_at',start.toISOString()).lt('due_at',end.toISOString()).order('due_at',{ascending:true}).range(offset,offset+999);if(error)throw error;const batch=(data??[]) as CalendarReminderDate[];rows.push(...batch);if(batch.length<1000)break;}return rows;}});
+  const calendarCacheScope=JSON.stringify(['reminder-calendar',profile?.organization_id,user?.id,calendarMonth.year,calendarMonth.month]);
+  const calendarQuery=useQuery<CalendarReminderDate[]>({
+   queryKey:['reminder-calendar',profile?.organization_id,user?.id,calendarMonth.year,calendarMonth.month],
+   enabled:Boolean(profile?.organization_id)&&isCalendarPage,staleTime:30000,
+   queryFn:async()=>{
+    if(!profile?.organization_id)return[];
+    try{
+     const nextMonth=shiftJalaliMonth(calendarMonth,1),start=zonedJalaliToDate(calendarMonth.year,calendarMonth.month,1,0,0,0),end=zonedJalaliToDate(nextMonth.year,nextMonth.month,1,0,0,0),rows:CalendarReminderDate[]=[];
+     for(let offset=0;;offset+=1000){
+      const {data,error}=await supabase.from('operational_reminders').select('due_at').eq('organization_id',profile.organization_id).is('deleted_at',null).eq('status','open').gte('due_at',start.toISOString()).lt('due_at',end.toISOString()).order('due_at',{ascending:true}).range(offset,offset+999);
+      if(error)throw error;
+      const batch=(data??[]) as CalendarReminderDate[];rows.push(...batch);if(batch.length<1000)break;
+     }
+     await saveOfflineQueryCache(calendarCacheScope,user?.id,profile.organization_id,rows).catch(()=>false);
+     return rows;
+    }catch(error){
+     if(isOfflineReadError(error)){const cached=await readOfflineQueryCache<CalendarReminderDate[]>(calendarCacheScope,user?.id,profile.organization_id).catch(()=>null);if(cached)return cached.payload;}
+     throw error;
+    }
+   }
+  });
   const calendarGrid=useMemo(()=>buildJalaliMonthGrid(calendarMonth.year,calendarMonth.month,calendarQuery.data??[]),[calendarMonth.year,calendarMonth.month,calendarQuery.data]);
   const calendarMonthTitle=language==='fa'?JALALI_MONTHS[calendarMonth.month-1]+' '+reminderNumber(calendarMonth.year,language):['Farvardin','Ordibehesht','Khordad','Tir','Mordad','Shahrivar','Mehr','Aban','Azar','Dey','Bahman','Esfand'][calendarMonth.month-1]+' '+calendarMonth.year;
   const goToCalendarMonth=(year:number,month:number)=>navigate('/reminders/calendar?month='+jalaliMonthKey({year,month}));
