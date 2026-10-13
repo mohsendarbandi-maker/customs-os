@@ -39,6 +39,7 @@ describe('Iranian Jalali calendar and working days', () => {
     expect(nextIranWorkingDay('1405-01-01')).toBe('1405-01-05');
     expect(nextIranWorkingDay('1406-01-01')).toBeNull();
     expect(isIranWorkingDay('1405-13-01')).toBe(false);
+    expect(isIranWorkingDay('1406-01-01')).toBeNull();
     expect(isIranWorkingDay('invalid')).toBe(false);
   });
 });
