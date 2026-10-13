@@ -6,7 +6,7 @@ export interface Env {
   TURN_KEY_ID_V2?: string;
 }
 
-const BUILD_SIGNATURE = '20261011-messenger-gateway-cache-fix';
+const BUILD_SIGNATURE = '20261013-reminders-list-first-teal-theme';
 
 const EDGE_FUNCTIONS = new Set([
   'ai-assistant', 'ai-core', 'ai-operator', 'ai-voice', 'knowledge-ai',
@@ -193,7 +193,7 @@ export default {
         .replace(/href="\/manifest\.webmanifest"/i, 'href="/reminders-subdomain.webmanifest?v=20261012-reminders-v1"')
         .replace(/href="\/icon\.svg"/i, 'href="/pwa/reminders-icon.svg"')
         .replace(/href="\/pwa\/apple-touch-icon-180\.png(?:\?[^"]*)?"/i, 'href="/pwa/reminders-icon-180.png?v=20261012-reminders-v1"')
-        .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#06265F"')
+        .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#087F8C"')
         .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="Reminders"');
       const remindersHeaders = new Headers(response.headers);
       remindersHeaders.delete('content-length');
