@@ -285,7 +285,7 @@ export const getWorkflowStageIssues = (
 
     const insuranceVsReceipt = compareJalaliDates(insuranceDate, receiptDate);
     if (insuranceVsReceipt !== null && insuranceVsReceipt >= 0 &&
-      textValue(port.insurance_followup_status) !== 'completed') {
+      !oneOf(port.insurance_followup_status, ['completed', 'not_required'])) {
       issues.push('بیمه‌نامه قبل از قبض انبار نیست؛ پیگیری بیمه/پوشش تکمیلی را تکمیل کنید.');
     }
 
