@@ -54,6 +54,9 @@ type Shipment = {
   cargo_owner: string;
   cargo_description: string;
   display_name: string;
+  customs_office_id: string | null;
+  customs_office_label: string;
+  customs_regime_label: string;
 };
 
 type Doc = {
@@ -70,6 +73,8 @@ type Doc = {
 };
 
 const BUCKET = 'customs_documents';
+const REGIME_LABELS: Record<string, string> = {import_definitive:'واردات قطعی',export_definitive:'صادرات قطعی',temporary_export:'صادرات موقت',import_temporary:'ورود موقت',temporary_processing:'ورود موقت برای پردازش',external_transit:'ترانزیت خارجی',internal_transit:'ترانزیت داخلی',re_export:'مرجوعی / اعاده به خارج',re_import:'ورود مجدد',cabotage:'کابوتاژ',customs_warehouse:'ورود به انبار گمرکی',free_zone:'رویه منطقه آزاد',other:'سایر رویه‌ها'};
+
 const REQUIRED: DocType[] = [
   'PROFORMA_INVOICE',
   'COMMERCIAL_INVOICE',
@@ -166,21 +171,27 @@ export const CustomsDocumentManagerPage: React.FC = () => {
     setError('');
     try {
       const { org } = await profile();
-      const [{ data: s, error: se }, { data: c, error: ce }, { data: v, error: ve }, { data: cl, error: cle }] =
+      const [{ data: s, error: se }, { data: c, error: ce }, { data: v, error: ve }, { data: cl, error: cle }, { data: pre, error: preError }] =
         await Promise.all([
           supabase
             .from('shipments')
-            .select('id,case_id,bill_of_lading_no,vessel_id,client_id,cargo_count,cargo_count_unit,display_name')
+            .select('id,case_id,bill_of_lading_no,vessel_id,client_id,cargo_count,cargo_count_unit,display_name,customs_office_id')
             .eq('organization_id', org)
             .order('updated_at', { ascending: false }),
           supabase.from('cases').select('id,cargo_description,status').eq('organization_id', org),
           supabase.from('vessels').select('id,name').eq('organization_id', org),
           supabase.from('clients').select('id,name').eq('organization_id', org),
+          supabase.from('shipment_customs_data').select('shipment_id,customs_office_id,customs_regime').eq('organization_id', org),
         ]);
       if (se) throw se;
       if (ce) throw ce;
       if (ve) throw ve;
       if (cle) throw cle;
+      if (preError) throw preError;
+      const pm = new Map((pre || []).map((x: any) => [x.shipment_id, x]));
+      const { data: offices, error: oe } = await supabase.from('customs_offices').select('id,code,name,city');
+      if (oe) throw oe;
+      const om = new Map((offices || []).map((x: any) => [x.id, `${x.code} · ${x.name} — ${x.city}`]));
       const cm = new Map((c || []).map((x: any) => [x.id, x]));
       const vm = new Map((v || []).map((x: any) => [x.id, x.name || '']));
       const lm = new Map((cl || []).map((x: any) => [x.id, x.name || '']));
@@ -198,6 +209,9 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           cargo_owner: owner,
           cargo_description: cc?.cargo_description || '',
           display_name: x.display_name || buildCargoName(x.cargo_count, x.cargo_count_unit, owner, vessel),
+          customs_office_id: x.customs_office_id || null,
+          customs_office_label: om.get(x.customs_office_id) || om.get(pm.get(x.id)?.customs_office_id) || 'گمرک هنوز انتخاب نشده',
+          customs_regime_label: REGIME_LABELS[pm.get(x.id)?.customs_regime] || 'رویه انتخاب نشده',
         };
       });
       setShipments(rows);
@@ -499,6 +513,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
             <p className="text-xs app-muted mt-1">
               آپلود اسناد اختیاری است؛ نبودن سند فقط هشدار است و مانع کار با پرونده نمی‌شود.
             </p>
+            {current && <p className="text-xs mt-2 font-bold">گمرک محل اظهار: {current.customs_office_label} · رویه گمرکی: {current.customs_regime_label}</p>}
           </div>
           <div className="flex gap-2">
             <button
@@ -541,7 +556,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
                 {!shipments.length && <option value="">محموله‌ای یافت نشد</option>}
                 {shipments.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.display_name} — B/L: {s.bill_of_lading_no || '—'}
+                    {s.display_name} — B/L: {s.bill_of_lading_no || '—'} — گمرک: {s.customs_office_label} — رویه: {s.customs_regime_label}
                   </option>
                 ))}
               </select>
