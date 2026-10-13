@@ -29,6 +29,10 @@ describe('offline and background-update safety', () => {
     expect(runtime).not.toContain('registration.unregister()');
     expect(runtime).toContain('registration.update()');
     expect(runtime).toContain('navigator.onLine === false');
+    const recovery = runtime.slice(runtime.indexOf('const recoverFromStaleApp'), runtime.indexOf('class AppErrorBoundary'));
+    expect(recovery).not.toContain('window.location.reload');
+    expect(recovery).not.toContain('window.location.assign');
+    expect(runtime).toContain('onClick={() => window.location.reload()}');
   });
 
   it('applies a waiting worker silently without forcing the open page to reload', () => {
