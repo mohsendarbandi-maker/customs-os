@@ -20,3 +20,21 @@ export function selectVisibleReminderIds(
 ): string[] {
   return [...new Set([...selected, ...visibleIds.filter((id) => !id.startsWith('local-'))])];
 }
+
+/** True only when at least one visible server-backed reminder exists and every one is selected. */
+export function areAllVisibleReminderIdsSelected(
+  selected: readonly string[],
+  visibleIds: readonly string[],
+): boolean {
+  const eligible = visibleIds.filter((id) => !id.startsWith('local-'));
+  return eligible.length > 0 && eligible.every((id) => selected.includes(id));
+}
+
+/** Remove the current page's selection without disturbing any other selected IDs. */
+export function deselectVisibleReminderIds(
+  selected: readonly string[],
+  visibleIds: readonly string[],
+): string[] {
+  const visible = new Set(visibleIds.filter((id) => !id.startsWith('local-')));
+  return selected.filter((id) => !visible.has(id));
+}
