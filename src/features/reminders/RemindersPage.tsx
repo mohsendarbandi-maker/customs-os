@@ -166,8 +166,8 @@ export const RemindersPage:React.FC=()=>{
  };
  const bulkSnooze=async()=>{
   if(bulkAction)return;
-  const batch=[...selectedReminders];
-  if(!batch.length)return;
+  const batch=selectedReminders.filter(item=>item.status==='open');
+  if(!batch.length){setSelected([]);setToast({text:summarizeReminderBulkAction('snooze',0,0,language)});return;}
   setBulkAction('snooze');
   const results=await Promise.allSettled(batch.map(item=>update.mutateAsync({id:item.id,patch:{snoozed_until:new Date(Date.now()+600000).toISOString(),snooze_count:item.snooze_count+1}})));
   const succeeded=batch.filter((_,index)=>results[index].status==='fulfilled');
@@ -273,7 +273,7 @@ export const RemindersPage:React.FC=()=>{
     <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
      <button type="button" onClick={()=>setSelected(current=>areAllVisibleReminderIdsSelected(current,visibleSelectableIds)?deselectVisibleReminderIds(current,visibleSelectableIds):selectVisibleReminderIds(current,visibleSelectableIds))} disabled={bulkAction!==null||visibleSelectableIds.length===0} aria-pressed={allVisibleSelected} className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border app-border px-3 text-xs font-semibold transition hover:bg-[var(--surface-2)] disabled:opacity-50 sm:col-span-1"><CheckCircle2 size={16}/>{t(allVisibleSelected?'لغو انتخاب موارد این صفحه':'انتخاب همهٔ موارد این صفحه')}</button>
      <button type="button" onClick={bulkDone} disabled={bulkAction!==null||selectedReminders.every(item=>item.status==='done')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{bulkAction==='complete'?<RefreshCw size={15} className="animate-spin"/>:<Check size={16}/>} {t('تکمیل موارد')}</button>
-     <button type="button" onClick={bulkSnooze} disabled={bulkAction!==null} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border app-border px-3 text-xs font-semibold transition hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-50">{bulkAction==='snooze'?<RefreshCw size={15} className="animate-spin"/>:<Clock3 size={16}/>} {t('تعویق ۱۰ دقیقه')}</button>
+     <button type="button" onClick={bulkSnooze} disabled={bulkAction!==null||selectedReminders.every(item=>item.status==='done')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border app-border px-3 text-xs font-semibold transition hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-50">{bulkAction==='snooze'?<RefreshCw size={15} className="animate-spin"/>:<Clock3 size={16}/>} {t('تعویق ۱۰ دقیقه')}</button>
      <button type="button" onClick={bulkDismiss} disabled={bulkAction!==null} className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/5 px-3 text-xs font-semibold text-red-600 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1">{bulkAction==='remove'?<RefreshCw size={15} className="animate-spin"/>:<Trash2 size={16}/>} {t('حذف از فهرست')}</button>
     </div>
    </div>}
@@ -307,7 +307,7 @@ export const RemindersPage:React.FC=()=>{
     <button type="button" role="menuitem" onClick={()=>{snooze(menuReminder,10);closeCardMenu()}}><Clock3 size={17}/><span>{t('۱۰ دقیقه بعد')}</span></button>
     <button type="button" role="menuitem" onClick={()=>{snooze(menuReminder,60);closeCardMenu()}}><Clock3 size={17}/><span>{t('۱ ساعت بعد')}</span></button>
     <button type="button" role="menuitem" onClick={()=>{update.mutate({id:menuReminder.id,patch:{snoozed_until:tomorrow().toISOString(),snooze_count:menuReminder.snooze_count+1}});closeCardMenu()}}><CalendarClock size={17}/><span>{t('فردا ۹ صبح')}</span></button>
-    <button type="button" role="menuitem" onClick={()=>{softDelete(menuReminder);closeCardMenu()}} className="is-danger"><Trash2 size={17}/><span>{t('پنهان‌کردن')}</span></button>
+    <button type="button" role="menuitem" onClick={()=>{softDelete(menuReminder);closeCardMenu()}} className="is-danger"><Trash2 size={17}/><span>{t('حذف از فهرست')}</span></button>
     <button type="button" role="menuitem" onClick={()=>{setEditor(menuReminder);closeCardMenu()}}><ArrowUpRight size={17}/><span>{t('ویرایش')}</span></button>
    </div></>}
 
