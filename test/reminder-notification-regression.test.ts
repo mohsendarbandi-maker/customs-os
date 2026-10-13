@@ -17,7 +17,9 @@ describe('reminder push delivery safety', () => {
   });
 
   it('does not advance a recurring reminder before its due occurrence', () => {
-    expect(delivery).toContain('if(new Date(d.fire_at)>=new Date(d.due_at))await advance(d.reminder_id)');
+    expect(delivery).toContain("const advanced=new Set<string>()");
+    expect(delivery).toContain("advanced.has(d.reminder_id)");
+    expect(delivery).toContain("await advanceFinalOccurrence(d)");
     expect(delivery).not.toContain('if(new Date(d.fire_at)<=new Date(d.due_at))await advance(d.reminder_id)');
     expect(delivery).toContain('mark("deferred",why)');
   });
