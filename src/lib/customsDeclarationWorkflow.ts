@@ -175,6 +175,9 @@ export const getWorkflowStageIssues = (
     if (required && status !== 'completed') {
       issues.push('ارزیابی الزامی است؛ نتیجه ارزیابی را تکمیل کنید.');
     }
+    if (required && status === 'completed' && textValue(evaluation.evaluator_number) === '') {
+      issues.push('شماره ارزیاب را ثبت کنید.');
+    }
     return issues;
   }
 
@@ -249,12 +252,14 @@ export const getWorkflowStageIssues = (
 
   if (stage === 'loading_permit') {
     const permit = state.loadingPermit;
+    const clause2Ready = oneOf(permit.clause2_request_status, ['approved', 'not_required']);
     const taxReady = oneOf(permit.tax_permission_status, ['approved', 'not_required']);
     const sataCode = textValue(permit.sata_code);
     const ninetyPercentRequest = boolValue(permit.clearance_90_percent_requested);
     const ninetyPercentReady = ninetyPercentRequest && !sataCode && textValue(permit.comment) !== '';
     const centralBankReady = oneOf(permit.central_bank_status, ['approved', 'not_required']) || ninetyPercentReady;
 
+    if (!clause2Ready) issues.push('درخواست تبصره ۲ منطقه آزاد باید تأیید یا صریحاً غیرلازم ثبت شود.');
     if (!taxReady) issues.push('مجوز سازمان امور مالیاتی باید صادر یا غیرلازم ثبت شود.');
     if (!centralBankReady) {
       issues.push('وضعیت منشأ ارز/بانک مرکزی را تأیید کنید؛ در نبود ساتا، درخواست ترخیص ۹۰ درصدی و توضیح آن را ثبت کنید.');
