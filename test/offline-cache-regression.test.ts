@@ -45,7 +45,7 @@ describe('offline and background-update safety', () => {
     expect(queue).toContain('if ((await currentUserId()) !== userId) return false');
     expect(queue).toContain('if ((await currentUserId()) !== userId) return null');
     expect(queue).toContain('value.organizationId !== organizationId');
-    expect(queue).toContain('const stopOfflineQueue');
+    expect(queue).toContain('let stopOfflineQueue: (() => void) | null = null');
   });
 
   it('uses offline snapshots for reminders, overview and calendar, and preserves quick-entry drafts per user/org', () => {
