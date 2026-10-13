@@ -748,3 +748,115 @@
   }
 }
 
+/* Reminders redesign: teal/ocean palette, list-first hierarchy, animated CSS artwork.
+   Intentionally no static stock-photo hero: the illustration is composed from UI shapes. */
+.reminders-app-standalone {
+  --primary: #087f8c;
+  --bg: #f2f9fa;
+  --surface: #ffffff;
+  --surface-2: #e8f4f5;
+  --border: #cfe3e6;
+  --text: #15343b;
+  --text-muted: #58757d;
+  background:
+    radial-gradient(ellipse at 8% 0%, rgba(8,127,140,.075), transparent 36rem),
+    radial-gradient(ellipse at 95% 20%, rgba(34,166,177,.065), transparent 32rem),
+    var(--bg);
+  color: var(--text);
+}
+.reminders-app-standalone .reminders-hub-hero {
+  background: linear-gradient(118deg, #075b70 0%, #087f8c 48%, #18a7a5 100%);
+  background-size: 220% 220%;
+  animation: reminders-ocean-flow 13s ease-in-out infinite;
+  border-color: rgba(19,151,164,.42);
+  box-shadow: 0 17px 38px rgba(8,127,140,.19);
+}
+.reminders-app-standalone .reminders-hero-orbit-one {
+  animation: reminders-orbit-drift 22s linear infinite;
+}
+.reminders-app-standalone .reminders-hero-orbit-two {
+  animation: reminders-orbit-drift 30s linear infinite reverse;
+}
+.reminders-app-standalone .reminders-smart-card:hover,
+.reminders-app-standalone .reminders-category-card:hover {
+  border-color: color-mix(in srgb, #087f8c 48%, var(--border));
+  box-shadow: 0 12px 28px rgba(8,91,112,.12);
+}
+.reminders-app-standalone .reminders-hub-search:focus-visible,
+.reminders-app-standalone .reminders-up-next-row button:focus-visible {
+  outline: 3px solid color-mix(in srgb, #087f8c 48%, transparent);
+  outline-offset: 2px;
+}
+.reminders-app-standalone .reminders-up-next {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--surface) 96%, #c9f0ee);
+  box-shadow: 0 9px 28px rgba(13,67,78,.065);
+}
+.reminders-app-standalone .reminders-up-next .reminders-section-title {
+  margin: 0;
+  padding: 16px 17px 12px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(110deg, color-mix(in srgb, #087f8c 7%, var(--surface)), var(--surface));
+}
+.reminders-app-standalone .reminders-up-next .reminders-section-title p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.reminders-app-standalone .reminders-up-next-row {
+  min-height: 76px;
+  padding: 12px 15px;
+  transition: background .18s ease;
+}
+.reminders-app-standalone .reminders-up-next-row:hover {
+  background: color-mix(in srgb, #087f8c 5%, var(--surface));
+}
+.reminders-app-standalone .reminders-up-next-row + .reminders-up-next-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+}
+.reminders-app-standalone .reminders-up-next-check {
+  width: 29px;
+  height: 29px;
+  flex-basis: 29px;
+  border-color: #78a6ad;
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+.reminders-app-standalone .reminders-up-next-check:hover {
+  border-color: #087f8c;
+  background: color-mix(in srgb, #087f8c 9%, var(--surface));
+  transform: scale(1.04);
+}
+@keyframes reminders-ocean-flow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@keyframes reminders-orbit-drift {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@media (max-width: 767px) {
+  .reminders-app-standalone .reminders-hub-screen { gap: 13px; }
+  .reminders-app-standalone .reminders-up-next { border-radius: 19px; }
+  .reminders-app-standalone .reminders-up-next .reminders-section-title { padding: 13px 13px 10px; }
+  .reminders-app-standalone .reminders-up-next-row { min-height: 70px; gap: 9px; padding: 10px 11px; }
+  .reminders-app-standalone .reminders-up-next-row strong { font-size: 13px; }
+  .reminders-app-standalone .reminders-up-next-row small { font-size: 11px; }
+}
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+  .reminders-app-standalone { padding-bottom: calc(68px + env(safe-area-inset-bottom)) !important; }
+  .reminders-app-standalone .reminders-hub-header { padding-block: 6px !important; }
+  .reminders-app-standalone .reminders-hub-hero { min-height: 118px; padding: 12px 16px; }
+  .reminders-app-standalone .reminders-hub-hero-art { min-height: 90px; transform: scale(.72); }
+  .reminders-app-standalone .reminders-up-next-row { min-height: 54px; padding-block: 7px; }
+  .reminders-app-standalone .reminders-mobile-nav { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reminders-app-standalone .reminders-hub-hero,
+  .reminders-app-standalone .reminders-hero-orbit-one,
+  .reminders-app-standalone .reminders-hero-orbit-two {
+    animation: none !important;
+  }
+}

@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Reminders | Customs OS",
-  "short_name": "Reminders",
-  "description": "Independent Customs OS operational reminders app",
+  "name": "یادآورهای Customs OS",
+  "short_name": "یادآورها",
+  "description": "مدیریت هوشمند یادآورها، سررسیدها و پیگیری‌های عملیاتی",
   "start_url": "/?app=1",
   "scope": "/",
   "display": "standalone",
@@ -10,11 +10,11 @@
     "standalone",
     "minimal-ui"
   ],
-  "orientation": "portrait-primary",
-  "dir": "ltr",
-  "lang": "en",
-  "theme_color": "#06265F",
-  "background_color": "#F3F7FC",
+  "orientation": "any",
+  "dir": "rtl",
+  "lang": "fa",
+  "theme_color": "#087F8C",
+  "background_color": "#F2F9FA",
   "icons": [
     {
       "src": "/pwa/reminders-icon.svg",
