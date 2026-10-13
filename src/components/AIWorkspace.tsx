@@ -1,4 +1,4 @@
-import React,{useRef,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {Bot,Send,X,CheckCircle2,Mic,MicOff,Plus,PanelLeftClose,SquarePen,ChevronDown} from 'lucide-react';
 import {supabase} from '../lib/supabase';
 import {makeClientId} from '../lib/clientId';
@@ -175,7 +175,7 @@ const transcribeVoice=async(blob:Blob)=>{
  const text=String(data?.answer||data?.transcript||'').trim();
  if(!text)throw new Error('متن از صدا دریافت نشد.');
  setInput(text);
- await ask(text);
+ setStatus('متن تبدیل‌شده آماده بازبینی است؛ قبل از ارسال می‌توانید آن را ویرایش کنید.');
 };
 const startVoice=async()=>{
  if(listening||mediaRecorderRef.current){stopVoiceRecorder();return;}
@@ -241,7 +241,7 @@ const startVoice=async()=>{
     setBusy(true);setStatus('⏳ در حال تبدیل صدا به متن…');
     try{
       await transcribeVoice(blob);
-      setStatus('✓ متن دریافت شد و برای Customs AI ارسال شد.');
+      setStatus('✓ تبدیل صوت انجام شد؛ متن را بازبینی کنید و سپس دکمه ارسال را بزنید.');
     }catch(e:any){
       if(liveText){
         setInput(liveText);
@@ -272,5 +272,5 @@ const apply=()=>{const result=applyToCurrentForm(fields);setApplied(result.appli
  <div className="text-xs font-black">تأیید عملیات</div>
  <div className="text-[11px] app-muted mt-1">{pendingOperator.plan?.module||'عملیات'} · {pendingOperator.plan?.action_code||'دستور عملیاتی'}</div>
  {pendingOperator.risk==='destructive'&&pendingOperator.phrase?<><div className="text-[11px] app-muted mt-2">عبارت تأیید نهایی:</div><code className="block mt-1 rounded-lg bg-[var(--surface-2)] p-2 text-[11px]">{pendingOperator.phrase}</code><input value={operatorFinal} onChange={e=>setOperatorFinal(e.target.value)} className="mt-2 w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2 text-sm" placeholder="عبارت را عیناً وارد کنید"/><button type="button" disabled={busy||operatorFinal.trim()!==pendingOperator.phrase.trim()} onClick={()=>void finalConfirmOperator()} className="mt-2 w-full min-h-11 rounded-xl bg-red-600 text-white font-bold">تأیید نهایی</button></>:<button type="button" disabled={busy} onClick={()=>void confirmOperator()} className="mt-2 w-full min-h-11 rounded-xl bg-[var(--primary)] text-white font-bold">{busy?'در حال اجرا…':'تأیید و اجرا'}</button>}
-</div>}</div></main><footer className="ai-chat-composer-wrap"><div className="ai-chat-composer"><button type="button" className="ai-composer-icon" title="افزودن فایل" onClick={()=>{setTab('doc');setTimeout(()=>fileRef.current?.click(),0)}}><Plus size={20}/></button><input ref={fileRef} type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={e=>{if(e.target.files?.length)extractMany(e.target.files);e.currentTarget.value=''}}/><textarea value={input} rows={1} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(!busy)void ask()}}} placeholder="پیام خود را بنویسید..." className="ai-chat-input"/><button type="button" onClick={startVoice} className={`ai-composer-icon ${listening?'is-listening':''}`} title={listening?'توقف مکالمه':'مکالمه صوتی'}>{listening?<MicOff size={18}/>:<Mic size={18}/>}</button><button type="button" onClick={()=>void ask()} disabled={busy||!input.trim()} className="ai-send-button" title="ارسال"><Send size={17}/></button></div><div className="ai-composer-hint">Customs AI به زمینه صفحه و اطلاعات محموله انتخاب‌شده دسترسی دارد.</div></footer>{tab==='doc'&&docResults.length>0&&<div className="ai-doc-toast"><div className="flex items-center gap-2"><CheckCircle2 size={16}/><b>استخراج اسناد</b><button type="button" className="ai-header-icon mr-auto" onClick={()=>setTab('chat')}><X size={15}/></button></div>{docResults.map((d,i)=><div key={`${d.name}-${i}`} className="text-xs mt-2">{d.error?`✕ ${d.name}: ${d.error}`:`✓ ${d.name}: ${Object.keys(d.fields).length} فیلد`}</div>)}{Object.keys(fields).length>0&&<button type="button" onClick={apply} className="ai-doc-apply">اعمال فیلدهای استخراج‌شده روی فرم</button>}</div>}</aside></>}</>;
+</div>}</div></main><footer className="ai-chat-composer-wrap"><div className="ai-chat-composer"><button type="button" className="ai-composer-icon" title="افزودن فایل" onClick={()=>{setTab('doc');setTimeout(()=>fileRef.current?.click(),0)}}><Plus size={20}/></button><input ref={fileRef} type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={e=>{if(e.target.files?.length)extractMany(e.target.files);e.currentTarget.value=''}}/><textarea value={input} rows={1} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(!busy)void ask()}}} placeholder="پیام خود را بنویسید..." className="ai-chat-input"/><button type="button" onClick={startVoice} className={`ai-composer-icon ${listening?'is-listening':''}`} title={listening?'پایان ضبط صوت':'ضبط صدا و تبدیل به متن فارسی'} aria-label={listening?'پایان ضبط صوت':'ضبط صدا و تبدیل به متن فارسی'}>{listening?<MicOff size={18}/>:<Mic size={18}/>}</button><button type="button" onClick={()=>void ask()} disabled={busy||!input.trim()} className="ai-send-button" title="ارسال"><Send size={17}/></button></div><div className="ai-composer-hint">Customs AI به زمینه صفحه و اطلاعات محموله انتخاب‌شده دسترسی دارد.</div></footer>{tab==='doc'&&docResults.length>0&&<div className="ai-doc-toast"><div className="flex items-center gap-2"><CheckCircle2 size={16}/><b>استخراج اسناد</b><button type="button" className="ai-header-icon mr-auto" onClick={()=>setTab('chat')}><X size={15}/></button></div>{docResults.map((d,i)=><div key={`${d.name}-${i}`} className="text-xs mt-2">{d.error?`✕ ${d.name}: ${d.error}`:`✓ ${d.name}: ${Object.keys(d.fields).length} فیلد`}</div>)}{Object.keys(fields).length>0&&<button type="button" onClick={apply} className="ai-doc-apply">اعمال فیلدهای استخراج‌شده روی فرم</button>}</div>}</aside></>}</>;
 };
