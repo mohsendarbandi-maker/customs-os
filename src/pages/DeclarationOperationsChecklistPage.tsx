@@ -5,6 +5,7 @@ import{CustomsDeclarationWorkflow}from'../components/CustomsDeclarationWorkflow'
 import{CustomsExportWorkflow}from'../components/CustomsExportWorkflow';
 import{CustomsTemporaryImportWorkflow}from'../components/CustomsTemporaryImportWorkflow';
 import{CustomsTransitReimportWorkflow}from'../components/CustomsTransitReimportWorkflow';
+import { CustomsOtherRegimeWorkflow } from '../components/CustomsOtherRegimeWorkflow';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
@@ -184,7 +185,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   {decl&&['export_definitive','temporary_export'].includes(decl.customs_regime||'')&&<CustomsExportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
   {decl&&['import_temporary','temporary_processing'].includes(decl.customs_regime||'')&&<CustomsTemporaryImportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
   {decl&&['external_transit','internal_transit','re_import','re_export'].includes(decl.customs_regime||'')&&<CustomsTransitReimportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
-  {decl&&decl.customs_regime!=='import_definitive'&&!['export_definitive','temporary_export','import_temporary','temporary_processing','external_transit','internal_transit','re_import','re_export'].includes(decl.customs_regime||'')&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 text-sm"><b>گردش‌کار رویه</b><p className="app-muted mt-1">گردش‌کار تفصیلی این رویه در فاز اختصاصی آن تکمیل خواهد شد. رویه انتخاب‌شده: {decl.customs_regime||'ثبت نشده'}.</p></section>}
+  {decl&&['cabotage','customs_warehouse','free_zone','other'].includes(decl.customs_regime||'')&&<CustomsOtherRegimeWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||'other'} editable={canEdit}/>}
 
   {rule&&<section className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/5 p-4 md:p-5">
    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><BrainCircuit size={19}/><div><b className="font-black">پیشنهاد یادگیرنده برای این HS</b><div className="text-xs app-muted mt-1">قاعده: {rule.rule_name} · {rule.evidence_count} نمونه · اطمینان {Math.round(rule.confidence*100)}٪</div></div></div><Link to="/permit-rules" className="text-xs font-bold text-[var(--primary)]">مشاهده قواعد</Link></div>
