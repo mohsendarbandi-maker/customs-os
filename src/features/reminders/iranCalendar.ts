@@ -132,31 +132,60 @@ export function isIranWorkingDay(date: string, overrides: IranCalendarOverrides 
   return getIranCalendarDayInfo(year, month, day, overrides).isWorkingDay;
 }
 
+function nextJalaliDate(date: string): string | null {
+  const [year, month, day] = date.split('-').map(Number);
+  if (!isValidJalaliDate(year, month, day)) return null;
+  let nextYear = year;
+  let nextMonth = month;
+  let nextDay = day + 1;
+  if (nextDay > jalaliMonthLength(nextYear, nextMonth)) {
+    nextDay = 1;
+    nextMonth += 1;
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear += 1;
+    }
+  }
+  return iranJalaliDateKey(nextYear, nextMonth, nextDay);
+}
+
 /** Returns the first working date strictly after the supplied Jalali date. */
 export function nextIranWorkingDay(
   date: string,
   overrides: IranCalendarOverrides = {},
 ): string | null {
   if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return null;
-  const [startYear, startMonth, startDay] = date.split('-').map(Number);
-  if (!isValidJalaliDate(startYear, startMonth, startDay) || !hasVerifiedIranHolidayData(startYear)) return null;
-
-  let year = startYear;
-  let month = startMonth;
-  let day = startDay;
+  const [year, month, day] = date.split('-').map(Number);
+  if (!isValidJalaliDate(year, month, day) || !hasVerifiedIranHolidayData(year)) return null;
+  let cursor = date;
   for (let offset = 0; offset < 370; offset += 1) {
-    day += 1;
-    if (day > jalaliMonthLength(year, month)) {
-      day = 1;
-      month += 1;
-      if (month > 12) {
-        month = 1;
-        year += 1;
-      }
-    }
-    if (!hasVerifiedIranHolidayData(year)) return null;
-    const key = iranJalaliDateKey(year, month, day);
-    if (isIranWorkingDay(key, overrides)) return key;
+    const next = nextJalaliDate(cursor);
+    if (!next || !hasVerifiedIranHolidayData(Number(next.slice(0, 4)))) return null;
+    if (isIranWorkingDay(next, overrides) === true) return next;
+    cursor = next;
   }
   return null;
+}
+
+/** Adds non-negative Iranian working days, returning null if annual data is missing. */
+export function addIranWorkingDays(
+  date: string,
+  daysToAdd: number,
+  overrides: IranCalendarOverrides = {},
+): string | null {
+  if (!Number.isInteger(daysToAdd) || daysToAdd < 0) return null;
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return null;
+  const [year, month, day] = date.split('-').map(Number);
+  if (!isValidJalaliDate(year, month, day) || !hasVerifiedIranHolidayData(year)) return null;
+  if (daysToAdd === 0) return date;
+
+  let cursor = date;
+  let counted = 0;
+  for (let offset = 0; offset < 370 && counted < daysToAdd; offset += 1) {
+    const next = nextJalaliDate(cursor);
+    if (!next || !hasVerifiedIranHolidayData(Number(next.slice(0, 4)))) return null;
+    if (isIranWorkingDay(next, overrides) === true) counted += 1;
+    cursor = next;
+  }
+  return counted === daysToAdd ? cursor : null;
 }
