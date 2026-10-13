@@ -23,6 +23,7 @@ const STORE_NAME = 'rpc_queue';
 const QUERY_CACHE_STORE_NAME = 'query_cache';
 const DB_VERSION = 4;
 const MAX_QUERY_CACHE_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const MAX_AUTH_PROFILE_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_QUERY_CACHE_ENTRIES_PER_SCOPE = 60;
 export const CHAT_RPC = 'chat_insert_message';
 export const CHAT_MAX_AUTO_RETRIES = 8;
@@ -168,7 +169,7 @@ export const readOfflineQueryCache = async <T,>(
         value.userId !== userId ||
         value.organizationId !== organizationId ||
         !Number.isFinite(value.updatedAt) ||
-        Date.now() - value.updatedAt > MAX_QUERY_CACHE_AGE_MS
+        Date.now() - value.updatedAt > (namespace === 'auth-profile' ? MAX_AUTH_PROFILE_CACHE_AGE_MS : MAX_QUERY_CACHE_AGE_MS)
       ) {
         resolve(null);
         return;
