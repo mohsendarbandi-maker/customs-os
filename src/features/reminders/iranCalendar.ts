@@ -1,4 +1,4 @@
-import { addJalaliDays, jalaliMonthLength, toJalali, zonedJalaliToDate } from '../../lib/jalali';
+import { jalaliMonthLength, jalaliWeekday, zonedJalaliToDate } from '../../lib/jalali';
 
 
 /**
@@ -74,14 +74,10 @@ const pad = (value: number) => String(value).padStart(2, '0');
 export const iranJalaliDateKey = (year: number, month: number, day: number) =>
   `${year}-${pad(month)}-${pad(day)}`;
 
-const weekdayFormatter = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'Asia/Tehran',
-  weekday: 'short',
-});
-
 function weekdayForJalaliDate(date: string): string {
   const [year, month, day] = date.split('-').map(Number);
-  return weekdayFormatter.format(zonedJalaliToDate(year, month, day, 12, 0, 0));
+  const weekdayIndex = jalaliWeekday(zonedJalaliToDate(year, month, day, 12, 0, 0));
+  return ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][weekdayIndex];
 }
 
 function isValidJalaliDate(year: number, month: number, day: number): boolean {
@@ -140,13 +136,24 @@ export function nextIranWorkingDay(
   overrides: IranCalendarOverrides = {},
 ): string | null {
   if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return null;
-  const [year, month, day] = date.split('-').map(Number);
-  if (!isValidJalaliDate(year, month, day) || !hasVerifiedIranHolidayData(year)) return null;
-  const start = zonedJalaliToDate(year, month, day, 12, 0, 0);
-  for (let offset = 1; offset <= 370; offset += 1) {
-    const next = toJalali(addJalaliDays(start, offset));
-    if (!hasVerifiedIranHolidayData(next.year)) return null;
-    const key = iranJalaliDateKey(next.year, next.month, next.day);
+  const [startYear, startMonth, startDay] = date.split('-').map(Number);
+  if (!isValidJalaliDate(startYear, startMonth, startDay) || !hasVerifiedIranHolidayData(startYear)) return null;
+
+  let year = startYear;
+  let month = startMonth;
+  let day = startDay;
+  for (let offset = 0; offset < 370; offset += 1) {
+    day += 1;
+    if (day > jalaliMonthLength(year, month)) {
+      day = 1;
+      month += 1;
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+    }
+    if (!hasVerifiedIranHolidayData(year)) return null;
+    const key = iranJalaliDateKey(year, month, day);
     if (isIranWorkingDay(key, overrides)) return key;
   }
   return null;
