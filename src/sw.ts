@@ -6,10 +6,10 @@ import {NetworkOnly} from 'workbox-strategies';
 
 declare const self: ServiceWorkerGlobalScope;
 cleanupOutdatedCaches();
-precacheAndRoute(self.__WB_MANIFEST);
-// Always try the network for navigation so stale HTML cannot pin an old build.
-// If the network is unavailable, serve the precached application shell (including hashed JS/CSS).
+// Register network-only navigation before the precache route, so cached HTML never
+// pins an old build. When offline, the catch handler below returns the precached app shell.
 registerRoute(({request})=>request.mode==='navigate',new NetworkOnly());
+precacheAndRoute(self.__WB_MANIFEST);
 setCatchHandler(async({request})=>{
  if(request.mode!=='navigate')return Response.error();
  return (await matchPrecache('/index.html'))??(await matchPrecache('/offline.html'))??Response.error();
