@@ -32,7 +32,7 @@ describe('Customs OS security hardening', () => {
   it('has role-aware route guards and matching navigation visibility', () => {
     expect(app).toContain('allowedRoles={finance}');
     expect(app).toContain('allowedRoles={management}');
-    expect(shell).toContain('visibleNav=nav.filter(x=>canSee(x,profile?.role))');
+    expect(shell).toContain('const visibleNav = nav.filter((x) => canSee(x, profile?.role));');
   });
 
   it('assigns the selected shipping-line id when creating and moving a vessel', () => {
