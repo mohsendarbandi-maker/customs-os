@@ -9,10 +9,12 @@ import { CustomsOtherRegimeWorkflow } from '../components/CustomsOtherRegimeWork
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
+import { resolveDeclarationRelationIds } from '../lib/declarationWorkflowContext';
 
 type Decl={id:string;shipment_id:string|null;case_id:string|null;kottaj_number:string;declaration_date:string;customs_path:string|null;payment_reference:string|null;total_duties_irr:number|null;declaration_file_name:string|null;customs_office_id?:string|null;customs_regime?:string|null};
 type Item={id:string;item_key:string;item_label:string;completed:boolean;note:string|null;sort_order:number;source:string;is_active:boolean};
 type Rule={id:string;rule_name:string;hs_code_prefix:string;customs_path:string;transport_mode:string;checklist_counts:Record<string,number>;field_counts:Record<string,number>;workflow_stages:number[];evidence_count:number;confidence:number;source:string;is_active:boolean};
+type DeclarationContext={shipmentName:string;billOfLading:string;caseNumber:string;clientName:string};
 
 const PATH_LABELS:Record<string,string>={green:'سبز',yellow:'زرد',red:'قرمز'};
 const FIELD_LABELS:Record<string,string>={
@@ -33,6 +35,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
  const[params]=useSearchParams();
  const declarationId=params.get('declarationId')||'';
  const[decl,setDecl]=useState<Decl|null>(null);const[officeSummary,setOfficeSummary]=useState('');
+ const[declarationContext,setDeclarationContext]=useState<DeclarationContext>({shipmentName:'',billOfLading:'',caseNumber:'',clientName:''});
  const[items,setItems]=useState<Item[]>([]);
  const[rule,setRule]=useState<Rule|null>(null);
  const[hs,setHs]=useState('');
@@ -53,6 +56,42 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
    const{data:d,error:de}=await supabase.from('customs_declarations').select('id,shipment_id,case_id,kottaj_number,declaration_date,customs_path,payment_reference,total_duties_irr,declaration_file_name,customs_office_id,customs_regime').eq('id',declarationId).maybeSingle();
    if(de)throw de;if(!d)throw new Error('اظهارنامه پیدا نشد.');
    setDecl(d as Decl);
+   setDeclarationContext({ shipmentName: '', billOfLading: '', caseNumber: '', clientName: '' });
+   let shipmentContext: { display_name?: string | null; bill_of_lading_no?: string | null; client_id?: string | null; case_id?: string | null } | null = null;
+   if (d.shipment_id) {
+    const { data: shipmentData, error: shipmentError } = await supabase.from('shipments')
+     .select('display_name,bill_of_lading_no,client_id,case_id').eq('id', d.shipment_id).maybeSingle();
+    if (shipmentError) throw shipmentError;
+    shipmentContext = shipmentData;
+   }
+   const declarationRelations = resolveDeclarationRelationIds({ declarationCaseId: d.case_id, shipmentCaseId: shipmentContext?.case_id });
+   const relatedCaseId = declarationRelations.caseId;
+   let caseContext: { case_number?: string | null; client_id?: string | null } | null = null;
+   if (relatedCaseId) {
+    const { data: caseData, error: caseError } = await supabase.from('cases')
+     .select('case_number,client_id').eq('id', relatedCaseId).maybeSingle();
+    if (caseError) throw caseError;
+    caseContext = caseData;
+   }
+   const relatedClientId = resolveDeclarationRelationIds({
+    declarationCaseId: d.case_id,
+    shipmentCaseId: shipmentContext?.case_id,
+    shipmentClientId: shipmentContext?.client_id,
+    caseClientId: caseContext?.client_id,
+   }).clientId;
+   let clientName = '';
+   if (relatedClientId && profile?.organization_id) {
+    const { data: clientData, error: clientError } = await supabase.from('clients')
+     .select('name').eq('id', relatedClientId).eq('organization_id', profile.organization_id).maybeSingle();
+    if (clientError) throw clientError;
+    clientName = String(clientData?.name || '');
+   }
+   setDeclarationContext({
+    shipmentName: String(shipmentContext?.display_name || ''),
+    billOfLading: String(shipmentContext?.bill_of_lading_no || ''),
+    caseNumber: String(caseContext?.case_number || ''),
+    clientName,
+   });
    if(d.customs_office_id){const{data:office,error:officeError}=await supabase.from('customs_offices').select('code,name,city').eq('id',d.customs_office_id).maybeSingle();if(officeError)throw officeError;setOfficeSummary(office?`${office.code} · ${office.name} — ${office.city}`:'گمرک ثبت‌شده')}else setOfficeSummary('');
 
    const[{data:sc},{data:c},{data:ro}]=await Promise.all([
@@ -89,7 +128,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
    setRule(candidates[0]||null);
   }catch(e:any){setError(e?.message||'دریافت چک‌لیست عملیات گمرکی انجام نشد')}
   finally{setBusy(false)}
- },[canEdit,declarationId]);
+ },[canEdit,declarationId,profile?.organization_id]);
 
  useEffect(()=>{void load()},[load]);
 
@@ -179,6 +218,13 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">HS Code</span><div className="font-black mt-1 ltr-num">{hs||'ثبت نشده'}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">مسیر</span><div className="font-bold mt-1">{decl.customs_path?PATH_LABELS[decl.customs_path]||decl.customs_path:'—'}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">وضعیت چک‌لیست</span><div className="font-black mt-1">{completed} از {items.length}</div></div>
+  </div></section>}
+
+  {decl&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><h2 className="font-black text-sm mb-3">ارتباطات پرونده</h2><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+   <div className="rounded-xl border app-border p-3"><span className="block text-xs app-muted">محموله</span><b className="block mt-1 break-words">{declarationContext.shipmentName||'بدون عنوان ثبت‌شده'}</b></div>
+   <div className="rounded-xl border app-border p-3"><span className="block text-xs app-muted">شماره بارنامه</span><b className="block mt-1 break-words ltr-num">{declarationContext.billOfLading||'ثبت نشده'}</b></div>
+   <div className="rounded-xl border app-border p-3"><span className="block text-xs app-muted">پرونده</span><b className="block mt-1 break-words">{declarationContext.caseNumber||'متصل نشده'}</b></div>
+   <div className="rounded-xl border app-border p-3"><span className="block text-xs app-muted">صاحب کالا</span><b className="block mt-1 break-words">{declarationContext.clientName||'قابل نمایش نیست'}</b></div>
   </div></section>}
 
   {decl?.customs_regime==='import_definitive'&&<CustomsDeclarationWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} customsPath={decl.customs_path||''} editable={canEdit}/>}
