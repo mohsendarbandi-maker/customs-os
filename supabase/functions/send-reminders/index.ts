@@ -86,13 +86,14 @@ async function deliver(){
      await admin.from("push_subscriptions").delete().eq("id",s.id);
     }else{
      transientFailure=true;await notePushFailure(s.id);
-     if(d.attempts<4)await finish(d.reminder_id,d.user_id,d.fire_at,"pending",msg,new Date(Date.now()+backoff(d.attempts)).toISOString());
-     else await finish(d.reminder_id,d.user_id,d.fire_at,"failed",msg,null);
     }
    }
   }
   if(delivered)await finish(d.reminder_id,d.user_id,d.fire_at,"sent",null,null);
-  else if(!transientFailure)await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",lastFailure??"no_active_device",null);
+  else if(transientFailure){
+   if(d.attempts<4)await finish(d.reminder_id,d.user_id,d.fire_at,"pending",lastFailure??"push_delivery_failed",new Date(Date.now()+backoff(d.attempts)).toISOString());
+   else await finish(d.reminder_id,d.user_id,d.fire_at,"failed",lastFailure??"push_delivery_failed",null);
+  }else await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",lastFailure??"no_active_device",null);
   if(new Date(d.fire_at)<=new Date(d.due_at))await advance(d.reminder_id);
  }
  return rows.length;
