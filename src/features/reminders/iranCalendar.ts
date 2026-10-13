@@ -75,6 +75,7 @@ export const IRAN_OBSERVANCES_1405: readonly IranCalendarObservance[] = [
   { date: '1405-02-27', title: 'روز ارتباطات و روابط عمومی', category: 'professional' },
   { date: '1405-02-28', title: 'روز بزرگداشت خیام', category: 'culture' },
   { date: '1405-03-03', title: 'روز آزادسازی خرمشهر؛ روز مقاومت، ایثار و پیروزی', category: 'national' },
+  { date: '1405-03-03', title: 'شهادت امام محمد باقر', category: 'culture' },
   { date: '1405-03-16', title: 'روز ملی محیط زیست', category: 'national' },
   { date: '1405-03-20', title: 'روز جهانی صنایع دستی', category: 'professional' },
   { date: '1405-03-27', title: 'روز جهاد کشاورزی', category: 'professional' },
