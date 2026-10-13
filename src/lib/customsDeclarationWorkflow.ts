@@ -247,9 +247,9 @@ export const getWorkflowStageIssues = (
     const permit = state.loadingPermit;
     const taxReady = oneOf(permit.tax_permission_status, ['approved', 'not_required']);
     const sataCode = textValue(permit.sata_code);
-    const 90PercentRequest = boolValue(permit.clearance_90_percent_requested);
-    const 90PercentReady = 90PercentRequest && !sataCode && textValue(permit.comment) !== '';
-    const centralBankReady = oneOf(permit.central_bank_status, ['approved', 'not_required']) || 90PercentReady;
+    const ninetyPercentRequest = boolValue(permit.clearance_90_percent_requested);
+    const ninetyPercentReady = ninetyPercentRequest && !sataCode && textValue(permit.comment) !== '';
+    const centralBankReady = oneOf(permit.central_bank_status, ['approved', 'not_required']) || ninetyPercentReady;
 
     if (!taxReady) issues.push('مجوز سازمان امور مالیاتی باید صادر یا غیرلازم ثبت شود.');
     if (!centralBankReady) {
