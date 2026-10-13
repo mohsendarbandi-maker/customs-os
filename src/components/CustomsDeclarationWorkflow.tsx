@@ -175,7 +175,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     {input('نام شرکت بازرسی',standard.inspection_company,v=>setStandard('inspection_company',v),'شرکت بازرسی')}
     {input('هزینه بازرسی (ریال)',standard.inspection_fee,v=>setStandard('inspection_fee',v),'مبلغ',true)}
     {check('هزینه بازرسی پرداخت شد',standard.inspection_paid,v=>setStandard('inspection_paid',v))}
-    {check('فاکتور بازرسی دریافت شد',standard.inspection_invoice_received,v=>setStandard('inspection_invoice_received',v))}
+    {select('وضعیت فاکتور بازرسی',standard.inspection_invoice_status||(standard.inspection_invoice_received?'received':'pending'),[['pending','در انتظار فاکتور'],['received','فاکتور دریافت شد'],['not_issued','فاکتور صادر نشد'],['not_required','نیازی به فاکتور نیست']],v=>{setStandard('inspection_invoice_status',v);setStandard('inspection_invoice_received',v==='received')})}
     {select('ارسال نمونه به آزمایشگاه',standard.sample_status,[['not_required','نیازی نیست'],['not_sent','ارسال نشده'],['sent_to_lab','ارسال شد'],['received','نتیجه دریافت شد']],v=>setStandard('sample_status',v))}
     {input('نام آزمایشگاه',standard.laboratory,v=>setStandard('laboratory',v),'نام آزمایشگاه')}
     {check('نتایج آزمایش در سامانه استاندارد بارگذاری شد',standard.results_uploaded,v=>setStandard('results_uploaded',v))}
@@ -211,6 +211,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
     {input('شماره بیمه‌نامه',port.insurance_policy_no,v=>setPort(p=>({...p,insurance_policy_no:v})),'شماره بیمه‌نامه')}
     {dateInput('تاریخ بیمه‌نامه',port.insurance_issue_date,v=>setPort(p=>({...p,insurance_issue_date:v})))}
+    {select('پیگیری بیمه در صورت صدور پس از قبض انبار',port.insurance_followup_status,[['pending','نیازمند بررسی / اقدام'],['completed','بیمه یا پوشش تکمیلی بررسی و تکمیل شد'],['not_required','عدم نیاز تأیید شد']],v=>setPort(p=>({...p,insurance_followup_status:v})))}
     {dateInput('تاریخ قبض انبار',port.warehouse_receipt_date,v=>setPort(p=>({...p,warehouse_receipt_date:v})))}
     {select('صورتحساب اولیه',port.initial_invoice_status,[['pending','در انتظار'],['received','دریافت شد'],['paid','پرداخت شد'],['not_required','نیازی نیست']],v=>setPort(p=>({...p,initial_invoice_status:v})))}
     {select('وکالت حمل',port.transport_power_of_attorney_status,[['pending','در انتظار'],['received','دریافت شد'],['approved','تأیید شد'],['not_required','نیازی نیست']],v=>setPort(p=>({...p,transport_power_of_attorney_status:v})))}
