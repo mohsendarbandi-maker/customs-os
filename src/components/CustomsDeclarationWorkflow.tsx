@@ -110,6 +110,15 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const save=async()=>{
   if(!row){setError('رکورد گردش‌کار هنوز آماده نیست. یک‌بار بروزرسانی کنید.');return}
   if(!editable)return;
+  if(stage==='port_charges'&&port.insurance_issue_date&&port.warehouse_receipt_date){
+   const insuranceDate=jalaliDateToDate(port.insurance_issue_date);
+   const receiptDate=jalaliDateToDate(port.warehouse_receipt_date);
+   if(!insuranceDate||!receiptDate){setError('تاریخ بیمه‌نامه یا قبض انبار معتبر نیست؛ تاریخ شمسی را به‌شکل سال/ماه/روز بررسی کنید.');return}
+   if(insuranceDate.getTime()>=receiptDate.getTime()){
+    setError('تاریخ صدور بیمه‌نامه باید قبل از تاریخ قبض انبار باشد. تاریخ‌ها را اصلاح کنید یا اگر تاریخ قبض انبار هنوز مشخص نیست، موقتاً آن را خالی بگذارید.');
+    return;
+   }
+  }
   setSaving(true);setError('');setMessage('');
   try{
    const nextEvaluation={...evaluation};
