@@ -235,8 +235,8 @@ export const getWorkflowStageIssues = (
       issues.push('مبلغ پرداخت نقدی صندوق را ثبت کنید.');
     } else if (method === 'bank_guarantee' && (!hasGuarantee || !hasGuaranteeReference)) {
       issues.push('نوع ضمانت‌نامه (حقوق ورودی/ارزش افزوده) و شماره مرجع آن را ثبت کنید.');
-    } else if (method === 'mixed' && !hasCashAmount && (!hasGuarantee || !hasGuaranteeReference)) {
-      issues.push('برای تسویه ترکیبی، مبلغ نقدی یا جزئیات ضمانت‌نامه را ثبت کنید.');
+    } else if (method === 'mixed' && (!hasCashAmount || !hasGuarantee || !hasGuaranteeReference)) {
+      issues.push('برای تسویه ترکیبی، مبلغ نقدی، نوع ضمانت‌نامه و شماره مرجع آن را ثبت کنید.');
     } else if (!oneOf(method, ['cash', 'bank_guarantee', 'mixed'])) {
       issues.push('روش تسویه صندوق را انتخاب کنید.');
     }
