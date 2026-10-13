@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { CustomsWorkflowAuditHistory } from './CustomsWorkflowAuditHistory';
 
 type StageKey = 'documents' | 'permits' | 'declaration' | 'valuation' | 'loading' | 'exit' | 'completed';
 type Field = { key: string; label: string; kind?: 'select' | 'date' | 'number'; options?: { value: string; label: string }[] };
@@ -180,5 +181,6 @@ export const CustomsTransitReimportWorkflow: React.FC<Props> = ({ declarationId,
       {!editable && <p className="text-xs app-muted">این حساب فقط اجازه مشاهده گردش‌کار را دارد.</p>}
     </div>
     <p className="text-xs app-muted">این فرم برای ثبت و پیگیری داخلی است؛ مهلت‌ها، مجوزها و تشریفات نهایی باید با پروانه و مقررات رسمی همان پرونده تطبیق داده شوند.</p>
-  </section>;
+  <CustomsWorkflowAuditHistory declarationId={declarationId} organizationId={organizationId} userId={userId}/>
+    </section>;
 };

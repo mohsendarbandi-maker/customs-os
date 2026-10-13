@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { CustomsWorkflowAuditHistory } from './CustomsWorkflowAuditHistory';
 import { validateAdditionalRegimeStage } from '../lib/customsOtherRegimeValidation';
 
 type StageKey = 'documents' | 'permits' | 'declaration' | 'loading' | 'exit' | 'completed';
@@ -126,5 +127,6 @@ export const CustomsOtherRegimeWorkflow: React.FC<Props> = ({ declarationId, org
         {stage === 'completed' && <span className="text-xs app-muted self-center"><ShieldCheck className="inline ml-1" size={15}/>بستن نهایی پس از تکمیل مرجع تأیید</span>}
       </div>
     </div>
-  </section>;
+  <CustomsWorkflowAuditHistory declarationId={declarationId} organizationId={organizationId} userId={userId}/>
+    </section>;
 };
