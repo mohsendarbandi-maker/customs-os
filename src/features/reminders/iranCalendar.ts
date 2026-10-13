@@ -52,6 +52,56 @@ export const IRAN_OFFICIAL_HOLIDAYS_1405: readonly IranCalendarHoliday[] = [
   { date: '1405-12-29', title: 'روز ملی شدن صنعت نفت' },
 ] as const;
 
+export type IranCalendarOccasionCategory = 'national' | 'culture' | 'profession' | 'science' | 'environment';
+export type IranCalendarOccasion = { month:number; day:number; title:string; shortTitle:string; category:IranCalendarOccasionCategory };
+
+/** Recurring Solar Hijri occasions; not every named day is a public holiday. */
+export const IRAN_FIXED_OCCASIONS: readonly IranCalendarOccasion[] = [
+{month:1,day:1,title:'آغاز نوروز و سال نو',shortTitle:'نوروز',category:'national'},
+{month:1,day:12,title:'روز جمهوری اسلامی ایران',shortTitle:'جمهوری اسلامی',category:'national'},
+{month:1,day:13,title:'روز طبیعت؛ سیزده‌بدر',shortTitle:'روز طبیعت',category:'culture'},
+{month:1,day:20,title:'روز ملی فناوری هسته‌ای',shortTitle:'فناوری هسته‌ای',category:'science'},
+{month:1,day:29,title:'روز ارتش جمهوری اسلامی ایران',shortTitle:'روز ارتش',category:'national'},
+{month:2,day:1,title:'روز بزرگداشت سعدی',shortTitle:'بزرگداشت سعدی',category:'culture'},
+{month:2,day:10,title:'روز ملی خلیج فارس',shortTitle:'خلیج فارس',category:'national'},
+{month:2,day:11,title:'روز کارگر',shortTitle:'روز کارگر',category:'profession'},
+{month:2,day:12,title:'روز معلم و بزرگداشت استاد مطهری',shortTitle:'روز معلم',category:'profession'},
+{month:2,day:15,title:'روز بزرگداشت شیخ صدوق',shortTitle:'بزرگداشت شیخ صدوق',category:'culture'},
+{month:2,day:25,title:'روز بزرگداشت فردوسی',shortTitle:'بزرگداشت فردوسی',category:'culture'},
+{month:3,day:1,title:'روز بزرگداشت حکیم عمر خیام',shortTitle:'بزرگداشت خیام',category:'science'},
+{month:3,day:3,title:'روز آزادسازی خرمشهر؛ روز مقاومت، ایثار و پیروزی',shortTitle:'آزادسازی خرمشهر',category:'national'},
+{month:3,day:15,title:'روز جهانی محیط زیست',shortTitle:'محیط زیست',category:'environment'},
+{month:3,day:31,title:'روز بزرگداشت دکتر علی شریعتی',shortTitle:'بزرگداشت شریعتی',category:'culture'},
+{month:4,day:7,title:'روز قوه قضائیه',shortTitle:'قوه قضائیه',category:'national'},
+{month:4,day:10,title:'روز صنعت و معدن',shortTitle:'صنعت و معدن',category:'profession'},
+{month:4,day:14,title:'روز قلم',shortTitle:'روز قلم',category:'culture'},
+{month:5,day:17,title:'روز خبرنگار',shortTitle:'روز خبرنگار',category:'profession'},
+{month:5,day:28,title:'روز بزرگداشت زکریای رازی',shortTitle:'بزرگداشت رازی',category:'science'},
+{month:6,day:1,title:'روز بزرگداشت ابوعلی سینا و روز پزشک',shortTitle:'روز پزشک',category:'profession'},
+{month:6,day:4,title:'روز کارمند',shortTitle:'روز کارمند',category:'profession'},
+{month:6,day:5,title:'روز داروسازی و بزرگداشت زکریای رازی',shortTitle:'روز داروساز',category:'profession'},
+{month:6,day:13,title:'روز بزرگداشت ابوریحان بیرونی',shortTitle:'بزرگداشت بیرونی',category:'science'},
+{month:6,day:21,title:'روز ملی سینما',shortTitle:'روز سینما',category:'culture'},
+{month:6,day:27,title:'روز شعر و ادب فارسی؛ بزرگداشت شهریار',shortTitle:'شعر و ادب فارسی',category:'culture'},
+{month:7,day:1,title:'آغاز سال تحصیلی و بازگشایی مدارس',shortTitle:'آغاز مدرسه',category:'culture'},
+{month:7,day:7,title:'روز آتش‌نشانی و ایمنی',shortTitle:'آتش‌نشانی',category:'profession'},
+{month:8,day:13,title:'روز دانش‌آموز',shortTitle:'روز دانش‌آموز',category:'culture'},
+{month:9,day:16,title:'روز دانشجو',shortTitle:'روز دانشجو',category:'culture'},
+{month:9,day:25,title:'روز پژوهش',shortTitle:'روز پژوهش',category:'science'},
+{month:9,day:30,title:'شب یلدا؛ جشن مهر و روشنایی',shortTitle:'شب یلدا',category:'culture'},
+{month:11,day:12,title:'سالروز ورود امام خمینی به ایران',shortTitle:'دهه فجر',category:'national'},
+{month:11,day:22,title:'سالروز پیروزی انقلاب اسلامی',shortTitle:'پیروزی انقلاب',category:'national'},
+{month:11,day:29,title:'روز بزرگداشت خواجه نصیرالدین طوسی و روز مهندس',shortTitle:'روز مهندس',category:'profession'},
+{month:12,day:5,title:'روز مهندسی',shortTitle:'روز مهندس',category:'profession'},
+{month:12,day:15,title:'روز درختکاری',shortTitle:'روز درختکاری',category:'environment'},
+{month:12,day:29,title:'روز ملی شدن صنعت نفت ایران',shortTitle:'ملی شدن نفت',category:'national'},
+] as const;
+const occasionsByMonthDay = new Map<string, readonly IranCalendarOccasion[]>();
+for (const occasion of IRAN_FIXED_OCCASIONS) {
+ const key = `${occasion.month}-${occasion.day}`;
+ occasionsByMonthDay.set(key, [...(occasionsByMonthDay.get(key) ?? []), occasion]);
+}
+
 const holidayByDate = new Map(
   IRAN_OFFICIAL_HOLIDAYS_1405.map((holiday) => [holiday.date, holiday]),
 );
@@ -62,6 +112,7 @@ export type IranCalendarDayInfo = {
   weekday: string;
   isFriday: boolean;
   holiday: IranCalendarHoliday | null;
+  occasions: readonly IranCalendarOccasion[];
   isOfficialHoliday: boolean;
   isWorkingDay: boolean | null;
   annualHolidayDataAvailable: boolean;
@@ -104,6 +155,7 @@ export function getIranCalendarDayInfo(
   const date = iranJalaliDateKey(year, month, day);
   const override = overrides[date] ?? null;
   const holiday = year === IRAN_CALENDAR_DATA_YEAR ? holidayByDate.get(date) ?? null : null;
+  const occasions = occasionsByMonthDay.get(`${month}-${day}`) ?? [];
   const weekday = weekdayForJalaliDate(date);
   const isFriday = weekday === 'Fri';
   const isOfficialHoliday = Boolean(holiday);
@@ -118,6 +170,7 @@ export function getIranCalendarDayInfo(
     weekday,
     isFriday,
     holiday,
+    occasions,
     isOfficialHoliday,
     isWorkingDay,
     annualHolidayDataAvailable: hasVerifiedIranHolidayData(year),
