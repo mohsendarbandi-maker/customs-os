@@ -95,7 +95,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    }else{
     setEvaluation(defaults(info).evaluation);setExpertise(defaults(info).expertise);
    }
-  }catch(e:any){setError(e?.message||'بارگذاری گردش‌کار گمرکی ناموفق بود')}
+  }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'دسترسی مشاهده گردش‌کار برای این کاربر مجاز نیست.':'بارگذاری گردش‌کار گمرکی انجام نشد؛ اتصال اظهارنامه و مجوز دسترسی را بررسی کنید.')}
   finally{setLoading(false)}
  },[declarationId,organizationId,userId,editable,defaults]);
  useEffect(()=>{void load()},[load]);
@@ -118,7 +118,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    const{error:e}=await supabase.from('customs_declaration_workflow').update(payload).eq('id',row.id).eq('organization_id',organizationId);
    if(e)throw e;
    setEvaluation(nextEvaluation);setRow({...row,...payload} as WorkflowRow);setMessage('مراحل عملیات گمرکی ذخیره شد.');
-  }catch(e:any){setError(e?.message||'ذخیره عملیات گمرکی انجام نشد')}
+  }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'مجوز ذخیره عملیات گمرکی را ندارید.':'ذخیره عملیات گمرکی انجام نشد؛ اطلاعات واردشده و دسترسی را بررسی کنید.')}
   finally{setSaving(false)}
  };
  const input=(label:string,value:any,onChange:(v:string)=>void,placeholder='',numeric=false)=><Label>{label}<input value={value==null?'':typeof value==='boolean'?'':String(value)} onChange={e=>onChange(numeric?digits(e.target.value).replace(/[^0-9.]/g,''):e.target.value)} inputMode={numeric?'decimal':undefined} placeholder={placeholder} disabled={!editable} className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)] disabled:opacity-60"/></Label>;
