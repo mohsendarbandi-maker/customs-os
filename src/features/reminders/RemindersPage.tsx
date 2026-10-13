@@ -436,7 +436,7 @@ const SelectedCalendarDayPanel:React.FC<{selectedKey:string;organizationId:strin
  const [expandedId,setExpandedId]=useState<string|null>(null);
  const valid=Number.isInteger(year)&&month>=1&&month<=12&&day>=1&&day<=31;
  const dayInfo=useMemo(()=>valid?getIranCalendarDayInfo(year,month,day):null,[valid,year,month,day]);
- const range=useMemo(()=>valid?{start:zonedJalaliToDate(year,month,day,0,0,0),end:zonedJalaliToDate(...(()=>{const next=addJalaliDays(zonedJalaliToDate(year,month,day,12,0,0),1);const j=toJalali(next);return [j.year,j.month,j.day,0,0,0] as [number,number,number,number,number,number]})())}:null,[valid,year,month,day]);
+ const range=useMemo(()=>{if(!valid)return null;const start=zonedJalaliToDate(year,month,day,0,0,0);const next=toJalali(addJalaliDays(zonedJalaliToDate(year,month,day,12,0,0),1));return{start,end:zonedJalaliToDate(next.year,next.month,next.day,0,0,0)};},[valid,year,month,day]);
  const query=useQuery<Reminder[]>({queryKey:['reminder-selected-calendar-day',organizationId,selectedKey],enabled:Boolean(organizationId&&range),staleTime:15000,queryFn:async()=>{if(!organizationId||!range)return[];const {data,error}=await supabase.from('operational_reminders').select('*').eq('organization_id',organizationId).is('deleted_at',null).gte('due_at',range.start.toISOString()).lt('due_at',range.end.toISOString()).order('due_at',{ascending:true});if(error)throw error;return (data??[]) as Reminder[];}});
  const displayDate=valid?formatReminderDate(zonedJalaliToDate(year,month,day,12,0,0),language):selectedKey;
  const weekdayLabel:Record<string,string>={Sat:'شنبه',Sun:'یکشنبه',Mon:'دوشنبه',Tue:'سه‌شنبه',Wed:'چهارشنبه',Thu:'پنجشنبه',Fri:'جمعه'};
