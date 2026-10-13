@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), 'utf8');
 const pushClient = read('src/features/reminders/push.ts');
 const sender = read('supabase/functions/send-reminders/index.ts');
+const remindersPage = read('src/features/reminders/RemindersPage.tsx');
 
 describe('reminder push delivery reliability', () => {
   it('enables server-side push delivery only after explicit device subscription succeeds', () => {
@@ -14,6 +15,13 @@ describe('reminder push delivery reliability', () => {
     expect(subscription).toBeGreaterThan(-1);
     expect(optIn).toBeGreaterThan(subscription);
     expect(pushClient).toContain("setNotificationPreferences({push_enabled:false})");
+  });
+
+  it('lets previously granted browsers re-enable server delivery when the preference is off', () => {
+    expect(remindersPage).toContain("select('push_enabled,hide_content,quiet_start,quiet_end')");
+    expect(remindersPage).toContain('const pushActive=pushEnabled&&permission===\'granted\'');
+    expect(remindersPage).toContain(">{pushActive?'غیرفعال‌سازی':'فعال‌سازی'}");
+    expect(remindersPage).toContain('disabled={busy||!pushActive} onClick={()=>void test()}');
   });
 
   it('records successful device delivery and resets its failure counter', () => {
