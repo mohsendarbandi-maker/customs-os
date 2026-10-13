@@ -1,7 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
 import{AlertTriangle,Clock3,RefreshCw,Save,ShieldCheck}from'lucide-react';
 import{supabase}from'../lib/supabase';
-import{compareJalaliDates,getAbandonedGoodsWarnings}from'../lib/customsDeclarationWorkflow';
+import{compareJalaliDates,getAbandonedGoodsWarnings,getWorkflowStageIssues,type CustomsWorkflowValidationState}from'../lib/customsDeclarationWorkflow';
 
 type WorkflowRow={
  id:string;organization_id:string;declaration_id:string;current_stage:string;
@@ -13,11 +13,11 @@ type WorkflowEvent={id:string;event_type:'created'|'stage_changed'|'saved';previ
 type Props={declarationId:string;organizationId:string;userId?:string;customsRegime:string;customsPath:string;editable:boolean};
 const stages=[['evaluation','ارزیابی'],['expertise','کارشناسی و مجوزها'],['cashier','صندوق'],['loading_permit','مجوز بارگیری'],['exit','درب خروج'],['port_charges','عوارض بندری'],['abandoned','متروکه'],['completed','تکمیل']] as const;
 const emptyEvaluation={status:'not_required',evaluator_number:'',expert_requested:false,expert_request_note:''};
-const emptyExpertise={appointment_status:'not_requested',appointment_number:'',road_authority_status:'not_required',plant_quarantine_status:'not_required',standard:{expert_review:'pending',inspection_status:'not_requested',inspection_company:'',inspection_fee:null,inspection_paid:false,inspection_invoice_received:false,sample_status:'not_sent',laboratory:'',results_uploaded:false,standard_fee:null,standard_fee_paid:false,standard_notified:false}};
+const emptyExpertise={appointment_status:'not_requested',appointment_number:'',road_authority_status:'not_required',plant_quarantine_status:'not_required',standard:{expert_review:'pending',inspection_status:'not_requested',inspection_company:'',inspection_fee:null,inspection_paid:false,inspection_invoice_received:false,inspection_invoice_status:'pending',sample_status:'not_sent',laboratory:'',results_uploaded:false,standard_fee:null,standard_fee_paid:false,standard_notified:false}};
 const emptyCashier={method:'pending',cash_paid_irr:null,guarantee_duties:false,guarantee_vat:false,guarantee_reference:''};
 const emptyLoadingPermit={clause2_request_status:'not_required',tax_permission_status:'pending',central_bank_status:'pending',sata_code:'',clearance_90_percent_requested:false,comment:''};
 const emptyExit={loading_permission_status:'pending',financial_registration_status:'pending',weighbridge_required:false,weighbridge_demand_irr:null,weighbridge_paid:false,loading_completed_at:''};
-const emptyPort={insurance_policy_no:'',insurance_issue_date:'',warehouse_receipt_date:'',initial_invoice_status:'pending',transport_power_of_attorney_status:'pending',loading_form_received_at:'',loading_started_at:'',supplemental_invoice_status:'not_required',last_truck_loaded_at:''};
+const emptyPort={insurance_policy_no:'',insurance_issue_date:'',insurance_followup_status:'pending',warehouse_receipt_date:'',initial_invoice_status:'pending',transport_power_of_attorney_status:'pending',loading_form_received_at:'',loading_started_at:'',supplemental_invoice_status:'not_required',last_truck_loaded_at:''};
 const digits=(v:string)=>String(v||'').replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const faDigits=(v:string|number)=>String(v??'').replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 const Label:React.FC<{children:React.ReactNode}>=({children})=><label className="block min-w-0 text-xs app-muted"><span className="block mb-1.5">{children}</span></label>;
@@ -110,7 +110,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
 
  const overdue=useMemo(()=>getAbandonedGoodsWarnings({loadingFormReceivedAt:port.loading_form_received_at,loadingCompletedAt:exitState.loading_completed_at,warehouseReceiptAt:port.warehouse_receipt_date,loadingStartedAt:port.loading_started_at}),[port.loading_form_received_at,port.warehouse_receipt_date,port.loading_started_at,exitState.loading_completed_at]);
  const insuranceComparison=useMemo(()=>compareJalaliDates(port.insurance_issue_date,port.warehouse_receipt_date),[port.insurance_issue_date,port.warehouse_receipt_date]);
- const insuranceWarning=insuranceComparison!==null&&insuranceComparison>=0;
+ const insuranceWarning=insuranceComparison!==null&&insuranceComparison>=0&&port.insurance_followup_status!=='completed';
 
  const save=async()=>{
   if(!row){setError('رکورد گردش‌کار هنوز آماده نیست. یک‌بار بروزرسانی کنید.');return}
