@@ -1,7 +1,9 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
 import{AlertTriangle,Clock3,RefreshCw,Save,ShieldCheck}from'lucide-react';
 import{supabase}from'../lib/supabase';
-import{compareJalaliDates,getAbandonedGoodsWarnings,getWorkflowStageIssues,type CustomsWorkflowValidationState}from'../lib/customsDeclarationWorkflow';
+import{compareJalaliDates,getAbandonedGoodsWarnings,getWorkflowStageIssues,parseJalaliDate,type CustomsWorkflowValidationState}from'../lib/customsDeclarationWorkflow';
+import{toJalali,zonedJalaliToDate}from'../lib/jalali';
+import{JalaliDateTimePicker}from'../features/reminders/JalaliDateTimePicker';
 
 type WorkflowRow={
  id:string;organization_id:string;declaration_id:string;current_stage:string;
@@ -39,6 +41,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const[message,setMessage]=useState('');
  const[history,setHistory]=useState<WorkflowEvent[]>([]);
  const[historyUnavailable,setHistoryUnavailable]=useState(false);
+ const[datePickerTarget,setDatePickerTarget]=useState<{label:string;value:string;onChange:(v:string)=>void}|null>(null);
  const isImport=customsRegime==='import_definitive';
 
  const refreshHistory=useCallback(async()=>{
@@ -135,7 +138,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
   finally{setSaving(false)}
  };
  const input=(label:string,value:any,onChange:(v:string)=>void,placeholder='',numeric=false)=><Label>{label}<input value={value==null?'':typeof value==='boolean'?'':String(value)} onChange={e=>onChange(numeric?digits(e.target.value).replace(/[^0-9.]/g,''):e.target.value)} inputMode={numeric?'decimal':undefined} placeholder={placeholder} disabled={!editable} className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)] disabled:opacity-60"/></Label>;
- const dateInput=(label:string,value:any,onChange:(v:string)=>void)=><Label>{label}<input value={faDigits(value||'')} onChange={e=>onChange(digits(e.target.value).replace(/[.-]/g,'/'))} placeholder="۱۴۰۵/۰۷/۲۱" inputMode="numeric" disabled={!editable} className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)] disabled:opacity-60"/></Label>;
+ const dateInput=(label:string,value:any,onChange:(v:string)=>void)=>{const parsed=parseJalaliDate(String(value||''));return <Label>{label}<button type="button" onClick={()=>setDatePickerTarget({label,value:String(value||''),onChange})} disabled={!editable} aria-label={'انتخاب تاریخ '+label} className="w-full flex items-center justify-between gap-2 rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)] text-right disabled:opacity-60"><span>{parsed?faDigits(`${parsed.year}/${String(parsed.month).padStart(2,'0')}/${String(parsed.day).padStart(2,'0')}`):'انتخاب تاریخ شمسی'}</span><Clock3 size={16} className="app-muted"/></button></Label>};
  const select=(label:string,value:any,options:readonly (readonly [string,string])[]|[string,string][],onChange:(v:string)=>void)=><Label>{label}<select value={value||''} onChange={e=>onChange(e.target.value)} disabled={!editable} className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)] disabled:opacity-60">{options.map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select></Label>;
  const check=(label:string,value:any,onChange:(v:boolean)=>void,disabled=false)=><label className={'flex items-center gap-2 rounded-xl border app-border bg-[var(--surface-2)] p-3 text-sm '+(disabled?'opacity-60':'')}><input type="checkbox" checked={!!value} onChange={e=>onChange(e.target.checked)} disabled={!editable||disabled} className="h-4 w-4 accent-[var(--primary)]"/><span>{label}</span></label>;
  const setEx=(key:string,value:any)=>setExpertise(p=>({...p,[key]:value}));
@@ -228,6 +231,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    <div className="grid sm:grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-[var(--surface-2)] p-3">فرم بارگیری: {faDigits(port.loading_form_received_at||'ثبت نشده')} · مهلت یک‌ماهه</div><div className="rounded-xl bg-[var(--surface-2)] p-3">قبض انبار: {faDigits(port.warehouse_receipt_date||'ثبت نشده')} · مهلت سه‌ماهه</div></div>
    {input('یادداشت پیگیری متروکه',notes,v=>setNotes(v),'اقدام انجام‌شده، مرجع پیگیری و توضیحات')}
   </div>)}
+  {datePickerTarget&&<JalaliDateTimePicker value={(()=>{const p=parseJalaliDate(datePickerTarget.value);return p?zonedJalaliToDate(p.year,p.month,p.day,9,0):new Date()})()} onChange={date=>{const j=toJalali(date);datePickerTarget.onChange(`${j.year}/${String(j.month).padStart(2,'0')}/${String(j.day).padStart(2,'0')}`);setDatePickerTarget(null)}} onClose={()=>setDatePickerTarget(null)} allDay onAllDayChange={()=>{}} language="fa" onApply={()=>setDatePickerTarget(null)}/>}
   {!loading&&stage==='completed'&&panel('تکمیل گردش‌کار','پس از کنترل اسناد، وضعیت نهایی و توضیحات پرونده را ذخیره کنید.',<div className="grid sm:grid-cols-2 gap-3">{input('یادداشت نهایی',notes,v=>setNotes(v),'خلاصه وضعیت و موارد باقی‌مانده')}</div>)}
   {!loading&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 flex flex-wrap items-center justify-between gap-3"><div className="text-xs app-muted flex items-center gap-2"><Clock3 size={15}/>مرحله جاری: <b className="text-[var(--text)]">{stages.find(x=>x[0]===stage)?.[1]||stage}</b>{row?.updated_at&&<span>· آخرین ذخیره {new Date(row.updated_at).toLocaleString('fa-IR')}</span>}</div><button type="button" onClick={()=>void save()} disabled={!editable||saving||loading||!row} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-3 text-sm font-black text-white disabled:opacity-50"><Save size={16}/>{saving?'در حال ذخیره…':'ذخیره مرحله و وضعیت‌ها'}</button></section>}
   {!loading&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5 space-y-4">
