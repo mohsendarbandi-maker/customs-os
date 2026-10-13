@@ -1,3 +1,5 @@
+import { addJalaliDays, jalaliMonthLength, toJalali, zonedJalaliToDate } from '../../lib/jalali';
+
 /**
  * Iranian national holidays transcribed for Solar Hijri year 1405.
  * Source of the annual calendar: University of Tehran, Institute of Geophysics,
