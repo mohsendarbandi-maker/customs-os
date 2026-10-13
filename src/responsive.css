@@ -1571,3 +1571,95 @@ html:has(.reminders-app-standalone), body:has(.reminders-app-standalone) {
   padding:0 3px !important; overflow:hidden !important; text-overflow:ellipsis !important;
   font-size:10px !important; line-height:1.1 !important; border-radius:7px !important;
 }
+
+
+/* Home dashboard: all key sections fit in one viewport, with compact readable cards. */
+.reminders-app-standalone .reminders-hub-screen {
+  height:100% !important; max-height:100% !important; min-height:0 !important;
+  overflow:hidden !important; display:flex !important; flex-direction:column !important;
+  gap:5px !important; padding:5px 9px 7px !important; box-sizing:border-box !important;
+}
+.reminders-app-standalone .reminders-hub-header { flex:0 0 auto !important; margin:0 !important; padding:4px 7px !important; border-radius:11px !important; }
+.reminders-app-standalone .reminders-hub-identity { min-height:32px !important; gap:6px !important; }
+.reminders-app-standalone .reminders-hub-identity .reminders-brand-icon { width:27px !important; height:27px !important; }
+.reminders-app-standalone .reminders-hub-identity h1 { font-size:14px !important; line-height:1.15 !important; margin:0 !important; }
+.reminders-app-standalone .reminders-hub-identity p { margin:2px 0 0 !important; font-size:9px !important; line-height:1.2 !important; white-space:nowrap !important; }
+.reminders-app-standalone .reminders-hub-actions { display:flex !important; align-items:center !important; gap:3px !important; flex:0 0 auto !important; }
+.reminders-app-standalone .reminders-hub-actions button { width:28px !important; min-width:28px !important; height:28px !important; min-height:28px !important; padding:0 !important; border-radius:7px !important; }
+.reminders-app-standalone .reminders-hub-actions button svg { width:15px !important; height:15px !important; }
+.reminders-app-standalone .reminders-hub-search {
+  flex:0 0 29px !important; height:29px !important; min-height:29px !important; margin:0 !important;
+  padding:0 9px !important; border-radius:8px !important; font-size:11px !important;
+}
+.reminders-app-standalone .reminders-hub-search svg { width:14px !important; height:14px !important; }
+.reminders-app-standalone .reminders-hub-section {
+  flex:0 0 auto !important; min-height:0 !important; margin:0 !important; padding:5px 7px !important;
+  border-radius:11px !important; overflow:hidden !important; box-shadow:none !important;
+}
+.reminders-app-standalone .reminders-section-title { margin:0 0 4px !important; min-height:20px !important; gap:5px !important; }
+.reminders-app-standalone .reminders-section-title h2 { margin:0 !important; font-size:12px !important; line-height:1.2 !important; }
+.reminders-app-standalone .reminders-section-title p { margin:1px 0 0 !important; font-size:9px !important; line-height:1.2 !important; }
+.reminders-app-standalone .reminders-section-title > button { min-height:22px !important; height:22px !important; padding:0 5px !important; gap:2px !important; border-radius:6px !important; font-size:10px !important; white-space:nowrap !important; }
+.reminders-app-standalone .reminders-up-next { padding-bottom:5px !important; }
+.reminders-app-standalone .reminders-up-next-row {
+  min-height:25px !important; height:25px !important; display:flex !important; align-items:center !important;
+  gap:5px !important; padding:2px 3px !important; border-radius:6px !important; border-bottom:1px solid var(--border) !important;
+}
+.reminders-app-standalone .reminders-up-next-row > .reminders-up-next-check {
+  width:17px !important; min-width:17px !important; height:17px !important; min-height:17px !important; padding:0 !important; border-radius:5px !important;
+}
+.reminders-app-standalone .reminders-up-next-row > .min-w-0 { display:flex !important; flex-direction:row !important; align-items:center !important; gap:7px !important; }
+.reminders-app-standalone .reminders-up-next-row strong { display:block !important; min-width:0 !important; overflow:hidden !important; text-overflow:ellipsis !important; white-space:nowrap !important; font-size:10px !important; line-height:1.25 !important; }
+.reminders-app-standalone .reminders-up-next-row small { display:block !important; flex:0 0 auto !important; font-size:9px !important; line-height:1.2 !important; white-space:nowrap !important; }
+.reminders-app-standalone .reminders-up-next-row > button:last-child { width:18px !important; min-width:18px !important; height:18px !important; min-height:18px !important; padding:0 !important; }
+.reminders-app-standalone .reminders-up-next-row > button:last-child svg { width:13px !important; height:13px !important; }
+.reminders-app-standalone .reminders-smart-grid {
+  display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  gap:4px !important; margin:0 !important;
+}
+.reminders-app-standalone .reminders-smart-card {
+  display:grid !important; grid-template-columns:20px minmax(0,1fr) auto !important;
+  grid-template-rows:19px 15px !important; align-items:center !important; column-gap:4px !important; row-gap:1px !important;
+  min-width:0 !important; min-height:37px !important; height:37px !important; padding:3px 5px !important;
+  border-radius:8px !important; box-shadow:none !important; overflow:hidden !important;
+}
+.reminders-app-standalone .reminders-smart-icon { grid-column:1 !important; grid-row:1 / span 2 !important; width:19px !important; height:19px !important; border-radius:5px !important; display:grid !important; place-items:center !important; }
+.reminders-app-standalone .reminders-smart-icon svg { width:13px !important; height:13px !important; }
+.reminders-app-standalone .reminders-smart-label { grid-column:2 !important; grid-row:1 !important; min-width:0 !important; overflow:hidden !important; text-overflow:ellipsis !important; white-space:nowrap !important; font-size:9px !important; line-height:1.1 !important; }
+.reminders-app-standalone .reminders-smart-card > strong { grid-column:3 !important; grid-row:1 !important; font-size:12px !important; line-height:1 !important; }
+.reminders-app-standalone .reminders-smart-card > small { grid-column:2 / span 2 !important; grid-row:2 !important; min-width:0 !important; overflow:hidden !important; text-overflow:ellipsis !important; white-space:nowrap !important; font-size:8px !important; line-height:1.1 !important; opacity:.78 !important; }
+.reminders-app-standalone .reminders-smart-arrow { display:none !important; }
+.reminders-app-standalone .reminders-my-lists { padding-top:4px !important; }
+.reminders-app-standalone .reminders-my-list-rows { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:3px 5px !important; }
+.reminders-app-standalone .reminders-my-list-rows > button {
+  display:flex !important; align-items:center !important; gap:5px !important; min-width:0 !important;
+  height:28px !important; min-height:28px !important; padding:3px 5px !important; border-radius:7px !important; overflow:hidden !important;
+}
+.reminders-app-standalone .reminders-my-list-rows .reminders-category-icon { width:20px !important; min-width:20px !important; height:20px !important; min-height:20px !important; border-radius:5px !important; }
+.reminders-app-standalone .reminders-my-list-rows .reminders-category-icon svg { width:12px !important; height:12px !important; }
+.reminders-app-standalone .reminders-my-list-rows .reminders-category-copy { min-width:0 !important; display:flex !important; flex-direction:row !important; align-items:center !important; gap:4px !important; }
+.reminders-app-standalone .reminders-my-list-rows .reminders-category-copy strong { font-size:9px !important; line-height:1.2 !important; white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important; }
+.reminders-app-standalone .reminders-my-list-rows .reminders-category-copy small { display:none !important; }
+.reminders-app-standalone .reminders-my-list-rows > button > svg { width:12px !important; height:12px !important; margin-inline-start:auto !important; }
+@media(max-width:420px) {
+ .reminders-app-standalone .reminders-hub-screen { padding:4px 6px 5px !important; gap:4px !important; }
+ .reminders-app-standalone .reminders-hub-section { padding:4px 5px !important; }
+ .reminders-app-standalone .reminders-hub-identity p { font-size:8px !important; }
+ .reminders-app-standalone .reminders-hub-actions { gap:2px !important; }
+ .reminders-app-standalone .reminders-hub-actions button { width:25px !important; min-width:25px !important; height:25px !important; min-height:25px !important; }
+ .reminders-app-standalone .reminders-up-next-row strong { font-size:9px !important; }
+ .reminders-app-standalone .reminders-up-next-row small { font-size:8px !important; }
+ .reminders-app-standalone .reminders-smart-card { grid-template-columns:16px minmax(0,1fr) auto !important; padding:2px 3px !important; column-gap:3px !important; }
+ .reminders-app-standalone .reminders-smart-icon { width:16px !important; height:16px !important; }
+ .reminders-app-standalone .reminders-smart-icon svg { width:11px !important; height:11px !important; }
+ .reminders-app-standalone .reminders-smart-label { font-size:8px !important; }
+ .reminders-app-standalone .reminders-smart-card > small { font-size:7px !important; }
+}
+@media(max-height:740px) {
+ .reminders-app-standalone .reminders-hub-screen { gap:3px !important; padding-block:3px !important; }
+ .reminders-app-standalone .reminders-hub-section { padding-block:3px !important; }
+ .reminders-app-standalone .reminders-section-title p { display:none !important; }
+ .reminders-app-standalone .reminders-up-next-row { height:22px !important; min-height:22px !important; }
+ .reminders-app-standalone .reminders-smart-card { height:33px !important; min-height:33px !important; grid-template-rows:16px 12px !important; }
+ .reminders-app-standalone .reminders-my-list-rows > button { height:25px !important; min-height:25px !important; }
+}
