@@ -56,6 +56,15 @@ async function advance(reminderId:string){
  await admin.from("operational_reminders").update({due_at:next.toISOString(),snoozed_until:null,snooze_count:0,occurrence_key:next.toISOString()}).eq("id",reminderId);
 }
 async function send(sub:{endpoint:string;p256dh:string;auth:string},payload:Record<string,unknown>,vapid:{publicKey:string;privateKey:string;subject:string}){return sendPushNotification(toSub(sub),rawPayload(JSON.stringify(payload)),vapid,{ttl:86400,urgency:"high"});}
+async function notePushSuccess(id:string){
+ const {error}=await admin.from("push_subscriptions").update({last_seen_at:new Date().toISOString(),last_success_at:new Date().toISOString(),failure_count:0,is_active:true}).eq("id",id);
+ if(error)throw error;
+}
+async function notePushFailure(id:string){
+ const {data}=await admin.from("push_subscriptions").select("failure_count").eq("id",id).maybeSingle();
+ if(!data)return;
+ await admin.from("push_subscriptions").update({failure_count:Math.min(100,(data.failure_count??0)+1),last_seen_at:new Date().toISOString()}).eq("id",id);
+}
 async function deliver(){
  const {data,error}=await admin.rpc("claim_reminder_deliveries",{p_limit:100});if(error)throw error;
  const rows=(data??[]) as Array<{reminder_id:string;user_id:string;fire_at:string;attempts:number;title:string;description:string|null;priority:string;due_at:string;timezone:string;hide_content:boolean;push_enabled:boolean}>,vapid=await ensureVapid();
@@ -65,9 +74,26 @@ async function deliver(){
   if(d.priority!=="urgent"&&isQuiet(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00")){await finish(d.reminder_id,d.user_id,d.fire_at,"pending","quiet_hours",quietEnd(new Date(d.fire_at),tz,pref?.quiet_start??"22:00:00",pref?.quiet_end??"07:00:00").toISOString());continue;}
   const devices=await subs(d.user_id);if(!devices.length){await finish(d.reminder_id,d.user_id,d.fire_at,"skipped","no_active_device",null);continue;}
   const hidden=d.hide_content||Boolean(pref?.hide_content),payload={title:hidden?"یادآور جدید":"یادآور گمرکی",body:hidden?"یک یادآور برای شما ثبت شده است.":d.title+(d.description?" · "+d.description:""),tag:"reminder-"+d.reminder_id,url:"/reminders?rid="+encodeURIComponent(d.reminder_id),actions:[{action:"done",title:"انجام شد"},{action:"snooze10",title:"۱۰ دقیقه بعد"},{action:"tomorrow9",title:"فردا ۹ صبح"}],data:{rid:d.reminder_id,url:"/reminders?rid="+encodeURIComponent(d.reminder_id)},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"};
-  let delivered=false;
-  for(const s of devices){try{const ok=await send(s,payload,vapid);if(ok!==false)delivered=true;else await admin.from("push_subscriptions").delete().eq("id",s.id);}catch(err){if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410)){await admin.from("push_subscriptions").delete().eq("id",s.id);}else{const msg=err instanceof Error?err.message:"ارسال اعلان ناموفق بود";if(d.attempts<4)await finish(d.reminder_id,d.user_id,d.fire_at,"pending",msg,new Date(Date.now()+backoff(d.attempts)).toISOString());else await finish(d.reminder_id,d.user_id,d.fire_at,"failed",msg,null);}}}
+  let delivered=false,transientFailure=false,lastFailure:string|null=null;
+  for(const s of devices){
+   try{
+    const ok=await send(s,payload,vapid);
+    if(ok!==false){delivered=true;await notePushSuccess(s.id);}
+    else{lastFailure="push_provider_rejected";await admin.from("push_subscriptions").delete().eq("id",s.id);}
+   }catch(err){
+    const msg=err instanceof Error?err.message:"ارسال اعلان ناموفق بود";lastFailure=msg;
+    if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410)){
+     await admin.from("push_subscriptions").delete().eq("id",s.id);
+    }else{
+     transientFailure=true;await notePushFailure(s.id);
+    }
+   }
+  }
   if(delivered)await finish(d.reminder_id,d.user_id,d.fire_at,"sent",null,null);
+  else if(transientFailure){
+   if(d.attempts<4)await finish(d.reminder_id,d.user_id,d.fire_at,"pending",lastFailure??"push_delivery_failed",new Date(Date.now()+backoff(d.attempts)).toISOString());
+   else await finish(d.reminder_id,d.user_id,d.fire_at,"failed",lastFailure??"push_delivery_failed",null);
+  }else await finish(d.reminder_id,d.user_id,d.fire_at,"skipped",lastFailure??"no_active_device",null);
   if(new Date(d.fire_at)<=new Date(d.due_at))await advance(d.reminder_id);
  }
  return rows.length;
@@ -90,7 +116,24 @@ async function main(req:Request){
  const {data:profile}=await admin.from("profiles").select("organization_id,role,is_active").eq("id",user.id).maybeSingle() as {data:{organization_id:string;role:string;is_active:boolean}|null};
  if(!profile?.is_active||profile.role==="client")return json({error:"این قابلیت برای این حساب فعال نیست"},403);
  if(mode==="bootstrap"){const v=await ensureVapid();return json({publicKey:v.publicKey});}
- if(mode==="test"){const v=await ensureVapid(),devices=await subs(user.id);if(!devices.length)return json({error:"هیچ دستگاه فعالی ثبت نشده است"},400);let sent=0;for(const s of devices){try{const ok=await send(s,{title:"اعلان آزمایشی",body:"اعلان‌های سامانه گمرکی با موفقیت فعال شد.",tag:"test-push",url:"/reminders",actions:[{action:"done",title:"انجام شد"}],data:{url:"/reminders"},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"},v);if(ok!==false)sent++;else await admin.from("push_subscriptions").delete().eq("id",s.id);}catch(err){if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410))await admin.from("push_subscriptions").delete().eq("id",s.id);}}return json({ok:true,sent});}
+ if(mode==="test"){
+  const v=await ensureVapid(),devices=await subs(user.id);
+  if(!devices.length)return json({error:"هیچ دستگاه فعالی ثبت نشده است"},400);
+  let sent=0,lastFailure:string|null=null;
+  for(const s of devices){
+   try{
+    const ok=await send(s,{title:"اعلان آزمایشی",body:"اعلان‌های سامانه گمرکی با موفقیت فعال شد.",tag:"test-push",url:"/reminders",actions:[{action:"done",title:"انجام شد"}],data:{url:"/reminders"},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"},v);
+    if(ok!==false){sent++;await notePushSuccess(s.id);}
+    else{lastFailure="push_provider_rejected";await admin.from("push_subscriptions").delete().eq("id",s.id);}
+   }catch(err){
+    lastFailure=err instanceof Error?err.message:"ارسال اعلان آزمایشی ناموفق بود";
+    if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410))await admin.from("push_subscriptions").delete().eq("id",s.id);
+    else await notePushFailure(s.id);
+   }
+  }
+  if(sent===0)return json({error:"ارسال اعلان آزمایشی به هیچ دستگاهی تأیید نشد",details:lastFailure},502);
+  return json({ok:true,sent});
+ }
  return json({error:"درخواست نامعتبر است"},400);
 }
 Deno.serve(main);

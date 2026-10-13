@@ -22,6 +22,9 @@ export async function enablePush(){
  const json={endpoint:sub.endpoint,keys:{p256dh:sub.getKey('p256dh')?btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')!))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''): '',auth:sub.getKey('auth')?btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth')!))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''):''}};
  const {error}=await supabase.rpc('upsert_push_subscription',{p_endpoint:json.endpoint,p_p256dh:json.keys.p256dh,p_auth:json.keys.auth,p_user_agent:navigator.userAgent,p_platform:/iphone|ipad|ipod/i.test(navigator.userAgent)?'ios':/android/i.test(navigator.userAgent)?'android':'desktop'});
  if(error)throw error;
+ // Registering a device and enabling delivery are separate database states.
+ // Explicitly opt this user in only after the browser permission and subscription succeeded.
+ await setNotificationPreferences({push_enabled:true});
  await navigator.serviceWorker.ready;
  return {status:'granted' as const,endpoint:sub.endpoint};
 }
