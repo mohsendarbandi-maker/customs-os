@@ -78,7 +78,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    if(existing){
     const r=existing as WorkflowRow;setRow(r);setStage(r.current_stage||'evaluation');
     setEvaluation({...emptyEvaluation,...(r.evaluation_state||{})});
-    const ex={...emptyExpertise,...(r.expertise_state||{}),standard:{...emptyExpertise.standard,...((r.expertise_state||{}).standard||{})}};
+    const storedStandard=((r.expertise_state||{}).standard||{}) as Record<string,any>;const mergedStandard={...emptyExpertise.standard,...storedStandard};if(!storedStandard.inspection_invoice_status&&storedStandard.inspection_invoice_received)mergedStandard.inspection_invoice_status='received';const ex={...emptyExpertise,...(r.expertise_state||{}),standard:mergedStandard};
     setExpertise(ex);
     setCashier({...emptyCashier,...(r.cashier_state||{})});
     setLoadingPermit({...emptyLoadingPermit,...(r.loading_permit_state||{})});
@@ -115,10 +115,6 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const save=async()=>{
   if(!row){setError('رکورد گردش‌کار هنوز آماده نیست. یک‌بار بروزرسانی کنید.');return}
   if(!editable)return;
-  if(stage==='port_charges'&&(port.insurance_issue_date||port.warehouse_receipt_date)){
-   if(!port.insurance_issue_date||!port.warehouse_receipt_date||insuranceComparison===null){setError('برای کنترل بیمه، هر دو تاریخ بیمه‌نامه و قبض انبار را با قالب شمسی سال/ماه/روز و معتبر وارد کنید.');return}
-   if(insuranceComparison>=0){setError('تاریخ صدور بیمه‌نامه باید قبل از تاریخ قبض انبار باشد. تاریخ‌ها را اصلاح کنید یا تا مشخص‌شدن تاریخ قبض انبار، هر دو تاریخ را موقتاً خالی بگذارید.');return}
-  }
   setSaving(true);setError('');setMessage('');
   try{
    const nextEvaluation={...evaluation};
