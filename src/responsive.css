@@ -860,3 +860,142 @@
     animation: none !important;
   }
 }
+
+
+/* Calendar: animated occasion agenda and readable event markers. */
+.reminders-app-standalone .reminders-calendar-events {
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 22px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--surface) 95%, #b8f1ed), var(--surface) 68%);
+  box-shadow: 0 10px 28px rgba(8, 91, 112, .07);
+  animation: reminders-agenda-enter .42s ease both;
+}
+.reminders-app-standalone .reminders-calendar-events-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 15px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(105deg, color-mix(in srgb, var(--primary) 8%, var(--surface)), var(--surface));
+}
+.reminders-app-standalone .reminders-calendar-events-orb {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 15px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface));
+  animation: reminders-calendar-glow 3.8s ease-in-out infinite;
+}
+.reminders-app-standalone .reminders-calendar-events-heading>div { flex: 1; min-width: 0; }
+.reminders-app-standalone .reminders-calendar-events-heading h2 { margin: 0; color: var(--text); font-size: 15px; font-weight: 950; }
+.reminders-app-standalone .reminders-calendar-events-heading p { margin: 4px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.6; }
+.reminders-app-standalone .reminders-calendar-events-count { display: grid; place-items: center; min-width: 30px; height: 28px; padding: 0 7px; border-radius: 10px; color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); font-size: 12px; font-weight: 950; }
+.reminders-app-standalone .reminders-calendar-agenda-day.is-holiday .reminders-calendar-day-icon { color: #d04454; background: color-mix(in srgb, #d04454 11%, var(--surface)); }
+.reminders-app-standalone .reminders-calendar-agenda-day.is-friday .reminders-calendar-day-icon { color: var(--text-muted); }
+.reminders-app-standalone .reminders-calendar-agenda-day strong { line-height: 1.65; }
+.reminders-app-standalone .reminders-calendar-agenda-day small { line-height: 1.7; }
+.reminders-app-standalone .reminders-calendar-event-tag { display: block; max-width: 100%; overflow: hidden; color: #087f8c; font-size: 8px; line-height: 1.25; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+.reminders-app-standalone .reminders-calendar-no-events { padding: 20px 14px; color: var(--text-muted); font-size: 12px; text-align: center; }
+@keyframes reminders-agenda-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes reminders-calendar-glow { 0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 0%, transparent); transform: translateY(0); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 8%, transparent); transform: translateY(-1px); } }
+
+/* Portrait smart composer: prevent action controls from compressing or escaping the sheet. */
+@media (max-width: 600px) and (orientation: portrait) {
+  .reminders-app-standalone .reminders-composebar.is-open {
+    align-items: center !important;
+    justify-content: center !important;
+    padding: calc(8px + env(safe-area-inset-top)) 9px calc(76px + env(safe-area-inset-bottom)) !important;
+  }
+  .reminders-app-standalone .reminders-compose-sheet {
+    width: min(100%, 520px) !important;
+    max-height: calc(100dvh - 18px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+    margin: auto !important;
+    padding: 13px !important;
+    border-radius: 20px !important;
+  }
+  .reminders-app-standalone .reminders-compose-actions {
+    position: relative;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 48px !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    width: 100%;
+    min-width: 0;
+    margin-top: 10px !important;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-date-control {
+    grid-column: 1 / -1;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 46px !important;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 12px !important;
+    white-space: normal;
+    text-align: start;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-date-control span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-clear-date {
+    position: absolute;
+    z-index: 2;
+    inset-inline-end: 8px;
+    top: 5px;
+    width: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    border-radius: 11px !important;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-date-control:has(+ .reminders-clear-date) {
+    padding-inline-end: 48px !important;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-mic-control {
+    grid-column: 2;
+    grid-row: 2;
+    width: 48px !important;
+    min-width: 48px !important;
+    min-height: 46px !important;
+    justify-self: end;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-submit-button {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 46px !important;
+    padding-inline: 12px !important;
+    justify-content: center;
+    white-space: nowrap;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-submit-button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .reminders-app-standalone .reminders-calendar-agenda-day {
+    min-height: 66px;
+    gap: 9px;
+    padding: 10px;
+  }
+  .reminders-app-standalone .reminders-calendar-day-icon {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+    border-radius: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reminders-app-standalone .reminders-calendar-events,
+  .reminders-app-standalone .reminders-calendar-events-orb {
+    animation: none !important;
+  }
+}

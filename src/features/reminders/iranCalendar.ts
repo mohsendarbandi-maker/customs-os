@@ -29,8 +29,7 @@ export const IRAN_OFFICIAL_HOLIDAYS_1405: readonly IranCalendarHoliday[] = [
   { date: '1405-01-04', title: 'عید نوروز' },
   { date: '1405-01-12', title: 'روز جمهوری اسلامی ایران' },
   { date: '1405-01-13', title: 'روز طبیعت' },
-  { date: '1405-01-24', title: 'شهادت امام جعفر صادق' },
-  { date: '1405-03-03', title: 'شهادت امام محمد باقر' },
+  { date: '1405-01-25', title: 'شهادت امام جعفر صادق' },
   { date: '1405-03-06', title: 'عید سعید قربان' },
   { date: '1405-03-14', title: 'رحلت امام خمینی و عید سعید غدیر خم' },
   { date: '1405-03-15', title: 'قیام ۱۵ خرداد' },
@@ -52,6 +51,85 @@ export const IRAN_OFFICIAL_HOLIDAYS_1405: readonly IranCalendarHoliday[] = [
   { date: '1405-12-29', title: 'روز ملی شدن صنعت نفت' },
 ] as const;
 
+/** Selected national, cultural and professional observances for the current official year.
+ * These entries are occasions, not public holidays unless also listed in IRAN_OFFICIAL_HOLIDAYS_1405.
+ * Dates are Jalali and bundled offline so the calendar works without a network request.
+ */
+export type IranCalendarObservance = {
+  date: string;
+  title: string;
+  category: 'national' | 'professional' | 'culture' | 'international';
+};
+
+export const IRAN_OBSERVANCES_1405: readonly IranCalendarObservance[] = [
+  { date: '1405-01-20', title: 'روز ملی فناوری هسته‌ای', category: 'national' },
+  { date: '1405-01-25', title: 'روز بزرگداشت عطار نیشابوری', category: 'culture' },
+  { date: '1405-02-01', title: 'روز بزرگداشت سعدی', category: 'culture' },
+  { date: '1405-02-02', title: 'روز زمین پاک', category: 'international' },
+  { date: '1405-02-03', title: 'روز بزرگداشت شیخ بهایی و روز معماری', category: 'professional' },
+  { date: '1405-02-09', title: 'روز روان‌شناس و مشاور؛ روز شوراها', category: 'professional' },
+  { date: '1405-02-10', title: 'روز ملی خلیج فارس', category: 'national' },
+  { date: '1405-02-12', title: 'روز معلم', category: 'professional' },
+  { date: '1405-02-15', title: 'روز جهانی ماما', category: 'professional' },
+  { date: '1405-02-25', title: 'روز بزرگداشت فردوسی', category: 'culture' },
+  { date: '1405-02-27', title: 'روز ارتباطات و روابط عمومی', category: 'professional' },
+  { date: '1405-02-28', title: 'روز بزرگداشت خیام', category: 'culture' },
+  { date: '1405-03-03', title: 'روز آزادسازی خرمشهر؛ روز مقاومت، ایثار و پیروزی', category: 'national' },
+  { date: '1405-03-03', title: 'شهادت امام محمد باقر', category: 'culture' },
+  { date: '1405-03-16', title: 'روز ملی محیط زیست', category: 'national' },
+  { date: '1405-03-20', title: 'روز جهانی صنایع دستی', category: 'professional' },
+  { date: '1405-03-27', title: 'روز جهاد کشاورزی', category: 'professional' },
+  { date: '1405-04-07', title: 'روز قوه قضائیه', category: 'national' },
+  { date: '1405-04-10', title: 'روز صنعت و معدن', category: 'professional' },
+  { date: '1405-04-13', title: 'جشن تیرگان', category: 'culture' },
+  { date: '1405-04-14', title: 'روز قلم', category: 'culture' },
+  { date: '1405-04-22', title: 'روز ملی فناوری اطلاعات', category: 'professional' },
+  { date: '1405-04-25', title: 'روز بهزیستی و تأمین اجتماعی', category: 'professional' },
+  { date: '1405-05-17', title: 'روز خبرنگار', category: 'professional' },
+  { date: '1405-06-01', title: 'روز بزرگداشت ابوعلی سینا و روز پزشک', category: 'professional' },
+  { date: '1405-06-05', title: 'روز داروساز', category: 'professional' },
+  { date: '1405-06-08', title: 'روز مبارزه با تروریسم؛ روز کارمند', category: 'national' },
+  { date: '1405-06-13', title: 'روز تعاون', category: 'professional' },
+  { date: '1405-06-21', title: 'روز ملی سینما', category: 'culture' },
+  { date: '1405-06-27', title: 'روز شعر و ادب فارسی؛ بزرگداشت شهریار', category: 'culture' },
+  { date: '1405-06-31', title: 'آغاز هفته دفاع مقدس', category: 'national' },
+  { date: '1405-07-01', title: 'آغاز سال تحصیلی', category: 'national' },
+  { date: '1405-07-07', title: 'روز آتش‌نشانی و ایمنی', category: 'professional' },
+  { date: '1405-07-13', title: 'روز ملی دامپزشکی', category: 'professional' },
+  { date: '1405-07-05', title: 'روز جهانی گردشگری', category: 'international' },
+  { date: '1405-07-02', title: 'روز جهانی دریانوردی', category: 'professional' },
+  { date: '1405-07-15', title: 'روز روستا و عشایر', category: 'national' },
+  { date: '1405-07-22', title: 'روز جهانی استاندارد', category: 'professional' },
+  { date: '1405-07-24', title: 'روز جهانی غذا', category: 'international' },
+  { date: '1405-07-26', title: 'روز تربیت بدنی و ورزش', category: 'professional' },
+  { date: '1405-07-29', title: 'روز ملی صادرات', category: 'professional' },
+  { date: '1405-07-20', title: 'روز بزرگداشت حافظ', category: 'culture' },
+  { date: '1405-07-24', title: 'روز پرستار؛ ولادت حضرت زینب (س)', category: 'professional' },
+  { date: '1405-08-13', title: 'روز دانش‌آموز و روز ملی مبارزه با استکبار جهانی', category: 'national' },
+  { date: '1405-08-24', title: 'روز کتاب، کتاب‌خوانی و کتابدار', category: 'culture' },
+  { date: '1405-09-05', title: 'روز بسیج مستضعفان', category: 'national' },
+  { date: '1405-09-07', title: 'روز نیروی دریایی', category: 'national' },
+  { date: '1405-09-15', title: 'روز حسابدار', category: 'professional' },
+  { date: '1405-09-16', title: 'روز دانشجو', category: 'national' },
+  { date: '1405-09-25', title: 'روز پژوهش و فناوری', category: 'professional' },
+  { date: '1405-09-30', title: 'شب یلدا؛ جشن زایش خورشید', category: 'culture' },
+  { date: '1405-10-05', title: 'روز ایمنی در برابر زلزله و کاهش اثرات بلایای طبیعی', category: 'national' },
+  { date: '1405-11-06', title: 'روز جهانی گمرک', category: 'professional' },
+  { date: '1405-11-14', title: 'روز فناوری فضایی', category: 'professional' },
+  { date: '1405-11-29', title: 'قیام مردم تبریز', category: 'national' },
+  { date: '1405-12-05', title: 'روز مهندس؛ بزرگداشت خواجه نصیرالدین طوسی', category: 'professional' },
+  { date: '1405-12-07', title: 'روز وکیل مدافع', category: 'professional' },
+  { date: '1405-12-15', title: 'روز درختکاری و آغاز هفته منابع طبیعی', category: 'national' },
+  { date: '1405-12-17', title: 'روز جهانی زن', category: 'international' },
+  { date: '1405-12-22', title: 'روز بزرگداشت شهدا', category: 'national' },
+] as const;
+
+const observancesByDate = new Map<string, readonly IranCalendarObservance[]>();
+for (const observance of IRAN_OBSERVANCES_1405) {
+  const existing = observancesByDate.get(observance.date) ?? [];
+  observancesByDate.set(observance.date, [...existing, observance]);
+}
+
 const holidayByDate = new Map(
   IRAN_OFFICIAL_HOLIDAYS_1405.map((holiday) => [holiday.date, holiday]),
 );
@@ -66,6 +144,7 @@ export type IranCalendarDayInfo = {
   isWorkingDay: boolean | null;
   annualHolidayDataAvailable: boolean;
   override: IranDayOverride | null;
+  observances: readonly IranCalendarObservance[];
 };
 
 export type IranCalendarOverrides = Readonly<Record<string, IranDayOverride | undefined>>;
@@ -122,7 +201,30 @@ export function getIranCalendarDayInfo(
     isWorkingDay,
     annualHolidayDataAvailable: hasVerifiedIranHolidayData(year),
     override,
+    observances: year === IRAN_CALENDAR_DATA_YEAR ? (observancesByDate.get(date) ?? []) : [],
   };
+}
+
+export type IranCalendarMonthEvent = {
+  date: string;
+  day: number;
+  weekday: string;
+  titles: string[];
+  isOfficialHoliday: boolean;
+  isFriday: boolean;
+};
+
+export function getIranCalendarMonthEvents(year: number, month: number): IranCalendarMonthEvent[] {
+  if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 1 || year > 3175) return [];
+  const days = jalaliMonthLength(year, month);
+  const events: IranCalendarMonthEvent[] = [];
+  for (let day = 1; day <= days; day += 1) {
+    const info = getIranCalendarDayInfo(year, month, day);
+    const titles = [...new Set([...(info.holiday ? [info.holiday.title] : []), ...info.observances.map((item) => item.title)])];
+    if (titles.length === 0) continue;
+    events.push({ date: info.date, day, weekday: info.weekday, titles, isOfficialHoliday: info.isOfficialHoliday, isFriday: info.isFriday });
+  }
+  return events;
 }
 
 export function isIranWorkingDay(date: string, overrides: IranCalendarOverrides = {}): boolean | null {
