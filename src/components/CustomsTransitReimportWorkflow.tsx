@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -79,7 +79,7 @@ const stagesFor = (regime: string): Stage[] => {
 };
 
 export const CustomsTransitReimportWorkflow: React.FC<Props> = ({ declarationId, organizationId, userId, customsRegime, editable }) => {
-  const stages = stagesFor(customsRegime);
+  const stages = useMemo(() => stagesFor(customsRegime), [customsRegime]);
   const [state, setState] = useState<State>(emptyState);
   const [stage, setStage] = useState<StageKey>('documents');
   const [savedStage, setSavedStage] = useState<StageKey>('documents');
@@ -105,7 +105,7 @@ export const CustomsTransitReimportWorkflow: React.FC<Props> = ({ declarationId,
     } catch (cause: any) {
       setError(cause?.message || 'دریافت گردش‌کار انجام نشد');
     } finally { setLoading(false); }
-  }, [declarationId, organizationId, customsRegime]);
+  }, [declarationId, organizationId, stages]);
 
   useEffect(() => { void load(); }, [load]);
 
