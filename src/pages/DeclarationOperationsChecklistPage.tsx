@@ -9,6 +9,7 @@ import { CustomsOtherRegimeWorkflow } from '../components/CustomsOtherRegimeWork
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
+import { resolveDeclarationRelationIds } from '../lib/declarationWorkflowContext';
 
 type Decl={id:string;shipment_id:string|null;case_id:string|null;kottaj_number:string;declaration_date:string;customs_path:string|null;payment_reference:string|null;total_duties_irr:number|null;declaration_file_name:string|null;customs_office_id?:string|null;customs_regime?:string|null};
 type Item={id:string;item_key:string;item_label:string;completed:boolean;note:string|null;sort_order:number;source:string;is_active:boolean};
@@ -63,7 +64,8 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
     if (shipmentError) throw shipmentError;
     shipmentContext = shipmentData;
    }
-   const relatedCaseId = d.case_id || shipmentContext?.case_id || null;
+   const declarationRelations = resolveDeclarationRelationIds({ declarationCaseId: d.case_id, shipmentCaseId: shipmentContext?.case_id });
+   const relatedCaseId = declarationRelations.caseId;
    let caseContext: { case_number?: string | null; client_id?: string | null } | null = null;
    if (relatedCaseId) {
     const { data: caseData, error: caseError } = await supabase.from('cases')
@@ -71,7 +73,12 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
     if (caseError) throw caseError;
     caseContext = caseData;
    }
-   const relatedClientId = shipmentContext?.client_id || caseContext?.client_id || null;
+   const relatedClientId = resolveDeclarationRelationIds({
+    declarationCaseId: d.case_id,
+    shipmentCaseId: shipmentContext?.case_id,
+    shipmentClientId: shipmentContext?.client_id,
+    caseClientId: caseContext?.client_id,
+   }).clientId;
    let clientName = '';
    if (relatedClientId && profile?.organization_id) {
     const { data: clientData, error: clientError } = await supabase.from('clients')
