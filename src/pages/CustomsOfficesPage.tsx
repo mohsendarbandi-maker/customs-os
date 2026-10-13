@@ -11,7 +11,7 @@ const faDigits=(v:string|number)=>String(v).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸
 
 export const CustomsOfficesPage:React.FC=()=>{
  const{profile}=useAuth();
- const canManage=profile?.role==='owner'||profile?.role==='admin';
+ const canManage=profile?.role==='owner';
  const[rows,setRows]=useState<Office[]>([]);
  const[form,setForm]=useState<OfficeForm>(empty);
  const[editing,setEditing]=useState<string|null>(null);
@@ -42,15 +42,14 @@ export const CustomsOfficesPage:React.FC=()=>{
   const city=form.city.trim();
   if(!code||!name||!city){setError('کد گمرک، نام گمرک و شهر را تکمیل کنید.');return}
   if(rows.some(r=>r.id!==editing&&r.code.trim().toLowerCase()===code.toLowerCase())){setError('این کد گمرک قبلاً ثبت شده است.');return}
-  if(!profile?.organization_id){setError('سازمان کاربر مشخص نیست.');return}
   setBusy(true);setError('');setMessage('');
   try{
    if(editing){
-    const{error:e}=await supabase.from('customs_offices').update({code,name,city,is_active:form.is_active}).eq('id',editing).eq('organization_id',profile.organization_id);
+    const{error:e}=await supabase.from('customs_offices').update({code,name,city,is_active:form.is_active}).eq('id',editing);
     if(e)throw e;
     setMessage('اطلاعات گمرک به‌روزرسانی شد.');
    }else{
-    const{error:e}=await supabase.from('customs_offices').insert({organization_id:profile.organization_id,code,name,city,is_active:form.is_active});
+    const{error:e}=await supabase.from('customs_offices').insert({organization_id:null,code,name,city,is_active:form.is_active});
     if(e)throw e;
     setMessage('گمرک با موفقیت ثبت شد.');
    }
@@ -62,11 +61,11 @@ export const CustomsOfficesPage:React.FC=()=>{
   }finally{setBusy(false)}
  };
  const remove=async(r:Office)=>{
-  if(!canManage||r.organization_id!==profile?.organization_id)return;
+  if(!canManage||(r.organization_id!==null&&r.organization_id!==profile?.organization_id))return;
   if(!window.confirm('گمرک «'+r.name+'» حذف شود؟ اگر به اظهارنامه یا پرونده متصل باشد، سامانه مانع حذف می‌شود.'))return;
   setBusy(true);setError('');setMessage('');
   try{
-   const{error:e}=await supabase.from('customs_offices').delete().eq('id',r.id).eq('organization_id',profile.organization_id);
+   const{error:e}=await supabase.from('customs_offices').delete().eq('id',r.id);
    if(e)throw e;
    setRows(p=>p.filter(x=>x.id!==r.id));if(editing===r.id)reset();setMessage('گمرک حذف شد.');
   }catch(e:any){setError(e?.message||'حذف گمرک ممکن نیست؛ احتمالاً به محموله، پرونده یا اظهارنامه متصل است.')}
@@ -95,11 +94,11 @@ export const CustomsOfficesPage:React.FC=()=>{
     {loading?<div className="py-12 text-center app-muted">در حال دریافت فهرست…</div>:visible.length===0?<div className="p-10 text-center"><Landmark size={30} className="mx-auto app-muted"/><p className="font-bold mt-3">{query?'موردی مطابق جست‌وجو پیدا نشد.':'هنوز گمرکی ثبت نشده است.'}</p><p className="text-xs app-muted mt-1">پس از ثبت گمرک، کد و نام آن در مراحل مربوط به محموله و اظهارنامه قابل انتخاب خواهد بود.</p></div>:<div className="divide-y app-border">{visible.map(r=><div key={r.id} className="p-4 sm:px-5 flex flex-wrap items-center gap-3">
      <div className="h-11 w-11 rounded-xl bg-[var(--surface-2)] grid place-items-center shrink-0"><Landmark size={19}/></div>
      <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><b>{r.name}</b><span className="rounded-md border app-border px-2 py-0.5 text-xs font-bold" dir="ltr">{faDigits(r.code)}</span><span className={'rounded-full px-2 py-1 text-[10px] font-bold '+(r.is_active?'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300':'bg-slate-500/10 app-muted')}>{r.is_active?'فعال':'غیرفعال'}</span></div><div className="text-xs app-muted mt-1">{r.city}</div></div>
-     {canManage&&r.organization_id===profile?.organization_id&&<div className="flex items-center gap-1"><button type="button" disabled={busy} onClick={()=>edit(r)} className="rounded-lg border app-border p-2" aria-label={'ویرایش '+r.name} title="ویرایش"><Pencil size={15}/></button><button type="button" disabled={busy} onClick={()=>void remove(r)} className="rounded-lg border app-border p-2 text-red-500" aria-label={'حذف '+r.name} title="حذف"><Trash2 size={15}/></button></div>}
+     {canManage&&(r.organization_id===null||r.organization_id===profile?.organization_id)&&<div className="flex items-center gap-1"><button type="button" disabled={busy} onClick={()=>edit(r)} className="rounded-lg border app-border p-2" aria-label={'ویرایش '+r.name} title="ویرایش"><Pencil size={15}/></button><button type="button" disabled={busy} onClick={()=>void remove(r)} className="rounded-lg border app-border p-2 text-red-500" aria-label={'حذف '+r.name} title="حذف"><Trash2 size={15}/></button></div>}
     </div>)}</div>}
    </section>
-   {!canManage&&<p className="text-xs app-muted">فهرست برای مشاهده در دسترس است؛ ثبت و ویرایش گمرک فقط توسط مالک یا مدیر سازمان انجام می‌شود.</p>}
-   <div className="flex items-start gap-2 text-xs app-muted"><AlertTriangle size={15} className="mt-0.5 shrink-0"/><p>کدها در این بخش دستی ثبت می‌شوند؛ پیش از استفاده عملیاتی، صحت کد هر گمرک را با مرجع رسمی خودتان تطبیق دهید.</p></div>
+   {!canManage&&<p className="text-xs app-muted">فهرست برای مشاهده در دسترس است؛ ثبت و ویرایش فهرست مرجع گمرک فقط توسط مالک سامانه انجام می‌شود.</p>}
+   <div className="flex items-start gap-2 text-xs app-muted"><AlertTriangle size={15} className="mt-0.5 shrink-0"/><p>این فهرست مرجع مشترک است تا یک کد گمرک در سازمان‌های مختلف به چند رکورد ناسازگار تبدیل نشود. نام و کد را با مرجع رسمی تطبیق دهید.</p></div>
   </div>
  </main>
 };
