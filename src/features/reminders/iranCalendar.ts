@@ -126,7 +126,7 @@ export function getIranCalendarDayInfo(
 }
 
 export function isIranWorkingDay(date: string, overrides: IranCalendarOverrides = {}): boolean | null {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   const [year, month, day] = date.split('-').map(Number);
   if (!isValidJalaliDate(year, month, day)) return false;
   return getIranCalendarDayInfo(year, month, day, overrides).isWorkingDay;
@@ -154,7 +154,7 @@ export function nextIranWorkingDay(
   date: string,
   overrides: IranCalendarOverrides = {},
 ): string | null {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   const [year, month, day] = date.split('-').map(Number);
   if (!isValidJalaliDate(year, month, day) || !hasVerifiedIranHolidayData(year)) return null;
   let cursor = date;
@@ -174,7 +174,7 @@ export function addIranWorkingDays(
   overrides: IranCalendarOverrides = {},
 ): string | null {
   if (!Number.isInteger(daysToAdd) || daysToAdd < 0) return null;
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   const [year, month, day] = date.split('-').map(Number);
   if (!isValidJalaliDate(year, month, day) || !hasVerifiedIranHolidayData(year)) return null;
   if (daysToAdd === 0) return date;
