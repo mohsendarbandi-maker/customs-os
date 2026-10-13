@@ -23,6 +23,7 @@ const STORE_NAME = 'rpc_queue';
 const QUERY_CACHE_STORE_NAME = 'query_cache';
 const DB_VERSION = 4;
 const MAX_QUERY_CACHE_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const MAX_QUERY_CACHE_ENTRIES_PER_SCOPE = 60;
 export const CHAT_RPC = 'chat_insert_message';
 export const CHAT_MAX_AUTO_RETRIES = 8;
 
@@ -129,7 +130,19 @@ export const saveOfflineQueryCache = async <T,>(
   };
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(QUERY_CACHE_STORE_NAME, 'readwrite');
-    transaction.objectStore(QUERY_CACHE_STORE_NAME).put(record);
+    const store = transaction.objectStore(QUERY_CACHE_STORE_NAME);
+    store.put(record);
+    const listRequest = store.getAll();
+    listRequest.onsuccess = () => {
+      const now = Date.now();
+      const entries = listRequest.result as OfflineQueryCacheRecord<unknown>[];
+      const expired = entries.filter((entry) => !Number.isFinite(entry.updatedAt) || now - entry.updatedAt > MAX_QUERY_CACHE_AGE_MS);
+      expired.forEach((entry) => store.delete(entry.cacheKey));
+      const sameScope = entries
+        .filter((entry) => entry.userId === userId && entry.organizationId === organizationId && now - entry.updatedAt <= MAX_QUERY_CACHE_AGE_MS)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      sameScope.slice(MAX_QUERY_CACHE_ENTRIES_PER_SCOPE).forEach((entry) => store.delete(entry.cacheKey));
+    };
     transaction.oncomplete = () => resolve(true);
     transaction.onerror = () => reject(transaction.error || new Error('Unable to save offline query cache'));
     transaction.onabort = () => reject(transaction.error || new Error('Offline query cache write aborted'));
@@ -537,14 +550,15 @@ export const startOfflineQueue = () => {
   document.addEventListener('visibilitychange', onVisibilityChange);
   flush();
   const timer = window.setInterval(flush, 30000);
-  stopOfflineQueue = () => {
+  const stop = () => {
     window.removeEventListener('online', onOnline);
     window.removeEventListener('pageshow', onPageShow);
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.clearInterval(timer);
-    stopOfflineQueue = null;
+    if (stopOfflineQueue === stop) stopOfflineQueue = null;
   };
-  return stopOfflineQueue;
+  stopOfflineQueue = stop;
+  return stop;
 };
 
 export const rpcWithOfflineQueue = async (
