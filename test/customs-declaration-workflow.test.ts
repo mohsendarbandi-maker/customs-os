@@ -13,6 +13,8 @@ describe('customs workflow Jalali dates', () => {
     expect(parseJalaliDate('۱۴۰۵/۰۷/۲۱')).toEqual({ year: 1405, month: 7, day: 21 });
     expect(parseJalaliDate('١٤٠٥-٠٧-٢١')).toEqual({ year: 1405, month: 7, day: 21 });
     expect(addJalaliMonths('۱۴۰۵.۰۶.۳۱', 1)).toBe('1405/07/30');
+    expect(parseJalaliDate('1405/12/29')).toEqual({ year: 1405, month: 12, day: 29 });
+    expect(addJalaliMonths('1405/12/29', 1)).toBe('1406/01/29');
   });
 
   it('rejects impossible Jalali dates instead of silently treating them as valid', () => {
