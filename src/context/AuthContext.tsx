@@ -205,7 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const retryableAuthFailure =
         isAuthTokenExpiredError(err) ||
         rawMessage === AUTH_SESSION_RETRY_MESSAGE ||
-        /failed to fetch|network error|timed? ?out|gateway timeout/i.test(rawMessage);
+        /failed to fetch|network request failed|network error|networkerror|load failed|connection (?:lost|reset|refused)|offline|timed? ?out|gateway timeout/i.test(rawMessage);
 
       if (retryableAuthFailure) {
         const cachedProfile = await readOfflineQueryCache<UserProfile | null>('auth-profile', userId, userId).catch(() => null);
