@@ -398,7 +398,7 @@ jobs:
                 }));
                 return { name: manifest.short_name, scope: manifest.scope, start_url: manifest.start_url, display: manifest.display, icons: iconResults };
               }, subdomainManifestHref);
-              if (subdomainManifest.name !== 'Reminders' ||
+              if (subdomainManifest.name !== 'یادآورها' ||
                 subdomainManifest.scope !== '/' ||
                 subdomainManifest.start_url !== '/' && !subdomainManifest.start_url.startsWith('/?') ||
                 subdomainManifest.display !== 'standalone' ||
