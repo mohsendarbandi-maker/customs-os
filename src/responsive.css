@@ -1556,3 +1556,18 @@ html:has(.reminders-app-standalone), body:has(.reminders-app-standalone) {
   .reminders-app-standalone .reminders-list-screen .reminders-language-switch,
   .reminders-app-standalone .reminders-list-screen .reminders-return-button { display:none !important; }
 }
+
+
+/* Filter controls use a compact fixed grid rather than tiny scrolling chips. */
+.reminders-app-standalone .reminders-list-screen .reminders-status-filters,
+.reminders-app-standalone .reminders-list-screen .reminders-kind-filters {
+  display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  overflow:hidden !important; flex-wrap:initial !important; gap:4px !important;
+  margin-top:6px !important; padding:0 !important;
+}
+.reminders-app-standalone .reminders-list-screen .reminders-status-filters button,
+.reminders-app-standalone .reminders-list-screen .reminders-kind-filters button {
+  min-width:0 !important; width:100% !important; min-height:26px !important; height:26px !important;
+  padding:0 3px !important; overflow:hidden !important; text-overflow:ellipsis !important;
+  font-size:10px !important; line-height:1.1 !important; border-radius:7px !important;
+}
