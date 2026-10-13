@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
+import { readOfflineQueryCache, saveOfflineQueryCache } from '../lib/offlineQueue';
 import {
   AUTH_SESSION_RETRY_MESSAGE,
   isAuthTokenExpiredError,
@@ -161,9 +162,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!data) {
         setProfile(null);
         setNeedsOnboarding(true);
+        // A server-confirmed missing profile invalidates any old offline profile snapshot.
+        void saveOfflineQueryCache<UserProfile | null>('auth-profile', userId, userId, null).catch(() => undefined);
       } else {
-        setProfile(data as UserProfile);
+        const loadedProfile = data as UserProfile;
+        setProfile(loadedProfile);
         setNeedsOnboarding(false);
+        // Keep a short-lived, user-partitioned profile snapshot so an already
+        // authenticated user can reopen the app shell during a temporary outage.
+        void saveOfflineQueryCache<UserProfile>('auth-profile', userId, userId, loadedProfile).catch(() => undefined);
       }
 
       setError(null);
@@ -199,6 +206,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         isAuthTokenExpiredError(err) ||
         rawMessage === AUTH_SESSION_RETRY_MESSAGE ||
         /failed to fetch|network error|timed? ?out|gateway timeout/i.test(rawMessage);
+
+      if (retryableAuthFailure) {
+        const cachedProfile = await readOfflineQueryCache<UserProfile | null>('auth-profile', userId, userId).catch(() => null);
+        if (!isMounted.current || fetchId !== currentFetchId.current) return;
+        const offlineProfile = cachedProfile?.payload;
+        if (
+          offlineProfile &&
+          offlineProfile.id === userId &&
+          offlineProfile.is_active &&
+          Boolean(offlineProfile.organization_id)
+        ) {
+          setProfile(offlineProfile);
+          setNeedsOnboarding(false);
+          setError(null);
+          return;
+        }
+      }
+
       const message = retryableAuthFailure
         ? AUTH_SESSION_RETRY_MESSAGE
         : rawMessage || 'خطا در دریافت اطلاعات کاربر';
