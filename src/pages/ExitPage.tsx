@@ -494,11 +494,14 @@ export const ExitPage: React.FC = () => {
             )}
 
             <section className="rounded-2xl border app-border bg-[var(--surface)] overflow-hidden">
-              <div className="p-5 border-b app-border flex items-center justify-between">
+              <div className="p-5 border-b app-border flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-black">درب خروج</h2>
-                <span className="text-xs app-muted">
-                  {completedExitItems} از {EXIT_ITEMS.length}
-                </span>
+                <div className="flex items-center gap-3">
+                  {shipmentId && <ShipmentStageCosts stage="STAGE_6_EXIT" shipmentId={shipmentId} />}
+                  <span className="text-xs app-muted">
+                    {completedExitItems} از {EXIT_ITEMS.length}
+                  </span>
+                </div>
               </div>
 
               {EXIT_ITEMS.map(([key, label], index) => (
