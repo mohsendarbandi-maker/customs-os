@@ -11,7 +11,9 @@ describe('reminder push delivery safety', () => {
   it('keeps explicit user opt-in as a hard delivery gate', () => {
     expect(delivery).toContain('if(!d.push_enabled)');
     expect(delivery).toContain('"skipped","push_disabled"');
-    expect(delivery).toContain('select("quiet_start,quiet_end,hide_content,timezone")');
+    expect(delivery).toContain('select("quiet_start,quiet_end,hide_content,timezone,push_enabled")');
+    expect(delivery).toContain("if(!pref?.push_enabled)");
+    expect(delivery).toContain('"preference_lookup_failed"');
   });
 
   it('does not advance a recurring reminder before its due occurrence', () => {
