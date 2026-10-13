@@ -860,3 +860,52 @@
     animation: none !important;
   }
 }
+
+
+/* Strong, unmistakable Reminders-only visual tokens; overrides saved global themes. */
+.reminders-app-standalone {
+  background-color: #f2f9fa !important;
+  background-image:
+    radial-gradient(ellipse at 8% 0%, rgba(8,127,140,.11), transparent 34rem),
+    radial-gradient(ellipse at 96% 12%, rgba(24,167,165,.09), transparent 30rem) !important;
+  color: #15343b !important;
+}
+.reminders-app-standalone .reminders-hub-search {
+  border-color: #b8d9dd !important;
+  background: rgba(255,255,255,.92) !important;
+  color: #365c64 !important;
+}
+.reminders-app-standalone .reminders-up-next {
+  background: #fff !important;
+  border: 1px solid #b8d9dd !important;
+  box-shadow: 0 12px 30px rgba(8,91,112,.11) !important;
+}
+.reminders-app-standalone .reminders-up-next .reminders-section-title {
+  background: linear-gradient(100deg,#e0f5f4,#fff) !important;
+  border-bottom-color: #cfe5e7 !important;
+}
+.reminders-app-standalone .reminders-up-next-row {
+  background: #fff !important;
+  color: #15343b !important;
+}
+.reminders-app-standalone .reminders-up-next-row:hover {
+  background: #edf9f8 !important;
+}
+.reminders-app-standalone .reminders-up-next-row strong {
+  color: #15343b !important;
+}
+.reminders-app-standalone .reminders-up-next-row small,
+.reminders-app-standalone .reminders-up-next .reminders-section-title p {
+  color: #58757d !important;
+}
+.reminders-app-standalone .reminders-up-next-check {
+  border-color: #168b91 !important;
+}
+.reminders-app-standalone .reminders-hub-hero {
+  background: linear-gradient(120deg,#064e63,#087f8c 52%,#20aaa4) !important;
+  background-size: 220% 220% !important;
+  animation: reminders-ocean-flow 12s ease-in-out infinite !important;
+}
+@media (prefers-color-scheme: dark) {
+  .reminders-app-standalone { background-color:#f2f9fa !important; color:#15343b !important; }
+}
