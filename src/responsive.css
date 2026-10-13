@@ -1154,3 +1154,22 @@
 .reminders-app-standalone .reminders-overview-detail-grid button > strong { grid-column:2; font-size:18px; font-variant-numeric:tabular-nums; }
 .reminders-app-standalone .reminders-overview-detail-grid button > svg:last-child { grid-column:3; grid-row:1 / span 2; }
 @media(max-width:380px){.reminders-app-standalone .reminders-overview-trigger{gap:8px;padding:10px}.reminders-app-standalone .reminders-overview-trigger-copy small{font-size:10px}.reminders-app-standalone .reminders-overview-detail-grid{grid-template-columns:1fr}}
+
+@media (max-width: 767px) and (orientation: portrait) {
+  .reminders-app-standalone .reminders-compose-actions {
+    grid-template-columns: minmax(0,1fr) 44px 44px !important;
+    align-items: center !important;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-date-control {
+    grid-column: 1 !important; grid-row: 1 !important; min-height: 46px !important;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-mic-control {
+    grid-column: 2 !important; grid-row: 1 !important; width: 44px !important; min-height: 44px !important;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-clear-date {
+    grid-column: 3 !important; grid-row: 1 !important; width: 44px !important; min-height: 44px !important;
+  }
+  .reminders-app-standalone .reminders-compose-actions .reminders-submit-button {
+    grid-column: 1 / -1 !important; grid-row: 2 !important;
+  }
+}
