@@ -52,7 +52,7 @@ const jalaliPartsToGregorian = (target: JalaliDateParts): Date | null => {
   ) return null;
 
   const candidate = new Date(Date.UTC(target.year + 621, 2, 1, 12));
-  for (let offset = 0; offset < 380; offset += 1) {
+  for (let offset = 0; offset < 400; offset += 1) {
     const parts = partsForGregorianDate(candidate);
     if (sameDate(parts, target)) {
       return new Date(Date.UTC(candidate.getUTCFullYear(), candidate.getUTCMonth(), candidate.getUTCDate(), 12));
