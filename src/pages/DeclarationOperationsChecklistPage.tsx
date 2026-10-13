@@ -2,6 +2,7 @@ import React,{useCallback,useEffect,useMemo,useState}from'react';
 import{AlertTriangle,ArrowLeft,BrainCircuit,Check,Info,Loader2,Plus,Save,Trash2}from'lucide-react';
 import{Link,useSearchParams}from'react-router-dom';
 import{CustomsDeclarationWorkflow}from'../components/CustomsDeclarationWorkflow';
+import{CustomsExportWorkflow}from'../components/CustomsExportWorkflow';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
@@ -178,7 +179,8 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   </div></section>}
 
   {decl?.customs_regime==='import_definitive'&&<CustomsDeclarationWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} customsPath={decl.customs_path||''} editable={canEdit}/>}
-  {decl&&decl.customs_regime!=='import_definitive'&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 text-sm"><b>گردش‌کار رویه</b><p className="app-muted mt-1">جزئیات ارزیابی تا متروکه در این مرحله ویژه واردات قطعی است. رویه انتخاب‌شده: {decl.customs_regime||'ثبت نشده'}.</p></section>}
+  {decl&&['export_definitive','temporary_export'].includes(decl.customs_regime||'')&&<CustomsExportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
+  {decl&&decl.customs_regime!=='import_definitive'&&!['export_definitive','temporary_export'].includes(decl.customs_regime||'')&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 text-sm"><b>گردش‌کار رویه</b><p className="app-muted mt-1">گردش‌کار تفصیلی این رویه در فاز اختصاصی آن تکمیل خواهد شد. رویه انتخاب‌شده: {decl.customs_regime||'ثبت نشده'}.</p></section>}
 
   {rule&&<section className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/5 p-4 md:p-5">
    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><BrainCircuit size={19}/><div><b className="font-black">پیشنهاد یادگیرنده برای این HS</b><div className="text-xs app-muted mt-1">قاعده: {rule.rule_name} · {rule.evidence_count} نمونه · اطمینان {Math.round(rule.confidence*100)}٪</div></div></div><Link to="/permit-rules" className="text-xs font-bold text-[var(--primary)]">مشاهده قواعد</Link></div>
