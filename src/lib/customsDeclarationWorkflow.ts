@@ -136,3 +136,173 @@ export const getAbandonedGoodsWarnings = (
 
   return { loadingFormExpired, receiptExpired, any: loadingFormExpired || receiptExpired };
 };
+
+
+export type CustomsWorkflowValidationState = {
+  customsPath: string;
+  evaluation: Record<string, unknown>;
+  expertise: Record<string, unknown>;
+  cashier: Record<string, unknown>;
+  loadingPermit: Record<string, unknown>;
+  exit: Record<string, unknown>;
+  port: Record<string, unknown>;
+};
+
+const textValue = (value: unknown): string => String(value ?? '').trim();
+const boolValue = (value: unknown): boolean => value === true || value === 'true';
+const recordValue = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+const oneOf = (value: unknown, allowed: string[]): boolean => allowed.includes(textValue(value));
+
+/**
+ * Returns Persian blocker messages for the specified stage. A stage is checked
+ * only when the operator attempts to advance past it, so users can still open
+ * and edit earlier stages without a dead-end.
+ */
+export const getWorkflowStageIssues = (
+  stage: string,
+  state: CustomsWorkflowValidationState,
+): string[] => {
+  const issues: string[] = [];
+
+  if (stage === 'evaluation') {
+    const evaluation = state.evaluation;
+    const status = textValue(evaluation.status);
+    const requested = boolValue(evaluation.expert_requested);
+    const required = state.customsPath === 'red' || requested || oneOf(status, ['required', 'in_progress']);
+    if (required && status !== 'completed') {
+      issues.push('ارزیابی الزامی است؛ نتیجه ارزیابی را تکمیل کنید.');
+    }
+    return issues;
+  }
+
+  if (stage === 'expertise') {
+    const expertise = state.expertise;
+    const standard = recordValue(expertise.standard);
+
+    if (!oneOf(expertise.appointment_status, ['scheduled', 'completed'])) {
+      issues.push('نوبت کارشناسی باید دریافت یا کارشناسی تکمیل شود.');
+    }
+    if (!oneOf(expertise.road_authority_status, ['approved', 'not_required', 'completed'])) {
+      issues.push('وضعیت مجوز راهداری باید تعیین تکلیف شود.');
+    }
+    if (!oneOf(expertise.plant_quarantine_status, ['approved', 'not_required', 'completed'])) {
+      issues.push('وضعیت حفظ نباتات/قرنطینه باید تعیین تکلیف شود.');
+    }
+
+    if (!oneOf(standard.expert_review, ['approved', 'not_required'])) {
+      issues.push('بررسی کارشناس استاندارد هنوز تأیید یا از شمول خارج نشده است.');
+    }
+    if (!oneOf(standard.expert_review, ['not_required'])) {
+      if (!oneOf(standard.inspection_status, ['sampled', 'completed', 'not_required'])) {
+        issues.push('بازدید یا نمونه‌گیری شرکت بازرسی باید تکمیل یا غیرلازم ثبت شود.');
+      }
+      if (!boolValue(standard.inspection_paid)) {
+        issues.push('هزینه بازرسی باید پرداخت یا از شمول خارج شود.');
+      }
+      const invoiceStatus = textValue(standard.inspection_invoice_status) ||
+        (boolValue(standard.inspection_invoice_received) ? 'received' : 'pending');
+      if (!oneOf(invoiceStatus, ['received', 'not_issued', 'not_required'])) {
+        issues.push('وضعیت دریافت یا صادرنشدن فاکتور بازرسی را مشخص کنید.');
+      }
+      if (!oneOf(standard.sample_status, ['received', 'not_required'])) {
+        issues.push('نتیجه آزمایش نمونه باید دریافت یا غیرلازم ثبت شود.');
+      }
+      if (!boolValue(standard.results_uploaded)) {
+        issues.push('نتایج آزمایش باید در سامانه استاندارد بارگذاری شود.');
+      }
+      if (!boolValue(standard.standard_fee_paid)) {
+        issues.push('پرداخت کارمزد استاندارد باید ثبت شود.');
+      }
+      if (!boolValue(standard.standard_notified)) {
+        issues.push('اطلاع‌رسانی پرداخت به استاندارد باید ثبت شود.');
+      }
+    }
+    return issues;
+  }
+
+  if (stage === 'cashier') {
+    const cashier = state.cashier;
+    const method = textValue(cashier.method);
+    const amount = textValue(cashier.cash_paid_irr);
+    const hasCashAmount = amount !== '' && Number.isFinite(Number(amount)) && Number(amount) >= 0;
+    const hasGuarantee = boolValue(cashier.guarantee_duties) || boolValue(cashier.guarantee_vat);
+    const hasGuaranteeReference = textValue(cashier.guarantee_reference) !== '';
+
+    if (method === 'cash' && !hasCashAmount) {
+      issues.push('مبلغ پرداخت نقدی صندوق را ثبت کنید.');
+    } else if (method === 'bank_guarantee' && (!hasGuarantee || !hasGuaranteeReference)) {
+      issues.push('نوع ضمانت‌نامه (حقوق ورودی/ارزش افزوده) و شماره مرجع آن را ثبت کنید.');
+    } else if (method === 'mixed' && !hasCashAmount && (!hasGuarantee || !hasGuaranteeReference)) {
+      issues.push('برای تسویه ترکیبی، مبلغ نقدی یا جزئیات ضمانت‌نامه را ثبت کنید.');
+    } else if (!oneOf(method, ['cash', 'bank_guarantee', 'mixed'])) {
+      issues.push('روش تسویه صندوق را انتخاب کنید.');
+    }
+    return issues;
+  }
+
+  if (stage === 'loading_permit') {
+    const permit = state.loadingPermit;
+    const taxReady = oneOf(permit.tax_permission_status, ['approved', 'not_required']);
+    const sataCode = textValue(permit.sata_code);
+    const 90PercentRequest = boolValue(permit.clearance_90_percent_requested);
+    const 90PercentReady = 90PercentRequest && !sataCode && textValue(permit.comment) !== '';
+    const centralBankReady = oneOf(permit.central_bank_status, ['approved', 'not_required']) || 90PercentReady;
+
+    if (!taxReady) issues.push('مجوز سازمان امور مالیاتی باید صادر یا غیرلازم ثبت شود.');
+    if (!centralBankReady) {
+      issues.push('وضعیت منشأ ارز/بانک مرکزی را تأیید کنید؛ در نبود ساتا، درخواست ترخیص ۹۰ درصدی و توضیح آن را ثبت کنید.');
+    }
+    return issues;
+  }
+
+  if (stage === 'exit') {
+    const exit = state.exit;
+    if (textValue(exit.loading_permission_status) !== 'approved') {
+      issues.push('اجازه بارگیری در درب خروج هنوز صادر نشده است.');
+    }
+    if (textValue(exit.financial_registration_status) !== 'registered') {
+      issues.push('ثبت مالی در درب خروج تکمیل نشده است.');
+    }
+    if (boolValue(exit.weighbridge_required) && textValue(exit.loading_completed_at) && !boolValue(exit.weighbridge_paid)) {
+      issues.push('دیماند باسکول پس از اتمام بارگیری باید پرداخت و ثبت شود.');
+    }
+    return issues;
+  }
+
+  if (stage === 'port_charges') {
+    const port = state.port;
+    const receiptDate = textValue(port.warehouse_receipt_date);
+    const insuranceDate = textValue(port.insurance_issue_date);
+    if (!parseJalaliDate(receiptDate)) issues.push('تاریخ معتبر قبض انبار را ثبت کنید.');
+    if (!parseJalaliDate(insuranceDate)) issues.push('تاریخ معتبر بیمه‌نامه را ثبت کنید.');
+
+    const insuranceVsReceipt = compareJalaliDates(insuranceDate, receiptDate);
+    if (insuranceVsReceipt !== null && insuranceVsReceipt >= 0 &&
+      textValue(port.insurance_followup_status) !== 'completed') {
+      issues.push('بیمه‌نامه قبل از قبض انبار نیست؛ پیگیری بیمه/پوشش تکمیلی را تکمیل کنید.');
+    }
+
+    if (!oneOf(port.initial_invoice_status, ['received', 'paid', 'not_required'])) {
+      issues.push('وضعیت صورتحساب اولیه باید دریافت، پرداخت یا عدم نیاز ثبت شود.');
+    }
+    if (!oneOf(port.transport_power_of_attorney_status, ['received', 'approved', 'not_required'])) {
+      issues.push('وکالت حمل باید دریافت/تأیید یا عدم نیاز آن ثبت شود.');
+    }
+    if (!parseJalaliDate(textValue(port.loading_form_received_at))) {
+      issues.push('تاریخ دریافت فرم بارگیری را ثبت کنید.');
+    }
+    if (!parseJalaliDate(textValue(state.exit.loading_completed_at))) {
+      issues.push('تاریخ اتمام بارگیری را در مرحله درب خروج ثبت کنید.');
+    }
+    if (textValue(port.last_truck_loaded_at) &&
+      !oneOf(port.supplemental_invoice_status, ['received', 'paid'])) {
+      issues.push('با ثبت بارگیری کامیون آخر، دریافت یا پرداخت صورتحساب متمم را ثبت کنید.');
+    }
+    return issues;
+  }
+
+  return issues;
+};
