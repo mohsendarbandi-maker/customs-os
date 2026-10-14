@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {Link} from 'react-router-dom';
-import {ArrowUpLeft,Briefcase,CloudSun,FileText,Search,Settings,Ship,Wallet,Wind,Waves,Activity,Plus,Clock3,Menu,PackageCheck,Building2,ChevronLeft} from 'lucide-react';
+import {ArrowUpLeft,Briefcase,CloudSun,FileText,Settings,Ship,Wallet,Waves,Activity,Plus,Clock3,Building2,ChevronLeft} from 'lucide-react';
 import {supabase} from '../lib/supabase';
 import {LatestShipmentStatuses} from '../components/LatestShipmentStatuses';
 import {RemindersHomeCard} from '../features/reminders/RemindersHomeCard';
