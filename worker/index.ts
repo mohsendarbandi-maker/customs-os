@@ -57,6 +57,89 @@ function maritimeJson(payload: unknown, status = 200, cacheControl = 'no-store')
   });
 }
 
+
+// OpenStreetMap tiles are proxied only on demand (no prefetch). Preserve upstream
+// cache directives, identify this application, and send a valid first-party Referer.
+async function serveMapTile(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const match = url.pathname.match(/^\\/api\\/map\\/tiles\\/(\\d{1,2})\\/(\\d{1,8})\\/(\\d{1,8})\\.png$/);
+  if (!match) return json({ error: 'آدرس کاشی نقشه معتبر نیست.' }, 400);
+  const z = Number(match[1]);
+  const x = Number(match[2]);
+  const y = Number(match[3]);
+  if (!Number.isInteger(z) || z < 0 || z > 19) {
+    return json({ error: 'بزرگ‌نمایی نقشه خارج از محدوده مجاز است.' }, 400);
+  }
+  const dimension = 2 ** z;
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= dimension || y >= dimension) {
+    return json({ error: 'مختصات کاشی نقشه معتبر نیست.' }, 400);
+  }
+  if (!['GET', 'HEAD'].includes(request.method)) return json({ error: 'Method not allowed' }, 405);
+
+  const cacheKey = new Request(new URL(url.pathname, url.origin).toString(), { method: 'GET' });
+  try {
+    const cached = await caches.default.match(cacheKey);
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      headers.set('X-Customs-Map-Cache', 'HIT');
+      return new Response(request.method === 'HEAD' ? null : cached.body, { status: cached.status, statusText: cached.statusText, headers });
+    }
+  } catch (error) {
+    console.warn('[Map tile] cache read unavailable:', error instanceof Error ? error.message : String(error));
+  }
+
+  const tileUrl = 'https://tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png';
+  const incomingReferrer = request.headers.get('Referer');
+  let referrer = new URL('/marine-conditions', url.origin).toString();
+  try {
+    if (incomingReferrer && new URL(incomingReferrer).origin === url.origin) referrer = incomingReferrer;
+  } catch { /* use the stable first-party referrer */ }
+
+  try {
+    const upstream = await fetch(tileUrl, {
+      method: request.method,
+      headers: {
+        Accept: 'image/avif,image/webp,image/apng,image/png,*/*;q=0.8',
+        'User-Agent': 'Customs OS/1.0 (+https://darbandicommercial.ir)',
+        Referer: referrer,
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!upstream.ok) {
+      console.error('[Map tile] upstream returned HTTP', upstream.status, 'z=' + z + ' x=' + x + ' y=' + y);
+      return new Response('Map tiles are temporarily unavailable.', {
+        status: upstream.status === 404 ? 404 : 503,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '30', 'X-Customs-Map-Cache': 'BYPASS' },
+      });
+    }
+
+    const contentType = upstream.headers.get('Content-Type') || '';
+    if (!contentType.toLowerCase().startsWith('image/')) {
+      console.error('[Map tile] upstream returned a non-image response:', contentType);
+      return new Response('Map tiles are temporarily unavailable.', { status: 502, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
+    }
+
+    const headers = new Headers();
+    for (const name of ['Content-Type', 'Cache-Control', 'ETag', 'Last-Modified', 'Expires', 'Vary']) {
+      const value = upstream.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+    // Follow origin cache directives; use 7 days only when neither Cache-Control nor Expires exists.
+    if (!headers.has('Cache-Control') && !headers.has('Expires')) headers.set('Cache-Control', 'public, max-age=604800, s-maxage=604800');
+    headers.set('X-Customs-Map-Cache', 'MISS');
+    const response = new Response(upstream.body, { status: 200, headers });
+    try { await caches.default.put(cacheKey, response.clone()); }
+    catch (error) { console.warn('[Map tile] cache write unavailable:', error instanceof Error ? error.message : String(error)); }
+    return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, statusText: response.statusText, headers: response.headers });
+  } catch (error) {
+    console.error('[Map tile] upstream request failed:', error instanceof Error ? error.message : String(error));
+    return new Response('Map tiles are temporarily unavailable.', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '30' },
+    });
+  }
+}
+
 async function serveMaritimeConditions(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const latitudeRaw = url.searchParams.get('latitude');
@@ -194,6 +277,11 @@ async function serveMaritimeConditions(request: Request): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // First-party map URL keeps browser requests on the same path as the app.
+    if (/^\\/api\\/map\\/tiles\\/\\d{1,2}\\/\\d{1,8}\\/\\d{1,8}\\.png$/.test(url.pathname)) {
+      return serveMapTile(request);
+    }
 
     // Public weather/marine data is fetched server-side from Cloudflare so end
     // users' browsers never need direct access to third-party forecast APIs.
