@@ -1759,3 +1759,16 @@ html:has(.reminders-app-standalone), body:has(.reminders-app-standalone) {
  .reminders-app-standalone .reminders-open-task{min-height:39px!important;padding:3px 4px!important}
  .reminders-app-standalone .reminders-open-copy strong{font-size:12px!important}
 }
+
+/* Fit the full active task queue without shrinking its text into micro-labels. */
+.reminders-app-standalone .reminders-open-grid{grid-auto-rows:minmax(39px,auto)!important;gap:3px!important}
+.reminders-app-standalone .reminders-open-task{min-height:39px!important;padding:3px 5px!important}
+.reminders-app-standalone .reminders-open-copy{gap:0!important}
+.reminders-app-standalone .reminders-open-title{display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:2!important;overflow:hidden!important;width:100%!important;min-width:0!important;padding:0!important;margin:0!important;text-align:start!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;color:var(--text)!important;font:inherit!important;font-size:13px!important;font-weight:700!important;line-height:1.2!important;overflow-wrap:anywhere!important;white-space:normal!important}
+.reminders-app-standalone .reminders-open-copy small{display:none!important}
+@media(max-width:520px){
+ .reminders-app-standalone .reminders-open-grid{grid-auto-rows:minmax(39px,auto)!important;gap:3px!important}
+ .reminders-app-standalone .reminders-open-task{min-height:39px!important;padding:3px 4px!important}
+ .reminders-app-standalone .reminders-open-title{font-size:13px!important;line-height:1.18!important}
+ .reminders-app-standalone .reminders-open-status{font-size:10px!important;padding:2px 3px!important}
+}
