@@ -1675,3 +1675,87 @@ html:has(.reminders-app-standalone), body:has(.reminders-app-standalone) {
 .reminders-app-standalone .reminders-calendar-day-close{position:sticky!important;top:0!important;z-index:2!important;float:inline-end!important;display:grid!important;place-items:center!important;width:30px!important;height:30px!important;margin:-4px -4px 0 0!important;border:1px solid var(--border)!important;border-radius:9px!important;background:var(--surface)!important;color:var(--text)!important}
 .reminders-app-standalone .reminders-calendar-day-dialog .reminders-selected-day-list{clear:both!important}
 @media(max-width:420px){.reminders-app-standalone .reminders-calendar-day-overlay{padding:10px!important}.reminders-app-standalone .reminders-calendar-day-dialog{max-height:82dvh!important;padding:11px!important;border-radius:15px!important}.reminders-app-standalone .reminders-date-widget{flex-basis:22px!important;height:22px!important}}
+
+
+/* Reminder home redesign: legible task grid; every open reminder is fetched and rendered. */
+.reminders-app-standalone .reminders-hub-screen{
+  height:calc(100dvh - 112px)!important;max-height:calc(100dvh - 112px)!important;min-height:0!important;
+  display:flex!important;flex-direction:column!important;gap:8px!important;padding:8px 10px 6px!important;
+  overflow:hidden!important;box-sizing:border-box!important;
+}
+.reminders-app-standalone .reminders-hub-header{flex:0 0 auto!important;padding:5px 9px!important;margin:0!important;border-radius:12px!important;border:1px solid var(--border)!important;box-shadow:none!important}
+.reminders-app-standalone .reminders-hub-identity{display:flex!important;align-items:center!important;min-height:36px!important;gap:9px!important}
+.reminders-app-standalone .reminders-hub-identity .reminders-brand-icon{width:31px!important;height:31px!important;flex:0 0 auto!important}
+.reminders-app-standalone .reminders-home-title{min-width:0!important;flex:1 1 auto!important;display:flex!important;align-items:baseline!important;gap:9px!important}
+.reminders-app-standalone .reminders-home-title h1{font-size:17px!important;line-height:1.2!important;font-weight:800!important;white-space:nowrap!important;margin:0!important}
+.reminders-app-standalone .reminders-home-title p{font-size:11px!important;line-height:1.25!important;white-space:nowrap!important;margin:0!important;color:var(--text-muted)!important}
+.reminders-app-standalone .reminders-hub-actions{display:flex!important;align-items:center!important;gap:5px!important;flex:0 0 auto!important}
+.reminders-app-standalone .reminders-hub-actions button{width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important;display:grid!important;place-items:center!important;padding:0!important;border-radius:9px!important;background:var(--surface-2)!important;border:1px solid var(--border)!important}
+.reminders-app-standalone .reminders-hub-actions button svg{width:18px!important;height:18px!important}
+.reminders-app-standalone .reminders-hub-search,.reminders-app-standalone .reminders-date-widget{display:none!important}
+.reminders-app-standalone .reminders-home-stats{flex:0 0 auto!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:7px!important}
+.reminders-app-standalone .reminders-home-stat{min-width:0!important;height:43px!important;min-height:43px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:7px!important;padding:0 10px!important;border-radius:10px!important;border:1px solid var(--border)!important;background:var(--surface)!important;box-shadow:none!important}
+.reminders-app-standalone .reminders-home-stat span{font-size:12px!important;font-weight:650!important;line-height:1.2!important;white-space:nowrap!important}
+.reminders-app-standalone .reminders-home-stat strong{font-size:16px!important;font-weight:800!important;line-height:1!important;font-variant-numeric:tabular-nums!important}
+.reminders-app-standalone .reminders-home-stat.is-overdue{border-inline-start:3px solid #dc5656!important}
+.reminders-app-standalone .reminders-home-stat.is-today{border-inline-start:3px solid #a27be9!important}
+.reminders-app-standalone .reminders-home-stat.is-future{border-inline-start:3px solid #4389d9!important}
+.reminders-app-standalone .reminders-home-stat.is-open{border-inline-start:3px solid #31a57a!important}
+.reminders-app-standalone .reminders-hub-section.reminders-up-next{flex:1 1 0!important;min-height:0!important;display:flex!important;flex-direction:column!important;margin:0!important;padding:8px!important;overflow:hidden!important;border-radius:12px!important;border:1px solid var(--border)!important;box-shadow:none!important}
+.reminders-app-standalone .reminders-home-section-heading{display:flex!important;align-items:center!important;gap:8px!important;min-height:27px!important;flex:0 0 auto!important;margin:0 0 7px!important}
+.reminders-app-standalone .reminders-home-section-heading h2{font-size:15px!important;line-height:1.2!important;font-weight:800!important;margin:0!important}
+.reminders-app-standalone .reminders-home-total{font-size:12px!important;font-weight:800!important;line-height:1!important;min-width:24px!important;text-align:center!important;padding:4px 6px!important;border-radius:7px!important;background:var(--surface-2)!important}
+.reminders-app-standalone .reminders-home-section-heading button{margin-inline-start:auto!important;display:flex!important;align-items:center!important;gap:4px!important;height:28px!important;min-height:28px!important;padding:0 8px!important;border:1px solid var(--border)!important;border-radius:8px!important;font-size:12px!important;font-weight:700!important;white-space:nowrap!important}
+.reminders-app-standalone .reminders-open-grid{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain!important;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-auto-rows:minmax(43px,auto)!important;align-content:start!important;gap:5px!important;padding:1px 2px 2px!important;scrollbar-width:thin!important}
+.reminders-app-standalone .reminders-open-task{position:relative!important;display:flex!important;align-items:center!important;gap:6px!important;min-width:0!important;min-height:43px!important;padding:4px 6px!important;margin:0!important;overflow:hidden!important;border:1px solid var(--border)!important;border-radius:9px!important;background:var(--surface)!important;box-shadow:none!important}
+.reminders-app-standalone .reminders-open-task[data-state="overdue"]{background:color-mix(in srgb,#d94848 7%,var(--surface))!important;border-inline-start:3px solid #d94848!important}
+.reminders-app-standalone .reminders-open-task[data-state="today"]{background:color-mix(in srgb,#8b5cc7 6%,var(--surface))!important;border-inline-start:3px solid #8b5cc7!important}
+.reminders-app-standalone .reminders-open-task[data-state="future"]{border-inline-start:3px solid #4788d4!important}
+.reminders-app-standalone .reminders-open-task[data-state="undated"]{border-inline-start:3px solid var(--border)!important}
+.reminders-app-standalone .reminders-open-check{flex:0 0 20px!important;width:20px!important;min-width:20px!important;height:20px!important;min-height:20px!important;display:grid!important;place-items:center!important;padding:0!important;border:1.5px solid var(--border)!important;border-radius:6px!important;background:transparent!important}
+.reminders-app-standalone .reminders-open-check span{display:block!important;width:9px!important;height:9px!important;border-radius:3px!important;background:transparent!important}
+.reminders-app-standalone .reminders-open-copy{flex:1 1 auto!important;min-width:0!important;display:flex!important;flex-direction:column!important;justify-content:center!important;gap:2px!important}
+.reminders-app-standalone .reminders-open-copy strong{display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:2!important;overflow:hidden!important;min-width:0!important;font-size:13px!important;line-height:1.2!important;font-weight:700!important;overflow-wrap:anywhere!important;text-overflow:clip!important}
+.reminders-app-standalone .reminders-open-copy small{display:block!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;font-size:10px!important;line-height:1.15!important;color:var(--text-muted)!important}
+.reminders-app-standalone .reminders-open-status{flex:0 0 auto!important;max-width:58px!important;padding:3px 4px!important;border-radius:6px!important;font-size:10px!important;line-height:1.2!important;font-weight:750!important;white-space:nowrap!important;text-align:center!important;background:var(--surface-2)!important;color:var(--text-muted)!important}
+.reminders-app-standalone .reminders-open-task[data-state="overdue"] .reminders-open-status{background:#fee2e2!important;color:#991b1b!important}
+.reminders-app-standalone .reminders-open-task[data-state="today"] .reminders-open-status{background:#ede9fe!important;color:#5b21b6!important}
+.reminders-app-standalone .reminders-open-task[data-state="future"] .reminders-open-status{background:#dbeafe!important;color:#1d4ed8!important}
+.reminders-app-standalone .reminders-home-empty{grid-column:1/-1!important;align-self:start!important;min-height:44px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;padding:10px!important;border:1px dashed var(--border)!important;border-radius:9px!important}
+.reminders-app-standalone .reminders-home-empty strong{font-size:13px!important}
+@media(min-width:900px){
+ .reminders-app-standalone .reminders-open-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;grid-auto-rows:minmax(43px,auto)!important}
+ .reminders-app-standalone .reminders-open-task{min-height:43px!important}
+}
+@media(max-width:520px){
+ .reminders-app-standalone .reminders-hub-screen{padding:7px 6px 5px!important;gap:7px!important}
+ .reminders-app-standalone .reminders-hub-header{padding:4px 6px!important}
+ .reminders-app-standalone .reminders-hub-identity{gap:6px!important}
+ .reminders-app-standalone .reminders-hub-identity .reminders-brand-icon{width:28px!important;height:28px!important}
+ .reminders-app-standalone .reminders-home-title{flex-direction:column!important;align-items:flex-start!important;gap:2px!important}
+ .reminders-app-standalone .reminders-home-title h1{font-size:16px!important}
+ .reminders-app-standalone .reminders-home-title p{font-size:10px!important}
+ .reminders-app-standalone .reminders-hub-actions{gap:3px!important}
+ .reminders-app-standalone .reminders-hub-actions button{width:31px!important;min-width:31px!important;height:31px!important;min-height:31px!important}
+ .reminders-app-standalone .reminders-home-stats{gap:4px!important}
+ .reminders-app-standalone .reminders-home-stat{height:39px!important;min-height:39px!important;padding:0 6px!important;gap:4px!important}
+ .reminders-app-standalone .reminders-home-stat span{font-size:12px!important}
+ .reminders-app-standalone .reminders-home-stat strong{font-size:15px!important}
+ .reminders-app-standalone .reminders-hub-section.reminders-up-next{padding:6px!important}
+ .reminders-app-standalone .reminders-open-grid{gap:4px!important;grid-auto-rows:minmax(42px,auto)!important}
+ .reminders-app-standalone .reminders-open-task{gap:4px!important;padding:4px!important;min-height:42px!important}
+ .reminders-app-standalone .reminders-open-check{flex-basis:18px!important;width:18px!important;min-width:18px!important;height:18px!important;min-height:18px!important}
+ .reminders-app-standalone .reminders-open-copy strong{font-size:12.5px!important}
+ .reminders-app-standalone .reminders-open-copy small{font-size:10px!important}
+ .reminders-app-standalone .reminders-open-status{font-size:10px!important;max-width:51px!important;padding:3px 3px!important}
+}
+@media(max-height:760px){
+ .reminders-app-standalone .reminders-hub-screen{gap:5px!important}
+ .reminders-app-standalone .reminders-home-stats{gap:4px!important}
+ .reminders-app-standalone .reminders-home-stat{height:36px!important;min-height:36px!important}
+ .reminders-app-standalone .reminders-hub-section.reminders-up-next{padding:5px!important}
+ .reminders-app-standalone .reminders-home-section-heading{margin-bottom:4px!important}
+ .reminders-app-standalone .reminders-open-grid{grid-auto-rows:minmax(39px,auto)!important;gap:3px!important}
+ .reminders-app-standalone .reminders-open-task{min-height:39px!important;padding:3px 4px!important}
+ .reminders-app-standalone .reminders-open-copy strong{font-size:12px!important}
+}
