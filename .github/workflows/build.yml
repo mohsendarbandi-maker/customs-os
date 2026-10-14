@@ -27,12 +27,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
-      - name: Verify Supabase client configuration was embedded
+      - name: Verify production Supabase client uses the same-origin proxy
         shell: bash
         run: |
           set -euo pipefail
-          grep -R -F -q "$VITE_SUPABASE_URL" dist/assets
           grep -R -F -q "$VITE_SUPABASE_ANON_KEY" dist/assets
+          grep -R -F -q "location.origin" dist/assets
       - name: Force a fresh Cloudflare asset manifest
         shell: bash
         run: |
@@ -146,6 +146,27 @@ jobs:
               sleep 5
             done
             test "$asset_success" = 1
+
+            echo "Checking same-origin Supabase Auth proxy"
+            auth_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/auth-health.json -w '%{http_code}' -H "apikey: ${VITE_SUPABASE_ANON_KEY}" "$base/auth/v1/health")"
+            test "$auth_status" = "200"
+
+            echo "Checking same-origin PostgREST proxy"
+            rest_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/rest-root.json -w '%{http_code}' -H "apikey: ${VITE_SUPABASE_ANON_KEY}" "$base/rest/v1/")"
+            test "$rest_status" = "200"
+            grep -q 'swagger\|openapi\|paths' /tmp/rest-root.json
+
+            echo "Checking same-origin Storage proxy"
+            storage_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/storage-version.json -w '%{http_code}' -H "apikey: ${VITE_SUPABASE_ANON_KEY}" "$base/storage/v1/version")"
+            test "$storage_status" = "200"
+
+            echo "Checking same-origin Realtime WebSocket handshake"
+            realtime_status="$(curl --silent --show-error --http1.1 --max-time 4 -D /tmp/realtime.headers -o /dev/null -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' "$base/realtime/v1/websocket?apikey=${VITE_SUPABASE_ANON_KEY}&vsn=1.0.0" 2>/dev/null || true)"
+            if [ "$realtime_status" != "101" ]; then
+              echo "Realtime proxy did not complete a WebSocket upgrade (HTTP $realtime_status)"
+              cat /tmp/realtime.headers || true
+              exit 1
+            fi
 
             echo "Checking dedicated chat entrypoint"
             smoke_qs="?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
