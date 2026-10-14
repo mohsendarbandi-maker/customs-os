@@ -27,6 +27,9 @@ const readResponse = async (response: Response): Promise<unknown> => {
 
 const directEndpoint = (name: string) => `${supabaseUrl.replace(/\/$/, '')}/functions/v1/${encodeURIComponent(name)}`;
 const proxyEndpoint = (name: string) => `/api/edge/${encodeURIComponent(name)}`;
+const isLocalDevelopment = () =>
+  typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
 async function request<T>(endpoint: string, token: string, body: Record<string, unknown>): Promise<EdgeResponse<T>> {
   const controller = new AbortController();
@@ -77,23 +80,13 @@ export async function invokeEdgeFunction<T = any>(
   const token = session?.access_token?.trim();
   if (!token) throw new Error('نشست کاربر معتبر نیست یا منقضی شده است. لطفاً دوباره وارد شوید.');
 
-  const useProxy =
-    typeof window !== 'undefined' &&
-    !['localhost', '127.0.0.1'].includes(window.location.hostname);
-
-  if (useProxy) {
-    try {
-      return await request<T>(proxyEndpoint(name), token, body);
-    } catch (proxyError) {
-      try {
-        return await request<T>(directEndpoint(name), token, body);
-      } catch (directError) {
-        const directMessage = directError instanceof Error ? directError.message : String(directError);
-        const proxyMessage = proxyError instanceof Error ? proxyError.message : String(proxyError);
-        throw new Error(`اتصال به سرویس «${name}» ناموفق بود. ${directMessage || proxyMessage}`);
-      }
-    }
+  // Production must never bypass Cloudflare when the proxy is unavailable.
+  // Direct Supabase requests are permitted only for local developer builds.
+  const endpoint = isLocalDevelopment() ? directEndpoint(name) : proxyEndpoint(name);
+  try {
+    return await request<T>(endpoint, token, body);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`اتصال به سرویس «${name}» از مسیر امن Cloudflare ناموفق بود. ${detail}`);
   }
-
-  return request<T>(directEndpoint(name), token, body);
 }
