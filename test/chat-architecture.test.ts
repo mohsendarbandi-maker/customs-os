@@ -137,4 +137,15 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('item.current_status?"وضعیت: "+statusFa(item.current_status):""');
   });
 
+  it('does not retry terminally ineligible messenger deliveries',()=>{
+    const migration=read('supabase/migrations/20261014153000_messenger_outbox_terminal_skip.sql');
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(migration).toContain("'skipped'::text");
+    expect(migration).toContain("'MESSAGE_NOT_ELIGIBLE_FOR_EXTERNAL_DELIVERY'");
+    expect(migration).toContain("'DESTINATION_NO_LONGER_LINKED'");
+    expect(gateway).toContain('const terminal=code==="MESSAGE_NOT_ELIGIBLE_FOR_EXTERNAL_DELIVERY"||code==="DESTINATION_NO_LONGER_LINKED";');
+    expect(gateway).toContain('status:terminal?"skipped":"failed"');
+    expect(gateway).toContain('claimed:rows.length,sent,failed,skipped');
+  });
+
 });
