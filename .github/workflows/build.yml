@@ -2,7 +2,7 @@ name: Customs OS Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'fix/**']
   workflow_dispatch:
 
 concurrency:
@@ -27,6 +27,15 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+      - name: Prevent browser-side weather provider requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'https?://(api|marine-api)\.open-meteo\.com' src; then
+            echo "Weather and marine provider calls must go through the Cloudflare Worker."
+            exit 1
+          fi
+          echo "No direct Open-Meteo API calls found in browser source."
       - name: Verify production Supabase client uses the same-origin proxy
         shell: bash
         run: |
@@ -175,6 +184,34 @@ jobs:
               cat /tmp/realtime.headers || true
               exit 1
             fi
+
+            echo "Checking Cloudflare weather and marine data endpoint"
+            marine_status="$(curl --silent --show-error --location --max-time 25 -D /tmp/maritime.headers -o /tmp/maritime.json -w '%{http_code}' "$base/api/maritime/conditions?latitude=37.473&longitude=49.459")"
+            content_type="$(grep -i '^content-type:' /tmp/maritime.headers | tail -n 1 | tr -d '\r' | awk -F': ' '{print $2}')"
+            case "$content_type" in
+              application/json* ) ;;
+              *) echo "Maritime API returned unexpected content type: $content_type"; head -c 1000 /tmp/maritime.json; exit 1 ;;
+            esac
+            case "$marine_status" in
+              200|503) ;;
+              *) echo "Unexpected HTTP status from maritime API: $marine_status"; head -c 1500 /tmp/maritime.json; exit 1 ;;
+            esac
+            API_STATUS="$marine_status" node -e '
+              const fs = require("node:fs");
+              const response = JSON.parse(fs.readFileSync("/tmp/maritime.json", "utf8"));
+              const status = Number(process.env.API_STATUS);
+              if (status === 200 && (!response.success || (!response.weather?.current && !response.marine?.current))) {
+                console.error("Maritime endpoint returned success without usable weather or marine data.");
+                process.exit(1);
+              }
+              if (status === 503 && !response.error) {
+                console.error("Maritime endpoint returned 503 without a structured JSON error.");
+                process.exit(1);
+              }
+              console.log(status === 200
+                ? "Maritime JSON contract passed; weather/marine partial responses are supported."
+                : "Maritime route and JSON error contract passed; both external data providers are temporarily unavailable.");
+            '
 
             echo "Checking dedicated chat entrypoint"
             smoke_qs="?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"

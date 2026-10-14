@@ -18,9 +18,190 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 });
 
+
+type ExternalJson = Record<string, any>;
+
+async function fetchExternalJson(endpoint: string, provider: string): Promise<ExternalJson> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(7500),
+      });
+      if (!response.ok) {
+        throw new Error(`${provider} HTTP ${response.status}`);
+      }
+      const payload = await response.json() as ExternalJson;
+      if (payload && (payload.error === true || typeof payload.reason === 'string')) {
+        throw new Error(`${provider} returned unavailable model data`);
+      }
+      return payload;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`${provider} unavailable`);
+}
+
+function maritimeJson(payload: unknown, status = 200, cacheControl = 'no-store'): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': cacheControl,
+      'X-Customs-OS-Proxy': 'cloudflare',
+    },
+  });
+}
+
+async function serveMaritimeConditions(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const latitudeRaw = url.searchParams.get('latitude');
+  const longitudeRaw = url.searchParams.get('longitude');
+  const latitude = latitudeRaw === null ? NaN : Number(latitudeRaw);
+  const longitude = longitudeRaw === null ? NaN : Number(longitudeRaw);
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 || latitude > 90 ||
+    longitude < -180 || longitude > 180
+  ) {
+    return maritimeJson({ success: false, error: 'مختصات جغرافیایی معتبر نیست.' }, 400);
+  }
+
+  // Round coordinates to limit duplicate public-cache entries without visibly
+  // changing port-level forecasts (roughly a 100 m grid).
+  const lat = Math.round(latitude * 1000) / 1000;
+  const lon = Math.round(longitude * 1000) / 1000;
+  const cacheUrl = new URL('https://customs.mohsen-darbandi.workers.dev/api/maritime/conditions');
+  cacheUrl.searchParams.set('latitude', lat.toFixed(3));
+  cacheUrl.searchParams.set('longitude', lon.toFixed(3));
+  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
+
+  try {
+    const cached = await caches.default.match(cacheKey);
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      headers.set('X-Customs-Data-Cache', 'HIT');
+      return new Response(cached.body, {
+        status: cached.status,
+        statusText: cached.statusText,
+        headers,
+      });
+    }
+  } catch (error) {
+    console.warn('[Maritime API] cache read unavailable:', error instanceof Error ? error.message : String(error));
+  }
+
+  const weatherUrl = new URL('https://api.open-meteo.com/v1/forecast');
+  weatherUrl.searchParams.set('latitude', lat.toFixed(3));
+  weatherUrl.searchParams.set('longitude', lon.toFixed(3));
+  weatherUrl.searchParams.set('current', [
+    'temperature_2m', 'relative_humidity_2m', 'apparent_temperature',
+    'precipitation', 'weather_code', 'pressure_msl', 'wind_speed_10m',
+    'wind_direction_10m', 'wind_gusts_10m',
+  ].join(','));
+  weatherUrl.searchParams.set('hourly', 'precipitation_probability');
+  weatherUrl.searchParams.set('forecast_days', '2');
+  weatherUrl.searchParams.set('timezone', 'auto');
+
+  const marineUrl = new URL('https://marine-api.open-meteo.com/v1/marine');
+  marineUrl.searchParams.set('latitude', lat.toFixed(3));
+  marineUrl.searchParams.set('longitude', lon.toFixed(3));
+  marineUrl.searchParams.set('current', [
+    'wave_height', 'wave_direction', 'wave_period', 'wind_wave_height',
+    'swell_wave_height', 'swell_wave_direction', 'sea_surface_temperature',
+    'ocean_current_velocity', 'ocean_current_direction',
+  ].join(','));
+  marineUrl.searchParams.set('hourly', [
+    'wave_height', 'wave_direction', 'wave_period', 'wind_wave_height',
+    'swell_wave_height', 'sea_level_height_msl', 'ocean_current_velocity',
+    'ocean_current_direction',
+  ].join(','));
+  marineUrl.searchParams.set('forecast_days', '2');
+  marineUrl.searchParams.set('timezone', 'auto');
+
+  const [weatherResult, marineResult] = await Promise.allSettled([
+    fetchExternalJson(weatherUrl.toString(), 'Open-Meteo weather'),
+    fetchExternalJson(marineUrl.toString(), 'Open-Meteo marine'),
+  ]);
+  const weatherPayload = weatherResult.status === 'fulfilled' ? weatherResult.value : null;
+  const marinePayload = marineResult.status === 'fulfilled' ? marineResult.value : null;
+
+  if (!weatherPayload) {
+    console.error('[Maritime API] weather source failed:', weatherResult.status === 'rejected'
+      ? (weatherResult.reason instanceof Error ? weatherResult.reason.message : String(weatherResult.reason))
+      : 'no payload');
+  }
+  if (!marinePayload) {
+    console.error('[Maritime API] marine source failed:', marineResult.status === 'rejected'
+      ? (marineResult.reason instanceof Error ? marineResult.reason.message : String(marineResult.reason))
+      : 'no payload');
+  }
+
+  if (!weatherPayload && !marinePayload) {
+    return maritimeJson({
+      success: false,
+      error: 'سرویس‌های دادهٔ آب‌وهوا و دریا موقتاً پاسخ نمی‌دهند.',
+      warnings: ['weather_unavailable', 'marine_unavailable'],
+    }, 503);
+  }
+
+  const warnings: string[] = [];
+  if (!weatherPayload) warnings.push('weather_unavailable');
+  if (!marinePayload) warnings.push('marine_unavailable');
+
+  const payload = {
+    success: true,
+    partial: warnings.length > 0,
+    updated_at: new Date().toISOString(),
+    location: { latitude: lat, longitude: lon },
+    weather: weatherPayload ? {
+      current: weatherPayload.current ?? null,
+      current_units: weatherPayload.current_units ?? null,
+      hourly: weatherPayload.hourly ?? null,
+      hourly_units: weatherPayload.hourly_units ?? null,
+      timezone: weatherPayload.timezone ?? null,
+    } : null,
+    marine: marinePayload ? {
+      current: marinePayload.current ?? null,
+      current_units: marinePayload.current_units ?? null,
+      hourly: marinePayload.hourly ?? null,
+      hourly_units: marinePayload.hourly_units ?? null,
+      minutely_15: marinePayload.minutely_15 ?? null,
+      minutely_15_units: marinePayload.minutely_15_units ?? null,
+      timezone: marinePayload.timezone ?? null,
+    } : null,
+    sources: ['Open-Meteo Weather Forecast API', 'Open-Meteo Marine API'],
+    warnings,
+  };
+
+  const response = maritimeJson(payload, 200, 'public, max-age=120, s-maxage=300');
+  try {
+    await caches.default.put(cacheKey, response.clone());
+  } catch (error) {
+    console.warn('[Maritime API] cache write unavailable:', error instanceof Error ? error.message : String(error));
+  }
+  const headers = new Headers(response.headers);
+  headers.set('X-Customs-Data-Cache', 'MISS');
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // Public weather/marine data is fetched server-side from Cloudflare so end
+    // users' browsers never need direct access to third-party forecast APIs.
+    if (url.pathname === '/api/maritime/conditions') {
+      if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
+      if (request.method !== 'GET') return maritimeJson({ error: 'Method not allowed' }, 405);
+      return serveMaritimeConditions(request);
+    }
     // Route every browser-facing Supabase API through this Worker. Do not cache
     // authenticated API responses: each request may contain tenant-specific data.
     if (/^\/(?:auth|rest|storage|realtime|functions|graphql)\/v1(?:\/|$)/.test(url.pathname)) {
