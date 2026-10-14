@@ -228,7 +228,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
  if(secretError||typeof expected!=="string"||!expected||!equal(req.headers.get("x-messenger-outbox-cron-secret")||"",expected))return bad("UNAUTHORIZED",401,req);
  const {data:rows,error}=await db.rpc("messenger_claim_delivery_outbox",{p_limit:40});
  if(error||!Array.isArray(rows))return bad("OUTBOX_CLAIM_FAILED",500,req);
- let sent=0,failed=0;
+ let sent=0,failed=0,skipped=0;
  for(const row of rows as any[]){
   const now=new Date().toISOString();
   try{
@@ -283,13 +283,16 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
    await db.from("message_logs").insert({organization_id:row.organization_id,connection_id:row.connection_id,direction:"outbound",message_type:logType,external_message_id:externalMessageId,external_chat_id:String(chat.external_chat_id),chat_message_id:row.chat_message_id,file_asset_id:fileAssetId,status:"sent",payload_summary:payloadSummary,sent_at:now});
    sent++;
   }catch(e){
-   const code=errorCode(e),attempt=Number(row.attempt_count||1),delay=Math.min(3600000,15000*Math.pow(2,Math.min(attempt,7))),retryAt=new Date(Date.now()+delay).toISOString();
-   await db.from("messenger_delivery_outbox").update({status:"failed",last_error_code:code,next_attempt_at:retryAt,updated_at:new Date().toISOString()}).eq("id",row.id).eq("status","sending");
-   await db.from("message_logs").insert({organization_id:row.organization_id,connection_id:row.connection_id,direction:"outbound",message_type:"text",external_chat_id:row.external_chat_id,chat_message_id:row.chat_message_id,status:"failed",error_code:code,payload_summary:{source:"customs_chat",outboxId:row.id,attempt}});
-   failed++;
+   const code=errorCode(e),attempt=Number(row.attempt_count||1);
+   const terminal=code==="MESSAGE_NOT_ELIGIBLE_FOR_EXTERNAL_DELIVERY"||code==="DESTINATION_NO_LONGER_LINKED";
+   const delay=Math.min(3600000,15000*Math.pow(2,Math.min(attempt,7)));
+   const retryAt=new Date(Date.now()+delay).toISOString();
+   await db.from("messenger_delivery_outbox").update({status:terminal?"skipped":"failed",last_error_code:code,next_attempt_at:terminal?new Date().toISOString():retryAt,updated_at:new Date().toISOString()}).eq("id",row.id).eq("status","sending");
+   await db.from("message_logs").insert({organization_id:row.organization_id,connection_id:row.connection_id,direction:"outbound",message_type:"text",external_chat_id:row.external_chat_id,chat_message_id:row.chat_message_id,status:"failed",error_code:code,payload_summary:{source:"customs_chat",outboxId:row.id,attempt,terminal}});
+   if(terminal)skipped++;else failed++;
   }
  }
- return out({ok:true,claimed:rows.length,sent,failed},200,req);
+ return out({ok:true,claimed:rows.length,sent,failed,skipped},200,req);
 }function formatDailyReport(snapshot:Record<string,any>){
  const number=(value:unknown)=>new Intl.NumberFormat("fa-IR").format(Number(value||0));
  const statusFa=(value:unknown)=>{
