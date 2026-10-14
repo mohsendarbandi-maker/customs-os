@@ -119,9 +119,9 @@ async function serveMaritimeConditions(request: Request): Promise<Response> {
   ].join(','));
   marineUrl.searchParams.set('hourly', [
     'wave_height', 'wave_direction', 'wave_period', 'wind_wave_height',
-    'swell_wave_height', 'sea_level_height_msl',
+    'swell_wave_height', 'sea_level_height_msl', 'ocean_current_velocity',
+    'ocean_current_direction',
   ].join(','));
-  marineUrl.searchParams.set('minutely_15', 'sea_level_height_msl,ocean_current_velocity,ocean_current_direction');
   marineUrl.searchParams.set('forecast_days', '2');
   marineUrl.searchParams.set('timezone', 'auto');
 
