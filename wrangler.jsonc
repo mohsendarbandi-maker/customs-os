@@ -22,7 +22,6 @@
       "/api/*",
       "/chat",
       "/chat/*",
-      "/api/messenger/*",
       "/webhooks/messenger/*"
     ],
     "html_handling": "none",
