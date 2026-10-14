@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity, MessageCircle, BarChart3, Building2, Landmark, ChevronLeft, ChevronRight,
   FileText, FileSearch, History, LayoutDashboard, Menu, Palette, Printer,
-  Settings2, Ship, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
+  Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
   ChevronDown, Plus, Home
 } from 'lucide-react';
@@ -35,6 +35,7 @@ const nav: NavItem[] = [
   { label: 'پرونده', en: 'Cases', to: '/cases', icon: Briefcase, group: 'عملیات', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'یادآورها', en: 'Reminders', to: '/reminders', icon: ClipboardList, group: 'عملیات' },
   { label: 'کشتیرانی', en: 'Shipping & Vessel Search', to: '/maritime', icon: Ship, group: 'حمل و اسناد', roles: allStaff },
+  { label: 'وضعیت دریا و لنگرگاه', en: 'Marine & Anchorage', to: '/marine-conditions', icon: Waves, group: 'حمل و اسناد', roles: allStaff },
   { label: 'گمرک', en: 'Customs Offices', to: '/customs-offices', icon: Landmark, group: 'حمل و اسناد', roles: management },
 { label: 'صاحب کالا', en: 'Clients', to: '/clients', icon: Building2, group: 'حمل و اسناد', roles: management },
   { label: 'اسناد و مجوزها', en: 'Documents & Permits', to: '/documents', icon: FileText, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
