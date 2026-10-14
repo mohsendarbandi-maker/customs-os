@@ -153,8 +153,19 @@ jobs:
 
             echo "Checking same-origin PostgREST proxy"
             rest_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/rest-root.json -w '%{http_code}' -H "apikey: ${VITE_SUPABASE_ANON_KEY}" "$base/rest/v1/")"
-            test "$rest_status" = "200"
-            grep -q 'swagger\|openapi\|paths' /tmp/rest-root.json
+            echo "PostgREST HTTP status: $rest_status"
+            if [ "$rest_status" != "200" ]; then
+              echo "PostgREST response body:"
+              head -c 2000 /tmp/rest-root.json || true
+              echo
+              exit 1
+            fi
+            if ! grep -Eqi '"(swagger|openapi|paths)"' /tmp/rest-root.json; then
+              echo "PostgREST root did not return the expected OpenAPI document. Body:"
+              head -c 2000 /tmp/rest-root.json || true
+              echo
+              exit 1
+            fi
 
             echo "Checking same-origin Storage proxy"
             storage_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/storage-version.json -w '%{http_code}' -H "apikey: ${VITE_SUPABASE_ANON_KEY}" "$base/storage/v1/version")"
