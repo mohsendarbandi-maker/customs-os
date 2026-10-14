@@ -1,8 +1,18 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { attachSupabaseClient, rpcWithOfflineQueue, startOfflineQueue } from './offlineQueue';
 
-const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+const env = (import.meta as any).env;
+const configuredSupabaseUrl = env.VITE_SUPABASE_URL as string;
+const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY as string;
+// Local development may talk to Supabase directly. Production apps (main,
+// chat, reminders, and workers.dev) must use their own origin so the Worker
+// can proxy Auth, PostgREST, Storage, Realtime, and Edge Functions together.
+const isLocalDevelopment =
+  typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const supabaseUrl = isLocalDevelopment
+  ? configuredSupabaseUrl
+  : (typeof window !== 'undefined' ? window.location.origin : configuredSupabaseUrl);
 export const SUPABASE_AUTH_STORAGE_KEY = 'customs-os-auth-v3';
 
 // Drop the legacy Supabase auth storage namespace once so stale refresh tokens
