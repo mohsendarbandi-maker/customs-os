@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -R -n -E 'https?://(api|marine-api)\\.open-meteo\\.com' src; then
+          if grep -R -n -E 'https?://(api|marine-api)\.open-meteo\.com' src; then
             echo "Weather and marine provider calls must go through the Cloudflare Worker."
             exit 1
           fi
