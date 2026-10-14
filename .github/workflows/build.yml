@@ -27,7 +27,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
-      - name: Prevent browser-side weather provider requests
+      - name: Prevent browser-side weather and map provider requests
         shell: bash
         run: |
           set -euo pipefail
@@ -35,7 +35,11 @@ jobs:
             echo "Weather and marine provider calls must go through the Cloudflare Worker."
             exit 1
           fi
-          echo "No direct Open-Meteo API calls found in browser source."
+          if grep -R -n -F -e 'tile.openstreetmap.org' -e 'openstreetmap.org/export/embed.html' src; then
+            echo "Map tiles and embedded maps must use the first-party Cloudflare path."
+            exit 1
+          fi
+          echo "No direct browser weather or map tile provider requests found."
       - name: Verify production Supabase client uses the same-origin proxy
         shell: bash
         run: |
@@ -213,6 +217,28 @@ jobs:
                 : "Maritime route and JSON error contract passed; both external data providers are temporarily unavailable.");
             '
 
+            echo "Checking first-party Cloudflare map tile proxy"
+            map_head_status="$(curl --silent --show-error --head --max-time 20 -o /dev/null -w '%{http_code}' "$base/api/map/tiles/2/2/1.png")"
+            test "$map_head_status" = "200"
+            map_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/map-tile.headers -o /tmp/map-tile.png -w '%{http_code}' "$base/api/map/tiles/2/2/1.png")"
+            test "$map_status" = "200"
+            map_content_type="$(grep -i '^content-type:' /tmp/map-tile.headers | tail -n 1 | tr -d '\r' | awk -F': ' '{print $2}')"
+            case "$map_content_type" in
+              image/* ) ;;
+              *) echo "Map tile proxy returned unexpected content type: $map_content_type"; exit 1 ;;
+            esac
+            node -e '
+              const fs = require("node:fs");
+              const tile = fs.readFileSync("/tmp/map-tile.png");
+              if (tile.length < 100 || tile.subarray(0, 4).toString("hex") !== "89504e47") {
+                console.error("Map tile response is not a valid PNG image.");
+                process.exit(1);
+              }
+              console.log("Map tile proxy returned a valid PNG image.");
+            '
+            bad_map_status="$(curl --silent --show-error --location --max-time 10 -o /tmp/bad-map.json -w '%{http_code}' "$base/api/map/tiles/20/0/0.png")"
+            test "$bad_map_status" = "400"
+            
             echo "Checking dedicated chat entrypoint"
             smoke_qs="?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
             curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat${smoke_qs}"
