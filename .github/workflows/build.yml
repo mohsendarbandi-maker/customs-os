@@ -218,6 +218,8 @@ jobs:
             '
 
             echo "Checking first-party Cloudflare map tile proxy"
+            map_head_status="$(curl --silent --show-error --head --max-time 20 -o /dev/null -w '%{http_code}' "$base/api/map/tiles/2/2/1.png")"
+            test "$map_head_status" = "200"
             map_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/map-tile.headers -o /tmp/map-tile.png -w '%{http_code}' "$base/api/map/tiles/2/2/1.png")"
             test "$map_status" = "200"
             map_content_type="$(grep -i '^content-type:' /tmp/map-tile.headers | tail -n 1 | tr -d '\r' | awk -F': ' '{print $2}')"
