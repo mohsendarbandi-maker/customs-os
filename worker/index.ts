@@ -21,6 +21,46 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    // Route every browser-facing Supabase API through this Worker. Do not cache
+    // authenticated API responses: each request may contain tenant-specific data.
+    if (/^\/(?:auth|rest|storage|realtime|functions|graphql)\/v1(?:\/|$)/.test(url.pathname)) {
+      const target = new URL(url.pathname + url.search, env.SUPABASE_URL);
+      const headers = new Headers(request.headers);
+      headers.delete('host');
+      headers.delete('content-length');
+      if (!headers.has('apikey') && env.SUPABASE_ANON_KEY) {
+        headers.set('apikey', env.SUPABASE_ANON_KEY);
+      }
+      headers.set('X-Customs-OS-Proxy', 'cloudflare');
+
+      const isWebSocket = (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket';
+      try {
+        const upstreamRequest = new Request(target.toString(), {
+          method: request.method,
+          headers,
+          body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
+          redirect: 'manual',
+        });
+        const upstream = await fetch(upstreamRequest);
+
+        // WebSocket upgrades must be returned untouched; rebuilding a 101
+        // response breaks the Realtime handshake.
+        if (isWebSocket || upstream.status === 101) return upstream;
+
+        const responseHeaders = new Headers(upstream.headers);
+        responseHeaders.set('Cache-Control', 'no-store, private');
+        responseHeaders.delete('content-length');
+        return new Response(upstream.body, {
+          status: upstream.status,
+          statusText: upstream.statusText,
+          headers: responseHeaders,
+        });
+      } catch (error) {
+        console.error('[Supabase proxy] upstream request failed:', request.method, url.pathname,
+          error instanceof Error ? error.message : String(error));
+        return json({ error: 'ارتباط امن با سرویس داده برقرار نشد.' }, 502);
+      }
+    }
     if (request.method === 'GET' && url.pathname === '/' && url.searchParams.get('source') === 'pwa') {
       const chatUrl = new URL(request.url);
       chatUrl.pathname = '/chat';
