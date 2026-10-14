@@ -439,10 +439,25 @@ jobs:
               console.log('Reminders independent subdomain passed:', JSON.stringify(subdomainManifest));
               await remindersSubdomainPage.close();
 
-              // Exercise the offline shell in a real browser after the service worker has taken control.
+              // A fresh installation can activate the worker before it controls the first document.
+              // Wait for activation and reload once if needed, then verify the controlled offline shell.
+              await expect.poll(
+                async () => page.evaluate(async () => {
+                  if (!('serviceWorker' in navigator)) return 'unsupported';
+                  const registration = await navigator.serviceWorker.getRegistration('/');
+                  return registration?.active?.state ||
+                    registration?.installing?.state ||
+                    registration?.waiting?.state ||
+                    'not-registered';
+                }),
+                { timeout: 20000, message: 'Service worker did not activate; check /sw.js and registration' },
+              ).toBe('activated');
+              if (!(await page.evaluate(() => Boolean(navigator.serviceWorker?.controller)))) {
+                await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+              }
               await expect.poll(
                 async () => page.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
-                { timeout: 15000, message: 'Service worker did not take control before offline navigation' },
+                { timeout: 15000, message: 'Active service worker did not control the app after reload' },
               ).toBe(true);
               const offlinePage = await page.context().newPage();
               await page.context().setOffline(true);
