@@ -151,17 +151,14 @@ jobs:
             auth_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/auth-health.json -w '%{http_code}' -H "apikey: ${VITE_SUPABASE_ANON_KEY}" "$base/auth/v1/health")"
             test "$auth_status" = "200"
 
-            echo "Checking same-origin PostgREST proxy"
+            echo "Checking same-origin PostgREST proxy and public-key root protection"
             rest_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/rest-root.json -w '%{http_code}' -H "apikey: ${VITE_SUPABASE_ANON_KEY}" "$base/rest/v1/")"
-            echo "PostgREST HTTP status: $rest_status"
-            if [ "$rest_status" != "200" ]; then
-              echo "PostgREST response body:"
-              head -c 2000 /tmp/rest-root.json || true
-              echo
-              exit 1
-            fi
-            if ! grep -Eqi '"(swagger|openapi|paths)"' /tmp/rest-root.json; then
-              echo "PostgREST root did not return the expected OpenAPI document. Body:"
+            echo "PostgREST root HTTP status: $rest_status"
+            # Current Supabase intentionally rejects schema/OpenAPI root enumeration
+            # for publishable keys. A 401 with this explicit message confirms the
+            # request reached PostgREST and that no secret key was used in CI.
+            if [ "$rest_status" != "401" ] || ! grep -Fq 'Secret API key required' /tmp/rest-root.json; then
+              echo "Unexpected PostgREST root response:"
               head -c 2000 /tmp/rest-root.json || true
               echo
               exit 1
