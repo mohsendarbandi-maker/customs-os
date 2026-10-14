@@ -31,11 +31,11 @@ async function fetchExternalJson(endpoint: string, provider: string): Promise<Ex
         signal: AbortSignal.timeout(7500),
       });
       if (!response.ok) {
-        throw new Error(\`\${provider} HTTP \${response.status}\`);
+        throw new Error(`${provider} HTTP ${response.status}`);
       }
       const payload = await response.json() as ExternalJson;
       if (payload && (payload.error === true || typeof payload.reason === 'string')) {
-        throw new Error(\`\${provider} returned unavailable model data\`);
+        throw new Error(`${provider} returned unavailable model data`);
       }
       return payload;
     } catch (error) {
@@ -43,7 +43,7 @@ async function fetchExternalJson(endpoint: string, provider: string): Promise<Ex
       if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
-  throw lastError instanceof Error ? lastError : new Error(\`\${provider} unavailable\`);
+  throw lastError instanceof Error ? lastError : new Error(`${provider} unavailable`);
 }
 
 function maritimeJson(payload: unknown, status = 200, cacheControl = 'no-store'): Response {
