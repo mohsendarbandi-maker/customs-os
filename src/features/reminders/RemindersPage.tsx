@@ -369,8 +369,7 @@ export const RemindersPage:React.FC=()=>{
                 return <article key={r.id} className="reminders-open-task" data-state={stateKey}>
                   <button type="button" onClick={()=>toggleDone(r)} aria-label={t('انجام شد')} title={t('انجام شد')} className="reminders-open-check"><span/></button>
                   <div className="reminders-open-copy">
-                    <strong dir="auto">{r.title}</strong>
-                    <small>{r.due_at&&Number.isFinite(dueMs)?formatReminderDateTime(new Date(r.due_at),language):priorityLabel[r.priority]}</small>
+                    <button type="button" className="reminders-open-title" dir="auto" onClick={()=>setEditor(r)}>{r.title}</button>
                   </div>
                   <span className="reminders-open-status">{stateLabel}</span>
                 </article>;
