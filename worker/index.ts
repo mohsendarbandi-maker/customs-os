@@ -62,11 +62,16 @@ function maritimeJson(payload: unknown, status = 200, cacheControl = 'no-store')
 // cache directives, identify this application, and send a valid first-party Referer.
 async function serveMapTile(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const match = url.pathname.match(/^\\/api\\/map\\/tiles\\/(\\d{1,2})\\/(\\d{1,8})\\/(\\d{1,8})\\.png$/);
-  if (!match) return json({ error: 'آدرس کاشی نقشه معتبر نیست.' }, 400);
-  const z = Number(match[1]);
-  const x = Number(match[2]);
-  const y = Number(match[3]);
+  const parts = url.pathname.split('/');
+  if (parts.length !== 7 || parts[1] !== 'api' || parts[2] !== 'map' || parts[3] !== 'tiles') {
+    return json({ error: 'آدرس کاشی نقشه معتبر نیست.' }, 400);
+  }
+  const zRaw = parts[4], xRaw = parts[5], yRaw = parts[6].endsWith('.png') ? parts[6].slice(0, -4) : '';
+  const isDigits = (value: string, maxLength: number) => value.length > 0 && value.length <= maxLength && [...value].every((character) => character >= '0' && character <= '9');
+  if (!isDigits(zRaw, 2) || !isDigits(xRaw, 8) || !isDigits(yRaw, 8)) return json({ error: 'آدرس کاشی نقشه معتبر نیست.' }, 400);
+  const z = Number(zRaw);
+  const x = Number(xRaw);
+  const y = Number(yRaw);
   if (!Number.isInteger(z) || z < 0 || z > 19) {
     return json({ error: 'بزرگ‌نمایی نقشه خارج از محدوده مجاز است.' }, 400);
   }
@@ -279,7 +284,7 @@ export default {
     const url = new URL(request.url);
 
     // First-party map URL keeps browser requests on the same path as the app.
-    if (/^\\/api\\/map\\/tiles\\/\\d{1,2}\\/\\d{1,8}\\/\\d{1,8}\\.png$/.test(url.pathname)) {
+    if (url.pathname.startsWith('/api/map/tiles/')) {
       return serveMapTile(request);
     }
 
