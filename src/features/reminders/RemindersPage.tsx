@@ -117,17 +117,21 @@ export const RemindersPage:React.FC=()=>{
   queryFn:async()=>{
    if(!profile?.organization_id)return{rows:[],count:0};
    try{
-    let q=supabase.from('operational_reminders').select('*',{count:'exact'}).order('due_at',{ascending:true,nullsFirst:false}).range(page*PAGE_SIZE,page*PAGE_SIZE+PAGE_SIZE-1);
+    let q=supabase.from('operational_reminders').select('*',{count:'exact'}).order('due_at',{ascending:true,nullsFirst:false});
     q=q.eq('organization_id',profile.organization_id);q=q.is('deleted_at',null);
-    if(filter==='today'){const[r1,r2]=todayRange();q=q.gte('due_at',r1.toISOString()).lt('due_at',r2.toISOString()).eq('status','open');}
-    if(filter==='scheduled')q=q.eq('status','open').gte('due_at',new Date().toISOString());
-    if(filter==='overdue')q=q.eq('status','open').lt('due_at',new Date().toISOString());
-    if(filter==='done')q=q.eq('status','done');
-    if(filter==='assigned')q=q.eq('assignee_id',user?.id??'00000000-0000-0000-0000-000000000000').eq('status','open');
-    if(filter==='undated')q=q.is('due_at',null).eq('status','open');
-    if(filter==='day'){const selectedDay=parseReminderDayKey(dayKey);if(!selectedDay)return{rows:[],count:0};const nextDay=addJalaliDays(selectedDay,1);q=q.gte('due_at',selectedDay.toISOString()).lt('due_at',nextDay.toISOString()).eq('status','open');}
-    if(kind)q=q.eq('kind',kind);
-    if(search.trim()){const s=search.trim().replace(/[,()]/g,' ');q=q.or('title.ilike.%'+s+'%,description.ilike.%'+s+'%,notes.ilike.%'+s+'%');}
+    if(isHome){q=q.eq('status','open').limit(1000);}
+    else {
+     q=q.range(page*PAGE_SIZE,page*PAGE_SIZE+PAGE_SIZE-1);
+     if(filter==='today'){const[r1,r2]=todayRange();q=q.gte('due_at',r1.toISOString()).lt('due_at',r2.toISOString()).eq('status','open');}
+     if(filter==='scheduled')q=q.eq('status','open').gte('due_at',new Date().toISOString());
+     if(filter==='overdue')q=q.eq('status','open').lt('due_at',new Date().toISOString());
+     if(filter==='done')q=q.eq('status','done');
+     if(filter==='assigned')q=q.eq('assignee_id',user?.id??'00000000-0000-0000-0000-000000000000').eq('status','open');
+     if(filter==='undated')q=q.is('due_at',null).eq('status','open');
+     if(filter==='day'){const selectedDay=parseReminderDayKey(dayKey);if(!selectedDay)return{rows:[],count:0};const nextDay=addJalaliDays(selectedDay,1);q=q.gte('due_at',selectedDay.toISOString()).lt('due_at',nextDay.toISOString()).eq('status','open');}
+     if(kind)q=q.eq('kind',kind);
+     if(search.trim()){const s=search.trim().replace(/[,()]/g,' ');q=q.or('title.ilike.%'+s+'%,description.ilike.%'+s+'%,notes.ilike.%'+s+'%');}
+    }
     const {data,error,count}=await q;if(error)throw error;
     const result:QueryResult={rows:(data??[]) as Reminder[],count:count??0,offlineCached:false};
     await saveOfflineQueryCache(reminderCacheScope,user?.id,profile.organization_id,result).catch(()=>false);
@@ -165,6 +169,13 @@ export const RemindersPage:React.FC=()=>{
  const queuedDrafts=useMemo(()=>queuedReminderDrafts(offlineQueue,user?.id??null,profile?.organization_id??null),[offlineQueue,user?.id,profile?.organization_id]);
  const queuedClientUuids=useMemo(()=>new Set(queuedDrafts.map(x=>x.reminder.client_uuid).filter((x):x is string=>Boolean(x))),[queuedDrafts]);
  const reminders=(query.data?.rows??[]).filter(r=>!(r.id.startsWith('local-')&&r.client_uuid&&queuedClientUuids.has(r.client_uuid)));
+  const [homeTodayStart,homeTomorrowStart]=todayRange();const homeNowMs=Date.now();
+  const homeOpenReminders=reminders.filter(r=>r.status==='open').sort((a,b)=>{
+   const bucket=(r:Reminder)=>{if(!r.due_at)return 3;const time=new Date(r.due_at).getTime();if(!Number.isFinite(time))return 3;if(r.all_day?time<homeTodayStart.getTime():time<homeNowMs)return 0;if(time<homeTomorrowStart.getTime())return 1;return 2;};
+   const aBucket=bucket(a),bBucket=bucket(b);if(aBucket!==bBucket)return aBucket-bBucket;
+   const priority:Record<ReminderPriority,number>={urgent:0,high:1,normal:2,low:3};if(priority[a.priority]!==priority[b.priority])return priority[a.priority]-priority[b.priority];
+   const aTime=a.due_at?new Date(a.due_at).getTime():Number.POSITIVE_INFINITY;const bTime=b.due_at?new Date(b.due_at).getTime():Number.POSITIVE_INFINITY;return aTime-bTime;
+  });
  const visibleSelectableIds=useMemo(()=>selectableReminderIds(reminders),[reminders]);
  const selectedReminders=useMemo(()=>reminders.filter(r=>selected.includes(r.id)&&!r.id.startsWith('local-')),[reminders,selected]);
  const allVisibleSelected=areAllVisibleReminderIdsSelected(selected,visibleSelectableIds);
@@ -318,21 +329,55 @@ export const RemindersPage:React.FC=()=>{
   {query.data?.offlineCached&&<div role="status" className="mx-3 sm:mx-6 mt-2 text-xs app-muted">دادهٔ ذخیره‌شده · آخرین همگام‌سازی {query.data.cacheUpdatedAt?formatReminderRelative(new Date(query.data.cacheUpdatedAt),language):''}</div>}
   {queuedDrafts.length>0&&<section role="status" aria-live="polite" className="mx-3 sm:mx-6 mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3 sm:p-4 shadow-sm"><div className="flex items-start gap-3"><span className="min-w-10 min-h-10 rounded-xl border border-amber-500/30 bg-amber-500/10 grid place-items-center text-amber-700"><UploadCloud size={19}/></span><div className="min-w-0 flex-1"><div className="flex items-center flex-wrap gap-2"><h2 className="font-black text-sm">{t('یادآورهای در انتظار همگام‌سازی')}</h2><span className="rounded-full bg-amber-500/15 px-2 py-1 text-xs font-bold tabular-nums">{reminderNumber(queuedDrafts.length,language)}</span></div><p className="mt-1 text-xs app-muted">{t('این یادآورها فعلاً فقط روی همین دستگاه ذخیره شده‌اند و هنوز تأیید سرور را نگرفته‌اند.')}</p><p className="mt-1 text-xs app-muted">{online?t('با اتصال اینترنت، صف به‌صورت خودکار همگام‌سازی می‌شود.'):t('اتصال اینترنت قطع است؛ این موارد روی دستگاه باقی می‌مانند.')}</p></div></div><div className="mt-3 max-h-56 overflow-y-auto space-y-2">{queuedDrafts.map(({queueId,queueState,reminder})=><div key={queueId} className="flex items-center gap-3 rounded-xl border app-border bg-[var(--surface)] p-3"><span className="grid min-w-9 min-h-9 place-items-center rounded-lg bg-[var(--surface-2)] app-muted"><Clock3 size={16}/></span><div className="min-w-0 flex-1"><div className="font-bold text-sm truncate" data-user-content="true" dir="auto">{reminder.title}</div><div className="mt-1 text-xs app-muted">{reminder.due_at?(reminder.all_day?formatReminderDate(new Date(reminder.due_at),language):formatReminderDateTime(new Date(reminder.due_at),language)):t('بدون سررسید')}</div></div><span className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-bold bg-amber-500/10 text-amber-800">{t(queueState==='sending'?'در حال همگام‌سازی':'در صف')}</span></div>)}</div></section>}
   {isHome ? <section className="reminders-route-screen reminders-hub-screen" key={currentSection}>
-    <header className="reminders-hub-header"><div className="reminders-hub-identity"><img src="/pwa/reminders-icon.svg" className="reminders-brand-icon" alt=""/><div className="min-w-0 flex-1"><h1>{t('یادآورها')}</h1><p>{formatReminderDate(new Date(),language)} <span>·</span> {t('مرکز مدیریت کارها')}</p></div><div className="reminders-hub-actions"><button type="button" onClick={()=>goToSection('search')} aria-label={t('جست‌وجو')}><Search size={20}/></button><button type="button" onClick={openComposer} aria-label={t('یادآور جدید')}><Plus size={20}/></button><button type="button" onClick={()=>void openPush()} aria-label={t('اعلان‌ها')}><Bell size={20}/></button><button type="button" onClick={()=>goToSection('settings')} aria-label={t('تنظیمات')}><Languages size={20}/></button></div></div></header>
-    <button type="button" onClick={()=>goToSection('search')} className="reminders-hub-search"><Search size={18}/><span>{t('جست‌وجو در همهٔ یادآورها')}</span><kbd>/</kbd></button><div className="reminders-date-widget" aria-label={t('تاریخ امروز')}><CalendarDays size={13}/><span>{formatReminderDate(new Date(),language)}</span><span className="reminders-date-widget-weekday">{new Intl.DateTimeFormat(language==='fa'?'fa-IR':'en-US',{timeZone:'Asia/Tehran',weekday:'long'}).format(new Date())}</span></div>
-    <section className="reminders-hub-section reminders-up-next"><div className="reminders-section-title"><div><h2>{t('فهرست یادآورها')}</h2><p>{t('موارد باز به‌ترتیب نزدیک‌ترین سررسید')}</p></div><button type="button" onClick={()=>goToSection('all')}>{t('همهٔ یادآورها')}<ChevronLeft size={15}/></button></div>
-      {query.isError?<div className="reminders-hub-empty">{errorFa(query.error)} <button type="button" onClick={()=>void query.refetch()}>{t('تلاش دوباره')}</button></div>:query.isPending?<div className="reminders-up-next-loading"><i/><i/><i/></div>:reminders.filter(r=>r.status==='open').sort((a,b)=>{if(!a.due_at)return b.due_at?1:0;if(!b.due_at)return -1;return new Date(a.due_at).getTime()-new Date(b.due_at).getTime();}).slice(0,4).map(r=><article key={r.id} className="reminders-up-next-row"><button type="button" onClick={()=>toggleDone(r)} aria-label={t('انجام شد')} className="reminders-up-next-check"><span/></button><div className="min-w-0 flex-1"><strong>{r.title}</strong><small>{r.due_at?(r.all_day?formatReminderDate(new Date(r.due_at),language):formatReminderRelative(new Date(r.due_at),language)+' · '+formatReminderDateTime(new Date(r.due_at),language)):t('بدون سررسید')}</small></div><button type="button" onClick={()=>goToSection(categoryRoute(r.kind))} aria-label={t('رفتن به فهرست مربوط')}><ChevronLeft size={16}/></button></article>)}
-      {!query.isPending&&!query.isError&&!reminders.some(r=>r.status==='open')&&<div className="reminders-hub-empty"><Check size={25}/><strong>{t('همه‌چیز مرتب است')}</strong><span>{t('یادآور بازی برای نمایش وجود ندارد.')}</span><button type="button" onClick={()=>openComposer()}>{t('ساخت یادآور جدید')}<Plus size={15}/></button></div>}
+    <header className="reminders-hub-header">
+      <div className="reminders-hub-identity">
+        <img src="/pwa/reminders-icon.svg" className="reminders-brand-icon" alt=""/>
+        <div className="reminders-home-title">
+          <h1>{t('یادآورها')}</h1>
+          <p>{formatReminderDate(new Date(),language)} <span>·</span> {new Intl.DateTimeFormat(language==='fa'?'fa-IR':'en-US',{timeZone:'Asia/Tehran',weekday:'long'}).format(new Date())}</p>
+        </div>
+        <div className="reminders-hub-actions">
+          <button type="button" onClick={()=>goToSection('search')} aria-label={t('جست‌وجو')} title={t('جست‌وجو')}><Search size={19}/></button>
+          <button type="button" onClick={openComposer} aria-label={t('یادآور جدید')} title={t('یادآور جدید')}><Plus size={20}/></button>
+          <button type="button" onClick={()=>void openPush()} aria-label={t('اعلان‌ها')} title={t('اعلان‌ها')}><Bell size={18}/></button>
+          <button type="button" onClick={()=>goToSection('settings')} aria-label={t('تنظیمات')} title={t('تنظیمات')}><Languages size={18}/></button>
+        </div>
+      </div>
+    </header>
+    <div className="reminders-home-stats" aria-label={t('وضعیت یادآورها')}>
+      <button type="button" className="reminders-home-stat is-overdue" onClick={()=>goToSection('overdue')}><span>{t('معوق')}</span><strong>{statsQuery.data?.overdue===undefined?'—':reminderNumber(statsQuery.data.overdue,language)}</strong></button>
+      <button type="button" className="reminders-home-stat is-today" onClick={()=>goToSection('today')}><span>{t('امروز')}</span><strong>{statsQuery.data?.today===undefined?'—':reminderNumber(statsQuery.data.today,language)}</strong></button>
+      <button type="button" className="reminders-home-stat is-future" onClick={()=>goToSection('scheduled')}><span>{t('آینده')}</span><strong>{statsQuery.data?.scheduled===undefined?'—':reminderNumber(statsQuery.data.scheduled,language)}</strong></button>
+      <button type="button" className="reminders-home-stat is-open" onClick={()=>goToSection('all')}><span>{t('باز')}</span><strong>{reminderNumber(homeOpenReminders.length,language)}</strong></button>
+    </div>
+    <section className="reminders-hub-section reminders-up-next">
+      <div className="reminders-home-section-heading">
+        <h2>{t('کارهای انجام‌نشده')}</h2>
+        <span className="reminders-home-total">{reminderNumber(homeOpenReminders.length,language)}</span>
+        <button type="button" onClick={()=>goToSection('all')}>{t('همه')}<ChevronLeft size={16}/></button>
+      </div>
+      {query.isError
+        ? <div className="reminders-hub-empty">{errorFa(query.error)} <button type="button" onClick={()=>void query.refetch()}>{t('تلاش دوباره')}</button></div>
+        : query.isPending
+          ? <div className="reminders-up-next-loading"><i/><i/><i/></div>
+          : <div className="reminders-open-grid">
+              {homeOpenReminders.map(r=>{
+                const dueMs=r.due_at?new Date(r.due_at).getTime():NaN;
+                const bucket=!Number.isFinite(dueMs)?3:(r.all_day?dueMs<homeTodayStart.getTime():dueMs<homeNowMs)?0:dueMs<homeTomorrowStart.getTime()?1:2;
+                const stateLabel=bucket===0?t('معوق'):bucket===1?t('امروز'):bucket===2?t('آینده'):t('بدون سررسید');
+                const stateKey=bucket===0?'overdue':bucket===1?'today':bucket===2?'future':'undated';
+                return <article key={r.id} className="reminders-open-task" data-state={stateKey}>
+                  <button type="button" onClick={()=>toggleDone(r)} aria-label={t('انجام شد')} title={t('انجام شد')} className="reminders-open-check"><span/></button>
+                  <div className="reminders-open-copy">
+                    <strong dir="auto">{r.title}</strong>
+                    <small>{r.due_at&&Number.isFinite(dueMs)?formatReminderDateTime(new Date(r.due_at),language):priorityLabel[r.priority]}</small>
+                  </div>
+                  <span className="reminders-open-status">{stateLabel}</span>
+                </article>;
+              })}
+              {!homeOpenReminders.length&&<div className="reminders-hub-empty reminders-home-empty"><Check size={20}/><strong>{t('همه‌چیز مرتب است')}</strong></div>}
+            </div>}
     </section>
-    <section className="reminders-hub-section"><div className="reminders-section-title"><div><h2>{t('فهرست‌های هوشمند')}</h2><p>{t('نمای سریع وضعیت کارها')}</p></div><button type="button" onClick={()=>goToSection('all')}>{t('همه')}<ChevronLeft size={15}/></button></div>
-      <div className="reminders-smart-grid">{[
-        {section:'today' as ReminderSection,label:'امروز',detail:'موعدهای امروز',value:statsQuery.data?.today,icon:CalendarDays,tone:'violet'},
-        {section:'scheduled' as ReminderSection,label:'برنامه‌ریزی‌شده',detail:'کارهای پیشِ رو',value:statsQuery.data?.scheduled,icon:CalendarClock,tone:'blue'},
-        {section:'overdue' as ReminderSection,label:'معوق',detail:'نیازمند پیگیری',value:statsQuery.data?.overdue,icon:Clock3,tone:'rose'},
-        {section:'all' as ReminderSection,label:'همهٔ یادآورها',detail:'کل فهرست',value:statsQuery.data?.total,icon:ListChecks,tone:'orange'}
-      ].map(item=>{const Icon=item.icon;return <button type="button" key={item.section} className="reminders-smart-card" data-tone={item.tone} onClick={()=>goToSection(item.section)}><span className="reminders-smart-icon"><Icon size={21}/></span><span className="reminders-smart-label">{t(item.label)}</span><strong>{item.value===undefined?'›':reminderNumber(item.value,language)}</strong><small>{t(item.detail)}</small><ChevronLeft className="reminders-smart-arrow" size={15}/></button>;})}</div>
-    </section>
-    <section className="reminders-hub-section reminders-my-lists"><div className="reminders-section-title"><div><h2>{t('فهرست‌های من')}</h2></div><button type="button" onClick={()=>goToSection('lists')}>{t('مدیریت فهرست‌ها')}<ChevronLeft size={15}/></button></div><div className="reminders-my-list-rows">{kinds.map(([k,label])=>{const Icon=CATEGORY_ICON[k];return <button type="button" key={k} onClick={()=>goToSection(categoryRoute(k))}><span className={'reminders-category-icon tone-'+k}><Icon size={19}/></span><span className="reminders-category-copy"><strong>{t(label)}</strong><small>{t(k==='document'?'پیگیری اسناد و مدارک':k==='shipment'?'پرونده‌ها و محموله‌های مرتبط':k==='finance'?'سررسیدها و امور مالی':'یادآورهای شخصی و سایر موارد')}</small></span><ChevronLeft size={17}/></button>;})}</div></section>
   </section> : isListsPage ? <section className="reminders-route-screen reminders-index-screen" key={currentSection}>
     <header className="reminders-subpage-heading"><button type="button" onClick={()=>goToSection('home')} aria-label={t('بازگشت')}><ChevronRight size={20}/></button><div><span>{t('یادآورها')}</span><h1>{t('فهرست‌های من')}</h1></div></header>
     <div className="reminders-category-grid">{kinds.map(([k,label])=>{const Icon=CATEGORY_ICON[k];const detail=k==='document'?'اسناد گمرکی و مدارک محموله':k==='shipment'?'پرونده، محموله و پیگیری عملیات':k==='finance'?'پیگیری پرداخت و امور مالی':'کارهای عمومی و شخصی';return <button type="button" key={k} onClick={()=>goToSection(categoryRoute(k))} className="reminders-category-card"><span className={'reminders-category-icon tone-'+k}><Icon size={23}/></span><strong>{t(label)}</strong><p>{t(detail)}</p><span className="reminders-category-open">{t('بازکردن فهرست')}<ChevronLeft size={15}/></span></button>;})}</div>
