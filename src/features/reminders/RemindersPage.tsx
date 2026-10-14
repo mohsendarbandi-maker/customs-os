@@ -111,9 +111,9 @@ export const RemindersPage:React.FC=()=>{
  useEffect(()=>{const rid=params.get('rid'),act=params.get('act');if(!rid||!act)return;setParams(p=>{p.delete('rid');p.delete('act');return p},{replace:true});if(!user)return;const run=async()=>{const patch:Partial<Reminder>|null=act==='done'?{status:'done',completed_at:new Date().toISOString(),completed_by:user.id}:act==='snooze10'?{snoozed_until:new Date(Date.now()+600000).toISOString(),snooze_count:1}:act==='tomorrow9'?{snoozed_until:(()=>{const j=toJalali(addJalaliDays(new Date(),1));return zonedJalaliToDate(j.year,j.month,j.day,9,0).toISOString()})(),snooze_count:1}:null;if(!patch)return;const {data,error}=await supabase.from('operational_reminders').update(patch).eq('id',rid).select('id').maybeSingle();if(error||!data){setToast({text:error?errorFa(error):'یادآور پیدا نشد یا مجوز تغییر آن وجود ندارد.'});return;}await qc.invalidateQueries({queryKey:['reminders']});await qc.invalidateQueries({queryKey:['reminder-overview']});};void run().catch(error=>setToast({text:errorFa(error)}));},[params,qc,setParams,user]);
 
  const reminderCacheDay=(()=>{const j=toJalali(new Date());return j.year+'-'+String(j.month).padStart(2,'0')+'-'+String(j.day).padStart(2,'0');})();
- const reminderCacheScope=JSON.stringify(['reminders',filter,kind,search,page,user?.id,profile?.organization_id,dayKey,reminderCacheDay]);
+ const reminderCacheScope=JSON.stringify(['reminders',currentSection,filter,kind,search,page,user?.id,profile?.organization_id,dayKey,reminderCacheDay]);
  const query=useQuery<QueryResult>({
-  queryKey:['reminders',filter,kind,search,page,user?.id,profile?.organization_id,dayKey,reminderCacheDay],
+  queryKey:['reminders',currentSection,filter,kind,search,page,user?.id,profile?.organization_id,dayKey,reminderCacheDay],
   queryFn:async()=>{
    if(!profile?.organization_id)return{rows:[],count:0};
    try{
