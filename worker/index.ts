@@ -102,7 +102,7 @@ async function serveMapTile(request: Request): Promise<Response> {
 
   try {
     const upstream = await fetch(tileUrl, {
-      method: request.method,
+      method: 'GET',
       headers: {
         Accept: 'image/avif,image/webp,image/apng,image/png,*/*;q=0.8',
         'User-Agent': 'Customs OS/1.0 (+https://darbandicommercial.ir)',
