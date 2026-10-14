@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(__dirname, '..');
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261013181000_customs_workflow_procedure_state_audit.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261013180308_customs_workflow_procedure_state_audit.sql'), 'utf8');
 
 describe('customs procedure-state audit snapshots — phase 10', () => {
   it('records procedure_state when a workflow is first created', () => {

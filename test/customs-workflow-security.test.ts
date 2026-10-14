@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, '..');
 const readMigration = (name: string) => fs.readFileSync(path.join(root, 'supabase/migrations', name), 'utf8');
 const workflowScope = readMigration('20261013142058_customs_workflow_client_scope.sql');
 const auditMigration = readMigration('20261013145845_customs_workflow_audit_history.sql');
-const procedureSnapshotMigration = readMigration('20261013181000_customs_workflow_procedure_state_audit.sql');
+const procedureSnapshotMigration = readMigration('20261013180308_customs_workflow_procedure_state_audit.sql');
 
 describe('customs workflow security regression — phase 11', () => {
   it('scopes workflow reads to the active organization', () => {
