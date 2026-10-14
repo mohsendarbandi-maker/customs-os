@@ -27,6 +27,15 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+      - name: Prevent browser-side weather provider requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'https?://(api|marine-api)\\.open-meteo\\.com' src; then
+            echo "Weather and marine provider calls must go through the Cloudflare Worker."
+            exit 1
+          fi
+          echo "No direct Open-Meteo API calls found in browser source."
       - name: Verify production Supabase client uses the same-origin proxy
         shell: bash
         run: |
