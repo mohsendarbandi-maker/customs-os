@@ -155,6 +155,30 @@ const recordValue = (value: unknown): Record<string, unknown> =>
     ? value as Record<string, unknown>
     : {};
 const oneOf = (value: unknown, allowed: string[]): boolean => allowed.includes(textValue(value));
+ 
+/** Green/yellow routes do not display an assessment step unless customs requests one. */
+export const shouldShowAssessmentStage = (
+  customsPath: string | null | undefined,
+  evaluation: Record<string, unknown> | null | undefined,
+): boolean => {
+  const path = textValue(customsPath).toLowerCase();
+  if (path !== 'green' && path !== 'yellow') return true;
+  const state = recordValue(evaluation);
+  return boolValue(state.expert_requested) || !oneOf(state.status, ['', 'not_required']);
+};
+
+/** Move stale default assessment stage to expertise on routes where it is not applicable. */
+export const getInitialCustomsWorkflowStage = (
+  currentStage: string | null | undefined,
+  customsPath: string | null | undefined,
+  evaluation: Record<string, unknown> | null | undefined,
+): string => {
+  const current = textValue(currentStage) || 'evaluation';
+  return current === 'evaluation' && !shouldShowAssessmentStage(customsPath, evaluation)
+    ? 'expertise'
+    : current;
+};
+
 
 /**
  * Returns Persian blocker messages for the specified stage. A stage is checked
