@@ -94,9 +94,9 @@ describe('route-aware assessment stage visibility', () => {
     expect(shouldShowAssessmentStage('green', { status: 'completed', expert_requested: false })).toBe(true);
   });
 
-  it('skips a stale default assessment stage for green/yellow routes without modifying assessment data', () => {
+  it('skips a stale default assessment stage for green routes without modifying assessment data', () => {
     expect(getInitialCustomsWorkflowStage('evaluation', 'green', { status: 'not_required', expert_requested: false })).toBe('expertise');
-    expect(getInitialCustomsWorkflowStage('evaluation', 'yellow', { status: 'not_required', expert_requested: false })).toBe('expertise');
+    expect(getInitialCustomsWorkflowStage('evaluation', 'yellow', { status: 'not_required', expert_requested: false })).toBe('evaluation');
     expect(getInitialCustomsWorkflowStage('evaluation', 'red', { status: 'required', expert_requested: false })).toBe('evaluation');
     expect(getInitialCustomsWorkflowStage('port_charges', 'green', { status: 'not_required', expert_requested: false })).toBe('port_charges');
   });
