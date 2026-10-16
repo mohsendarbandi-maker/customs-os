@@ -84,10 +84,10 @@ const readyWorkflow = () => ({
 });
 
 describe('route-aware assessment stage visibility', () => {
-  it('does not show assessment for green/yellow routes until a customs request or active status exists', () => {
+  it('does not show assessment for green routes until a customs request or active status exists', () => {
     const optional = { status: 'not_required', expert_requested: false };
     expect(shouldShowAssessmentStage('green', optional)).toBe(false);
-    expect(shouldShowAssessmentStage('yellow', optional)).toBe(false);
+    expect(shouldShowAssessmentStage('yellow', optional)).toBe(true);
     expect(shouldShowAssessmentStage('red', optional)).toBe(true);
     expect(shouldShowAssessmentStage('green', { ...optional, expert_requested: true })).toBe(true);
     expect(shouldShowAssessmentStage('green', { status: 'required', expert_requested: false })).toBe(true);
