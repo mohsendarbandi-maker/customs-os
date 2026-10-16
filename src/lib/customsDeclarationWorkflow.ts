@@ -156,13 +156,13 @@ const recordValue = (value: unknown): Record<string, unknown> =>
     : {};
 const oneOf = (value: unknown, allowed: string[]): boolean => allowed.includes(textValue(value));
  
-/** Green/yellow routes do not display an assessment step unless customs requests one. */
+/** Green routes do not display an assessment step unless customs requests one. */
 export const shouldShowAssessmentStage = (
   customsPath: string | null | undefined,
   evaluation: Record<string, unknown> | null | undefined,
 ): boolean => {
   const path = textValue(customsPath).toLowerCase();
-  if (path !== 'green' && path !== 'yellow') return true;
+  if (path !== 'green') return true;
   const state = recordValue(evaluation);
   return boolValue(state.expert_requested) || !oneOf(state.status, ['', 'not_required']);
 };
