@@ -295,6 +295,31 @@ jobs:
           test -s /tmp/reminders-icon.png
           echo "Dedicated reminders HTTPS, manifest and icons are healthy."
 
+          echo "Checking dedicated mobile app subdomain"
+          mobile_base="https://mobile.darbandicommercial.ir"
+          mobile_success=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            status="$(curl --silent --show-error --location --max-time 25 -o /tmp/mobile-subdomain.html -w '%{http_code}' "${mobile_base}/?__mobile_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}" 2>/tmp/mobile-curl-error)" || status=000
+            if [ "$status" = "200" ] &&
+              grep -Fq '<title>Customs OS Mobile</title>' /tmp/mobile-subdomain.html &&
+              grep -Fq 'mobile-subdomain.webmanifest?v=20261018-mobile-v1' /tmp/mobile-subdomain.html; then
+              mobile_success=1
+              break
+            fi
+            echo "Mobile subdomain not ready (attempt $attempt, HTTP $status); retrying..."
+            cat /tmp/mobile-curl-error || true
+            sleep 10
+          done
+          test "$mobile_success" = 1
+          curl --fail --silent --show-error --location --max-time 30 -o /tmp/mobile-subdomain-manifest.json "${mobile_base}/mobile-subdomain.webmanifest?v=20261018-mobile-v1&__smoke=${GITHUB_RUN_ID}"
+          grep -Fq '"id": "/"' /tmp/mobile-subdomain-manifest.json
+          grep -Fq '"start_url": "/"' /tmp/mobile-subdomain-manifest.json
+          grep -Fq '"scope": "/"' /tmp/mobile-subdomain-manifest.json
+          grep -Fq '"display": "standalone"' /tmp/mobile-subdomain-manifest.json
+          curl --fail --silent --show-error --location --max-time 20 -o /tmp/mobile-icon.svg "${mobile_base}/mobile-icon.svg"
+          grep -Fq '<svg' /tmp/mobile-icon.svg
+          echo "Dedicated mobile HTTPS, standalone manifest and icon are healthy."
+
           echo "Checking PWA legacy launch URL canonicalization"
             pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "${base}/?source=pwa")"
             pwa_location="$(printf '%s\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"

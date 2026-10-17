@@ -39,6 +39,10 @@
     {
       "pattern": "reminders.darbandicommercial.ir",
       "custom_domain": true
+    },
+    {
+      "pattern": "mobile.darbandicommercial.ir",
+      "custom_domain": true
     }
   ]
 }

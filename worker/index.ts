@@ -453,6 +453,7 @@ export default {
     const hostname = url.hostname.toLowerCase();
     const isChatHost = hostname === 'chat.darbandicommercial.ir';
     const isRemindersHost = hostname === 'reminders.darbandicommercial.ir';
+    const isMobileHost = hostname === 'mobile.darbandicommercial.ir';
     const isManifestRequest =
       url.pathname === '/manifest.webmanifest' ||
       url.pathname === '/manifest-chat.webmanifest' ||
@@ -460,7 +461,8 @@ export default {
       url.pathname === '/chat-app-v4.webmanifest' ||
       url.pathname === '/chat-subdomain.webmanifest' ||
       url.pathname === '/manifest-reminders.webmanifest' ||
-      url.pathname === '/reminders-subdomain.webmanifest';
+      url.pathname === '/reminders-subdomain.webmanifest' ||
+      url.pathname === '/mobile-subdomain.webmanifest';
 
     const isStaticAsset =
       url.pathname.startsWith('/assets/') ||
@@ -469,7 +471,7 @@ export default {
       request.method === 'GET' &&
       !url.pathname.startsWith('/api/') &&
       !isStaticAsset &&
-      (url.pathname === '/' || url.pathname.startsWith('/chat') || isChatHost || accept.includes('text/html'));
+      (url.pathname === '/' || url.pathname.startsWith('/chat') || isChatHost || isMobileHost || accept.includes('text/html'));
     const assetBase = new URL(request.url);
     assetBase.hostname = 'customs.mohsen-darbandi.workers.dev';
     const assetRequest = new Request(assetBase, request);
@@ -515,6 +517,24 @@ export default {
         status: response.status,
         statusText: response.statusText,
         headers: remindersHeaders,
+      });
+    }
+
+    if (isMobileHost && isHtmlNavigation && response.ok) {
+      const html = await response.text();
+      const mobileHtml = html
+        .replace(/<title>[^<]*<\/title>/i, '<title>Customs OS Mobile</title>')
+        .replace(/href="\/manifest\.webmanifest"/i, 'href="/mobile-subdomain.webmanifest?v=20261018-mobile-v1"')
+        .replace(/href="\/icon\.svg"/i, 'href="/mobile-icon.svg?v=20261018-mobile-v1"')
+        .replace(/href="\/pwa\/apple-touch-icon-180\.png(?:\?[^"]*)?"/i, 'href="/pwa/apple-touch-icon-180.png?v=20261018-mobile-v1"')
+        .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#0A4D8C"')
+        .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="Customs OS"');
+      const mobileHeaders = new Headers(response.headers);
+      mobileHeaders.delete('content-length');
+      response = new Response(mobileHtml, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: mobileHeaders,
       });
     }
 
