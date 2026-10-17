@@ -43,10 +43,12 @@ describe('finance edit, archive, and restore invariants', () => {
   });
 
   it('prevents duplicate claims when restoring an archived invoice', () => {
-    expect(migration).toContain('for جلوگیری از مطالبهٔ تکراری');
+    expect(migration).toContain('برای جلوگیری از مطالبهٔ تکراری');
     expect(migration).toContain('i2.deleted_at IS NULL');
     expect(migration).toContain("i2.status NOT IN ('void', 'cancelled')");
     expect(migration).toContain("SET status = 'invoiced'");
+    expect(migration).toContain('guard_finance_invoice_child_mutation');
+    expect(migration).toContain("v_status <> 'draft' OR v_deleted_at IS NOT NULL OR v_issued_at IS NOT NULL");
   });
 
   it('keeps archived invoices out of active shipment finance summaries', () => {
