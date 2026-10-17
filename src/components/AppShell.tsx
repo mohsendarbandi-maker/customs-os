@@ -6,7 +6,7 @@ import {
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
   Contact, Folder, ClipboardCheck, GitBranch, Receipt, Network,
-  ChevronDown, Plus, Home
+  ChevronDown, Plus, Home, CalendarDays
 } from 'lucide-react';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { useAppearance } from '../context/AppearanceContext';
@@ -546,6 +546,13 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
         </div>
       </main>
+      <nav className="app-mobile-dock md:hidden" aria-label="پیمایش سریع">
+        <button type="button" className={isActive('/')?'is-active':''} aria-current={isActive('/')?'page':undefined} onClick={()=>go('/')}><Home size={21}/><span>خانه</span></button>
+        <button type="button" className={location.pathname.startsWith('/operations')?'is-active':''} aria-current={location.pathname.startsWith('/operations')?'page':undefined} onClick={()=>go('/operations')}><ClipboardList size={21}/><span>عملیات</span></button>
+        <button type="button" className={isActive('/reminders')?'is-active':''} aria-current={isActive('/reminders')?'page':undefined} onClick={()=>go('/reminders')}><CalendarDays size={21}/><span>یادآورها</span></button>
+        <button type="button" className={isActive('/chat')?'is-active':''} aria-current={isActive('/chat')?'page':undefined} onClick={()=>go('/chat')}><MessageCircle size={21}/><span>چت</span></button>
+        <button type="button" className={mobileOpen?'is-active':''} aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}><Menu size={21}/><span>بیشتر</span></button>
+      </nav>
       <AIWorkspace pageContext={location.pathname + location.search} />
     </div>
   );

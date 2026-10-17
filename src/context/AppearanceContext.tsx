@@ -7,10 +7,12 @@ type ComfortMode='normal'|'soft'|'warm'|'reading';
 type Density='comfortable'|'compact';
 type AppearanceState={
  theme:ThemeMode;
+ accentColor:string;
  comfort:ComfortMode;
  density:Density;
  sidebarCollapsed:boolean;
  setTheme:(v:ThemeMode)=>void;
+ setAccentColor:(v:string)=>void;
  setComfort:(v:ComfortMode)=>void;
  setDensity:(v:Density)=>void;
  setSidebarCollapsed:(v:boolean)=>void;
@@ -18,6 +20,7 @@ type AppearanceState={
 
 type StoredAppearance={
  theme:ThemeMode;
+ accentColor:string;
  comfort:ComfortMode;
  density:Density;
  sidebarCollapsed:boolean;
@@ -27,6 +30,7 @@ const AppearanceContext=createContext<AppearanceState|null>(null);
 
 const defaults:StoredAppearance={
  theme:'dark',
+ accentColor:'#0A66C2',
  comfort:'normal',
  density:'comfortable',
  sidebarCollapsed:false,
@@ -37,6 +41,7 @@ const readAppearance=(userId:string|null|undefined):StoredAppearance=>{
   const settings=readUserSettings<Record<string,unknown>>(userId,{});
   return{
    theme:settings.theme==='light'?'light':'dark',
+   accentColor:typeof settings.accentColor==='string'&&/^#[0-9a-fA-F]{6}$/.test(settings.accentColor)?settings.accentColor:defaults.accentColor,
    comfort:settings.comfort==='reading'||settings.comfort==='soft'||settings.comfort==='warm'||settings.comfort==='normal'
     ? settings.comfort
     : defaults.comfort,
@@ -74,11 +79,14 @@ export const AppearanceProvider:React.FC<{children:React.ReactNode}>=({children}
  };
 
  const setTheme=(v:ThemeMode)=>persist({theme:v});
+ const setAccentColor=(v:string)=>persist({accentColor:/^#[0-9a-fA-F]{6}$/.test(v)?v:defaults.accentColor});
  const setComfort=(v:ComfortMode)=>persist({comfort:v});
  const setDensity=(v:Density)=>persist({density:v});
  const setSidebarCollapsed=(v:boolean)=>persist({sidebarCollapsed:v});
 
  useEffect(()=>{
+  document.documentElement.style.setProperty('--primary',appearance.accentColor);
+  document.documentElement.style.setProperty('--hero-b',appearance.accentColor);
   document.documentElement.dataset.theme=appearance.theme;
   document.documentElement.dataset.comfort=appearance.comfort;
   document.documentElement.dataset.density=appearance.density;
@@ -87,10 +95,12 @@ export const AppearanceProvider:React.FC<{children:React.ReactNode}>=({children}
 
  const value=useMemo(()=>({
   theme:appearance.theme,
+  accentColor:appearance.accentColor,
   comfort:appearance.comfort,
   density:appearance.density,
   sidebarCollapsed:appearance.sidebarCollapsed,
   setTheme,
+  setAccentColor,
   setComfort,
   setDensity,
   setSidebarCollapsed,
