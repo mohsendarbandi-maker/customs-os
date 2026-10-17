@@ -154,10 +154,12 @@ describe('customs workflow stage prerequisites', () => {
     state.expertise.standard = {
       expert_review: 'approved',
       inspection_status: 'completed',
+      inspection_fee: '125000',
       inspection_paid: true,
       inspection_invoice_status: 'received',
       sample_status: 'received',
       results_uploaded: true,
+      standard_fee: '45000',
       standard_fee_paid: true,
       standard_notified: true,
     };
@@ -176,6 +178,29 @@ describe('customs workflow stage prerequisites', () => {
     state.loadingPermit.clearance_90_percent_requested = true;
     state.loadingPermit.comment = 'درخواست ترخیص باقیمانده بدون کد ساتا';
     expect(getWorkflowStageIssues('loading_permit', state)).toEqual([]);
+  });
+
+  it('requires explicit inspection and standard fee amounts before payment checkboxes can pass', () => {
+    const state = readyWorkflow();
+    state.expertise.standard = {
+      expert_review: 'approved',
+      inspection_status: 'completed',
+      inspection_paid: true,
+      inspection_invoice_status: 'not_issued',
+      sample_status: 'not_required',
+      results_uploaded: true,
+      standard_fee_paid: true,
+      standard_notified: true,
+    };
+    let issues = getWorkflowStageIssues('expertise', state);
+    expect(issues).toContain('مبلغ هزینه بازرسی را ثبت کنید؛ در صورت رایگان بودن، صفر وارد کنید.');
+    expect(issues).toContain('مبلغ کارمزد استاندارد را ثبت کنید؛ اگر مبلغ صفر است، صفر وارد کنید.');
+
+    state.expertise.standard.inspection_fee = 0;
+    state.expertise.standard.standard_fee = '0';
+    issues = getWorkflowStageIssues('expertise', state);
+    expect(issues).not.toContain('مبلغ هزینه بازرسی را ثبت کنید؛ در صورت رایگان بودن، صفر وارد کنید.');
+    expect(issues).not.toContain('مبلغ کارمزد استاندارد را ثبت کنید؛ اگر مبلغ صفر است، صفر وارد کنید.');
   });
 
   it('flags insurance issued on/after warehouse receipt until follow-up is completed', () => {

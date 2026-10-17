@@ -155,6 +155,12 @@ const recordValue = (value: unknown): Record<string, unknown> =>
     ? value as Record<string, unknown>
     : {};
 const oneOf = (value: unknown, allowed: string[]): boolean => allowed.includes(textValue(value));
+const hasRecordedAmount = (value: unknown): boolean => {
+  const raw = textValue(value).replace(/[\s,٬，]/g, '');
+  if (!raw) return false;
+  const amount = Number(raw);
+  return Number.isFinite(amount) && amount >= 0;
+};
  
 /** Green routes do not display an assessment step unless customs requests one. */
 export const shouldShowAssessmentStage = (
@@ -227,6 +233,9 @@ export const getWorkflowStageIssues = (
       if (inspectionRequired && !oneOf(standard.inspection_status, ['sampled', 'completed'])) {
         issues.push('بازدید یا نمونه‌گیری شرکت بازرسی باید تکمیل یا غیرلازم ثبت شود.');
       }
+      if (inspectionRequired && !hasRecordedAmount(standard.inspection_fee)) {
+        issues.push('مبلغ هزینه بازرسی را ثبت کنید؛ در صورت رایگان بودن، صفر وارد کنید.');
+      }
       if (inspectionRequired && !boolValue(standard.inspection_paid)) {
         issues.push('هزینه بازرسی باید پرداخت شود.');
       }
@@ -243,6 +252,9 @@ export const getWorkflowStageIssues = (
       }
       if (sampleRequired && !boolValue(standard.results_uploaded)) {
         issues.push('نتایج آزمایش باید در سامانه استاندارد بارگذاری شود.');
+      }
+      if (!hasRecordedAmount(standard.standard_fee)) {
+        issues.push('مبلغ کارمزد استاندارد را ثبت کنید؛ اگر مبلغ صفر است، صفر وارد کنید.');
       }
       if (!boolValue(standard.standard_fee_paid)) {
         issues.push('پرداخت کارمزد استاندارد باید ثبت شود.');
