@@ -85,6 +85,71 @@ CREATE POLICY finance_cost_items_recycle_select
     )
   );
 
+-- A draft invoice can be edited, but its child rows become immutable after issue/void/archive.
+CREATE OR REPLACE FUNCTION public.guard_finance_invoice_child_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_invoice_id uuid;
+  v_org_id uuid;
+  v_status text;
+  v_deleted_at timestamptz;
+  v_issued_at timestamptz;
+  v_role text := COALESCE(public.user_role()::text, '');
+BEGIN
+  IF v_role NOT IN ('owner', 'admin', 'accountant') THEN
+    RAISE EXCEPTION 'دسترسی تغییر ردیف صورتحساب نیازمند نقش مالی است';
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    v_invoice_id := OLD.invoice_id;
+    v_org_id := OLD.organization_id;
+  ELSE
+    v_invoice_id := NEW.invoice_id;
+    v_org_id := NEW.organization_id;
+    IF TG_OP = 'UPDATE'
+       AND (NEW.invoice_id IS DISTINCT FROM OLD.invoice_id
+         OR NEW.organization_id IS DISTINCT FROM OLD.organization_id) THEN
+      RAISE EXCEPTION 'انتقال ردیف صورتحساب به سند یا سازمان دیگر مجاز نیست';
+    END IF;
+  END IF;
+
+  IF v_org_id IS DISTINCT FROM public.user_org_id() THEN
+    RAISE EXCEPTION 'صورتحساب به سازمان جاری تعلق ندارد';
+  END IF;
+
+  SELECT i.status, i.deleted_at, i.issued_at
+    INTO v_status, v_deleted_at, v_issued_at
+  FROM public.finance_invoices i
+  WHERE i.id = v_invoice_id AND i.organization_id = v_org_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'صورتحساب مرتبط پیدا نشد';
+  END IF;
+  IF v_status <> 'draft' OR v_deleted_at IS NOT NULL OR v_issued_at IS NOT NULL THEN
+    RAISE EXCEPTION 'ردیف‌های صورتحساب صادرشده، بایگانی‌شده یا غیرپیش‌نویس قابل تغییر مستقیم نیستند';
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_finance_invoice_lines
+  ON public.finance_invoice_lines;
+CREATE TRIGGER trg_guard_finance_invoice_lines
+  BEFORE INSERT OR UPDATE OR DELETE ON public.finance_invoice_lines
+  FOR EACH ROW EXECUTE FUNCTION public.guard_finance_invoice_child_mutation();
+
+DROP TRIGGER IF EXISTS trg_guard_finance_invoice_shipments
+  ON public.finance_invoice_shipments;
+CREATE TRIGGER trg_guard_finance_invoice_shipments
+  BEFORE INSERT OR UPDATE OR DELETE ON public.finance_invoice_shipments
+  FOR EACH ROW EXECUTE FUNCTION public.guard_finance_invoice_child_mutation();
+
+REVOKE ALL ON FUNCTION public.guard_finance_invoice_child_mutation() FROM PUBLIC, anon, authenticated;
+
 -- Never physically delete an invoice through the client Data API.
 DROP POLICY IF EXISTS finance_invoices_delete ON public.finance_invoices;
 CREATE POLICY finance_invoices_delete
@@ -334,7 +399,9 @@ BEGIN
     RAISE EXCEPTION 'بازیابی این هزینه مجاز نیست';
   END IF;
   IF v.deleted_previous_approval_status = 'approved'
-     OR v.deleted_previous_workflow_status = 'APPROVED' THEN
+     OR v.deleted_previous_workflow_status = 'APPROVED'
+     OR (v.deleted_previous_approval_status IS NULL AND v.approval_status = 'approved')
+     OR (v.deleted_previous_workflow_status IS NULL AND v.workflow_status = 'APPROVED') THEN
     RAISE EXCEPTION 'هزینه تأییدشده باید از مسیر اصلاح مالی بازیابی شود';
   END IF;
 
