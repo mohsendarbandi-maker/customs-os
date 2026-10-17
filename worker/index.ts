@@ -508,7 +508,7 @@ export default {
         .replace(/<title>[^<]*<\/title>/i, '<title>Reminders | Customs OS</title>')
         .replace(/href="\/manifest\.webmanifest"/i, 'href="/reminders-subdomain.webmanifest?v=20261012-reminders-v1"')
         .replace(/href="\/icon\.svg"/i, 'href="/pwa/reminders-icon.svg"')
-        .replace(/href="\/pwa\/apple-touch-icon-180\.png(?:\?[^"]*)?"/i, 'href="/pwa/reminders-icon-180.png?v=20261012-reminders-v1"')
+        .replace(/href="\/pwa\/apple-touch-icon-180\.png(?:\?[^"]*)?"/gi, 'href="/pwa/reminders-icon-180.png?v=20261012-reminders-v1"')
         .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#087F8C"')
         .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="Reminders"');
       const remindersHeaders = new Headers(response.headers);
@@ -524,10 +524,10 @@ export default {
       const html = await response.text();
       const mobileHtml = html
         .replace(/<title>[^<]*<\/title>/i, '<title>Customs OS Mobile</title>')
-        .replace(/href="\/manifest\.webmanifest"/i, 'href="/mobile-subdomain.webmanifest?v=20261018-mobile-v1"')
+        .replace(/href="\/manifest\.webmanifest"/i, 'href="/mobile-subdomain.webmanifest?v=20261018-mobile-v2"')
         .replace(/href="\/icon\.svg(?:\?[^"]*)?"/i, 'href="/mobile-icon.svg?v=20261018-mobile-v2"')
         .replace(/href="\/pwa\/apple-touch-icon-180\.png(?:\?[^"]*)?"/i, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
-        .replace(/href="\/pwa\/apple-touch-icon\.png(?:\?[^"]*)?"/i, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
+        .replace(/href="\/pwa\/apple-touch-icon\.png(?:\?[^"]*)?"/gi, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
         .replace(/href="\/pwa\/mobile-icon-180\.png(?:\?[^"]*)?"/i, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
         .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#0A4D8C"')
         .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="Customs OS"');
