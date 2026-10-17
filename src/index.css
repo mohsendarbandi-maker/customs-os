@@ -505,7 +505,6 @@ body{
 @keyframes customsOnlinePulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--success) 18%,transparent)}50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--success) 0%,transparent)}}
 
 /* App-wide moving light edge and icon micro-interactions. */
-.app-content section[class*="border"]{position:relative}
 .app-content h1,.app-content h2{letter-spacing:-.025em}
 .app-content h1{ text-wrap:balance }
 .app-content svg{transition:filter .25s,transform .25s}
