@@ -37,14 +37,14 @@ BEGIN
     SELECT EXISTS (
       SELECT 1
       FROM jsonb_each(to_jsonb(NEW)) AS item(key, value)
-      WHERE (item.key = 'deleted_at' OR item.key LIKE 'deleted\_%' ESCAPE '\\')
+      WHERE (item.key = 'deleted_at' OR left(item.key, 8) = 'deleted_'
         AND item.value <> 'null'::jsonb
     ) INTO v_has_change;
   ELSE
     SELECT EXISTS (
       SELECT 1
       FROM jsonb_each(to_jsonb(NEW)) AS item(key, value)
-      WHERE (item.key = 'deleted_at' OR item.key LIKE 'deleted\_%' ESCAPE '\\')
+      WHERE (item.key = 'deleted_at' OR left(item.key, 8) = 'deleted_'
         AND (to_jsonb(OLD) -> item.key) IS DISTINCT FROM item.value
     ) INTO v_has_change;
   END IF;
@@ -201,7 +201,7 @@ BEGIN
       cost_category = v_category_name,
       description = BTRIM(p_description),
       amount = p_amount,
-      unit_price = p_amount,
+      unit_price = p_amount / GREATEST(COALESCE(v.quantity, 1), 1),
       currency = p_currency::public.currency_code,
       exchange_rate = p_exchange_rate,
       amount_irr = v_amount_irr,
