@@ -13,15 +13,11 @@
   "theme_color": "#0A4D8C",
   "background_color": "#F5F9FE",
   "icons": [
-    { "src": "/mobile-icon.svg?v=20261018-mobile-v1", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/pwa/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/pwa/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/mobile-icon.svg?v=20261018-mobile-v2", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ],
   "shortcuts": [
-    { "name": "داشبورد", "short_name": "خانه", "url": "/", "icons": [{ "src": "/mobile-icon.svg?v=20261018-mobile-v1", "sizes": "any", "type": "image/svg+xml" }] },
-    { "name": "عملیات", "short_name": "عملیات", "url": "/operations", "icons": [{ "src": "/mobile-icon.svg?v=20261018-mobile-v1", "sizes": "any", "type": "image/svg+xml" }] },
-    { "name": "یادآورها", "short_name": "یادآورها", "url": "/reminders", "icons": [{ "src": "/mobile-icon.svg?v=20261018-mobile-v1", "sizes": "any", "type": "image/svg+xml" }] }
+    { "name": "داشبورد", "short_name": "خانه", "url": "/", "icons": [{ "src": "/mobile-icon.svg?v=20261018-mobile-v2", "sizes": "any", "type": "image/svg+xml" }] },
+    { "name": "عملیات", "short_name": "عملیات", "url": "/operations", "icons": [{ "src": "/mobile-icon.svg?v=20261018-mobile-v2", "sizes": "any", "type": "image/svg+xml" }] },
+    { "name": "یادآورها", "short_name": "یادآورها", "url": "/reminders", "icons": [{ "src": "/mobile-icon.svg?v=20261018-mobile-v2", "sizes": "any", "type": "image/svg+xml" }] }
   ]
 }

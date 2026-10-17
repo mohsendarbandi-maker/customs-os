@@ -16,6 +16,25 @@
         window.location.replace(secureUrl.toString());
       })();
     </script>
+    <script>
+      // Route handheld users to the dedicated mobile origin. Keep path, query and
+      // hash intact so Supabase callback parameters survive the origin switch.
+      (() => {
+        const host = window.location.hostname.toLowerCase();
+        const primaryHost = host === 'darbandicommercial.ir' || host === 'www.darbandicommercial.ir';
+        if (!primaryHost || window.location.protocol !== 'https:') return;
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('desktop') === '1' || params.get('no_mobile_redirect') === '1') return;
+        const ua = navigator.userAgent || '';
+        const handheld = /Android|iPhone|iPod|IEMobile|Opera Mini|Mobile/i.test(ua) ||
+          (/Macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1);
+        if (!handheld) return;
+        const target = new URL(window.location.href);
+        target.hostname = 'mobile.darbandicommercial.ir';
+        target.port = '';
+        window.location.replace(target.toString());
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0A4D8C" />
