@@ -156,7 +156,7 @@ const recordValue = (value: unknown): Record<string, unknown> =>
     : {};
 const oneOf = (value: unknown, allowed: string[]): boolean => allowed.includes(textValue(value));
 const hasRecordedAmount = (value: unknown): boolean => {
-  const raw = textValue(value).replace(/[\\s,٬，]/g, '');
+  const raw = textValue(value).replace(/[\s,٬，]/g, '');
   if (!raw) return false;
   const amount = Number(raw);
   return Number.isFinite(amount) && amount >= 0;
