@@ -287,3 +287,307 @@ html,body,#root{min-height:100%;margin:0;max-width:100%;overflow-x:hidden}html{s
  .customs-widget-tools{gap:7px}
  .customs-widget-tools button{width:36px;height:36px}
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   CUSTOMS OS GLOBAL VISUAL SYSTEM — all authenticated routes
+   Presentation only. Existing workflow/data components stay intact.
+   ═══════════════════════════════════════════════════════════════════ */
+:root{
+ --bg:#080817;
+ --surface:#111128;
+ --surface-2:#191936;
+ --surface-3:#242448;
+ --text:#F3F3FF;
+ --text-muted:#A6A8C8;
+ --border:#34345D;
+ --primary:#9B6BFF;
+ --primary-2:#28D9F2;
+ --success:#39D6A2;
+ --warning:#FFC56E;
+ --danger:#FF668E;
+ --shadow:0 18px 48px rgba(2,2,18,.34);
+ --hero-a:#413080;
+ --hero-b:#15768D;
+ --motion-violet:#9B6BFF;
+ --motion-cyan:#28D9F2;
+ --motion-rose:#FF63BB;
+ --motion-glow:rgba(40,217,242,.22);
+ color-scheme:dark;
+}
+[data-theme="light"]{
+ --bg:#F4F3FF;
+ --surface:#FFFFFF;
+ --surface-2:#F0EDFF;
+ --surface-3:#E7E2FF;
+ --text:#22203B;
+ --text-muted:#686582;
+ --border:#D9D4F1;
+ --primary:#7347E8;
+ --primary-2:#0789A6;
+ --success:#138A67;
+ --warning:#A75F08;
+ --danger:#C83766;
+ --shadow:0 18px 48px rgba(51,37,110,.10);
+ --hero-a:#DCD2FF;
+ --hero-b:#C5F5FA;
+ --motion-glow:rgba(115,71,232,.14);
+ color-scheme:light;
+}
+[data-comfort="soft"]{--bg:#F0F2FC;--surface:#FBFCFF;--surface-2:#E9EDFA;--surface-3:#DFE5F7;--text:#202842;--text-muted:#68738B;--border:#CFD8EA;--primary:#6C58D8;--primary-2:#0B91B0}
+[data-comfort="warm"],[data-comfort="reading"]{--bg:#F4EFFA;--surface:#FFFDFE;--surface-2:#F0E8F9;--surface-3:#E7DDF3;--text:#342843;--text-muted:#776783;--border:#DED0EA;--primary:#8652D8;--primary-2:#148FA4}
+html{background:var(--bg)}
+body{
+ background-color:var(--bg)!important;
+ background-image:
+  radial-gradient(ellipse at 12% 0%,color-mix(in srgb,var(--primary) 22%,transparent) 0,transparent 36%),
+  radial-gradient(ellipse at 92% 23%,color-mix(in srgb,var(--primary-2) 18%,transparent) 0,transparent 34%),
+  radial-gradient(ellipse at 50% 100%,color-mix(in srgb,var(--motion-rose) 10%,transparent) 0,transparent 42%),
+  linear-gradient(135deg,color-mix(in srgb,var(--bg) 96%,var(--primary)),var(--bg) 52%,color-mix(in srgb,var(--bg) 95%,var(--primary-2)))!important;
+ background-size:145% 145%,160% 160%,170% 170%,100% 100%!important;
+ background-attachment:fixed!important;
+ animation:customsGlobalAtmosphere 28s ease-in-out infinite alternate;
+ transition:background-color .45s,color .3s;
+}
+@keyframes customsGlobalAtmosphere{
+ 0%{background-position:0% 0%,100% 15%,50% 100%,0 0}
+ 50%{background-position:22% 30%,72% 40%,18% 82%,0 0}
+ 100%{background-position:0% 12%,100% 0%,80% 100%,0 0}
+}
+#root{background:transparent!important}
+.app-shell,.app-main,.app-content,.future-route-stage{background:transparent!important}
+.app-shell{position:relative;isolation:isolate}
+.app-sidebar{
+ background:color-mix(in srgb,var(--surface) 76%,transparent)!important;
+ border-color:color-mix(in srgb,var(--primary) 28%,var(--border))!important;
+ backdrop-filter:blur(28px) saturate(1.35)!important;
+ box-shadow:-20px 0 70px rgba(0,0,0,.16),inset 1px 0 0 rgba(255,255,255,.035);
+}
+.app-brand{border-bottom-color:color-mix(in srgb,var(--primary-2) 26%,var(--border))!important}
+.app-topbar{
+ background:color-mix(in srgb,var(--bg) 68%,transparent)!important;
+ border-bottom-color:color-mix(in srgb,var(--primary-2) 24%,var(--border))!important;
+ backdrop-filter:blur(26px) saturate(1.45)!important;
+ box-shadow:0 12px 38px rgba(0,0,0,.08),inset 0 -1px 0 rgba(255,255,255,.025)!important;
+}
+.app-mobilebar{
+ background:color-mix(in srgb,var(--bg) 72%,transparent)!important;
+ border-bottom-color:color-mix(in srgb,var(--primary-2) 25%,var(--border))!important;
+ backdrop-filter:blur(22px) saturate(1.35)!important;
+}
+.app-content{overflow:visible}
+.app-content main[class*="min-h-screen"]{background:transparent!important}
+.future-route-stage{
+ animation:customsRouteCinematic .52s cubic-bezier(.16,1,.3,1) both!important;
+ transform-origin:50% 20%;
+}
+@keyframes customsRouteCinematic{
+ from{opacity:0;transform:translate3d(0,15px,0) scale(.992);filter:blur(2px)}
+ 70%{filter:blur(0)}
+ to{opacity:1;transform:none;filter:blur(0)}
+}
+
+/* Transform bordered panels throughout operations, finance, documents, CRM and settings. */
+.app-content section[class*="border"],
+.app-content article[class*="border"],
+.app-content [role="dialog"],
+.app-content [class*="rounded-xl"][class*="border"],
+.app-content [class*="rounded-2xl"][class*="border"]{
+ border-color:color-mix(in srgb,var(--primary) 20%,var(--border))!important;
+ box-shadow:0 12px 34px rgba(0,0,0,.075),inset 0 1px 0 rgba(255,255,255,.035);
+ transition:border-color .28s,box-shadow .32s,background-color .32s,transform .32s cubic-bezier(.16,1,.3,1);
+}
+.app-content section[class*="border"]:hover,
+.app-content article[class*="border"]:hover,
+.app-content [role="dialog"]:hover{
+ border-color:color-mix(in srgb,var(--primary-2) 36%,var(--border))!important;
+}
+.app-content [class~="bg-white"],
+.app-content [class*="bg-slate-50"],
+.app-content [class*="bg-gray-50"],
+.app-content [class*="bg-zinc-50"],
+.app-content [class*="bg-neutral-50"]{
+ background-color:var(--surface)!important;
+}
+[data-theme="dark"] .app-content [class*="text-slate-900"],
+[data-theme="dark"] .app-content [class*="text-slate-800"],
+[data-theme="dark"] .app-content [class*="text-gray-900"],
+[data-theme="dark"] .app-content [class*="text-zinc-900"],
+[data-theme="dark"] .app-content [class*="text-neutral-900"]{
+ color:var(--text)!important;
+}
+.app-content [class*="border-slate-"],
+.app-content [class*="border-gray-"],
+.app-content [class*="border-zinc-"]{
+ border-color:var(--border)!important;
+}
+
+/* Animated control surfaces; the information and semantics inside are not changed. */
+#root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+#root select,#root textarea{
+ border-color:color-mix(in srgb,var(--primary) 23%,var(--border));
+ border-radius:12px;
+ transition:border-color .22s,box-shadow .25s,background-color .3s,transform .22s;
+}
+#root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+#root select:focus,#root textarea:focus{
+ border-color:var(--primary-2)!important;
+ box-shadow:0 0 0 3px color-mix(in srgb,var(--primary-2) 20%,transparent),0 0 24px color-mix(in srgb,var(--primary) 10%,transparent)!important;
+ outline:none;
+}
+#root button,#root a[class*="rounded-"]{
+ -webkit-tap-highlight-color:transparent;
+}
+.app-content button:not(.shipment-name):not(.shipment-stage-dot):not(.shipment-current-stage){
+ transition:transform .22s cubic-bezier(.16,1,.3,1),box-shadow .25s,border-color .25s,filter .22s;
+}
+.app-content button:not(:disabled):not(.shipment-name):not(.shipment-stage-dot):not(.shipment-current-stage):hover{
+ filter:saturate(1.12);
+}
+.app-content button:focus-visible,.app-content a:focus-visible{
+ outline:2px solid var(--primary-2);
+ outline-offset:3px;
+}
+.app-content a[class*="text-[var(--primary-2)]"],
+.app-content a[class*="text-blue-"],
+.app-content button[class*="text-blue-"]{
+ text-decoration-color:color-mix(in srgb,var(--primary-2) 55%,transparent);
+}
+.app-content table{border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:12px}
+.app-content thead th{background:color-mix(in srgb,var(--primary) 10%,var(--surface-2));color:var(--text);border-color:var(--border)}
+.app-content tbody tr{transition:background-color .2s,box-shadow .2s}
+.app-content tbody tr:hover{background:color-mix(in srgb,var(--primary-2) 7%,var(--surface))}
+.app-content td,.app-content th{border-color:var(--border)}
+
+/* Animated gradient action language shared by forms and navigation. */
+.app-content button[class*="bg-blue-"],
+.app-content button[class*="bg-indigo-"],
+.app-content button[class*="bg-violet-"],
+.app-content button[class*="bg-purple-"],
+.app-content a[class*="bg-blue-"],
+.app-content a[class*="bg-indigo-"],
+.app-content a[class*="bg-violet-"],
+.app-content a[class*="bg-purple-"],
+.app-content .customs-primary-button,
+.app-content .future-submit{
+ background-image:linear-gradient(112deg,var(--primary),var(--motion-violet) 48%,var(--primary-2))!important;
+ background-size:220% 220%;
+ color:#fff!important;
+ border-color:color-mix(in srgb,var(--primary-2) 30%,transparent)!important;
+ box-shadow:0 9px 25px color-mix(in srgb,var(--primary) 22%,transparent);
+}
+.app-content button[class*="bg-blue-"]:hover,
+.app-content button[class*="bg-indigo-"]:hover,
+.app-content button[class*="bg-violet-"]:hover,
+.app-content button[class*="bg-purple-"]:hover,
+.app-content a[class*="bg-blue-"]:hover,
+.app-content a[class*="bg-indigo-"]:hover,
+.app-content a[class*="bg-violet-"]:hover,
+.app-content a[class*="bg-purple-"]:hover,
+.app-content .customs-primary-button:hover,
+.app-content .future-submit:hover{
+ background-position:100% 50%;
+ box-shadow:0 13px 32px color-mix(in srgb,var(--primary) 31%,transparent);
+ transform:translateY(-2px);
+}
+.app-nav-item.active,.mobile-nav-item.active{
+ background:linear-gradient(115deg,color-mix(in srgb,var(--primary) 44%,var(--surface)),color-mix(in srgb,var(--primary-2) 20%,var(--surface)))!important;
+ box-shadow:inset -3px 0 0 var(--primary-2),0 8px 25px color-mix(in srgb,var(--primary) 16%,transparent)!important;
+ color:var(--text)!important;
+}
+.icon-btn,.theme-cycle-btn,.theme-choice,.customs-desktop-menu{
+ border-color:color-mix(in srgb,var(--primary-2) 25%,var(--border))!important;
+ background:color-mix(in srgb,var(--surface) 76%,transparent)!important;
+ backdrop-filter:blur(14px);
+}
+.app-online-chip.is-online{border-color:color-mix(in srgb,var(--success) 44%,var(--border));box-shadow:inset 0 0 18px color-mix(in srgb,var(--success) 7%,transparent)}
+.app-online-dot{animation:customsOnlinePulse 2.8s ease-in-out infinite}
+@keyframes customsOnlinePulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--success) 18%,transparent)}50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--success) 0%,transparent)}}
+
+/* App-wide moving light edge and icon micro-interactions. */
+.app-content h1,.app-content h2{letter-spacing:-.025em}
+.app-content h1{ text-wrap:balance }
+.app-content svg{transition:filter .25s,transform .25s}
+.app-content a:hover svg,.app-content button:hover svg{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--primary-2) 22%,transparent))}
+.app-content .app-muted{color:var(--text-muted)!important}
+@media(min-width:768px){
+ .app-content{padding-inline:clamp(16px,2vw,36px)}
+}
+@media(max-width:767px){
+ body{background-size:220% 220%,220% 220%,200% 200%,100% 100%!important}
+ .app-content{padding-inline:12px}
+ .app-content section[class*="border"],
+ .app-content article[class*="border"]{border-radius:16px}
+}
+@media(prefers-reduced-motion:reduce){
+ body{animation:none!important}
+ .future-route-stage{animation:none!important}
+ #root *,#root *:before,#root *:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
+
+/* Shipment status search — presentation-only filtering of the existing visible rows. */
+.shipment-status-toolbar{position:relative;background:linear-gradient(105deg,color-mix(in srgb,var(--primary) 7%,var(--surface)),color-mix(in srgb,var(--primary-2) 6%,var(--surface)));min-width:0}
+.shipment-status-toolbar:after{content:"";height:1px;position:absolute;inset:auto 0 0;background:linear-gradient(90deg,transparent,var(--primary),var(--primary-2),transparent);opacity:.6;pointer-events:none}
+.shipment-status-search{position:relative;display:flex;align-items:center;gap:9px;flex:1 1 250px;min-width:180px;max-width:520px;margin-inline-start:auto;padding:0 12px;min-height:40px;border:1px solid color-mix(in srgb,var(--primary-2) 35%,var(--border));border-radius:12px;background:color-mix(in srgb,var(--surface) 92%,transparent);color:var(--text-muted);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);transition:border-color .25s,box-shadow .25s,transform .25s}
+.shipment-status-search:focus-within{border-color:var(--primary-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary-2) 18%,transparent),0 8px 24px color-mix(in srgb,var(--primary) 9%,transparent);transform:translateY(-1px)}
+.shipment-status-search>svg{flex:0 0 auto;color:var(--primary-2)}
+#root .shipment-status-search input{width:100%;min-width:0;height:38px;padding:0;border:0!important;border-radius:0!important;outline:none!important;background:transparent!important;color:var(--text)!important;box-shadow:none!important;font-size:12px}
+#root .shipment-status-search input::placeholder{color:var(--text-muted);opacity:.92}
+.shipment-status-search button{display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;padding:0;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text-muted)}
+.shipment-status-search button:hover{background:color-mix(in srgb,var(--primary) 16%,var(--surface-2));color:var(--primary-2)}
+.shipment-status-search button[hidden]{display:none!important}
+.shipment-search-empty{animation:customsRouteCinematic .24s ease-out both}
+@media(max-width:767px){
+ .shipment-status-toolbar{align-items:stretch}
+ .shipment-status-toolbar>div:first-child{width:100%;justify-content:space-between}
+ .shipment-status-toolbar>a{order:2;margin-inline-start:auto}
+ .shipment-status-search{order:3;flex:1 1 100%;width:100%;max-width:none;min-width:0;margin:0}
+}
+
+
+/* Extend the same visual language to standalone Chat and Reminders workspaces,
+   which intentionally bypass AppShell, without changing their routes or behavior. */
+#root main[class*="min-h-screen"]{background-color:transparent!important}
+#root section[class*="border"],
+#root article[class*="border"],
+#root [role="dialog"],
+#root [class*="rounded-xl"][class*="border"],
+#root [class*="rounded-2xl"][class*="border"]{
+ border-color:color-mix(in srgb,var(--primary) 19%,var(--border))!important;
+ box-shadow:0 12px 34px rgba(0,0,0,.07),inset 0 1px 0 rgba(255,255,255,.025);
+ transition:border-color .28s,box-shadow .32s,background-color .32s,transform .32s cubic-bezier(.16,1,.3,1);
+}
+#root [class~="bg-white"],
+#root [class*="bg-slate-50"],
+#root [class*="bg-gray-50"],
+#root [class*="bg-zinc-50"],
+#root [class*="bg-neutral-50"]{background-color:var(--surface)!important}
+[data-theme="dark"] #root [class*="text-slate-900"],
+[data-theme="dark"] #root [class*="text-slate-800"],
+[data-theme="dark"] #root [class*="text-gray-900"],
+[data-theme="dark"] #root [class*="text-zinc-900"]{color:var(--text)!important}
+#root button[class*="bg-blue-"],
+#root button[class*="bg-indigo-"],
+#root button[class*="bg-violet-"],
+#root button[class*="bg-purple-"],
+#root a[class*="bg-blue-"],
+#root a[class*="bg-indigo-"],
+#root a[class*="bg-violet-"],
+#root a[class*="bg-purple-"]{
+ background-image:linear-gradient(112deg,var(--primary),var(--motion-violet) 48%,var(--primary-2))!important;
+ background-size:220% 220%;color:#fff!important;
+ border-color:color-mix(in srgb,var(--primary-2) 30%,transparent)!important;
+ box-shadow:0 9px 25px color-mix(in srgb,var(--primary) 20%,transparent);
+ transition:background-position .45s,transform .22s,box-shadow .25s;
+}
+#root button[class*="bg-blue-"]:hover,
+#root button[class*="bg-indigo-"]:hover,
+#root button[class*="bg-violet-"]:hover,
+#root button[class*="bg-purple-"]:hover,
+#root a[class*="bg-blue-"]:hover,
+#root a[class*="bg-indigo-"]:hover,
+#root a[class*="bg-violet-"]:hover,
+#root a[class*="bg-purple-"]:hover{background-position:100% 50%;transform:translateY(-1px)}
+#root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+#root textarea,#root select{accent-color:var(--primary)}
