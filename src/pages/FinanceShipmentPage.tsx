@@ -22,12 +22,12 @@ export const FinanceShipmentPage:React.FC=()=>{
   setS(sh);
   if(canViewFinance){
    const[{data:iv},{data:pr},{data:pa},{data:vr}]=await Promise.all([
-    supabase.from('finance_invoice_shipments').select('invoice_id,finance_invoices(id,invoice_no,status,total_amount,currency,issue_date)').eq('shipment_id',id),
+    supabase.from('finance_invoice_shipments').select('invoice_id,finance_invoices(id,invoice_no,status,total_amount,currency,issue_date,deleted_at)').eq('shipment_id',id),
     supabase.from('finance_payment_requests').select('*').eq('shipment_id',id).order('request_date',{ascending:false}),
     supabase.from('finance_payments').select('*').eq('shipment_id',id).order('payment_date',{ascending:false}),
     supabase.from('customs_accounting_vouchers').select('id,case_id,voucher_number,kottaj_number,debit_total,credit_total,created_at').order('created_at',{ascending:false})
    ]);
-   setInvoices((iv||[]).map((x:any)=>x.finance_invoices).filter(Boolean));setRequests(pr||[]);setPayments(pa||[]);setVouchers((vr||[]).filter((x:any)=>x.case_id===sh?.case_id));
+   setInvoices((iv||[]).map((x:any)=>x.finance_invoices).filter((x:any)=>Boolean(x)&&!x.deleted_at));setRequests(pr||[]);setPayments(pa||[]);setVouchers((vr||[]).filter((x:any)=>x.case_id===sh?.case_id));
   }else{
    setInvoices([]);setRequests([]);setPayments([]);setVouchers([]);
   }
