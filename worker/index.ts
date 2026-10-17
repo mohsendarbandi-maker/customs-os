@@ -526,7 +526,7 @@ export default {
         .replace(/<title>[^<]*<\/title>/i, '<title>Customs OS Mobile</title>')
         .replace(/href="\/manifest\.webmanifest"/i, 'href="/mobile-subdomain.webmanifest?v=20261018-mobile-v2"')
         .replace(/href="\/icon\.svg(?:\?[^"]*)?"/i, 'href="/mobile-icon.svg?v=20261018-mobile-v2"')
-        .replace(/href="\/pwa\/apple-touch-icon-180\.png(?:\?[^"]*)?"/i, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
+        .replace(/href="\/pwa\/apple-touch-icon-180\.png(?:\?[^"]*)?"/gi, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
         .replace(/href="\/pwa\/apple-touch-icon\.png(?:\?[^"]*)?"/gi, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
         .replace(/href="\/pwa\/mobile-icon-180\.png(?:\?[^"]*)?"/i, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
         .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#0A4D8C"')
