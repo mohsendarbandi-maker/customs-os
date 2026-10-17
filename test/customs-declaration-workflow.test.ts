@@ -4,6 +4,8 @@ import {
   compareJalaliDates,
   getAbandonedGoodsWarnings,
   getWorkflowStageIssues,
+  getInitialCustomsWorkflowStage,
+  shouldShowAssessmentStage,
   isJalaliDeadlinePassed,
   parseJalaliDate,
 } from '../src/lib/customsDeclarationWorkflow';
@@ -79,6 +81,25 @@ const readyWorkflow = () => ({
     last_truck_loaded_at: '',
     supplemental_invoice_status: 'not_required',
   },
+});
+
+describe('route-aware assessment stage visibility', () => {
+  it('does not show assessment for green routes until a customs request or active status exists', () => {
+    const optional = { status: 'not_required', expert_requested: false };
+    expect(shouldShowAssessmentStage('green', optional)).toBe(false);
+    expect(shouldShowAssessmentStage('yellow', optional)).toBe(true);
+    expect(shouldShowAssessmentStage('red', optional)).toBe(true);
+    expect(shouldShowAssessmentStage('green', { ...optional, expert_requested: true })).toBe(true);
+    expect(shouldShowAssessmentStage('green', { status: 'required', expert_requested: false })).toBe(true);
+    expect(shouldShowAssessmentStage('green', { status: 'completed', expert_requested: false })).toBe(true);
+  });
+
+  it('skips a stale default assessment stage for green routes without modifying assessment data', () => {
+    expect(getInitialCustomsWorkflowStage('evaluation', 'green', { status: 'not_required', expert_requested: false })).toBe('expertise');
+    expect(getInitialCustomsWorkflowStage('evaluation', 'yellow', { status: 'not_required', expert_requested: false })).toBe('evaluation');
+    expect(getInitialCustomsWorkflowStage('evaluation', 'red', { status: 'required', expert_requested: false })).toBe('evaluation');
+    expect(getInitialCustomsWorkflowStage('port_charges', 'green', { status: 'not_required', expert_requested: false })).toBe('port_charges');
+  });
 });
 
 describe('customs workflow stage prerequisites', () => {

@@ -1,7 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useState}from'react';
 import{AlertTriangle,Clock3,RefreshCw,Save,ShieldCheck}from'lucide-react';
 import{supabase}from'../lib/supabase';
-import{compareJalaliDates,getAbandonedGoodsWarnings,getWorkflowStageIssues,parseJalaliDate,type CustomsWorkflowValidationState}from'../lib/customsDeclarationWorkflow';
+import{compareJalaliDates,getAbandonedGoodsWarnings,getWorkflowStageIssues,getInitialCustomsWorkflowStage,shouldShowAssessmentStage,parseJalaliDate,type CustomsWorkflowValidationState}from'../lib/customsDeclarationWorkflow';
 import{toJalali,zonedJalaliToDate}from'../lib/jalali';
 import{JalaliDateTimePicker}from'../features/reminders/JalaliDateTimePicker';
 
@@ -43,6 +43,8 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const[historyUnavailable,setHistoryUnavailable]=useState(false);
  const[datePickerTarget,setDatePickerTarget]=useState<{label:string;value:string;onChange:(v:string)=>void}|null>(null);
  const isImport=customsRegime==='import_definitive';
+ const assessmentStageActive=shouldShowAssessmentStage(customsPath,evaluation);
+ const visibleStages=stages.filter(([key])=>key!=='evaluation'||assessmentStageActive);
 
  const refreshHistory=useCallback(async()=>{
   if(!declarationId||!organizationId){setHistory([]);return}
@@ -79,8 +81,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    const{data:existing,error:e}=await supabase.from('customs_declaration_workflow').select('*').eq('declaration_id',declarationId).maybeSingle();
    if(e)throw e;
    if(existing){
-    const r=existing as WorkflowRow;setRow(r);setStage(r.current_stage||'evaluation');
-    setEvaluation({...emptyEvaluation,...(r.evaluation_state||{})});
+    const r=existing as WorkflowRow;setRow(r);const ev={...emptyEvaluation,...(r.evaluation_state||{})};setEvaluation(ev);setStage(getInitialCustomsWorkflowStage(r.current_stage,customsPath,ev));
     const storedStandard=((r.expertise_state||{}).standard||{}) as Record<string,any>;const mergedStandard={...emptyExpertise.standard,...storedStandard};if(!storedStandard.inspection_invoice_status&&storedStandard.inspection_invoice_received)mergedStandard.inspection_invoice_status='received';const ex={...emptyExpertise,...(r.expertise_state||{}),standard:mergedStandard};
     setExpertise(ex);
     setCashier({...emptyCashier,...(r.cashier_state||{})});
@@ -97,13 +98,12 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
       created_by:userId||null,updated_by:userId||null
     }).select('*').single();
     if(createError)throw createError;
-    const r=created as WorkflowRow;setRow(r);setStage(r.current_stage);
-    setEvaluation({...emptyEvaluation,...r.evaluation_state});
+    const r=created as WorkflowRow;setRow(r);const ev={...emptyEvaluation,...r.evaluation_state};setEvaluation(ev);setStage(getInitialCustomsWorkflowStage(r.current_stage,customsPath,ev));
     setExpertise({...emptyExpertise,...r.expertise_state,standard:{...emptyExpertise.standard,...r.expertise_state?.standard}});
     setCashier({...emptyCashier,...r.cashier_state});setLoadingPermit({...emptyLoadingPermit,...r.loading_permit_state});
     setExitState({...emptyExit,...r.exit_state});setPort({...emptyPort,...r.port_charges_state});setNotes(r.notes||'');
    }else{
-    setEvaluation(defaults(info).evaluation);setExpertise(defaults(info).expertise);
+    const initial=defaults(info);setEvaluation(initial.evaluation);setExpertise(initial.expertise);setStage(getInitialCustomsWorkflowStage('evaluation',customsPath,initial.evaluation));
    }
    await refreshHistory();
   }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'دسترسی مشاهده گردش‌کار برای این کاربر مجاز نیست.':'بارگذاری گردش‌کار گمرکی انجام نشد؛ اتصال اظهارنامه و مجوز دسترسی را بررسی کنید.')}
@@ -152,8 +152,9 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  if(!isImport)return <section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex items-start gap-3"><ShieldCheck size={20} className="mt-0.5 text-[var(--primary)]"/><div><h2 className="font-black">گردش‌کار متناسب با رویه گمرکی</h2><p className="text-sm app-muted mt-1">این گردش‌کار جزئیات ارزیابی، کارشناسی، صندوق، مجوز بارگیری، درب خروج، عوارض بندری و متروکه را برای «واردات قطعی» فعال می‌کند. رویه انتخاب‌شده این اظهارنامه: {customsRegime||'ثبت نشده'}.</p></div></div></section>;
 
  return <section className="space-y-4">
-  <header className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-black">گردش‌کار واردات قطعی</h2><p className="text-xs app-muted mt-1">هفت مرحله عملیاتی، وابسته به همین اظهارنامه؛ ثبت هر گام همراه با توضیح و وضعیت.</p><div className="text-xs app-muted mt-2">تشخیص پیشنهادی کالا: {commodity.description||'شرح کالا ثبت نشده'} · HS: {commodity.hsCode||'—'} · نوع کشتی: {commodity.vesselType||'—'}</div></div><button type="button" onClick={()=>void load()} disabled={loading||saving} className="rounded-xl border app-border p-2.5" aria-label="بروزرسانی گردش‌کار"><RefreshCw size={16} className={loading?'animate-spin':''}/></button></div>
-   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mt-4">{stages.map(([key,label],i)=><button type="button" key={key} onClick={()=>setStage(key)} className={'rounded-xl border px-2 py-3 text-xs font-bold '+(stage===key?'border-[var(--primary)] bg-[var(--primary)] text-white':'app-border bg-[var(--surface-2)]')}>{faDigits(i+1)}<span className="block mt-1">{label}</span></button>)}</div>
+  <header className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-black">گردش‌کار واردات قطعی</h2><p className="text-xs app-muted mt-1">مراحل عملیاتی متناسب با مسیر و ارجاع‌های گمرکی؛ در مسیر سبز، ارزیابی فقط در صورت درخواست کارشناس فعال می‌شود؛ مسیرهای دیگر طبق وضعیت اظهارنامه بررسی می‌شوند.</p><div className="text-xs app-muted mt-2">تشخیص پیشنهادی کالا: {commodity.description||'شرح کالا ثبت نشده'} · HS: {commodity.hsCode||'—'} · نوع کشتی: {commodity.vesselType||'—'}</div></div><button type="button" onClick={()=>void load()} disabled={loading||saving} className="rounded-xl border app-border p-2.5" aria-label="بروزرسانی گردش‌کار"><RefreshCw size={16} className={loading?'animate-spin':''}/></button></div>
+   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mt-4">{visibleStages.map(([key,label],i)=><button type="button" key={key} onClick={()=>setStage(key)} className={'rounded-xl border px-2 py-3 text-xs font-bold '+(stage===key?'border-[var(--primary)] bg-[var(--primary)] text-white':'app-border bg-[var(--surface-2)]')}>{faDigits(i+1)}<span className="block mt-1">{label}</span></button>)}</div>
+   {!loading&&!assessmentStageActive&&<div className="mt-3 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 flex flex-wrap items-center justify-between gap-3"><div className="text-xs app-muted">در مسیر سبز، ارزیابی به‌صورت پیش‌فرض مرحلهٔ فعال نیست. اگر کارشناس گمرک ارزیابی درخواست کرد، آن را فعال کنید.</div><button type="button" disabled={!editable} onClick={()=>{setEvaluation(p=>({...p,expert_requested:true,status:p.status==='not_required'?'required':p.status,expert_request_note:p.expert_request_note||'ارجاع ارزیابی توسط کارشناس گمرک'}));setStage('evaluation');}} className="shrink-0 rounded-lg bg-[var(--primary)] text-white px-3 py-2 text-xs font-bold disabled:opacity-50">فعال‌کردن ارزیابی با ارجاع کارشناس</button></div>}
   </header>
   {loading&&<div className="rounded-xl border app-border p-6 text-center app-muted">در حال بارگذاری گردش‌کار…</div>}
   {error&&<div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 whitespace-pre-line">{error}</div>}
