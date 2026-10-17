@@ -249,10 +249,18 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <button
           type="button"
           className="app-mobile-title"
-          aria-label="خانه"
+          aria-label={`رفتن به خانه؛ بخش فعلی: ${location.pathname.startsWith('/settings') ? 'تنظیمات' : visibleNav.find((x) => isActive(x.to))?.label || 'Customs OS'}`}
           onClick={() => navigate('/')}
         >
-          <CustomsLogo size={30} showWordmark={false} />
+          <CustomsLogo size={32} showWordmark={false} />
+          <span className="mobile-current-page">
+            <span className="mobile-current-page__eyebrow">CUSTOMS OS</span>
+            <span className="mobile-current-page__title">
+              {location.pathname.startsWith('/settings')
+                ? 'تنظیمات'
+                : visibleNav.find((x) => isActive(x.to))?.label || 'خانه'}
+            </span>
+          </span>
         </button>
         <button type="button" className="icon-btn" aria-label="ظاهر" onClick={cycleTheme}>
           {comfort === 'reading' ? (
