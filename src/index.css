@@ -279,3 +279,11 @@ html,body,#root{min-height:100%;margin:0;max-width:100%;overflow-x:hidden}html{s
  .app-nav-item,.customs-stat,.customs-shortcut,.customs-line-button,.customs-primary-button,.customs-desktop-menu,.customs-widget-frame,.customs-layout-action{transition:none!important}
  .future-route-stage{animation:none!important}
 }
+
+
+/* On touch devices the explicit move controls are more reliable than native HTML drag. */
+@media(hover:none){
+ .customs-widget-tools .customs-widget-grip{display:none}
+ .customs-widget-tools{gap:7px}
+ .customs-widget-tools button{width:36px;height:36px}
+}
