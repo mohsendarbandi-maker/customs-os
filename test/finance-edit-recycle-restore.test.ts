@@ -58,6 +58,8 @@ describe('finance edit, archive, and restore invariants', () => {
 
   it('protects archive metadata from direct client writes', () => {
     expect(migration).toContain('guard_finance_recycle_metadata');
+    expect(migration).toContain("WHERE (item.key = 'deleted_at' OR left(item.key, 8) = 'deleted_')");
+    expect(migration).not.toContain("WHERE (item.key = 'deleted_at' OR left(item.key, 8) = 'deleted_'\n        AND");
     expect(migration).toContain("current_setting('app.finance_recycle_write', true) = 'true'");
     expect(migration).toContain("left(item.key, 8) = 'deleted_'");
     expect(migration).toContain('Recycle metadata can only be changed through the finance archive/restore actions');

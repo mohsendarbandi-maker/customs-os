@@ -37,14 +37,14 @@ BEGIN
     SELECT EXISTS (
       SELECT 1
       FROM jsonb_each(to_jsonb(NEW)) AS item(key, value)
-      WHERE (item.key = 'deleted_at' OR left(item.key, 8) = 'deleted_'
+      WHERE (item.key = 'deleted_at' OR left(item.key, 8) = 'deleted_')
         AND item.value <> 'null'::jsonb
     ) INTO v_has_change;
   ELSE
     SELECT EXISTS (
       SELECT 1
       FROM jsonb_each(to_jsonb(NEW)) AS item(key, value)
-      WHERE (item.key = 'deleted_at' OR left(item.key, 8) = 'deleted_'
+      WHERE (item.key = 'deleted_at' OR left(item.key, 8) = 'deleted_')
         AND (to_jsonb(OLD) -> item.key) IS DISTINCT FROM item.value
     ) INTO v_has_change;
   END IF;
