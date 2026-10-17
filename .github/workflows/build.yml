@@ -313,7 +313,7 @@ jobs:
           test "$mobile_success" = 1
           curl --fail --silent --show-error --location --max-time 30 -o /tmp/mobile-subdomain-manifest.json "${mobile_base}/mobile-subdomain.webmanifest?v=20261018-mobile-v1&__smoke=${GITHUB_RUN_ID}"
           grep -Fq '"id": "/"' /tmp/mobile-subdomain-manifest.json
-          grep -Fq '"start_url": "/?app=1"' /tmp/mobile-subdomain-manifest.json
+          grep -Fq '"start_url": "/"' /tmp/mobile-subdomain-manifest.json
           grep -Fq '"scope": "/"' /tmp/mobile-subdomain-manifest.json
           grep -Fq '"display": "standalone"' /tmp/mobile-subdomain-manifest.json
           curl --fail --silent --show-error --location --max-time 20 -o /tmp/mobile-icon.svg "${mobile_base}/mobile-icon.svg"
