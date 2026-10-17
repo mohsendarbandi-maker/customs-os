@@ -302,7 +302,7 @@ jobs:
             status="$(curl --silent --show-error --location --max-time 25 -o /tmp/mobile-subdomain.html -w '%{http_code}' "${mobile_base}/?__mobile_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}" 2>/tmp/mobile-curl-error)" || status=000
             if [ "$status" = "200" ] &&
               grep -Fq '<title>Customs OS Mobile</title>' /tmp/mobile-subdomain.html &&
-              grep -Fq 'mobile-subdomain.webmanifest?v=20261018-mobile-v1' /tmp/mobile-subdomain.html; then
+              grep -Fq 'mobile-subdomain.webmanifest?v=20261018-mobile-v2' /tmp/mobile-subdomain.html; then
               mobile_success=1
               break
             fi
@@ -311,13 +311,18 @@ jobs:
             sleep 10
           done
           test "$mobile_success" = 1
-          curl --fail --silent --show-error --location --max-time 30 -o /tmp/mobile-subdomain-manifest.json "${mobile_base}/mobile-subdomain.webmanifest?v=20261018-mobile-v1&__smoke=${GITHUB_RUN_ID}"
+          curl --fail --silent --show-error --location --max-time 30 -o /tmp/mobile-subdomain-manifest.json "${mobile_base}/mobile-subdomain.webmanifest?v=20261018-mobile-v2&__smoke=${GITHUB_RUN_ID}"
           grep -Fq '"id": "/"' /tmp/mobile-subdomain-manifest.json
           grep -Fq '"start_url": "/"' /tmp/mobile-subdomain-manifest.json
           grep -Fq '"scope": "/"' /tmp/mobile-subdomain-manifest.json
           grep -Fq '"display": "standalone"' /tmp/mobile-subdomain-manifest.json
           curl --fail --silent --show-error --location --max-time 20 -o /tmp/mobile-icon.svg "${mobile_base}/mobile-icon.svg"
           grep -Fq '<svg' /tmp/mobile-icon.svg
+          curl --fail --silent --show-error --location --max-time 20 -o /tmp/mobile-icon-180.png "${mobile_base}/pwa/mobile-icon-180.png"
+          file /tmp/mobile-icon-180.png | grep -Fq 'PNG image data'
+          echo "Checking primary-domain mobile redirect code"
+          curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-main.html "https://darbandicommercial.ir/?__mobile_redirect_smoke=${GITHUB_RUN_ID}"
+          grep -Fq "mobile.darbandicommercial.ir" /tmp/customs-main.html
           echo "Dedicated mobile HTTPS, standalone manifest and icon are healthy."
 
           echo "Checking PWA legacy launch URL canonicalization"
