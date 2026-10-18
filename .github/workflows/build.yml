@@ -455,7 +455,7 @@ jobs:
                 manifestCheck.scope !== '/' ||
                 manifestCheck.start_url !== '/' ||
                 manifestCheck.display !== 'standalone' ||
-                !manifestCheck.icons.some((icon) => icon.src.includes('180x180') || icon.src.includes('apple-touch-icon-180.png')) ||
+                !manifestCheck.icons.some((icon) => icon.src.includes('180x180') || icon.src.includes('mobile-icon-180.png')) ||
                 manifestCheck.icons.some((icon) => icon.status !== 200)
               ) {
                 throw new Error(\`Canonical PWA manifest/icon validation failed: ${JSON.stringify(manifestCheck)}\`);
