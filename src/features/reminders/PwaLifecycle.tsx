@@ -38,12 +38,7 @@ export const PwaLifecycle: React.FC = () => {
       return false;
     }
   })();
-  const areaLabel =
-    pwaArea === 'chat'
-      ? 'چت سازمانی'
-      : pwaArea === 'reminders'
-        ? reminderEnglish ? 'Reminders' : 'یادآورها'
-        : 'Customs OS';
+  const areaLabel = 'Customs OS';
 
   useEffect(() => {
     // Intentionally do not mutate manifest href, Apple touch icon, app title, or theme per route.
@@ -169,7 +164,7 @@ export const PwaLifecycle: React.FC = () => {
       {installEvent && !standalone() && (
         <div dir="rtl" className="pwa-install-prompt fixed bottom-4 right-4 left-4 md:left-auto md:w-[380px] z-[500] rounded-2xl border app-border bg-[var(--surface)] p-4 shadow-2xl">
           <b>نصب {areaLabel}</b>
-          <p className="text-xs app-muted mt-1">برای دسترسی سریع، اجرای مستقیم {areaLabel} و اعلان‌های واقعی، آن را به صفحه اصلی اضافه کنید.</p>
+          <p className="text-xs app-muted mt-1">برای دسترسی سریع به همهٔ بخش‌ها و دریافت اعلان‌ها، برنامهٔ Customs OS را به صفحهٔ اصلی اضافه کنید.</p>
           <div className="flex gap-2 mt-3">
             <button onClick={() => void install()} className="min-h-11 flex-1 rounded-xl bg-[var(--primary)] text-white font-bold">نصب برنامه</button>
             <button onClick={() => setInstallEvent(null)} className="min-h-11 px-4 rounded-xl border app-border">بعداً</button>
