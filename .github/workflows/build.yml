@@ -373,7 +373,7 @@ jobs:
           for (const baseURL of [
             'https://darbandicommercial.ir',
           ]) {
-            test(`runtime boot: ${baseURL}`, async ({ page }) => {
+            test(`runtime boot: ${baseURL}`, async ({ page, browser }) => {
               const errors = [];
               const scriptResponses = [];
               page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
@@ -458,6 +458,61 @@ jobs:
               await expect(remindersPage.locator('#root')).not.toBeEmpty();
               await expect(remindersPage.locator('.app-sidebar')).toHaveCount(0);
               await expect(remindersPage.locator('.app-topbar')).toHaveCount(0);
+              await expect(remindersPage.locator('.app-mobilebar')).toHaveCount(1);
+              await expect(remindersPage.locator('.app-mobile-dock')).toHaveCount(1);
+              const phoneLayout = await remindersPage.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                mobileHeaderDisplay: getComputedStyle(document.querySelector('.app-mobilebar')).display,
+                mobileDockDisplay: getComputedStyle(document.querySelector('.app-mobile-dock')).display,
+                sidebarCount: document.querySelectorAll('.app-sidebar').length,
+                topbarCount: document.querySelectorAll('.app-topbar').length,
+              }));
+              if (
+                phoneLayout.viewportWidth !== 390 ||
+                phoneLayout.mobileHeaderDisplay === 'none' ||
+                phoneLayout.mobileDockDisplay === 'none' ||
+                phoneLayout.sidebarCount !== 0 ||
+                phoneLayout.topbarCount !== 0
+              ) {
+                throw new Error(`390px iPhone layout regression: ${JSON.stringify(phoneLayout)}`);
+              }
+
+              // Simulate a touch-first device whose reported viewport is unusually wide.
+              // The app must still present the compact shell rather than a desktop sidebar.
+              const touchContext = await browser.newContext({
+                viewport: { width: 1280, height: 900 },
+                isMobile: true,
+                hasTouch: true,
+              });
+              try {
+                const touchPage = await touchContext.newPage();
+                await touchPage.goto(baseURL + '/reminders/login?__touch_layout_smoke=' + encodeURIComponent(smokeToken), {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 30000,
+                });
+                await touchPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+                const touchLayout = await touchPage.evaluate(() => ({
+                  viewportWidth: window.innerWidth,
+                  coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+                  mobileHeaderDisplay: getComputedStyle(document.querySelector('.app-mobilebar')).display,
+                  mobileDockDisplay: getComputedStyle(document.querySelector('.app-mobile-dock')).display,
+                  sidebarCount: document.querySelectorAll('.app-sidebar').length,
+                  topbarCount: document.querySelectorAll('.app-topbar').length,
+                }));
+                if (
+                  touchLayout.viewportWidth < 1024 ||
+                  !touchLayout.coarsePointer ||
+                  touchLayout.mobileHeaderDisplay === 'none' ||
+                  touchLayout.mobileDockDisplay === 'none' ||
+                  touchLayout.sidebarCount !== 0 ||
+                  touchLayout.topbarCount !== 0
+                ) {
+                  throw new Error(`Wide touch-first layout regression: ${JSON.stringify(touchLayout)}`);
+                }
+                console.log('Touch-first layout retained at a wide viewport:', JSON.stringify(touchLayout));
+              } finally {
+                await touchContext.close();
+              }
 
               const manifestHref = await remindersPage.locator('link[rel="manifest"]').getAttribute('href');
               if (manifestHref !== '/manifest.webmanifest') {
