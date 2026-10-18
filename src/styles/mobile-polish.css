@@ -922,3 +922,12 @@
     bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
   }
 }
+
+.pwa-update-prompt {
+  position: fixed;
+  inset-inline: 12px;
+  bottom: 16px;
+  width: auto;
+  max-width: 520px;
+  margin-inline: auto;
+}
