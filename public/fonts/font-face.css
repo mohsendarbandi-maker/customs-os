@@ -1,0 +1,9 @@
+/* Vazirmatn, self-hosted from the official OFL-licensed upstream source.
+   Keep the variable font local to Customs OS: no third-party font request is made at runtime. */
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("./Vazirmatn-Variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
