@@ -17,8 +17,11 @@ export function formDraftKey(
   if (!userId || !formId) return '';
   // New keys are scoped by user + organization + form/entity. The namespace version
   // changes the key so old drafts are not accidentally restored into a different org.
-  const org = organizationId ? encodeURIComponent(organizationId) : 'legacy-org';
-  return `customs-os:form-draft:v2:${encodeURIComponent(userId)}:${org}:${encodeURIComponent(formId)}`;
+  if (!organizationId) {
+    // Preserve existing drafts for older call sites until they explicitly pass org scope.
+    return `customs-os:form-draft:v1:${encodeURIComponent(userId)}:${encodeURIComponent(formId)}`;
+  }
+  return `customs-os:form-draft:v2:${encodeURIComponent(userId)}:${encodeURIComponent(organizationId)}:${encodeURIComponent(formId)}`;
 }
 
 function readStoredDraft(key: string): unknown | null {
@@ -51,6 +54,8 @@ export function useAutosavedDraft<T>(
   const skipNextPersistRef = useRef(false);
   const timerRef = useRef<number | null>(null);
   const serialized = JSON.stringify(value);
+  const valueRef = useRef(value);
+  valueRef.current = value;
 
   const [status, setStatus] = useState<AutosavedDraftStatus>(key ? 'restoring' : 'idle');
   const [hasDraft, setHasDraft] = useState(() => readStoredDraft(key) !== null);
@@ -132,7 +137,7 @@ export function useAutosavedDraft<T>(
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
-      void writeDraftValue(key, value).then((saved) => {
+      void writeDraftValue(key, valueRef.current).then((saved) => {
         if (restoredKeyRef.current !== key) return;
         if (saved) {
           updateHasDraft(true);
@@ -152,7 +157,7 @@ export function useAutosavedDraft<T>(
         timerRef.current = null;
       }
     };
-  }, [key, serialized, value, delayMs, updateStatus, updateHasDraft]);
+  }, [key, serialized, delayMs, updateStatus, updateHasDraft]);
 
   const saveDraftNow = useCallback(() => {
     if (!key) return false;
