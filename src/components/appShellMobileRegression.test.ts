@@ -9,12 +9,19 @@ const reminders = read('src/features/reminders/RemindersPage.tsx');
 
 describe('single mobile shell navigation regressions', () => {
   it('mounts the sidebar only at the desktop breakpoint and omits mobile hamburger markup', () => {
-    expect(shell).toContain("window.matchMedia('(min-width: 1024px)')");
+    expect(shell).toContain("window.matchMedia('(min-width: 1024px) and (pointer: fine)')");
     expect(shell).toContain('{isDesktop && (');
     expect(shell).not.toContain('mobile-menu-trigger');
     expect(shell).not.toContain('customs-desktop-menu');
     expect(shell).not.toContain('className={`app-sidebar hidden md:flex');
     expect(shell).toContain('{isDesktop && <header className="app-topbar">');
+  });
+
+  it('keeps touch-first navigation when a mobile browser reports a wide viewport', () => {
+    expect(shell).toContain("(min-width: 1024px) and (pointer: fine)");
+    expect(mobileCss).toContain("@media (max-width: 1023px), (pointer: coarse)");
+    expect(shell).toContain("{isDesktop && (");
+    expect(shell).toContain("{!isDesktop && <header className=\"app-mobilebar\"");
   });
 
   it('provides exactly five primary mobile tabs and a three-column More sheet', () => {
