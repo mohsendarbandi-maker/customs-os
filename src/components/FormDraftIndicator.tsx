@@ -1,6 +1,7 @@
 import React from 'react';
 import { CheckCircle2, Loader2, Save, ShieldCheck } from 'lucide-react';
 import type { AutosavedDraftStatus } from '../hooks/useAutosavedDraft';
+import { Badge, Button, type BadgeTone } from './ui';
 
 interface FormDraftIndicatorProps {
   status: AutosavedDraftStatus;
@@ -16,25 +17,34 @@ export const FormDraftIndicator: React.FC<FormDraftIndicatorProps> = ({ status, 
         ? 'پیش‌نویس قبلی بازیابی شد'
         : status === 'error'
           ? 'ذخیره خودکار ناموفق بود'
-          : 'ذخیره خودکار فعال است';
+          : status === 'restoring'
+            ? 'در حال بازیابی پیش‌نویس…'
+            : 'ذخیره خودکار فعال است';
+
+  const tone: BadgeTone =
+    status === 'saved' || status === 'restored' ? 'success' :
+    status === 'saving' || status === 'restoring' ? 'warning' :
+    status === 'error' ? 'danger' : 'neutral';
+
+  const icon = status === 'saving' || status === 'restoring'
+    ? <Loader2 size={14} className="ds-spin" />
+    : status === 'saved' || status === 'restored'
+      ? <CheckCircle2 size={14} />
+      : <ShieldCheck size={14} />;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs app-muted" role="status" aria-live="polite">
-      {status === 'saving'
-        ? <Loader2 size={14} className="animate-spin" />
-        : status === 'saved' || status === 'restored'
-          ? <CheckCircle2 size={14} className="text-emerald-500" />
-          : <ShieldCheck size={14} />}
-      <span>{label}</span>
-      <button
+    <div className="flex flex-wrap items-center gap-2" role="status" aria-live="polite">
+      <Badge tone={tone} icon={icon}>{label}</Badge>
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         disabled={status === 'restoring'}
         onClick={() => { onSave(); }}
-        className="inline-flex items-center gap-1 rounded-lg border app-border px-2.5 py-1.5 font-bold text-[var(--text)] hover:bg-[var(--surface-2)] disabled:opacity-50"
+        startIcon={<Save size={14} />}
       >
-        <Save size={13} />
         ذخیره پیش‌نویس
-      </button>
+      </Button>
       <span className="sr-only">ذخیره موقت فقط برای همین حساب و همین دستگاه است.</span>
     </div>
   );
