@@ -298,12 +298,12 @@ jobs:
               mobile_status="$(curl --silent --show-error --max-time 20 -D /tmp/mobile.headers -o /tmp/mobile.html -w '%{http_code}' "https://mobile.darbandicommercial.ir/?__mobile_smoke=${GITHUB_RUN_ID}&attempt=${attempt}")"
               mobile_location="$(grep -i '^location:' /tmp/mobile.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
               echo "Dedicated mobile check: attempt=${attempt}, status=${mobile_status}, location=${mobile_location}"
-              if [ "$mobile_status" = "200" ] && [ -z "$mobile_location" ] && grep -Fq '<div id="root">' /tmp/mobile.html && grep -Fq '/src/main.tsx' /tmp/mobile.html; then
+              if [ "$mobile_status" = "200" ] && [ -z "$mobile_location" ] && grep -Fq '<div id="root">' /tmp/mobile.html && grep -Eq 'src="/assets/[^" ]+\.js' /tmp/mobile.html; then
                 break
               fi
               sleep 3
             done
-            if [ "$mobile_status" != "200" ] || [ -n "$mobile_location" ] || ! grep -Fq '<div id="root">' /tmp/mobile.html || ! grep -Fq '/src/main.tsx' /tmp/mobile.html; then
+            if [ "$mobile_status" != "200" ] || [ -n "$mobile_location" ] || ! grep -Fq '<div id="root">' /tmp/mobile.html || ! grep -Eq 'src="/assets/[^" ]+\.js' /tmp/mobile.html; then
               echo "::error::Dedicated mobile host did not serve the app shell directly: HTTP ${mobile_status}, Location=${mobile_location}"
               exit 1
             fi
