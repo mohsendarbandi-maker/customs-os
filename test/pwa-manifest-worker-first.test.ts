@@ -27,10 +27,19 @@ describe('PWA manifest requests pass through the canonical Worker', () => {
     }
   });
 
-  it('keeps the permanent canonical redirects in Worker code', () => {
+  it('keeps the permanent canonical redirects for legacy chat/reminders aliases', () => {
     expect(worker).toContain("if (/\\.webmanifest$/i.test(canonical.pathname)) canonical.pathname = '/manifest.webmanifest'");
     expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
     expect(worker).toContain('status: 301');
+    expect(worker).toContain("'chat.darbandicommercial.ir'");
+    expect(worker).toContain("'reminders.darbandicommercial.ir'");
+  });
+
+  it('serves the dedicated mobile hostname without canonical redirecting away', () => {
+    expect(worker).toContain("'mobile.darbandicommercial.ir'");
+    expect(worker).toContain('dedicated mobile-first entry point');
+    const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
+    expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
   });
 
   it('does not abort before diagnostics when a response lacks a Location header', () => {
