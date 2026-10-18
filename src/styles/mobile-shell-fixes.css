@@ -1,0 +1,478 @@
+/* iOS mobile shell correction.
+   Root cause: older md (768px) Tailwind classes and later min-width:768 CSS overrides
+   contradicted each other, while the dock only existed below 768px. Use one 1024px
+   layout boundary and reserve the Home Indicator area explicitly. */
+:root {
+  --mobile-header-height: 56px;
+  --mobile-tabbar-height: 72px;
+}
+
+@media (max-width: 1023px) {
+  html, body, #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100%;
+    overflow-x: clip !important;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body { padding-bottom: 0 !important; }
+  #root > .app-shell,
+  .app-shell {
+    box-sizing: border-box;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    padding-bottom: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Do not depend on CSS visibility to manage a desktop rail on a phone/tablet. */
+  .app-sidebar { display: none !important; }
+  .app-main,
+  .app-main.sidebar-compact {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+  .app-topbar { display: none !important; }
+
+  /* 56px content header + safe-area top, not 64–68px plus extra padding. */
+  .app-mobilebar {
+    position: relative !important;
+    inset: auto !important;
+    z-index: 90 !important;
+    display: grid !important;
+    flex: 0 0 calc(var(--mobile-header-height) + env(safe-area-inset-top)) !important;
+    grid-template-columns: minmax(0, 1fr) 40px !important;
+    align-items: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    height: calc(var(--mobile-header-height) + env(safe-area-inset-top)) !important;
+    min-height: calc(var(--mobile-header-height) + env(safe-area-inset-top)) !important;
+    max-height: calc(var(--mobile-header-height) + env(safe-area-inset-top)) !important;
+    padding: env(safe-area-inset-top) 12px 0 !important;
+    border-radius: 0 !important;
+    box-sizing: border-box !important;
+    backdrop-filter: blur(18px) saturate(1.25);
+    -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  }
+  .app-mobile-title {
+    display: flex !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: var(--mobile-header-height) !important;
+    min-height: 40px !important;
+    max-height: var(--mobile-header-height) !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    text-align: start !important;
+  }
+  .app-mobile-title .customs-logo { width: 28px !important; height: 28px !important; flex: 0 0 28px !important; }
+  .app-mobile-title .customs-logo__wordmark { display: none !important; }
+  .mobile-current-page { display: flex !important; min-width: 0 !important; }
+  .mobile-current-page__eyebrow { display: none !important; }
+  .mobile-current-page__title {
+    display: block !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 16px !important;
+    line-height: 1.25 !important;
+    letter-spacing: 0 !important;
+  }
+  .app-mobilebar .icon-btn,
+  .app-mobilebar .mobile-search-trigger {
+    display: grid !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    flex: 0 0 40px !important;
+    padding: 0 !important;
+    place-items: center !important;
+    border-radius: 12px !important;
+  }
+  .mobile-menu-trigger,
+  .customs-desktop-menu { display: none !important; }
+
+  /* Main content owns its scroll; page width cannot be increased by RTL insets. */
+  .app-content {
+    display: block !important;
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 12px 12px calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    overflow-x: clip !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .app-content > .future-route-stage,
+  .app-content > div,
+  .app-content section,
+  .app-content article,
+  .app-content [class*="grid-cols-"],
+  .app-content [class*="flex"] { min-width: 0; }
+  .app-content h1,
+  .app-content h2,
+  .app-content h3,
+  .app-content h4,
+  .app-content p,
+  .app-content a,
+  .app-content button,
+  .app-content label {
+    overflow-wrap: anywhere;
+  }
+  .app-content input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .app-content textarea,
+  .app-content select { font-size: 16px !important; }
+
+  /* One fixed navigation only. Its measured height includes the iOS safe area. */
+  .app-mobile-dock {
+    position: fixed !important;
+    z-index: 500 !important;
+    inset-inline: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom)) !important;
+    border: 1px solid color-mix(in srgb, var(--border) 90%, transparent) !important;
+    border-bottom: 0 !important;
+    border-radius: 21px 21px 0 0 !important;
+    background: color-mix(in srgb, var(--surface) 94%, transparent) !important;
+    box-sizing: border-box !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+    backdrop-filter: blur(24px) saturate(1.3);
+    box-shadow: 0 -8px 28px rgba(8, 22, 42, .13) !important;
+  }
+  .app-mobile-dock button {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    max-height: 60px !important;
+    padding: 4px 2px !important;
+    border: 0 !important;
+    border-radius: 14px !important;
+    background: transparent !important;
+    color: var(--text-muted) !important;
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+    font-weight: 800 !important;
+    white-space: nowrap !important;
+  }
+  .app-mobile-dock button span {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .app-mobile-dock button svg { width: 21px; height: 21px; flex: 0 0 auto; }
+  .app-mobile-dock button.is-active {
+    color: var(--primary) !important;
+    background: color-mix(in srgb, var(--primary) 12%, var(--surface)) !important;
+  }
+
+  /* More is a bottom sheet, not a partly translated side drawer. */
+  .mobile-more-scrim {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1000 !important;
+    background: rgba(3, 12, 28, .56) !important;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  }
+  .mobile-more-sheet,
+  .app-mobile-drawer.mobile-more-sheet {
+    position: fixed !important;
+    z-index: 1001 !important;
+    inset-inline: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    max-height: min(82dvh, 700px) !important;
+    min-height: 0 !important;
+    padding: 0 0 env(safe-area-inset-bottom) !important;
+    overflow: hidden !important;
+    border: 1px solid var(--border) !important;
+    border-bottom: 0 !important;
+    border-radius: 26px 26px 0 0 !important;
+    background: var(--surface) !important;
+    box-shadow: 0 -20px 60px rgba(0,0,0,.22) !important;
+    animation: mobileMoreSheetIn .22s cubic-bezier(.2,.8,.2,1) both !important;
+  }
+  .mobile-more-sheet .mobile-drawer-header {
+    flex: 0 0 auto !important;
+    padding: 14px 14px 10px !important;
+    border-radius: 26px 26px 0 0 !important;
+    background: var(--surface) !important;
+  }
+  .mobile-more-user-mark {
+    display: grid;
+    place-items: center;
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    border-radius: 13px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 900;
+  }
+  .mobile-more-grid {
+    display: grid !important;
+    flex: 1 1 auto !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    align-content: start !important;
+    gap: 8px !important;
+    min-height: 0 !important;
+    padding: 10px 12px calc(16px + env(safe-area-inset-bottom)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .mobile-more-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 82px !important;
+    padding: 9px 4px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    background: var(--surface-2) !important;
+    color: var(--text) !important;
+    text-align: center !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+  }
+  .mobile-more-icon {
+    display: grid !important;
+    place-items: center !important;
+    width: 36px !important;
+    height: 36px !important;
+    flex: 0 0 36px !important;
+    border-radius: 12px !important;
+    background: color-mix(in srgb, var(--primary) 12%, var(--surface)) !important;
+    color: var(--primary) !important;
+  }
+  .mobile-more-label {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    line-height: 1.3 !important;
+  }
+  .mobile-more-item.active { border-color: var(--primary) !important; background: color-mix(in srgb, var(--primary) 8%, var(--surface-2)) !important; }
+  .mobile-more-item.is-danger .mobile-more-icon { color: #c24141 !important; background: rgba(194,65,65,.10) !important; }
+  .mobile-search-wrap { margin-top: 10px !important; }
+  .mobile-search-input { min-height: 44px !important; height: 44px !important; font-size: 16px !important; }
+
+  /* Move the floating AI control above the tab bar; it must never cover a tab. */
+  #root .ai-launcher {
+    bottom: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    inset-inline-end: 12px !important;
+    z-index: 490 !important;
+  }
+  #root .ai-chat-panel {
+    bottom: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    max-height: calc(100dvh - var(--mobile-tabbar-height) - env(safe-area-inset-bottom) - env(safe-area-inset-top) - 24px) !important;
+    z-index: 490 !important;
+  }
+
+  /* Chat is edge-to-edge: hide the global tabs while a conversation is open or the keyboard is active. */
+  .app-shell.is-chat-route { padding-bottom: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom)) !important; }
+  .app-shell.is-chat-route .app-main { min-height: 0 !important; }
+  .app-content:has(.chat-standalone) {
+    height: 100% !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  .app-content:has(.chat-standalone) > .future-route-stage { height: 100% !important; min-height: 0 !important; overflow: hidden !important; }
+  .chat-standalone {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+  .app-shell.is-chat-route:has(.chat-standalone[data-chat-selected="true"]) { padding-bottom: 0 !important; }
+  .app-shell.is-chat-route:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock,
+  body:has(.chat-standalone input:focus, .chat-standalone textarea:focus, .chat-standalone [contenteditable="true"]:focus) .app-mobile-dock {
+    display: none !important;
+  }
+
+  /* Reminders keeps its in-page section controls in flow; only the app-wide dock stays fixed. */
+  .app-shell.is-reminders-route .app-main { min-height: 0 !important; }
+  .app-content:has(.reminders-app-standalone) {
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  .app-content:has(.reminders-app-standalone) > .future-route-stage { height: 100% !important; min-height: 0 !important; }
+  .reminders-app-standalone {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  .reminders-app-standalone > section { height: 100% !important; min-height: 0 !important; }
+  .reminders-app-standalone .reminders-mobile-nav {
+    position: relative !important;
+    inset: auto !important;
+    bottom: auto !important;
+    z-index: auto !important;
+    flex: 0 0 auto !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    width: 100% !important;
+    margin: 6px 0 0 !important;
+    border-radius: 14px !important;
+    box-shadow: none !important;
+    padding-bottom: 6px !important;
+  }
+  .reminders-app-standalone .reminders-hub-screen {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: 1 1 auto !important;
+  }
+
+  /* Stats are compact two-column cards with one-line labels. */
+  .customs-home .customs-stat-line {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+  }
+  .customs-home .customs-stat-divider { display: none !important; }
+  .customs-home .customs-stat {
+    display: grid !important;
+    grid-template-columns: 24px minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    align-items: center !important;
+    gap: 5px 7px !important;
+    min-width: 0 !important;
+    padding: 12px 9px !important;
+    border-bottom: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+  }
+  .customs-home .customs-stat:nth-of-type(odd) { border-inline-start: 1px solid var(--border) !important; }
+  .customs-home .customs-stat > svg { grid-column: 1 !important; grid-row: 1 / span 2 !important; width: 18px !important; height: 18px !important; }
+  .customs-home .customs-stat > span {
+    display: block !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+  }
+  .customs-home .customs-stat > strong {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    min-width: 0 !important;
+    font-size: clamp(21px, 5.5vw, 27px) !important;
+    line-height: 1.05 !important;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap !important;
+  }
+  .customs-home header > div:first-child > div > div:first-child {
+    letter-spacing: .035em !important;
+    font-size: 9px !important;
+    line-height: 1.25 !important;
+    white-space: nowrap !important;
+    color: var(--text-muted) !important;
+  }
+  .customs-home header { min-width: 0 !important; }
+  .customs-home header > div:first-child { min-width: 0 !important; }
+  .customs-home header h1 { overflow-wrap: normal !important; }
+
+  @media (max-width: 430px) {
+    .app-content { padding-inline: 10px !important; }
+    .customs-home header > div:first-child > div:first-child { display: none !important; }
+    .customs-home .customs-stat { padding-inline: 7px !important; gap: 4px 6px !important; }
+    .customs-home .customs-stat > span { font-size: 10px !important; }
+  }
+  @media (max-width: 380px) {
+    .app-mobile-dock { padding-inline: 5px !important; gap: 2px !important; }
+    .app-mobile-dock button { font-size: 9px !important; }
+    .mobile-more-grid { gap: 6px !important; padding-inline: 9px !important; }
+    .mobile-more-item { min-height: 78px !important; font-size: 11px !important; }
+  }
+}
+
+/* Restore a real rail only at desktop width. This overrides old min-width:768px rules
+   that hid the rail while still applying desktop layout assumptions. */
+@media (min-width: 1024px) {
+  .app-shell {
+    display: block !important;
+    width: 100% !important;
+    min-height: 100dvh !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: 0 !important;
+  }
+  .app-sidebar { display: flex !important; }
+  .app-main { margin-right: 276px !important; width: auto !important; min-height: 100dvh !important; }
+  .app-main.sidebar-compact { margin-right: 82px !important; }
+  .app-mobilebar, .app-mobile-dock { display: none !important; }
+  .app-topbar { display: block !important; }
+}
+
+/* Consistent reduced-motion behavior for the newly unified shell. */
+@keyframes mobileMoreSheetIn {
+  from { opacity: .8; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-more-sheet { animation: none !important; }
+}
