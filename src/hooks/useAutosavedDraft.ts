@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { readDraftValue, removeDraftValue, writeDraftValue } from '../lib/draftStorage';
 
 export type AutosavedDraftStatus =
   | 'idle'
@@ -8,9 +9,16 @@ export type AutosavedDraftStatus =
   | 'saved'
   | 'error';
 
-export function formDraftKey(userId: string | null | undefined, formId: string): string {
+export function formDraftKey(
+  userId: string | null | undefined,
+  formId: string,
+  organizationId?: string | null,
+): string {
   if (!userId || !formId) return '';
-  return `customs-os:form-draft:v1:${encodeURIComponent(userId)}:${encodeURIComponent(formId)}`;
+  // New keys are scoped by user + organization + form/entity. The namespace version
+  // changes the key so old drafts are not accidentally restored into a different org.
+  const org = organizationId ? encodeURIComponent(organizationId) : 'legacy-org';
+  return `customs-os:form-draft:v2:${encodeURIComponent(userId)}:${org}:${encodeURIComponent(formId)}`;
 }
 
 function readStoredDraft(key: string): unknown | null {
@@ -26,9 +34,9 @@ function readStoredDraft(key: string): unknown | null {
 }
 
 /**
- * Saves serializable form values to a per-user local draft. This is deliberately
- * separate from the database submit action: background auth/session checks must
- * never erase work that has not yet been submitted.
+ * Saves serializable form values to a per-user/per-org local draft in localStorage
+ * and IndexedDB. It is deliberately separate from database submit actions: a
+ * background auth/session check must never erase unsubmitted user work.
  */
 export function useAutosavedDraft<T>(
   key: string,
@@ -39,6 +47,7 @@ export function useAutosavedDraft<T>(
   const setValueRef = useRef(setValue);
   setValueRef.current = setValue;
   const restoredKeyRef = useRef('');
+  const restorePendingRef = useRef(false);
   const skipNextPersistRef = useRef(false);
   const timerRef = useRef<number | null>(null);
   const serialized = JSON.stringify(value);
@@ -57,33 +66,63 @@ export function useAutosavedDraft<T>(
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     if (!key) {
       restoredKeyRef.current = '';
+      restorePendingRef.current = false;
       skipNextPersistRef.current = false;
       updateStatus('idle');
       updateHasDraft(false);
-      return;
+      return undefined;
     }
 
     restoredKeyRef.current = key;
-    skipNextPersistRef.current = true;
+    restorePendingRef.current = true;
+    skipNextPersistRef.current = false;
+    updateStatus('restoring');
 
-    const stored = readStoredDraft(key);
-    if (stored !== null) {
-      setValueRef.current(stored as T);
+    const localDraft = readStoredDraft(key);
+    if (localDraft !== null) {
+      // Restore synchronously for the common path, then mirror it to IndexedDB.
+      skipNextPersistRef.current = true;
+      setValueRef.current(localDraft as T);
       updateHasDraft(true);
       updateStatus('restored');
+      restorePendingRef.current = false;
+      void readDraftValue(key);
     } else {
-      updateHasDraft(false);
-      updateStatus('idle');
+      // Do not persist the blank initial form before the asynchronous IndexedDB lookup
+      // finishes; that race used to overwrite the only recoverable copy.
+      void readDraftValue(key).then((stored) => {
+        if (cancelled) return;
+        if (stored !== null) {
+          skipNextPersistRef.current = true;
+          setValueRef.current(stored as T);
+          updateHasDraft(true);
+          updateStatus('restored');
+        } else {
+          updateHasDraft(false);
+          updateStatus('idle');
+        }
+      }).catch((error: unknown) => {
+        if (cancelled) return;
+        console.warn('[FormDraft] Failed to restore IndexedDB draft:', error);
+        updateStatus('error');
+      }).finally(() => {
+        if (!cancelled) restorePendingRef.current = false;
+      });
     }
+
+    return () => {
+      cancelled = true;
+      restorePendingRef.current = false;
+    };
   }, [key, updateStatus, updateHasDraft]);
 
   useEffect(() => {
-    if (!key || restoredKeyRef.current !== key) return;
+    if (!key || restoredKeyRef.current !== key || restorePendingRef.current) return;
 
-    // Do not overwrite the draft with the form's blank initial state before
-    // the restoration state update has been applied.
+    // Do not overwrite the draft with a blank initial value before restoration.
     if (skipNextPersistRef.current) {
       skipNextPersistRef.current = false;
       return;
@@ -93,14 +132,18 @@ export function useAutosavedDraft<T>(
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
-      try {
-        localStorage.setItem(key, serialized);
-        updateHasDraft(true);
-        updateStatus('saved');
-      } catch (error) {
-        console.warn('[FormDraft] Local draft could not be saved:', error);
-        updateStatus('error');
-      }
+      void writeDraftValue(key, value).then((saved) => {
+        if (restoredKeyRef.current !== key) return;
+        if (saved) {
+          updateHasDraft(true);
+          updateStatus('saved');
+        } else {
+          updateStatus('error');
+        }
+      }).catch((error: unknown) => {
+        console.warn('[FormDraft] Auto-save failed:', error);
+        if (restoredKeyRef.current === key) updateStatus('error');
+      });
     }, delayMs);
 
     return () => {
@@ -109,7 +152,7 @@ export function useAutosavedDraft<T>(
         timerRef.current = null;
       }
     };
-  }, [key, serialized, delayMs, updateStatus, updateHasDraft]);
+  }, [key, serialized, value, delayMs, updateStatus, updateHasDraft]);
 
   const saveDraftNow = useCallback(() => {
     if (!key) return false;
@@ -117,17 +160,35 @@ export function useAutosavedDraft<T>(
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+
+    // Keep the synchronous confirmation used by existing form controls, while
+    // IndexedDB persistence completes independently as a second durable copy.
     try {
       localStorage.setItem(key, serialized);
       updateHasDraft(true);
-      updateStatus('saved');
+      updateStatus('saving');
+      void writeDraftValue(key, value).then((saved) => {
+        if (restoredKeyRef.current !== key) return;
+        updateStatus(saved ? 'saved' : 'error');
+      }).catch((error: unknown) => {
+        console.warn('[FormDraft] Manual draft save failed:', error);
+        if (restoredKeyRef.current === key) updateStatus('error');
+      });
       return true;
     } catch (error) {
-      console.warn('[FormDraft] Local draft could not be saved:', error);
-      updateStatus('error');
+      console.warn('[FormDraft] localStorage blocked; trying IndexedDB:', error);
+      updateStatus('saving');
+      void writeDraftValue(key, value).then((saved) => {
+        if (restoredKeyRef.current !== key) return;
+        updateHasDraft(saved);
+        updateStatus(saved ? 'saved' : 'error');
+      }).catch((saveError: unknown) => {
+        console.warn('[FormDraft] Manual draft save failed:', saveError);
+        if (restoredKeyRef.current === key) updateStatus('error');
+      });
       return false;
     }
-  }, [key, serialized, updateStatus, updateHasDraft]);
+  }, [key, serialized, value, updateStatus, updateHasDraft]);
 
   const clearDraft = useCallback((skipNextValueWrite = false, nextValue?: T) => {
     if (!key) return;
@@ -135,16 +196,19 @@ export function useAutosavedDraft<T>(
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    try {
-      localStorage.removeItem(key);
+    // Remove both stores; do not allow the IndexedDB copy to resurrect a submitted draft.
+    void removeDraftValue(key).then((cleared) => {
+      if (restoredKeyRef.current !== key) return;
       updateHasDraft(false);
-      updateStatus('idle');
-      // Suppress only a programmatic reset/hydration state change, never the next real user edit.
-      skipNextPersistRef.current = skipNextValueWrite && nextValue !== undefined && JSON.stringify(nextValue) !== serialized;
-    } catch (error) {
-      console.warn('[FormDraft] Local draft could not be cleared:', error);
-      updateStatus('error');
-    }
+      updateStatus(cleared ? 'idle' : 'error');
+    }).catch((error: unknown) => {
+      console.warn('[FormDraft] Draft removal failed:', error);
+      if (restoredKeyRef.current === key) updateStatus('error');
+    });
+    skipNextPersistRef.current =
+      skipNextValueWrite && nextValue !== undefined && JSON.stringify(nextValue) !== serialized;
+    updateHasDraft(false);
+    updateStatus('idle');
   }, [key, serialized, updateStatus, updateHasDraft]);
 
   return { status, hasDraft, statusRef, hasDraftRef, saveDraftNow, clearDraft };
