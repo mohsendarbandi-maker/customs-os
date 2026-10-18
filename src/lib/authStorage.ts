@@ -1,5 +1,3 @@
-import type { SupportedStorage } from '@supabase/supabase-js';
-
 const DB_NAME = 'customs-os-auth-fallback';
 const STORE_NAME = 'auth_values';
 const DB_VERSION = 1;
@@ -95,7 +93,7 @@ const removeFallback = async (key: string): Promise<void> => {
   }
 };
 
-export const authStorage: SupportedStorage = {
+export const authStorage = {
   getItem: async (key) => {
     if (!primaryStorageUnavailable && typeof window !== 'undefined') {
       try {
