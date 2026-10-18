@@ -334,17 +334,43 @@ export default {
       headers.delete('origin');
       headers.delete('referer');
       try {
-        const upstream = await fetch(new Request(target.toString(), {
-          method: request.method,
-          headers,
-          body: request.method === 'GET' ? undefined : request.body,
-          redirect: 'manual',
-        }));
+        let currentTarget = target;
+        let upstream: Response | null = null;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          upstream = await fetch(new Request(currentTarget.toString(), {
+            method: request.method,
+            headers,
+            body: request.method === 'GET' ? undefined : request.body,
+            redirect: 'manual',
+          }));
+          const location = upstream.headers.get('Location');
+          const isRedirect = [301, 302, 303, 307, 308].includes(upstream.status);
+          // Only GET downloads may follow redirects, and every hop is revalidated.
+          if (request.method !== 'GET' || !isRedirect || !location) break;
+          if (attempt === 3) return json({ error: 'Provider redirect limit exceeded' }, 502);
+          let next: URL;
+          try { next = new URL(location, currentTarget); }
+          catch { return json({ error: 'Invalid provider redirect' }, 502); }
+          const nextHost = next.hostname.toLowerCase();
+          const nextAllowed =
+            nextHost === 'api.telegram.org' ||
+            nextHost === 'tapi.bale.ai' ||
+            nextHost === 'graph.facebook.com' ||
+            nextHost.endsWith('.fbsbx.com') ||
+            nextHost.endsWith('.fbcdn.net') ||
+            nextHost.endsWith('.whatsapp.net');
+          if (next.protocol !== 'https:' || next.username || next.password || next.port || next.hash || !nextAllowed) {
+            return json({ error: 'Provider redirect host is not allowed' }, 403);
+          }
+          currentTarget = next;
+        }
+        if (!upstream) return json({ error: 'Provider request failed' }, 502);
         const responseHeaders = new Headers(upstream.headers);
         responseHeaders.set('Cache-Control', 'no-store, private');
         responseHeaders.set('X-Customs-OS-Proxy', 'cloudflare-messenger-egress');
         responseHeaders.delete('set-cookie');
         responseHeaders.delete('content-length');
+        responseHeaders.delete('location');
         return new Response(upstream.body, {
           status: upstream.status,
           statusText: upstream.statusText,
