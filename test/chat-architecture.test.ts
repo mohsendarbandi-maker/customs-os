@@ -19,7 +19,7 @@ describe('chat architecture invariants',()=>{
 
   it('marks visible messages read within the active conversation and exposes receipt failures',()=>{
     const page=read('src/features/chat/ChatPage.tsx');
-    expect(page).toContain("area.querySelectorAll<HTMLElement>('[data-chat-message=\\\"true\\\"]')");
+    expect(page).toContain(`area.querySelectorAll<HTMLElement>('[data-chat-message="true"]')`);
     expect(page).toContain('rect.top<bounds.bottom&&rect.bottom>bounds.top');
     expect(page).toContain('readIndexRef.current=-1;setError(err(error))');
     expect(page).toContain("document.addEventListener('visibilitychange',onVisibilityChange)");

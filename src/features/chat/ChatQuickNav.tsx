@@ -1,6 +1,5 @@
-import React,{useState}from'react';
+import React,{useMemo,useState}from'react';
 import{MoreHorizontal,Phone,Plus,UserPlus,Users}from'lucide-react';
-import type{ChatConversation}from'./types';
 import{supabase}from'../../lib/supabase';
 import type{UserRole}from'../../context/AuthContext';
 
@@ -10,11 +9,8 @@ type Person={id:string;full_name:string;phone:string|null;role:string};
 
 type QuickNavProps={
  people:Person[];
- conversations:ChatConversation[];
  role:UserRole|null|undefined;
  onNewMessage:()=>void;
- selectedFolder:'all'|'groups'|'owners';
- onSelectFolder:(folder:'groups'|'owners')=>void;
  onOpenDirectory:(mode:ChatDirectoryMode)=>void;
  onOpenAi:()=>void;
  onOpenSettings:()=>void;
