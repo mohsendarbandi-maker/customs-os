@@ -296,6 +296,7 @@ export default {
       /^\/(?:auth|rest|storage|realtime|functions|graphql|api|webhooks)(?:\/|$)/i.test(url.pathname);
     if (isLegacyAppOrigin && ['GET', 'HEAD'].includes(request.method) && !isLegacyIntegrationRequest) {
       const canonical = new URL(url.toString());
+      canonical.protocol = 'https:';
       canonical.hostname = 'darbandicommercial.ir';
       canonical.port = '';
       if (canonical.pathname === '/') {
@@ -332,6 +333,9 @@ export default {
       legacyManifestPaths.has(url.pathname)
     ) {
       const canonical = new URL(url.toString());
+      canonical.protocol = 'https:';
+      canonical.hostname = 'darbandicommercial.ir';
+      canonical.port = '';
       canonical.pathname = '/manifest.webmanifest';
       return new Response(null, {
         status: 301,
@@ -351,6 +355,9 @@ export default {
       url.searchParams.get('source') === 'pwa'
     ) {
       const canonical = new URL(url.toString());
+      canonical.protocol = 'https:';
+      canonical.hostname = 'darbandicommercial.ir';
+      canonical.port = '';
       canonical.searchParams.delete('source');
       return new Response(null, {
         status: 301,
