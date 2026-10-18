@@ -385,19 +385,6 @@ export default {
         return json({ error: 'ارتباط امن با سرویس داده برقرار نشد.' }, 502);
       }
     }
-    if (request.method === 'GET' && url.pathname === '/' && url.searchParams.get('source') === 'pwa') {
-      const chatUrl = new URL(request.url);
-      chatUrl.pathname = '/chat';
-      chatUrl.search = '';
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: chatUrl.toString(),
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
-          Pragma: 'no-cache',
-        },
-      });
-    }
     if (url.pathname === '/api/webrtc/ice') {
       if (request.method !== 'GET') {
         return request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : json({ error: 'Method not allowed' }, 405);
