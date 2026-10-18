@@ -283,14 +283,13 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Legacy app origins are permanent aliases, not separate applications.
-    // Redirect browser navigations/assets to the canonical origin. Keep inbound
-    // POST webhooks and API traffic working until external integrations are migrated.
+    // Chat and Reminders remain aliases of the unified app. The mobile hostname
+    // is intentionally NOT an alias: it is a dedicated mobile-first entry point
+    // sharing the same authenticated app and same-origin Cloudflare/Supabase proxy.
     const legacyHost = url.hostname.toLowerCase();
     const isLegacyAppOrigin = [
       'chat.darbandicommercial.ir',
       'reminders.darbandicommercial.ir',
-      'mobile.darbandicommercial.ir',
     ].includes(legacyHost);
     const isLegacyIntegrationRequest =
       /^\/(?:auth|rest|storage|realtime|functions|graphql|api|webhooks)(?:\/|$)/i.test(url.pathname);
