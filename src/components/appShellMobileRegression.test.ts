@@ -6,6 +6,24 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 const shell = read('src/components/AppShell.tsx');
 const mobileCss = read('src/styles/mobile-polish.css');
 const reminders = read('src/features/reminders/RemindersPage.tsx');
+const appSource = read('src/App.tsx');
+const mainSource = read('src/main.tsx');
+
+describe('safe stale-chunk recovery', () => {
+  it('does not automatically reload a page when a lazy route chunk fails', () => {
+    expect(appSource).not.toContain('__chunk_reload');
+    expect(appSource).not.toContain('window.location.replace(url.toString())');
+    expect(appSource).not.toContain('customs-os:chunk-retry:');
+    expect(mainSource).toContain('Never reload automatically here');
+    expect(mainSource).toContain('onClick={() => window.location.reload()}');
+  });
+
+  it('checks for a fresh worker without unregistering or clearing caches', () => {
+    expect(mainSource).toContain('registration.update()');
+    expect(mainSource).not.toContain('registration.unregister()');
+    expect(mainSource).not.toContain('caches.delete(');
+  });
+});
 
 describe('single mobile shell navigation regressions', () => {
   it('mounts the sidebar only at the desktop breakpoint and omits mobile hamburger markup', () => {
