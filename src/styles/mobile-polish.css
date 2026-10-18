@@ -835,7 +835,7 @@
   .shipment-status-toolbar { min-width: 0; }
   .shipment-status-search { position: relative !important; inset: auto !important; }
 }
-@media (min-width: 1024px) {
+@media (min-width: 1024px) and (pointer: fine) {
   .app-mobilebar, .app-mobile-dock, .app-more-scrim { display: none !important; }
   .app-sidebar {
     display: flex !important;
