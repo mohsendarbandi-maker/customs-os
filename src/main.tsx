@@ -4,6 +4,7 @@ import App from './App';
 import './index.css';
 import './responsive.css';
 import './styles/mobile-polish.css';
+import './styles/mobile-shell-fixes.css';
 import { startOfflineQueue } from './lib/offlineQueue';
 
 type BoundaryState = { hasError: boolean; message: string };
