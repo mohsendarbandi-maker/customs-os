@@ -130,6 +130,7 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  const voice=mediaKind==="voice"&&(c.platform!=="telegram"||mime==="audio/ogg"||mime==="audio/opus");
  const filename=cleanName(name).replace(/["\r\n]/g,"_");
  if(c.platform==="rubika"){
+  // Fail closed on media URLs outside the exact official Bot API host until the provider documents its upload host.
   const tokenValue=await accessToken(c),requested=await apiJson(botBase(c,tokenValue)+"requestSendFile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:voice?"Voice":"File"})});
   const uploadUrl=String(requested.data?.upload_url||requested.upload_url||"");let target:URL;try{target=new URL(uploadUrl);}catch{throw new Error("RUBIKA_UPLOAD_URL_INVALID");}
   if(target.protocol!=="https:"||target.hostname.toLowerCase()!=="botapi.rubika.ir"||target.username||target.password||target.port||target.hash)throw new Error("MEDIA_HOST_REJECTED");
