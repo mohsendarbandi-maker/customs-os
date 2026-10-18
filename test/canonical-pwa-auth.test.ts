@@ -17,6 +17,7 @@ const manifest = JSON.parse(read('public/manifest.webmanifest')) as {
 const worker = read('worker/index.ts');
 const pwaLifecycle = read('src/features/reminders/PwaLifecycle.tsx');
 const app = read('src/App.tsx');
+const mainEntry = read('src/main.tsx');
 const supabaseClient = read('src/lib/supabase.ts');
 const authContext = read('src/context/AuthContext.tsx');
 
@@ -74,6 +75,12 @@ describe('one canonical Customs OS PWA', () => {
     expect(pwaLifecycle).not.toContain("document.querySelector<HTMLMetaElement>('meta[name=\"theme-color\"]')");
     expect(app).not.toContain("host==='reminders.darbandicommercial.ir'");
     expect(app).not.toContain("host==='chat.darbandicommercial.ir'");
+  });
+
+  it('keeps the canonical PWA start URL on the home route', () => {
+    expect(mainEntry).not.toContain('normalizeLegacyPwaLaunch');
+    expect(mainEntry).not.toContain("searchParams.get('source') !== 'pwa'");
+    expect(mainEntry).toContain('ReactDOM.createRoot(rootElement).render(');
   });
 
   it('preserves Supabase auto-refresh and performs throttled recovery on visibility, focus and pageshow', () => {
