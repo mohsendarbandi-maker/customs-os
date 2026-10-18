@@ -85,6 +85,17 @@ describe('chat architecture invariants',()=>{
     expect(integration).toContain('conversationId:conversationId||null');
   });
 
+  it('requires routed messenger destinations to link to a canonical conversation',()=>{
+    const migration=read('supabase/migrations/20261018203000_messenger_routed_destination_requires_conversation.sql');
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    const integration=read('src/pages/MessengerIntegrationsPage.tsx');
+    expect(migration).toContain("purpose not in ('inbox','shipment_notifications','shipment')");
+    expect(migration).toContain('conversation_id is not null');
+    expect(gateway).toContain('["inbox","shipment_notifications","shipment"].includes(purpose)');
+    expect(integration).toContain('required={['+'"inbox","shipment_notifications","shipment"'+'].includes(purpose)}');
+    expect(integration).toContain('(["inbox","shipment_notifications","shipment"].includes(purpose)&&!conversationId)');
+  });
+
   it('does not deliver quarantined or unscanned chat attachments to external messengers',()=>{
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
     const scanner=read('supabase/functions/scan-chat-file/index.ts');
