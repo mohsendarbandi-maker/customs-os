@@ -1146,6 +1146,21 @@ body {
   .app-sidebar { display: flex !important; }
   .app-mobilebar, .app-mobile-dock, .app-more-scrim { display: none !important; }
 }
+/* iOS tap targets and input zoom: cover legacy route forms as well as ds-* controls. */
+@media (max-width: 1023px), (pointer: coarse) {
+  .app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .app-shell textarea,
+  .app-shell select {
+    max-width: 100%;
+    min-width: 0;
+    font-size: 16px !important;
+  }
+  .app-shell button,
+  .app-shell [role="button"],
+  .app-shell a[role="button"] {
+    touch-action: manipulation;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;
