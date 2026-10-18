@@ -461,11 +461,11 @@ jobs:
 
               const manifestHref = await remindersPage.locator('link[rel="manifest"]').getAttribute('href');
               if (manifestHref !== '/manifest.webmanifest') {
-                throw new Error(\`Reminders route must use the single canonical manifest: ${manifestHref || 'missing'}\`);
+                throw new Error(`Reminders route must use the single canonical manifest: ${manifestHref || 'missing'}`);
               }
               const manifestCheck = await remindersPage.evaluate(async (href) => {
                 const response = await fetch(href);
-                if (!response.ok) throw new Error(\`Canonical manifest HTTP ${response.status}\`);
+                if (!response.ok) throw new Error(`Canonical manifest HTTP ${response.status}`);
                 const manifest = await response.json();
                 const iconResults = await Promise.all((manifest.icons || []).map(async (icon) => {
                   const result = await fetch(icon.src);
@@ -482,7 +482,7 @@ jobs:
                 !manifestCheck.icons.some((icon) => icon.src.includes('180x180') || icon.src.includes('mobile-icon-180.png')) ||
                 manifestCheck.icons.some((icon) => icon.status !== 200)
               ) {
-                throw new Error(\`Canonical PWA manifest/icon validation failed: ${JSON.stringify(manifestCheck)}\`);
+                throw new Error(`Canonical PWA manifest/icon validation failed: ${JSON.stringify(manifestCheck)}`);
               }
               if (remindersErrors.length) throw new Error(remindersErrors.join('; '));
               console.log('Reminders internal route uses the canonical PWA manifest:', JSON.stringify(manifestCheck));
@@ -499,11 +499,11 @@ jobs:
                   aliasRedirectStatuses.push(response.status());
                 }
               });
-              remindersSubdomainPage.on('pageerror', (error) => subdomainErrors.push(\`pageerror: ${error.message}\`));
+              remindersSubdomainPage.on('pageerror', (error) => subdomainErrors.push(`pageerror: ${error.message}`));
               remindersSubdomainPage.on('requestfailed', (request) => {
                 const url = request.url();
                 if (url.includes('.js') || url.includes('.mjs')) {
-                  subdomainErrors.push(\`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}\`);
+                  subdomainErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
                 }
               });
               await remindersSubdomainPage.goto('https://reminders.darbandicommercial.ir/?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -517,7 +517,7 @@ jobs:
                 { timeout: 20000, message: 'Reminders alias did not open the internal reminders route' },
               ).toBe('/reminders/login');
               if (!aliasRedirectStatuses.includes(301)) {
-                throw new Error(\`Legacy reminders host did not emit HTTP 301: ${JSON.stringify(aliasRedirectStatuses)}\`);
+                throw new Error(`Legacy reminders host did not emit HTTP 301: ${JSON.stringify(aliasRedirectStatuses)}`);
               }
               await expect(remindersSubdomainPage).toHaveTitle(/یادآورها/);
               await expect(remindersSubdomainPage.locator('#root')).not.toBeEmpty();
@@ -525,7 +525,7 @@ jobs:
               await expect(remindersSubdomainPage.locator('.app-topbar')).toHaveCount(0);
               const aliasManifestHref = await remindersSubdomainPage.locator('link[rel="manifest"]').getAttribute('href');
               if (aliasManifestHref !== '/manifest.webmanifest') {
-                throw new Error(\`Legacy reminders redirect did not resolve to the one canonical manifest: ${aliasManifestHref || 'missing'}\`);
+                throw new Error(`Legacy reminders redirect did not resolve to the one canonical manifest: ${aliasManifestHref || 'missing'}`);
               }
               if (subdomainErrors.length) throw new Error(subdomainErrors.join('; '));
               console.log('Legacy reminders domain permanently redirects to canonical app.');
