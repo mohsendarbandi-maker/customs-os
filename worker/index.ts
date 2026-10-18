@@ -313,6 +313,7 @@ export default {
       const host = target.hostname.toLowerCase();
       const allowedHost =
         host === 'api.telegram.org' ||
+        host === 'botapi.rubika.ir' ||
         host === 'tapi.bale.ai' ||
         host === 'graph.facebook.com' ||
         host.endsWith('.fbsbx.com') ||
@@ -354,6 +355,7 @@ export default {
           const nextHost = next.hostname.toLowerCase();
           const nextAllowed =
             nextHost === 'api.telegram.org' ||
+            nextHost === 'botapi.rubika.ir' ||
             nextHost === 'tapi.bale.ai' ||
             nextHost === 'graph.facebook.com' ||
             nextHost.endsWith('.fbsbx.com') ||
