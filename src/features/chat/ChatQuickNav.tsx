@@ -1,5 +1,5 @@
-import React,{useMemo}from'react';
-import{Bot,Phone,Plus,Settings,UserPlus,UserRound,Users}from'lucide-react';
+import React,{useState}from'react';
+import{MoreHorizontal,Phone,Plus,UserPlus,Users}from'lucide-react';
 import type{ChatConversation}from'./types';
 import{supabase}from'../../lib/supabase';
 import type{UserRole}from'../../context/AuthContext';
@@ -20,21 +20,19 @@ type QuickNavProps={
  onOpenSettings:()=>void;
 };
 
-export const ChatQuickNav:React.FC<QuickNavProps>=({
- people,conversations,role,onNewMessage,selectedFolder,onSelectFolder,onOpenDirectory,onOpenAi,onOpenSettings,
-})=>{
- const groupCount=useMemo(()=>conversations.filter(c=>['group','company_channel','shared_company'].includes(c.type)&&!['owner_group','shipment_group'].includes(c.hierarchy_kind??'')).length,[conversations]);
- const ownerCount=useMemo(()=>conversations.filter(c=>c.hierarchy_kind==='owner_group').length,[conversations]);
+export const ChatQuickNav:React.FC<QuickNavProps>=({people,role,onNewMessage,onOpenDirectory,onOpenAi,onOpenSettings})=>{
+ const [moreOpen,setMoreOpen]=useState(false);
  const canManageDirectory=role!=='client';
-
- return <div className="chat-quick-nav" role="toolbar" aria-label="دسترسی سریع چت">
-  <button type="button" className="chat-quick-nav-item" onClick={onNewMessage} title="پیام جدید"><Plus size={16}/><span>جدید</span></button>
-  <button type="button" className={"chat-quick-nav-item "+(selectedFolder==='groups'?'is-active':'')} onClick={()=>onSelectFolder('groups')} title="گروه‌ها و کانال‌ها"><Users size={16}/><span>گروه‌ها</span>{groupCount>0&&<em>{groupCount}</em>}</button>
-  <button type="button" className={"chat-quick-nav-item "+(selectedFolder==='owners'?'is-active':'')} onClick={()=>onSelectFolder('owners')} title="صاحب کالاها"><UserRound size={16}/><span>صاحب کالا</span>{ownerCount>0&&<em>{ownerCount}</em>}</button>
-  <button type="button" className="chat-quick-nav-item" onClick={()=>onOpenDirectory('calls')} title="لیست تماس‌ها"><Phone size={16}/><span>تماس</span></button>
-  {canManageDirectory&&<button type="button" className="chat-quick-nav-item" onClick={()=>onOpenDirectory('members')} title="اعضای داخلی شرکت"><UserPlus size={16}/><span>اعضا</span>{people.length>0&&<em>{people.length}</em>}</button>}
-  <button type="button" className="chat-quick-nav-item" onClick={onOpenAi} title="هوش مصنوعی"><Bot size={16}/><span>AI</span></button>
-  <button type="button" className="chat-quick-nav-item" onClick={onOpenSettings} title="تنظیمات کاربر"><Settings size={16}/><span>من</span></button>
+ const act=(callback:()=>void)=>{callback();setMoreOpen(false);};
+ return <div className="chat-quick-nav relative" role="toolbar" aria-label="دسترسی سریع چت">
+  <button type="button" className="chat-quick-nav-item" onClick={onNewMessage} title="پیام جدید"><Plus size={16}/><span>پیام جدید</span></button>
+  <button type="button" className={"chat-quick-nav-item "+(moreOpen?'is-active':'')} onClick={()=>setMoreOpen(value=>!value)} aria-expanded={moreOpen} aria-label="گزینه‌های بیشتر چت"><MoreHorizontal size={17}/><span>بیشتر</span></button>
+  {moreOpen&&<div className="absolute top-full left-0 z-50 mt-2 min-w-48 rounded-2xl border app-border bg-[var(--surface)] p-2 shadow-xl" role="menu">
+   <button type="button" role="menuitem" className="w-full min-h-11 rounded-xl px-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5" onClick={()=>act(()=>onOpenDirectory('calls'))}><Phone size={16}/><span>تماس‌ها</span></button>
+   {canManageDirectory&&<button type="button" role="menuitem" className="w-full min-h-11 rounded-xl px-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5" onClick={()=>act(()=>onOpenDirectory('members'))}><UserPlus size={16}/><span>اعضای داخلی</span><span className="mr-auto text-xs app-muted">{people.length}</span></button>}
+   <button type="button" role="menuitem" className="w-full min-h-11 rounded-xl px-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5" onClick={()=>act(onOpenAi)}><Users size={16}/><span>دستیار هوش مصنوعی</span></button>
+   <button type="button" role="menuitem" className="w-full min-h-11 rounded-xl px-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5" onClick={()=>act(onOpenSettings)}><MoreHorizontal size={16}/><span>تنظیمات چت</span></button>
+  </div>}
  </div>;
 };
 

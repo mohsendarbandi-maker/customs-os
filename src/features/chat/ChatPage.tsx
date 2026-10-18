@@ -428,11 +428,31 @@ export const ChatPage:React.FC=()=>{
  const onScroll=()=>{const area=messageArea.current;if(!area)return;const distance=area.scrollHeight-area.scrollTop-area.clientHeight;nearBottomRef.current=distance<96;if(nearBottomRef.current)setNewMessageCount(0);if(area.scrollTop<180)void loadOlder()};
 
  const markVisibleRead=useCallback(()=>{
-  if(!selectedId||!user?.id)return;const items=[...document.querySelectorAll<HTMLElement>('[data-chat-message="true"]')];
+  const area=messageArea.current;
+  if(!selectedId||!user?.id||!area||document.visibilityState==='hidden')return;
+  const bounds=area.getBoundingClientRect();
+  if(bounds.width<=0||bounds.height<=0)return;
+  const items=[...area.querySelectorAll<HTMLElement>('[data-chat-message="true"]')];
   let highest=-1;
-  for(const item of items){const rect=item.getBoundingClientRect();if(rect.top<window.innerHeight&&rect.bottom>0){const index=Number(item.dataset.messageIndex);const message=messages[index];if(message&&message.sender_id!==user.id&&index>highest)highest=index}}
-  if(highest<=readIndexRef.current)return;const message=messages[highest];if(!message||message.id.startsWith('local-'))return;readIndexRef.current=highest;
-  if(readTimer.current!==null)window.clearTimeout(readTimer.current);readTimer.current=window.setTimeout(()=>{void markRead(selectedId,message.id).then(()=>refresh()).catch(()=>{})},250);
+  for(const item of items){
+   const rect=item.getBoundingClientRect();
+   if(rect.top<bounds.bottom&&rect.bottom>bounds.top&&rect.left<bounds.right&&rect.right>bounds.left){
+    const index=Number(item.dataset.messageIndex);
+    const message=Number.isInteger(index)?messages[index]:undefined;
+    if(message&&message.sender_id!==user.id&&index>highest)highest=index;
+   }
+  }
+  if(highest<0||highest<=readIndexRef.current)return;
+  const message=messages[highest],conversationAtSchedule=selectedId;
+  if(!message||message.id.startsWith('local-'))return;
+  readIndexRef.current=highest;
+  if(readTimer.current!==null)window.clearTimeout(readTimer.current);
+  readTimer.current=window.setTimeout(()=>{
+   readTimer.current=null;
+   void markRead(conversationAtSchedule,message.id)
+    .then(()=>{if(selectedIdRef.current===conversationAtSchedule)return refresh();})
+    .catch(error=>{if(selectedIdRef.current===conversationAtSchedule){readIndexRef.current=-1;setError(err(error));}});
+  },250);
  },[messages,refresh,selectedId,user?.id]);
 
  useEffect(()=>{
@@ -441,6 +461,8 @@ export const ChatPage:React.FC=()=>{
   const observer=new IntersectionObserver(()=>markVisibleRead(),{root:area,threshold:[0.6]});nodes.forEach(node=>observer.observe(node));void markVisibleRead();
   return()=>observer.disconnect();
  },[markVisibleRead,messages]);
+
+ useEffect(()=>{const onVisibilityChange=()=>{if(document.visibilityState==='visible')requestAnimationFrame(()=>markVisibleRead())};document.addEventListener('visibilitychange',onVisibilityChange);return()=>document.removeEventListener('visibilitychange',onVisibilityChange)},[markVisibleRead]);
 
  useEffect(()=>{
   if(!selectedId||loading||!pendingScrollMessage.current)return;
@@ -466,7 +488,7 @@ export const ChatPage:React.FC=()=>{
 
  const unread=useMemo(()=>conversations.reduce((n,c)=>n+Number(c.unread_count??0),0),[conversations]);
  const filteredPeople=useMemo(()=>{const q=normalizeFaText(personQuery).toLowerCase();return people.filter(person=>person.id!==user?.id&&(!q||normalizeFaText(person.full_name).toLowerCase().includes(q)||(person.phone??'').includes(q)))},[people,personQuery,user?.id]);
- const folderLabels:Record<ChatFolder,string>={all:'همه',coworkers:'همکاران',groups:'گروه‌ها',owners:'صاحب کالا',shipments:'محموله‌ها',unread:'خوانده‌نشده'};
+ const folderLabels:Partial<Record<ChatFolder,string>>={all:'همه',coworkers:'مستقیم',groups:'گروه‌ها',unread:'خوانده‌نشده'};
  const statusView=(m:ChatMessage)=>{
   if(m.delivery_status==='queued')return<Clock size={13} aria-label="در صف ارسال"/>;
   if(m.delivery_status==='sending')return<Loader2 size={13} className="animate-spin" aria-label="در حال ارسال"/>;
@@ -492,11 +514,8 @@ export const ChatPage:React.FC=()=>{
   <div className={selectedId?'hidden md:flex':'flex'} style={{height:selectedId?'0':'auto',minHeight:selectedId?'0':undefined}}>
    {!selectedId&&<ChatQuickNav
  people={people.filter(person=>person.id!==user?.id)}
- conversations={conversations}
- selectedFolder={folder==='groups'||folder==='owners'?folder:'all'}
  role={profile?.role}
  onNewMessage={()=>void openPeople('direct')}
- onSelectFolder={nextFolder=>setFolder(nextFolder)}
  onOpenDirectory={openDirectory}
  onOpenAi={()=>setError('پنل هوش مصنوعی در پایین صفحه باز است.')}
  onOpenSettings={()=>setSettingsOpen(true)}

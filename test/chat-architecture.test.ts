@@ -17,6 +17,14 @@ describe('chat architecture invariants',()=>{
     expect(page).not.toContain("setSelectedId(c.conversation_id)");
   });
 
+  it('marks visible messages read within the active conversation and exposes receipt failures',()=>{
+    const page=read('src/features/chat/ChatPage.tsx');
+    expect(page).toContain("area.querySelectorAll<HTMLElement>('[data-chat-message=\\\"true\\\"]')");
+    expect(page).toContain('rect.top<bounds.bottom&&rect.bottom>bounds.top');
+    expect(page).toContain('readIndexRef.current=-1;setError(err(error))');
+    expect(page).toContain("document.addEventListener('visibilitychange',onVisibilityChange)");
+  });
+
   it('uses one shared conversation dataset for hierarchy rendering',()=>{
     const hierarchy=read('src/features/chat/ChatHierarchyPanel.tsx');
     expect(hierarchy).toContain('conversations:ChatConversation[]');
