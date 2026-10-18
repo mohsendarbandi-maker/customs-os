@@ -908,3 +908,11 @@
     padding-bottom: 16px !important;
   }
 }
+
+@media (max-width: 1023px) {
+  /* Install guidance is intentionally a card above the dock—not another bottom bar. */
+  .app-shell .pwa-install-prompt,
+  .app-shell .pwa-ios-install-guide {
+    bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+  }
+}
