@@ -38,7 +38,7 @@ describe('durable unfinished-work protection', () => {
     expect(chat).toContain("import{readDraftValue,removeDraftValue,writeDraftValue}from'../../lib/draftStorage'");
     expect(chat).toContain("'customs-os:chat-composer:v1:'+encodeURIComponent(user.id)+':'+encodeURIComponent(profile.organization_id)+':'+encodeURIComponent(selectedId)");
     expect(chat).toContain('readDraftValue(key)');
-    expect(chat).toContain('writeDraftValue(draftKey,{text,updatedAt:Date.now()})');
+    expect(chat).toContain('writeDraftValue(draftKey,{text,updatedAt})');
     expect(chat).toContain('removeDraftValue(draftKey)');
     expect(chat).toContain("window.addEventListener('pagehide',persistNow)");
   });
