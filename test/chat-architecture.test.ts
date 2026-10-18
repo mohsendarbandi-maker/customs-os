@@ -243,6 +243,9 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('https://botapi.rubika.ir/v3/');
     expect(gateway).toContain('updateBotEndpoints');
     expect(gateway).toContain('ReceiveInlineMessage');
+    expect(gateway).toContain('requestSendFile');
+    expect(gateway).toContain('RUBIKA_FILE_LIMIT');
+    expect(gateway).toContain('RUBIKA_DOWNLOAD_URL_INVALID');
     expect(gateway).toContain('async function rubikaWebhook');
     expect(gateway).toContain('rubika:{supported:true,text:true,inboundWebhook:true,media:false');
   });
