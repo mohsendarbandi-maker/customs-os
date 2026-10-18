@@ -102,8 +102,46 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('security_status==="clean"');
     expect(gateway).toContain('startsWith("quarantine/")');
     expect(gateway).toContain('ATTACHMENT_NOT_CLEAN_OR_NOT_READY');
-    expect(scanner).toContain('security_status:"clean"');
-    expect(scanner).toContain('from("chat-files").move(quarantinePath,finalPath)');
+    expect(scanner).toContain('security_status: "clean"');
+    expect(scanner).toContain('from("chat-files").move(storagePath, finalPath)');
+    expect(scanner).toContain('scanChatFile(bytes,');
+    expect(scanner).toContain('/api/messenger/internal/scan-source/');
+  });
+
+  it('keeps new chat attachment binaries outside Supabase Storage',()=>{
+    const migration=read('supabase/migrations/20261019170000_messenger_remote_only_chat_attachments.sql');
+    const api=read('src/features/chat/api.ts');
+    const types=read('src/features/chat/types.ts');
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    const scanner=read('supabase/functions/scan-chat-file/index.ts');
+    expect(migration).toContain('drop policy if exists chat_files_insert_quarantine on storage.objects');
+    expect(migration).toContain('file_asset_id');
+    expect(api).not.toContain(".storage.from('chat-files').upload");
+    expect(api).toContain('/api/messenger/internal-chat-files/');
+    expect(api).toContain('/api/messenger/chat-attachments/');
+    expect(types).toContain('file_asset_id: string | null');
+    const inbound=gateway.slice(gateway.indexOf('async function inbound('),gateway.indexOf('async function processMessengerOutbox'));
+    expect(inbound).not.toContain('response.arrayBuffer()');
+    expect(inbound).not.toContain('.storage.from("chat-files").upload');
+    expect(inbound).toContain('storage_path:null,file_asset_id:fileAssetId');
+    expect(gateway).toContain('function internalScanSource');
+    expect(gateway).toContain('function downloadChatAttachment');
+    expect(gateway).toContain('a.file_asset_id');
+    expect(scanner).toContain('scanChatFile');
+    expect(scanner).toContain('remote-reference-and-legacy-storage');
+  });
+
+  it('scans uploaded files before sending them to the messenger archive',()=>{
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    const scanner=read('supabase/functions/_shared/chat-file-scanner.ts');
+    const api=read('src/features/chat/api.ts');
+    expect(gateway).toContain('scanChatFile(bytes,name,mime)');
+    expect(gateway).toContain('FILE_ARCHIVE_NOT_CONFIGURED');
+    expect(gateway).toContain('TG_DOWNLOAD_LIMIT');
+    expect(scanner).toContain('pdf_active:');
+    expect(scanner).toContain('path_traversal');
+    expect(api).toContain('FILE_ARCHIVE_NOT_CONFIGURED');
+    expect(api).toContain('downloadExternalAttachment');
   });
 
   it('uses a durable retry queue for internal-to-external text and file delivery',()=>{
