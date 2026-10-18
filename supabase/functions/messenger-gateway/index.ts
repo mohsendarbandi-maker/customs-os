@@ -463,8 +463,9 @@ async function uploadInternalChatFile(req:Request,p:Profile,userId:string,conver
  if(bytes.byteLength<=0||(claimed!==null&&claimed!==bytes.byteLength))return bad("INVALID_FILE_SIZE",400,req);
  const scan=scanChatFile(bytes,name,mime);
  if(!scan.clean)return out({ok:false,error:"FILE_REJECTED_BY_SECURITY_SCAN",reasons:scan.reasons},422,req);
- const sha256=hex(await crypto.subtle.digest("SHA-256",bytes));
- const stream=new Response(bytes,{headers:{"Content-Type":mime}}).body;
+ const byteBuffer=bytes.buffer as ArrayBuffer;
+ const sha256=hex(await crypto.subtle.digest("SHA-256",byteBuffer));
+ const stream=new Response(byteBuffer,{headers:{"Content-Type":mime}}).body;
  if(!stream)return bad("FILE_STREAM_UNAVAILABLE",500,req);
  try{
   const result=await uploadStream(c,String(archive.external_chat_id),name,mime,bytes.byteLength,stream,message.message_type==="voice"?"voice":"file");
