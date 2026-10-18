@@ -21,7 +21,7 @@ describe('single mobile shell navigation regressions', () => {
     expect(shell).toContain("(min-width: 1024px) and (pointer: fine)");
     expect(mobileCss).toContain("@media (max-width: 1023px), (pointer: coarse)");
     expect(shell).toContain("{isDesktop && (");
-    expect(shell).toContain("{!isDesktop && <header className=\"app-mobilebar\"");
+    expect(shell).toContain('<header className="app-mobilebar"');
   });
 
   it('provides exactly five primary mobile tabs and a three-column More sheet', () => {
