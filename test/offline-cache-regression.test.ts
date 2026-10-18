@@ -35,11 +35,13 @@ describe('offline and background-update safety', () => {
     expect(runtime).toContain('تازه‌سازی صفحه');
   });
 
-  it('applies a waiting worker silently without forcing the open page to reload', () => {
-    expect(lifecycle).toContain("onNeedRefresh:()=>{if(updater)void updater(false).catch((error)=>console.warn('[PWA] silent update failed:',error));}");
-    expect(lifecycle).toContain('onNeedReload:()=>undefined');
-    expect(lifecycle).not.toContain('نسخه جدید آماده است');
-    expect(lifecycle).not.toContain('updateSW?.(true)');
+  it('waits for user consent before activating an updated service worker', () => {
+    expect(lifecycle).toContain('onNeedRefresh: () => {');
+    expect(lifecycle).toContain('setNewVersionAvailable(true)');
+    expect(lifecycle).toContain('نسخهٔ جدید آماده است');
+    expect(lifecycle).toContain('await activate(true)');
+    expect(serviceWorker).toContain("event.data.type === 'SKIP_WAITING'");
+    expect(serviceWorker).not.toContain('self.skipWaiting();\nclientsClaim();');
   });
 
   it('stores query snapshots in a bounded, user-and-organization-scoped IndexedDB store', () => {
@@ -59,7 +61,8 @@ describe('offline and background-update safety', () => {
     expect(reminders).toContain('readOfflineQueryCache<ReminderOverview>');
     expect(reminders).toContain('readOfflineQueryCache<CalendarReminderDate[]>');
     expect(reminders).toContain('composerDraftKey=user?.id&&profile?.organization_id');
-    expect(reminders).toContain('sessionStorage.setItem(composerDraftKey');
+    expect(reminders).toContain('writeDraftValue(composerDraftKey,draft)');
+    expect(reminders).toContain('customs-os-reminder-composer-v2:');
     expect(auth).toContain("readOfflineQueryCache<UserProfile | null>('auth-profile', userId, userId)");
     expect(auth).toContain('offlineProfile.id === userId');
     expect(auth).toContain('offlineProfile.is_active');

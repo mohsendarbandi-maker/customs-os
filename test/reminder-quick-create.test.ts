@@ -15,7 +15,9 @@ describe('reminder quick-create shipment linking', () => {
   it('persists the selected shipment with the composer draft and restores it after reopening', () => {
     expect(source).toContain('shipment:quickShipment,savedAt:Date.now()');
     expect(source).toContain('setQuickShipment(restoredShipment)');
-    expect(source).toContain('!quickShipment){sessionStorage.removeItem(composerDraftKey)');
+    expect(source).toContain('if(!hasDraft){');
+    expect(source).toContain('removeDraftValue(composerDraftKey)');
+    expect(source).toContain("sessionStorage.removeItem('customs-os-reminder-composer-v1:");
   });
 
   it('keeps the composer draft when create fails and retains remaining lines in a multi-line submission', () => {

@@ -4,6 +4,7 @@ import{useSearchParams}from'react-router-dom';
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
+import{readDraftValue,removeDraftValue,writeDraftValue}from'../../lib/draftStorage';
 import{subscribeOfflineQueue,flushOfflineQueue,isChatQueueItem,chatClientUuid,retryChatMessage,type QueuedRpc}from'../../lib/offlineQueue';
 import{enableChatPush,hasChatPushSubscription}from'./push';
 import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,getMessageById,listMessageReceipts,listMessages,listMessagesAfter,listOrgConnections,markChatFocus,markDelivered,markPlayed,markRead,clearChatFocus,searchChat,sendFileMessage,sendMessage,setMessageMentions,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
@@ -81,6 +82,11 @@ export const ChatPage:React.FC=()=>{
  const{user,profile}=useAuth();const[searchParams]=useSearchParams();
  const requestedConversationId=searchParams.get('conversation');const requestedCallId=searchParams.get('call');
  const[conversations,setConversations]=useState<ChatConversation[]>([]);const[selectedId,setSelectedId]=useState<string|null>(null);
+  const chatDraftKey=user?.id&&profile?.organization_id&&selectedId
+   ?'customs-os:chat-composer:v1:'+encodeURIComponent(user.id)+':'+encodeURIComponent(profile.organization_id)+':'+encodeURIComponent(selectedId)
+   :null;
+  const chatDraftLoadedKey=useRef<string|null>(null);const chatDraftRestoreSequence=useRef(0);
+  const chatDraftBeforeEdit=useRef('');
  const[messages,setMessages]=useState<ChatMessage[]>([]);const[queueItems,setQueueItems]=useState<QueuedRpc[]>([]);
  const messagesRef=useRef<ChatMessage[]>([]);const selectedIdRef=useRef<string|null>(null);
  const[text,setText]=useState('');const[error,setError]=useState<string|null>(null);
@@ -109,6 +115,56 @@ export const ChatPage:React.FC=()=>{
  useEffect(()=>{queueSyncRef.current=queueItems},[queueItems]);
  useEffect(()=>{messagesRef.current=messages},[messages]);
  useEffect(()=>{selectedIdRef.current=selectedId},[selectedId]);
+
+  useEffect(()=>{
+   const key=chatDraftKey;
+   const sequence=++chatDraftRestoreSequence.current;
+   let cancelled=false;
+   chatDraftLoadedKey.current=null;
+   if(!key){
+    setText('');
+    return()=>{cancelled=true;};
+   }
+   // Restore by conversation key so unsent text never appears in the wrong thread.
+   setText('');
+   void readDraftValue(key).then(value=>{
+    if(cancelled||sequence!==chatDraftRestoreSequence.current)return;
+    const draft=value&&typeof value==='object'?(value as {text?:unknown}):null;
+    setText(typeof draft?.text==='string'?draft.text:'');
+    chatDraftLoadedKey.current=key;
+   }).catch(error=>{
+    if(cancelled||sequence!==chatDraftRestoreSequence.current)return;
+    console.warn('[Chat] composer draft restore failed:',error);
+    chatDraftLoadedKey.current=key;
+   });
+   return()=>{cancelled=true;};
+  },[chatDraftKey]);
+
+  useEffect(()=>{
+   if(!chatDraftKey||chatDraftLoadedKey.current!==chatDraftKey||editId)return;
+   const persistNow=()=>{
+    const draftKey=chatDraftKey;
+    if(chatDraftLoadedKey.current!==draftKey||editId)return;
+    const updatedAt=Date.now();
+    if(text.trim()){
+     // localStorage is written synchronously inside writeDraftValue before its first await.
+     void writeDraftValue(draftKey,{text,updatedAt}).then(saved=>{
+      if(!saved)console.warn('[Chat] browser storage did not accept the composer draft.');
+     }).catch(error=>console.warn('[Chat] composer draft save failed:',error));
+    }else{
+     void removeDraftValue(draftKey).catch(error=>console.warn('[Chat] composer draft cleanup failed:',error));
+    }
+   };
+   const persistWhenHidden=()=>{if(document.visibilityState==='hidden')persistNow();};
+   window.addEventListener('pagehide',persistNow);
+   document.addEventListener('visibilitychange',persistWhenHidden);
+   const timer=window.setTimeout(persistNow,300);
+   return()=>{
+    window.removeEventListener('pagehide',persistNow);
+    document.removeEventListener('visibilitychange',persistWhenHidden);
+    window.clearTimeout(timer);
+   };
+  },[chatDraftKey,text,editId]);
  useEffect(()=>{latestMessageRef.current=[...messages].filter(m=>!m.id.startsWith('local-')).pop()??latestMessageRef.current},[messages]);
 
  const refresh=useCallback(async()=>{
@@ -354,7 +410,7 @@ export const ChatPage:React.FC=()=>{
  const retry=(clientUuid:string)=>{void retryChatMessage(clientUuid).catch(e=>setError(err(e)))};
  const react=async(m:ChatMessage,emoji:string)=>{try{await toggleChatReaction(m.id,emoji);if(selectedId)await loadConversation(selectedId,false);setMenu(null)}catch(e){setError(err(e))}};
  const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);setMenu(null);if(selectedId)await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
- const editCurrent=async()=>{if(!editId||!selectedId)return;const body=normalizeFaText(text);if(!body)return;try{await editChatMessage(editId,body);setEditId(null);setText('');await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
+ const editCurrent=async()=>{if(!editId||!selectedId)return;const body=normalizeFaText(text);if(!body)return;try{await editChatMessage(editId,body);setEditId(null);setText(chatDraftBeforeEdit.current);chatDraftBeforeEdit.current='';await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
  const forwardCurrent=async(targetId:string)=>{if(!forwardId)return;try{await forwardChatMessage(forwardId,targetId);setForwardId(null);void refresh();setError('پیام ارسال شد.')}catch(e){setError(err(e))}};
  const publishShipmentUpdate=async()=>{const selected=conversations.find(c=>c.conversation_id===selectedId);if(!selectedId||!selected?.shipment_id)return;try{await shareShipmentUpdate(selectedId,selected.shipment_id,shipmentStatus,shipmentNote.trim()||undefined);setShipmentUpdateOpen(false);setShipmentNote('');await loadConversation(selectedId,false);void refresh()}catch(e){setError(err(e))}};
 
@@ -497,7 +553,7 @@ export const ChatPage:React.FC=()=>{
           {menu===m.id&&!local&&<div className="absolute z-20 left-1 bottom-7 rounded-2xl border app-border bg-[var(--surface)] text-[var(--text)] shadow-xl p-1 min-w-48">
            <div className="flex gap-1 p-1 border-b app-border">{['❤️','👍','😂','😮','😢','🔥'].map(emoji=><button type="button" key={emoji} onClick={()=>void react(m,emoji)} className="h-8 w-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/10" aria-label={emoji}>{emoji}</button>)}</div>
            <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setReply(m);setMenu(null)}}>پاسخ</button>
-           {own&&<button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setEditId(m.id);setText(m.body??'');setReply(null);setMenu(null)}}>ویرایش</button>}
+           {own&&<button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{chatDraftBeforeEdit.current=text;setEditId(m.id);setText(m.body??'');setReply(null);setMenu(null)}}>ویرایش</button>}
            <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>void toggleChatStar(m.id).then(()=>selectedId?loadConversation(selectedId,false):undefined).catch(e=>setError(err(e)))}><Star size={13} className="inline ml-1"/>ستاره</button>
            <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>void toggleChatPin(m.id).then(()=>selectedId?loadConversation(selectedId,false):undefined).catch(e=>setError(err(e)))}><Pin size={13} className="inline ml-1"/>سنجاق</button>
            <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setForwardId(m.id);setMenu(null)}}>فوروارد</button>
@@ -513,7 +569,7 @@ export const ChatPage:React.FC=()=>{
     <div ref={bottom}/>
    </div>
 
-   {(reply||editId)&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">{editId?'در حال ویرایش پیام':'پاسخ به: '+(reply?.body||'پیام پیوست‌دار')}</div><button type="button" className="icon-btn" onClick={()=>{setReply(null);setEditId(null);setText('')}} aria-label="لغو"><X size={15}/></button></div>}
+   {(reply||editId)&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">{editId?'در حال ویرایش پیام':'پاسخ به: '+(reply?.body||'پیام پیوست‌دار')}</div><button type="button" className="icon-btn" onClick={()=>{setReply(null);setEditId(null);setText(chatDraftBeforeEdit.current);chatDraftBeforeEdit.current=''}} aria-label="لغو"><X size={15}/></button></div>}
 
    <div className="shrink-0 border-t app-border p-3 md:p-3 bg-[var(--surface)]" style={{paddingBottom:'max(12px,env(safe-area-inset-bottom))'}}>
     <input ref={fileInput} type="file" className="hidden" accept="image/*,application/pdf,text/plain,.doc,.docx,.xls,.xlsx" onChange={e=>{const file=e.target.files?.[0];e.currentTarget.value='';void chooseAttachment(file)}}/>

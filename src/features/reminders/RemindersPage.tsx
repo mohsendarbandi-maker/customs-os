@@ -6,6 +6,7 @@ import {buildJalaliMonthGrid,jalaliMonthKey,parseReminderDayKey,readJalaliMonth,
 import {getIranCalendarDayInfo,hasVerifiedIranHolidayData,IRAN_CALENDAR_SOURCE_URL,IRAN_CALENDAR_SOURCE_NAME} from './iranCalendar';
 import {supabase} from '../../lib/supabase';
 import {readOfflineQueryCache,removeQueuedRpc,rpcWithOfflineQueue,saveOfflineQueryCache,subscribeOfflineQueue,type QueuedRpc} from '../../lib/offlineQueue';
+import {readDraftValue,removeDraftValue,writeDraftValue} from '../../lib/draftStorage';
 import {useAuth} from '../../context/AuthContext';
 import {addJalaliDays,formatJalali,formatJalaliDateTime,formatRelativeFa,groupDayLabel,JALALI_MONTHS,startOfTehranDay,toJalali,WEEK_DAYS,zonedJalaliToDate} from '../../lib/jalali';
 import {JalaliDateTimePicker} from './JalaliDateTimePicker';
@@ -70,33 +71,87 @@ export const RemindersPage:React.FC=()=>{
  const [menuId,setMenuId]=useState<string|null>(null);const [menuPosition,setMenuPosition]=useState<{top:number;left:number;width:number}|null>(null);
  const [language,setLanguage]=useState<ReminderLanguage>(()=>readReminderLanguage());const [quickDueAt,setQuickDueAt]=useState<Date|null>(null);const [quickAllDay,setQuickAllDay]=useState(false);const [quickDateSource,setQuickDateSource]=useState<'manual'|'inferred'|null>(null);const [showQuickPicker,setShowQuickPicker]=useState(false);const [quickShipment,setQuickShipment]=useState<QuickShipment|null>(null);const [quickShipmentSearch,setQuickShipmentSearch]=useState('');const [quickShipmentResults,setQuickShipmentResults]=useState<QuickShipment[]>([]);const [quickShipmentBusy,setQuickShipmentBusy]=useState(false);const [quickShipmentError,setQuickShipmentError]=useState('');const quickShipmentSearchSeq=useRef(0);
  const t=(value:string)=>reminderText(value,language);
- const composerDraftKey=user?.id&&profile?.organization_id?('customs-os-reminder-composer-v1:'+user.id+':'+profile.organization_id):null;
+ const composerDraftKey=user?.id&&profile?.organization_id
+  ?('customs-os-reminder-composer-v2:'+encodeURIComponent(user.id)+':'+encodeURIComponent(profile.organization_id))
+  :null;
  const [draftLoadedKey,setDraftLoadedKey]=useState<string|null>(null);
+
  useEffect(()=>{
+  let cancelled=false;
   if(!composerDraftKey){
-   setComposer('');setQuickDueAt(null);setQuickAllDay(false);setQuickDateSource(null);setQuickShipment(null);setQuickShipmentSearch('');setQuickShipmentResults([]);setComposerOpen(false);setDraftLoadedKey(null);return;
+   setComposer('');setQuickDueAt(null);setQuickAllDay(false);setQuickDateSource(null);
+   setQuickShipment(null);setQuickShipmentSearch('');setQuickShipmentResults([]);
+   setComposerOpen(false);setDraftLoadedKey(null);
+   return ()=>{cancelled=true;};
   }
-  try{
-   const raw=sessionStorage.getItem(composerDraftKey);
-   const saved=raw?JSON.parse(raw) as {text?:unknown;dueAt?:unknown;allDay?:unknown;dateSource?:unknown;shipment?:unknown}:null;
+
+  setDraftLoadedKey(null);
+  const restore=async()=>{
+   let saved:{text?:unknown;dueAt?:unknown;allDay?:unknown;dateSource?:unknown;shipment?:unknown}|null=null;
+   // Migrate the previous tab-only draft into the durable user+organization store.
+   try{
+    const legacyRaw=sessionStorage.getItem('customs-os-reminder-composer-v1:'+user?.id+':'+profile?.organization_id);
+    if(legacyRaw){
+     const legacy=JSON.parse(legacyRaw) as typeof saved;
+     if(legacy&&typeof legacy==='object'){
+      saved=legacy;
+      // Remove the tab-only copy only after the durable key accepts it, otherwise
+      // a stale sessionStorage value could overwrite a newer reminder draft later.
+      if(await writeDraftValue(composerDraftKey,saved)){
+       try{sessionStorage.removeItem('customs-os-reminder-composer-v1:'+user?.id+':'+profile?.organization_id);}catch{}
+      }
+     }
+    }
+   }catch(error){console.warn('[Reminders] legacy draft migration failed:',error);}
+   if(!saved){
+    try{
+     const durable=await readDraftValue(composerDraftKey);
+     if(durable&&typeof durable==='object')saved=durable as typeof saved;
+    }catch(error){console.warn('[Reminders] durable draft restore failed:',error);}
+   }
+   if(cancelled)return;
    const text=typeof saved?.text==='string'?saved.text:'';
    const dueAt=typeof saved?.dueAt==='string'&&Number.isFinite(new Date(saved.dueAt).getTime())?new Date(saved.dueAt):null;
-   setComposer(text);setQuickDueAt(dueAt);setQuickAllDay(saved?.allDay===true);const rawShipment=saved?.shipment as {id?:unknown;label?:unknown;caseId?:unknown;billOfLadingNo?:unknown}|null;const restoredShipment=rawShipment&&typeof rawShipment.id==='string'&&typeof rawShipment.label==='string'?{id:rawShipment.id,label:rawShipment.label,caseId:typeof rawShipment.caseId==='string'?rawShipment.caseId:null,billOfLadingNo:typeof rawShipment.billOfLadingNo==='string'?rawShipment.billOfLadingNo:null}:null;setQuickShipment(restoredShipment);setQuickShipmentSearch('');setQuickShipmentResults([]);
+   const rawShipment=saved?.shipment as {id?:unknown;label?:unknown;caseId?:unknown;billOfLadingNo?:unknown}|null;
+   const restoredShipment=rawShipment&&typeof rawShipment.id==='string'&&typeof rawShipment.label==='string'
+    ?{id:rawShipment.id,label:rawShipment.label,caseId:typeof rawShipment.caseId==='string'?rawShipment.caseId:null,billOfLadingNo:typeof rawShipment.billOfLadingNo==='string'?rawShipment.billOfLadingNo:null}
+    :null;
+   setComposer(text);setQuickDueAt(dueAt);setQuickAllDay(saved?.allDay===true);
+   setQuickShipment(restoredShipment);setQuickShipmentSearch('');setQuickShipmentResults([]);
    setQuickDateSource(saved?.dateSource==='manual'||saved?.dateSource==='inferred'?saved.dateSource:null);
-   setComposerOpen(Boolean(text.trim()||restoredShipment));
-  }catch{setComposer('');setQuickDueAt(null);setQuickAllDay(false);setQuickDateSource(null);setQuickShipment(null);setQuickShipmentSearch('');setQuickShipmentResults([]);setComposerOpen(false);}
-  setDraftLoadedKey(composerDraftKey);
- },[composerDraftKey]);
+   setComposerOpen(Boolean(text.trim()||restoredShipment||dueAt));
+   setDraftLoadedKey(composerDraftKey);
+  };
+  void restore();
+  return ()=>{cancelled=true;};
+ },[composerDraftKey,user?.id,profile?.organization_id]);
+
  useEffect(()=>{
   if(!composerDraftKey||draftLoadedKey!==composerDraftKey)return;
-  const timer=window.setTimeout(()=>{
-   try{
-    if(!composer.trim()&&!quickDueAt&&!quickAllDay&&!quickShipment){sessionStorage.removeItem(composerDraftKey);return;}
-    sessionStorage.setItem(composerDraftKey,JSON.stringify({text:composer,dueAt:quickDueAt?.toISOString()??null,allDay:quickAllDay,dateSource:quickDateSource,shipment:quickShipment,savedAt:Date.now()}));
-   }catch(error){console.warn('[Reminders] draft could not be persisted:',error);}
-  },250);
-  return()=>window.clearTimeout(timer);
- },[composerDraftKey,draftLoadedKey,composer,quickDueAt,quickAllDay,quickDateSource,quickShipment]);
+  const persistNow=()=>{
+   if(!composerDraftKey||draftLoadedKey!==composerDraftKey)return;
+   const hasDraft=Boolean(composer.trim()||quickDueAt||quickAllDay||quickShipment);
+   if(!hasDraft){
+    void removeDraftValue(composerDraftKey).catch(error=>console.warn('[Reminders] draft cleanup failed:',error));
+    try{sessionStorage.removeItem('customs-os-reminder-composer-v1:'+user?.id+':'+profile?.organization_id);}catch{}
+    return;
+   }
+   const draft={text:composer,dueAt:quickDueAt?.toISOString()??null,allDay:quickAllDay,dateSource:quickDateSource,shipment:quickShipment,savedAt:Date.now()};
+   void writeDraftValue(composerDraftKey,draft).then(saved=>{
+    if(!saved)console.warn('[Reminders] browser storage did not accept the durable draft.');
+   }).catch(error=>console.warn('[Reminders] draft could not be persisted:',error));
+  };
+  const persistWhenHidden=()=>{if(document.visibilityState==='hidden')persistNow();};
+  // iOS may suspend the page before the debounce timer expires.
+  window.addEventListener('pagehide',persistNow);
+  document.addEventListener('visibilitychange',persistWhenHidden);
+  const timer=window.setTimeout(persistNow,250);
+  return()=>{
+   window.removeEventListener('pagehide',persistNow);
+   document.removeEventListener('visibilitychange',persistWhenHidden);
+   window.clearTimeout(timer);
+  };
+ },[composerDraftKey,draftLoadedKey,composer,quickDueAt,quickAllDay,quickDateSource,quickShipment,user?.id,profile?.organization_id]);
   const goToSection=(section:ReminderSection)=>{setPage(0);navigate(section==='home'?'/reminders':('/reminders/'+section));};
   const goToDay=(key:string)=>{setPage(0);navigate('/reminders/day?day='+encodeURIComponent(key));};
   useEffect(()=>{setFilter(SECTION_FILTER[currentSection]??'all');setKind(SECTION_KIND[currentSection]??null);setPage(0);setSelected([]);},[currentSection]);
