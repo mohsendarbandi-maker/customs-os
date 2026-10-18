@@ -23,7 +23,7 @@ Generate one strong random value in a trusted terminal, for example with `openss
 ## Proxy security contract
 
 - Only HTTPS requests to `api.telegram.org`, `tapi.bale.ai`, `graph.facebook.com`, and subdomains of `fbsbx.com`, `fbcdn.net`, and `whatsapp.net` are accepted.
-- Only GET and POST are accepted; redirects are not followed by the proxy.
+- Only GET and POST are accepted. GET media redirects are followed for at most three hops, with HTTPS and host allowlist validation on every hop; provider Authorization is stripped on unsafe cross-origin redirects.
 - The shared secret is checked with a constant-time comparison and is never forwarded upstream.
 - Request and response bodies are streamed; the Worker does not write message files to Assets, KV, D1, or R2.
 - Responses are marked private/no-store and upstream cookies are removed.
