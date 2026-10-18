@@ -883,3 +883,28 @@
   }
   .customs-home header p { font-variant-numeric: lining-nums; }
 }
+
+@media (max-width: 1023px) {
+  /* iOS opens the keyboard when a real text field receives focus; hiding the
+     dock and releasing its reserved space prevents the keyboard/composer overlap. */
+  .app-shell:has(input:focus) .app-mobile-dock,
+  .app-shell:has(textarea:focus) .app-mobile-dock,
+  .app-shell:has(select:focus) .app-mobile-dock,
+  .app-shell:has([contenteditable="true"]:focus) .app-mobile-dock {
+    display: none !important;
+  }
+  .app-shell:has(input:focus) .app-content,
+  .app-shell:has(textarea:focus) .app-content,
+  .app-shell:has(select:focus) .app-content,
+  .app-shell:has([contenteditable="true"]:focus) .app-content {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 12px) !important;
+  }
+  .app-shell:has(.chat-standalone[data-chat-selected="false"] input:focus) .chat-standalone,
+  .app-shell:has(.chat-standalone[data-chat-selected="false"] textarea:focus) .chat-standalone {
+    height: 100dvh !important;
+  }
+  .app-shell:has(.reminders-app-standalone input:focus) .reminders-app-standalone,
+  .app-shell:has(.reminders-app-standalone textarea:focus) .reminders-app-standalone {
+    padding-bottom: 16px !important;
+  }
+}
