@@ -162,6 +162,26 @@ export function useAutosavedDraft<T>(
     }
 
     updateStatus('saving');
+    const persistBeforeFreeze = () => {
+      // Do not recreate a draft after an explicit successful submit/clear.
+      if (restoredKeyRef.current !== key || restorePendingRef.current || statusRef.current === 'idle') return;
+      const currentValue = valueRef.current;
+      try {
+        localStorage.setItem(key, JSON.stringify(currentValue));
+      } catch {
+        // The async IndexedDB fallback below may still preserve the draft.
+      }
+      void writeDraftValue(key, currentValue).catch((error: unknown) => {
+        console.warn('[FormDraft] Immediate draft persist failed:', error);
+      });
+    };
+    const persistWhenHidden = () => {
+      if (document.visibilityState === 'hidden') persistBeforeFreeze();
+    };
+    // A debounce alone can lose the last keystrokes if iOS suspends Safari/PWA quickly.
+    window.addEventListener('pagehide', persistBeforeFreeze);
+    document.addEventListener('visibilitychange', persistWhenHidden);
+
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
@@ -180,6 +200,8 @@ export function useAutosavedDraft<T>(
     }, delayMs);
 
     return () => {
+      window.removeEventListener('pagehide', persistBeforeFreeze);
+      document.removeEventListener('visibilitychange', persistWhenHidden);
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
