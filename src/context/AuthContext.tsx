@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
+import { authStorage } from '../lib/authStorage';
 import { readOfflineQueryCache, saveOfflineQueryCache } from '../lib/offlineQueue';
 import {
   AUTH_SESSION_RETRY_MESSAGE,
@@ -17,6 +18,11 @@ import {
 } from '../lib/authSessionErrors';
 
 const clearLocalAuthStorage = () => {
+  // Clear both primary and fallback storage on explicit sign-out or a confirmed
+  // unrecoverable refresh-token failure; transient network errors never reach here.
+  void authStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY).catch((error) => {
+    console.warn('[Auth] persistent session cleanup failed:', error);
+  });
   try {
     localStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
     sessionStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
@@ -370,6 +376,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     });
 
+    let lastResumeCheckAt = 0;
+    let resumeCheckInFlight = false;
     const handleVisibilityChange = () => {
       if (
         !active ||
@@ -379,6 +387,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       ) {
         return;
       }
+      const now = Date.now();
+      // Safari fires pageshow, focus and visibilitychange together when returning
+      // to an installed app. Coalesce that burst so refresh/profile fetches cannot race.
+      if (resumeCheckInFlight || now - lastResumeCheckAt < 4000) return;
+      lastResumeCheckAt = now;
+      resumeCheckInFlight = true;
 
       // getSession() refreshes expired sessions when possible. This runs outside
       // onAuthStateChange so it cannot wait on the SDK's auth lock from a callback.
@@ -428,16 +442,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           setError(AUTH_SESSION_RETRY_MESSAGE);
           setLoading(false);
         }
+      }).finally(() => {
+        resumeCheckInFlight = false;
       });
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pageshow', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
     subscription = authSubscription;
     void loadInitialSession();
 
     return () => {
       active = false;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pageshow', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
       subscription?.unsubscribe();
     };
   }, [fetchProfile]);
