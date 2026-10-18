@@ -28,8 +28,9 @@ async function readText(req:Request,limit:number){const claimed=Number(req.heade
 async function readBinary(body:ReadableStream<Uint8Array>,limit:number){
  const reader=body.getReader(),chunks:Uint8Array[]=[];let total=0;
  try{
-  while(true){
-   const part=await reader.read();if(part.done)break;
+  let finished=false;
+  while(!finished){
+   const part=await reader.read();if(part.done){finished=true;continue;}
    total+=part.value.byteLength;
    if(total>limit){await reader.cancel();throw new Error("BODY_TOO_LARGE");}
    chunks.push(part.value);
