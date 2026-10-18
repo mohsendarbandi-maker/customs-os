@@ -27,7 +27,10 @@ describe('safe stale-chunk recovery', () => {
 
 describe('single mobile shell navigation regressions', () => {
   it('mounts the sidebar only at the desktop breakpoint and omits mobile hamburger markup', () => {
-    expect(shell).toContain("window.matchMedia('(min-width: 1024px) and (pointer: fine)')");
+    expect(shell).toContain("window.matchMedia('(min-width: 1024px)')");
+    expect(shell).toContain('(navigator.maxTouchPoints || 0) > 0');
+    expect(shell).toContain("'ontouchstart' in window");
+    expect(shell).toContain('is-touch-layout');
     expect(shell).toContain('{isDesktop && (');
     expect(shell).not.toContain('mobile-menu-trigger');
     expect(shell).not.toContain('customs-desktop-menu');
@@ -36,7 +39,9 @@ describe('single mobile shell navigation regressions', () => {
   });
 
   it('keeps touch-first navigation when a mobile browser reports a wide viewport', () => {
-    expect(shell).toContain("(min-width: 1024px) and (pointer: fine)");
+    expect(shell).toContain("window.matchMedia('(min-width: 1024px)')");
+    expect(shell).toContain('getDesktopLayout');
+    expect(mobileCss).toContain('.app-shell.is-touch-layout .app-mobile-dock');
     expect(mobileCss).toContain("@media (max-width: 1023px), (pointer: coarse)");
     expect(mobileCss).toContain("@media (min-width: 1024px) and (pointer: fine)");
     expect(mobileCss).not.toContain("@media (min-width: 1024px) {");
