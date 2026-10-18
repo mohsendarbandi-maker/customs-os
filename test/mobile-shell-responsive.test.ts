@@ -12,8 +12,13 @@ const home = read('src/pages/DesktopHomePage.tsx');
 describe('iOS touch-first application shell', () => {
   it.each([375, 390, 430])('keeps the touch shell contract at %i CSS pixels', (width) => {
     expect(width).toBeLessThan(768);
-    expect(shell).toContain("window.matchMedia('(min-width: 1024px) and (pointer: fine)')");
-    expect(shell).toContain("const media = window.matchMedia('(min-width: 1024px) and (pointer: fine)')");
+    expect(shell).toContain("window.matchMedia('(min-width: 1024px)')");
+    expect(shell).toContain("(pointer: fine)");
+    expect(shell).toContain("(navigator.maxTouchPoints || 0) > 0");
+    expect(shell).toContain("'ontouchstart' in window");
+    expect(shell).toContain("const widthMedia = window.matchMedia('(min-width: 1024px)')");
+    expect(shell).toContain("const pointerMedia = window.matchMedia('(pointer: fine)')");
+    expect(shell).toContain("getDesktopLayout");
     expect(shell).toContain('{isDesktop && (');
     expect(shell).toContain('{!isDesktop && <nav className="app-mobile-dock"');
     expect(mobileCss).toContain('@media (max-width: 1023px), (pointer: coarse)');
