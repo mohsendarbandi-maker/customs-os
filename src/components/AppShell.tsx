@@ -85,9 +85,16 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { profile, signOut } = useAuth();
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
 
-  const [isDesktop, setIsDesktop] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches : true
-  );
+  // Touch-capable devices must keep the mobile shell even when "Request Desktop Website"
+  // or an attached trackpad reports a wide viewport/fine pointer (notably iPadOS).
+  const getDesktopLayout = () => {
+    if (typeof window === 'undefined') return true;
+    const wideViewport = window.matchMedia('(min-width: 1024px)').matches;
+    const finePointer = window.matchMedia('(pointer: fine)').matches;
+    const hasTouch = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+    return wideViewport && finePointer && !hasTouch;
+  };
+  const [isDesktop, setIsDesktop] = useState(getDesktopLayout);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState('');
@@ -98,14 +105,24 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
-    const media = window.matchMedia('(min-width: 1024px) and (pointer: fine)');
+    const widthMedia = window.matchMedia('(min-width: 1024px)');
+    const pointerMedia = window.matchMedia('(pointer: fine)');
     const updateLayout = () => {
-      setIsDesktop(media.matches);
-      if (media.matches) setMobileOpen(false);
+      const nextIsDesktop = getDesktopLayout();
+      setIsDesktop(nextIsDesktop);
+      if (nextIsDesktop) setMobileOpen(false);
     };
     updateLayout();
-    media.addEventListener('change', updateLayout);
-    return () => media.removeEventListener('change', updateLayout);
+    widthMedia.addEventListener('change', updateLayout);
+    pointerMedia.addEventListener('change', updateLayout);
+    window.addEventListener('resize', updateLayout, { passive: true });
+    window.addEventListener('orientationchange', updateLayout, { passive: true });
+    return () => {
+      widthMedia.removeEventListener('change', updateLayout);
+      pointerMedia.removeEventListener('change', updateLayout);
+      window.removeEventListener('resize', updateLayout);
+      window.removeEventListener('orientationchange', updateLayout);
+    };
   }, []);
 
   useEffect(() => {
@@ -336,7 +353,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             ?.label || 'Customs OS';
 
   return (
-    <div className="app-shell min-h-screen future-shell" dir="rtl">
+    <div className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'}`} dir="rtl">
       {/* Desktop navigation is mounted only at >=1024px. It is not merely hidden on phones. */}
       {isDesktop && (
         <aside className={`app-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
