@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { attachSupabaseClient, rpcWithOfflineQueue, startOfflineQueue } from './offlineQueue';
+import { persistentAuthStorage } from './authStorage';
 
 const env = (import.meta as any).env;
 const configuredSupabaseUrl = env.VITE_SUPABASE_URL as string;
@@ -32,6 +33,7 @@ const baseClient = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
+    storage: persistentAuthStorage,
     storageKey: SUPABASE_AUTH_STORAGE_KEY,
   },
 });
