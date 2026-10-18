@@ -86,6 +86,8 @@ describe('single mobile shell navigation regressions', () => {
     expect(mobileCss).toContain('min-width: 0 !important');
     expect(mobileCss).toContain('overflow-x: clip');
     expect(mobileCss).toContain('grid-template-columns: repeat(5, minmax(0, 1fr)) !important');
+    expect(mobileCss).toContain('font-size: 16px !important');
+    expect(mobileCss).toContain('touch-action: manipulation');
   });
 
   it('keeps shipment search in the page toolbar rather than as a fixed control', () => {
