@@ -1169,3 +1169,45 @@ body {
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Runtime layout contract: JS marks touch-capable devices explicitly. This
+   overrides desktop-width rules when iOS/iPadOS requests a desktop viewport. */
+.app-shell.is-touch-layout .app-sidebar,
+.app-shell.is-touch-layout .app-topbar {
+  display: none !important;
+}
+.app-shell.is-touch-layout .app-mobilebar {
+  display: flex !important;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  width: 100%;
+  min-height: calc(var(--app-mobile-header-height) + env(safe-area-inset-top));
+  height: calc(var(--app-mobile-header-height) + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 12px 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.app-shell.is-touch-layout .app-mobile-dock {
+  display: grid !important;
+  position: fixed !important;
+  z-index: 110 !important;
+  inset-inline: 0 !important;
+  inset-block-end: 0 !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  min-height: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
+  padding: 5px 6px calc(5px + env(safe-area-inset-bottom)) !important;
+}
+.app-shell.is-touch-layout .app-main,
+.app-shell.is-touch-layout .app-main.sidebar-compact {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+.app-shell.is-touch-layout .app-content {
+  min-width: 0 !important;
+  padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+}
