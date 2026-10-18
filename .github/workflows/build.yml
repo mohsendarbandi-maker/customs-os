@@ -305,7 +305,7 @@ jobs:
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-main.html "$base/?__canonical_pwa_smoke=${GITHUB_RUN_ID}"
             grep -Fq '<link rel="manifest" href="/manifest.webmanifest" />' /tmp/customs-main.html
             test "$(grep -o 'rel="manifest"' /tmp/customs-main.html | wc -l | tr -d ' ')" = "1"
-            grep -Fq 'rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon-180.png' /tmp/customs-main.html
+            grep -Fq 'rel="apple-touch-icon" sizes="180x180" href="/pwa/mobile-icon-180.png' /tmp/customs-main.html
             if grep -Eq 'mobile\.darbandicommercial\.ir|chat-app-v4\.webmanifest|chat-subdomain\.webmanifest|manifest-reminders\.webmanifest|reminders-subdomain\.webmanifest|mobile-subdomain\.webmanifest|apple-touch-icon-precomposed' /tmp/customs-main.html; then
               echo "Legacy origin/manifest/icon selection remains in primary HTML."
               exit 1
