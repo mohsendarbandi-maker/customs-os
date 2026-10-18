@@ -431,7 +431,7 @@
     inset-block-start: 0;
     z-index: 90;
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) 40px;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
     align-items: center;
     gap: 8px;
     width: 100%;
@@ -445,6 +445,18 @@
     backdrop-filter: blur(18px) saturate(1.2);
     box-sizing: border-box;
   }
+  .app-mobile-back,
+  .app-mobile-back-placeholder {
+    width: 40px !important;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    flex: 0 0 40px;
+    border-radius: 13px;
+    z-index: auto;
+  }
+  .app-mobile-back-placeholder { display: block; pointer-events: none; }
+  .app-mobile-back { justify-self: start; }
   .app-mobile-title {
     justify-self: stretch;
     display: flex;
@@ -920,6 +932,18 @@
 
 /* Wide tablets and touch laptops must follow the touch-first shell even when
    their CSS viewport is wider than the traditional phone/tablet breakpoints. */
+/* Phase 3 — three-column mobile header with an explicit RTL back action. */
+@media (max-width: 1023px), (pointer: coarse) {
+  .app-mobilebar {
+    grid-template-columns: 40px minmax(0, 1fr) 40px !important;
+    column-gap: 8px;
+    height: calc(var(--app-mobile-header-height) + env(safe-area-inset-top));
+    min-height: calc(var(--app-mobile-header-height) + env(safe-area-inset-top));
+  }
+  .app-mobile-back { display: grid; place-items: center; }
+  .app-mobile-title { width: 100%; justify-self: stretch; }
+  .app-more-sheet:focus { outline: none; }
+}
 @media (min-width: 1024px) and (pointer: coarse) {
   .app-sidebar,
   .app-topbar {
