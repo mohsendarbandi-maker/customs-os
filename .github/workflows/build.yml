@@ -296,8 +296,8 @@ jobs:
             echo "Checking old per-area manifests on the primary host also return HTTP 301"
             for legacy_path in "/chat-app-v4.webmanifest" "/manifest-reminders.webmanifest" "/mobile-subdomain.webmanifest"; do
               legacy_primary_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base${legacy_path}?__legacy_manifest_smoke=${GITHUB_RUN_ID}")"
-              legacy_primary_status="$(printf '%s\\n' "$legacy_primary_headers" | awk 'BEGIN{IGNORECASE=1} /^HTTP\\//{status=$2} END{print status}')"
-              legacy_primary_location="$(printf '%s\\n' "$legacy_primary_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
+              legacy_primary_status="$(printf '%s\n' "$legacy_primary_headers" | awk 'BEGIN{IGNORECASE=1} /^HTTP\//{status=$2} END{print status}')"
+              legacy_primary_location="$(printf '%s\n' "$legacy_primary_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
               test "$legacy_primary_status" = "301"
               test "$legacy_primary_location" = "$base/manifest.webmanifest?__legacy_manifest_smoke=${GITHUB_RUN_ID}"
             done
