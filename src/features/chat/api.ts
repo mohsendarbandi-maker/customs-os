@@ -106,7 +106,7 @@ async function enrichMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
     supabase
       .from('chat_attachments')
       .select(
-        'id,message_id,storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform,security_status,security_checked_at,security_error',
+        'id,message_id,file_asset_id,storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform,security_status,security_checked_at,security_error',
       )
       .in('message_id', ids)
       .is('deleted_at', null),
@@ -522,7 +522,7 @@ export async function downloadExternalAttachment(attachmentId: string, originalN
   try {
     const link = document.createElement('a');
     link.href = objectUrl;
-    link.download = originalName.replaceAll('/', '_').replaceAll(String.fromCharCode(92), '_').replaceAll(String.fromCharCode(13), '_').replaceAll(String.fromCharCode(10), '_') || 'attachment.bin';
+    link.download = originalName.split('/').join('_').split(String.fromCharCode(92)).join('_').split(String.fromCharCode(13)).join('_').split(String.fromCharCode(10)).join('_') || 'attachment.bin';
     link.rel = 'noopener';
     link.style.display = 'none';
     document.body.appendChild(link);
