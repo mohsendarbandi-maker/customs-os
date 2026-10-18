@@ -240,8 +240,8 @@ jobs:
             test "$bad_map_status" = "400"
             
             echo "Checking unified internal chat route and single canonical manifest"
-            smoke_qs="?__chat_smoke=\${GITHUB_SHA}-\${GITHUB_RUN_ID}"
-            curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat\${smoke_qs}"
+            smoke_qs="?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
+            curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat${smoke_qs}"
             grep -Fq '<link rel="manifest" href="/manifest.webmanifest" />' /tmp/chat.html
             if grep -Eq 'chat-app-v4\.webmanifest|chat-subdomain\.webmanifest|mobile-subdomain\.webmanifest|manifest-reminders\.webmanifest|reminders-subdomain\.webmanifest' /tmp/chat.html; then
               echo "Area-specific manifest reference remains in the primary HTML."
@@ -249,7 +249,7 @@ jobs:
             fi
 
             echo "Checking the one canonical manifest and all declared PNG icons"
-            curl --fail --silent --show-error --location --max-time 30 -o /tmp/customs-manifest.json "$base/manifest.webmanifest?__pwa_smoke=\${GITHUB_RUN_ID}"
+            curl --fail --silent --show-error --location --max-time 30 -o /tmp/customs-manifest.json "$base/manifest.webmanifest?__pwa_smoke=${GITHUB_RUN_ID}"
             node -e '
               const fs = require("node:fs");
               const m = JSON.parse(fs.readFileSync("/tmp/customs-manifest.json", "utf8"));
@@ -264,7 +264,7 @@ jobs:
             '
             node -e 'const m=require("/tmp/customs-manifest.json"); for (const icon of m.icons || []) console.log(icon.src)' > /tmp/customs-icons.txt
             while IFS= read -r icon_src; do
-              curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-icon.bin "$base\${icon_src}"
+              curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-icon.bin "$base${icon_src}"
               case "$icon_src" in
                 *180.png*|*192.png*|*512.png*) file /tmp/customs-icon.bin | grep -Fq 'PNG image data' ;;
               esac
@@ -276,12 +276,12 @@ jobs:
               local expected_path="$2"
               local marker="$3"
               local status location
-              status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-redirect.headers -o /dev/null -w '%{http_code}' "https://\${legacy_host}/?\${marker}=\${GITHUB_RUN_ID}")"
+              status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-redirect.headers -o /dev/null -w '%{http_code}' "https://${legacy_host}/?${marker}=${GITHUB_RUN_ID}")"
               test "$status" = "301"
-              location="$(grep -i '^location:' /tmp/legacy-redirect.headers | tail -n 1 | tr -d '\\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
+              location="$(grep -i '^location:' /tmp/legacy-redirect.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
               case "$location" in
-                "https://darbandicommercial.ir\${expected_path}?"*) ;;
-                *) echo "Unexpected canonical redirect from \${legacy_host}: HTTP \${status}, Location=\${location}"; exit 1 ;;
+                "https://darbandicommercial.ir${expected_path}?"*) ;;
+                *) echo "Unexpected canonical redirect from ${legacy_host}: HTTP ${status}, Location=${location}"; exit 1 ;;
               esac
             }
             assert_legacy_redirect "chat.darbandicommercial.ir" "/chat" "__chat_alias_smoke"
@@ -290,11 +290,11 @@ jobs:
 
             legacy_manifest_status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-manifest.headers -o /dev/null -w '%{http_code}' "https://reminders.darbandicommercial.ir/reminders-subdomain.webmanifest?v=legacy-smoke")"
             test "$legacy_manifest_status" = "301"
-            legacy_manifest_location="$(grep -i '^location:' /tmp/legacy-manifest.headers | tail -n 1 | tr -d '\\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
+            legacy_manifest_location="$(grep -i '^location:' /tmp/legacy-manifest.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
             test "$legacy_manifest_location" = "https://darbandicommercial.ir/manifest.webmanifest?v=legacy-smoke"
 
             echo "Checking primary HTML has one manifest and no mobile-origin redirect"
-            curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-main.html "$base/?__canonical_pwa_smoke=\${GITHUB_RUN_ID}"
+            curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-main.html "$base/?__canonical_pwa_smoke=${GITHUB_RUN_ID}"
             grep -Fq '<link rel="manifest" href="/manifest.webmanifest" />' /tmp/customs-main.html
             test "$(grep -o 'rel="manifest"' /tmp/customs-main.html | wc -l | tr -d ' ')" = "1"
             grep -Fq 'rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon-180.png' /tmp/customs-main.html
@@ -304,10 +304,10 @@ jobs:
             fi
 
             echo "Checking legacy PWA launch URL returns to canonical home"
-            pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base/?source=pwa&__legacy_pwa_smoke=\${GITHUB_RUN_ID}")"
+            pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
             pwa_location="$(printf '%s\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
             echo "PWA redirect Location: $pwa_location"
-            test "$pwa_location" = "$base/?__legacy_pwa_smoke=\${GITHUB_RUN_ID}"
+            test "$pwa_location" = "$base/?__legacy_pwa_smoke=${GITHUB_RUN_ID}"
 
             echo "Checking live-voice code is present in compiled bundle"
             grep -R -F -q 'تماس صوتی زنده' dist/assets
@@ -429,11 +429,11 @@ jobs:
 
               const manifestHref = await remindersPage.locator('link[rel="manifest"]').getAttribute('href');
               if (manifestHref !== '/manifest.webmanifest') {
-                throw new Error(\`Reminders route must use the single canonical manifest: \${manifestHref || 'missing'}\`);
+                throw new Error(\`Reminders route must use the single canonical manifest: ${manifestHref || 'missing'}\`);
               }
               const manifestCheck = await remindersPage.evaluate(async (href) => {
                 const response = await fetch(href);
-                if (!response.ok) throw new Error(\`Canonical manifest HTTP \${response.status}\`);
+                if (!response.ok) throw new Error(\`Canonical manifest HTTP ${response.status}\`);
                 const manifest = await response.json();
                 const iconResults = await Promise.all((manifest.icons || []).map(async (icon) => {
                   const result = await fetch(icon.src);
@@ -450,7 +450,7 @@ jobs:
                 !manifestCheck.icons.some((icon) => icon.src.includes('180x180') || icon.src.includes('apple-touch-icon-180.png')) ||
                 manifestCheck.icons.some((icon) => icon.status !== 200)
               ) {
-                throw new Error(\`Canonical PWA manifest/icon validation failed: \${JSON.stringify(manifestCheck)}\`);
+                throw new Error(\`Canonical PWA manifest/icon validation failed: ${JSON.stringify(manifestCheck)}\`);
               }
               if (remindersErrors.length) throw new Error(remindersErrors.join('; '));
               console.log('Reminders internal route uses the canonical PWA manifest:', JSON.stringify(manifestCheck));
@@ -467,11 +467,11 @@ jobs:
                   aliasRedirectStatuses.push(response.status());
                 }
               });
-              remindersSubdomainPage.on('pageerror', (error) => subdomainErrors.push(\`pageerror: \${error.message}\`));
+              remindersSubdomainPage.on('pageerror', (error) => subdomainErrors.push(\`pageerror: ${error.message}\`));
               remindersSubdomainPage.on('requestfailed', (request) => {
                 const url = request.url();
                 if (url.includes('.js') || url.includes('.mjs')) {
-                  subdomainErrors.push(\`requestfailed: \${url} — \${request.failure()?.errorText || 'unknown'}\`);
+                  subdomainErrors.push(\`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}\`);
                 }
               });
               await remindersSubdomainPage.goto('https://reminders.darbandicommercial.ir/?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -485,7 +485,7 @@ jobs:
                 { timeout: 20000, message: 'Reminders alias did not open the internal reminders route' },
               ).toBe('/reminders/login');
               if (!aliasRedirectStatuses.includes(301)) {
-                throw new Error(\`Legacy reminders host did not emit HTTP 301: \${JSON.stringify(aliasRedirectStatuses)}\`);
+                throw new Error(\`Legacy reminders host did not emit HTTP 301: ${JSON.stringify(aliasRedirectStatuses)}\`);
               }
               await expect(remindersSubdomainPage).toHaveTitle(/یادآورها/);
               await expect(remindersSubdomainPage.locator('#root')).not.toBeEmpty();
@@ -493,7 +493,7 @@ jobs:
               await expect(remindersSubdomainPage.locator('.app-topbar')).toHaveCount(0);
               const aliasManifestHref = await remindersSubdomainPage.locator('link[rel="manifest"]').getAttribute('href');
               if (aliasManifestHref !== '/manifest.webmanifest') {
-                throw new Error(\`Legacy reminders redirect did not resolve to the one canonical manifest: \${aliasManifestHref || 'missing'}\`);
+                throw new Error(\`Legacy reminders redirect did not resolve to the one canonical manifest: ${aliasManifestHref || 'missing'}\`);
               }
               if (subdomainErrors.length) throw new Error(subdomainErrors.join('; '));
               console.log('Legacy reminders domain permanently redirects to canonical app.');
