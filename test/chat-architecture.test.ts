@@ -247,7 +247,7 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('RUBIKA_FILE_LIMIT');
     expect(gateway).toContain('RUBIKA_DOWNLOAD_URL_INVALID');
     expect(gateway).toContain('async function rubikaWebhook');
-    expect(gateway).toContain('rubika:{supported:true,text:true,inboundWebhook:true,media:false');
+    expect(gateway).toContain('rubika:{supported:true,text:true,inboundWebhook:true,media:true,maxUploadBytes:RUBIKA_FILE_LIMIT');
   });
 
   it('routes messenger provider egress through a signed Cloudflare allowlist proxy',()=>{
