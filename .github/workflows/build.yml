@@ -427,7 +427,7 @@ jobs:
                 const manifest = await response.json();
                 const iconResults = await Promise.all((manifest.icons || []).map(async (icon) => {
                   const result = await fetch(icon.src);
-                  return { src: icon.src, status: result.status, type: result.headers().get('content-type') };
+                  return { src: icon.src, status: result.status, type: result.headers.get('content-type') };
                 }));
                 return {
                   name: manifest.short_name,
