@@ -128,7 +128,8 @@ export const RemindersPage:React.FC=()=>{
 
  useEffect(()=>{
   if(!composerDraftKey||draftLoadedKey!==composerDraftKey)return;
-  const timer=window.setTimeout(()=>{
+  const persistNow=()=>{
+   if(!composerDraftKey||draftLoadedKey!==composerDraftKey)return;
    const hasDraft=Boolean(composer.trim()||quickDueAt||quickAllDay||quickShipment);
    if(!hasDraft){
     void removeDraftValue(composerDraftKey).catch(error=>console.warn('[Reminders] draft cleanup failed:',error));
@@ -139,8 +140,17 @@ export const RemindersPage:React.FC=()=>{
    void writeDraftValue(composerDraftKey,draft).then(saved=>{
     if(!saved)console.warn('[Reminders] browser storage did not accept the durable draft.');
    }).catch(error=>console.warn('[Reminders] draft could not be persisted:',error));
-  },250);
-  return()=>window.clearTimeout(timer);
+  };
+  const persistWhenHidden=()=>{if(document.visibilityState==='hidden')persistNow();};
+  // iOS may suspend the page before the debounce timer expires.
+  window.addEventListener('pagehide',persistNow);
+  document.addEventListener('visibilitychange',persistWhenHidden);
+  const timer=window.setTimeout(persistNow,250);
+  return()=>{
+   window.removeEventListener('pagehide',persistNow);
+   document.removeEventListener('visibilitychange',persistWhenHidden);
+   window.clearTimeout(timer);
+  };
  },[composerDraftKey,draftLoadedKey,composer,quickDueAt,quickAllDay,quickDateSource,quickShipment,user?.id,profile?.organization_id]);
   const goToSection=(section:ReminderSection)=>{setPage(0);navigate(section==='home'?'/reminders':('/reminders/'+section));};
   const goToDay=(key:string)=>{setPage(0);navigate('/reminders/day?day='+encodeURIComponent(key));};
