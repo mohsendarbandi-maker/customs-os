@@ -370,7 +370,7 @@ export const ChatPage:React.FC=()=>{
    recorder.onstop=async()=>{
     try{
      setMediaState('preparing');stream.getTracks().forEach(t=>t.stop());const blob=new Blob(voiceChunks.current,{type:mime||'audio/mp4'});voiceChunks.current=[];recorderRef.current=null;streamRef.current=null;setRecording(false);
-     if(blob.size<1000){setError('صدای قابل استفاده‌ای ضبط نشد.');return}
+     if(blob.size<1000){setError('صدای قابل استفاده‌ای ضبط نشد.');return}if(blob.size>20*1024*1024){setError('حجم پیام صوتی چت حداکثر ۲۰MB است.');return}
      setAttachmentBusy(true);setMediaState('uploading');const ext=(blob.type||'audio/mp4').includes('webm')?'webm':'mp4';
      await sendFileMessage(selectedId,profile.organization_id,new File([blob],`voice-${Date.now()}.${ext}`,{type:blob.type||'audio/mp4'}),'voice');
      setMediaState('committed');await loadConversation(selectedId,false);await refresh();
