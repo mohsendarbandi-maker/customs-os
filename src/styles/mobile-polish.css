@@ -741,14 +741,20 @@
   }
   .app-shell:has(.chat-standalone) .future-route-stage { height: 100%; min-height: 0; }
   .app-shell:has(.chat-standalone) .chat-standalone {
-    height: 100dvh !important;
     min-height: 0 !important;
     max-height: 100dvh !important;
   }
-  .app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock { display: none !important; }
+  /* The inbox reserves tab-bar space; the open chat takes the full viewport because its dock is removed. */
   .app-shell:has(.chat-standalone[data-chat-selected="false"]) .chat-standalone {
-    padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 10px);
+    height: calc(100dvh - var(--app-mobile-tabbar-height) - env(safe-area-inset-bottom)) !important;
   }
+  .app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-content {
+    padding-bottom: 0 !important;
+  }
+  .app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone {
+    height: 100dvh !important;
+  }
+  .app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock { display: none !important; }
   /* Reminders previously owned a second fixed tab bar and forced the whole root
      into a hidden 100dvh viewport. Their route keeps its content and quick-add,
      but the shared shell is the only navigation and page content may scroll. */
