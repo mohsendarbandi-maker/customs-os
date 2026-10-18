@@ -125,6 +125,24 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       )
     : visibleNav;
 
+  React.useEffect(() => {
+    // Escape always dismisses the More sheet; route changes also close it to prevent a stranded overlay.
+    if (!mobileOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileOpen(false);
+        setMobileSearch('');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [mobileOpen]);
+
+  React.useEffect(() => {
+    setMobileOpen(false);
+    setMobileSearch('');
+  }, [location.pathname, location.search]);
+
   if (bare) return <>{children}</>;
 
   const isActive = (to: string) => {
@@ -181,25 +199,11 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 .filter((x) => x.group === g)
                 .map((item) => {
                   const Icon = item.icon;
-                  return item.to === '/chat' ? (
-                    <a
-                      key={item.to}
-                      href="/chat"
-                      className={`app-nav-item ${isActive(item.to) ? 'active' : ''}`}
-                      title={sidebarCollapsed ? item.label : undefined}
-                    >
-                      <Icon size={19} />
-                      {!sidebarCollapsed && (
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold truncate">{item.label}</span>
-                          <span className="block text-[10px] app-muted truncate">{item.en}</span>
-                        </span>
-                      )}
-                    </a>
-                  ) : (
+                  return (
                     <NavLink
                       key={item.to}
                       to={item.to}
+                      end={item.to === '/'}
                       className={`app-nav-item ${isActive(item.to) ? 'active' : ''}`}
                       title={sidebarCollapsed ? item.label : undefined}
                     >
@@ -211,7 +215,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                         </span>
                       )}
                     </NavLink>
-                  );
                 })}
             </div>
           ))}
