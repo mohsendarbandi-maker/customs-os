@@ -916,3 +916,120 @@
     bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
   }
 }
+
+
+/* Shared workspace design: Reminders is a route within Customs OS, not a second app.
+   Its prior independent theme state, gradient canvas, and fixed nav duplicated app chrome. */
+.reminders-app-standalone {
+  background: transparent !important;
+  color: var(--text) !important;
+  padding-bottom: 24px !important;
+}
+.reminders-app-standalone .reminders-hub-header,
+.reminders-app-standalone .reminders-standalone-header {
+  background: color-mix(in srgb, var(--surface) 96%, transparent) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow) !important;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.reminders-app-standalone .reminders-hub-section,
+.reminders-app-standalone .reminders-up-next,
+.reminders-app-standalone .reminders-overview .reminder-stat-card,
+.reminders-app-standalone .reminder-card,
+.reminders-app-standalone .reminders-calendar-panel,
+.reminders-app-standalone .reminders-my-list-rows,
+.reminders-app-standalone .reminders-smart-card,
+.reminders-app-standalone .reminders-settings-group {
+  color: var(--text);
+  border-color: var(--border);
+}
+.reminders-app-standalone .reminders-hub-section,
+.reminders-app-standalone .reminders-overview .reminder-stat-card,
+.reminders-app-standalone .reminder-card,
+.reminders-app-standalone .reminders-calendar-panel,
+.reminders-app-standalone .reminders-my-list-rows,
+.reminders-app-standalone .reminders-smart-card {
+  background-color: var(--surface);
+}
+.reminders-app-standalone .reminders-brand-icon {
+  border-radius: 13px;
+  box-shadow: var(--shadow);
+}
+.reminders-app-standalone .reminders-shared-appearance-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 58px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: start;
+}
+.reminders-app-standalone .reminders-shared-appearance-link > span:nth-child(2) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+}
+.reminders-app-standalone .reminders-shared-appearance-link strong { font-size: 14px; font-weight: 850; }
+.reminders-app-standalone .reminders-shared-appearance-link small { color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.reminders-app-standalone .reminders-settings-group > button {
+  color: var(--text);
+  border-color: var(--border);
+}
+.reminders-app-standalone .reminders-settings-group > button:hover {
+  background: var(--surface-2);
+}
+.reminders-app-standalone .reminders-standalone-header h1 {
+  color: var(--text) !important;
+}
+@media (max-width: 1023px) {
+  .app-shell:has(.reminders-app-standalone) .reminders-app-standalone {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+    padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important;
+  }
+  .app-shell:has(.reminders-app-standalone) .reminders-standalone-header {
+    display: block;
+    margin: 0 0 12px !important;
+    padding: 12px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    box-shadow: var(--shadow) !important;
+    background: var(--surface) !important;
+  }
+  .app-shell:has(.reminders-app-standalone) .reminders-standalone-header h1 {
+    font-size: 18px !important;
+    line-height: 1.35 !important;
+  }
+  .app-shell:has(.reminders-app-standalone) .reminders-standalone-header > div:first-child {
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+  .app-shell:has(.reminders-app-standalone) .reminders-standalone-header > div:first-child > div {
+    min-width: 0;
+  }
+}
+@media (max-width: 390px) {
+  .app-shell:has(.reminders-app-standalone) .reminders-standalone-header > div:first-child {
+    gap: 6px !important;
+  }
+  .app-shell:has(.reminders-app-standalone) .reminders-standalone-header .reminders-header-add {
+    min-width: 40px;
+    width: 40px;
+    padding-inline: 0;
+    justify-content: center;
+  }
+  .app-shell:has(.reminders-app-standalone) .reminders-standalone-header .reminders-header-add span {
+    display: none;
+  }
+}
