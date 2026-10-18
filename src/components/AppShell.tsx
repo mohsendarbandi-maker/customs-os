@@ -75,7 +75,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
 
   const [isDesktop, setIsDesktop] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : true
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches : true
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -85,7 +85,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   );
 
   useEffect(() => {
-    const media = window.matchMedia('(min-width: 1024px)');
+    const media = window.matchMedia('(min-width: 1024px) and (pointer: fine)');
     const updateLayout = () => {
       setIsDesktop(media.matches);
       if (media.matches) setMobileOpen(false);
