@@ -404,7 +404,7 @@
   --app-mobile-tabbar-height: 70px;
   --app-mobile-header-height: 56px;
 }
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (pointer: coarse) {
   html, body, #root {
     width: 100%;
     max-width: 100%;
@@ -869,7 +869,7 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (pointer: coarse) {
   /* The reminders page had a legacy width: calc(100% + 20px) rule, which
      shifted RTL content underneath the viewport edge despite body overflow clipping. */
   .app-shell:has(.reminders-app-standalone) .reminders-app-standalone {
@@ -884,7 +884,7 @@
   .customs-home header p { font-variant-numeric: lining-nums; }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (pointer: coarse) {
   /* iOS opens the keyboard when a real text field receives focus; hiding the
      dock and releasing its reserved space prevents the keyboard/composer overlap. */
   .app-shell:has(input:focus) .app-mobile-dock,
@@ -909,7 +909,7 @@
   }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (pointer: coarse) {
   /* PwaLifecycle is a sibling of AppShell in the DOM, so selectors must not be scoped under .app-shell. */
   .pwa-install-prompt,
   .pwa-ios-install-guide,
