@@ -314,6 +314,35 @@ export default {
       });
     }
 
+    // Requests saved by older installed PWA versions on the primary host must
+    // also resolve to the single manifest, rather than falling through to the SPA shell.
+    const legacyManifestPaths = new Set([
+      '/chat-app-v3.webmanifest',
+      '/chat-app-v4.webmanifest',
+      '/chat-manifest.webmanifest',
+      '/chat-subdomain.webmanifest',
+      '/manifest-chat.webmanifest',
+      '/manifest-reminders.webmanifest',
+      '/reminders-subdomain.webmanifest',
+      '/mobile-subdomain.webmanifest',
+    ]);
+    if (
+      ['GET', 'HEAD'].includes(request.method) &&
+      url.hostname.toLowerCase() === 'darbandicommercial.ir' &&
+      legacyManifestPaths.has(url.pathname)
+    ) {
+      const canonical = new URL(url.toString());
+      canonical.pathname = '/manifest.webmanifest';
+      return new Response(null, {
+        status: 301,
+        headers: {
+          Location: canonical.toString(),
+          'Cache-Control': 'public, max-age=3600',
+          'X-Customs-OS-Canonical-Redirect': '1',
+        },
+      });
+    }
+
     // Old installed launch URLs open the unified home, not a separate chat PWA.
     if (
       ['GET', 'HEAD'].includes(request.method) &&
