@@ -4,6 +4,7 @@ import{useSearchParams}from'react-router-dom';
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
+import{readDraftValue,removeDraftValue,writeDraftValue}from'../../lib/draftStorage';
 import{subscribeOfflineQueue,flushOfflineQueue,isChatQueueItem,chatClientUuid,retryChatMessage,type QueuedRpc}from'../../lib/offlineQueue';
 import{enableChatPush,hasChatPushSubscription}from'./push';
 import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,getMessageById,listMessageReceipts,listMessages,listMessagesAfter,listOrgConnections,markChatFocus,markDelivered,markPlayed,markRead,clearChatFocus,searchChat,sendFileMessage,sendMessage,setMessageMentions,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
@@ -81,6 +82,10 @@ export const ChatPage:React.FC=()=>{
  const{user,profile}=useAuth();const[searchParams]=useSearchParams();
  const requestedConversationId=searchParams.get('conversation');const requestedCallId=searchParams.get('call');
  const[conversations,setConversations]=useState<ChatConversation[]>([]);const[selectedId,setSelectedId]=useState<string|null>(null);
+  const chatDraftKey=user?.id&&profile?.organization_id&&selectedId
+   ?'customs-os:chat-composer:v1:'+encodeURIComponent(user.id)+':'+encodeURIComponent(profile.organization_id)+':'+encodeURIComponent(selectedId)
+   :null;
+  const chatDraftLoadedKey=useRef<string|null>(null);const chatDraftRestoreSequence=useRef(0);
  const[messages,setMessages]=useState<ChatMessage[]>([]);const[queueItems,setQueueItems]=useState<QueuedRpc[]>([]);
  const messagesRef=useRef<ChatMessage[]>([]);const selectedIdRef=useRef<string|null>(null);
  const[text,setText]=useState('');const[error,setError]=useState<string|null>(null);
@@ -109,6 +114,46 @@ export const ChatPage:React.FC=()=>{
  useEffect(()=>{queueSyncRef.current=queueItems},[queueItems]);
  useEffect(()=>{messagesRef.current=messages},[messages]);
  useEffect(()=>{selectedIdRef.current=selectedId},[selectedId]);
+
+  useEffect(()=>{
+   const key=chatDraftKey;
+   const sequence=++chatDraftRestoreSequence.current;
+   let cancelled=false;
+   chatDraftLoadedKey.current=null;
+   if(!key){
+    setText('');
+    return()=>{cancelled=true;};
+   }
+   // Restore by conversation key so unsent text never appears in the wrong thread.
+   setText('');
+   void readDraftValue(key).then(value=>{
+    if(cancelled||sequence!==chatDraftRestoreSequence.current)return;
+    const draft=value&&typeof value==='object'?(value as {text?:unknown}):null;
+    setText(typeof draft?.text==='string'?draft.text:'');
+    chatDraftLoadedKey.current=key;
+   }).catch(error=>{
+    if(cancelled||sequence!==chatDraftRestoreSequence.current)return;
+    console.warn('[Chat] composer draft restore failed:',error);
+    chatDraftLoadedKey.current=key;
+   });
+   return()=>{cancelled=true;};
+  },[chatDraftKey]);
+
+  useEffect(()=>{
+   if(!chatDraftKey||chatDraftLoadedKey.current!==chatDraftKey||editId)return;
+   const timer=window.setTimeout(()=>{
+    const draftKey=chatDraftKey;
+    if(chatDraftLoadedKey.current!==draftKey)return;
+    if(text.trim()){
+     void writeDraftValue(draftKey,{text,updatedAt:Date.now()}).then(saved=>{
+      if(!saved)console.warn('[Chat] browser storage did not accept the composer draft.');
+     }).catch(error=>console.warn('[Chat] composer draft save failed:',error));
+    }else{
+     void removeDraftValue(draftKey).catch(error=>console.warn('[Chat] composer draft cleanup failed:',error));
+    }
+   },300);
+   return()=>window.clearTimeout(timer);
+  },[chatDraftKey,text,editId]);
  useEffect(()=>{latestMessageRef.current=[...messages].filter(m=>!m.id.startsWith('local-')).pop()??latestMessageRef.current},[messages]);
 
  const refresh=useCallback(async()=>{
