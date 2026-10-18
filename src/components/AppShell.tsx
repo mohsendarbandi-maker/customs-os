@@ -6,7 +6,7 @@ import {
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
   Contact, Folder, ClipboardCheck, GitBranch, Receipt, Network,
-  ChevronDown, Plus, Home, CalendarDays
+  Plus, Home, CalendarDays
 } from 'lucide-react';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { useAppearance } from '../context/AppearanceContext';
@@ -76,12 +76,28 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState('');
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(groups.map((g) => [g, true]))
+  // Keep JSX and CSS on the same breakpoint. Below 1024px, desktop navigation must not exist in the DOM.
+  const [isCompactViewport, setIsCompactViewport] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
   );
   const [online, setOnline] = useState(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
+
+  React.useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px)');
+    const updateViewport = () => {
+      setIsCompactViewport(media.matches);
+      if (!media.matches) setMobileOpen(false);
+    };
+    updateViewport();
+    if (typeof media.addEventListener === 'function') media.addEventListener('change', updateViewport);
+    else media.addListener(updateViewport);
+    return () => {
+      if (typeof media.removeEventListener === 'function') media.removeEventListener('change', updateViewport);
+      else media.removeListener(updateViewport);
+    };
+  }, []);
 
   React.useEffect(() => {
     const on = () => setOnline(true);
@@ -94,18 +110,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     };
   }, []);
 
-  const host = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
-  const isChatSubdomain = host === 'chat.darbandicommercial.ir';
-  const isRemindersSubdomain = host === 'reminders.darbandicommercial.ir';
-  const bare =
-    location.pathname === '/login' ||
-    location.pathname === '/onboarding' ||
-    location.pathname === '/chat' ||
-    location.pathname.startsWith('/chat/') ||
-    location.pathname === '/reminders' ||
-    location.pathname.startsWith('/reminders/') ||
-    (isChatSubdomain && location.pathname === '/') ||
-    (isRemindersSubdomain && location.pathname === '/');
+  const isChatRoute = location.pathname === '/chat' || location.pathname.startsWith('/chat/');
+  const isRemindersRoute = location.pathname === '/reminders' || location.pathname.startsWith('/reminders/');
+  const bare = location.pathname === '/login' || location.pathname === '/onboarding';
 
   const visibleNav = nav.filter((x) => canSee(x, profile?.role));
   const query = mobileSearch.trim().toLowerCase();
@@ -151,27 +158,16 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     setMobileSearch('');
   };
 
-  const toggleGroup = (g: string) =>
-    setOpenGroups((prev) => ({ ...prev, [g]: !prev[g] }));
-
-  const quickActions = [
-    { label: 'ثبت محموله', to: '/operations?tab=pre-declaration', icon: Plus },
-    { label: 'داشبورد', to: '/', icon: Home },
-    { label: 'چت', to: '/chat', icon: MessageCircle },
-    { label: 'یادآورها', to: '/reminders', icon: ClipboardList },
-  ];
-
   const go = (to: string) => {
-    if (to === '/chat') {
-      window.location.href = '/chat';
-    } else {
-      navigate(to);
-    }
+    // Keep same-origin routes inside React Router; hard navigation can reset the active workspace.
+    navigate(to);
     closeMobile();
   };
 
   return (
-    <div className="app-shell min-h-screen future-shell" dir="rtl">
+    <div className={`app-shell min-h-screen future-shell${isChatRoute ? ' is-chat-route' : ''}${isRemindersRoute ? ' is-reminders-route' : ''}`} dir="rtl">
+      {!isCompactViewport && (
+        <>
       {/* ── Desktop Sidebar ── */}
       <aside className={`app-sidebar hidden md:flex ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
         <div className="app-brand">
@@ -235,215 +231,114 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </div>
       </aside>
 
-      {/* ── Mobile Top Bar ── */}
-      <div className="app-mobilebar md:hidden">
-        <button
-          type="button"
-          className="icon-btn mobile-menu-trigger"
-          aria-label="منو"
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen(v => !v)}
-        >
-          <Menu size={22} />
-        </button>
-        <button
-          type="button"
-          className="app-mobile-title"
-          aria-label={`رفتن به خانه؛ بخش فعلی: ${location.pathname.startsWith('/settings') ? 'تنظیمات' : visibleNav.find((x) => isActive(x.to))?.label || 'Customs OS'}`}
-          onClick={() => navigate('/')}
-        >
-          <CustomsLogo size={32} showWordmark={false} />
-          <span className="mobile-current-page">
-            <span className="mobile-current-page__eyebrow">CUSTOMS OS</span>
-            <span className="mobile-current-page__title">
-              {location.pathname.startsWith('/settings')
-                ? 'تنظیمات'
-                : visibleNav.find((x) => isActive(x.to))?.label || 'خانه'}
-            </span>
-          </span>
-        </button>
-        <button type="button" className="icon-btn" aria-label="ظاهر" onClick={cycleTheme}>
-          {comfort === 'reading' ? (
-            <BookOpen size={18} />
-          ) : theme === 'light' ? (
-            <Sun size={18} />
-          ) : (
-            <Moon size={18} />
-          )}
-        </button>
-      </div>
+        </>
+      )}
 
-      {/* ── Mobile Drawer ── */}
-      {mobileOpen && (
+      {/* Compact mobile header: no hamburger and no theme-cycle button. */}
+      {isCompactViewport && !isChatRoute && !isRemindersRoute && (
+        <header className="app-mobilebar" role="banner">
+          <button
+            type="button"
+            className="app-mobile-title"
+            aria-label={`خانه؛ بخش فعلی: ${location.pathname.startsWith('/settings') ? 'تنظیمات' : visibleNav.find((x) => isActive(x.to))?.label || 'خانه'}`}
+            onClick={() => navigate('/')}
+          >
+            <CustomsLogo size={28} showWordmark={false} />
+            <span className="mobile-current-page">
+              <span className="mobile-current-page__title">
+                {location.pathname.startsWith('/settings')
+                  ? 'تنظیمات'
+                  : visibleNav.find((x) => isActive(x.to))?.label || 'خانه'}
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="icon-btn mobile-search-trigger"
+            aria-label="جست‌وجو و دسترسی به بخش‌ها"
+            title="جست‌وجو در بخش‌ها"
+            onClick={() => setMobileOpen(true)}
+          >
+            <Search size={19} />
+          </button>
+        </header>
+      )}
+
+      {/* One role-aware More sheet: every visible section is a tile in a 3-column grid. */}
+      {mobileOpen && isCompactViewport && (
         <>
-          <div className="app-scrim md:hidden" onClick={closeMobile} />
-          <aside className="app-mobile-drawer md:hidden" role="dialog" aria-label="منوی اصلی">
-            {/* Header */}
+          <div className="app-scrim mobile-more-scrim" onClick={closeMobile} aria-hidden="true" />
+          <section className="app-mobile-drawer mobile-more-sheet" role="dialog" aria-modal="true" aria-label="بیشتر">
             <div className="mobile-drawer-header">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex items-center gap-3">
-                  <span className="h-12 w-12 rounded-2xl bg-[var(--primary)] text-white grid place-items-center font-black text-lg shadow-lg">
-                    {(profile?.full_name || 'ک').slice(0, 1)}
-                  </span>
+                  <span className="mobile-more-user-mark">{(profile?.full_name || 'ک').slice(0, 1)}</span>
                   <div className="min-w-0">
                     <b className="block truncate text-[15px]">{profile?.full_name || 'کاربر'}</b>
-                    <span className="block text-xs app-muted mt-0.5">
-                      {roles[profile?.role || ''] || 'کاربر'}
-                    </span>
+                    <span className="block text-xs app-muted mt-0.5">{roles[profile?.role || ''] || 'کاربر'}</span>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  aria-label="بستن منو"
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    closeMobile();
-                  }}
-                  onClick={closeMobile}
-                >
+                <button type="button" className="icon-btn" aria-label="بستن بخش بیشتر" onClick={closeMobile}>
                   <X size={18} />
                 </button>
               </div>
-
-              {/* Quick actions */}
-              <div className="mobile-quick-actions">
-                {quickActions.map((qa) => {
-                  const Icon = qa.icon;
-                  return (
-                    <button
-                      key={qa.to}
-                      type="button"
-                      className="mobile-quick-btn"
-                      onClick={() => go(qa.to)}
-                    >
-                      <Icon size={20} strokeWidth={2.2} />
-                      <span>{qa.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Search */}
               <div className="mobile-search-wrap">
-                <Search size={16} className="mobile-search-icon" />
+                <Search size={17} className="mobile-search-icon" />
                 <input
                   type="search"
                   className="mobile-search-input"
-                  placeholder="جستجو در منو…"
+                  placeholder="جست‌وجو در همه بخش‌ها…"
                   value={mobileSearch}
                   onChange={(e) => setMobileSearch(e.target.value)}
                   autoComplete="off"
+                  aria-label="جست‌وجو در همه بخش‌ها"
                 />
                 {mobileSearch && (
-                  <button
-                    type="button"
-                    className="mobile-search-clear"
-                    onClick={() => setMobileSearch('')}
-                    aria-label="پاک کردن"
-                  >
+                  <button type="button" className="mobile-search-clear" onClick={() => setMobileSearch('')} aria-label="پاک کردن جست‌وجو">
                     <X size={14} />
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Nav groups */}
-            <nav className="mobile-drawer-nav">
-              {groups.map((g) => {
-                const items = filteredNav.filter((x) => x.group === g);
-                if (items.length === 0) return null;
-                const isOpen = openGroups[g] !== false;
+            <nav className="mobile-drawer-nav mobile-more-grid" aria-label="همه بخش‌های سامانه">
+              {filteredNav.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.to) || (item.to === '/operations' && location.pathname.startsWith('/operations'));
                 return (
-                  <div key={g} className="mobile-nav-group">
-                    <button
-                      type="button"
-                      className="mobile-group-toggle"
-                      onClick={() => toggleGroup(g)}
-                      aria-expanded={isOpen}
-                    >
-                      <span>{g}</span>
-                      <ChevronDown
-                        size={16}
-                        className={`mobile-group-chevron ${isOpen ? 'is-open' : ''}`}
-                      />
-                    </button>
-                    {isOpen && (
-                      <div className="mobile-group-items">
-                        {items.map((item) => {
-                          const Icon = item.icon;
-                          const active = isActive(item.to);
-                          return (
-                            <button
-                              key={item.to}
-                              type="button"
-                              className={`mobile-nav-item ${active ? 'active' : ''}`}
-                              onClick={() => go(item.to)}
-                            >
-                              <span className="mobile-nav-icon">
-                                <Icon size={20} strokeWidth={active ? 2.4 : 2} />
-                              </span>
-                              <span className="mobile-nav-label">
-                                <span className="block text-[14px] font-semibold leading-tight">
-                                  {item.label}
-                                </span>
-                                <span className="block text-[11px] app-muted mt-0.5">
-                                  {item.en}
-                                </span>
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    key={item.to}
+                    type="button"
+                    className={`mobile-more-item ${active ? 'active' : ''}`}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => go(item.to)}
+                  >
+                    <span className="mobile-more-icon"><Icon size={21} strokeWidth={2.1} /></span>
+                    <span className="mobile-more-label">{item.label}</span>
+                  </button>
                 );
               })}
-
-              {filteredNav.length === 0 && (
-                <div className="mobile-empty-search">
-                  نتیجه‌ای یافت نشد
-                </div>
-              )}
+              <button type="button" className="mobile-more-item" onClick={() => go('/settings/appearance')}>
+                <span className="mobile-more-icon"><Palette size={21} /></span>
+                <span className="mobile-more-label">ظاهر و تم</span>
+              </button>
+              <button type="button" className="mobile-more-item" onClick={() => go('/settings/profile')}>
+                <span className="mobile-more-icon"><Users size={21} /></span>
+                <span className="mobile-more-label">پروفایل من</span>
+              </button>
+              <button type="button" className="mobile-more-item is-danger" onClick={() => { closeMobile(); void signOut(); }}>
+                <span className="mobile-more-icon"><LogOut size={21} /></span>
+                <span className="mobile-more-label">خروج از حساب</span>
+              </button>
             </nav>
-
-            {/* Footer */}
-            <div className="mobile-drawer-footer">
-              <button
-                type="button"
-                className="mobile-nav-item"
-                onClick={() => {
-                  closeMobile();
-                  navigate('/settings/profile');
-                }}
-              >
-                <span className="mobile-nav-icon"><Users size={20} /></span>
-                <span className="mobile-nav-label">
-                  <span className="block text-[14px] font-semibold">پروفایل من</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                className="mobile-nav-item"
-                onClick={() => {
-                  closeMobile();
-                  void signOut();
-                }}
-              >
-                <span className="mobile-nav-icon"><LogOut size={20} /></span>
-                <span className="mobile-nav-label">
-                  <span className="block text-[14px] font-semibold">خروج از حساب</span>
-                </span>
-              </button>
-            </div>
-          </aside>
+          </section>
         </>
       )}
 
       {/* ── Main content ── */}
       <main className={`app-main ${sidebarCollapsed ? 'sidebar-compact' : ''}`}>
-        <header className="app-topbar">
-          <div className="flex items-center gap-3 min-w-0"><button type="button" className="customs-desktop-menu" aria-label="باز کردن منوی اصلی" aria-expanded={mobileOpen} onClick={() => setMobileOpen(v => !v)}><Menu size={19}/><span>منو</span></button>
+        {!isCompactViewport && <header className="app-topbar">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="hidden lg:block">
               <div className="text-[11px] app-muted">سامانه مدیریت عملیات گمرکی و لجستیک</div>
               <div className="font-bold truncate">
@@ -547,21 +442,21 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               </div>
             </div>
           </div>
-        </header>
+        </header>}
         <div className="app-content">
           <div key={location.pathname + location.search} className="future-route-stage">
             {children}
           </div>
         </div>
       </main>
-      <nav className="app-mobile-dock md:hidden" aria-label="پیمایش سریع">
+      {isCompactViewport && <nav className="app-mobile-dock" aria-label="پیمایش اصلی">
         <button type="button" className={isActive('/')?'is-active':''} aria-current={isActive('/')?'page':undefined} onClick={()=>go('/')}><Home size={21}/><span>خانه</span></button>
         <button type="button" className={location.pathname.startsWith('/operations')?'is-active':''} aria-current={location.pathname.startsWith('/operations')?'page':undefined} onClick={()=>go('/operations')}><ClipboardList size={21}/><span>عملیات</span></button>
-        <button type="button" className={isActive('/reminders')?'is-active':''} aria-current={isActive('/reminders')?'page':undefined} onClick={()=>go('/reminders')}><CalendarDays size={21}/><span>یادآورها</span></button>
+        <button type="button" className={isRemindersRoute?'is-active':''} aria-current={isRemindersRoute?'page':undefined} onClick={()=>go('/reminders')}><CalendarDays size={21}/><span>یادآورها</span></button>
         <button type="button" className={isActive('/chat')?'is-active':''} aria-current={isActive('/chat')?'page':undefined} onClick={()=>go('/chat')}><MessageCircle size={21}/><span>چت</span></button>
         <button type="button" className={mobileOpen?'is-active':''} aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}><Menu size={21}/><span>بیشتر</span></button>
-      </nav>
-      <AIWorkspace pageContext={location.pathname + location.search} />
+      </nav>}
+      {!isChatRoute && !isRemindersRoute && <AIWorkspace pageContext={location.pathname + location.search} />}
     </div>
   );
 };
