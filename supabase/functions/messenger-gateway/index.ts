@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { scanChatFile } from "../_shared/chat-file-scanner.ts";
 
 type Platform = "telegram" | "bale" | "rubika" | "whatsapp";
 type Conn = { id:string; organization_id:string; platform:Platform; external_account_id:string; display_name:string; secret_ref:string; webhook_secret_ref:string; verify_token_ref:string|null; app_secret_ref:string|null; config:Record<string,any>; enabled:boolean; created_by?:string|null };
@@ -24,6 +25,20 @@ const token = (n=32)=>{const b=crypto.getRandomValues(new Uint8Array(n));return 
 function out(body:unknown,status=200,req?:Request){const h=new Headers({...noStore,"Content-Type":"application/json; charset=utf-8"});const origin=req?.headers.get("Origin")||"";if(ORIGINS.has(origin)){h.set("Access-Control-Allow-Origin",origin);h.set("Vary","Origin");h.set("Access-Control-Allow-Headers","authorization, apikey, content-type, x-file-name, x-file-size, idempotency-key");h.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");}return new Response(JSON.stringify(body),{status,headers:h});}
 const bad=(code:string,status=400,req?:Request)=>out({ok:false,error:code},status,req);
 async function readText(req:Request,limit:number){const claimed=Number(req.headers.get("content-length")||0);if(claimed>limit)throw new Error("BODY_TOO_LARGE");if(!req.body)return "";const r=req.body.getReader(),chunks:Uint8Array[]=[];let total=0;try{let done=false;while(!done){const p=await r.read();if(p.done){done=true;continue;}total+=p.value.byteLength;if(total>limit){await r.cancel();throw new Error("BODY_TOO_LARGE");}chunks.push(p.value);}}finally{try{r.releaseLock();}catch{}}const all=new Uint8Array(total);let off=0;for(const c of chunks){all.set(c,off);off+=c.byteLength;}return new TextDecoder().decode(all);}
+async function readBinary(body:ReadableStream<Uint8Array>,limit:number){
+ const reader=body.getReader(),chunks:Uint8Array[]=[];let total=0;
+ try{
+  while(true){
+   const part=await reader.read();if(part.done)break;
+   total+=part.value.byteLength;
+   if(total>limit){await reader.cancel();throw new Error("BODY_TOO_LARGE");}
+   chunks.push(part.value);
+  }
+ }finally{try{reader.releaseLock();}catch{}}
+ const bytes=new Uint8Array(total);let offset=0;
+ for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+ return bytes;
+}
 async function bodyJson(req:Request){const raw=await readText(req,100*1024);if(!raw)return {};const v=JSON.parse(raw);if(!v||typeof v!=="object"||Array.isArray(v))throw new Error("INVALID_JSON");return v as Record<string,any>;}
 async function context(req:Request){const jwt=(req.headers.get("Authorization")||"").match(/^Bearer\s+(.+)$/i)?.[1];if(!jwt||!ANON)throw new Error("AUTH_REQUIRED");const anon=createClient(SB,ANON,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Authorization:"Bearer "+jwt}}});const {data,error}=await anon.auth.getUser(jwt);if(error||!data.user)throw new Error("AUTH_INVALID");const {data:p,error:pe}=await db.from("profiles").select("id,organization_id,role,is_active,client_id").eq("id",data.user.id).maybeSingle();if(pe||!p||!p.is_active||!p.organization_id)throw new Error("PROFILE_UNAVAILABLE");return {userId:data.user.id,p:p as Profile};}
 function onlyManager(p:Profile){if(!manager(p))throw new Error("MANAGER_REQUIRED");}
@@ -134,7 +149,7 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  return String(a.id);
 }async function upload(req:Request,p:Profile,user:string,cid:string){const c=await ownedConn(cid,p.organization_id),u=new URL(req.url),chat=u.searchParams.get("chatId")||"",name=cleanName(decodeURIComponent(req.headers.get("X-File-Name")||u.searchParams.get("filename")||"document.bin")),mime=cleanMime(req.headers.get("Content-Type")),h=req.headers.get("x-file-size")||req.headers.get("content-length"),size=h&&/^\d+$/.test(h)?Number(h):null,max=c.platform==="whatsapp"?100*1024*1024:50*1024*1024;if(!chat||size===0||(size!==null&&size>max)||!req.body)return bad("INVALID_FILE_SIZE_CHAT_OR_BODY",413,req);const {data:mapped}=await db.from("messenger_chats").select("enabled,shipment_id").eq("organization_id",p.organization_id).eq("connection_id",c.id).eq("external_chat_id",chat).maybeSingle();if(!mapped?.enabled)return bad("CHAT_NOT_ALLOWED",403,req);try{const result=await uploadStream(c,chat,name,mime,size,req.body),assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",mapped.shipment_id||null);return out({ok:true,fileAssetId:assetId,externalMessageId:result.messageId,sizeBytes:size},201,req);}catch(e){return bad(errorCode(e),502,req);}}
 async function sourceFile(c:Conn,fileId:string){if(c.platform==="rubika")throw new Error("PLATFORM_TRANSPORT_UNVERIFIED");if(c.platform==="whatsapp"){const t=await accessToken(c),r=await graph(c,encodeURIComponent(fileId));const d=await r.json() as any;if(!r.ok||d.error||typeof d.url!=="string")throw new Error("WHATSAPP_MEDIA_URL_FAILED");const url=new URL(d.url);if(url.protocol!=="https:"||!(url.hostname.endsWith(".fbsbx.com")||url.hostname.endsWith(".fbcdn.net")||url.hostname.endsWith(".whatsapp.net")))throw new Error("MEDIA_HOST_REJECTED");const media=await fetch(url.toString(),{headers:{Authorization:"Bearer "+t}});if(!media.ok||!media.body)throw new Error("MEDIA_DOWNLOAD_FAILED");const cl=media.headers.get("content-length");return {response:media,size:cl&&/^\d+$/.test(cl)?Number(cl):null};}const t=await accessToken(c),d=await apiJson(botBase(c,t)+"getFile?file_id="+encodeURIComponent(fileId)),path=String(d.result?.file_path||""),size=Number(d.result?.file_size||0)||null;if(!path||(size&&size>TG_DOWNLOAD_LIMIT))throw new Error("SOURCE_FILE_OVER_DOWNLOAD_LIMIT");const base=c.platform==="telegram"?"https://api.telegram.org/file/bot":"https://tapi.bale.ai/file/bot";const r=await fetch(base+t+"/"+path);if(!r.ok||!r.body)throw new Error("SOURCE_FILE_DOWNLOAD_FAILED");return {response:r,size};}
-async function authorizeAsset(p:Profile,id:string){const {data:a}=await db.from("file_assets").select("*").eq("id",id).eq("organization_id",p.organization_id).maybeSingle();if(!a)throw new Error("FILE_NOT_FOUND");if(p.role==="client"){const {data:links}=await db.from("shipment_files").select("shipment_id").eq("organization_id",p.organization_id).eq("file_asset_id",id);const ids=(links||[]).map((x:any)=>x.shipment_id);if(!ids.length)throw new Error("FILE_ACCESS_DENIED");const {data:visible}=await db.from("shipments").select("id").eq("organization_id",p.organization_id).eq("client_id",p.client_id||"").in("id",ids);if(!visible?.length)throw new Error("FILE_ACCESS_DENIED");}const {data:locations}=await db.from("file_locations").select("*").eq("organization_id",p.organization_id).eq("file_asset_id",id).eq("availability_status","available").order("created_at");for(const l of locations||[]){const c=await readConn(l.connection_id);if(c&&c.organization_id===p.organization_id)return {asset:a,location:l,connection:c};}throw new Error("SOURCE_CONNECTION_UNAVAILABLE");}
+async function authorizeAsset(p:Profile,id:string){const {data:a}=await db.from("file_assets").select("*").eq("id",id).eq("organization_id",p.organization_id).maybeSingle();if(!a)throw new Error("FILE_NOT_FOUND");const {data:attachedFiles,error:attachedFilesError}=await db.from("chat_attachments").select("id,security_status").eq("organization_id",p.organization_id).eq("file_asset_id",id).is("deleted_at",null);if(attachedFilesError)throw new Error("ATTACHMENT_SECURITY_LOOKUP_FAILED");if((attachedFiles||[]).some((item:any)=>item.security_status!=="clean"))throw new Error("ATTACHMENT_NOT_CLEAN_OR_NOT_READY");if(p.role==="client"){const {data:links}=await db.from("shipment_files").select("shipment_id").eq("organization_id",p.organization_id).eq("file_asset_id",id);const ids=(links||[]).map((x:any)=>x.shipment_id);if(!ids.length)throw new Error("FILE_ACCESS_DENIED");const {data:visible}=await db.from("shipments").select("id").eq("organization_id",p.organization_id).eq("client_id",p.client_id||"").in("id",ids);if(!visible?.length)throw new Error("FILE_ACCESS_DENIED");}const {data:locations}=await db.from("file_locations").select("*").eq("organization_id",p.organization_id).eq("file_asset_id",id).eq("availability_status","available").order("created_at");for(const l of locations||[]){const c=await readConn(l.connection_id);if(c&&c.organization_id===p.organization_id)return {asset:a,location:l,connection:c};}throw new Error("SOURCE_CONNECTION_UNAVAILABLE");}
 async function download(req:Request,p:Profile,id:string){if(!validId(id))return bad("INVALID_FILE_ID",400,req);try{const x=await authorizeAsset(p,id),f=await sourceFile(x.connection,x.location.external_file_id),h=new Headers(noStore);h.set("Content-Type",cleanMime(x.asset.mime_type));h.set("Content-Disposition","attachment; filename*=UTF-8''"+encodeURIComponent(cleanName(x.asset.original_name)));if(f.size!==null)h.set("Content-Length",String(f.size));return new Response(f.response.body,{status:200,headers:h});}catch(e){return bad(errorCode(e),404,req);}}
 async function transfer(req:Request,p:Profile,user:string){const b=await bodyJson(req),assetId=String(b.fileAssetId||""),destId=String(b.destinationConnectionId||""),destChat=String(b.destinationChatId||""),key=String(req.headers.get("Idempotency-Key")||b.idempotencyKey||"").trim();if(!validId(assetId)||!validId(destId)||!destChat||!key||key.length>180)return bad("INVALID_TRANSFER_INPUT",400,req);const s=await authorizeAsset(p,assetId),d=await ownedConn(destId,p.organization_id);if(s.connection.id===d.id)return bad("SAME_CONNECTION_USE_PLATFORM_COPY",422,req);const {data:chat}=await db.from("messenger_chats").select("enabled,shipment_id").eq("organization_id",p.organization_id).eq("connection_id",d.id).eq("external_chat_id",destChat).maybeSingle();if(!chat?.enabled)return bad("DESTINATION_CHAT_NOT_ALLOWED",403,req);const {data:job,error}=await db.from("file_transfer_jobs").insert({organization_id:p.organization_id,file_asset_id:assetId,source_location_id:s.location.id,destination_connection_id:d.id,destination_chat_id:destChat,status:"processing",idempotency_key:key,attempt_count:1,created_by:user,locked_until:new Date(Date.now()+8*60*1000).toISOString()}).select("id").single();if(error||!job)return bad(error?.code==="23505"?"IDEMPOTENCY_KEY_ALREADY_USED":"TRANSFER_JOB_CREATE_FAILED",409,req);try{const src=await sourceFile(s.connection,s.location.external_file_id),mime=cleanMime(s.asset.mime_type);if(src.size&&(src.size>(d.platform==="whatsapp"?100*1024*1024:50*1024*1024)))throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");const result=await uploadStream(d,destChat,cleanName(s.asset.original_name),mime,src.size,src.response.body!);const newAsset=await storeAsset(p.organization_id,user,d,destChat,result,mime,src.size,s.connection.platform,chat.shipment_id||null);await db.from("file_transfer_jobs").update({status:"succeeded",result_message_id:result.messageId,completed_at:new Date().toISOString(),locked_until:null,updated_at:new Date().toISOString()}).eq("id",job.id);return out({ok:true,jobId:job.id,sourceFileAssetId:assetId,destinationFileAssetId:newAsset,externalMessageId:result.messageId},201,req);}catch(e){await db.from("file_transfer_jobs").update({status:"retry",last_error_code:errorCode(e),next_attempt_at:new Date(Date.now()+60000).toISOString(),locked_until:null,updated_at:new Date().toISOString()}).eq("id",job.id);return bad("TRANSFER_FAILED_"+errorCode(e),502,req);}}
 function equal(a:string,b:string){if(a.length!==b.length)return false;let d=0;for(let i=0;i<a.length;i++)d|=a.charCodeAt(i)^b.charCodeAt(i);return d===0;}
@@ -150,37 +165,25 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
   const {data:duplicate}=await db.from("chat_messages").select("id").eq("organization_id",c.organization_id).eq("external_connection_id",c.id).eq("external_chat_id",chatId).eq("external_message_id",msgId).maybeSingle();
   if(duplicate?.id)return;
  }
- let fileAssetId:string|null=null,internalStoragePath:string|null=null,mirrorErrorCode:string|null=null;
+ let fileAssetId:string|null=null;
  const cleanExternalName=media?cleanName(String(media.name||"document.bin")):null;
  if(media){
-  const {data:a,error}=await db.from("file_assets").insert({organization_id:c.organization_id,original_name:cleanExternalName||"document.bin",mime_type:cleanMime(media.mime),size_bytes:media.size||null,source_platform:c.platform,metadata:{inbound:true}}).select("id").single();
+  const {data:a,error}=await db.from("file_assets").insert({organization_id:c.organization_id,original_name:cleanExternalName||"document.bin",mime_type:cleanMime(media.mime),size_bytes:media.size||null,source_platform:c.platform,metadata:{inbound:true,storageMode:"external_only"}}).select("id").single();
   if(error||!a)throw new Error("FILE_METADATA_SAVE_FAILED");
   fileAssetId=String(a.id);
-  const {error:le}=await db.from("file_locations").insert({organization_id:c.organization_id,file_asset_id:a.id,connection_id:c.id,external_file_id:String(media.id),external_file_unique_id:media.unique||null,external_chat_id:chatId,external_message_id:msgId,availability_status:"available",metadata:{inbound:true}});
+  const {error:le}=await db.from("file_locations").insert({organization_id:c.organization_id,file_asset_id:a.id,connection_id:c.id,external_file_id:String(media.id),external_file_unique_id:media.unique||null,external_chat_id:chatId,external_message_id:msgId,availability_status:"available",metadata:{inbound:true,storageMode:"external_only"}});
   if(le)throw new Error("FILE_LOCATION_SAVE_FAILED");
   if(chat.shipment_id){
    const {error:shipmentFileError}=await db.from("shipment_files").upsert({organization_id:c.organization_id,shipment_id:chat.shipment_id,file_asset_id:a.id,document_type:media.mime==="application/pdf"?"customs_document":"other"},{onConflict:"shipment_id,file_asset_id,document_type"});
    if(shipmentFileError)throw new Error("SHIPMENT_FILE_LINK_FAILED");
   }
-  const maxMirror=c.platform==="whatsapp"?50*1024*1024:TG_DOWNLOAD_LIMIT;
-  if(chat.conversation_id&&Number(media.size||0)<=maxMirror){
-   try{
-    const source=await sourceFile(c,String(media.id)),buffer=await source.response.arrayBuffer();
-    if(buffer.byteLength<=0||buffer.byteLength>maxMirror)throw new Error("INBOUND_FILE_SIZE_OUT_OF_RANGE");
-    const mime=cleanMime(media.mime),storagePath="quarantine/"+c.organization_id+"/"+chat.conversation_id+"/"+crypto.randomUUID();
-    const blob=new Blob([buffer],{type:mime});
-    const {error:uploadError}=await db.storage.from("chat-files").upload(storagePath,blob,{contentType:mime,cacheControl:"3600",upsert:false});
-    if(uploadError)throw new Error("INBOUND_CHAT_STORAGE_UPLOAD_FAILED");
-    internalStoragePath=storagePath;media.size=buffer.byteLength;
-   }catch(e){mirrorErrorCode=errorCode(e);}
-  }else if(chat.conversation_id){mirrorErrorCode="INBOUND_FILE_TOO_LARGE_TO_MIRROR";}
  }
  let coreMessageId:string|null=null;
  const text=String(messageText||"").trim().slice(0,10000);
- const body=text||(media?"📎 "+(cleanExternalName||"فایل دریافتی")+(mirrorErrorCode?" · فایل در آرشیو پیام‌رسان نگهداری شده است.":""):"");
+ const body=text||(media?"📎 "+(cleanExternalName||"فایل دریافتی")+" · فایل در پیام‌رسان اصلی نگهداری می‌شود.":"");
  if(chat.conversation_id&&(body||media)){
   const {data:conversation}=await db.from("chat_conversations").select("id").eq("id",chat.conversation_id).eq("organization_id",c.organization_id).is("deleted_at",null).maybeSingle();
-  if(!conversation){if(internalStoragePath)await db.storage.from("chat-files").remove([internalStoragePath]);throw new Error("INTERNAL_CONVERSATION_NOT_FOUND");}
+  if(!conversation)throw new Error("INTERNAL_CONVERSATION_NOT_FOUND");
   const messageType=media?(media.voice?"voice":"file"):"text";
   const {data:coreMessage,error:coreError}=await db.from("chat_messages").insert({
    organization_id:c.organization_id,conversation_id:chat.conversation_id,sender_id:null,client_uuid:crypto.randomUUID(),
@@ -188,16 +191,13 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
    external_connection_id:c.id,external_chat_id:chatId,external_message_id:msgId,
    external_sender_id:userId||null,external_sender_name:String(senderName||"").trim().slice(0,160)||null
   }).select("id").maybeSingle();
-  if(coreError&&coreError.code!=="23505"){
-   if(internalStoragePath)await db.storage.from("chat-files").remove([internalStoragePath]);
-   throw new Error("CORE_CHAT_MIRROR_FAILED");
-  }
+  if(coreError&&coreError.code!=="23505")throw new Error("CORE_CHAT_MIRROR_FAILED");
   if(coreMessage?.id)coreMessageId=String(coreMessage.id);
   if(!coreMessageId){
    const {data:existing}=await db.from("chat_messages").select("id").eq("external_connection_id",c.id).eq("external_chat_id",chatId).eq("external_message_id",msgId).maybeSingle();
    if(existing?.id)coreMessageId=String(existing.id);
   }
-  if(internalStoragePath&&coreMessageId){
+  if(fileAssetId&&media&&coreMessageId){
    try{
     let creator=String(c.created_by||"");
     if(!validId(creator)){
@@ -205,25 +205,26 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
      creator=String(profile?.id||"");
     }
     if(!validId(creator))throw new Error("INTERNAL_ATTACHMENT_OWNER_UNAVAILABLE");
+    const reportedSize=Number(media.size||0)||null;
+    if(reportedSize!==null&&reportedSize>2147483648)throw new Error("INBOUND_ATTACHMENT_SIZE_UNSUPPORTED");
     const {error:attachmentError}=await db.from("chat_attachments").insert({
-     organization_id:c.organization_id,conversation_id:chat.conversation_id,message_id:coreMessageId,storage_path:internalStoragePath,
-     original_name:cleanExternalName||"document.bin",mime_type:cleanMime(media.mime),size_bytes:Number(media.size||0),
+     organization_id:c.organization_id,conversation_id:chat.conversation_id,message_id:coreMessageId,storage_path:null,file_asset_id:fileAssetId,
+     original_name:cleanExternalName||"document.bin",mime_type:cleanMime(media.mime),size_bytes:reportedSize,
      duration_seconds:null,waveform:null,thumbnail_path:null,created_by:creator
     });
     if(attachmentError)throw new Error("INTERNAL_CHAT_ATTACHMENT_SAVE_FAILED");
    }catch(e){
-    mirrorErrorCode=errorCode(e);
-    await db.storage.from("chat-files").remove([internalStoragePath]);
-    internalStoragePath=null;
+    console.error("[Messenger inbound] external attachment metadata could not be linked",errorCode(e));
    }
   }
   const {error:updateConversationError}=await db.from("chat_conversations").update({updated_at:new Date().toISOString()}).eq("id",chat.conversation_id).eq("organization_id",c.organization_id);
   if(updateConversationError)throw new Error("CONVERSATION_ACTIVITY_UPDATE_FAILED");
  }
- const payload={externalUserId:userId||null,senderName:String(senderName||"").trim().slice(0,160)||null,text:text||null,...(media?{name:cleanExternalName||"document.bin",mimeType:cleanMime(media.mime),sizeBytes:media.size||null,internalAttachmentMirrored:Boolean(internalStoragePath),mirrorError:mirrorErrorCode}: {})};
+ const payload={externalUserId:userId||null,senderName:String(senderName||"").trim().slice(0,160)||null,text:text||null,...(media?{name:cleanExternalName||"document.bin",mimeType:cleanMime(media.mime),sizeBytes:media.size||null,fileAssetRecorded:Boolean(fileAssetId),storageMode:"external_only"}:{})};
  const {error:logError}=await db.from("message_logs").insert({organization_id:c.organization_id,connection_id:c.id,direction:"inbound",message_type:media?"document":"text",external_message_id:msgId,external_chat_id:chatId,file_asset_id:fileAssetId,chat_message_id:coreMessageId,status:"received",payload_summary:payload});
  if(logError&&logError.code!=="23505")throw new Error("INBOUND_LOG_SAVE_FAILED");
-}async function processMessengerOutbox(req:Request){
+}
+async function processMessengerOutbox(req:Request){
  const {data:expected,error:secretError}=await db.rpc("internal_get_reminder_secret",{p_name:"messenger_outbox_cron_secret"});
  if(secretError||typeof expected!=="string"||!expected||!equal(req.headers.get("x-messenger-outbox-cron-secret")||"",expected))return bad("UNAUTHORIZED",401,req);
  const {data:rows,error}=await db.rpc("messenger_claim_delivery_outbox",{p_limit:40});
@@ -240,16 +241,16 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
    if(!c||!c.enabled||!chat||!chat.enabled||!chat.conversation_id||chat.conversation_id!==message?.conversation_id)throw new Error("DESTINATION_NO_LONGER_LINKED");
    if(!message||message.deleted_at||message.external_platform)throw new Error("MESSAGE_NOT_ELIGIBLE_FOR_EXTERNAL_DELIVERY");
    let externalMessageId="",fileAssetId:string|null=null,logType="text",payloadSummary:Record<string,any>={source:"customs_chat",outboxId:row.id};
-   let pendingAsset:{result:any;mime:string;size:number;name:string}|null=null;
+   let pendingAsset:{result:any;mime:string;size:number|null;name:string}|null=null;
    const bodyText=String(message.body||"").trim();
    if(message.message_type==="text"){
     if(!bodyText)throw new Error("EMPTY_MESSAGE_BODY");
     externalMessageId=await sendTextToPlatform(c as Conn,String(chat.external_chat_id),bodyText.slice(0,4000));
     payloadSummary={...payloadSummary,text:bodyText.slice(0,4000),charCount:bodyText.length};
    }else if(message.message_type==="file"||message.message_type==="voice"){
-    const {data:attachments,error:attachmentError}=await db.from("chat_attachments").select("id,storage_path,original_name,mime_type,size_bytes,security_status,deleted_at").eq("message_id",message.id).is("deleted_at",null).order("created_at",{ascending:true});
+    const {data:attachments,error:attachmentError}=await db.from("chat_attachments").select("id,storage_path,file_asset_id,original_name,mime_type,size_bytes,security_status,deleted_at").eq("message_id",message.id).is("deleted_at",null).order("created_at",{ascending:true});
     if(attachmentError)throw new Error("ATTACHMENT_LOOKUP_FAILED");
-    const attachment=(attachments||[]).find((a:any)=>a.security_status==="clean"&&a.storage_path&&!String(a.storage_path).startsWith("quarantine/"));
+    const attachment=(attachments||[]).find((a:any)=>a.security_status==="clean"&&(a.file_asset_id||(a.storage_path&&!String(a.storage_path).startsWith("quarantine/"))));
     if(!attachment){
      if((attachments||[]).some((a:any)=>a.security_status==="blocked"))throw new Error("ATTACHMENT_BLOCKED_BY_SECURITY_SCAN");
      throw new Error("ATTACHMENT_NOT_CLEAN_OR_NOT_READY");
@@ -257,13 +258,39 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
     const max=c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT;
     const expectedSize=Number(attachment.size_bytes||0)||null;
     if(expectedSize!==null&&expectedSize>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
-    const {data:file,error:fileError}=await db.storage.from("chat-files").download(String(attachment.storage_path));
-    if(fileError||!file)throw new Error("CHAT_ATTACHMENT_DOWNLOAD_FAILED");
-    const actualSize=Number(file.size||0);
-    if(actualSize<=0||actualSize>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
-    const mime=cleanMime(String(attachment.mime_type||file.type||"application/octet-stream")),name=cleanName(String(attachment.original_name||"attachment.bin"));
-    const result=await uploadStream(c as Conn,String(chat.external_chat_id),name,mime,actualSize,file.stream(),message.message_type==="voice"?"voice":"file");
+    const mime=cleanMime(String(attachment.mime_type||"application/octet-stream")),name=cleanName(String(attachment.original_name||"attachment.bin"));
+    let actualSize:number|null=expectedSize;
+    let fileStream:ReadableStream<Uint8Array>|null=null;
+    if(attachment.file_asset_id){
+     const {data:locations,error:locationError}=await db.from("file_locations").select("connection_id,external_file_id,availability_status").eq("organization_id",row.organization_id).eq("file_asset_id",attachment.file_asset_id).eq("availability_status","available").order("created_at",{ascending:true});
+     if(locationError||!locations?.length)throw new Error("SOURCE_ATTACHMENT_NOT_AVAILABLE");
+     let source:{response:Response;size:number|null}|null=null;
+     for(const location of locations){
+      const sourceConn=await readConn(String(location.connection_id));
+      if(!sourceConn||sourceConn.organization_id!==row.organization_id)continue;
+      try{source=await sourceFile(sourceConn,String(location.external_file_id));break;}catch(e){if(errorCode(e)==="SOURCE_FILE_OVER_DOWNLOAD_LIMIT")throw e;}
+     }
+     if(!source?.response.body)throw new Error("SOURCE_ATTACHMENT_NOT_AVAILABLE");
+     if(source.size!==null&&source.size>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
+     actualSize=source.size??expectedSize;
+     fileStream=source.response.body;
+    }else{
+     const storagePath=String(attachment.storage_path||"");
+     if(!storagePath||storagePath.startsWith("quarantine/"))throw new Error("ATTACHMENT_NOT_CLEAN_OR_NOT_READY");
+     const {data:file,error:fileError}=await db.storage.from("chat-files").download(storagePath);
+     if(fileError||!file)throw new Error("CHAT_ATTACHMENT_DOWNLOAD_FAILED");
+     const localSize=Number(file.size||0);
+     if(localSize<=0||localSize>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
+     actualSize=localSize;
+     fileStream=file.stream();
+    }
+    if(!fileStream)throw new Error("SOURCE_ATTACHMENT_NOT_AVAILABLE");
+    const result=await uploadStream(c as Conn,String(chat.external_chat_id),name,mime,actualSize,fileStream,message.message_type==="voice"?"voice":"file");
     externalMessageId=result.messageId;
+    pendingAsset={result,mime,size:actualSize,name};
+    logType="document";
+    payloadSummary={...payloadSummary,name,mimeType:mime,sizeBytes:actualSize,sourceMessageType:message.message_type};
+   externalMessageId=result.messageId;
     pendingAsset={result,mime,size:actualSize,name};
     logType="document";
     payloadSummary={...payloadSummary,name,mimeType:mime,sizeBytes:actualSize,sourceMessageType:message.message_type};
@@ -412,5 +439,111 @@ async function processDailyReports(req:Request){
 async function tgWebhook(req:Request,c:Conn,secretPath?:string){const s=await secret(c.webhook_secret_ref);if(c.platform==="telegram"){if(!s||!equal(req.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",s))return bad("WEBHOOK_AUTH_FAILED",401,req);}else if(!s||!secretPath||!equal(s,secretPath))return bad("WEBHOOK_AUTH_FAILED",401,req);let b:any;try{b=JSON.parse(await readText(req,1024*1024));}catch(e){return bad(errorCode(e),400,req);}const updateId=String(b.update_id??b.updateId??"");if(!updateId)return bad("WEBHOOK_EVENT_ID_MISSING",400,req);const eid=await event(c,updateId,c.platform+"-update");if(!eid)return out({ok:true,duplicate:true},200,req);try{const m=b.message||b.channel_post||b.edited_message||b.edited_channel_post||{},chat=String(m.chat?.id??""),mid=String(m.message_id??"");if(chat&&mid)await inbound(c,chat,mid,tgMedia(m),String((typeof m.text==="string"?m.text:"")||m.caption||""),String(m.from?.id||""),String([m.from?.first_name,m.from?.last_name].filter(Boolean).join(" ")||m.from?.username||""));await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);return out({ok:true},200,req);}catch(e){await db.from("webhook_events").update({status:"failed",attempt_count:1,error_code:errorCode(e)}).eq("id",eid);return bad("WEBHOOK_PROCESSING_FAILED",500,req);}}
 async function waWebhook(req:Request,c:Conn){if(req.method==="GET"){const u=new URL(req.url),s=await secret(c.verify_token_ref),challenge=u.searchParams.get("hub.challenge");if(u.searchParams.get("hub.mode")!=="subscribe"||!s||!equal(u.searchParams.get("hub.verify_token")||"",s)||challenge===null)return bad("WEBHOOK_VERIFICATION_FAILED",403,req);return new Response(challenge,{status:200,headers:{...noStore,"Content-Type":"text/plain"}});}const raw=await readText(req,1024*1024),app=await secret(c.app_secret_ref);if(!app||!await checkHmac(app,raw,req.headers.get("X-Hub-Signature-256")||""))return bad("WEBHOOK_SIGNATURE_INVALID",401,req);let b:any;try{b=JSON.parse(raw);}catch{return bad("INVALID_JSON",400,req);}try{for(const entry of b.entry||[])for(const change of entry.changes||[]){const value=change.value||{};for(const m of value.messages||[]){const id=String(m.id||"");if(!id)continue;const eid=await event(c,id,"whatsapp-message");if(!eid)continue;const type=String(m.type||"unknown"),media=m[type];const normalized=media?.id?{id:String(media.id),unique:null,name:media.filename||(type==="image"?"image.jpg":type+".bin"),mime:media.mime_type||(type==="image"?"image/jpeg":"application/octet-stream"),size:null,voice:type==="audio"}:null;await inbound(c,String(m.from||""),id,normalized,String(m.text?.body||""),String(m.from||""),String((value.contacts||[]).find((contact:any)=>String(contact.wa_id||"")===String(m.from||""))?.profile?.name||""));await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);}for(const s of value.statuses||[]){const id=String(s.id||"");if(!id)continue;const eid=await event(c,id,"whatsapp-status-"+String(s.status||"unknown"));if(!eid)continue;await db.from("message_logs").update({status:["sent","delivered","read","failed"].includes(s.status)?s.status:"unknown"}).eq("organization_id",c.organization_id).eq("connection_id",c.id).eq("external_message_id",id);await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);}}}catch(e){return bad("WEBHOOK_PROCESSING_FAILED_"+errorCode(e),500,req);}return out({ok:true},200,req);}
 async function webhook(req:Request,path:string){const m=path.match(/^\/webhooks\/messenger\/(telegram|bale|whatsapp)\/([0-9a-f-]{36})(?:\/([A-Za-z0-9_-]+))?$/i);if(!m)return bad("WEBHOOK_NOT_FOUND",404,req);const platform=m[1].toLowerCase() as Platform,c=await readConn(m[2]);if(!c||c.platform!==platform)return bad("CONNECTION_NOT_FOUND",404,req);if(platform==="whatsapp")return await waWebhook(req,c);if(req.method!=="POST")return bad("METHOD_NOT_ALLOWED",405,req);return await tgWebhook(req,c,m[3]);}
-async function route(req:Request,path:string){const ctx=await context(req),p=ctx.p;if(req.method==="GET"&&path==="/api/messenger/health")return out({ok:true,platforms:{telegram:{supported:true,maxUploadBytes:TG_UPLOAD_LIMIT,maxDownloadBytes:TG_DOWNLOAD_LIMIT},bale:{supported:true,webhookAuth:"secret_path"},whatsapp:{supported:true,maxDocumentUploadBytes:100*1024*1024,metaSetupRequired:true},rubika:{supported:false,reason:"PUBLIC_BOT_API_NOT_VERIFIED"}}},200,req);if(path==="/api/messenger/connections"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_connections").select("id,organization_id,platform,external_account_id,display_name,config,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CONNECTION_LIST_FAILED",500,req);return out({ok:true,connections:data||[]},200,req);}if(path==="/api/messenger/connections"&&req.method==="POST")return await addConnection(req,p,ctx.userId);if(path==="/api/messenger/chats"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_chats").select("id,connection_id,external_chat_id,chat_type,purpose,display_name,shipment_id,conversation_id,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CHAT_LIST_FAILED",500,req);return out({ok:true,chats:data||[]},200,req);}if(path==="/api/messenger/chats"&&req.method==="POST")return await createChat(req,p,ctx.userId);const test=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/test$/i);if(req.method==="POST"&&test){onlyManager(p);const c=await ownedConn(test[1],p.organization_id,true);try{return out({ok:true,account:await probe(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}const hook=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/register-webhook$/i);if(req.method==="POST"&&hook){onlyManager(p);const c=await ownedConn(hook[1],p.organization_id,true);try{return out({ok:true,webhookUrl:await registerHook(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}if(path==="/api/messenger/messages"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("message_logs").select("id,connection_id,direction,message_type,external_message_id,external_chat_id,status,payload_summary,created_at,file_asset_id,chat_message_id").eq("organization_id",p.organization_id).order("created_at",{ascending:false}).limit(100);if(error)return bad("MESSAGE_LIST_FAILED",500,req);return out({ok:true,messages:data||[]},200,req);}if(path==="/api/messenger/messages"&&req.method==="POST")return await sendText(req,p);const up=path.match(/^\/api\/messenger\/uploads\/([0-9a-f-]{36})$/i);if(up&&req.method==="POST")return await upload(req,p,ctx.userId,up[1]);const down=path.match(/^\/api\/messenger\/files\/([0-9a-f-]{36})\/download$/i);if(down&&req.method==="GET")return await download(req,p,down[1]);if(path==="/api/messenger/transfers"&&req.method==="POST")return await transfer(req,p,ctx.userId);return bad("ROUTE_NOT_FOUND",404,req);}
-Deno.serve(async(req:Request)=>{const path=req.headers.get("x-messenger-path")||new URL(req.url).pathname;if(req.method==="OPTIONS"){const h=new Headers(noStore),o=req.headers.get("Origin")||"";if(ORIGINS.has(o)){h.set("Access-Control-Allow-Origin",o);h.set("Vary","Origin");h.set("Access-Control-Allow-Headers","authorization, apikey, content-type, x-file-name, x-file-size, idempotency-key");h.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");}return new Response(null,{status:204,headers:h});}try{if(!SB||!ANON||!SERVICE)return bad("GATEWAY_CONFIGURATION_MISSING",503,req);if(path==="/api/messenger/outbox/process"&&req.method==="POST")return await processMessengerOutbox(req);if(path==="/api/messenger/reports/daily"&&req.method==="POST")return await processDailyReports(req);if(path.startsWith("/webhooks/messenger/"))return await webhook(req,path);if(path.startsWith("/api/messenger/"))return await route(req,path);return bad("ROUTE_NOT_FOUND",404,req);}catch(e){const c=errorCode(e),status=c==="MANAGER_REQUIRED"?403:c.startsWith("AUTH_")?401:c==="CONNECTION_NOT_FOUND"||c==="FILE_NOT_FOUND"?404:400;return bad(c,status,req);}});
+async function uploadInternalChatFile(req:Request,p:Profile,userId:string,conversationId:string,messageId:string){
+ const u=new URL(req.url),providedOrg=u.searchParams.get("organizationId");
+ if(providedOrg&&providedOrg!==p.organization_id)return bad("ORGANIZATION_MISMATCH",403,req);
+ if(!validId(conversationId)||!validId(messageId)||!req.body)return bad("INVALID_CHAT_FILE_REQUEST",400,req);
+ const {data:member,error:memberError}=await db.from("chat_conversation_members").select("id").eq("organization_id",p.organization_id).eq("conversation_id",conversationId).eq("user_id",userId).is("deleted_at",null).is("left_at",null).maybeSingle();
+ if(memberError||!member)return bad("CONVERSATION_ACCESS_DENIED",403,req);
+ const {data:message,error:messageError}=await db.from("chat_messages").select("id,message_type").eq("organization_id",p.organization_id).eq("conversation_id",conversationId).eq("id",messageId).eq("sender_id",userId).is("deleted_at",null).maybeSingle();
+ if(messageError||!message)return bad("CHAT_MESSAGE_NOT_FOUND",404,req);
+ if(message.message_type!=="file"&&message.message_type!=="voice")return bad("CHAT_MESSAGE_NOT_AN_ATTACHMENT",400,req);
+ const {data:archives,error:archiveError}=await db.from("messenger_chats").select("id,connection_id,external_chat_id,shipment_id,enabled").eq("organization_id",p.organization_id).eq("purpose","file_archive").eq("enabled",true).is("conversation_id",null).order("created_at",{ascending:false}).limit(10);
+ if(archiveError)return bad("FILE_ARCHIVE_LOOKUP_FAILED",500,req);
+ const choices=archives||[];
+ if(choices.length!==1)return bad(choices.length?"FILE_ARCHIVE_AMBIGUOUS":"FILE_ARCHIVE_NOT_CONFIGURED",409,req);
+ const archive=choices[0];
+ const c=await ownedConn(String(archive.connection_id),p.organization_id);
+ if(c.platform!=="telegram")return bad("FILE_ARCHIVE_MUST_BE_TELEGRAM",422,req);
+ const rawSize=req.headers.get("x-file-size")||req.headers.get("content-length")||"";
+ const claimed=rawSize&&/^\\d+$/.test(rawSize)?Number(rawSize):null;
+ if(claimed===0||(claimed!==null&&claimed>TG_DOWNLOAD_LIMIT))return bad("FILE_TOO_LARGE_FOR_CHAT_ARCHIVE",413,req);
+ let name="document.bin";
+ try{name=cleanName(decodeURIComponent(req.headers.get("x-file-name")||u.searchParams.get("filename")||"document.bin"));}catch{name=cleanName(req.headers.get("x-file-name")||"document.bin");}
+ const mime=cleanMime(req.headers.get("Content-Type"));
+ let bytes:Uint8Array;
+ try{bytes=await readBinary(req.body,TG_DOWNLOAD_LIMIT);}catch(e){return bad(errorCode(e)==="BODY_TOO_LARGE"?"FILE_TOO_LARGE_FOR_CHAT_ARCHIVE":errorCode(e),413,req);}
+ if(bytes.byteLength<=0||(claimed!==null&&claimed!==bytes.byteLength))return bad("INVALID_FILE_SIZE",400,req);
+ const scan=scanChatFile(bytes,name,mime);
+ if(!scan.clean)return out({ok:false,error:"FILE_REJECTED_BY_SECURITY_SCAN",reasons:scan.reasons},422,req);
+ const sha256=hex(await crypto.subtle.digest("SHA-256",bytes));
+ const stream=new Response(bytes,{headers:{"Content-Type":mime}}).body;
+ if(!stream)return bad("FILE_STREAM_UNAVAILABLE",500,req);
+ try{
+  const result=await uploadStream(c,String(archive.external_chat_id),name,mime,bytes.byteLength,stream,message.message_type==="voice"?"voice":"file");
+  const fileAssetId=await storeAsset(p.organization_id,userId,c,String(archive.external_chat_id),result,mime,bytes.byteLength,"website",archive.shipment_id||null,false);
+  const now=new Date().toISOString();
+  const {error:assetUpdateError}=await db.from("file_assets").update({sha256,metadata:{transferMode:"transient_scan_stream",securityScan:{provider:"local_static",clean:true,reasons:scan.reasons,magic:scan.magic}}}).eq("id",fileAssetId).eq("organization_id",p.organization_id);
+  if(assetUpdateError)throw new Error("FILE_METADATA_SCAN_SAVE_FAILED");
+  const {data:attachment,error:attachmentError}=await db.from("chat_attachments").insert({
+   organization_id:p.organization_id,conversation_id:conversationId,message_id:messageId,storage_path:null,file_asset_id:fileAssetId,
+   original_name:name,mime_type:mime,size_bytes:bytes.byteLength,duration_seconds:null,waveform:null,thumbnail_path:null,created_by:userId
+  }).select("id").single();
+  if(attachmentError||!attachment)throw new Error("CHAT_ATTACHMENT_METADATA_SAVE_FAILED");
+  const {error:cleanError}=await db.from("chat_attachments").update({security_status:"clean",security_checked_at:now,security_error:null}).eq("id",attachment.id).eq("organization_id",p.organization_id);
+  if(cleanError)throw new Error("CHAT_ATTACHMENT_SCAN_STATE_SAVE_FAILED");
+  const {data:scans}=await db.from("file_scans").select("id").eq("attachment_id",attachment.id);
+  if(scans?.length)await db.from("file_scans").update({status:"clean",sha256,provider:"local_static",local_result:scan,completed_at:now}).eq("attachment_id",attachment.id);
+  await db.from("message_logs").update({chat_message_id:messageId}).eq("organization_id",p.organization_id).eq("file_asset_id",fileAssetId);
+  return out({ok:true,attachmentId:attachment.id,fileAssetId,externalMessageId:result.messageId,sizeBytes:bytes.byteLength,securityStatus:"clean"},201,req);
+ }catch(e){
+  console.error("[Messenger chat upload] metadata/finalization failed after platform upload",errorCode(e));
+  return bad(errorCode(e),502,req);
+ }
+}
+async function internalScanSource(req:Request,path:string){
+ const match=path.match(/^\\/api\\/messenger\\/internal\\/scan-source\\/([0-9a-f-]{36})$/i);
+ if(!match||req.method!=="GET")return bad("ROUTE_NOT_FOUND",404,req);
+ const {data:expected,error}=await db.rpc("internal_get_reminder_secret",{p_name:"file_scan_cron_secret"});
+ const supplied=req.headers.get("x-file-scan-cron-secret")||"";
+ if(error||typeof expected!=="string"||!expected||!equal(supplied,expected))return bad("UNAUTHORIZED",401,req);
+ const assetId=match[1];
+ const {data:asset,error:assetError}=await db.from("file_assets").select("id,organization_id,original_name,mime_type,size_bytes").eq("id",assetId).maybeSingle();
+ if(assetError||!asset)return bad("FILE_NOT_FOUND",404,req);
+ const {data:locations,error:locationError}=await db.from("file_locations").select("connection_id,external_file_id,availability_status").eq("organization_id",asset.organization_id).eq("file_asset_id",assetId).eq("availability_status","available").order("created_at",{ascending:true});
+ if(locationError||!locations?.length)return bad("SOURCE_LOCATION_UNAVAILABLE",404,req);
+ for(const location of locations){
+  const connection=await readConn(String(location.connection_id));
+  if(!connection||connection.organization_id!==asset.organization_id)continue;
+  try{
+   const file=await sourceFile(connection,String(location.external_file_id));
+   if(file.size!==null&&file.size>50*1024*1024)return bad("SOURCE_FILE_OVER_SCANNER_LIMIT",413,req);
+   if(!file.response.body)return bad("SOURCE_FILE_DOWNLOAD_FAILED",502,req);
+   const headers=new Headers(noStore);headers.set("Content-Type",cleanMime(asset.mime_type));headers.set("X-Content-Type-Options","nosniff");
+   if(file.size!==null)headers.set("Content-Length",String(file.size));
+   return new Response(bounded(file.response.body,50*1024*1024),{status:200,headers});
+  }catch(e){
+   if(errorCode(e)==="SOURCE_FILE_OVER_DOWNLOAD_LIMIT")return bad("SOURCE_FILE_OVER_DOWNLOAD_LIMIT",413,req);
+   continue;
+  }
+ }
+ return bad("SOURCE_CONNECTION_UNAVAILABLE",404,req);
+}
+async function downloadChatAttachment(req:Request,p:Profile,userId:string,id:string){
+ if(!validId(id))return bad("INVALID_ATTACHMENT_ID",400,req);
+ const {data:attachment,error}=await db.from("chat_attachments").select("id,organization_id,conversation_id,file_asset_id,storage_path,original_name,mime_type,size_bytes,security_status,deleted_at").eq("id",id).eq("organization_id",p.organization_id).is("deleted_at",null).maybeSingle();
+ if(error||!attachment)return bad("ATTACHMENT_NOT_FOUND",404,req);
+ if(attachment.security_status!=="clean")return bad(attachment.security_status==="blocked"?"ATTACHMENT_BLOCKED_BY_SECURITY_SCAN":"ATTACHMENT_NOT_CLEAN_OR_NOT_READY",403,req);
+ if(!attachment.file_asset_id||attachment.storage_path!==null)return bad("EXTERNAL_ATTACHMENT_NOT_AVAILABLE",404,req);
+ const {data:member,error:memberError}=await db.from("chat_conversation_members").select("id").eq("organization_id",p.organization_id).eq("conversation_id",attachment.conversation_id).eq("user_id",userId).is("deleted_at",null).is("left_at",null).maybeSingle();
+ if(memberError||!member)return bad("CONVERSATION_ACCESS_DENIED",403,req);
+ const {data:asset,error:assetError}=await db.from("file_assets").select("id,original_name,mime_type,size_bytes").eq("id",attachment.file_asset_id).eq("organization_id",p.organization_id).maybeSingle();
+ if(assetError||!asset)return bad("FILE_NOT_FOUND",404,req);
+ const {data:locations,error:locationError}=await db.from("file_locations").select("connection_id,external_file_id,availability_status").eq("organization_id",p.organization_id).eq("file_asset_id",asset.id).eq("availability_status","available").order("created_at",{ascending:true});
+ if(locationError||!locations?.length)return bad("SOURCE_LOCATION_UNAVAILABLE",404,req);
+ for(const location of locations){
+  const connection=await readConn(String(location.connection_id));
+  if(!connection||connection.organization_id!==p.organization_id)continue;
+  try{
+   const file=await sourceFile(connection,String(location.external_file_id));
+   if(!file.response.body)return bad("SOURCE_FILE_DOWNLOAD_FAILED",502,req);
+   const headers=new Headers(noStore);headers.set("Content-Type",cleanMime(asset.mime_type||attachment.mime_type));headers.set("Content-Disposition","attachment; filename*=UTF-8''"+encodeURIComponent(cleanName(asset.original_name||attachment.original_name)));headers.set("X-Content-Type-Options","nosniff");
+   if(file.size!==null)headers.set("Content-Length",String(file.size));
+   return new Response(bounded(file.response.body,connection.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_DOWNLOAD_LIMIT),{status:200,headers});
+  }catch(e){return bad(errorCode(e),404,req);}
+ }
+ return bad("SOURCE_CONNECTION_UNAVAILABLE",404,req);
+}
+
+async function route(req:Request,path:string){const ctx=await context(req),p=ctx.p;if(req.method==="GET"&&path==="/api/messenger/health")return out({ok:true,platforms:{telegram:{supported:true,maxUploadBytes:TG_UPLOAD_LIMIT,maxDownloadBytes:TG_DOWNLOAD_LIMIT},bale:{supported:true,webhookAuth:"secret_path"},whatsapp:{supported:true,maxDocumentUploadBytes:100*1024*1024,metaSetupRequired:true},rubika:{supported:false,reason:"PUBLIC_BOT_API_NOT_VERIFIED"}}},200,req);if(path==="/api/messenger/connections"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_connections").select("id,organization_id,platform,external_account_id,display_name,config,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CONNECTION_LIST_FAILED",500,req);return out({ok:true,connections:data||[]},200,req);}if(path==="/api/messenger/connections"&&req.method==="POST")return await addConnection(req,p,ctx.userId);if(path==="/api/messenger/chats"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_chats").select("id,connection_id,external_chat_id,chat_type,purpose,display_name,shipment_id,conversation_id,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CHAT_LIST_FAILED",500,req);return out({ok:true,chats:data||[]},200,req);}if(path==="/api/messenger/chats"&&req.method==="POST")return await createChat(req,p,ctx.userId);const test=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/test$/i);if(req.method==="POST"&&test){onlyManager(p);const c=await ownedConn(test[1],p.organization_id,true);try{return out({ok:true,account:await probe(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}const hook=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/register-webhook$/i);if(req.method==="POST"&&hook){onlyManager(p);const c=await ownedConn(hook[1],p.organization_id,true);try{return out({ok:true,webhookUrl:await registerHook(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}if(path==="/api/messenger/messages"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("message_logs").select("id,connection_id,direction,message_type,external_message_id,external_chat_id,status,payload_summary,created_at,file_asset_id,chat_message_id").eq("organization_id",p.organization_id).order("created_at",{ascending:false}).limit(100);if(error)return bad("MESSAGE_LIST_FAILED",500,req);return out({ok:true,messages:data||[]},200,req);}if(path==="/api/messenger/messages"&&req.method==="POST")return await sendText(req,p);const internalUpload=path.match(/^\\/api\\/messenger\\/internal-chat-files\\/([0-9a-f-]{36})\\/([0-9a-f-]{36})$/i);if(internalUpload&&req.method==="POST")return await uploadInternalChatFile(req,p,ctx.userId,internalUpload[1],internalUpload[2]);const chatAttachmentDownload=path.match(/^\\/api\\/messenger\\/chat-attachments\\/([0-9a-f-]{36})\\/download$/i);if(chatAttachmentDownload&&req.method==="GET")return await downloadChatAttachment(req,p,ctx.userId,chatAttachmentDownload[1]);const up=path.match(/^\/api\/messenger\/uploads\/([0-9a-f-]{36})$/i);if(up&&req.method==="POST")return await upload(req,p,ctx.userId,up[1]);const down=path.match(/^\/api\/messenger\/files\/([0-9a-f-]{36})\/download$/i);if(down&&req.method==="GET")return await download(req,p,down[1]);if(path==="/api/messenger/transfers"&&req.method==="POST")return await transfer(req,p,ctx.userId);return bad("ROUTE_NOT_FOUND",404,req);}
+Deno.serve(async(req:Request)=>{const path=req.headers.get("x-messenger-path")||new URL(req.url).pathname;if(path.startsWith("/api/messenger/internal/scan-source/"))return await internalScanSource(req,path);if(req.method==="OPTIONS"){const h=new Headers(noStore),o=req.headers.get("Origin")||"";if(ORIGINS.has(o)){h.set("Access-Control-Allow-Origin",o);h.set("Vary","Origin");h.set("Access-Control-Allow-Headers","authorization, apikey, content-type, x-file-name, x-file-size, idempotency-key");h.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");}return new Response(null,{status:204,headers:h});}try{if(!SB||!ANON||!SERVICE)return bad("GATEWAY_CONFIGURATION_MISSING",503,req);if(path==="/api/messenger/outbox/process"&&req.method==="POST")return await processMessengerOutbox(req);if(path==="/api/messenger/reports/daily"&&req.method==="POST")return await processDailyReports(req);if(path.startsWith("/webhooks/messenger/"))return await webhook(req,path);if(path.startsWith("/api/messenger/"))return await route(req,path);return bad("ROUTE_NOT_FOUND",404,req);}catch(e){const c=errorCode(e),status=c==="MANAGER_REQUIRED"?403:c.startsWith("AUTH_")?401:c==="CONNECTION_NOT_FOUND"||c==="FILE_NOT_FOUND"?404:400;return bad(c,status,req);}});
