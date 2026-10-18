@@ -43,6 +43,8 @@ const OverlaySurface: React.FC<OverlayInternalProps> = ({
   const titleId = useId();
   const descriptionId = useId();
   const panelRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open || typeof document === 'undefined') return undefined;
@@ -56,7 +58,7 @@ const OverlaySurface: React.FC<OverlayInternalProps> = ({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab' || !panel) return;
@@ -85,7 +87,7 @@ const OverlaySurface: React.FC<OverlayInternalProps> = ({
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus({ preventScroll: true });
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || typeof document === 'undefined') return null;
 
