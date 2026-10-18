@@ -8,28 +8,10 @@ import { AppearanceProvider } from './context/AppearanceContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppShell } from './components/AppShell';
 import { SettingsPersistenceBridge } from './components/SettingsPersistenceBridge';
-let lazyPageCounter=0;
-const lazyPage=<T extends React.ComponentType<any>>(loader:()=>Promise<{default:T}>,key=`route-${++lazyPageCounter}`)=>lazy(async()=>{
- try{
-  const mod=await loader();
-  try{sessionStorage.removeItem('customs-os:chunk-retry:'+key)}catch{}
-  return mod;
- }catch(error){
-  if(typeof window!=='undefined'){
-   const storageKey='customs-os:chunk-retry:'+key;
-   try{
-    if(!sessionStorage.getItem(storageKey)){
-     sessionStorage.setItem(storageKey,'1');
-     const url=new URL(window.location.href);
-     url.searchParams.set('__chunk_reload',String(Date.now()));
-     window.location.replace(url.toString());
-     await new Promise<never>(()=>{});
-    }
-   }catch{}
-  }
-  throw error;
- }
-});
+// Keep lazy route failures inside the error boundary. A chunk failure must never
+// trigger a silent page reload: the user may have an unsaved customs form or chat draft.
+// The root error boundary checks for a fresh service worker and offers an explicit refresh.
+const lazyPage=<T extends React.ComponentType<any>>(loader:()=>Promise<{default:T}>)=>lazy(loader);
 // Critical boot routes are statically imported so a missing lazy chunk can never white-screen login/home.
  
 const ClientRegistryPage=lazyPage(()=>import('./pages/ClientRegistryPage').then(m=>({default:m.ClientRegistryPage})));
