@@ -21,4 +21,19 @@ describe('form draft keys', () => {
       encodeURIComponent('stage:2?shipment=4'),
     );
   });
+
+  it('isolates drafts for the same user and form across organizations', () => {
+    expect(formDraftKey('user-a', 'shipment-first', 'org-a')).not.toBe(
+      formDraftKey('user-a', 'shipment-first', 'org-b'),
+    );
+  });
+
+  it('keeps legacy keys stable until a caller can provide organization scope', () => {
+    expect(formDraftKey('user-a', 'shipment-first')).toBe(
+      'customs-os:form-draft:v1:user-a:shipment-first',
+    );
+    expect(formDraftKey('user-a', 'shipment-first', 'org-a')).toBe(
+      'customs-os:form-draft:v2:user-a:org-a:shipment-first',
+    );
+  });
 });
