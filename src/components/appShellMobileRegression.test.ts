@@ -20,6 +20,8 @@ describe('single mobile shell navigation regressions', () => {
   it('keeps touch-first navigation when a mobile browser reports a wide viewport', () => {
     expect(shell).toContain("(min-width: 1024px) and (pointer: fine)");
     expect(mobileCss).toContain("@media (max-width: 1023px), (pointer: coarse)");
+    expect(mobileCss).toContain("@media (min-width: 1024px) and (pointer: fine)");
+    expect(mobileCss).not.toContain("@media (min-width: 1024px) {");
     expect(shell).toContain("{isDesktop && (");
     expect(shell).toContain('<header className="app-mobilebar"');
   });
