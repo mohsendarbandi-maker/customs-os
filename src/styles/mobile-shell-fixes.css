@@ -54,7 +54,7 @@
     z-index: 90 !important;
     display: grid !important;
     flex: 0 0 calc(var(--mobile-header-height) + env(safe-area-inset-top)) !important;
-    grid-template-columns: minmax(0, 1fr) 40px !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     align-items: center !important;
     gap: 10px !important;
     width: 100% !important;
@@ -341,7 +341,7 @@
   }
   .app-shell.is-chat-route:has(.chat-standalone[data-chat-selected="true"]) { padding-bottom: 0 !important; }
   .app-shell.is-chat-route:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock,
-  body:has(.chat-standalone input:focus, .chat-standalone textarea:focus, .chat-standalone [contenteditable="true"]:focus) .app-mobile-dock {
+  body:has(input:focus, textarea:focus, select:focus, [contenteditable="true"]:focus, [role="textbox"]:focus) .app-mobile-dock {
     display: none !important;
   }
 
