@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity, MessageCircle, BarChart3, Building2, Landmark, ChevronLeft, ChevronRight,
-  FileText, FileSearch, History, LayoutDashboard, Menu, Palette, Printer,
+  Activity, MessageCircle, Landmark, ChevronLeft, ChevronRight,
+  FileText, FileSearch, History, LayoutDashboard, Palette, Printer,
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
   Contact, Folder, ClipboardCheck, GitBranch, Receipt, Network,
-  ChevronDown, Plus, Home, CalendarDays
+  Home, CalendarDays
 } from 'lucide-react';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { useAppearance } from '../context/AppearanceContext';
@@ -73,17 +73,42 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { profile, signOut } = useAuth();
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
 
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : true
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState('');
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(groups.map((g) => [g, true]))
-  );
   const [online, setOnline] = useState(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const updateLayout = () => {
+      setIsDesktop(media.matches);
+      if (media.matches) setMobileOpen(false);
+    };
+    updateLayout();
+    media.addEventListener('change', updateLayout);
+    return () => media.removeEventListener('change', updateLayout);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [mobileOpen]);
+
+  useEffect(() => {
     const on = () => setOnline(true);
     const off = () => setOnline(false);
     window.addEventListener('online', on);
@@ -94,18 +119,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     };
   }, []);
 
-  const host = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
-  const isChatSubdomain = host === 'chat.darbandicommercial.ir';
-  const isRemindersSubdomain = host === 'reminders.darbandicommercial.ir';
-  const bare =
-    location.pathname === '/login' ||
-    location.pathname === '/onboarding' ||
-    location.pathname === '/chat' ||
-    location.pathname.startsWith('/chat/') ||
-    location.pathname === '/reminders' ||
-    location.pathname.startsWith('/reminders/') ||
-    (isChatSubdomain && location.pathname === '/') ||
-    (isRemindersSubdomain && location.pathname === '/');
+  // Only auth/onboarding pages intentionally bypass the shared application shell.
+  // Chat and Reminders stay inside the same route tree so mobile gets one global tab bar.
+  const bare = location.pathname === '/login' || location.pathname === '/onboarding';
 
   const visibleNav = nav.filter((x) => canSee(x, profile?.role));
   const query = mobileSearch.trim().toLowerCase();
@@ -151,305 +167,177 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     setMobileSearch('');
   };
 
-  const toggleGroup = (g: string) =>
-    setOpenGroups((prev) => ({ ...prev, [g]: !prev[g] }));
-
-  const quickActions = [
-    { label: 'ثبت محموله', to: '/operations?tab=pre-declaration', icon: Plus },
-    { label: 'داشبورد', to: '/', icon: Home },
-    { label: 'چت', to: '/chat', icon: MessageCircle },
-    { label: 'یادآورها', to: '/reminders', icon: ClipboardList },
-  ];
-
   const go = (to: string) => {
-    if (to === '/chat') {
-      window.location.href = '/chat';
-    } else {
-      navigate(to);
-    }
+    navigate(to);
     closeMobile();
   };
 
+  const currentPageLabel =
+    location.pathname.startsWith('/settings')
+      ? 'تنظیمات'
+      : [...visibleNav]
+          .sort((a, b) => b.to.length - a.to.length)
+          .find((item) => location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to + '/')))
+          ?.label || (location.pathname === '/' ? 'خانه' : 'Customs OS');
+
   return (
     <div className="app-shell min-h-screen future-shell" dir="rtl">
-      {/* ── Desktop Sidebar ── */}
-      <aside className={`app-sidebar hidden md:flex ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
-        <div className="app-brand">
-          <CustomsLogo size={38} showWordmark={!sidebarCollapsed} />
-        </div>
-        <nav className="flex-1 overflow-y-auto px-2 pb-4">
-          {groups.map((g) => (
-            <div key={g} className="mb-4">
-              <div className="app-nav-group">{!sidebarCollapsed && g}</div>
-              {visibleNav
-                .filter((x) => x.group === g)
-                .map((item) => {
-                  const Icon = item.icon;
-                  return item.to === '/chat' ? (
-                    <a
-                      key={item.to}
-                      href="/chat"
-                      className={`app-nav-item ${isActive(item.to) ? 'active' : ''}`}
-                      title={sidebarCollapsed ? item.label : undefined}
-                    >
-                      <Icon size={19} />
-                      {!sidebarCollapsed && (
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold truncate">{item.label}</span>
-                          <span className="block text-[10px] app-muted truncate">{item.en}</span>
-                        </span>
-                      )}
-                    </a>
-                  ) : (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      className={`app-nav-item ${isActive(item.to) ? 'active' : ''}`}
-                      title={sidebarCollapsed ? item.label : undefined}
-                    >
-                      <Icon size={19} />
-                      {!sidebarCollapsed && (
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold truncate">{item.label}</span>
-                          <span className="block text-[10px] app-muted truncate">{item.en}</span>
-                        </span>
-                      )}
-                    </NavLink>
-                  );
-                })}
-            </div>
-          ))}
-        </nav>
-        <div className="p-2">
-          <button className="app-nav-item w-full" onClick={() => navigate('/settings/appearance')}>
-            <Palette size={18} />
-            {!sidebarCollapsed && <span>ظاهر و شخصی‌سازی</span>}
-          </button>
-          <button
-            className="app-nav-item w-full"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          >
-            {sidebarCollapsed ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
-            {!sidebarCollapsed && <span>جمع‌کردن منو</span>}
-          </button>
-        </div>
-      </aside>
-
-      {/* ── Mobile Top Bar ── */}
-      <div className="app-mobilebar md:hidden">
-        <button
-          type="button"
-          className="icon-btn mobile-menu-trigger"
-          aria-label="منو"
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen(v => !v)}
-        >
-          <Menu size={22} />
-        </button>
-        <button
-          type="button"
-          className="app-mobile-title"
-          aria-label={`رفتن به خانه؛ بخش فعلی: ${location.pathname.startsWith('/settings') ? 'تنظیمات' : visibleNav.find((x) => isActive(x.to))?.label || 'Customs OS'}`}
-          onClick={() => navigate('/')}
-        >
-          <CustomsLogo size={32} showWordmark={false} />
-          <span className="mobile-current-page">
-            <span className="mobile-current-page__eyebrow">CUSTOMS OS</span>
-            <span className="mobile-current-page__title">
-              {location.pathname.startsWith('/settings')
-                ? 'تنظیمات'
-                : visibleNav.find((x) => isActive(x.to))?.label || 'خانه'}
-            </span>
-          </span>
-        </button>
-        <button type="button" className="icon-btn" aria-label="ظاهر" onClick={cycleTheme}>
-          {comfort === 'reading' ? (
-            <BookOpen size={18} />
-          ) : theme === 'light' ? (
-            <Sun size={18} />
-          ) : (
-            <Moon size={18} />
-          )}
-        </button>
-      </div>
-
-      {/* ── Mobile Drawer ── */}
-      {mobileOpen && (
-        <>
-          <div className="app-scrim md:hidden" onClick={closeMobile} />
-          <aside className="app-mobile-drawer md:hidden" role="dialog" aria-label="منوی اصلی">
-            {/* Header */}
-            <div className="mobile-drawer-header">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex items-center gap-3">
-                  <span className="h-12 w-12 rounded-2xl bg-[var(--primary)] text-white grid place-items-center font-black text-lg shadow-lg">
-                    {(profile?.full_name || 'ک').slice(0, 1)}
-                  </span>
-                  <div className="min-w-0">
-                    <b className="block truncate text-[15px]">{profile?.full_name || 'کاربر'}</b>
-                    <span className="block text-xs app-muted mt-0.5">
-                      {roles[profile?.role || ''] || 'کاربر'}
-                    </span>
-                  </div>
+      {/* Desktop navigation is mounted only at >=1024px. It is not merely hidden on phones. */}
+      {isDesktop && (
+        <aside className={`app-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
+          <div className="app-brand">
+            <CustomsLogo size={38} showWordmark={!sidebarCollapsed} />
+          </div>
+          <nav className="flex-1 overflow-y-auto px-2 pb-4" aria-label="ناوبری اصلی">
+            {groups.map((g) => {
+              const items = visibleNav.filter((item) => item.group === g);
+              if (!items.length) return null;
+              return (
+                <div key={g} className="mb-4">
+                  <div className="app-nav-group">{!sidebarCollapsed && g}</div>
+                  {items.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        className={`app-nav-item ${isActive(item.to) ? 'active' : ''}`}
+                        title={sidebarCollapsed ? item.label : undefined}
+                      >
+                        <Icon size={19} />
+                        {!sidebarCollapsed && (
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold truncate">{item.label}</span>
+                            <span className="block text-[10px] app-muted truncate">{item.en}</span>
+                          </span>
+                        )}
+                      </NavLink>
+                    );
+                  })}
                 </div>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  aria-label="بستن منو"
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    closeMobile();
-                  }}
-                  onClick={closeMobile}
-                >
-                  <X size={18} />
+              );
+            })}
+          </nav>
+          <div className="p-2">
+            <button type="button" className="app-nav-item w-full" onClick={() => navigate('/settings/appearance')}>
+              <Palette size={18} />
+              {!sidebarCollapsed && <span>ظاهر و شخصی‌سازی</span>}
+            </button>
+            <button
+              type="button"
+              className="app-nav-item w-full"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              aria-label={sidebarCollapsed ? 'گسترش منو' : 'جمع کردن منو'}
+            >
+              {sidebarCollapsed ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+              {!sidebarCollapsed && <span>جمع‌کردن منو</span>}
+            </button>
+          </div>
+        </aside>
+      )}
+
+      {/* Compact touch header: deliberately no hamburger and no theme toggle.
+          Theme settings live in More > ظاهر و شخصی‌سازی. */}
+      {!isDesktop && (
+        <header className="app-mobilebar" aria-label="هدر موبایل">
+          <div className="app-mobile-title">
+            <CustomsLogo size={30} showWordmark={false} />
+            <span className="mobile-current-page">
+              <span className="mobile-current-page__eyebrow">CUSTOMS OS</span>
+              <span className="mobile-current-page__title">{currentPageLabel}</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            className="icon-btn app-mobile-settings"
+            aria-label="تنظیمات ظاهر"
+            title="تنظیمات ظاهر"
+            onClick={() => navigate('/settings/appearance')}
+          >
+            <Settings2 size={19} />
+          </button>
+        </header>
+      )}
+
+      {/* The More sheet is the only secondary mobile navigation. All role-visible
+          routes stay available, in a three-column grid instead of a side drawer. */}
+      {mobileOpen && !isDesktop && (
+        <div className="app-more-scrim" role="presentation" onClick={closeMobile}>
+          <section
+            className="app-more-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="بیشتر"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="app-more-sheet-handle" aria-hidden="true" />
+            <header className="app-more-sheet-header">
+              <div className="min-w-0">
+                <strong>بیشتر</strong>
+                <span>{profile?.full_name || 'کاربر'} · {roles[profile?.role || ''] || 'کاربر'}</span>
+              </div>
+              <button type="button" className="icon-btn" aria-label="بستن بیشتر" onClick={closeMobile}>
+                <X size={18} />
+              </button>
+            </header>
+            <label className="app-more-search">
+              <Search size={17} aria-hidden="true" />
+              <input
+                type="search"
+                placeholder="جست‌وجو در بخش‌ها…"
+                aria-label="جست‌وجو در بخش‌ها"
+                value={mobileSearch}
+                onChange={(event) => setMobileSearch(event.target.value)}
+                autoComplete="off"
+              />
+              {mobileSearch && (
+                <button type="button" onClick={() => setMobileSearch('')} aria-label="پاک کردن جست‌وجو">
+                  <X size={15} />
                 </button>
-              </div>
-
-              {/* Quick actions */}
-              <div className="mobile-quick-actions">
-                {quickActions.map((qa) => {
-                  const Icon = qa.icon;
-                  return (
-                    <button
-                      key={qa.to}
-                      type="button"
-                      className="mobile-quick-btn"
-                      onClick={() => go(qa.to)}
-                    >
-                      <Icon size={20} strokeWidth={2.2} />
-                      <span>{qa.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Search */}
-              <div className="mobile-search-wrap">
-                <Search size={16} className="mobile-search-icon" />
-                <input
-                  type="search"
-                  className="mobile-search-input"
-                  placeholder="جستجو در منو…"
-                  value={mobileSearch}
-                  onChange={(e) => setMobileSearch(e.target.value)}
-                  autoComplete="off"
-                />
-                {mobileSearch && (
+              )}
+            </label>
+            <nav className="app-more-grid" aria-label="همه بخش‌ها">
+              {filteredNav.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.to) || (item.to !== '/' && location.pathname.startsWith(item.to + '/'));
+                return (
                   <button
                     type="button"
-                    className="mobile-search-clear"
-                    onClick={() => setMobileSearch('')}
-                    aria-label="پاک کردن"
+                    key={item.to}
+                    className={`app-more-item ${active ? 'is-active' : ''}`}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => go(item.to)}
                   >
-                    <X size={14} />
+                    <span className="app-more-item-icon"><Icon size={21} strokeWidth={2} /></span>
+                    <span>{item.label}</span>
                   </button>
-                )}
-              </div>
-            </div>
-
-            {/* Nav groups */}
-            <nav className="mobile-drawer-nav">
-              {groups.map((g) => {
-                const items = filteredNav.filter((x) => x.group === g);
-                if (items.length === 0) return null;
-                const isOpen = openGroups[g] !== false;
-                return (
-                  <div key={g} className="mobile-nav-group">
-                    <button
-                      type="button"
-                      className="mobile-group-toggle"
-                      onClick={() => toggleGroup(g)}
-                      aria-expanded={isOpen}
-                    >
-                      <span>{g}</span>
-                      <ChevronDown
-                        size={16}
-                        className={`mobile-group-chevron ${isOpen ? 'is-open' : ''}`}
-                      />
-                    </button>
-                    {isOpen && (
-                      <div className="mobile-group-items">
-                        {items.map((item) => {
-                          const Icon = item.icon;
-                          const active = isActive(item.to);
-                          return (
-                            <button
-                              key={item.to}
-                              type="button"
-                              className={`mobile-nav-item ${active ? 'active' : ''}`}
-                              onClick={() => go(item.to)}
-                            >
-                              <span className="mobile-nav-icon">
-                                <Icon size={20} strokeWidth={active ? 2.4 : 2} />
-                              </span>
-                              <span className="mobile-nav-label">
-                                <span className="block text-[14px] font-semibold leading-tight">
-                                  {item.label}
-                                </span>
-                                <span className="block text-[11px] app-muted mt-0.5">
-                                  {item.en}
-                                </span>
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
                 );
               })}
-
-              {filteredNav.length === 0 && (
-                <div className="mobile-empty-search">
-                  نتیجه‌ای یافت نشد
-                </div>
-              )}
+              <button type="button" className={`app-more-item ${location.pathname.startsWith('/settings/appearance') ? 'is-active' : ''}`} onClick={() => go('/settings/appearance')}>
+                <span className="app-more-item-icon"><Palette size={21} /></span>
+                <span>ظاهر و رنگ‌بندی</span>
+              </button>
+              <button type="button" className="app-more-item" onClick={() => go('/settings/profile')}>
+                <span className="app-more-item-icon"><Users size={21} /></span>
+                <span>پروفایل من</span>
+              </button>
+              <button type="button" className="app-more-item" onClick={() => { closeMobile(); void signOut(); }}>
+                <span className="app-more-item-icon"><LogOut size={21} /></span>
+                <span>خروج از حساب</span>
+              </button>
             </nav>
-
-            {/* Footer */}
-            <div className="mobile-drawer-footer">
-              <button
-                type="button"
-                className="mobile-nav-item"
-                onClick={() => {
-                  closeMobile();
-                  navigate('/settings/profile');
-                }}
-              >
-                <span className="mobile-nav-icon"><Users size={20} /></span>
-                <span className="mobile-nav-label">
-                  <span className="block text-[14px] font-semibold">پروفایل من</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                className="mobile-nav-item"
-                onClick={() => {
-                  closeMobile();
-                  void signOut();
-                }}
-              >
-                <span className="mobile-nav-icon"><LogOut size={20} /></span>
-                <span className="mobile-nav-label">
-                  <span className="block text-[14px] font-semibold">خروج از حساب</span>
-                </span>
-              </button>
-            </div>
-          </aside>
-        </>
+          </section>
+        </div>
       )}
 
       {/* ── Main content ── */}
       <main className={`app-main ${sidebarCollapsed ? 'sidebar-compact' : ''}`}>
         <header className="app-topbar">
-          <div className="flex items-center gap-3 min-w-0"><button type="button" className="customs-desktop-menu" aria-label="باز کردن منوی اصلی" aria-expanded={mobileOpen} onClick={() => setMobileOpen(v => !v)}><Menu size={19}/><span>منو</span></button>
+          <div className="flex items-center gap-3 min-w-0">
             <div className="hidden lg:block">
               <div className="text-[11px] app-muted">سامانه مدیریت عملیات گمرکی و لجستیک</div>
               <div className="font-bold truncate">
-                {location.pathname.startsWith('/settings')
-                  ? 'تنظیمات'
-                  : visibleNav.find((x) => isActive(x.to))?.label || 'Customs OS'}
+                {currentPageLabel}
               </div>
             </div>
             <div className="flex-1" />
@@ -554,14 +442,14 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
         </div>
       </main>
-      <nav className="app-mobile-dock md:hidden" aria-label="پیمایش سریع">
+      {!isDesktop && <nav className="app-mobile-dock" aria-label="پیمایش سریع">
         <button type="button" className={isActive('/')?'is-active':''} aria-current={isActive('/')?'page':undefined} onClick={()=>go('/')}><Home size={21}/><span>خانه</span></button>
         <button type="button" className={location.pathname.startsWith('/operations')?'is-active':''} aria-current={location.pathname.startsWith('/operations')?'page':undefined} onClick={()=>go('/operations')}><ClipboardList size={21}/><span>عملیات</span></button>
-        <button type="button" className={isActive('/reminders')?'is-active':''} aria-current={isActive('/reminders')?'page':undefined} onClick={()=>go('/reminders')}><CalendarDays size={21}/><span>یادآورها</span></button>
-        <button type="button" className={isActive('/chat')?'is-active':''} aria-current={isActive('/chat')?'page':undefined} onClick={()=>go('/chat')}><MessageCircle size={21}/><span>چت</span></button>
-        <button type="button" className={mobileOpen?'is-active':''} aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}><Menu size={21}/><span>بیشتر</span></button>
-      </nav>
-      <AIWorkspace pageContext={location.pathname + location.search} />
+        <button type="button" className={location.pathname.startsWith('/reminders')?'is-active':''} aria-current={location.pathname.startsWith('/reminders')?'page':undefined} onClick={()=>go('/reminders')}><CalendarDays size={21}/><span>یادآورها</span></button>
+        <button type="button" className={location.pathname.startsWith('/chat')?'is-active':''} aria-current={location.pathname.startsWith('/chat')?'page':undefined} onClick={()=>go('/chat')}><MessageCircle size={21}/><span>چت</span></button>
+        <button type="button" className={mobileOpen?'is-active':''} aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}><Layers3 size={21}/><span>بیشتر</span></button>
+      </nav>}
+      {!location.pathname.startsWith('/chat') && !location.pathname.startsWith('/reminders') && <AIWorkspace pageContext={location.pathname + location.search} />}
     </div>
   );
 };

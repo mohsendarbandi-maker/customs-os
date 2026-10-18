@@ -1,7 +1,6 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import "./styles/mobile-polish.css";
 
 :root{--bg:#0b1220;--surface:#111a2b;--surface-2:#162237;--surface-3:#1b2a42;--text:#e5edf8;--text-muted:#91a1b8;--border:#263754;--primary:#2563eb;--primary-2:#06b6d4;--success:#10b981;--warning:#f59e0b;--danger:#ef4444;--shadow:0 12px 35px rgba(2,8,23,.18);--content-max:100%;--hero-a:#284b72;--hero-b:#0A66C2}
 html,body,#root{min-height:100%;margin:0;max-width:100%;overflow-x:hidden}html{scroll-behavior:smooth}body{font-family:Vazirmatn,IRANSans,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}*{box-sizing:border-box;min-width:0}button,input,select,textarea{font:inherit;max-width:100%}button{cursor:pointer}:focus-visible{outline:2px solid var(--primary-2);outline-offset:2px}.app-shell{background:var(--bg);color:var(--text);min-height:100vh;width:100%;overflow-x:hidden}.app-border{border-color:var(--border)!important}.app-muted{color:var(--text-muted)!important}

@@ -393,3 +393,526 @@
   }
 }
 
+
+
+/* CUSTOMS OS iOS shell remediation — 2026-10-18
+   Root cause: legacy md breakpoints hid the desktop sidebar at 768px while
+   separately forcing the old drawer open; hidden sidebar nodes also remained in
+   the DOM on phones. The shell now mounts the sidebar only above 1023px, and
+   this final layer intentionally supersedes older stacked responsive rules. */
+:root {
+  --app-mobile-tabbar-height: 70px;
+  --app-mobile-header-height: 56px;
+}
+@media (max-width: 1023px) {
+  html, body, #root {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: clip !important;
+  }
+  body {
+    padding-bottom: 0 !important;
+    overscroll-behavior-x: none;
+  }
+  #root, .app-shell {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100dvh;
+    overflow-x: clip !important;
+  }
+  /* Desktop navigation is also removed from the React tree at this breakpoint.
+     These selectors are defensive against an already-open stale legacy drawer. */
+  .app-sidebar, .app-topbar, .app-scrim, .app-mobile-drawer {
+    display: none !important;
+  }
+  .app-mobilebar {
+    position: sticky !important;
+    inset-block-start: 0;
+    z-index: 90;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: calc(var(--app-mobile-header-height) + env(safe-area-inset-top));
+    min-height: calc(var(--app-mobile-header-height) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 12px 0 !important;
+    margin: 0;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--bg) 94%, transparent) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    backdrop-filter: blur(18px) saturate(1.2);
+    box-sizing: border-box;
+  }
+  .app-mobile-title {
+    justify-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-align: start;
+  }
+  .app-mobile-title .customs-logo {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+  }
+  .app-mobile-title .customs-logo__wordmark { display: none !important; }
+  .app-mobile-title .mobile-current-page {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    max-width: 100%;
+    gap: 2px;
+    text-align: start;
+    overflow: hidden;
+  }
+  .app-mobile-title .mobile-current-page__eyebrow {
+    display: block;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 9px;
+    line-height: 1.1;
+    letter-spacing: .04em;
+    white-space: nowrap;
+  }
+  .app-mobile-title .mobile-current-page__title {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-mobile-settings {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px;
+    min-height: 40px;
+    flex: 0 0 40px;
+    border-radius: 13px;
+    z-index: auto;
+  }
+  .app-main, .app-main.sidebar-compact {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0;
+    min-height: calc(100dvh - var(--app-mobile-header-height) - env(safe-area-inset-top));
+    margin: 0 !important;
+  }
+  .app-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0;
+    padding: 10px 12px calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important;
+    overflow-x: clip !important;
+    overflow-y: visible !important;
+    overscroll-behavior-x: none;
+  }
+  .future-route-stage {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .app-content h1, .app-content h2, .app-content h3, .app-content h4,
+  .app-content p, .app-content span, .app-content a, .app-content button {
+    overflow-wrap: anywhere;
+  }
+  .app-content input, .app-content textarea, .app-content select {
+    min-width: 0;
+    font-size: 16px !important;
+  }
+  .app-mobile-dock {
+    position: fixed !important;
+    inset-inline: 10px;
+    inset-block-end: calc(env(safe-area-inset-bottom) + 8px) !important;
+    z-index: 120;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 3px;
+    min-width: 0;
+    padding: 6px;
+    padding-bottom: 6px;
+    border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+    border-radius: 21px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(1.25);
+    backdrop-filter: blur(22px) saturate(1.25);
+    box-shadow: 0 10px 30px rgba(4, 18, 38, .18), inset 0 1px 0 rgba(255,255,255,.1);
+    transform: translateZ(0);
+  }
+  .app-mobile-dock > button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    min-height: 54px;
+    max-width: 100%;
+    padding: 4px 1px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.15;
+    white-space: nowrap;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .app-mobile-dock > button svg { flex: 0 0 auto; width: 21px; height: 21px; }
+  .app-mobile-dock > button span {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-mobile-dock > button.is-active {
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  }
+  .app-more-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: max(8px, env(safe-area-inset-top)) 0 0;
+    background: rgba(3, 12, 26, .52);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+  .app-more-sheet {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 720px;
+    max-height: min(86dvh, 780px);
+    min-height: 0;
+    margin-inline: auto;
+    padding: 8px 0 calc(12px + env(safe-area-inset-bottom));
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 -16px 50px rgba(0,0,0,.22);
+    overflow: hidden;
+    animation: appMoreSheetIn .2s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .app-more-sheet-handle {
+    width: 38px;
+    height: 4px;
+    flex: 0 0 4px;
+    margin: 0 auto 8px;
+    border-radius: 99px;
+    background: var(--text-muted);
+    opacity: .45;
+  }
+  .app-more-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 14px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .app-more-sheet-header > div { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+  .app-more-sheet-header strong { font-size: 18px; font-weight: 900; }
+  .app-more-sheet-header span { color: var(--text-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-more-sheet-header .icon-btn { z-index: auto; width: 40px; height: 40px; flex: 0 0 40px; }
+  .app-more-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    margin: 10px 12px 6px;
+    padding: 0 11px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-2);
+    color: var(--text-muted);
+  }
+  .app-more-search input {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    height: 42px;
+    min-height: 42px;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 16px !important;
+  }
+  .app-more-search button {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--text-muted);
+  }
+  .app-more-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-content: start;
+    gap: 8px;
+    min-height: 0;
+    padding: 8px 12px 4px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .app-more-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 7px;
+    min-width: 0;
+    min-height: 82px;
+    padding: 9px 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    background: var(--surface-2);
+    color: var(--text);
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.35;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .app-more-item > span:last-child {
+    display: -webkit-box;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .app-more-item-icon {
+    display: grid;
+    place-items: center;
+    width: 37px;
+    height: 37px;
+    flex: 0 0 37px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+    color: var(--primary);
+  }
+  .app-more-item.is-active {
+    border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+    background: color-mix(in srgb, var(--primary) 9%, var(--surface));
+    color: var(--primary);
+  }
+  /* The chat inbox keeps the tabs; inside a conversation the composer owns the viewport. */
+  .app-shell:has(.chat-standalone) .app-mobilebar { display: none !important; }
+  .app-shell:has(.chat-standalone) .app-main {
+    height: 100dvh;
+    min-height: 0;
+  }
+  .app-shell:has(.chat-standalone) .app-content {
+    height: 100dvh;
+    min-height: 0;
+    padding: 0 0 calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
+    overflow: hidden !important;
+  }
+  .app-shell:has(.chat-standalone) .future-route-stage { height: 100%; min-height: 0; }
+  .app-shell:has(.chat-standalone) .chat-standalone {
+    min-height: 0 !important;
+    max-height: 100dvh !important;
+  }
+  /* The inbox reserves tab-bar space; the open chat takes the full viewport because its dock is removed. */
+  .app-shell:has(.chat-standalone[data-chat-selected="false"]) .chat-standalone {
+    height: calc(100dvh - var(--app-mobile-tabbar-height) - env(safe-area-inset-bottom)) !important;
+  }
+  .app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-content {
+    padding-bottom: 0 !important;
+  }
+  .app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone {
+    height: 100dvh !important;
+  }
+  .app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock { display: none !important; }
+  /* Reminders previously owned a second fixed tab bar and forced the whole root
+     into a hidden 100dvh viewport. Their route keeps its content and quick-add,
+     but the shared shell is the only navigation and page content may scroll. */
+  html:has(.reminders-app-standalone),
+  body:has(.reminders-app-standalone),
+  #root:has(.reminders-app-standalone),
+  .app-shell:has(.reminders-app-standalone) {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow-x: clip !important;
+    overflow-y: auto !important;
+  }
+  .app-shell:has(.reminders-app-standalone) .app-main,
+  .app-shell:has(.reminders-app-standalone) .app-content,
+  .app-shell:has(.reminders-app-standalone) .future-route-stage {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow-x: clip !important;
+    overflow-y: visible !important;
+  }
+  .app-shell:has(.reminders-app-standalone) .reminders-app-standalone {
+    height: auto !important;
+    min-height: calc(100dvh - var(--app-mobile-header-height) - env(safe-area-inset-top)) !important;
+    max-height: none !important;
+    overflow-x: clip !important;
+    overflow-y: visible !important;
+    padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important;
+  }
+  .app-shell:has(.reminders-app-standalone) .reminders-mobile-nav { display: none !important; }
+
+  /* Short labels and two compact columns preserve the 375px layout without truncating data. */
+  .customs-home-tagline { display: none !important; }
+  .customs-home header { align-items: center; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; }
+  .customs-home header > div:first-child { gap: 9px; min-width: 0; }
+  .customs-home header h1 { font-size: 18px !important; line-height: 1.35; }
+  .customs-home header p { margin-top: 3px !important; font-size: 12px; white-space: nowrap; }
+  .customs-home header .customs-primary-button,
+  .customs-home header .customs-line-button { min-height: 40px; padding-inline: 10px; }
+  .customs-home .customs-stat-line {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .customs-home .customs-stat-divider { display: none !important; }
+  .customs-home .customs-stat {
+    display: grid !important;
+    grid-template-columns: 18px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 4px 7px;
+    min-height: 76px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: 0 4px 14px rgba(4,18,38,.06);
+  }
+  .customs-home .customs-stat > svg { grid-column: 1; grid-row: 1; width: 18px; height: 18px; }
+  .customs-home .customs-stat > span {
+    grid-column: 2; grid-row: 1;
+    display: block; min-width: 0; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 11px !important; line-height: 1.3;
+  }
+  .customs-home .customs-stat > strong {
+    grid-column: 1 / -1; grid-row: 2;
+    font-size: 24px !important; line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .customs-home .customs-widget-grid { min-width: 0; }
+  .customs-home .customs-widget-frame { min-width: 0; grid-column: 1 / -1 !important; }
+  .customs-home .customs-shipments-section { min-width: 0; }
+  .customs-home .customs-status-board { max-width: 100%; overflow-x: auto; }
+  .customs-home .customs-status-board > * { min-width: 0; }
+  .shipment-status-toolbar { min-width: 0; }
+  .shipment-status-search { position: relative !important; inset: auto !important; }
+}
+@media (min-width: 1024px) {
+  .app-mobilebar, .app-mobile-dock, .app-more-scrim { display: none !important; }
+  .app-sidebar {
+    display: flex !important;
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: auto;
+    right: 0;
+    left: auto;
+    width: 276px;
+  }
+  .app-sidebar.is-collapsed { width: 82px; }
+  .app-main { width: auto; min-width: 0; margin-right: 276px !important; min-height: 100dvh; }
+  .app-main.sidebar-compact { margin-right: 82px !important; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-mobilebar { display: grid !important; }
+  .app-mobile-dock { display: grid !important; }
+  .app-main, .app-main.sidebar-compact { margin: 0 !important; width: 100% !important; }
+}
+@media (max-width: 390px) {
+  .app-content { padding-inline: 10px !important; }
+  .app-more-grid { gap: 6px; padding-inline: 10px; }
+  .app-more-item { min-height: 78px; padding-inline: 3px; font-size: 10.5px; }
+  .app-more-item-icon { width: 35px; height: 35px; flex-basis: 35px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-more-sheet { animation: none !important; }
+}
+@keyframes appMoreSheetIn {
+  from { opacity: .7; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 1023px) {
+  /* The reminders page had a legacy width: calc(100% + 20px) rule, which
+     shifted RTL content underneath the viewport edge despite body overflow clipping. */
+  .app-shell:has(.reminders-app-standalone) .reminders-app-standalone {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+  }
+  /* Toasts and other fixed actions must sit above—not on top of—the shared tab bar. */
+  .app-shell .fixed[class~="bottom-24"] {
+    bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+  }
+  .customs-home header p { font-variant-numeric: lining-nums; }
+}
+
+@media (max-width: 1023px) {
+  /* iOS opens the keyboard when a real text field receives focus; hiding the
+     dock and releasing its reserved space prevents the keyboard/composer overlap. */
+  .app-shell:has(input:focus) .app-mobile-dock,
+  .app-shell:has(textarea:focus) .app-mobile-dock,
+  .app-shell:has(select:focus) .app-mobile-dock,
+  .app-shell:has([contenteditable="true"]:focus) .app-mobile-dock {
+    display: none !important;
+  }
+  .app-shell:has(input:focus) .app-content,
+  .app-shell:has(textarea:focus) .app-content,
+  .app-shell:has(select:focus) .app-content,
+  .app-shell:has([contenteditable="true"]:focus) .app-content {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 12px) !important;
+  }
+  .app-shell:has(.chat-standalone[data-chat-selected="false"] input:focus) .chat-standalone,
+  .app-shell:has(.chat-standalone[data-chat-selected="false"] textarea:focus) .chat-standalone {
+    height: 100dvh !important;
+  }
+  .app-shell:has(.reminders-app-standalone input:focus) .reminders-app-standalone,
+  .app-shell:has(.reminders-app-standalone textarea:focus) .reminders-app-standalone {
+    padding-bottom: 16px !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  /* Install guidance is intentionally a card above the dock—not another bottom bar. */
+  .app-shell .pwa-install-prompt,
+  .app-shell .pwa-ios-install-guide {
+    bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+  }
+}

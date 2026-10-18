@@ -451,7 +451,8 @@ export const RemindersPage:React.FC=()=>{
    </div>
   </form>
 
-  <nav className="reminders-mobile-nav" aria-label={t('ناوبری اپ یادآورها')}><button type="button" className={currentSection==='today'?'is-active':''} onClick={()=>goToSection('today')}><CalendarDays size={20}/><span>{t('امروز')}</span></button><button type="button" className={currentSection==='lists'||currentSection.startsWith('list-')?'is-active':''} onClick={()=>goToSection('lists')}><ListChecks size={20}/><span>{t('فهرست‌ها')}</span></button><button type="button" className={'reminders-mobile-add '+(composerOpen?'is-open':'')} onClick={openComposer} aria-label={composerOpen?t('بستن فرم'):t('یادآور جدید')}><span>{composerOpen?<X size={22}/>:<Plus size={22}/>}</span><small>{composerOpen?t('بستن فرم'):t('یادآور جدید')}</small></button><button type="button" className={isSearchPage?'is-active':''} onClick={()=>goToSection('search')}><Search size={20}/><span>{t('جست‌وجو')}</span></button><button type="button" className={isSettingsPage?'is-active':''} onClick={()=>goToSection('settings')}><Languages size={20}/><span>{t('تنظیمات')}</span></button></nav>
+  {/* Global AppShell bottom tabs replace the old reminders-only nav; quick-add remains in the page header. */}
+  
   {menuReminder&&menuPosition&&<><button type="button" className="reminder-menu-scrim" onClick={closeCardMenu} aria-label={t('بستن')}/><div role="menu" className="reminder-overflow-menu" style={{top:menuPosition.top,left:menuPosition.left,width:menuPosition.width}}>
     <button type="button" role="menuitem" onClick={()=>{snooze(menuReminder,10);closeCardMenu()}}><Clock3 size={17}/><span>{t('۱۰ دقیقه بعد')}</span></button>
     <button type="button" role="menuitem" onClick={()=>{snooze(menuReminder,60);closeCardMenu()}}><Clock3 size={17}/><span>{t('۱ ساعت بعد')}</span></button>
