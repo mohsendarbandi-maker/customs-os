@@ -12,7 +12,6 @@ const json = (d: unknown, s = 200) => new Response(JSON.stringify(d), {
   status: s,
   headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
 });
-const ext = (n: string) => n.toLowerCase().match(/\.([a-z0-9]{1,12})$/)?.[1] ?? "";
 
 async function expectedSecret() {
   const { data, error } = await admin.rpc("internal_get_reminder_secret", { p_name: "file_scan_cron_secret" });
