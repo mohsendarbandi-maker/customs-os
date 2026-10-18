@@ -4,6 +4,7 @@ export interface Env {
   SUPABASE_ANON_KEY?: string;
   TURN_API_TOKEN_V2?: string;
   TURN_KEY_ID_V2?: string;
+  MESSENGER_EGRESS_SECRET?: string;
 }
 
 const BUILD_SIGNATURE = '20261013-reminders-list-first-teal-theme';
@@ -282,6 +283,79 @@ async function serveMaritimeConditions(request: Request): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // Signed server-to-server egress for messenger provider APIs. This endpoint
+    // is not a general-purpose proxy: only explicit provider hosts are allowed,
+    // credentials are never forwarded to the destination except provider auth,
+    // and responses are streamed without caching or binary buffering.
+    if (url.pathname === '/_internal/messenger-egress') {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return json({ error: 'Method not allowed' }, 405);
+      }
+      const expected = env.MESSENGER_EGRESS_SECRET || '';
+      const supplied = request.headers.get('x-customs-messenger-proxy-key') || '';
+      const equalSecret = (a: string, b: string) => {
+        if (!a || a.length !== b.length) return false;
+        let diff = 0;
+        for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+        return diff === 0;
+      };
+      if (!expected || !equalSecret(expected, supplied)) {
+        return json({ error: 'Unauthorized' }, 401);
+      }
+      const rawTarget = request.headers.get('x-customs-messenger-target-url') || '';
+      let target: URL;
+      try {
+        target = new URL(rawTarget);
+      } catch {
+        return json({ error: 'Invalid provider URL' }, 400);
+      }
+      const host = target.hostname.toLowerCase();
+      const allowedHost =
+        host === 'api.telegram.org' ||
+        host === 'tapi.bale.ai' ||
+        host === 'graph.facebook.com' ||
+        host.endsWith('.fbsbx.com') ||
+        host.endsWith('.fbcdn.net') ||
+        host.endsWith('.whatsapp.net');
+      if (
+        target.protocol !== 'https:' ||
+        target.username || target.password || target.port ||
+        target.hash || !allowedHost
+      ) {
+        return json({ error: 'Provider host is not allowed' }, 403);
+      }
+      const headers = new Headers(request.headers);
+      headers.delete('host');
+      headers.delete('content-length');
+      headers.delete('x-customs-messenger-proxy-key');
+      headers.delete('x-customs-messenger-target-url');
+      headers.delete('cookie');
+      headers.delete('origin');
+      headers.delete('referer');
+      try {
+        const upstream = await fetch(new Request(target.toString(), {
+          method: request.method,
+          headers,
+          body: request.method === 'GET' ? undefined : request.body,
+          redirect: 'manual',
+        }));
+        const responseHeaders = new Headers(upstream.headers);
+        responseHeaders.set('Cache-Control', 'no-store, private');
+        responseHeaders.set('X-Customs-OS-Proxy', 'cloudflare-messenger-egress');
+        responseHeaders.delete('set-cookie');
+        responseHeaders.delete('content-length');
+        return new Response(upstream.body, {
+          status: upstream.status,
+          statusText: upstream.statusText,
+          headers: responseHeaders,
+        });
+      } catch (error) {
+        console.error('[Messenger egress] provider request failed:', host,
+          error instanceof Error ? error.message : String(error));
+        return json({ error: 'Messenger provider temporarily unavailable' }, 502);
+      }
+    }
 
     // Chat and Reminders remain aliases of the unified app. The mobile hostname
     // is intentionally NOT an alias: it is a dedicated mobile-first entry point
