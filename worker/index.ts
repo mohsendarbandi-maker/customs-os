@@ -491,26 +491,6 @@ export default {
     }
 
     const accept = request.headers.get('Accept') || '';
-    const legacyManifestPath =
-      url.pathname === '/manifest-chat.webmanifest' ||
-      url.pathname === '/chat-manifest.webmanifest' ||
-      url.pathname === '/chat-app-v3.webmanifest' ||
-      url.pathname === '/chat-app-v4.webmanifest' ||
-      url.pathname === '/chat-subdomain.webmanifest' ||
-      url.pathname === '/manifest-reminders.webmanifest' ||
-      url.pathname === '/reminders-subdomain.webmanifest' ||
-      url.pathname === '/mobile-subdomain.webmanifest';
-
-    // The legacy manifest redirects above should handle all old names, but this
-    // guard prevents an asset SPA fallback from ever serving HTML as a manifest.
-    if (legacyManifestPath) {
-      const target = new URL('/manifest.webmanifest', request.url);
-      target.protocol = 'https:';
-      target.hostname = 'darbandicommercial.ir';
-      target.port = '';
-      return Response.redirect(target.toString(), 301);
-    }
-
     const isManifestRequest = url.pathname === '/manifest.webmanifest';
     const isStaticAsset =
       url.pathname.startsWith('/assets/') ||
