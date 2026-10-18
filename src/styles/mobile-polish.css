@@ -1133,7 +1133,9 @@ body {
 }
 @media (min-width: 768px) and (max-width: 1023px) {
   .app-sidebar, .app-topbar { display: none !important; }
-  .app-mobilebar, .app-mobile-dock { display: grid !important; }
+  /* The header is a flex row; only the five-tab dock uses CSS Grid. */
+  .app-mobilebar { display: flex !important; }
+  .app-mobile-dock { display: grid !important; }
   .app-main, .app-main.sidebar-compact {
     width: 100% !important;
     max-width: 100% !important;
