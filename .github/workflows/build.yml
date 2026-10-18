@@ -293,6 +293,14 @@ jobs:
             legacy_manifest_location="$(grep -i '^location:' /tmp/legacy-manifest.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
             test "$legacy_manifest_location" = "https://darbandicommercial.ir/manifest.webmanifest?v=legacy-smoke"
 
+            echo "Checking Cloudflare-to-Supabase WebRTC endpoint remains protected"
+            ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "$base/api/webrtc/ice")"
+            test "$ice_status" = "401"
+
+            echo "Checking Cloudflare-to-Supabase messenger webhook routing"
+            gateway_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/messenger-gateway.json -w '%{http_code}' "$base/webhooks/messenger/telegram/00000000-0000-4000-8000-000000000000")"
+            test "$gateway_status" = "404"
+
             echo "Checking primary HTML has one manifest and no mobile-origin redirect"
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-main.html "$base/?__canonical_pwa_smoke=${GITHUB_RUN_ID}"
             grep -Fq '<link rel="manifest" href="/manifest.webmanifest" />' /tmp/customs-main.html
