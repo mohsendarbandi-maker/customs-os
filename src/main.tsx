@@ -136,31 +136,15 @@ if (!rootElement) {
   throw new Error('Root element #root was not found');
 }
 
-const normalizeLegacyPwaLaunch = () => {
-  if (typeof window === 'undefined') return false;
+// A single installed PWA always opens the canonical home route. Older builds
+// appended ?source=pwa to open Chat, but that route-level redirect contradicted the
+// shared app identity and unexpectedly bypassed the user's home/workspace entry.
+rootElement.replaceChildren();
 
-  try {
-    const current = new URL(window.location.href);
-    if (current.pathname !== '/' || current.searchParams.get('source') !== 'pwa') return false;
-
-    current.pathname = '/chat';
-    current.search = '';
-    window.location.replace(current.toString());
-    return true;
-  } catch (error) {
-    console.warn('[Customs OS] Legacy PWA launch normalization failed:', error);
-    return false;
-  }
-};
-
-if (!normalizeLegacyPwaLaunch()) {
-  rootElement.replaceChildren();
-
-  ReactDOM.createRoot(rootElement).render(
-    <React.StrictMode>
-      <AppErrorBoundary>
-        <App />
-      </AppErrorBoundary>
-    </React.StrictMode>,
-  );
-}
+ReactDOM.createRoot(rootElement).render(
+  <React.StrictMode>
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
+  </React.StrictMode>,
+);
