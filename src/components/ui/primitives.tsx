@@ -8,7 +8,7 @@ import React, {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
-import { ArrowRight, LoaderCircle, PackageOpen } from 'lucide-react';
+import { ArrowRight, Loader2, PackageOpen } from 'lucide-react';
 
 const cx = (...tokens: Array<string | false | null | undefined>) =>
   tokens.filter(Boolean).join(' ');
@@ -48,7 +48,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       aria-busy={loading || props['aria-busy']}
       className={cx('ds-btn', `ds-btn--${variant}`, `ds-btn--${size}`, className)}
     >
-      {loading ? <LoaderCircle className="ds-spin" size={17} aria-hidden="true" /> : startIcon && <span className="ds-btn__icon" aria-hidden="true">{startIcon}</span>}
+      {loading ? <Loader2 className="ds-spin" size={17} aria-hidden="true" /> : startIcon && <span className="ds-btn__icon" aria-hidden="true">{startIcon}</span>}
       {size !== 'icon' && children != null && <span className="ds-btn__label">{children}</span>}
       {!loading && size !== 'icon' && endIcon && <span className="ds-btn__icon" aria-hidden="true">{endIcon}</span>}
       {size === 'icon' && children}
