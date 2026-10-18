@@ -912,7 +912,8 @@
 @media (max-width: 1023px) {
   /* Install guidance is intentionally a card above the dock—not another bottom bar. */
   .app-shell .pwa-install-prompt,
-  .app-shell .pwa-ios-install-guide {
+  .app-shell .pwa-ios-install-guide,
+  .app-shell .pwa-version-notice {
     bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
   }
 }
