@@ -22,7 +22,7 @@ Generate one strong random value in a trusted terminal, for example with `openss
 
 ## Proxy security contract
 
-- Only HTTPS requests to `api.telegram.org`, `tapi.bale.ai`, `graph.facebook.com`, and subdomains of `fbsbx.com`, `fbcdn.net`, and `whatsapp.net` are accepted.
+- Only HTTPS requests to `api.telegram.org`, `tapi.bale.ai`, `botapi.rubika.ir`, `graph.facebook.com`, and subdomains of `fbsbx.com`, `fbcdn.net`, and `whatsapp.net` are accepted.
 - Only GET and POST are accepted. GET media redirects are followed for at most three hops, with HTTPS and host allowlist validation on every hop; provider Authorization is stripped on unsafe cross-origin redirects.
 - The shared secret is checked with a constant-time comparison and is never forwarded upstream.
 - Request and response bodies are streamed; the Worker does not write message files to Assets, KV, D1, or R2.
@@ -66,7 +66,7 @@ These observations confirm that the existing Telegram daily-report path has reco
 - The PR is still open and its changes have not been deployed.
 - Production secret configuration for the Worker and Edge Function has not been verified or performed through the available tools.
 - No live test has verified the new egress endpoint or remote-only attachment flow.
-- The Rubika adapter is explicitly unsupported in the current gateway (`PLATFORM_TRANSPORT_UNVERIFIED` / `PUBLIC_BOT_API_NOT_VERIFIED`). Do not report Rubika as implemented until its supported API and media/webhook contract are verified and tested.
+- The gateway now uses Rubika's documented `https://botapi.rubika.ir/v3/{token}/{method}` API for text, inbound `ReceiveUpdate`/`ReceiveInlineMessage` webhooks, and bounded remote-reference file transfers. Upload/download URLs are fail-closed unless HTTPS and the exact `botapi.rubika.ir` host; the official docs do not document the returned media host clearly enough to widen this allowlist. Live token, webhook, media-host, and file round-trip tests remain required before calling Rubika production-ready.
 - Bale and WhatsApp have code paths, but no enabled production connections were found during the read-only check; live provider tests remain pending.
 
 Do not merge, apply the phase-1 migration, or deploy the Edge Function before the shared egress secret is set and a coordinated release is ready. The new function intentionally fails closed when proxy configuration is absent, and deploying it prematurely can interrupt current provider operations.
@@ -79,4 +79,4 @@ Do not merge, apply the phase-1 migration, or deploy the Edge Function before th
 4. Apply the reviewed migration and deploy `messenger-gateway` using the established production release procedure.
 5. Run a non-sensitive Telegram text test, inbound webhook test, and attachment upload/download test; verify no new binary object is stored by Customs OS.
 6. Confirm daily reports and outbox delivery still work.
-7. Complete Bale and WhatsApp live checks when valid credentials are configured. Treat Rubika as blocked until its official API contract is confirmed.
+7. Complete Bale and WhatsApp live checks when valid credentials are configured. Complete Rubika live `getMe`, webhook, text and file round-trip tests; expand media host allowlisting only if official provider evidence verifies the exact host.
