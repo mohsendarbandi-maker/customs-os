@@ -28,7 +28,7 @@ describe('one canonical Customs OS PWA', () => {
     expect(links).toHaveLength(1);
     expect(links[0]).toContain('href="/manifest.webmanifest"');
     expect(appleIcons).toHaveLength(1);
-    expect(appleIcons[0]).toContain('.png');
+    expect(appleIcons[0]).toContain('/pwa/mobile-icon-180.png');
     expect(html).toContain('viewport-fit=cover');
     expect(html).toContain('name="apple-mobile-web-app-capable" content="yes"');
     expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="black-translucent"');
