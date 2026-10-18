@@ -275,23 +275,38 @@ jobs:
               local legacy_host="$1"
               local expected_path="$2"
               local marker="$3"
-              local status location
-              status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-redirect.headers -o /dev/null -w '%{http_code}' "https://${legacy_host}/?${marker}=${GITHUB_RUN_ID}")"
-              test "$status" = "301"
-              location="$(grep -i '^location:' /tmp/legacy-redirect.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
-              case "$location" in
-                "https://darbandicommercial.ir${expected_path}?"*) ;;
-                *) echo "Unexpected canonical redirect from ${legacy_host}: HTTP ${status}, Location=${location}"; exit 1 ;;
-              esac
+              local status location attempt
+              for attempt in 1 2 3 4 5 6; do
+                status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-redirect.headers -o /dev/null -w '%{http_code}' "https://${legacy_host}/?${marker}=${GITHUB_RUN_ID}&attempt=${attempt}")"
+                location="$(grep -i '^location:' /tmp/legacy-redirect.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
+                echo "Legacy redirect check: host=${legacy_host}, attempt=${attempt}, status=${status}, location=${location}"
+                case "$status:$location" in
+                  "301:https://darbandicommercial.ir${expected_path}?"*) return 0 ;;
+                esac
+                sleep 3
+              done
+              echo "::error::Expected HTTP 301 from ${legacy_host} to https://darbandicommercial.ir${expected_path}; got HTTP ${status}, Location=${location}"
+              exit 1
             }
             assert_legacy_redirect "chat.darbandicommercial.ir" "/chat" "__chat_alias_smoke"
             assert_legacy_redirect "reminders.darbandicommercial.ir" "/reminders" "__reminders_alias_smoke"
             assert_legacy_redirect "mobile.darbandicommercial.ir" "/" "__mobile_alias_smoke"
 
-            legacy_manifest_status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-manifest.headers -o /dev/null -w '%{http_code}' "https://reminders.darbandicommercial.ir/reminders-subdomain.webmanifest?v=legacy-smoke")"
-            test "$legacy_manifest_status" = "301"
-            legacy_manifest_location="$(grep -i '^location:' /tmp/legacy-manifest.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
-            test "$legacy_manifest_location" = "https://darbandicommercial.ir/manifest.webmanifest?v=legacy-smoke"
+            legacy_manifest_status=""
+            legacy_manifest_location=""
+            for attempt in 1 2 3 4 5 6; do
+              legacy_manifest_status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-manifest.headers -o /dev/null -w '%{http_code}' "https://reminders.darbandicommercial.ir/reminders-subdomain.webmanifest?v=legacy-smoke&attempt=${attempt}")"
+              legacy_manifest_location="$(grep -i '^location:' /tmp/legacy-manifest.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
+              echo "Legacy manifest redirect check: attempt=${attempt}, status=${legacy_manifest_status}, location=${legacy_manifest_location}"
+              if [ "$legacy_manifest_status" = "301" ] && [ "$legacy_manifest_location" = "https://darbandicommercial.ir/manifest.webmanifest?v=legacy-smoke&attempt=${attempt}" ]; then
+                break
+              fi
+              sleep 3
+            done
+            if [ "$legacy_manifest_status" != "301" ] || [ "$legacy_manifest_location" != "https://darbandicommercial.ir/manifest.webmanifest?v=legacy-smoke&attempt=${attempt}" ]; then
+              echo "::error::Legacy manifest did not permanently redirect: HTTP ${legacy_manifest_status}, Location=${legacy_manifest_location}"
+              exit 1
+            fi
 
             echo "Checking old per-area manifests on the primary host also return HTTP 301"
             for legacy_path in "/chat-app-v4.webmanifest" "/manifest-reminders.webmanifest" "/mobile-subdomain.webmanifest"; do
