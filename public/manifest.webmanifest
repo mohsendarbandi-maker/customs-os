@@ -12,7 +12,7 @@
   "background_color": "#F8FBFF",
   "icons": [
     {
-      "src": "/pwa/apple-touch-icon-180.png?v=20261018-single-pwa-v1",
+      "src": "/pwa/mobile-icon-180.png?v=20261018-single-pwa-v2",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
