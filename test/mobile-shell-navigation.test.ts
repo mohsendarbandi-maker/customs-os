@@ -43,7 +43,7 @@ describe('unified iOS navigation and viewport invariants', () => {
   it('keeps floating AI controls above the dock and hides global tabs in an active chat or while typing', () => {
     expect(styles).toContain('bottom: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;');
     expect(styles).toContain('.app-shell.is-chat-route:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock');
-    expect(styles).toContain('body:has(.chat-standalone input:focus, .chat-standalone textarea:focus');
+    expect(styles).toContain('body:has(input:focus, textarea:focus, select:focus');
   });
 
   it('loads the override last and uses Persian punctuation for the dashboard date line', () => {
