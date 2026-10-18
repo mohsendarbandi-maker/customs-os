@@ -14,6 +14,7 @@ describe('single mobile shell navigation regressions', () => {
     expect(shell).not.toContain('mobile-menu-trigger');
     expect(shell).not.toContain('customs-desktop-menu');
     expect(shell).not.toContain('className={`app-sidebar hidden md:flex');
+    expect(shell).toContain('{isDesktop && <header className="app-topbar">');
   });
 
   it('provides exactly five primary mobile tabs and a three-column More sheet', () => {
