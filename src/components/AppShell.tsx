@@ -13,6 +13,7 @@ import { useAppearance } from '../context/AppearanceContext';
 import { CustomsLogo } from './CustomsLogo';
 import { AIWorkspace } from './AIWorkspace';
 import { OperationalAlertsDropdown } from './OperationalAlertsDropdown';
+import { Avatar } from './ui';
 
 type NavItem = {
   label: string;
@@ -366,9 +367,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                   aria-expanded={userMenuOpen}
                   onClick={() => setUserMenuOpen((v) => !v)}
                 >
-                  <span className="h-9 w-9 rounded-full bg-[var(--primary)] text-white grid place-items-center font-black shrink-0">
-                    {(profile?.full_name || 'ک').slice(0, 1)}
-                  </span>
+                  <Avatar name={profile?.full_name || 'کاربر'} size="md" aria-hidden="true" />
                   <span className="text-xs hidden lg:block text-right">
                     <b>{profile?.full_name || 'کاربر'}</b>
                     <span className="block app-muted">{roles[profile?.role || ''] || ''}</span>
