@@ -362,6 +362,16 @@ export default {
           if (next.protocol !== 'https:' || next.username || next.password || next.port || next.hash || !nextAllowed) {
             return json({ error: 'Provider redirect host is not allowed' }, 403);
           }
+          if (next.origin !== currentTarget.origin) {
+            const currentHost = currentTarget.hostname.toLowerCase();
+            const currentMetaHost = currentHost === 'graph.facebook.com' ||
+              currentHost.endsWith('.fbsbx.com') || currentHost.endsWith('.fbcdn.net') ||
+              currentHost.endsWith('.whatsapp.net');
+            const nextMetaHost = nextHost === 'graph.facebook.com' ||
+              nextHost.endsWith('.fbsbx.com') || nextHost.endsWith('.fbcdn.net') ||
+              nextHost.endsWith('.whatsapp.net');
+            if (!(currentMetaHost && nextMetaHost)) headers.delete('Authorization');
+          }
           currentTarget = next;
         }
         if (!upstream) return json({ error: 'Provider request failed' }, 502);
