@@ -1,12 +1,12 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { attachSupabaseClient, rpcWithOfflineQueue, startOfflineQueue } from './offlineQueue';
+import { authStorage } from './authStorage';
 
 const env = (import.meta as any).env;
 const configuredSupabaseUrl = env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY as string;
-// Local development may talk to Supabase directly. Production apps (main,
-// chat, reminders, and workers.dev) must use their own origin so the Worker
-// can proxy Auth, PostgREST, Storage, Realtime, and Edge Functions together.
+// Production uses the single canonical origin so Auth, Storage, Realtime and
+// Edge Functions share one persistent browser origin across every internal route.
 const isLocalDevelopment =
   typeof window !== 'undefined' &&
   ['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -33,6 +33,7 @@ const baseClient = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     flowType: 'pkce',
     storageKey: SUPABASE_AUTH_STORAGE_KEY,
+    storage: authStorage,
   },
 });
 attachSupabaseClient(baseClient);
