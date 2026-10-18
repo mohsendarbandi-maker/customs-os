@@ -278,7 +278,7 @@ jobs:
               local status location attempt
               for attempt in 1 2 3 4 5 6; do
                 status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-redirect.headers -o /dev/null -w '%{http_code}' "https://${legacy_host}/?${marker}=${GITHUB_RUN_ID}&attempt=${attempt}")"
-                location="$(grep -i '^location:' /tmp/legacy-redirect.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
+                location="$(grep -i '^location:' /tmp/legacy-redirect.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
                 echo "Legacy redirect check: host=${legacy_host}, attempt=${attempt}, status=${status}, location=${location}"
                 case "$status:$location" in
                   "301:https://darbandicommercial.ir${expected_path}?"*) return 0 ;;
@@ -296,7 +296,7 @@ jobs:
             legacy_manifest_location=""
             for attempt in 1 2 3 4 5 6; do
               legacy_manifest_status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-manifest.headers -o /dev/null -w '%{http_code}' "https://reminders.darbandicommercial.ir/reminders-subdomain.webmanifest?v=legacy-smoke&attempt=${attempt}")"
-              legacy_manifest_location="$(grep -i '^location:' /tmp/legacy-manifest.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
+              legacy_manifest_location="$(grep -i '^location:' /tmp/legacy-manifest.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
               echo "Legacy manifest redirect check: attempt=${attempt}, status=${legacy_manifest_status}, location=${legacy_manifest_location}"
               if [ "$legacy_manifest_status" = "301" ] && [ "$legacy_manifest_location" = "https://darbandicommercial.ir/manifest.webmanifest?v=legacy-smoke&attempt=${attempt}" ]; then
                 break
