@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      const digest = await crypto.subtle.digest("SHA-256", bytes.buffer as ArrayBuffer);
       const sha256 = Array.from(new Uint8Array(digest)).map((x) => x.toString(16).padStart(2, "0")).join("");
       const result = scanChatFile(bytes, String(attachment.original_name || "document.bin"), String(attachment.mime_type || "application/octet-stream"));
       const now = new Date().toISOString();
