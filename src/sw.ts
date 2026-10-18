@@ -14,7 +14,14 @@ setCatchHandler(async({request})=>{
  if(request.mode!=='navigate')return Response.error();
  return (await matchPrecache('/index.html'))??(await matchPrecache('/offline.html'))??Response.error();
 });
-self.skipWaiting();
+// Wait for an explicit user action from the update notice before taking control.
+// With registerType='prompt', unconditional skipWaiting would bypass the notice and
+// could replace the running app while a customs form or chat composer is open.
+self.addEventListener('message', (event) => {
+ if (event.data && event.data.type === 'SKIP_WAITING') {
+  void self.skipWaiting();
+ }
+});
 clientsClaim();
 
 type PushData={title?:string;body?:string;tag?:string;url?:string;icon?:string;badge?:string;requireInteraction?:boolean;actions?:Array<{action:string;title:string;icon?:string}>;data?:Record<string,string>};
