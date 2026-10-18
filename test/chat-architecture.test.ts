@@ -226,4 +226,16 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('claimed:rows.length,sent,failed,skipped');
   });
 
+  it('streams external file downloads with platform size ceilings and no full-response buffering',()=>{
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    const start=gateway.indexOf('async function download(req:Request');
+    const end=gateway.indexOf('async function transfer(',start);
+    const download=gateway.slice(start,end);
+    expect(download).toContain('const max=x.connection.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_DOWNLOAD_LIMIT;');
+    expect(download).toContain('new Response(bounded(f.response.body,max)');
+    expect(download).toContain('SOURCE_FILE_OVER_DOWNLOAD_LIMIT');
+    expect(download).not.toContain('arrayBuffer()');
+    expect(download).not.toContain('readBinary(');
+  });
+
 });
