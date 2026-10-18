@@ -36,6 +36,19 @@ function readStoredDraft(key: string): unknown | null {
   }
 }
 
+function legacyFormDraftKey(key: string): string | null {
+  const prefix = 'customs-os:form-draft:v2:';
+  if (!key.startsWith(prefix)) return null;
+  const scoped = key.slice(prefix.length);
+  const firstSeparator = scoped.indexOf(':');
+  const secondSeparator = scoped.indexOf(':', firstSeparator + 1);
+  if (firstSeparator <= 0 || secondSeparator <= firstSeparator + 1) return null;
+  const encodedUserId = scoped.slice(0, firstSeparator);
+  const encodedFormId = scoped.slice(secondSeparator + 1);
+  if (!encodedUserId || !encodedFormId) return null;
+  return `customs-os:form-draft:v1:${encodedUserId}:${encodedFormId}`;
+}
+
 /**
  * Saves serializable form values to a per-user/per-org local draft in localStorage
  * and IndexedDB. It is deliberately separate from database submit actions: a
@@ -98,7 +111,22 @@ export function useAutosavedDraft<T>(
     } else {
       // Do not persist the blank initial form before the asynchronous IndexedDB lookup
       // finishes; that race used to overwrite the only recoverable copy.
-      void readDraftValue(key).then((stored) => {
+      void (async () => {
+        let stored = await readDraftValue(key);
+        const legacyKey = stored === null ? legacyFormDraftKey(key) : null;
+        if (stored === null && legacyKey) {
+          const legacyDraft = await readDraftValue(legacyKey);
+          if (legacyDraft !== null) {
+            // Migrate only after the new key accepted a durable copy. If storage fails,
+            // keep the old draft in place so a reload cannot destroy the only copy.
+            if (await writeDraftValue(key, legacyDraft)) {
+              stored = legacyDraft;
+              await removeDraftValue(legacyKey);
+            }
+          }
+        }
+        return stored;
+      })().then((stored) => {
         if (cancelled) return;
         if (stored !== null) {
           skipNextPersistRef.current = true;
