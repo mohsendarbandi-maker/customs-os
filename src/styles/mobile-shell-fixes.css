@@ -435,18 +435,18 @@
   .customs-home header > div:first-child { min-width: 0 !important; }
   .customs-home header h1 { overflow-wrap: normal !important; }
 
-  @media (max-width: 430px) {
-    .app-content { padding-inline: 10px !important; }
-    .customs-home header > div:first-child > div:first-child { display: none !important; }
-    .customs-home .customs-stat { padding-inline: 7px !important; gap: 4px 6px !important; }
-    .customs-home .customs-stat > span { font-size: 10px !important; }
-  }
-  @media (max-width: 380px) {
-    .app-mobile-dock { padding-inline: 5px !important; gap: 2px !important; }
-    .app-mobile-dock button { font-size: 9px !important; }
-    .mobile-more-grid { gap: 6px !important; padding-inline: 9px !important; }
-    .mobile-more-item { min-height: 78px !important; font-size: 11px !important; }
-  }
+}
+@media (max-width: 430px) and (max-width: 1023px) {
+  .app-content { padding-inline: 10px !important; }
+  .customs-home header > div:first-child > div:first-child { display: none !important; }
+  .customs-home .customs-stat { padding-inline: 7px !important; gap: 4px 6px !important; }
+  .customs-home .customs-stat > span { font-size: 10px !important; }
+}
+@media (max-width: 380px) and (max-width: 1023px) {
+  .app-mobile-dock { padding-inline: 5px !important; gap: 2px !important; }
+  .app-mobile-dock button { font-size: 9px !important; }
+  .mobile-more-grid { gap: 6px !important; padding-inline: 9px !important; }
+  .mobile-more-item { min-height: 78px !important; font-size: 11px !important; }
 }
 
 /* Restore a real rail only at desktop width. This overrides old min-width:768px rules
