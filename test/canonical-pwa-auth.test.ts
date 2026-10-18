@@ -64,6 +64,8 @@ describe('one canonical Customs OS PWA', () => {
     expect(worker).not.toContain('chatManifestPath');
     expect(worker).not.toContain('reminders-subdomain.webmanifest?v=');
     expect(worker).not.toContain('mobile-subdomain.webmanifest?v=');
+    expect(worker).toContain("legacyManifestPaths.has(url.pathname)");
+    expect(worker).toContain("canonical.pathname = '/manifest.webmanifest'");
   });
 
   it('keeps PWA identity static while React Router decides which internal section to show', () => {
