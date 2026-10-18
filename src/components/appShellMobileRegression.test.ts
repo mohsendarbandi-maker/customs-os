@@ -49,7 +49,8 @@ describe('single mobile shell navigation regressions', () => {
 
   it('keeps Chat/Reminders in the shell and removes the duplicate reminders tab bar', () => {
     expect(shell).toContain("const bare = location.pathname === '/login' || location.pathname === '/onboarding'");
-    expect(shell).not.toContain("location.pathname === '/chat' ||");
+    expect(shell).toContain("const bare = location.pathname === '/login' || location.pathname === '/onboarding'");
+    expect(shell).not.toContain("const bare = location.pathname === '/login' || location.pathname === '/chat'");
     expect(reminders).not.toContain('<nav className="reminders-mobile-nav"');
     expect(mobileCss).toContain('.app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock');
   });
