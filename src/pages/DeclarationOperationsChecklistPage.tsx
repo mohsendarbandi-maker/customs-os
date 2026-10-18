@@ -17,15 +17,7 @@ type Rule={id:string;rule_name:string;hs_code_prefix:string;customs_path:string;
 type DeclarationContext={shipmentName:string;billOfLading:string;caseNumber:string;clientName:string};
 
 const PATH_LABELS:Record<string,string>={green:'سبز',yellow:'زرد',red:'قرمز'};
-const FIELD_LABELS:Record<string,string>={
- tariff_code:'HS Code',customs_path:'مسیر گمرکی',kottaj_number:'شماره کوتاژ',declaration_date:'تاریخ اظهار',
- payment_reference:'شناسه پرداخت',total_duties_irr:'حقوق ورودی / مبلغ گمرکی',registration_order_no:'شماره ثبت سفارش',
- warehouse_receipt_no:'شماره قبض انبار',cargo_description:'شرح کالا',origin_country:'کشور مبدأ',
- transaction_country:'کشور معامله',delivery_term:'اینکوترمز / شرایط تحویل',invoice_amount:'مبلغ فاکتور',
- invoice_currency:'ارز فاکتور',bank_name:'نام بانک',bank_branch:'شعبه بانک',lc_number:'شماره اعتبار اسنادی',
- duty_rate:'نرخ حقوق ورودی',net_weight_kg:'وزن خالص',gross_weight_kg:'وزن ناخالص',bill_of_lading:'شماره B/L',
- insurance_irr:'بیمه',required_documents:'اسناد موردنیاز',source_method:'منبع اطلاعات'
-};
+
 const digits=(v:string)=>String(v||'').replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const normalizeHs=(v:string)=>digits(v).replace(/\D/g,'');
 const itemRatio=(count:number,evidence:number)=>evidence>0?count/evidence:0;
