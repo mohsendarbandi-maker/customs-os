@@ -24,9 +24,10 @@ async function readBounded(stream: ReadableStream<Uint8Array>, max: number) {
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
-    while (true) {
+    let finished = false;
+    while (!finished) {
       const part = await reader.read();
-      if (part.done) break;
+      if (part.done) { finished = true; continue; }
       total += part.value.byteLength;
       if (total > max) {
         await reader.cancel();
