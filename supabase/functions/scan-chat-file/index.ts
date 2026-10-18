@@ -129,11 +129,18 @@ Deno.serve(async (req) => {
             cache: "no-store",
           });
           if (!source.ok || !source.body) {
-            const code = source.status === 413 ? "SOURCE_FILE_OVER_SCANNER_LIMIT" :
-              source.status === 404 ? "SOURCE_ATTACHMENT_UNAVAILABLE" :
-              "REMOTE_SCAN_SOURCE_UNAVAILABLE";
-            await markBlocked(scan.id, attachment, "local_static", [code]);
-            blocked++;
+            if (source.status === 413) {
+              await markBlocked(scan.id, attachment, "local_static", ["SOURCE_FILE_OVER_SCANNER_LIMIT"]);
+              blocked++;
+            } else {
+              // Provider/network/configuration failures are not malware verdicts.
+              // Keep status=scanning so the next scheduled scan can retry.
+              await admin.from("file_scans").update({
+                provider: "remote_unavailable",
+                local_result: { clean: false, reasons: ["REMOTE_SCAN_SOURCE_UNAVAILABLE", "http_" + source.status] },
+              }).eq("id", scan.id);
+              unavailable++;
+            }
             continue;
           }
           const length = Number(source.headers.get("content-length") || 0);
@@ -151,8 +158,17 @@ Deno.serve(async (req) => {
         }
       } catch (error) {
         const code = error instanceof Error ? error.message : "SOURCE_READ_FAILED";
-        await markBlocked(scan.id, attachment, "local_static", [code]);
-        blocked++;
+        if (code === "SOURCE_FILE_OVER_SCANNER_LIMIT") {
+          await markBlocked(scan.id, attachment, "local_static", [code]);
+          blocked++;
+        } else {
+          // Transient provider failures remain pending and visible as unscanned.
+          await admin.from("file_scans").update({
+            provider: "remote_unavailable",
+            local_result: { clean: false, reasons: [code] },
+          }).eq("id", scan.id);
+          unavailable++;
+        }
         continue;
       }
 
@@ -188,10 +204,18 @@ Deno.serve(async (req) => {
           continue;
         }
         if (attachment.file_asset_id) {
-          const { error: hashError } = await admin.from("file_assets")
-            .update({ sha256, metadata: { securityScan: { provider: "local_static", clean: true, reasons: result.reasons, magic: result.magic } } })
-            .eq("id", attachment.file_asset_id).eq("organization_id", attachment.organization_id);
-          if (hashError) console.error("[scan-chat-file] metadata hash update failed", hashError.message);
+          const { data: fileAsset, error: metaReadError } = await admin.from("file_assets")
+            .select("metadata").eq("id", attachment.file_asset_id).eq("organization_id", attachment.organization_id).maybeSingle();
+          if (metaReadError) {
+            console.error("[scan-chat-file] metadata read failed", metaReadError.message);
+          } else {
+            const oldMetadata = fileAsset?.metadata && typeof fileAsset.metadata === "object" && !Array.isArray(fileAsset.metadata)
+              ? fileAsset.metadata as Record<string, unknown> : {};
+            const { error: hashError } = await admin.from("file_assets")
+              .update({ sha256, metadata: { ...oldMetadata, securityScan: { provider: "local_static", clean: true, reasons: result.reasons, magic: result.magic } } })
+              .eq("id", attachment.file_asset_id).eq("organization_id", attachment.organization_id);
+            if (hashError) console.error("[scan-chat-file] metadata hash update failed", hashError.message);
+          }
         }
       } else {
         await markBlocked(scan.id, attachment, "local_static", result.reasons);
