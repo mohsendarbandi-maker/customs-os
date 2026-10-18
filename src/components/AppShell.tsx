@@ -332,7 +332,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
       {/* ── Main content ── */}
       <main className={`app-main ${sidebarCollapsed ? 'sidebar-compact' : ''}`}>
-        <header className="app-topbar">
+        {isDesktop && <header className="app-topbar">
           <div className="flex items-center gap-3 min-w-0">
             <div className="hidden lg:block">
               <div className="text-[11px] app-muted">سامانه مدیریت عملیات گمرکی و لجستیک</div>
@@ -435,7 +435,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               </div>
             </div>
           </div>
-        </header>
+        </header>}
         <div className="app-content">
           <div key={location.pathname + location.search} className="future-route-stage">
             {children}
