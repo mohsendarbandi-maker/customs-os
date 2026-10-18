@@ -10,6 +10,7 @@ import React, {
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
 import { readOfflineQueryCache, saveOfflineQueryCache } from '../lib/offlineQueue';
+import { persistentAuthStorage } from '../lib/authStorage';
 import {
   AUTH_SESSION_RETRY_MESSAGE,
   isAuthTokenExpiredError,
@@ -17,8 +18,10 @@ import {
 } from '../lib/authSessionErrors';
 
 const clearLocalAuthStorage = () => {
+  // Keep the explicit logout and invalid-session paths aligned with both storage
+  // layers; clearing only localStorage could resurrect a fallback refresh token.
+  void persistentAuthStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
   try {
-    localStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
     sessionStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
   } catch {}
 };
@@ -380,13 +383,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
-      // getSession() refreshes expired sessions when possible. This runs outside
-      // onAuthStateChange so it cannot wait on the SDK's auth lock from a callback.
-      void supabase.auth.getSession().then(({ data: { session: visibleSession }, error: sessionError }) => {
+      // Safari may suspend the page while it is backgrounded. Read the persisted
+      // session on visibilitychange/pageshow/focus, and refresh only near expiry.
+      // Temporary network errors never clear the stored session or redirect.
+      void supabase.auth.getSession().then(async ({ data: { session: visibleSession }, error: sessionError }) => {
         if (!active || !isMounted.current) return;
 
         if (sessionError) {
-          console.warn('[Auth] visible session recovery failed:', sessionError);
+          console.warn('[Auth] foreground session recovery failed:', sessionError);
 
           if (isUnrecoverableAuthSessionError(sessionError)) {
             clearLocalAuthStorage();
@@ -408,8 +412,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (!visibleSession?.user) return;
 
         const visibleUserId = visibleSession.user.id;
-        setSession(visibleSession);
-        setUser(visibleSession.user);
+        let recoveredSession = visibleSession;
+        const secondsRemaining = visibleSession.expires_at
+          ? visibleSession.expires_at - Math.floor(Date.now() / 1000)
+          : Number.POSITIVE_INFINITY;
+
+        if (secondsRemaining <= 90) {
+          try {
+            await refreshSessionForUser(visibleUserId);
+            const refreshed = await supabase.auth.getSession();
+            if (refreshed.data.session?.user.id === visibleUserId) {
+              recoveredSession = refreshed.data.session;
+            }
+          } catch (refreshError: unknown) {
+            console.warn('[Auth] foreground token refresh failed; preserving the page session:', refreshError);
+            const status = refreshError && typeof refreshError === 'object'
+              ? Number((refreshError as { status?: unknown }).status)
+              : 0;
+            // Only an explicit 401 combined with an Auth-confirmed invalid session
+            // is treated as terminal here. Network failures remain retryable.
+            if (status === 401 && isUnrecoverableAuthSessionError(refreshError)) {
+              clearLocalAuthStorage();
+              currentFetchId.current++;
+              setSession(null);
+              setUser(null);
+              setProfile(null);
+              setNeedsOnboarding(false);
+              setError(null);
+              setLoading(false);
+              return;
+            }
+            setError(AUTH_SESSION_RETRY_MESSAGE);
+            setLoading(false);
+            return;
+          }
+        }
+
+        setSession(recoveredSession);
+        setUser(recoveredSession.user);
 
         if (
           activeUserId.current !== visibleUserId ||
@@ -423,7 +463,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           setError(null);
         }
       }).catch((err: unknown) => {
-        console.warn('[Auth] visible session recovery exception:', err);
+        console.warn('[Auth] foreground session recovery exception:', err);
         if (active && isMounted.current && !activeProfileId.current) {
           setError(AUTH_SESSION_RETRY_MESSAGE);
           setLoading(false);
@@ -432,15 +472,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pageshow', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
     subscription = authSubscription;
     void loadInitialSession();
 
     return () => {
       active = false;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pageshow', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
       subscription?.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [fetchProfile, refreshSessionForUser]);
 
   const signOut = useCallback(async () => {
     currentFetchId.current++;
