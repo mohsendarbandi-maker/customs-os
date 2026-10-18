@@ -16,63 +16,19 @@
         window.location.replace(secureUrl.toString());
       })();
     </script>
-    <script>
-      // Route handheld users to the dedicated mobile origin. Keep path, query and
-      // hash intact so Supabase callback parameters survive the origin switch.
-      (() => {
-        const host = window.location.hostname.toLowerCase();
-        const primaryHost = host === 'darbandicommercial.ir' || host === 'www.darbandicommercial.ir';
-        if (!primaryHost || window.location.protocol !== 'https:') return;
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('desktop') === '1' || params.get('no_mobile_redirect') === '1') return;
-        const ua = navigator.userAgent || '';
-        const handheld = /Android|iPhone|iPod|IEMobile|Opera Mini|Mobile/i.test(ua) ||
-          (/Macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1);
-        if (!handheld) return;
-        const target = new URL(window.location.href);
-        target.hostname = 'mobile.darbandicommercial.ir';
-        target.port = '';
-        window.location.replace(target.toString());
-      })();
-    </script>
+
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0A4D8C" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Customs OS" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <script>
-      (() => {
-        const path = window.location.pathname;
-        const host = window.location.hostname.toLowerCase();
-        const chatHost = host === 'chat.darbandicommercial.ir';
-        const remindersHost = host === 'reminders.darbandicommercial.ir';
-        const mobileHost = host === 'mobile.darbandicommercial.ir';
-        const manifest = mobileHost ? '/mobile-subdomain.webmanifest?v=20261018-mobile-v1' : chatHost ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' : remindersHost ? '/reminders-subdomain.webmanifest?v=20261012-reminders-v1' : path.startsWith('/chat') ? '/chat-app-v4.webmanifest?v=20261005-chat-v4' : path.startsWith('/reminders') ? '/manifest-reminders.webmanifest?v=20261012-reminders-v2' : '/manifest.webmanifest';
-        const link = document.querySelector('link[rel="manifest"]');
-        if (link) link.setAttribute('href', manifest);
-      })();
-    </script>
+    <link rel="manifest" href="/manifest.webmanifest?v=20261018-canonical-pwa-v2" />
 
-    <link rel="icon" href="/icon.svg?v=20261014-line-brand" type="image/svg+xml" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon-180.png?v=20261014-line-brand" />
-    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/pwa/apple-touch-icon-180.png?v=20261006-brand" />
-    <script>
-      (() => {
-        const host = window.location.hostname.toLowerCase();
-        const isRemindersHost = host === "reminders.darbandicommercial.ir";
-        const isRemindersPath = window.location.pathname.startsWith("/reminders");
-        if (!isRemindersHost && !isRemindersPath) return;
-        const icon = "/pwa/reminders-icon-180.png?v=20261012-reminders-v1";
-        const appLabel = isRemindersHost ? "Reminders" : "یادآورها";
-        document.querySelectorAll('link[rel*="apple-touch-icon"]').forEach((node) => node.setAttribute("href", icon));
-        document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", appLabel);
-        document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#06265F");
-        document.title = appLabel + " | Customs OS";
-      })();
-    </script>
+
+    <link rel="icon" href="/icon.svg?v=20261018-canonical-pwa-v2" type="image/svg+xml" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon-180.png?v=20261018-canonical-pwa-v2" />
     <title>Customs OS | سیستم مدیریت گمرک</title>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
     <style>
