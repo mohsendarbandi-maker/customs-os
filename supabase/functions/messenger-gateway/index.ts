@@ -471,7 +471,7 @@ async function uploadInternalChatFile(req:Request,p:Profile,userId:string,conver
  if(!stream)return bad("FILE_STREAM_UNAVAILABLE",500,req);
  try{
   const result=await uploadStream(c,String(archive.external_chat_id),name,mime,bytes.byteLength,stream,message.message_type==="voice"?"voice":"file");
-  const fileAssetId=await storeAsset(p.organization_id,userId,c,String(archive.external_chat_id),result,mime,bytes.byteLength,"website",archive.shipment_id||null,false);
+  const fileAssetId=await storeAsset(p.organization_id,userId,c,String(archive.external_chat_id),result,mime,bytes.byteLength,"website",archive.shipment_id||null,true);
   const now=new Date().toISOString();
   const {error:assetUpdateError}=await db.from("file_assets").update({sha256,metadata:{transferMode:"transient_scan_stream",securityScan:{provider:"local_static",clean:true,reasons:scan.reasons,magic:scan.magic}}}).eq("id",fileAssetId).eq("organization_id",p.organization_id);
   if(assetUpdateError)throw new Error("FILE_METADATA_SCAN_SAVE_FAILED");
