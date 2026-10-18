@@ -32,6 +32,20 @@ describe('chat architecture invariants',()=>{
     expect(migration).toContain('SET search_path TO');
   });
 
+  it('keeps reminder creation simple and collapses optional shipment linking',()=>{
+    const page=read('src/features/reminders/RemindersPage.tsx');
+    expect(page).toContain('<details className="mt-2 rounded-xl border app-border bg-[var(--surface-2)] p-2.5">');
+    expect(page).toContain("{quickShipment?quickShipment.label:'اختیاری'}");
+    expect(page).toContain('<details className="rounded-2xl border app-border p-3"><summary');
+  });
+
+  it('uses the Jalali picker for the active kotaj registration screen',()=>{
+    const page=read('src/pages/DeclarationRegistrationPage.tsx');
+    expect(page).toContain('JalaliDateTimePicker');
+    expect(page).toContain('تاریخ کوتاژ / اظهار');
+    expect(page).not.toContain('type="datetime-local"');
+  });
+
   it('uses one shared conversation dataset for hierarchy rendering',()=>{
     const hierarchy=read('src/features/chat/ChatHierarchyPanel.tsx');
     expect(hierarchy).toContain('conversations:ChatConversation[]');
