@@ -21,6 +21,7 @@ describe('durable unfinished-work protection', () => {
     expect(formHook).toContain('writeDraftValue(key, valueRef.current)');
     expect(formHook).toContain('removeDraftValue(key)');
     expect(formHook).toContain('restorePendingRef.current');
+    expect(formHook).toContain("window.addEventListener('pagehide', persistBeforeFreeze)");
   });
 
   it('restores a reminder composer including date and shipment context from durable storage', () => {
@@ -29,6 +30,7 @@ describe('durable unfinished-work protection', () => {
     expect(reminders).toContain('readDraftValue(composerDraftKey)');
     expect(reminders).toContain('await writeDraftValue(composerDraftKey,saved)');
     expect(reminders).toContain('shipment:quickShipment');
+    expect(reminders).toContain("window.addEventListener('pagehide',persistNow)");
     expect(reminders).toContain("sessionStorage.getItem('customs-os-reminder-composer-v1:");
   });
 
@@ -38,6 +40,7 @@ describe('durable unfinished-work protection', () => {
     expect(chat).toContain('readDraftValue(key)');
     expect(chat).toContain('writeDraftValue(draftKey,{text,updatedAt:Date.now()})');
     expect(chat).toContain('removeDraftValue(draftKey)');
+    expect(chat).toContain("window.addEventListener('pagehide',persistNow)");
   });
 
   it('retains the pre-existing offline queue as the authoritative outbox for unsent messages and reminders', () => {
