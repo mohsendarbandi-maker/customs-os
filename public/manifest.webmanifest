@@ -9,8 +9,14 @@
   "dir": "rtl",
   "lang": "fa",
   "theme_color": "#0A4D8C",
-  "background_color": "#F8FBFF",
+  "background_color": "#F5F9FE",
   "icons": [
+    {
+      "src": "/pwa/apple-touch-icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/pwa/icon-192.png",
       "sizes": "192x192",
