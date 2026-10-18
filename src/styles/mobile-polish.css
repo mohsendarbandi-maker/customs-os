@@ -835,7 +835,7 @@
   .shipment-status-toolbar { min-width: 0; }
   .shipment-status-search { position: relative !important; inset: auto !important; }
 }
-@media (min-width: 1024px) {
+@media (min-width: 1024px) and (pointer: fine) {
   .app-mobilebar, .app-mobile-dock, .app-more-scrim { display: none !important; }
   .app-sidebar {
     display: flex !important;
@@ -917,3 +917,72 @@
     bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
   }
 }
+
+/* Wide tablets and touch laptops must follow the touch-first shell even when
+   their CSS viewport is wider than the traditional phone/tablet breakpoints. */
+@media (min-width: 1024px) and (pointer: coarse) {
+  .app-sidebar,
+  .app-topbar {
+    display: none !important;
+  }
+  .app-mobilebar {
+    display: flex !important;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    min-height: 68px;
+    padding: 8px 14px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .app-mobile-dock {
+    position: fixed;
+    z-index: 105;
+    inset-inline: 10px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+    padding: 7px 6px;
+    border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+    border-radius: 23px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.35);
+    backdrop-filter: blur(24px) saturate(1.35);
+    box-shadow: 0 12px 35px rgba(8,22,42,.2), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .app-mobile-dock > button {
+    display: flex;
+    min-width: 0;
+    min-height: 54px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    padding: 5px 2px;
+    border: 0;
+    border-radius: 16px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.1;
+    touch-action: manipulation;
+  }
+  .app-mobile-dock > button.is-active {
+    background: color-mix(in srgb, var(--primary) 15%, var(--surface));
+    color: var(--primary);
+  }
+  .app-mobile-dock > button svg { flex: 0 0 auto; }
+  .app-main,
+  .app-main.sidebar-compact {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+  .app-content {
+    padding-bottom: calc(94px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
