@@ -89,6 +89,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   // or an attached trackpad reports a wide viewport/fine pointer (notably iPadOS).
   const getDesktopLayout = () => {
     if (typeof window === 'undefined') return true;
+    // Dedicated mobile origin is mobile-first by contract. Never let Safari zoom,
+    // Request Desktop Website, or pointer media queries switch this origin to desktop.
+    if (window.location.hostname.toLowerCase() === 'mobile.darbandicommercial.ir') return false;
     const wideViewport = window.matchMedia('(min-width: 1024px)').matches;
     const finePointer = window.matchMedia('(pointer: fine)').matches;
     const hasTouch = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
