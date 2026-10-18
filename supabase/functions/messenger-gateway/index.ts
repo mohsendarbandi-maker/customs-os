@@ -46,7 +46,7 @@ async function createChat(req:Request,p:Profile,userId:string){
  if(!validId(cid)||!chatId||chatId.length>200)return bad("INVALID_CHAT_INPUT",400,req);
  if(!["private","group","channel","business","unknown"].includes(type)||!["inbox","file_archive","daily_report","shipment_notifications","shipment"].includes(purpose))return bad("INVALID_CHAT_CONFIGURATION",400,req);
  await ownedConn(cid,p.organization_id,true);
- if(purpose==="inbox"&&!validId(conversationId||""))return bad("INTERNAL_CONVERSATION_REQUIRED",400,req);
+ if(["inbox","shipment_notifications","shipment"].includes(purpose)&&!validId(conversationId||""))return bad("INTERNAL_CONVERSATION_REQUIRED",400,req);
  if(conversationId){
   if(!validId(conversationId))return bad("INVALID_CONVERSATION_ID",400,req);
   const {data:conversation}=await db.from("chat_conversations").select("id").eq("id",conversationId).eq("organization_id",p.organization_id).is("deleted_at",null).maybeSingle();
