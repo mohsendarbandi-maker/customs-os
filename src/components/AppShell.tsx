@@ -256,15 +256,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               </span>
             </span>
           </button>
-          <button
-            type="button"
-            className="icon-btn mobile-search-trigger"
-            aria-label="جست‌وجو و دسترسی به بخش‌ها"
-            title="جست‌وجو در بخش‌ها"
-            onClick={() => setMobileOpen(true)}
-          >
-            <Search size={19} />
-          </button>
         </header>
       )}
 
