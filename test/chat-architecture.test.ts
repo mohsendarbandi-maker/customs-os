@@ -238,12 +238,23 @@ describe('chat architecture invariants',()=>{
     expect(download).not.toContain('readBinary(');
   });
 
+  it('implements Rubika text messaging through its official Bot API and authenticates inbound updates',()=>{
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(gateway).toContain('https://botapi.rubika.ir/v3/');
+    expect(gateway).toContain('updateBotEndpoints');
+    expect(gateway).toContain('ReceiveInlineMessage');
+    expect(gateway).toContain('async function rubikaWebhook');
+    expect(gateway).toContain('rubika:{supported:true,text:true,inboundWebhook:true,media:false');
+  });
+
   it('routes messenger provider egress through a signed Cloudflare allowlist proxy',()=>{
     const worker=read('worker/index.ts');
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
     expect(worker).toContain("url.pathname === '/_internal/messenger-egress'");
     expect(worker).toContain('x-customs-messenger-proxy-key');
     expect(worker).toContain("host === 'api.telegram.org'");
+    expect(worker).toContain("host === 'botapi.rubika.ir'");
+    expect(worker).toContain("nextHost === 'botapi.rubika.ir'");
     expect(worker).toContain("host === 'tapi.bale.ai'");
     expect(worker).toContain("host === 'graph.facebook.com'");
     expect(worker).toContain("target.protocol !== 'https:'");
