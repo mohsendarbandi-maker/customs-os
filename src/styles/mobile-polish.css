@@ -862,3 +862,18 @@
   from { opacity: .7; transform: translateY(18px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+@media (max-width: 1023px) {
+  /* The reminders page had a legacy width: calc(100% + 20px) rule, which
+     shifted RTL content underneath the viewport edge despite body overflow clipping. */
+  .app-shell:has(.reminders-app-standalone) .reminders-app-standalone {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+  }
+  /* Toasts and other fixed actions must sit above—not on top of—the shared tab bar. */
+  .app-shell .fixed[class~="bottom-24"] {
+    bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+  }
+  .customs-home header p { font-variant-numeric: lining-nums; }
+}
