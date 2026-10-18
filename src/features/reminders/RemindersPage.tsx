@@ -95,7 +95,11 @@ export const RemindersPage:React.FC=()=>{
      const legacy=JSON.parse(legacyRaw) as typeof saved;
      if(legacy&&typeof legacy==='object'){
       saved=legacy;
-      await writeDraftValue(composerDraftKey,saved);
+      // Remove the tab-only copy only after the durable key accepts it, otherwise
+      // a stale sessionStorage value could overwrite a newer reminder draft later.
+      if(await writeDraftValue(composerDraftKey,saved)){
+       try{sessionStorage.removeItem('customs-os-reminder-composer-v1:'+user?.id+':'+profile?.organization_id);}catch{}
+      }
      }
     }
    }catch(error){console.warn('[Reminders] legacy draft migration failed:',error);}
