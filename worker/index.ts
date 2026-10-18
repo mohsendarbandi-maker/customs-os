@@ -283,6 +283,56 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    // Legacy app origins are permanent aliases, not separate applications.
+    // Redirect browser navigations/assets to the canonical origin. Keep inbound
+    // POST webhooks and API traffic working until external integrations are migrated.
+    const legacyHost = url.hostname.toLowerCase();
+    const isLegacyAppOrigin = [
+      'chat.darbandicommercial.ir',
+      'reminders.darbandicommercial.ir',
+      'mobile.darbandicommercial.ir',
+    ].includes(legacyHost);
+    const isLegacyIntegrationRequest =
+      /^\/(?:auth|rest|storage|realtime|functions|graphql|api|webhooks)(?:\/|$)/i.test(url.pathname);
+    if (isLegacyAppOrigin && ['GET', 'HEAD'].includes(request.method) && !isLegacyIntegrationRequest) {
+      const canonical = new URL(url.toString());
+      canonical.hostname = 'darbandicommercial.ir';
+      canonical.port = '';
+      if (canonical.pathname === '/') {
+        if (legacyHost === 'chat.darbandicommercial.ir') canonical.pathname = '/chat';
+        else if (legacyHost === 'reminders.darbandicommercial.ir') canonical.pathname = '/reminders';
+      }
+      // Old per-area manifests now resolve to the one canonical manifest.
+      if (/\.webmanifest$/i.test(canonical.pathname)) canonical.pathname = '/manifest.webmanifest';
+      return new Response(null, {
+        status: 301,
+        headers: {
+          Location: canonical.toString(),
+          'Cache-Control': 'public, max-age=3600',
+          'X-Customs-OS-Canonical-Redirect': '1',
+        },
+      });
+    }
+
+    // Old installed launch URLs open the unified home, not a separate chat PWA.
+    if (
+      ['GET', 'HEAD'].includes(request.method) &&
+      url.hostname.toLowerCase() === 'darbandicommercial.ir' &&
+      url.pathname === '/' &&
+      url.searchParams.get('source') === 'pwa'
+    ) {
+      const canonical = new URL(url.toString());
+      canonical.searchParams.delete('source');
+      return new Response(null, {
+        status: 301,
+        headers: {
+          Location: canonical.toString(),
+          'Cache-Control': 'public, max-age=3600',
+          'X-Customs-OS-Canonical-Redirect': '1',
+        },
+      });
+    }
+
     // First-party map URL keeps browser requests on the same path as the app.
     if (url.pathname.startsWith('/api/map/tiles/')) {
       return serveMapTile(request);
@@ -449,20 +499,6 @@ export default {
     }
 
     const accept = request.headers.get('Accept') || '';
-    const referer = request.headers.get('Referer') || '';
-    const hostname = url.hostname.toLowerCase();
-    const isChatHost = hostname === 'chat.darbandicommercial.ir';
-    const isRemindersHost = hostname === 'reminders.darbandicommercial.ir';
-    const isMobileHost = hostname === 'mobile.darbandicommercial.ir';
-    const isManifestRequest =
-      url.pathname === '/manifest.webmanifest' ||
-      url.pathname === '/manifest-chat.webmanifest' ||
-      url.pathname === '/chat-manifest.webmanifest' ||
-      url.pathname === '/chat-app-v4.webmanifest' ||
-      url.pathname === '/chat-subdomain.webmanifest' ||
-      url.pathname === '/manifest-reminders.webmanifest' ||
-      url.pathname === '/reminders-subdomain.webmanifest' ||
-      url.pathname === '/mobile-subdomain.webmanifest';
 
     const isStaticAsset =
       url.pathname.startsWith('/assets/') ||
@@ -471,7 +507,7 @@ export default {
       request.method === 'GET' &&
       !url.pathname.startsWith('/api/') &&
       !isStaticAsset &&
-      (url.pathname === '/' || url.pathname.startsWith('/chat') || isChatHost || isMobileHost || accept.includes('text/html'));
+      (url.pathname === '/' || url.pathname.startsWith('/chat') || accept.includes('text/html'));
     const assetBase = new URL(request.url);
     assetBase.hostname = 'customs.mohsen-darbandi.workers.dev';
     const assetRequest = new Request(assetBase, request);
@@ -480,95 +516,8 @@ export default {
       ? await env.ASSETS.fetch(htmlAssetUrl)
       : await env.ASSETS.fetch(assetRequest);
 
-    if (isHtmlNavigation && (url.pathname.startsWith('/chat') || isChatHost) && response.ok) {
-      const html = await response.text();
-      const chatManifestPath = isChatHost
-        ? '/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2'
-        : '/chat-app-v4.webmanifest?v=20261005-chat-v4';
-      const chatHtml = html
-        .replace(/<title>[^<]*<\/title>/i, '<title>چت سازمانی | Customs OS</title>')
-        .replace(/href="\/manifest\.webmanifest"/i, 'href="' + chatManifestPath + '"')
-        .replace(/href="\/icon\.svg"/i, 'href="/chat-icon.svg"')
-        .replace(/href="\/pwa\/apple-touch-icon-180\.png"/i, 'href="/chat-icon.svg"')
-        .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#0B7EA4"')
-        .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="چت سازمانی"')
-        .replace('</head>', '<!-- legacy-chat-manifest-smoke: chat-manifest.webmanifest?v=20261005-chat-v4 --></head>');
-      const chatHeaders = new Headers(response.headers);
-      chatHeaders.delete('content-length');
-      response = new Response(chatHtml, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: chatHeaders,
-      });
-    }
-
-    if (isRemindersHost && isHtmlNavigation && response.ok) {
-      const html = await response.text();
-      const remindersHtml = html
-        .replace(/<title>[^<]*<\/title>/i, '<title>Reminders | Customs OS</title>')
-        .replace(/href="\/manifest\.webmanifest"/i, 'href="/reminders-subdomain.webmanifest?v=20261012-reminders-v1"')
-        .replace(/href="\/icon\.svg"/i, 'href="/pwa/reminders-icon.svg"')
-        .replace(/href="\/pwa\/apple-touch-icon-180\.png(?:\?[^"]*)?"/gi, 'href="/pwa/reminders-icon-180.png?v=20261012-reminders-v1"')
-        .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#087F8C"')
-        .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="Reminders"');
-      const remindersHeaders = new Headers(response.headers);
-      remindersHeaders.delete('content-length');
-      response = new Response(remindersHtml, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: remindersHeaders,
-      });
-    }
-
-    if (isMobileHost && isHtmlNavigation && response.ok) {
-      const html = await response.text();
-      const mobileHtml = html
-        .replace(/<title>[^<]*<\/title>/i, '<title>Customs OS Mobile</title>')
-        .replace(/href="\/manifest\.webmanifest"/i, 'href="/mobile-subdomain.webmanifest?v=20261018-mobile-v2"')
-        .replace(/href="\/icon\.svg(?:\?[^"]*)?"/i, 'href="/mobile-icon.svg?v=20261018-mobile-v2"')
-        .replace(/href="\/pwa\/apple-touch-icon-180\.png(?:\?[^"]*)?"/gi, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
-        .replace(/href="\/pwa\/apple-touch-icon\.png(?:\?[^"]*)?"/gi, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
-        .replace(/href="\/pwa\/mobile-icon-180\.png(?:\?[^"]*)?"/i, 'href="/pwa/mobile-icon-180.png?v=20261018-mobile-v2"')
-        .replace(/<meta name="theme-color" content="[^"]*"/i, '<meta name="theme-color" content="#0A4D8C"')
-        .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/i, '<meta name="apple-mobile-web-app-title" content="Customs OS"');
-      const mobileHeaders = new Headers(response.headers);
-      mobileHeaders.delete('content-length');
-      response = new Response(mobileHtml, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: mobileHeaders,
-      });
-    }
-
-    if (isManifestRequest && response.ok) {
-      const manifestHeaders = new Headers(response.headers);
-      manifestHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-      manifestHeaders.set('Pragma', 'no-cache');
-      manifestHeaders.set('Vary', 'Referer, Accept-Encoding');
-
-      if (url.pathname === '/manifest.webmanifest' && referer.includes('/chat')) {
-        const chatManifestPath = '/chat-app-v4.webmanifest?v=20261005-chat-v4';
-        const chatResponse = await env.ASSETS.fetch(new URL(chatManifestPath + '?from=chat&v=20261005', assetBase));
-        if (chatResponse.ok) {
-          const chatHeaders = new Headers(chatResponse.headers);
-          chatHeaders.set('Content-Type', 'application/manifest+json; charset=utf-8');
-          chatHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-          chatHeaders.set('Pragma', 'no-cache');
-          chatHeaders.set('Vary', 'Referer, Accept-Encoding');
-          response = new Response(chatResponse.body, {
-            status: chatResponse.status,
-            statusText: chatResponse.statusText,
-            headers: chatHeaders,
-          });
-        }
-      } else {
-        response = new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: manifestHeaders,
-        });
-      }
-    }
+    // All app areas share one HTML shell. Route labels are owned by React; manifest,
+    // Apple touch icon, and theme-color stay canonical and never vary by host/Referer.
 
     if (
       response.status === 404 &&
