@@ -27,7 +27,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
  const formDraft=useAutosavedDraft(
-  formDraftKey(profile?.id,'shipment-first',profile?.organization_id),
+  formDraftKey(profile?.id,`shipment-first:${profile?.organization_id||''}`,profile?.organization_id),
   {selected,form},
   (draft:{selected?:string;form?:Form})=>{
    setSelected(draft.selected||'');
