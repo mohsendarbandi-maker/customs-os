@@ -25,6 +25,13 @@ describe('chat architecture invariants',()=>{
     expect(page).toContain("document.addEventListener('visibilitychange',onVisibilityChange)");
   });
 
+  it('excludes a user's own messages from the unread counter',()=>{
+    const migration=read('supabase/migrations/20261018201149_fix_chat_unread_count_own_messages.sql');
+    expect(migration).toContain('and (m.sender_id is null or m.sender_id <> auth.uid())');
+    expect(migration).toContain('public.chat_user_is_member(p_conversation_id)');
+    expect(migration).toContain('SET search_path TO');
+  });
+
   it('uses one shared conversation dataset for hierarchy rendering',()=>{
     const hierarchy=read('src/features/chat/ChatHierarchyPanel.tsx');
     expect(hierarchy).toContain('conversations:ChatConversation[]');
