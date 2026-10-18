@@ -986,3 +986,146 @@
   }
 }
 
+/* iOS/PWA final consistency layer (2026-10-18).
+   Root cause addressed: older touch/tablet and mobile overrides were appended
+   in several places, so later selectors could reintroduce competing dock offsets.
+   Keep one final source of truth for mobile shell geometry. */
+:root {
+  --app-mobile-tabbar-height: 68px;
+  --app-mobile-header-height: 56px;
+}
+html, body, #root {
+  min-width: 0;
+  max-width: 100%;
+}
+html {
+  overscroll-behavior-x: none;
+}
+body {
+  overflow-x: clip;
+}
+.app-shell, .app-main, .app-content,
+.app-mobilebar, .app-mobile-title, .mobile-current-page {
+  min-width: 0;
+  max-width: 100%;
+}
+.mobile-current-page__title,
+.app-more-item > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 767px) {
+  /* On phones the sidebar and desktop topbar must not participate in layout. */
+  .app-sidebar, .app-topbar { display: none !important; }
+  .app-main, .app-main.sidebar-compact {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    min-width: 0 !important;
+  }
+  .app-mobilebar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex !important;
+    width: 100%;
+    min-height: var(--app-mobile-header-height);
+    max-height: var(--app-mobile-header-height);
+    height: var(--app-mobile-header-height);
+    box-sizing: border-box;
+    padding: max(4px, env(safe-area-inset-top)) 12px 4px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .app-mobilebar .icon-btn,
+  .app-mobile-settings {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    flex: 0 0 40px !important;
+  }
+  .app-mobile-dock {
+    position: fixed !important;
+    z-index: 110 !important;
+    inset-inline: 0 !important;
+    inset-block-end: 0 !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 2px !important;
+    min-height: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
+    padding: 5px 6px calc(5px + env(safe-area-inset-bottom)) !important;
+    border-radius: 18px 18px 0 0 !important;
+    box-sizing: border-box !important;
+  }
+  .app-mobile-dock > button {
+    min-width: 0 !important;
+    min-height: 44px !important;
+    padding-inline: 1px !important;
+    font-size: 11px !important;
+    white-space: nowrap;
+  }
+  .app-content {
+    padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    min-width: 0 !important;
+    overflow-wrap: anywhere;
+  }
+  /* Search is in document flow, never a second fixed bottom control. */
+  .shipment-status-search {
+    position: relative !important;
+    inset: auto !important;
+    bottom: auto !important;
+    top: auto !important;
+    transform: none !important;
+    max-width: 100% !important;
+  }
+  .customs-home .customs-stat,
+  .customs-home .customs-stat > span {
+    min-width: 0;
+  }
+  .customs-home .customs-stat > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .customs-home .customs-home-tagline {
+    letter-spacing: .015em !important;
+    line-height: 1.2;
+    overflow-wrap: normal;
+    white-space: nowrap;
+  }
+  .app-shell:has(input:focus) .app-mobile-dock,
+  .app-shell:has(textarea:focus) .app-mobile-dock,
+  .app-shell:has(select:focus) .app-mobile-dock,
+  .app-shell:has([contenteditable="true"]:focus) .app-mobile-dock {
+    display: none !important;
+  }
+  .app-shell:has(input:focus) .app-content,
+  .app-shell:has(textarea:focus) .app-content,
+  .app-shell:has(select:focus) .app-content,
+  .app-shell:has([contenteditable="true"]:focus) .app-content {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 12px) !important;
+  }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-sidebar, .app-topbar { display: none !important; }
+  .app-mobilebar, .app-mobile-dock { display: grid !important; }
+  .app-main, .app-main.sidebar-compact {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+}
+@media (min-width: 1024px) and (pointer: fine) {
+  .app-sidebar { display: flex !important; }
+  .app-mobilebar, .app-mobile-dock, .app-more-scrim { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
