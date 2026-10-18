@@ -6,7 +6,7 @@ import {
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
   Contact, Folder, ClipboardCheck, GitBranch, Receipt, Network,
-  Plus, Home, CalendarDays
+  Home, CalendarDays
 } from 'lucide-react';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { useAppearance } from '../context/AppearanceContext';
@@ -93,6 +93,20 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     media.addEventListener('change', updateLayout);
     return () => media.removeEventListener('change', updateLayout);
   }, []);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     const on = () => setOnline(true);
