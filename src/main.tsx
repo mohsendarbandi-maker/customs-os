@@ -137,31 +137,15 @@ if (!rootElement) {
   throw new Error('Root element #root was not found');
 }
 
-const normalizeLegacyPwaLaunch = () => {
-  if (typeof window === 'undefined') return false;
+// Root launches, including older installed-PWA links with ?source=pwa, stay on
+// the canonical home route. Older builds redirected that query to /chat and made the
+// single Customs OS install behave like a separate chat app.
+rootElement.replaceChildren();
 
-  try {
-    const current = new URL(window.location.href);
-    if (current.pathname !== '/' || current.searchParams.get('source') !== 'pwa') return false;
-
-    current.pathname = '/chat';
-    current.search = '';
-    window.location.replace(current.toString());
-    return true;
-  } catch (error) {
-    console.warn('[Customs OS] Legacy PWA launch normalization failed:', error);
-    return false;
-  }
-};
-
-if (!normalizeLegacyPwaLaunch()) {
-  rootElement.replaceChildren();
-
-  ReactDOM.createRoot(rootElement).render(
-    <React.StrictMode>
-      <AppErrorBoundary>
-        <App />
-      </AppErrorBoundary>
-    </React.StrictMode>,
-  );
-}
+ReactDOM.createRoot(rootElement).render(
+  <React.StrictMode>
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
+  </React.StrictMode>,
+);
