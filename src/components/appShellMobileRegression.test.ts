@@ -55,6 +55,21 @@ describe('single mobile shell navigation regressions', () => {
     expect(mobileCss).toContain('.app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock');
   });
 
+  it('keeps the tablet header flex-based and the dock grid-based', () => {
+    expect(mobileCss).toContain('.app-mobilebar { display: flex !important; }');
+    expect(mobileCss).toContain('.app-mobile-dock { display: grid !important; }');
+    expect(mobileCss).not.toContain('.app-mobilebar, .app-mobile-dock { display: grid !important; }');
+  });
+
+  it('applies phone layout rules to 375px, 390px, and 430px viewports', () => {
+    const phoneWidths = [375, 390, 430];
+    expect(phoneWidths.every((width) => width <= 767)).toBe(true);
+    expect(mobileCss).toContain('@media (max-width: 767px)');
+    expect(mobileCss).toContain('min-width: 0 !important');
+    expect(mobileCss).toContain('overflow-x: clip');
+    expect(mobileCss).toContain('grid-template-columns: repeat(5, minmax(0, 1fr)) !important');
+  });
+
   it('keeps shipment search in the page toolbar rather than as a fixed control', () => {
     const statuses = read('src/components/LatestShipmentStatuses.tsx');
     expect(statuses).toContain('className="shipment-status-search"');
