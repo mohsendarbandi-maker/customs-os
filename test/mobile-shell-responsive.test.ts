@@ -11,7 +11,6 @@ const home = read('src/pages/DesktopHomePage.tsx');
 
 describe('iOS touch-first application shell', () => {
   it.each([375, 390, 430])('keeps the touch shell contract at %i CSS pixels', (width) => {
-    // These representative iPhone CSS widths all belong to the mobile shell.
     expect(width).toBeLessThan(768);
     expect(shell).toContain("window.matchMedia('(min-width: 1024px) and (pointer: fine)')");
     expect(shell).toContain("const media = window.matchMedia('(min-width: 1024px) and (pointer: fine)')");
@@ -59,5 +58,25 @@ describe('iOS touch-first application shell', () => {
     expect(mobileCss).toContain('text-overflow: ellipsis; white-space: nowrap;');
     expect(home).toContain("new Intl.DateTimeFormat('fa-IR-u-ca-persian'");
     expect(home).toContain('opacity-40">،</span>');
+  });
+
+  it('restores scroll per route and supports RTL back from nested screens', () => {
+    expect(shell).toContain("routeScrollStorageKey(routeKey)");
+    expect(shell).toContain('window.scrollTo({ top: savedPosition ?? 0, left: 0, behavior: \'auto\' })');
+    expect(shell).toContain('location.pathname.startsWith('/operations') && location.search');
+    expect(shell).toContain('const showMobileBack = !isPrimaryMobileRoute');
+    expect(shell).toContain('aria-label="بازگشت"');
+  });
+
+  it('adds Home Screen-only right-edge swipe back without hijacking editors or horizontal lists', () => {
+    expect(shell).toContain("!isStandalonePwa()");
+    expect(shell).toContain('touch.clientX < window.innerWidth - 26');
+    expect(shell).toContain("'.overflow-x-auto'");
+    expect(shell).toContain("'.app-more-sheet'");
+    expect(shell).toContain("'.chat-standalone'");
+    expect(shell).toContain("'.reminders-app-standalone'");
+    expect(shell).toContain("event.key === 'Escape'");
+    expect(shell).toContain('focusableSelector');
+    expect(shell).toContain('moreSheetRef.current?.focus({ preventScroll: true })');
   });
 });
