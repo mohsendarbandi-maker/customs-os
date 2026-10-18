@@ -392,7 +392,7 @@ jobs:
               }
               await chatPage.close();
 
-              // The reminders PWA must remain standalone even before authentication.
+              // Reminders is an internal route and must share the one canonical PWA identity.
               const remindersPage = await page.context().newPage();
               await remindersPage.setViewportSize({ width: 390, height: 844 });
               const remindersErrors = [];
@@ -406,28 +406,32 @@ jobs:
 
               await remindersPage.goto(baseURL + '/reminders?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
               await remindersPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
-              await expect.poll(async () => new URL(remindersPage.url()).pathname, { timeout: 15000, message: 'Reminders did not stay inside its app scope' }).toBe('/reminders/login');
+              await expect.poll(async () => new URL(remindersPage.url()).pathname, { timeout: 15000, message: 'Reminders route did not stay under the canonical app' }).toBe('/reminders/login');
               await expect(remindersPage).toHaveTitle(/یادآورها/);
               await expect(remindersPage.locator('#root')).not.toBeEmpty();
               await expect(remindersPage.locator('.app-sidebar')).toHaveCount(0);
               await expect(remindersPage.locator('.app-topbar')).toHaveCount(0);
-
+              const manifestCount = await remindersPage.locator('link[rel="manifest"]').count();
+              if (manifestCount !== 1) throw new Error(`Expected exactly one manifest link; got ${manifestCount}`);
               const manifestHref = await remindersPage.locator('link[rel="manifest"]').getAttribute('href');
-              if (!manifestHref?.includes('/manifest-reminders.webmanifest')) {
-                throw new Error(`Reminders route did not select its own manifest: ${manifestHref || 'missing'}`);
+              if (manifestHref !== '/manifest.webmanifest?v=20261018-canonical-v1') {
+                throw new Error(`Reminders route changed the canonical manifest: ${manifestHref || 'missing'}`);
+              }
+              const appleTouchIcon = await remindersPage.locator('link[rel="apple-touch-icon"]').getAttribute('href');
+              if (!appleTouchIcon?.includes('/pwa/mobile-icon-180.png')) {
+                throw new Error(`Canonical Apple touch icon is missing or not PNG: ${appleTouchIcon || 'missing'}`);
               }
               const manifestCheck = await remindersPage.evaluate(async (href) => {
                 const response = await fetch(href);
-                if (!response.ok) throw new Error(`Reminders manifest HTTP ${response.status}`);
+                if (!response.ok) throw new Error(`Manifest HTTP ${response.status}`);
                 const manifest = await response.json();
-                const iconResults = await Promise.all(
-                  (manifest.icons || []).map(async (icon) => {
-                    const result = await fetch(icon.src);
-                    return { src: icon.src, status: result.status };
-                  }),
-                );
+                const iconResults = await Promise.all((manifest.icons || []).map(async (icon) => {
+                  const result = await fetch(icon.src);
+                  return { src: icon.src, status: result.status, type: result.headers().get('content-type') };
+                }));
                 return {
                   name: manifest.short_name,
+                  id: manifest.id,
                   scope: manifest.scope,
                   start_url: manifest.start_url,
                   display: manifest.display,
@@ -435,20 +439,22 @@ jobs:
                 };
               }, manifestHref);
               if (
-                manifestCheck.name !== 'یادآورها' ||
-                manifestCheck.scope !== '/reminders' ||
-                !manifestCheck.start_url.startsWith('/reminders') ||
+                manifestCheck.name !== 'Customs OS' ||
+                manifestCheck.id !== '/' ||
+                manifestCheck.scope !== '/' ||
+                manifestCheck.start_url !== '/' ||
                 manifestCheck.display !== 'standalone' ||
+                !manifestCheck.iconResults.some((icon) => icon.src === '/pwa/mobile-icon-180.png' && icon.status === 200) ||
                 !manifestCheck.iconResults.length ||
                 manifestCheck.iconResults.some((icon) => icon.status !== 200)
               ) {
-                throw new Error(`Reminders PWA manifest/icon validation failed: ${JSON.stringify(manifestCheck)}`);
+                throw new Error(`Canonical PWA manifest/icon validation failed: ${JSON.stringify(manifestCheck)}`);
               }
               if (remindersErrors.length) throw new Error(remindersErrors.join('; '));
-              console.log('Reminders standalone mobile route passed:', JSON.stringify(manifestCheck));
+              console.log('Reminders uses the canonical PWA manifest:', JSON.stringify(manifestCheck));
               await remindersPage.close();
 
-              // A distinct host must open the reminders app (not the corporate home).
+              // Old subdomains now permanently redirect into the same origin and internal route.
               const remindersSubdomainPage = await page.context().newPage();
               await remindersSubdomainPage.setViewportSize({ width: 390, height: 844 });
               const subdomainErrors = [];
@@ -463,36 +469,22 @@ jobs:
               await remindersSubdomainPage.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => undefined);
               await expect.poll(
                 async () => new URL(remindersSubdomainPage.url()).pathname,
-                { timeout: 20000, message: 'Unauthenticated reminders subdomain did not remain on its login route' },
-              ).toBe('/login');
-              await expect(remindersSubdomainPage).toHaveTitle(/Reminders \| Customs OS/);
+                { timeout: 20000, message: 'Legacy reminders domain did not reach the internal reminders route' },
+              ).toBe('/reminders/login');
+              await expect.poll(
+                async () => new URL(remindersSubdomainPage.url()).origin,
+                { timeout: 20000, message: 'Legacy reminders domain did not redirect to the canonical origin' },
+              ).toBe(new URL(baseURL).origin);
+              await expect(remindersSubdomainPage).toHaveTitle(/یادآورها \| Customs OS/);
               await expect(remindersSubdomainPage.locator('#root')).not.toBeEmpty();
               await expect(remindersSubdomainPage.locator('.app-sidebar')).toHaveCount(0);
               await expect(remindersSubdomainPage.locator('.app-topbar')).toHaveCount(0);
               const subdomainManifestHref = await remindersSubdomainPage.locator('link[rel="manifest"]').getAttribute('href');
-              if (!subdomainManifestHref?.includes('/reminders-subdomain.webmanifest')) {
-                throw new Error(`Dedicated reminders subdomain chose the wrong manifest: ${subdomainManifestHref || 'missing'}`);
-              }
-              const subdomainManifest = await remindersSubdomainPage.evaluate(async (href) => {
-                const response = await fetch(href);
-                if (!response.ok) throw new Error(`Subdomain manifest HTTP ${response.status}`);
-                const manifest = await response.json();
-                const iconResults = await Promise.all((manifest.icons || []).map(async (icon) => {
-                  const result = await fetch(icon.src);
-                  return { src: icon.src, status: result.status };
-                }));
-                return { name: manifest.short_name, scope: manifest.scope, start_url: manifest.start_url, display: manifest.display, icons: iconResults };
-              }, subdomainManifestHref);
-              if (subdomainManifest.name !== 'یادآورها' ||
-                subdomainManifest.scope !== '/' ||
-                subdomainManifest.start_url !== '/' && !subdomainManifest.start_url.startsWith('/?') ||
-                subdomainManifest.display !== 'standalone' ||
-                !subdomainManifest.icons.length ||
-                subdomainManifest.icons.some((icon) => icon.status !== 200)) {
-                throw new Error(`Subdomain PWA manifest/icon validation failed: ${JSON.stringify(subdomainManifest)}`);
+              if (subdomainManifestHref !== '/manifest.webmanifest?v=20261018-canonical-v1') {
+                throw new Error(`Redirected Reminders page does not use the canonical manifest: ${subdomainManifestHref || 'missing'}`);
               }
               if (subdomainErrors.length) throw new Error(subdomainErrors.join('; '));
-              console.log('Reminders independent subdomain passed:', JSON.stringify(subdomainManifest));
+              console.log('Legacy Reminders domain redirects to the shared app.');
               await remindersSubdomainPage.close();
 
               // A fresh installation can activate the worker before it controls the first document.
