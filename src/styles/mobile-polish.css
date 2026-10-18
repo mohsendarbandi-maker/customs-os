@@ -916,3 +916,9 @@
     bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
   }
 }
+
+@media (max-width: 1023px) {
+  .app-shell .pwa-update-prompt {
+    bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+  }
+}
