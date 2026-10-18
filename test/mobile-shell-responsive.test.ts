@@ -63,7 +63,7 @@ describe('iOS touch-first application shell', () => {
   it('restores scroll per route and supports RTL back from nested screens', () => {
     expect(shell).toContain("routeScrollStorageKey(routeKey)");
     expect(shell).toContain('window.scrollTo({ top: savedPosition ?? 0, left: 0, behavior: \'auto\' })');
-    expect(shell).toContain('location.pathname.startsWith('/operations') && location.search');
+    expect(shell).toContain("location.pathname.startsWith('/operations') && location.search");
     expect(shell).toContain('const showMobileBack = !isPrimaryMobileRoute');
     expect(shell).toContain('aria-label="بازگشت"');
   });
