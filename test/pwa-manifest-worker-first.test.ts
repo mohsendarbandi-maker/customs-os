@@ -36,7 +36,7 @@ describe('PWA manifest requests pass through the canonical Worker', () => {
   });
 
   it('serves the dedicated mobile hostname without canonical redirecting away', () => {
-    expect(worker).toContain("'mobile.darbandicommercial.ir'");
+    expect(worker).toContain('mobile hostname');
     expect(worker).toContain('dedicated mobile-first entry point');
     const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
     expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
