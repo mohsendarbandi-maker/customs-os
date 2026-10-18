@@ -238,4 +238,21 @@ describe('chat architecture invariants',()=>{
     expect(download).not.toContain('readBinary(');
   });
 
+  it('routes messenger provider egress through a signed Cloudflare allowlist proxy',()=>{
+    const worker=read('worker/index.ts');
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(worker).toContain("url.pathname === '/_internal/messenger-egress'");
+    expect(worker).toContain('x-customs-messenger-proxy-key');
+    expect(worker).toContain("host === 'api.telegram.org'");
+    expect(worker).toContain("host === 'tapi.bale.ai'");
+    expect(worker).toContain("host === 'graph.facebook.com'");
+    expect(worker).toContain("target.protocol !== 'https:'");
+    expect(worker).toContain('new Response(upstream.body');
+    expect(gateway).toContain('CLOUDFLARE_MESSENGER_PROXY_URL');
+    expect(gateway).toContain('CLOUDFLARE_MESSENGER_PROXY_SECRET');
+    expect(gateway).toContain('async function providerFetch(');
+    expect(gateway).toContain('providerFetch(graphBase(c)');
+    expect(gateway).not.toContain('fetch(botBase(c,await accessToken(c))+endpoint');
+  });
+
 });
