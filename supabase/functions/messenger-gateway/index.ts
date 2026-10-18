@@ -290,10 +290,6 @@ async function processMessengerOutbox(req:Request){
     pendingAsset={result,mime,size:actualSize,name};
     logType="document";
     payloadSummary={...payloadSummary,name,mimeType:mime,sizeBytes:actualSize,sourceMessageType:message.message_type};
-   externalMessageId=result.messageId;
-    pendingAsset={result,mime,size:actualSize,name};
-    logType="document";
-    payloadSummary={...payloadSummary,name,mimeType:mime,sizeBytes:actualSize,sourceMessageType:message.message_type};
    }else throw new Error("UNSUPPORTED_MESSAGE_TYPE");
 
    // Once the external platform accepts a message, commit delivery before writing optional file metadata.
