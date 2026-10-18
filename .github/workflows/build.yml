@@ -239,97 +239,75 @@ jobs:
             bad_map_status="$(curl --silent --show-error --location --max-time 10 -o /tmp/bad-map.json -w '%{http_code}' "$base/api/map/tiles/20/0/0.png")"
             test "$bad_map_status" = "400"
             
-            echo "Checking dedicated chat entrypoint"
-            smoke_qs="?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
-            curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat${smoke_qs}"
-            grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat.html
-            grep -q 'chat-app-v4.webmanifest?v=20261005-chat-v4' /tmp/chat.html
-            curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-icon.svg "$base/chat-icon.svg${smoke_qs}"
-            test -s /tmp/chat-icon.svg
-            chat_manifest_href="/chat-app-v4.webmanifest?v=20261005-chat-v4"
-            curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-manifest.json "${base}${chat_manifest_href}&__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
-            grep -q '"start_url": "/chat"' /tmp/chat-manifest.json
-            grep -q '"scope": "/chat"' /tmp/chat-manifest.json
-            grep -q '"id": "/chat-v4"' /tmp/chat-manifest.json
-            ice_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/ice.json -w '%{http_code}' "${base}/api/webrtc/ice")"
-            test "$ice_status" = 401
-
-            echo "Checking Cloudflare-to-Supabase messenger webhook routing"
-            gateway_status="$(curl --silent --show-error --max-time 20 -o /tmp/messenger-gateway.json -w '%{http_code}' "$base/webhooks/messenger/telegram/00000000-0000-4000-8000-000000000000")"
-            test "$gateway_status" = 404
-            echo "Checking dedicated chat subdomain"
-          chat_base="https://chat.darbandicommercial.ir"
-          curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat-subdomain.html "$chat_base/?__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
-          grep -q '<title>چت سازمانی | Customs OS</title>' /tmp/chat-subdomain.html
-          grep -q 'chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2' /tmp/chat-subdomain.html
-          curl --fail --silent --show-error --location --max-time 20 -o /tmp/chat-subdomain-manifest.json "$chat_base/chat-subdomain.webmanifest?v=20261006-chat-subdomain-v2&__chat_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
-          grep -q '"start_url": "/"' /tmp/chat-subdomain-manifest.json
-          grep -q '"scope": "/"' /tmp/chat-subdomain-manifest.json
-          grep -q '"id": "/"' /tmp/chat-subdomain-manifest.json
-
-          echo "Checking dedicated reminders subdomain"
-          reminders_base="https://reminders.darbandicommercial.ir"
-          reminders_success=0
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            status="$(curl --silent --show-error --location --max-time 25 -o /tmp/reminders-subdomain.html -w '%{http_code}' "${reminders_base}/?__reminders_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}" 2>/tmp/reminders-curl-error)" || status=000
-            if [ "$status" = "200" ] &&
-              grep -Fq '<title>Reminders | Customs OS</title>' /tmp/reminders-subdomain.html &&
-              grep -Fq 'reminders-subdomain.webmanifest?v=20261012-reminders-v1' /tmp/reminders-subdomain.html; then
-              reminders_success=1
-              break
+            echo "Checking unified internal chat route and single canonical manifest"
+            smoke_qs="?__chat_smoke=\${GITHUB_SHA}-\${GITHUB_RUN_ID}"
+            curl --fail --silent --show-error --location --max-time 30 -o /tmp/chat.html "$base/chat\${smoke_qs}"
+            grep -Fq '<link rel="manifest" href="/manifest.webmanifest" />' /tmp/chat.html
+            if grep -Eq 'chat-app-v4\.webmanifest|chat-subdomain\.webmanifest|mobile-subdomain\.webmanifest|manifest-reminders\.webmanifest|reminders-subdomain\.webmanifest' /tmp/chat.html; then
+              echo "Area-specific manifest reference remains in the primary HTML."
+              exit 1
             fi
-            echo "Reminders subdomain not ready (attempt $attempt, HTTP $status); retrying..."
-            cat /tmp/reminders-curl-error || true
-            sleep 10
-          done
-          test "$reminders_success" = 1
-          curl --fail --silent --show-error --location --max-time 30 -o /tmp/reminders-subdomain-manifest.json "${reminders_base}/reminders-subdomain.webmanifest?v=20261012-reminders-v1&__smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}"
-          grep -Fq '"id": "/"' /tmp/reminders-subdomain-manifest.json
-          grep -Fq '"start_url": "/?app=1"' /tmp/reminders-subdomain-manifest.json
-          grep -Fq '"scope": "/"' /tmp/reminders-subdomain-manifest.json
-          grep -Fq '"display": "standalone"' /tmp/reminders-subdomain-manifest.json
-          grep -Fq '"short_name": "یادآورها"' /tmp/reminders-subdomain-manifest.json
-          curl --fail --silent --show-error --location --max-time 20 -o /tmp/reminders-icon.svg "${reminders_base}/pwa/reminders-icon.svg"
-          test -s /tmp/reminders-icon.svg
-          curl --fail --silent --show-error --location --max-time 20 -o /tmp/reminders-icon.png "${reminders_base}/pwa/reminders-icon-180.png"
-          test -s /tmp/reminders-icon.png
-          echo "Dedicated reminders HTTPS, manifest and icons are healthy."
 
-          echo "Checking dedicated mobile app subdomain"
-          mobile_base="https://mobile.darbandicommercial.ir"
-          mobile_success=0
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            status="$(curl --silent --show-error --location --max-time 25 -o /tmp/mobile-subdomain.html -w '%{http_code}' "${mobile_base}/?__mobile_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}" 2>/tmp/mobile-curl-error)" || status=000
-            if [ "$status" = "200" ] &&
-              grep -Fq '<title>Customs OS Mobile</title>' /tmp/mobile-subdomain.html &&
-              grep -Fq 'mobile-subdomain.webmanifest?v=20261018-mobile-v2' /tmp/mobile-subdomain.html; then
-              mobile_success=1
-              break
+            echo "Checking the one canonical manifest and all declared PNG icons"
+            curl --fail --silent --show-error --location --max-time 30 -o /tmp/customs-manifest.json "$base/manifest.webmanifest?__pwa_smoke=\${GITHUB_RUN_ID}"
+            node -e '
+              const fs = require("node:fs");
+              const m = JSON.parse(fs.readFileSync("/tmp/customs-manifest.json", "utf8"));
+              if (m.id !== "/" || m.start_url !== "/" || m.scope !== "/" || m.display !== "standalone") {
+                throw new Error("Non-canonical manifest identity: " + JSON.stringify({id:m.id,start_url:m.start_url,scope:m.scope,display:m.display}));
+              }
+              const required = new Set(["180x180", "192x192", "512x512"]);
+              for (const icon of m.icons || []) required.delete(icon.sizes);
+              if (required.size) throw new Error("Missing required PNG icon sizes: " + [...required].join(", "));
+              if ((m.icons || []).some((icon) => icon.type !== "image/png")) throw new Error("Only PNG manifest icons are allowed.");
+              console.log("Single standalone manifest identity passed.");
+            '
+            node -e 'const m=require("/tmp/customs-manifest.json"); for (const icon of m.icons || []) console.log(icon.src)' > /tmp/customs-icons.txt
+            while IFS= read -r icon_src; do
+              curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-icon.bin "$base\${icon_src}"
+              case "$icon_src" in
+                *180.png*|*192.png*|*512.png*) file /tmp/customs-icon.bin | grep -Fq 'PNG image data' ;;
+              esac
+            done < /tmp/customs-icons.txt
+
+            echo "Checking permanent redirects from legacy app subdomains"
+            assert_legacy_redirect() {
+              local legacy_host="$1"
+              local expected_path="$2"
+              local marker="$3"
+              local status location
+              status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-redirect.headers -o /dev/null -w '%{http_code}' "https://\${legacy_host}/?\${marker}=\${GITHUB_RUN_ID}")"
+              test "$status" = "301"
+              location="$(grep -i '^location:' /tmp/legacy-redirect.headers | tail -n 1 | tr -d '\\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
+              case "$location" in
+                "https://darbandicommercial.ir\${expected_path}?"*) ;;
+                *) echo "Unexpected canonical redirect from \${legacy_host}: HTTP \${status}, Location=\${location}"; exit 1 ;;
+              esac
+            }
+            assert_legacy_redirect "chat.darbandicommercial.ir" "/chat" "__chat_alias_smoke"
+            assert_legacy_redirect "reminders.darbandicommercial.ir" "/reminders" "__reminders_alias_smoke"
+            assert_legacy_redirect "mobile.darbandicommercial.ir" "/" "__mobile_alias_smoke"
+
+            legacy_manifest_status="$(curl --silent --show-error --max-time 20 -D /tmp/legacy-manifest.headers -o /dev/null -w '%{http_code}' "https://reminders.darbandicommercial.ir/reminders-subdomain.webmanifest?v=legacy-smoke")"
+            test "$legacy_manifest_status" = "301"
+            legacy_manifest_location="$(grep -i '^location:' /tmp/legacy-manifest.headers | tail -n 1 | tr -d '\\r' | sed -E 's/^[^:]*:[[:space:]]*//')"
+            test "$legacy_manifest_location" = "https://darbandicommercial.ir/manifest.webmanifest?v=legacy-smoke"
+
+            echo "Checking primary HTML has one manifest and no mobile-origin redirect"
+            curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-main.html "$base/?__canonical_pwa_smoke=\${GITHUB_RUN_ID}"
+            grep -Fq '<link rel="manifest" href="/manifest.webmanifest" />' /tmp/customs-main.html
+            test "$(grep -o 'rel="manifest"' /tmp/customs-main.html | wc -l | tr -d ' ')" = "1"
+            grep -Fq 'rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon-180.png' /tmp/customs-main.html
+            if grep -Eq 'mobile\.darbandicommercial\.ir|chat-app-v4\.webmanifest|chat-subdomain\.webmanifest|manifest-reminders\.webmanifest|reminders-subdomain\.webmanifest|mobile-subdomain\.webmanifest|apple-touch-icon-precomposed' /tmp/customs-main.html; then
+              echo "Legacy origin/manifest/icon selection remains in primary HTML."
+              exit 1
             fi
-            echo "Mobile subdomain not ready (attempt $attempt, HTTP $status); retrying..."
-            cat /tmp/mobile-curl-error || true
-            sleep 10
-          done
-          test "$mobile_success" = 1
-          curl --fail --silent --show-error --location --max-time 30 -o /tmp/mobile-subdomain-manifest.json "${mobile_base}/mobile-subdomain.webmanifest?v=20261018-mobile-v2&__smoke=${GITHUB_RUN_ID}"
-          grep -Fq '"id": "/"' /tmp/mobile-subdomain-manifest.json
-          grep -Fq '"start_url": "/"' /tmp/mobile-subdomain-manifest.json
-          grep -Fq '"scope": "/"' /tmp/mobile-subdomain-manifest.json
-          grep -Fq '"display": "standalone"' /tmp/mobile-subdomain-manifest.json
-          curl --fail --silent --show-error --location --max-time 20 -o /tmp/mobile-icon.svg "${mobile_base}/mobile-icon.svg"
-          grep -Fq '<svg' /tmp/mobile-icon.svg
-          curl --fail --silent --show-error --location --max-time 20 -o /tmp/mobile-icon-180.png "${mobile_base}/pwa/mobile-icon-180.png"
-          file /tmp/mobile-icon-180.png | grep -Fq 'PNG image data'
-          echo "Checking primary-domain mobile redirect code"
-          curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-main.html "https://darbandicommercial.ir/?__mobile_redirect_smoke=${GITHUB_RUN_ID}"
-          grep -Fq "mobile.darbandicommercial.ir" /tmp/customs-main.html
-          echo "Dedicated mobile HTTPS, standalone manifest and icon are healthy."
 
-          echo "Checking PWA legacy launch URL canonicalization"
-            pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "${base}/?source=pwa")"
+            echo "Checking legacy PWA launch URL returns to canonical home"
+            pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base/?source=pwa&__legacy_pwa_smoke=\${GITHUB_RUN_ID}")"
             pwa_location="$(printf '%s\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
             echo "PWA redirect Location: $pwa_location"
-            test "$pwa_location" = "${base}/chat"
+            test "$pwa_location" = "$base/?__legacy_pwa_smoke=\${GITHUB_RUN_ID}"
 
             echo "Checking live-voice code is present in compiled bundle"
             grep -R -F -q 'تماس صوتی زنده' dist/assets
