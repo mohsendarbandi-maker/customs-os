@@ -4,7 +4,7 @@ import { scanChatFile } from "../_shared/chat-file-scanner.ts";
 
 const SB = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const PUBLIC_BASE = (Deno.env.get("CUSTOMS_PUBLIC_BASE_URL") || "https://darbandicommercial.ir").replace(/\\/+$/, "");
+const PUBLIC_BASE = (Deno.env.get("CUSTOMS_PUBLIC_BASE_URL") || "https://darbandicommercial.ir").replace(/\/+$/, "");
 const admin = createClient(SB, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
 const MAX_SCAN_BYTES = 50 * 1024 * 1024;
 
@@ -12,7 +12,7 @@ const json = (d: unknown, s = 200) => new Response(JSON.stringify(d), {
   status: s,
   headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
 });
-const ext = (n: string) => n.toLowerCase().match(/\\.([a-z0-9]{1,12})$/)?.[1] ?? "";
+const ext = (n: string) => n.toLowerCase().match(/\.([a-z0-9]{1,12})$/)?.[1] ?? "";
 
 async function expectedSecret() {
   const { data, error } = await admin.rpc("internal_get_reminder_secret", { p_name: "file_scan_cron_secret" });
@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
       const now = new Date().toISOString();
 
       if (result.clean && isStoredQuarantine) {
-        const finalPath = storagePath.replace(/^quarantine\\//, "");
+        const finalPath = storagePath.replace(/^quarantine\//, "");
         const moved = await admin.storage.from("chat-files").move(storagePath, finalPath);
         if (moved.error) {
           await markBlocked(scan.id, attachment, "local_static", ["quarantine_commit_failed"]);
