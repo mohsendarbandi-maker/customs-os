@@ -19,6 +19,7 @@ describe('iOS touch-first application shell', () => {
     expect(shell).toContain("const widthMedia = window.matchMedia('(min-width: 1024px)')");
     expect(shell).toContain("const pointerMedia = window.matchMedia('(pointer: fine)')");
     expect(shell).toContain("getDesktopLayout");
+    expect(shell).toContain("window.location.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
     expect(shell).toContain('{isDesktop && (');
     expect(shell).toContain('{!isDesktop && <nav className="app-mobile-dock"');
     expect(mobileCss).toContain('@media (max-width: 1023px), (pointer: coarse)');
