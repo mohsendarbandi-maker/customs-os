@@ -166,7 +166,7 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
   const multipartBody=multipart(prefix,bounded(stream,max),"\r\n--"+boundary+"--\r\n");
   const uploadResponse=await providerFetch(target.toString(),{method:"POST",headers:{"Content-Type":"multipart/form-data; boundary="+boundary},body:multipartBody});
   const uploadText=await uploadResponse.text();let uploaded:any={};try{uploaded=JSON.parse(uploadText);}catch{}const fileId=String(uploaded.data?.file_id||uploaded.file_id||"");if(!uploadResponse.ok||!fileId)throw new Error("RUBIKA_FILE_UPLOAD_FAILED");
-  const sent=await apiJson(botBase(c,tokenValue)+"sendFile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:chat,file_id:fileId})});const messageId=String(sent.data?.message_id||sent.message_id||sent.result?.message_id||"");if(!messageId)throw new Error("RUBIKA_FILE_SEND_FAILED");return {fileId,uniqueId:null,messageId,name:filename};
+  const sent=await apiJson(botBase(c,tokenValue)+"sendFile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:chat,file_id:fileId,text:filename})});const messageId=String(sent.data?.message_id||sent.message_id||sent.result?.message_id||"");if(!messageId)throw new Error("RUBIKA_FILE_SEND_FAILED");return {fileId,uniqueId:null,messageId,name:filename};
  }
  const boundary="----CustomsOS"+token(16);
  const prefix=c.platform==="whatsapp"
