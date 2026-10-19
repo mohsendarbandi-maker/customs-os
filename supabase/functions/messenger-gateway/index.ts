@@ -341,7 +341,7 @@ async function processMessengerOutbox(req:Request){
       try{source=await sourceFile(sourceConn,String(location.external_file_id));break;}catch(e){if(errorCode(e)==="SOURCE_FILE_OVER_DOWNLOAD_LIMIT")throw e;}
      }
      if(!source?.response.body)throw new Error("SOURCE_ATTACHMENT_NOT_AVAILABLE");
-     if(source.size!==null&&source.size>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
+     if(source.size!==null&&source.size>max){await cancelResponseBody(source.response);throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");}
      actualSize=source.size??expectedSize;
      fileStream=source.response.body;
     }else{
