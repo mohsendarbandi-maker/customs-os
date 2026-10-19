@@ -1,6 +1,6 @@
 # Phase 1 — Signed Cloudflare Messenger Egress Setup
 
-This phase routes Telegram, Bale, Rubika and Meta Graph/WhatsApp requests made by the Supabase Edge Function through the existing first-party Cloudflare Worker. The Worker is an allowlisted streaming proxy, not an open proxy. New Customs OS chat files are kept as remote messenger references plus metadata; legacy stored files are not deleted.
+This phase routes Telegram, Bale, Rubika and Meta Graph/WhatsApp requests made by the Supabase Edge Function through the existing first-party Cloudflare Worker. The Worker is an allowlisted streaming proxy, not an open proxy. New Customs OS chat files are kept as remote messenger references plus metadata; legacy stored files are not deleted. Integration send/upload/transfer/file-download APIs require owner/admin. Normal chat attachment downloads require active conversation membership and a clean scan state.
 
 ## Required secrets
 
@@ -23,7 +23,7 @@ Generate one strong random value in a trusted terminal, for example with `openss
 ## Proxy security contract
 
 - The built-in HTTPS host allowlist includes `api.telegram.org`, `tapi.bale.ai`, `botapi.rubika.ir`, `graph.facebook.com`, and subdomains of `fbsbx.com`, `fbcdn.net`, and `whatsapp.net`.
-- Rubika's official `requestSendFile` and `getFile` return `upload_url` and `download_url`; the official docs do not promise these URLs use `botapi.rubika.ir`. Do **not** assume that hostname. After secrets/token are configured, use the connection's **آزمایش** action to reveal the hostname only (not the full URL). If it is not already allowed, add that exact hostname—no scheme, path, token, wildcard, IP address, or port—to both Worker variable `MESSENGER_EGRESS_EXTRA_HOSTS` and Supabase Edge variable `CLOUDFLARE_MESSENGER_PROXY_EXTRA_HOSTS`, comma-separated if more than one. The two lists must match. The gateway and Worker validate HTTPS and exact hostnames, including every redirect hop; arbitrary URLs and wildcard host entries are rejected.
+- Rubika's official [`requestSendFile`](https://rubika.ir/botapi/methods) and [`getFile`](https://rubika.ir/botapi/methods) return `upload_url` and `download_url`; the official docs do not promise these URLs use `botapi.rubika.ir`. Do **not** assume that hostname. The documented upload body is `multipart/form-data` with a `file` part. After secrets/token are configured, use the connection's **آزمایش** action to reveal the upload hostname only (not the full URL). A real file download may reveal a separate hostname in the error code. If a returned host is not already allowed, add that exact hostname—no scheme, path, token, wildcard, IP address, or port—to both Worker variable `MESSENGER_EGRESS_EXTRA_HOSTS` and Supabase Edge variable `CLOUDFLARE_MESSENGER_PROXY_EXTRA_HOSTS`, comma-separated if more than one. The two lists must match. Only public DNS hostnames are accepted; localhost/local/internal/test/invalid names and IPv4 literals are rejected. The gateway and Worker validate HTTPS and exact hostnames, including every redirect hop; arbitrary URLs and wildcard host entries are rejected. Rubika's documented `File`/`Video` maximum is 50 MB; `Voice` is MP3-only ([official enum](https://rubika.ir/botapi/models)).
 - Only GET and POST are accepted. GET media redirects are followed for at most three hops, with HTTPS and host allowlist validation on every hop; provider Authorization is stripped on unsafe cross-origin redirects.
 - The shared secret is checked with a constant-time comparison and is never forwarded upstream.
 - Request and response bodies are streamed; the Worker does not write message files to Assets, KV, D1, or R2.
@@ -59,15 +59,15 @@ These observations confirm that the existing Telegram daily-report path has reco
 ### Code and CI verified
 
 - The phase-1 branch includes the signed Cloudflare egress endpoint, bounded remote downloads, remote-only attachment metadata, regression assertions, and this setup guide.
-- The latest CI run completed successfully: unit tests, typecheck, lint, production build, Deno checks for the messenger gateway, and Cloudflare Worker dry run.
-- The separate Shipment Cost CI run also completed successfully.
+- The current PR includes regression checks for remote-only attachments, Rubika multipart upload/webhooks, exact media-host allowlists, streaming ceilings, and manager-only integration administration.
+- Before merge, confirm that both required GitHub Actions workflows are green on the exact current PR head; older green results do not validate later commits.
 
 ### Not yet complete — production blockers
 
 - The PR is still open and its changes have not been deployed.
 - Production secret configuration for the Worker and Edge Function has not been verified or performed through the available tools.
 - No live test has verified the new egress endpoint or remote-only attachment flow.
-- The gateway now uses Rubika's official `https://botapi.rubika.ir/v3/{token}/{method}` API for text, inbound `ReceiveUpdate`/`ReceiveInlineMessage` webhooks, and bounded remote-reference file transfers. The “آزمایش” action reveals the file-media hostname and whether the exact host is allowlisted, without exposing the full provider URL. Add a returned media hostname to both exact-host variables before live file transfers. Live token, webhook, media-host, and file round-trip tests remain required before calling Rubika production-ready.
+- The gateway now uses Rubika's official `https://botapi.rubika.ir/v3/{token}/{method}` API for text, inbound `ReceiveUpdate`/`ReceiveInlineMessage` webhooks, and bounded remote-reference file transfers. Inline-keypad callbacks are recorded as webhook interactions rather than being misrepresented as a new chat message. The “آزمایش” action reveals the upload hostname and whether the exact host is allowlisted, without exposing the full provider URL. Add a returned media hostname to both exact-host variables before live file transfers. Live token, webhook, media-host, and file round-trip tests remain required before calling Rubika production-ready.
 - Bale and WhatsApp have code paths, but no enabled production connections were found during the read-only check; live provider tests remain pending.
 
 Do not merge, apply the phase-1 migration, or deploy the Edge Function before the shared egress secret is set and a coordinated release is ready. The new function intentionally fails closed when proxy configuration is absent, and deploying it prematurely can interrupt current provider operations.
