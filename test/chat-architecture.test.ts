@@ -240,9 +240,9 @@ describe('chat architecture invariants',()=>{
 
   it('requires manager role for integration admin send and transfer endpoints',()=>{
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
-    expect(gateway).toContain('async function sendText(req:Request,p:Profile){\\n onlyManager(p);');
+    expect(gateway).toContain('async function sendText(req:Request,p:Profile){\n onlyManager(p);');
     expect(gateway).toContain('async function upload(req:Request,p:Profile,user:string,cid:string){onlyManager(p);');
-    expect(gateway).toContain('async function download(req:Request,p:Profile,id:string){\\n onlyManager(p);');
+    expect(gateway).toContain('async function download(req:Request,p:Profile,id:string){\n onlyManager(p);');
     expect(gateway).toContain('async function transfer(req:Request,p:Profile,user:string){onlyManager(p);');
   });
 
