@@ -267,9 +267,11 @@ describe('chat architecture invariants',()=>{
     expect(worker).toContain('allowedMessengerEgressHost(nextHost, env)');
     expect(worker).toContain('MESSENGER_EGRESS_EXTRA_HOSTS');
     expect(worker).toContain('exactExtraMessengerHosts');
-    expect(worker).toContain('!/.');
-    expect(worker).toContain('!/[.]');
+    expect(worker).toContain("if (host.endsWith('.')) return false;");
+    expect(worker).toContain('localhost|local|internal|test|invalid');
     expect(gateway).toContain('value.includes(".")');
+    expect(gateway).toContain('localhost|local|internal|test|invalid');
+    expect(gateway).toContain('!host.endsWith(".")');
     expect(worker).toContain("target.protocol !== 'https:'");
     expect(worker).toContain('new Response(upstream.body');
     expect(worker).toContain('Provider redirect host is not allowed');
