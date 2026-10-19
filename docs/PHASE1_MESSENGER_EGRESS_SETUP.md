@@ -4,7 +4,7 @@ This phase routes Telegram, Bale, Rubika and Meta Graph/WhatsApp requests made b
 
 ## Required secrets
 
-Generate one strong random value in a trusted terminal, for example with `openssl rand -base64 32`. Do not commit it or paste it into chat.
+Generate one strong random value of at least 32 characters in a trusted terminal, for example with `openssl rand -base64 32`. Both Worker and gateway reject shorter shared secrets. Do not commit it or paste it into chat.
 
 1. Set the Worker secret:
    ```sh
@@ -17,6 +17,8 @@ Generate one strong random value in a trusted terminal, for example with `openss
    supabase secrets set CLOUDFLARE_MESSENGER_PROXY_URL=https://darbandicommercial.ir/_internal/messenger-egress CLOUDFLARE_MESSENGER_PROXY_SECRET='<same-generated-value>'
    ```
    Run this against the already-linked production project only after reviewing the target project ID. Do not include the value in shell history where avoidable; use the dashboard secret editor if preferred.
+
+   The gateway accepts only the exact proxy URL `https://darbandicommercial.ir/_internal/messenger-egress` (HTTPS, no custom port, query, fragment or credentials). `CLOUDFLARE_MESSENGER_PROXY_EXTRA_HOSTS` is an optional comma-separated exact-host list; it must match Worker variable `MESSENGER_EGRESS_EXTRA_HOSTS`. These host-list variables are not secrets, but every entry is security-sensitive configuration and must contain verified public DNS hostnames only.
 
 3. Deploy the Worker and the `messenger-gateway` Edge Function from the reviewed phase-1 branch through the project's established release workflow. Do not deploy the branch to production before the checks pass.
 
