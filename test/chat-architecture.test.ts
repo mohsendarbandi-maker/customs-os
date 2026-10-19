@@ -238,6 +238,13 @@ describe('chat architecture invariants',()=>{
     expect(download).not.toContain('readBinary(');
   });
 
+  it('releases bounded and multipart readers on oversize or cancellation',()=>{
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(gateway).toContain('async function cancelResponseBody(response:Response)');
+    expect(gateway).toContain('if(total>max){try{await r.cancel();}catch{}try{r.releaseLock();}catch{}c.error(new Error("FILE_TOO_LARGE"));return;}');
+    expect(gateway).toContain('const hadReader=Boolean(r)');
+  });
+
   it('requires manager role for integration admin send and transfer endpoints',()=>{
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
     expect(gateway).toContain('async function sendText(req:Request,p:Profile){\n onlyManager(p);');
