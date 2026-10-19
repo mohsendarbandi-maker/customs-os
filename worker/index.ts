@@ -371,7 +371,15 @@ export default {
           const nextHost = next.hostname.toLowerCase();
           const nextAllowed = allowedMessengerEgressHost(nextHost, env);
           if (next.protocol !== 'https:' || next.username || next.password || next.port || next.hash || !nextAllowed) {
-            return json({ error: 'Provider redirect host is not allowed' }, 403);
+            await upstream.body?.cancel().catch(() => {});
+            return new Response(JSON.stringify({ error: 'Provider redirect host is not allowed' }), {
+              status: 403,
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store',
+                ...(!nextAllowed ? { 'X-Customs-OS-Blocked-Host': nextHost } : {}),
+              },
+            });
           }
           if (next.origin !== currentTarget.origin) {
             const currentHost = currentTarget.hostname.toLowerCase();
