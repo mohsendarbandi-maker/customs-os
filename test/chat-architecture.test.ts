@@ -294,6 +294,8 @@ describe('chat architecture invariants',()=>{
     expect(worker).toContain("target.protocol !== 'https:'");
     expect(worker).toContain('new Response(upstream.body');
     expect(worker).toContain('Provider redirect host is not allowed');
+    expect(worker).toContain('X-Customs-OS-Blocked-Host');
+    expect(gateway).toContain('response.headers.get("X-Customs-OS-Blocked-Host")');
     expect(worker).toContain("headers.delete('Authorization')");
     expect(worker).toContain("if (!(host === 'graph.facebook.com' || isMetaMediaHost(host))) headers.delete('Authorization')");
     expect(gateway).toContain('CLOUDFLARE_MESSENGER_PROXY_URL');
