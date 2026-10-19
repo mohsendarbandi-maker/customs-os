@@ -250,6 +250,8 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('mediaUploadHostAllowed');
     expect(gateway).toContain('add_exact_host_to_cloudflare_and_supabase_egress_allowlists');
     expect(gateway).toContain('async function rubikaWebhook');
+    expect(gateway).toContain('interactionRecorded:true');
+    expect(gateway).toContain('inline-'+ '');
     expect(gateway).toContain('rubika:{supported:true,text:true,inboundWebhook:true,media:true,maxUploadBytes:RUBIKA_FILE_LIMIT');
   });
 
