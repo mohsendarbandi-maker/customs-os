@@ -321,7 +321,7 @@ export default {
         for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
         return diff === 0;
       };
-      if (!expected || !equalSecret(expected, supplied)) {
+      if (!expected || expected.length < 32 || !equalSecret(expected, supplied)) {
         return json({ error: 'Unauthorized' }, 401);
       }
       const rawTarget = request.headers.get('x-customs-messenger-target-url') || '';
