@@ -400,6 +400,7 @@ export default {
         responseHeaders.delete('set-cookie');
         responseHeaders.delete('content-length');
         responseHeaders.delete('location');
+        responseHeaders.delete('X-Customs-OS-Blocked-Host');
         return new Response(upstream.body, {
           status: upstream.status,
           statusText: upstream.statusText,
