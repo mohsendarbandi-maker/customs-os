@@ -345,6 +345,8 @@ export default {
       headers.delete('content-length');
       headers.delete('x-customs-messenger-proxy-key');
       headers.delete('x-customs-messenger-target-url');
+      // Provider bearer credentials are only needed by Meta Graph/media; never forward them to bot APIs.
+      if (!(host === 'graph.facebook.com' || isMetaMediaHost(host))) headers.delete('Authorization');
       headers.delete('cookie');
       headers.delete('origin');
       headers.delete('referer');
