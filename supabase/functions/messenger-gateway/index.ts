@@ -12,7 +12,7 @@ const EGRESS_PROXY_URL = (Deno.env.get("CLOUDFLARE_MESSENGER_PROXY_URL") || "").
 const EGRESS_PROXY_SECRET = Deno.env.get("CLOUDFLARE_MESSENGER_PROXY_SECRET") || "";
 const EGRESS_EXTRA_HOSTS = new Set((Deno.env.get("CLOUDFLARE_MESSENGER_PROXY_EXTRA_HOSTS") || "")
  .split(",").map(value=>value.trim().toLowerCase())
- .filter(value=>value.length>0&&value.length<=253&&/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/.test(value)&&!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)));
+ .filter(value=>value.length>0&&value.length<=253&&value.includes(".")&&!/\.(?:localhost|local|internal|test|invalid)$/i.test(value)&&/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/.test(value)&&!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)));
 const BASE_PROVIDER_HOSTS = new Set(["api.telegram.org","tapi.bale.ai","botapi.rubika.ir","graph.facebook.com"]);
 const isMetaMediaHost = (host:string)=>host.endsWith(".fbsbx.com")||host.endsWith(".fbcdn.net")||host.endsWith(".whatsapp.net");
 function isAllowedProviderHost(value:string){const host=value.toLowerCase();return !host.endsWith(".")&&(BASE_PROVIDER_HOSTS.has(host)||isMetaMediaHost(host)||EGRESS_EXTRA_HOSTS.has(host));}
