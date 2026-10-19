@@ -300,6 +300,9 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('CLOUDFLARE_MESSENGER_PROXY_SECRET');
     expect(gateway).toContain('CLOUDFLARE_MESSENGER_PROXY_EXTRA_HOSTS');
     expect(gateway).toContain('assertProviderEndpoint(endpoint)');
+    expect(gateway).toContain('url.hostname.toLowerCase()!=="darbandicommercial.ir"');
+    expect(gateway).toContain('EGRESS_PROXY_SECRET.length<32');
+    expect(worker).toContain('expected.length < 32');
     expect(gateway).toContain('async function providerFetch(');
     expect(gateway).toContain('providerFetch(graphBase(c)');
     expect(gateway).not.toContain('fetch(botBase(c,await accessToken(c))+endpoint');
