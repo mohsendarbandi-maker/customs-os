@@ -159,8 +159,8 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
   const uploadUrl=String(requested.data?.upload_url||requested.upload_url||"");let target:URL;try{target=new URL(uploadUrl);}catch{throw new Error("RUBIKA_UPLOAD_URL_INVALID");}
   if(target.protocol!=="https:"||target.username||target.password||target.port||target.hash||!isAllowedProviderHost(target.hostname))throw new Error("RUBIKA_MEDIA_HOST_NOT_ALLOWLISTED_"+target.hostname.toLowerCase());
   const boundary="----CustomsOS"+token(16);
-  const prefix="--"+boundary+"\\r\\nContent-Disposition: form-data; name=\\"file\\"; filename=\\""+filename+"\\"\\r\\nContent-Type: "+mime+"\\r\\n\\r\\n";
-  const multipartBody=multipart(prefix,bounded(stream,max),"\\r\\n--"+boundary+"--\\r\\n");
+  const prefix="--"+boundary+"\r\nContent-Disposition: form-data; name=\"file\"; filename=\""+filename+"\"\r\nContent-Type: "+mime+"\r\n\r\n";
+  const multipartBody=multipart(prefix,bounded(stream,max),"\r\n--"+boundary+"--\r\n");
   const uploadResponse=await providerFetch(target.toString(),{method:"POST",headers:{"Content-Type":"multipart/form-data; boundary="+boundary},body:multipartBody});
   const uploadText=await uploadResponse.text();let uploaded:any={};try{uploaded=JSON.parse(uploadText);}catch{}const fileId=String(uploaded.data?.file_id||uploaded.file_id||"");if(!uploadResponse.ok||!fileId)throw new Error("RUBIKA_FILE_UPLOAD_FAILED");
   const sent=await apiJson(botBase(c,tokenValue)+"sendFile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:chat,file_id:fileId,text:filename})});const messageId=String(sent.data?.message_id||sent.message_id||sent.result?.message_id||"");if(!messageId)throw new Error("RUBIKA_FILE_SEND_FAILED");return {fileId,uniqueId:null,messageId,name:filename};
