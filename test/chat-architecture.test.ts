@@ -102,8 +102,46 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('security_status==="clean"');
     expect(gateway).toContain('startsWith("quarantine/")');
     expect(gateway).toContain('ATTACHMENT_NOT_CLEAN_OR_NOT_READY');
-    expect(scanner).toContain('security_status:"clean"');
-    expect(scanner).toContain('from("chat-files").move(quarantinePath,finalPath)');
+    expect(scanner).toContain('security_status: "clean"');
+    expect(scanner).toContain('from("chat-files").move(storagePath, finalPath)');
+    expect(scanner).toContain('scanChatFile(bytes,');
+    expect(scanner).toContain('/api/messenger/internal/scan-source/');
+  });
+
+  it('keeps new chat attachment binaries outside Supabase Storage',()=>{
+    const migration=read('supabase/migrations/20261019170000_messenger_remote_only_chat_attachments.sql');
+    const api=read('src/features/chat/api.ts');
+    const types=read('src/features/chat/types.ts');
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    const scanner=read('supabase/functions/scan-chat-file/index.ts');
+    expect(migration).toContain('drop policy if exists chat_files_insert_quarantine on storage.objects');
+    expect(migration).toContain('file_asset_id');
+    expect(api).not.toContain(".storage.from('chat-files').upload");
+    expect(api).toContain('/api/messenger/internal-chat-files/');
+    expect(api).toContain('/api/messenger/chat-attachments/');
+    expect(types).toContain('file_asset_id: string | null');
+    const inbound=gateway.slice(gateway.indexOf('async function inbound('),gateway.indexOf('async function processMessengerOutbox'));
+    expect(inbound).not.toContain('response.arrayBuffer()');
+    expect(inbound).not.toContain('.storage.from("chat-files").upload');
+    expect(inbound).toContain('storage_path:null,file_asset_id:fileAssetId');
+    expect(gateway).toContain('function internalScanSource');
+    expect(gateway).toContain('function downloadChatAttachment');
+    expect(gateway).toContain('a.file_asset_id');
+    expect(scanner).toContain('scanChatFile');
+    expect(scanner).toContain('remote-reference-and-legacy-storage');
+  });
+
+  it('scans uploaded files before sending them to the messenger archive',()=>{
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    const scanner=read('supabase/functions/_shared/chat-file-scanner.ts');
+    const api=read('src/features/chat/api.ts');
+    expect(gateway).toContain('scanChatFile(bytes,name,mime)');
+    expect(gateway).toContain('FILE_ARCHIVE_NOT_CONFIGURED');
+    expect(gateway).toContain('TG_DOWNLOAD_LIMIT');
+    expect(scanner).toContain('pdf_active:');
+    expect(scanner).toContain('path_traversal');
+    expect(api).toContain('FILE_ARCHIVE_NOT_CONFIGURED');
+    expect(api).toContain('downloadExternalAttachment');
   });
 
   it('uses a durable retry queue for internal-to-external text and file delivery',()=>{
@@ -186,6 +224,91 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('const terminal=code==="MESSAGE_NOT_ELIGIBLE_FOR_EXTERNAL_DELIVERY"||code==="DESTINATION_NO_LONGER_LINKED";');
     expect(gateway).toContain('status:terminal?"skipped":"failed"');
     expect(gateway).toContain('claimed:rows.length,sent,failed,skipped');
+  });
+
+  it('streams external file downloads with platform size ceilings and no full-response buffering',()=>{
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    const start=gateway.indexOf('async function download(req:Request');
+    const end=gateway.indexOf('async function transfer(',start);
+    const download=gateway.slice(start,end);
+    expect(download).toContain('const max=x.connection.platform==="whatsapp"?WA_DOCUMENT_LIMIT:x.connection.platform==="rubika"?RUBIKA_FILE_LIMIT:TG_DOWNLOAD_LIMIT;');
+    expect(download).toContain('new Response(bounded(f.response.body,max)');
+    expect(download).toContain('SOURCE_FILE_OVER_DOWNLOAD_LIMIT');
+    expect(download).not.toContain('arrayBuffer()');
+    expect(download).not.toContain('readBinary(');
+  });
+
+  it('releases bounded and multipart readers on oversize or cancellation',()=>{
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(gateway).toContain('async function cancelResponseBody(response:Response)');
+    expect(gateway).toContain('if(total>max){try{await r.cancel();}catch{}try{r.releaseLock();}catch{}c.error(new Error("FILE_TOO_LARGE"));return;}');
+    expect(gateway).toContain('const hadReader=Boolean(r)');
+  });
+
+  it('requires manager role for integration admin send and transfer endpoints',()=>{
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(gateway).toContain('async function sendText(req:Request,p:Profile){\n onlyManager(p);');
+    expect(gateway).toContain('async function upload(req:Request,p:Profile,user:string,cid:string){onlyManager(p);');
+    expect(gateway).toContain('async function download(req:Request,p:Profile,id:string){\n onlyManager(p);');
+    expect(gateway).toContain('async function transfer(req:Request,p:Profile,user:string){onlyManager(p);');
+  });
+
+  it('implements Rubika text messaging through its official Bot API and authenticates inbound updates',()=>{
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(gateway).toContain('https://botapi.rubika.ir/v3/');
+    expect(gateway).toContain('updateBotEndpoints');
+    expect(gateway).toContain('ReceiveInlineMessage');
+    expect(gateway).toContain('requestSendFile');
+    expect(gateway).toContain('name=\\"file\\"; filename=\\"');
+    expect(gateway).toContain('multipart/form-data; boundary=');
+    expect(gateway).toContain('RUBIKA_FILE_LIMIT');
+    expect(gateway).toContain('RUBIKA_DOWNLOAD_URL_INVALID');
+    expect(gateway).toContain('RUBIKA_MEDIA_HOST_NOT_ALLOWLISTED_');
+    expect(gateway).toContain('mediaUploadHostAllowed');
+    expect(gateway).toContain('add_exact_host_to_cloudflare_and_supabase_egress_allowlists');
+    expect(gateway).toContain('async function rubikaWebhook');
+    expect(gateway).toContain('interactionRecorded:true');
+    expect(gateway).toContain('const eventId=inline?"inline-"');
+    expect(gateway).toContain('rubika:{supported:true,text:true,inboundWebhook:true,media:true,maxUploadBytes:RUBIKA_FILE_LIMIT');
+  });
+
+  it('routes messenger provider egress through a signed Cloudflare allowlist proxy',()=>{
+    const worker=read('worker/index.ts');
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    expect(worker).toContain("url.pathname === '/_internal/messenger-egress'");
+    expect(worker).toContain('x-customs-messenger-proxy-key');
+    expect(worker).toContain("'api.telegram.org'");
+    expect(worker).toContain("'botapi.rubika.ir'");
+    expect(worker).toContain("'tapi.bale.ai'");
+    expect(worker).toContain("'graph.facebook.com'");
+    expect(worker).toContain('function allowedMessengerEgressHost');
+    expect(worker).toContain('allowedMessengerEgressHost(host, env)');
+    expect(worker).toContain('allowedMessengerEgressHost(nextHost, env)');
+    expect(worker).toContain('MESSENGER_EGRESS_EXTRA_HOSTS');
+    expect(worker).toContain('exactExtraMessengerHosts');
+    expect(worker).toContain("if (host.endsWith('.')) return false;");
+    expect(worker).toContain('localhost|local|internal|test|invalid');
+    expect(gateway).toContain('value.includes(".")');
+    expect(gateway).toContain('localhost|local|internal|test|invalid');
+    expect(gateway).toContain('!host.endsWith(".")');
+    expect(worker).toContain("target.protocol !== 'https:'");
+    expect(worker).toContain('new Response(upstream.body');
+    expect(worker).toContain('Provider redirect host is not allowed');
+    expect(worker).toContain('X-Customs-OS-Blocked-Host');
+    expect(worker).toContain("responseHeaders.delete('X-Customs-OS-Blocked-Host')");
+    expect(gateway).toContain('response.headers.get("X-Customs-OS-Blocked-Host")');
+    expect(worker).toContain("headers.delete('Authorization')");
+    expect(worker).toContain("if (!(host === 'graph.facebook.com' || isMetaMediaHost(host))) headers.delete('Authorization')");
+    expect(gateway).toContain('CLOUDFLARE_MESSENGER_PROXY_URL');
+    expect(gateway).toContain('CLOUDFLARE_MESSENGER_PROXY_SECRET');
+    expect(gateway).toContain('CLOUDFLARE_MESSENGER_PROXY_EXTRA_HOSTS');
+    expect(gateway).toContain('assertProviderEndpoint(endpoint)');
+    expect(gateway).toContain('url.hostname.toLowerCase()!=="darbandicommercial.ir"');
+    expect(gateway).toContain('EGRESS_PROXY_SECRET.length<32');
+    expect(worker).toContain('expected.length < 32');
+    expect(gateway).toContain('async function providerFetch(');
+    expect(gateway).toContain('providerFetch(graphBase(c)');
+    expect(gateway).not.toContain('fetch(botBase(c,await accessToken(c))+endpoint');
   });
 
 });

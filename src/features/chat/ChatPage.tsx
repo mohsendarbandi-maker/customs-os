@@ -7,7 +7,7 @@ import{makeClientId}from'../../lib/clientId';
 import{readDraftValue,removeDraftValue,writeDraftValue}from'../../lib/draftStorage';
 import{subscribeOfflineQueue,flushOfflineQueue,isChatQueueItem,chatClientUuid,retryChatMessage,type QueuedRpc}from'../../lib/offlineQueue';
 import{enableChatPush,hasChatPushSubscription}from'./push';
-import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,getMessageById,listMessageReceipts,listMessages,listMessagesAfter,listOrgConnections,markChatFocus,markDelivered,markPlayed,markRead,clearChatFocus,searchChat,sendFileMessage,sendMessage,setMessageMentions,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
+import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,getMessageById,listMessageReceipts,listMessages,listMessagesAfter,listOrgConnections,markChatFocus,markDelivered,markPlayed,markRead,clearChatFocus,searchChat,sendFileMessage,downloadExternalAttachment,sendMessage,setMessageMentions,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
 import{supabase}from'../../lib/supabase';
 import type{ChatConversation,ChatMessage}from'./types';
 import{ChatBrandLogo}from'./ChatBrandLogo';
@@ -349,7 +349,7 @@ export const ChatPage:React.FC=()=>{
 
  const chooseAttachment=async(file?:File)=>{
   if(!file||!selectedId||!profile?.organization_id||attachmentBusy)return;
-  if(file.size>50*1024*1024){setError('حجم فایل بیش از ۵۰MB است.');return}
+  if(file.size>20*1024*1024){setError('حجم فایل چت حداکثر ۲۰MB است.');return}
   setAttachmentBusy(true);setMediaState('preparing');
   try{
    setMediaState('uploading');await sendFileMessage(selectedId,profile.organization_id,file,'file');setMediaState('committed');
@@ -370,7 +370,7 @@ export const ChatPage:React.FC=()=>{
    recorder.onstop=async()=>{
     try{
      setMediaState('preparing');stream.getTracks().forEach(t=>t.stop());const blob=new Blob(voiceChunks.current,{type:mime||'audio/mp4'});voiceChunks.current=[];recorderRef.current=null;streamRef.current=null;setRecording(false);
-     if(blob.size<1000){setError('صدای قابل استفاده‌ای ضبط نشد.');return}
+     if(blob.size<1000){setError('صدای قابل استفاده‌ای ضبط نشد.');return}if(blob.size>20*1024*1024){setError('حجم پیام صوتی چت حداکثر ۲۰MB است.');return}
      setAttachmentBusy(true);setMediaState('uploading');const ext=(blob.type||'audio/mp4').includes('webm')?'webm':'mp4';
      await sendFileMessage(selectedId,profile.organization_id,new File([blob],`voice-${Date.now()}.${ext}`,{type:blob.type||'audio/mp4'}),'voice');
      setMediaState('committed');await loadConversation(selectedId,false);await refresh();
@@ -561,7 +561,7 @@ export const ChatPage:React.FC=()=>{
           {!own&&(selected.type!=='direct'||Boolean(m.external_sender_name))&&m.sender_name&&document.querySelector<HTMLElement>('.chat-standalone')?.dataset.chatShowSenderNames!=='false'&&<div className="text-[10px] font-bold mb-1 app-muted">{m.sender_name}</div>}
           {quoted&&<button type="button" className="w-full text-right mb-2 px-2 py-1 rounded-lg border border-current/20 text-[10px] opacity-80" onClick={()=>document.getElementById('msg-'+quoted.id)?.scrollIntoView({behavior:'smooth',block:'center'})}>{quoted.body||'پیام پیوست‌دار'}</button>}
           {deleted?<div className="text-sm italic opacity-80">این پیام حذف شده است.</div>:m.body&&<div className="chat-message-text text-[17px] leading-8 whitespace-pre-wrap break-words">{m.body}</div>}
-          {!deleted&&(m.attachments??[]).map(a=>a.security_status==='clean'&&a.url?(a.mime_type.startsWith('audio/')?<audio key={a.id} controls src={a.url} onPlay={()=>{if(!own)void markPlayed(m.id).catch(()=>{})}} className="mt-2 w-full max-w-[280px]" aria-label="پیام صوتی"/>:<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline"><Paperclip size={14}/><span className="truncate">{a.original_name}</span></a>):<div key={a.id} className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs">{a.security_status==='blocked'?'فایل مسدود شد.':'فایل در حال بررسی امنیتی است…'}</div>)}
+          {!deleted&&(m.attachments??[]).map(a=>a.security_status==='clean'&&a.file_asset_id?<button key={a.id} type="button" onClick={()=>void downloadExternalAttachment(a.id,a.original_name).catch(e=>setError(err(e)))} className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline text-right"><Paperclip size={14}/><span className="truncate">{a.original_name}</span><span className="shrink-0 opacity-70">دریافت امن</span></button>:a.security_status==='clean'&&a.url?(a.mime_type.startsWith('audio/')?<audio key={a.id} controls src={a.url} onPlay={()=>{if(!own)void markPlayed(m.id).catch(()=>{})}} className="mt-2 w-full max-w-[280px]" aria-label="پیام صوتی"/>:<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline"><Paperclip size={14}/><span className="truncate">{a.original_name}</span></a>):<div key={a.id} className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs">{a.security_status==='blocked'?'فایل مسدود شد.':'فایل در حال بررسی امنیتی است…'}</div>)}
           {(m.reactions??[]).length>0&&<div className="flex flex-wrap gap-1 mt-2">{Array.from(new Set((m.reactions??[]).map(r=>r.emoji))).map(emoji=><button type="button" key={emoji} onClick={()=>void react(m,emoji)} className="rounded-full px-2 py-1 text-[11px] bg-black/10 dark:bg-white/10">{emoji} {((m.reactions??[]).filter(r=>r.emoji===emoji)).length}</button>)}</div>}
           <div className={"flex items-center justify-end gap-1 mt-1 text-[11px] "+(own?'text-white/75':'app-muted')}>
            {m.edited_at&&<span>ویرایش‌شده</span>}<span>{chatTime(m.created_at)}</span>

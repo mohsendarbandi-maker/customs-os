@@ -1,14 +1,247 @@
-// Deployed Edge Function: scan-chat-file. Static defense-in-depth scanner; no external AV dependency.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import {createClient} from "jsr:@supabase/supabase-js@2";
-const admin=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-const secret=async()=>{const {data,error}=await admin.rpc("internal_get_reminder_secret",{p_name:"file_scan_cron_secret"});if(error)throw error;return data as string|null};
-const json=(d:unknown,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"content-type":"application/json"}});
-const ext=(n:string)=>(n.toLowerCase().match(/\.([a-z0-9]{1,12})$/)?.[1]??"");
-const blocked=new Set(["exe","dll","com","scr","msi","msix","apk","ipa","jar","class","wasm","js","mjs","cjs","ts","tsx","jsx","php","phtml","asp","aspx","jsp","jspx","cgi","pl","py","rb","sh","bash","bat","cmd","ps1","vbs","vbe","wsf","hta","html","htm","svg"]);
-const txt=(b:Uint8Array)=>new TextDecoder("latin1").decode(b);
-const u16=(b:Uint8Array,o:number)=>new DataView(b.buffer,b.byteOffset,b.byteLength).getUint16(o,true);
-const u32=(b:Uint8Array,o:number)=>new DataView(b.buffer,b.byteOffset,b.byteLength).getUint32(o,true);
-function magic(b:Uint8Array){if(b[0]===0x4d&&b[1]===0x5a)return"exe";if(b[0]===0x7f&&b[1]===0x45&&b[2]===0x4c&&b[3]===0x46)return"elf";if(txt(b.slice(0,5))==="%PDF-")return"pdf";if(b[0]===0x50&&b[1]===0x4b&&b[2]===0x03&&b[3]===0x04)return"zip";if(b[0]===0x89&&b[1]===0x50&&b[2]===0x4e&&b[3]===0x47)return"png";if(b[0]===0xff&&b[1]===0xd8&&b[2]===0xff)return"jpeg";return"unknown"}
-function scan(b:Uint8Array,name:string,mime:string){const reasons:string[]=[],e=ext(name),m=magic(b);if(b.length===0)reasons.push("empty");if(b.length>50*1024*1024)reasons.push("size");if(blocked.has(e)||["exe","elf"].includes(m))reasons.push("executable");if(m==="pdf"){const h=txt(b.slice(0,2*1024*1024));for(const x of ["/JavaScript","/JS","/OpenAction","/AA","/Launch","/EmbeddedFile"])if(h.includes(x))reasons.push("pdf_active:"+x)}if(m==="zip"){const end=Math.max(0,b.length-65557);let at=-1;for(let i=b.length-22;i>=end;i--)if(u32(b,i)===0x06054b50){at=i;break}if(at<0)reasons.push("invalid_zip");else{const n=u16(b,at+10),size=u32(b,at+12),off=u32(b,at+16);if(n>100||off+size>b.length)reasons.push("archive_limit");else{let p=off,total=0;for(let i=0;i<n;i++){if(u32(b,p)!==0x02014b50){reasons.push("invalid_entry");break}const flags=u16(b,p+8),un=u32(b,p+24),fn=u16(b,p+28),ex=u16(b,p+30),co=u16(b,p+32),name0=txt(b.slice(p+46,p+46+fn));if(flags&1)reasons.push("encrypted");if(name0.includes("..")||name0.startsWith("/")||name0.includes("\\")||name0.includes(":"))reasons.push("path_traversal");if(/vbaProject\.bin$/i.test(name0))reasons.push("office_macro");total+=un;if(total>250*1024*1024)reasons.push("decompression_limit");p+=46+fn+ex+co}}}}if(["docm","xlsm","pptm","xlam","xltm","potm"].includes(e))reasons.push("office_macro");return{clean:reasons.length===0,magic:m,extension:e,mime,reasons}}
-Deno.serve(async req=>{if(req.method!=="POST")return json({error:"method_not_allowed"},405);const expected=await secret();if(!expected||req.headers.get("x-file-scan-cron-secret")!==expected)return json({error:"unauthorized"},401);try{const {data,error}=await admin.from("file_scans").select("id,attachment_id").eq("status","scanning").order("created_at").limit(25);if(error)throw error;let processed=0;for(const s of data??[]){const {data:a}=await admin.from("chat_attachments").select("id,organization_id,conversation_id,storage_path,original_name,mime_type").eq("id",s.attachment_id).maybeSingle();if(!a)continue;const quarantinePath=String(a.storage_path||"");if(!quarantinePath.startsWith("quarantine/")){await admin.from("file_scans").update({status:"blocked",provider:"local_static",local_result:{clean:false,reasons:["invalid_storage_path"]},completed_at:new Date().toISOString()}).eq("id",s.id);continue;}const {data:file}=await admin.storage.from("chat-files").download(quarantinePath);if(!file)continue;const b=new Uint8Array(await file.arrayBuffer()),dig=await crypto.subtle.digest("SHA-256",b),sha=Array.from(new Uint8Array(dig)).map(x=>x.toString(16).padStart(2,"0")).join(""),r=scan(b,a.original_name,a.mime_type);if(r.clean){const finalPath=quarantinePath.replace(/^quarantine\//,"");const moved=await admin.storage.from("chat-files").move(quarantinePath,finalPath);if(moved.error){await admin.from("file_scans").update({status:"failed",sha256:sha,provider:"local_static",local_result:{...r,move_error:moved.error.message},completed_at:new Date().toISOString()}).eq("id",s.id);continue;}await admin.from("chat_attachments").update({storage_path:finalPath,security_status:"clean",security_checked_at:new Date().toISOString(),security_error:null}).eq("id",a.id);}else{await admin.from("chat_attachments").update({security_status:"blocked",security_checked_at:new Date().toISOString(),security_error:JSON.stringify(r.reasons)}).eq("id",a.id);}await admin.from("file_scans").update({status:r.clean?"clean":"blocked",sha256:sha,provider:"local_static",local_result:r,completed_at:new Date().toISOString()}).eq("id",s.id);processed++}return json({ok:true,processed})}catch(e){return json({ok:false,error:e instanceof Error?e.message:"scanner_failed"},500)}});
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { scanChatFile } from "../_shared/chat-file-scanner.ts";
+
+const SB = Deno.env.get("SUPABASE_URL") || "";
+const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const PUBLIC_BASE = (Deno.env.get("CUSTOMS_PUBLIC_BASE_URL") || "https://darbandicommercial.ir").replace(/\/+$/, "");
+const admin = createClient(SB, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
+const MAX_SCAN_BYTES = 50 * 1024 * 1024;
+
+const json = (d: unknown, s = 200) => new Response(JSON.stringify(d), {
+  status: s,
+  headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+});
+
+async function expectedSecret() {
+  const { data, error } = await admin.rpc("internal_get_reminder_secret", { p_name: "file_scan_cron_secret" });
+  if (error) throw error;
+  return typeof data === "string" ? data : null;
+}
+
+async function readBounded(stream: ReadableStream<Uint8Array>, max: number) {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    let finished = false;
+    while (!finished) {
+      const part = await reader.read();
+      if (part.done) { finished = true; continue; }
+      total += part.value.byteLength;
+      if (total > max) {
+        await reader.cancel();
+        throw new Error("SOURCE_FILE_OVER_SCANNER_LIMIT");
+      }
+      chunks.push(part.value);
+    }
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+async function markBlocked(scanId: string, attachment: any, provider: string, reasons: string[]) {
+  const now = new Date().toISOString();
+  await admin.from("chat_attachments").update({
+    security_status: "blocked",
+    security_checked_at: now,
+    security_error: JSON.stringify(reasons).slice(0, 4000),
+  }).eq("id", attachment.id).eq("organization_id", attachment.organization_id);
+  await admin.from("file_scans").update({
+    status: "blocked", provider, local_result: { clean: false, reasons },
+    completed_at: now,
+  }).eq("id", scanId);
+}
+
+Deno.serve(async (req) => {
+  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+  try {
+    const expected = await expectedSecret();
+    if (!expected || req.headers.get("x-file-scan-cron-secret") !== expected) {
+      return json({ error: "unauthorized" }, 401);
+    }
+
+    const { data: scans, error: scansError } = await admin.from("file_scans")
+      .select("id,attachment_id").eq("status", "scanning").order("created_at").limit(20);
+    if (scansError) throw scansError;
+
+    let processed = 0, blocked = 0, unavailable = 0;
+    for (const scan of scans ?? []) {
+      const { data: attachment, error: attachmentError } = await admin.from("chat_attachments")
+        .select("id,organization_id,conversation_id,storage_path,file_asset_id,original_name,mime_type,size_bytes,security_status")
+        .eq("id", scan.attachment_id).maybeSingle();
+      if (attachmentError) {
+        unavailable++;
+        continue;
+      }
+      if (!attachment) {
+        await admin.from("file_scans").update({
+          status: "blocked", provider: "local_static",
+          local_result: { clean: false, reasons: ["attachment_missing"] },
+          completed_at: new Date().toISOString(),
+        }).eq("id", scan.id);
+        blocked++;
+        continue;
+      }
+      if (attachment.security_status === "clean") {
+        await admin.from("file_scans").update({
+          status: "clean", provider: "local_static",
+          local_result: { clean: true, reasons: ["already_scanned_at_ingress"] },
+          completed_at: new Date().toISOString(),
+        }).eq("id", scan.id);
+        processed++;
+        continue;
+      }
+      if (attachment.security_status === "blocked") {
+        await admin.from("file_scans").update({
+          status: "blocked", provider: "local_static",
+          local_result: { clean: false, reasons: ["attachment_already_blocked"] },
+          completed_at: new Date().toISOString(),
+        }).eq("id", scan.id);
+        blocked++;
+        continue;
+      }
+
+      let bytes: Uint8Array;
+      let isStoredQuarantine = false;
+      const storagePath = String(attachment.storage_path || "");
+      try {
+        if (storagePath.startsWith("quarantine/")) {
+          isStoredQuarantine = true;
+          const { data: file, error: fileError } = await admin.storage.from("chat-files").download(storagePath);
+          if (fileError || !file) throw new Error("QUARANTINE_FILE_UNAVAILABLE");
+          if (file.size > MAX_SCAN_BYTES) throw new Error("SOURCE_FILE_OVER_SCANNER_LIMIT");
+          bytes = new Uint8Array(await file.arrayBuffer());
+          if (bytes.byteLength > MAX_SCAN_BYTES) throw new Error("SOURCE_FILE_OVER_SCANNER_LIMIT");
+        } else if (attachment.file_asset_id && storagePath === "") {
+          // Remote file payload is streamed through the first-party Cloudflare Worker.
+          // The provider's media URL and token never reach the browser or database.
+          const source = await fetch(PUBLIC_BASE + "/api/messenger/internal/scan-source/" + encodeURIComponent(String(attachment.file_asset_id)), {
+            method: "GET",
+            headers: { "x-file-scan-cron-secret": expected },
+            redirect: "manual",
+            cache: "no-store",
+          });
+          if (!source.ok || !source.body) {
+            if (source.status === 413) {
+              await markBlocked(scan.id, attachment, "local_static", ["SOURCE_FILE_OVER_SCANNER_LIMIT"]);
+              blocked++;
+            } else {
+              // Provider/network/configuration failures are not malware verdicts.
+              // Keep status=scanning so the next scheduled scan can retry.
+              await admin.from("file_scans").update({
+                provider: "remote_unavailable",
+                local_result: { clean: false, reasons: ["REMOTE_SCAN_SOURCE_UNAVAILABLE", "http_" + source.status] },
+              }).eq("id", scan.id);
+              unavailable++;
+            }
+            continue;
+          }
+          const length = Number(source.headers.get("content-length") || 0);
+          if (length > MAX_SCAN_BYTES) {
+            await source.body.cancel();
+            await markBlocked(scan.id, attachment, "local_static", ["SOURCE_FILE_OVER_SCANNER_LIMIT"]);
+            blocked++;
+            continue;
+          }
+          bytes = await readBounded(source.body, MAX_SCAN_BYTES);
+        } else {
+          await markBlocked(scan.id, attachment, "local_static", ["invalid_attachment_source"]);
+          blocked++;
+          continue;
+        }
+      } catch (error) {
+        const code = error instanceof Error ? error.message : "SOURCE_READ_FAILED";
+        if (code === "SOURCE_FILE_OVER_SCANNER_LIMIT") {
+          await markBlocked(scan.id, attachment, "local_static", [code]);
+          blocked++;
+        } else {
+          // Transient provider failures remain pending and visible as unscanned.
+          await admin.from("file_scans").update({
+            provider: "remote_unavailable",
+            local_result: { clean: false, reasons: [code] },
+          }).eq("id", scan.id);
+          unavailable++;
+        }
+        continue;
+      }
+
+      const digest = await crypto.subtle.digest("SHA-256", bytes.buffer as ArrayBuffer);
+      const sha256 = Array.from(new Uint8Array(digest)).map((x) => x.toString(16).padStart(2, "0")).join("");
+      const result = scanChatFile(bytes, String(attachment.original_name || "document.bin"), String(attachment.mime_type || "application/octet-stream"));
+      const now = new Date().toISOString();
+
+      if (result.clean && isStoredQuarantine) {
+        const finalPath = storagePath.replace(/^quarantine\//, "");
+        const moved = await admin.storage.from("chat-files").move(storagePath, finalPath);
+        if (moved.error) {
+          await markBlocked(scan.id, attachment, "local_static", ["quarantine_commit_failed"]);
+          blocked++;
+          continue;
+        }
+        const { error: updateError } = await admin.from("chat_attachments").update({
+          storage_path: finalPath, security_status: "clean", security_checked_at: now, security_error: null,
+        }).eq("id", attachment.id);
+        if (updateError) {
+          await admin.storage.from("chat-files").move(finalPath, storagePath);
+          await markBlocked(scan.id, attachment, "local_static", ["attachment_security_state_update_failed"]);
+          blocked++;
+          continue;
+        }
+      } else if (result.clean) {
+        const { error: updateError } = await admin.from("chat_attachments").update({
+          security_status: "clean", security_checked_at: now, security_error: null,
+        }).eq("id", attachment.id).eq("organization_id", attachment.organization_id);
+        if (updateError) {
+          await markBlocked(scan.id, attachment, "local_static", ["attachment_security_state_update_failed"]);
+          blocked++;
+          continue;
+        }
+        if (attachment.file_asset_id) {
+          const { data: fileAsset, error: metaReadError } = await admin.from("file_assets")
+            .select("metadata").eq("id", attachment.file_asset_id).eq("organization_id", attachment.organization_id).maybeSingle();
+          if (metaReadError) {
+            console.error("[scan-chat-file] metadata read failed", metaReadError.message);
+          } else {
+            const oldMetadata = fileAsset?.metadata && typeof fileAsset.metadata === "object" && !Array.isArray(fileAsset.metadata)
+              ? fileAsset.metadata as Record<string, unknown> : {};
+            const { error: hashError } = await admin.from("file_assets")
+              .update({ sha256, metadata: { ...oldMetadata, securityScan: { provider: "local_static", clean: true, reasons: result.reasons, magic: result.magic } } })
+              .eq("id", attachment.file_asset_id).eq("organization_id", attachment.organization_id);
+            if (hashError) console.error("[scan-chat-file] metadata hash update failed", hashError.message);
+          }
+        }
+      } else {
+        await markBlocked(scan.id, attachment, "local_static", result.reasons);
+        blocked++;
+        await admin.from("file_scans").update({ sha256, local_result: result }).eq("id", scan.id);
+        processed++;
+        continue;
+      }
+
+      const { error: scanUpdateError } = await admin.from("file_scans").update({
+        status: "clean", sha256, provider: "local_static", local_result: result, completed_at: now,
+      }).eq("id", scan.id);
+      if (scanUpdateError) {
+        // Fail closed: attachment must not remain available if the audit row did not commit.
+        await admin.from("chat_attachments").update({
+          security_status: "scanning", security_checked_at: null, security_error: "scan_audit_commit_failed",
+        }).eq("id", attachment.id);
+        unavailable++;
+        continue;
+      }
+      processed++;
+    }
+    return json({ ok: true, processed, blocked, unavailable, mode: "remote-reference-and-legacy-storage" });
+  } catch (error) {
+    console.error("[scan-chat-file] failed", error instanceof Error ? error.message : String(error));
+    return json({ ok: false, error: "scan_failed" }, 500);
+  }
+});

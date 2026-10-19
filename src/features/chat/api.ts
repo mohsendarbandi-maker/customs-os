@@ -106,7 +106,7 @@ async function enrichMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
     supabase
       .from('chat_attachments')
       .select(
-        'id,message_id,storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform,security_status,security_checked_at,security_error',
+        'id,message_id,file_asset_id,storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform,security_status,security_checked_at,security_error',
       )
       .in('message_id', ids)
       .is('deleted_at', null),
@@ -430,6 +430,33 @@ export async function createConversation(input: {
   return unwrap(result);
 }
 
+function messengerFileError(code: string): Error {
+  const messages: Record<string, string> = {
+    FILE_ARCHIVE_NOT_CONFIGURED: 'برای ارسال پیوست در چت، ابتدا در تنظیمات پیام‌رسان یک مقصد «آرشیو فایل» تلگرام تعریف کنید.',
+    FILE_ARCHIVE_AMBIGUOUS: 'بیش از یک مقصد آرشیو فایل فعال است؛ فقط یک مقصد تلگرام را فعال نگه دارید.',
+    FILE_ARCHIVE_MUST_BE_TELEGRAM: 'آرشیو فایل پیوست‌های چت باید یک اتصال تلگرام باشد.',
+    FILE_REJECTED_BY_SECURITY_SCAN: 'فایل به‌دلیل بررسی امنیتی ارسال نشد.',
+    FILE_TOO_LARGE_FOR_CHAT_ARCHIVE: 'حجم فایل برای آرشیو تلگرام حداکثر ۲۰ مگابایت است.',
+    CONVERSATION_ACCESS_DENIED: 'شما به این گفت‌وگو دسترسی ندارید.',
+    CHAT_MESSAGE_NOT_FOUND: 'پیام پیوست پیدا نشد؛ دوباره تلاش کنید.',
+    SOURCE_ATTACHMENT_NOT_AVAILABLE: 'فایل اصلی در پیام‌رسان پیدا نشد.',
+    ATTACHMENT_BLOCKED_BY_SECURITY_SCAN: 'این فایل به‌دلیل بررسی امنیتی مسدود شده است.',
+    ATTACHMENT_NOT_CLEAN_OR_NOT_READY: 'فایل هنوز تأیید امنیتی نشده است.',
+    SOURCE_FILE_OVER_DOWNLOAD_LIMIT: 'این فایل از سقف دریافت فعلی پیام‌رسان مبدأ بزرگ‌تر است.',
+    FILE_ARCHIVE_LOOKUP_FAILED: 'تنظیمات آرشیو فایل خوانده نشد.',
+  };
+  return new Error(messages[code] || code || 'عملیات فایل انجام نشد.');
+}
+
+async function responseError(response: Response): Promise<Error> {
+  let code = 'درگاه فایل پاسخ معتبری نداد.';
+  try {
+    const body = await response.json() as { error?: unknown };
+    if (typeof body.error === 'string') code = body.error;
+  } catch {}
+  return messengerFileError(code);
+}
+
 export async function sendFileMessage(
   conversationId: string,
   organizationId: string,
@@ -448,42 +475,61 @@ export async function sendFileMessage(
   }, { durable: false });
 
   const message = result.data as ChatMessage;
-
-  const objectId = makeClientId();
-  const storagePath = `quarantine/${organizationId}/${conversationId}/${objectId}`;
-
   try {
-    const upload = await supabase.storage.from('chat-files').upload(storagePath, file, {
-      contentType: file.type || 'application/octet-stream',
-      cacheControl: '3600',
-      upsert: false,
-    });
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (sessionError || !accessToken) throw new Error('نشست ورود معتبر نیست؛ دوباره وارد سامانه شوید.');
 
-    if (upload.error) throw new Error(upload.error.message);
-
-    const attachment = await supabase.rpc('chat_register_attachment', {
-      p_conversation_id: conversationId,
-      p_message_id: message.id,
-      p_storage_path: storagePath,
-      p_original_name: file.name,
-      p_mime_type: file.type || 'application/octet-stream',
-      p_size_bytes: file.size,
-      p_duration_seconds: null,
-      p_waveform: null,
-      p_thumbnail_path: null,
-    });
-
-    if (attachment.error) throw new Error(attachment.error.message);
-
+    const response = await fetch(
+      '/api/messenger/internal-chat-files/' + encodeURIComponent(conversationId) + '/' + encodeURIComponent(message.id) +
+        '?organizationId=' + encodeURIComponent(organizationId),
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + accessToken,
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name),
+          'x-file-size': String(file.size),
+        },
+        body: file,
+        cache: 'no-store',
+      },
+    );
+    if (!response.ok) throw await responseError(response);
+    const body = await response.json() as { ok?: boolean; error?: string };
+    if (!body.ok) throw messengerFileError(body.error || 'ارسال فایل تأیید نشد.');
     return message;
   } catch (error) {
-    try {
-      await supabase.storage.from('chat-files').remove([storagePath]);
-    } catch {}
-    try {
-      await deleteForAll(message.id);
-    } catch {}
+    try { await deleteForAll(message.id); } catch {}
     throw error;
+  }
+}
+
+export async function downloadExternalAttachment(attachmentId: string, originalName: string): Promise<void> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (sessionError || !accessToken) throw new Error('نشست ورود معتبر نیست؛ دوباره وارد سامانه شوید.');
+
+  const response = await fetch('/api/messenger/chat-attachments/' + encodeURIComponent(attachmentId) + '/download', {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + accessToken },
+    cache: 'no-store',
+  });
+  if (!response.ok) throw await responseError(response);
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = originalName.split('/').join('_').split(String.fromCharCode(92)).join('_').split(String.fromCharCode(13)).join('_').split(String.fromCharCode(10)).join('_') || 'attachment.bin';
+    link.rel = 'noopener';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } finally {
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   }
 }
 

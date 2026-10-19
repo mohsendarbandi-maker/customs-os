@@ -76,10 +76,11 @@ export type ChatMessage = {
 export type ChatAttachment = {
   id: string;
   message_id: string;
-  storage_path: string;
+  file_asset_id: string | null;
+  storage_path: string | null;
   original_name: string;
   mime_type: string;
-  size_bytes: number;
+  size_bytes: number | null;
   duration_seconds: number | null;
   waveform: unknown;
   security_status: string;

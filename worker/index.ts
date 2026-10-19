@@ -4,6 +4,9 @@ export interface Env {
   SUPABASE_ANON_KEY?: string;
   TURN_API_TOKEN_V2?: string;
   TURN_KEY_ID_V2?: string;
+  MESSENGER_EGRESS_SECRET?: string;
+  /** Comma-separated exact HTTPS hostnames returned by provider media APIs, manually reviewed. No wildcards. */
+  MESSENGER_EGRESS_EXTRA_HOSTS?: string;
 }
 
 const BUILD_SIGNATURE = '20261013-reminders-list-first-teal-theme';
@@ -17,6 +20,25 @@ const EDGE_FUNCTIONS = new Set([
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 });
+
+const BASE_MESSENGER_HOSTS = new Set([
+  'api.telegram.org', 'botapi.rubika.ir', 'tapi.bale.ai', 'graph.facebook.com',
+]);
+const isMetaMediaHost = (host: string) => host.endsWith('.fbsbx.com') ||
+  host.endsWith('.fbcdn.net') || host.endsWith('.whatsapp.net');
+function exactExtraMessengerHosts(env: Env): Set<string> {
+  return new Set((env.MESSENGER_EGRESS_EXTRA_HOSTS || '').split(',')
+    .map(value => value.trim().toLowerCase())
+    .filter(value => value.length > 0 && value.length <= 253 && value.includes('.') &&
+      !/\.(?:localhost|local|internal|test|invalid)$/i.test(value) &&
+      /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/.test(value) &&
+      !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)));
+}
+function allowedMessengerEgressHost(hostValue: string, env: Env): boolean {
+  const host = hostValue.toLowerCase();
+  if (host.endsWith('.')) return false;
+  return BASE_MESSENGER_HOSTS.has(host) || isMetaMediaHost(host) || exactExtraMessengerHosts(env).has(host);
+}
 
 
 type ExternalJson = Record<string, any>;
@@ -282,6 +304,114 @@ async function serveMaritimeConditions(request: Request): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // Signed server-to-server egress for messenger provider APIs. This endpoint
+    // is not a general-purpose proxy: only explicit provider hosts are allowed,
+    // credentials are never forwarded to the destination except provider auth,
+    // and responses are streamed without caching or binary buffering.
+    if (url.pathname === '/_internal/messenger-egress') {
+      if (request.method !== 'GET' && request.method !== 'POST') {
+        return json({ error: 'Method not allowed' }, 405);
+      }
+      const expected = env.MESSENGER_EGRESS_SECRET || '';
+      const supplied = request.headers.get('x-customs-messenger-proxy-key') || '';
+      const equalSecret = (a: string, b: string) => {
+        if (!a || a.length !== b.length) return false;
+        let diff = 0;
+        for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+        return diff === 0;
+      };
+      if (!expected || expected.length < 32 || !equalSecret(expected, supplied)) {
+        return json({ error: 'Unauthorized' }, 401);
+      }
+      const rawTarget = request.headers.get('x-customs-messenger-target-url') || '';
+      let target: URL;
+      try {
+        target = new URL(rawTarget);
+      } catch {
+        return json({ error: 'Invalid provider URL' }, 400);
+      }
+      const host = target.hostname.toLowerCase();
+      const allowedHost = allowedMessengerEgressHost(host, env);
+      if (
+        target.protocol !== 'https:' ||
+        target.username || target.password || target.port ||
+        target.hash || !allowedHost
+      ) {
+        return json({ error: 'Provider host is not allowed' }, 403);
+      }
+      const headers = new Headers(request.headers);
+      headers.delete('host');
+      headers.delete('content-length');
+      headers.delete('x-customs-messenger-proxy-key');
+      headers.delete('x-customs-messenger-target-url');
+      // Provider bearer credentials are only needed by Meta Graph/media; never forward them to bot APIs.
+      if (!(host === 'graph.facebook.com' || isMetaMediaHost(host))) headers.delete('Authorization');
+      headers.delete('cookie');
+      headers.delete('origin');
+      headers.delete('referer');
+      try {
+        let currentTarget = target;
+        let upstream: Response | null = null;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          upstream = await fetch(new Request(currentTarget.toString(), {
+            method: request.method,
+            headers,
+            body: request.method === 'GET' ? undefined : request.body,
+            redirect: 'manual',
+          }));
+          const location = upstream.headers.get('Location');
+          const isRedirect = [301, 302, 303, 307, 308].includes(upstream.status);
+          // Only GET downloads may follow redirects, and every hop is revalidated.
+          if (request.method !== 'GET' || !isRedirect || !location) break;
+          if (attempt === 3) return json({ error: 'Provider redirect limit exceeded' }, 502);
+          let next: URL;
+          try { next = new URL(location, currentTarget); }
+          catch { return json({ error: 'Invalid provider redirect' }, 502); }
+          const nextHost = next.hostname.toLowerCase();
+          const nextAllowed = allowedMessengerEgressHost(nextHost, env);
+          if (next.protocol !== 'https:' || next.username || next.password || next.port || next.hash || !nextAllowed) {
+            await upstream.body?.cancel().catch(() => {});
+            return new Response(JSON.stringify({ error: 'Provider redirect host is not allowed' }), {
+              status: 403,
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store',
+                ...(!nextAllowed ? { 'X-Customs-OS-Blocked-Host': nextHost } : {}),
+              },
+            });
+          }
+          if (next.origin !== currentTarget.origin) {
+            const currentHost = currentTarget.hostname.toLowerCase();
+            const currentMetaHost = currentHost === 'graph.facebook.com' ||
+              currentHost.endsWith('.fbsbx.com') || currentHost.endsWith('.fbcdn.net') ||
+              currentHost.endsWith('.whatsapp.net');
+            const nextMetaHost = nextHost === 'graph.facebook.com' ||
+              nextHost.endsWith('.fbsbx.com') || nextHost.endsWith('.fbcdn.net') ||
+              nextHost.endsWith('.whatsapp.net');
+            if (!(currentMetaHost && nextMetaHost)) headers.delete('Authorization');
+          }
+          currentTarget = next;
+        }
+        if (!upstream) return json({ error: 'Provider request failed' }, 502);
+        const responseHeaders = new Headers(upstream.headers);
+        responseHeaders.set('Cache-Control', 'no-store, private');
+        responseHeaders.set('X-Customs-OS-Proxy', 'cloudflare-messenger-egress');
+        responseHeaders.delete('set-cookie');
+        responseHeaders.delete('content-length');
+        responseHeaders.delete('location');
+        responseHeaders.delete('X-Customs-OS-Blocked-Host');
+        return new Response(upstream.body, {
+          status: upstream.status,
+          statusText: upstream.statusText,
+          headers: responseHeaders,
+        });
+      } catch (error) {
+        console.error('[Messenger egress] provider request failed:', host,
+          error instanceof Error ? error.message : String(error));
+        return json({ error: 'Messenger provider temporarily unavailable' }, 502);
+      }
+    }
 
     // Chat and Reminders remain aliases of the unified app. The mobile hostname
     // is intentionally NOT an alias: it is a dedicated mobile-first entry point
