@@ -60,14 +60,15 @@ async function ownedConn(id:string,org:string,disabled=false){const c=await read
 async function accessToken(c:Conn){const s=await secret(c.secret_ref);if(!s)throw new Error("CREDENTIAL_MISSING");return s;}
 function botBase(c:Conn,t:string){if(c.platform==="telegram")return "https://api.telegram.org/bot"+t+"/";if(c.platform==="bale")return "https://tapi.bale.ai/bot"+t+"/";if(c.platform==="rubika")return "https://botapi.rubika.ir/v3/"+t+"/";throw new Error("PLATFORM_TRANSPORT_UNVERIFIED");}
 function graphBase(c:Conn){return "https://graph.facebook.com/"+String(c.config.apiVersion||"v26.0").replace(/^v?/,"v")+"/";}
+async function egressProxyEndpoint(){if(!EGRESS_PROXY_URL||!EGRESS_PROXY_SECRET||EGRESS_PROXY_SECRET.length<32)throw new Error("MESSENGER_EGRESS_PROXY_NOT_CONFIGURED");let url:URL;try{url=new URL(EGRESS_PROXY_URL);}catch{throw new Error("MESSENGER_EGRESS_PROXY_URL_INVALID");}if(url.protocol!=="https:"||url.hostname.toLowerCase()!=="darbandicommercial.ir"||url.username||url.password||url.port||url.search||url.hash||url.pathname!=="/_internal/messenger-egress")throw new Error("MESSENGER_EGRESS_PROXY_URL_INVALID");return url.toString();}
 async function providerFetch(endpoint:string,init?:RequestInit):Promise<Response>{
- if(!EGRESS_PROXY_URL||!EGRESS_PROXY_SECRET)throw new Error("MESSENGER_EGRESS_PROXY_NOT_CONFIGURED");
+ const proxyUrl=await egressProxyEndpoint();
  assertProviderEndpoint(endpoint);
  const headers=new Headers(init?.headers);
  headers.set("x-customs-messenger-target-url",endpoint);
  headers.set("x-customs-messenger-proxy-key",EGRESS_PROXY_SECRET);
  headers.set("Cache-Control","no-store");
- return await fetch(EGRESS_PROXY_URL,{...init,headers,redirect:"manual"});
+ return await fetch(proxyUrl,{...init,headers,redirect:"manual"});
 }
 async function apiJson(url:string,init?:RequestInit){const r=await providerFetch(url,init);const raw=await r.text();let data:any={};try{data=raw?JSON.parse(raw):{};}catch{}if(!r.ok||data.ok===false||data.error||String(data.status||"").toUpperCase()==="ERROR")throw new Error("UPSTREAM_"+r.status);return data;}
 async function graph(c:Conn,path:string,init?:RequestInit){const t=await accessToken(c),h=new Headers(init?.headers);h.set("Authorization","Bearer "+t);if(init?.body&&!h.has("Content-Type"))h.set("Content-Type","application/json");return await providerFetch(graphBase(c)+path.replace(/^\/+/,""),{...init,headers:h});}
