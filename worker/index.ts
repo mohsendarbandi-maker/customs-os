@@ -29,7 +29,8 @@ const isMetaMediaHost = (host: string) => host.endsWith('.fbsbx.com') ||
 function exactExtraMessengerHosts(env: Env): Set<string> {
   return new Set((env.MESSENGER_EGRESS_EXTRA_HOSTS || '').split(',')
     .map(value => value.trim().toLowerCase())
-    .filter(value => value.length > 0 && value.length <= 253 &&
+    .filter(value => value.length > 0 && value.length <= 253 && value.includes('.') &&
+      !/\.(?:localhost|local|internal|test|invalid)$/i.test(value) &&
       /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/.test(value) &&
       !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)));
 }
