@@ -244,6 +244,8 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('updateBotEndpoints');
     expect(gateway).toContain('ReceiveInlineMessage');
     expect(gateway).toContain('requestSendFile');
+    expect(gateway).toContain('name=\\"file\\"; filename=\\"');
+    expect(gateway).toContain('multipart/form-data; boundary=');
     expect(gateway).toContain('RUBIKA_FILE_LIMIT');
     expect(gateway).toContain('RUBIKA_DOWNLOAD_URL_INVALID');
     expect(gateway).toContain('RUBIKA_MEDIA_HOST_NOT_ALLOWLISTED_');
@@ -251,7 +253,7 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('add_exact_host_to_cloudflare_and_supabase_egress_allowlists');
     expect(gateway).toContain('async function rubikaWebhook');
     expect(gateway).toContain('interactionRecorded:true');
-    expect(gateway).toContain('inline-'+ '');
+    expect(gateway).toContain('const eventId=inline?"inline-"');
     expect(gateway).toContain('rubika:{supported:true,text:true,inboundWebhook:true,media:true,maxUploadBytes:RUBIKA_FILE_LIMIT');
   });
 
