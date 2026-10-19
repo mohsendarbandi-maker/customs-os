@@ -5,6 +5,8 @@ export interface Env {
   TURN_API_TOKEN_V2?: string;
   TURN_KEY_ID_V2?: string;
   MESSENGER_EGRESS_SECRET?: string;
+  /** Comma-separated exact HTTPS hostnames returned by provider media APIs, manually reviewed. No wildcards. */
+  MESSENGER_EGRESS_EXTRA_HOSTS?: string;
 }
 
 const BUILD_SIGNATURE = '20261013-reminders-list-first-teal-theme';
@@ -18,6 +20,24 @@ const EDGE_FUNCTIONS = new Set([
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 });
+
+const BASE_MESSENGER_HOSTS = new Set([
+  'api.telegram.org', 'botapi.rubika.ir', 'tapi.bale.ai', 'graph.facebook.com',
+]);
+const isMetaMediaHost = (host: string) => host.endsWith('.fbsbx.com') ||
+  host.endsWith('.fbcdn.net') || host.endsWith('.whatsapp.net');
+function exactExtraMessengerHosts(env: Env): Set<string> {
+  return new Set((env.MESSENGER_EGRESS_EXTRA_HOSTS || '').split(',')
+    .map(value => value.trim().toLowerCase())
+    .filter(value => value.length > 0 && value.length <= 253 &&
+      /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/.test(value) &&
+      !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)));
+}
+function allowedMessengerEgressHost(hostValue: string, env: Env): boolean {
+  const host = hostValue.toLowerCase();
+  if (host.endsWith('.')) return false;
+  return BASE_MESSENGER_HOSTS.has(host) || isMetaMediaHost(host) || exactExtraMessengerHosts(env).has(host);
+}
 
 
 type ExternalJson = Record<string, any>;
@@ -311,14 +331,7 @@ export default {
         return json({ error: 'Invalid provider URL' }, 400);
       }
       const host = target.hostname.toLowerCase();
-      const allowedHost =
-        host === 'api.telegram.org' ||
-        host === 'botapi.rubika.ir' ||
-        host === 'tapi.bale.ai' ||
-        host === 'graph.facebook.com' ||
-        host.endsWith('.fbsbx.com') ||
-        host.endsWith('.fbcdn.net') ||
-        host.endsWith('.whatsapp.net');
+      const allowedHost = allowedMessengerEgressHost(host, env);
       if (
         target.protocol !== 'https:' ||
         target.username || target.password || target.port ||
@@ -353,14 +366,7 @@ export default {
           try { next = new URL(location, currentTarget); }
           catch { return json({ error: 'Invalid provider redirect' }, 502); }
           const nextHost = next.hostname.toLowerCase();
-          const nextAllowed =
-            nextHost === 'api.telegram.org' ||
-            nextHost === 'botapi.rubika.ir' ||
-            nextHost === 'tapi.bale.ai' ||
-            nextHost === 'graph.facebook.com' ||
-            nextHost.endsWith('.fbsbx.com') ||
-            nextHost.endsWith('.fbcdn.net') ||
-            nextHost.endsWith('.whatsapp.net');
+          const nextAllowed = allowedMessengerEgressHost(nextHost, env);
           if (next.protocol !== 'https:' || next.username || next.password || next.port || next.hash || !nextAllowed) {
             return json({ error: 'Provider redirect host is not allowed' }, 403);
           }
