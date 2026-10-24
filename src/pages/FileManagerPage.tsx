@@ -323,10 +323,15 @@ export const FileManagerPage: React.FC = () => {
     setError('');
     setMessage('');
     let completed = 0;
+    let attemptingFile = '';
+    setProgress('در حال بررسی مقصد آرشیو تلگرام…');
     try {
       const target = await getUploadTarget();
       const destination = await getFileArchiveDestination();
+      setProgress('مقصد «' + destination.displayName + '» آماده است؛ فایل‌ها آماده‌سازی می‌شوند.');
       for (const file of pendingFiles) {
+        attemptingFile = file.name;
+        setProgress('آماده‌سازی فایل: ' + file.name);
         if (file.size > FILE_ARCHIVE_MAX_BYTES) {
           throw new Error(`فایل «${file.name}» بیشتر از ۲۰ مگابایت است؛ برای قابلیت بازیابی Bot API معمولی تلگرام، فعلاً فایل‌های بزرگ‌تر پذیرفته نمی‌شوند.`);
         }
@@ -342,6 +347,7 @@ export const FileManagerPage: React.FC = () => {
           documentName: file.name,
           destination,
         });
+        setProgress('در حال ارسال به تلگرام: ' + file.name);
         await uploadTelegramArchivedFile(file, {
           folderId: parent.id,
           ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
@@ -365,7 +371,8 @@ export const FileManagerPage: React.FC = () => {
       setPendingFiles([]);
       setProgress('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'آپلود ناموفق بود.');
+      const reason = e instanceof Error ? e.message : 'آپلود ناموفق بود.';
+      setError(attemptingFile ? `فایل «${attemptingFile}»: ${reason}` : reason);
       if (completed > 0) setMessage(`${completed} فایل ذخیره شد. فایل‌های باقی‌مانده در صف انتخاب‌شده باقی مانده‌اند.`);
     } finally {
       setUploading(false);
