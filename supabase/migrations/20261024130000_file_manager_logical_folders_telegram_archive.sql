@@ -138,6 +138,7 @@ alter table public.file_manager_folders enable row level security;
 alter table public.file_manager_files enable row level security;
 grant select, insert, update, delete on public.file_manager_folders to authenticated;
 grant select on public.file_manager_files to authenticated;
+grant all on public.file_manager_folders, public.file_manager_files to service_role;
 
 drop policy if exists file_manager_folders_select on public.file_manager_folders;
 create policy file_manager_folders_select on public.file_manager_folders
@@ -813,12 +814,11 @@ as $$
       and (public.user_role()::text <> 'client' or f.folder_type = 'root' or f.client_id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
-        f.display_name ilike q.pattern
-        or f.folder_key ilike q.pattern
+        f.file_manager_search_text ilike q.pattern
         or c.file_manager_search_text ilike q.pattern
         or s.file_manager_search_text ilike q.pattern
         or o.file_manager_search_text ilike q.pattern
-        or o.code ilike q.pattern
+
       )
 
     union all
