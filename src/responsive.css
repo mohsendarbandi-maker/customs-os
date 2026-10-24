@@ -1877,5 +1877,5 @@ html:has(.reminders-app-standalone), body:has(.reminders-app-standalone) {
  .reminders-app-standalone .reminders-mic-control{width:56px!important;min-width:56px!important;height:56px!important;min-height:56px!important;flex:0 0 56px!important;border-radius:16px!important;display:grid!important;place-items:center!important}
  .reminders-app-standalone .reminders-mic-control svg{width:23px!important;height:23px!important}
  .reminders-app-standalone .reminders-mic-control[data-recording="true"]{background:#dc2626!important;color:#fff!important;border-color:#dc2626!important}
- .reminders-app-standalone .reminders-mobile-fab[aria-expanded="true"]{display:none!important}
+ .reminders-app-standalone:has(.reminders-composebar.is-open) .reminders-mobile-fab{display:none!important}
 }
