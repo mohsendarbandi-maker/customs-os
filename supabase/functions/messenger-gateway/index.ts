@@ -164,7 +164,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   max=archive&&c.platform==="telegram"?TG_DOWNLOAD_LIMIT:(c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT),
   idempotencyKey=(req.headers.get("Idempotency-Key")||"").trim();
  if(!chat||size===0||(size!==null&&size>max)||!req.body)return bad(size!==null&&size>max?"FILE_TOO_LARGE_FOR_DESTINATION":"INVALID_FILE_SIZE_CHAT_OR_BODY",413,req);
- if(archive&&(!folderId||!requestedShipmentId||!validId(folderId)||!validId(requestedShipmentId)||!idempotencyKey||idempotencyKey.length>180))
+ if(archive&&(!folderId||!requestedShipmentId||!validId(folderId)||!validId(requestedShipmentId)||size===null||!idempotencyKey||idempotencyKey.length>180))
   return bad("INVALID_FILE_ARCHIVE_INPUT",400,req);
  const {data:mapped,error:mappedError}=await db.from("messenger_chats")
   .select("enabled,shipment_id,purpose")
@@ -185,9 +185,11 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   if(p.role==="client"&&folder.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
   let job:any=null;
   const {data:existing,error:existingError}=await db.from("file_manager_upload_jobs")
-   .select("id,status,file_asset_id,external_message_id,size_bytes,attempt_count")
+   .select("id,status,file_asset_id,external_message_id,size_bytes,attempt_count,folder_id,shipment_id,original_name,mime_type")
    .eq("organization_id",p.organization_id).eq("idempotency_key",idempotencyKey).maybeSingle();
   if(existingError)return bad("FILE_UPLOAD_JOB_LOOKUP_FAILED",500,req);
+  if(existing&&(existing.folder_id!==folderId||existing.shipment_id!==shipment.id||existing.original_name!==name||existing.mime_type!==mime||Number(existing.size_bytes)!==Number(size)))
+   return bad("IDEMPOTENCY_KEY_REUSE_MISMATCH",409,req);
   if(existing?.status==="stored"&&existing.file_asset_id)
    return out({ok:true,fileAssetId:existing.file_asset_id,externalMessageId:existing.external_message_id,sizeBytes:existing.size_bytes,folderId,uploadJobId:existing.id,alreadyStored:true},200,req);
   if(existing&&existing.status!=="failed")return bad("FILE_UPLOAD_RECONCILIATION_REQUIRED",409,req);
@@ -238,12 +240,15 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    if(completeError)throw new Error("FILE_UPLOAD_JOB_COMPLETE_FAILED");
    return out({ok:true,fileAssetId:assetId,externalMessageId:result.messageId,sizeBytes:size,folderId,uploadJobId:job.id,alreadyStored:false},201,req);
   }catch(e){
+   const code=errorCode(e);
+   const definitelyRejected=!result&&["TELEGRAM_UPLOAD_FAILED","FILE_TOO_LARGE_FOR_DESTINATION","REQUEST_BODY_TOO_LARGE"].includes(code);
+   const nextStatus=definitelyRejected||!telegramCallStarted?"failed":"reconcile_required";
    await db.from("file_manager_upload_jobs").update({
-    status:telegramCallStarted?"reconcile_required":"failed",
+    status:nextStatus,
     file_asset_id:assetId,external_message_id:result?.messageId?String(result.messageId):null,
-    error_code:errorCode(e),updated_at:new Date().toISOString()
+    error_code:code,updated_at:new Date().toISOString()
    }).eq("id",job.id).eq("organization_id",p.organization_id);
-   return bad(telegramCallStarted?"FILE_UPLOAD_RECONCILIATION_REQUIRED":errorCode(e),502,req);
+   return bad(nextStatus==="failed"?code:"FILE_UPLOAD_RECONCILIATION_REQUIRED",502,req);
   }
  }
  if(mapped.purpose==="file_archive")return bad("FILE_ARCHIVE_FOLDER_REQUIRED",400,req);
