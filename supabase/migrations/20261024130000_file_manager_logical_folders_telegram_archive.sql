@@ -680,6 +680,52 @@ create index if not exists customs_declarations_search_text_trgm_idx on public.c
 create index if not exists shipment_documents_search_text_trgm_idx on public.shipment_documents using gin (file_manager_search_text extensions.gin_trgm_ops);
 create index if not exists customs_documents_search_text_trgm_idx on public.customs_documents using gin (file_manager_search_text extensions.gin_trgm_ops);
 
+-- Do not generate business audit events for the one-time internal search-index backfill.
+-- Normal updates still generate audit rows whenever any business field changes.
+create or replace function public.record_audit_event()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_catalog, pg_temp
+as $function$
+declare
+  v_org_id uuid;
+  v_record_id uuid;
+  v_old jsonb := null;
+  v_new jsonb := null;
+begin
+  if tg_op = 'UPDATE'
+     and to_jsonb(new) ? 'file_manager_search_text'
+     and (to_jsonb(new) - 'file_manager_search_text' - 'updated_at')
+         = (to_jsonb(old) - 'file_manager_search_text' - 'updated_at') then
+    return new;
+  end if;
+
+  if tg_op = 'DELETE' then
+    v_org_id := old.organization_id;
+    v_record_id := old.id;
+    v_old := to_jsonb(old);
+  elsif tg_op = 'UPDATE' then
+    v_org_id := new.organization_id;
+    v_record_id := new.id;
+    v_old := to_jsonb(old);
+    v_new := to_jsonb(new);
+  elsif tg_op = 'INSERT' then
+    v_org_id := new.organization_id;
+    v_record_id := new.id;
+    v_new := to_jsonb(new);
+  end if;
+
+  insert into public.audit_logs (
+    organization_id, user_id, action, table_name, record_id, old_data, new_data
+  ) values (
+    v_org_id, auth.uid(), tg_op, tg_table_name, v_record_id, v_old, v_new
+  );
+
+  return coalesce(new, old);
+end;
+$function$;
+
 -- Populate existing metadata once. Subsequent writes are maintained by the trigger.
 update public.file_manager_folders set file_manager_search_text = file_manager_search_text;
 update public.file_manager_files set file_manager_search_text = file_manager_search_text;
