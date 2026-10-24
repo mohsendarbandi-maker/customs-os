@@ -426,7 +426,7 @@ export const FileManagerPage: React.FC = () => {
           <div className="rounded-2xl bg-[var(--primary)]/10 p-3 text-[var(--primary)]"><FolderOpen size={24} /></div>
           <div>
             <div className="text-xs app-muted">CUSTOMS OS · DOCUMENTS</div>
-            <h1 className="text-2xl font-black">فایل‌منیجر اسناد محموله</h1>
+            <h1 className="text-2xl font-black">فایل‌منیجر اسناد و مدارک</h1>
             <p className="mt-1 text-xs app-muted">پوشه‌بندی خودکار بر اساس صاحب کالا، محموله و گمرک؛ آرشیو فایل اصلی در تلگرام.</p>
           </div>
         </div>
@@ -507,7 +507,7 @@ export const FileManagerPage: React.FC = () => {
               <div className="mt-2 max-h-36 space-y-1 overflow-auto">{pendingFiles.slice(0, 40).map((file, index) => <div key={file.name + file.size + file.lastModified + index} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate">{(file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name}</span><span className="shrink-0 app-muted">{byteLabel(file.size)}</span></div>)}{pendingFiles.length > 40 && <div className="text-xs app-muted">و {pendingFiles.length - 40} فایل دیگر…</div>}</div>
               <button type="button" onClick={() => void archiveFiles()} disabled={uploading} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}آپلود در تلگرام و ثبت فراداده</button>
             </div>}
-            {!uploadEnabled && <p className="mt-2 text-xs app-muted">برای آپلود، ابتدا وارد پوشه یک محموله شوید.</p>}
+            {!uploadEnabled && <p className="mt-2 text-xs app-muted">برای آپلود، پوشه صاحب کالا یا محموله را انتخاب کنید.</p>}
           </div>}
 
           <div className="p-4">
