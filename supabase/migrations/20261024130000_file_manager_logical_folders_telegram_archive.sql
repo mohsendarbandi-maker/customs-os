@@ -185,6 +185,7 @@ create policy file_manager_folders_select on public.file_manager_folders
   for select to authenticated
   using (
     organization_id = public.user_org_id()
+    and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client')
     and (
       public.user_role()::text <> 'client'
       or folder_type = 'root'
@@ -255,6 +256,7 @@ create policy file_manager_files_select on public.file_manager_files
   for select to authenticated
   using (
     organization_id = public.user_org_id()
+    and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client')
     and (
       public.user_role()::text <> 'client'
       or exists (
@@ -1135,7 +1137,7 @@ as $$
     left join public.file_manager_folders fm on fm.shipment_id = s.id and fm.organization_id = s.organization_id and fm.folder_type = 'shipment'
     cross join query_arg q
     where s.organization_id = public.user_org_id()
-      and (public.user_role()::text <> 'client' or s.client_id = public.user_client_id())
+      and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client') and (public.user_role()::text <> 'client' or s.client_id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
         s.file_manager_search_text ilike q.pattern
@@ -1157,7 +1159,7 @@ as $$
     left join public.file_manager_folders fm on fm.client_id = c.id and fm.organization_id = c.organization_id and fm.folder_type = 'client'
     cross join query_arg q
     where c.organization_id = public.user_org_id()
-      and (public.user_role()::text <> 'client' or c.id = public.user_client_id())
+      and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client') and (public.user_role()::text <> 'client' or c.id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
       and c.file_manager_search_text ilike q.pattern
 
@@ -1172,6 +1174,7 @@ as $$
     left join public.file_manager_folders fm on fm.shipment_id = s.id and fm.organization_id = s.organization_id and fm.folder_type = 'shipment'
     cross join query_arg q
     where v.organization_id = public.user_org_id()
+      and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client')
       and (
         public.user_role()::text <> 'client'
         or exists (select 1 from public.shipments sx
@@ -1195,7 +1198,7 @@ as $$
     left join public.file_manager_folders fm on fm.shipment_id = d.shipment_id and fm.organization_id = d.organization_id and fm.folder_type = 'shipment'
     cross join query_arg q
     where d.organization_id = public.user_org_id()
-      and (public.user_role()::text <> 'client' or coalesce(s.client_id, ca.client_id) = public.user_client_id())
+      and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client') and (public.user_role()::text <> 'client' or coalesce(s.client_id, ca.client_id) = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
       and (d.file_manager_search_text ilike q.pattern or ca.file_manager_search_text ilike q.pattern or s.file_manager_search_text ilike q.pattern)
 
@@ -1210,7 +1213,7 @@ as $$
     left join public.customs_offices o on o.id = f.customs_office_id and o.organization_id = f.organization_id
     cross join query_arg q
     where f.organization_id = public.user_org_id()
-      and (public.user_role()::text <> 'client' or f.folder_type = 'root' or f.client_id = public.user_client_id())
+      and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client') and (public.user_role()::text <> 'client' or f.folder_type = 'root' or f.client_id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
         f.file_manager_search_text ilike q.pattern
@@ -1234,7 +1237,7 @@ as $$
     left join public.customs_offices o on o.id = s.customs_office_id and o.organization_id = s.organization_id
     cross join query_arg q
     where fm.organization_id = public.user_org_id()
-      and (public.user_role()::text <> 'client' or fm.client_id = public.user_client_id())
+      and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client') and (public.user_role()::text <> 'client' or fm.client_id = public.user_client_id())
       and fm.shipment_document_id is null
       and fm.customs_document_id is null
       and not fm.is_archived
@@ -1262,7 +1265,7 @@ as $$
     left join public.file_manager_files fm_file on fm_file.shipment_document_id = sd.id and fm_file.organization_id = sd.organization_id
     cross join query_arg q
     where sd.organization_id = public.user_org_id()
-      and (public.user_role()::text <> 'client' or s.client_id = public.user_client_id())
+      and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client') and (public.user_role()::text <> 'client' or s.client_id = public.user_client_id())
       and not exists (select 1 from public.customs_documents mirror
         where mirror.id = sd.id and mirror.organization_id = sd.organization_id)
       and length(trim(coalesce(p_query, ''))) >= 2
@@ -1291,7 +1294,7 @@ as $$
       and (fm_file.customs_document_id = cd.id or fm_file.shipment_document_id = cd.id)
     cross join query_arg q
     where cd.organization_id = public.user_org_id()
-      and (public.user_role()::text <> 'client' or coalesce(cd.client_id, s.client_id) = public.user_client_id())
+      and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client') and (public.user_role()::text <> 'client' or coalesce(cd.client_id, s.client_id) = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
       and not coalesce(cd.is_archived, false)
       and not coalesce(fm_file.is_archived, false)
