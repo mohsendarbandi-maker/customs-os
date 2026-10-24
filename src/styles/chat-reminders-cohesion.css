@@ -664,3 +664,16 @@
   .chat-standalone .chat-owner-card,
   .chat-standalone .chat-shipment-row { transition: none !important; }
 }
+
+
+/* Keep native controls and highlighted calendar dates on the same global theme. */
+[data-theme="dark"] .reminders-app-standalone input,
+[data-theme="dark"] .reminders-app-standalone textarea,
+[data-theme="dark"] .reminders-app-standalone select { color-scheme: dark; }
+[data-theme="light"] .reminders-app-standalone input,
+[data-theme="light"] .reminders-app-standalone textarea,
+[data-theme="light"] .reminders-app-standalone select { color-scheme: light; }
+.reminders-app-standalone .reminders-calendar-cell.is-today .reminders-calendar-cell-day {
+  background: var(--primary);
+  color: #fff;
+}
