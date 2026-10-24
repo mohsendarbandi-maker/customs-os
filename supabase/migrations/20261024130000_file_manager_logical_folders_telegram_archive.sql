@@ -798,12 +798,15 @@ $function$;
 -- These rows reference existing bytes; they do not copy or delete any file.
 insert into public.file_manager_files
   (organization_id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,
-   document_type,tags,metadata,shipment_document_id,storage_path,created_by)
+   document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,created_by)
 select sd.organization_id,f.id,sd.shipment_id,s.client_id,sd.file_asset_id,
        sd.original_file_name,coalesce(sd.mime_type,'application/octet-stream'),
        greatest(coalesce(sd.file_size_bytes,0),0),'other','{}'::text[],
        jsonb_build_object('legacyStorageBackend',coalesce(sd.storage_backend,'supabase')),
-       sd.id,sd.storage_path,sd.uploaded_by
+       sd.id,
+       case when exists (select 1 from public.customs_documents mirror
+         where mirror.id=sd.id and mirror.organization_id=sd.organization_id) then sd.id else null end,
+       sd.storage_path,sd.uploaded_by
 from public.shipment_documents sd
 join public.shipments s on s.id=sd.shipment_id and s.organization_id=sd.organization_id
 join public.file_manager_folders f on f.organization_id=sd.organization_id
@@ -850,12 +853,14 @@ as $$
 declare
   v_client uuid;
   v_folder uuid;
+  v_rows integer := 0;
+  v_customs_mirror uuid;
 begin
   if coalesce(new.is_archived, false) then
     update public.file_manager_files
     set is_archived = true, updated_at = now()
     where organization_id = new.organization_id
-      and (shipment_document_id = new.id
+      and (shipment_document_id = new.id or customs_document_id = new.id
         or (new.file_asset_id is not null and file_asset_id = new.file_asset_id));
     return new;
   end if;
@@ -863,13 +868,14 @@ begin
   select s.client_id into v_client
   from public.shipments s
   where s.id=new.shipment_id and s.organization_id=new.organization_id;
-  -- Prefer the exact folder selected by the uploader; use "other" only for legacy records.
+
   select f.id into v_folder
   from public.file_manager_folders f
   where f.id=new.folder_id
     and f.organization_id=new.organization_id
     and f.shipment_id=new.shipment_id
   limit 1;
+
   if v_folder is null then
     select f.id into v_folder
     from public.file_manager_folders f
@@ -877,23 +883,50 @@ begin
       and f.folder_type='other'
     limit 1;
   end if;
-  if v_folder is not null then
+
+  if v_folder is null then
+    return new;
+  end if;
+
+  select cd.id into v_customs_mirror
+  from public.customs_documents cd
+  where cd.id=new.id and cd.organization_id=new.organization_id
+  limit 1;
+
+  -- The legacy shipment_documents/customs_documents mirror is one logical file.
+  -- Reuse its row (or its asset row) instead of creating a second visible file.
+  update public.file_manager_files
+  set folder_id=v_folder,
+      shipment_id=new.shipment_id,
+      client_id=v_client,
+      file_asset_id=coalesce(new.file_asset_id,file_asset_id),
+      original_name=new.original_file_name,
+      mime_type=coalesce(new.mime_type,'application/octet-stream'),
+      size_bytes=greatest(coalesce(new.file_size_bytes,0),0),
+      shipment_document_id=new.id,
+      customs_document_id=coalesce(v_customs_mirror,customs_document_id),
+      storage_path=new.storage_path,
+      created_by=coalesce(created_by,new.uploaded_by),
+      is_archived=false,
+      updated_at=now()
+  where organization_id=new.organization_id
+    and (shipment_document_id=new.id or customs_document_id=new.id
+      or (new.file_asset_id is not null and file_asset_id=new.file_asset_id));
+  get diagnostics v_rows = row_count;
+
+  if v_rows = 0 then
     insert into public.file_manager_files
       (organization_id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,
-       document_type,tags,metadata,shipment_document_id,storage_path,created_by)
+       document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,created_by)
     values
       (new.organization_id,v_folder,new.shipment_id,v_client,new.file_asset_id,
        new.original_file_name,coalesce(new.mime_type,'application/octet-stream'),
        greatest(coalesce(new.file_size_bytes,0),0),'other','{}'::text[],
        jsonb_build_object('legacyStorageBackend',coalesce(new.storage_backend,'supabase')),
-       new.id,new.storage_path,new.uploaded_by)
+       new.id,v_customs_mirror,new.storage_path,new.uploaded_by)
     on conflict do nothing;
-    update public.file_manager_files
-    set is_archived = false, updated_at = now()
-    where organization_id = new.organization_id
-      and (shipment_document_id = new.id
-        or (new.file_asset_id is not null and file_asset_id = new.file_asset_id));
   end if;
+
   return new;
 end;
 $$;
@@ -917,6 +950,8 @@ declare
   v_client uuid;
   v_shipment uuid;
   v_folder uuid;
+  v_rows integer := 0;
+  v_shipment_mirror uuid;
 begin
   v_shipment := new.shipment_id;
   v_client := new.client_id;
@@ -932,7 +967,7 @@ begin
     update public.file_manager_files
     set is_archived = true, updated_at = now()
     where organization_id = new.organization_id
-      and (customs_document_id = new.id
+      and (customs_document_id = new.id or shipment_document_id = new.id
         or (new.file_asset_id is not null and file_asset_id = new.file_asset_id));
     return new;
   end if;
@@ -959,11 +994,42 @@ begin
     limit 1;
   end if;
 
-  if v_folder is not null then
+  if v_folder is null then
+    return new;
+  end if;
+
+  select sd.id into v_shipment_mirror
+  from public.shipment_documents sd
+  where sd.id=new.id and sd.organization_id=new.organization_id
+  limit 1;
+
+  -- Keep a single metadata row for records mirrored across both legacy tables.
+  update public.file_manager_files
+  set folder_id=v_folder,
+      shipment_id=v_shipment,
+      client_id=v_client,
+      file_asset_id=coalesce(new.file_asset_id,file_asset_id),
+      original_name=coalesce(new.display_name,new.original_name),
+      mime_type=coalesce(new.mime_type,'application/octet-stream'),
+      size_bytes=greatest(coalesce(new.size_bytes,0),0),
+      customs_document_id=new.id,
+      shipment_document_id=coalesce(v_shipment_mirror,shipment_document_id),
+      document_type=coalesce(new.document_type::text,'other'),
+      tags=coalesce(new.tags,'{}'::text[]),
+      storage_path=new.storage_path,
+      created_by=coalesce(created_by,new.created_by),
+      is_archived=false,
+      updated_at=now()
+  where organization_id=new.organization_id
+    and (customs_document_id=new.id or shipment_document_id=new.id
+      or (new.file_asset_id is not null and file_asset_id=new.file_asset_id));
+  get diagnostics v_rows = row_count;
+
+  if v_rows = 0 then
     insert into public.file_manager_files
       (organization_id, folder_id, shipment_id, client_id, file_asset_id,
        original_name, mime_type, size_bytes, document_type, tags, metadata,
-       customs_document_id, storage_path, created_by, is_archived)
+       shipment_document_id, customs_document_id, storage_path, created_by, is_archived)
     values
       (new.organization_id, v_folder, v_shipment, v_client, new.file_asset_id,
        coalesce(new.display_name, new.original_name),
@@ -971,14 +1037,8 @@ begin
        greatest(coalesce(new.size_bytes, 0), 0),
        coalesce(new.document_type::text, 'other'), coalesce(new.tags, '{}'::text[]),
        jsonb_build_object('legacyStorageBackend', coalesce(new.storage_backend, 'supabase')),
-       new.id, new.storage_path, new.created_by, false)
+       v_shipment_mirror, new.id, new.storage_path, new.created_by, false)
     on conflict do nothing;
-
-    update public.file_manager_files
-    set is_archived = false, updated_at = now()
-    where organization_id = new.organization_id
-      and (customs_document_id = new.id
-        or (new.file_asset_id is not null and file_asset_id = new.file_asset_id));
   end if;
 
   return new;
