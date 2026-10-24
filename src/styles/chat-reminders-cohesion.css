@@ -677,3 +677,49 @@
   background: var(--primary);
   color: #fff;
 }
+
+/* Reminder calendar details stay on the site-wide accent and surface tokens. */
+.reminders-app-standalone .reminders-calendar-month-toolbar {
+  color: var(--text) !important;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border)) !important;
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface)) !important;
+}
+.reminders-app-standalone .reminders-calendar-month-toolbar > button:not(.reminders-calendar-today),
+.reminders-app-standalone .reminder-icon-button,
+.reminders-app-standalone .reminders-calendar-shortcut {
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+}
+.reminders-app-standalone .reminders-calendar-month-toolbar > button:not(.reminders-calendar-today):hover,
+.reminders-app-standalone .reminder-icon-button:hover,
+.reminders-app-standalone .reminders-calendar-shortcut:hover {
+  border-color: var(--primary) !important;
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface)) !important;
+}
+.reminders-app-standalone .reminders-calendar-today,
+.reminders-app-standalone .reminders-calendar-day.is-selected {
+  color: #fff !important;
+  border-color: var(--primary) !important;
+  background: var(--primary) !important;
+}
+.reminders-app-standalone .reminders-calendar-cell.is-today .reminders-calendar-cell-day {
+  color: #fff !important;
+  background: var(--primary) !important;
+}
+.reminders-app-standalone .reminders-calendar-cell[aria-pressed="true"]:not(.is-today):not(.is-iran-holiday) .reminders-calendar-cell-day {
+  color: var(--primary) !important;
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface)) !important;
+}
+.reminders-app-standalone .reminders-calendar-cell[aria-pressed="true"]:not(.is-iran-holiday) {
+  outline-color: var(--primary) !important;
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--border)) !important;
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface)) !important;
+}
+.reminders-app-standalone .reminders-calendar-cell-count {
+  color: var(--primary) !important;
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-2)) !important;
+}
+.reminders-app-standalone .reminders-calendar-event.is-observance {
+  color: var(--primary) !important;
+}
