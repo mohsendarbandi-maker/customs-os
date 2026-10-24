@@ -193,7 +193,9 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(folderCopyMigration).toContain('FILE_MANAGER_COPY_SCOPE_MISMATCH');
     expect(folderCopyMigration).toContain('FILE_MANAGER_COPY_CLIENT_SCOPE_FORBIDDEN');
     expect(folderCopyMigration).toContain('copyAliasFileAssetId');
-    expect(folderCopyMigration).toContain("and not (fm.metadata ? 'copyAliasSourceFileId')");
+    expect(folderCopyMigration).toContain("pg_get_functiondef('public.search_file_manager(text,integer)'::regprocedure)");
+    expect(folderCopyMigration).toContain("FILE_MANAGER_SEARCH_FUNCTION_SHAPE_CHANGED");
+    expect(folderCopyMigration).toContain("copyAliasSourceFileId");
   });
 
   it('adds searchable Persian Telegram archive captions with customs and kottaj details', () => {
