@@ -699,7 +699,8 @@ export const FileManagerPage: React.FC = () => {
                 <p className="mt-1 text-xs app-muted">{currentFolder?.folder_type === 'shipment' ? 'محموله · برای دسته‌بندی دقیق، وارد یکی از زیرپوشه‌ها شوید.' : currentFolder?.shipment_id ? 'پوشه اسناد محموله' : currentFolder?.client_id ? 'اسناد ثابت صاحب کالا و شرکت' : 'پوشه سازمانی'}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => void exportFolderToWindows()} disabled={!currentFolder || exporting || loading} className="rounded-xl border app-border px-3 py-2 text-sm disabled:opacity-50"><Download size={15} className="ml-1 inline" />انتقال پوشه به ویندوز</button>
+                <button type="button" onClick={() => void syncWindowsFolder()} disabled={!currentFolder || syncing || exporting || uploading || loading} className="rounded-xl border app-border px-3 py-2 text-sm disabled:opacity-50">{syncing ? <Loader2 size={15} className="ml-1 inline animate-spin" /> : <RefreshCw size={15} className="ml-1 inline" />}همگام‌سازی دوطرفه ویندوز</button>
+                <button type="button" onClick={() => void exportFolderToWindows()} disabled={!currentFolder || exporting || syncing || loading} className="rounded-xl border app-border px-3 py-2 text-sm disabled:opacity-50"><Download size={15} className="ml-1 inline" />انتقال پوشه به ویندوز</button>
                 {uploadEnabled && roleCanModifyStructure(role) && <form onSubmit={(e) => { e.preventDefault(); void createFolder(); }} className="flex gap-1">
                   <input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="نام زیرپوشه" className="w-32 rounded-xl border app-border bg-[var(--surface-2)] px-2 py-2 text-sm" />
                   <button type="submit" disabled={creatingFolder || !folderName.trim()} className="rounded-xl border app-border px-3 py-2 text-sm disabled:opacity-50">{creatingFolder ? <Loader2 size={15} className="animate-spin" /> : 'ساخت پوشه'}</button>
@@ -712,7 +713,7 @@ export const FileManagerPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2">
               <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-bold text-white">
                 <UploadCloud size={16} /> انتخاب فایل
-                <input type="file" multiple className="hidden" disabled={!uploadEnabled || uploading} onChange={(e) => { setPendingFiles((old) => [...old, ...Array.from(e.target.files || [])]); e.currentTarget.value = ''; }} />
+                <input type="file" multiple className="hidden" disabled={!uploadEnabled || uploading || syncing} onChange={(e) => { setPendingFiles((old) => [...old, ...Array.from(e.target.files || [])]); e.currentTarget.value = ''; }} />
               </label>
               <button type="button" onClick={() => directoryInput.current?.click()} disabled={!uploadEnabled || uploading} className="flex items-center gap-2 rounded-xl border app-border px-4 py-2.5 text-sm disabled:opacity-40"><FolderOpen size={16} />انتخاب پوشه ویندوز</button>
               <input ref={directoryInput} {...directoryProps} type="file" multiple className="hidden" disabled={!uploadEnabled || uploading} onChange={(e) => { setPendingFiles((old) => [...old, ...Array.from(e.target.files || [])]); e.currentTarget.value = ''; }} />
