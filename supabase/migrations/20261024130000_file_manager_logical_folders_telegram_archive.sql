@@ -134,6 +134,8 @@ create index if not exists file_manager_files_tags_gin_idx
 
 alter table public.file_manager_folders enable row level security;
 alter table public.file_manager_files enable row level security;
+grant select, insert, update, delete on public.file_manager_folders to authenticated;
+grant select on public.file_manager_files to authenticated;
 
 drop policy if exists file_manager_folders_select on public.file_manager_folders;
 create policy file_manager_folders_select on public.file_manager_folders
@@ -678,13 +680,12 @@ as $$
 
     union all
 
-    select 'file'::text, fm.id, coalesce(a.original_name, fm.original_name),
-      concat_ws(' • ', coalesce(a.mime_type, fm.mime_type), coalesce(a.size_bytes::text, fm.size_bytes::text), fm.document_type,
+    select 'file'::text, fm.id, fm.original_name,
+      concat_ws(' • ', fm.mime_type, fm.size_bytes::text, fm.document_type,
         array_to_string(fm.tags, ' '), fm.metadata::text, f.display_name,
         s.display_name, c.name, o.name),
       fm.folder_id, fm.shipment_id, fm.client_id, fm.created_at
     from public.file_manager_files fm
-    left join public.file_assets a on a.id = fm.file_asset_id and a.organization_id = fm.organization_id
     join public.file_manager_folders f on f.id = fm.folder_id and f.organization_id = fm.organization_id
     left join public.shipments s on s.id = fm.shipment_id and s.organization_id = fm.organization_id
     left join public.clients c on c.id = fm.client_id and c.organization_id = fm.organization_id
@@ -694,8 +695,7 @@ as $$
       and (public.user_role()::text <> 'client' or fm.client_id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
-        to_jsonb(a)::text ilike q.pattern
-        or to_jsonb(fm)::text ilike q.pattern
+        to_jsonb(fm)::text ilike q.pattern
         or f.display_name ilike q.pattern
         or s.display_name ilike q.pattern
         or c.name ilike q.pattern
