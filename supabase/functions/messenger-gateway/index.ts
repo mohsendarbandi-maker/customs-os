@@ -276,8 +276,43 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
  try{const result=await uploadStream(c,chat,name,mime,size,req.body),assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",assetShipment?.shipment_id||null);return out({ok:true,fileAssetId:assetId,externalMessageId:result.messageId,sizeBytes:size},201,req);}catch(e){return bad(errorCode(e),502,req);}
 }
 async function sourceFile(c:Conn,fileId:string){if(c.platform==="rubika")throw new Error("PLATFORM_TRANSPORT_UNVERIFIED");if(c.platform==="whatsapp"){const t=await accessToken(c),r=await graph(c,encodeURIComponent(fileId));const d=await r.json() as any;if(!r.ok||d.error||typeof d.url!=="string")throw new Error("WHATSAPP_MEDIA_URL_FAILED");const url=new URL(d.url);if(url.protocol!=="https:"||!(url.hostname.endsWith(".fbsbx.com")||url.hostname.endsWith(".fbcdn.net")||url.hostname.endsWith(".whatsapp.net")))throw new Error("MEDIA_HOST_REJECTED");const media=await fetch(url.toString(),{headers:{Authorization:"Bearer "+t}});if(!media.ok||!media.body)throw new Error("MEDIA_DOWNLOAD_FAILED");const cl=media.headers.get("content-length");return {response:media,size:cl&&/^\d+$/.test(cl)?Number(cl):null};}const t=await accessToken(c),d=await apiJson(botBase(c,t)+"getFile?file_id="+encodeURIComponent(fileId)),path=String(d.result?.file_path||""),size=Number(d.result?.file_size||0)||null;if(!path||(size&&size>TG_DOWNLOAD_LIMIT))throw new Error("SOURCE_FILE_OVER_DOWNLOAD_LIMIT");const base=c.platform==="telegram"?"https://api.telegram.org/file/bot":"https://tapi.bale.ai/file/bot";const r=await fetch(base+t+"/"+path);if(!r.ok||!r.body)throw new Error("SOURCE_FILE_DOWNLOAD_FAILED");return {response:r,size};}
-async function authorizeAsset(p:Profile,id:string){const {data:a}=await db.from("file_assets").select("*").eq("id",id).eq("organization_id",p.organization_id).maybeSingle();if(!a)throw new Error("FILE_NOT_FOUND");if(p.role==="client"){const {data:links}=await db.from("shipment_files").select("shipment_id").eq("organization_id",p.organization_id).eq("file_asset_id",id);const ids=(links||[]).map((x:any)=>x.shipment_id);if(!ids.length)throw new Error("FILE_ACCESS_DENIED");const {data:visible}=await db.from("shipments").select("id").eq("organization_id",p.organization_id).eq("client_id",p.client_id||"").in("id",ids);if(!visible?.length)throw new Error("FILE_ACCESS_DENIED");}const {data:locations}=await db.from("file_locations").select("*").eq("organization_id",p.organization_id).eq("file_asset_id",id).eq("availability_status","available").order("created_at");for(const l of locations||[]){const c=await readConn(l.connection_id);if(c&&c.organization_id===p.organization_id)return {asset:a,location:l,connection:c};}throw new Error("SOURCE_CONNECTION_UNAVAILABLE");}
-async function download(req:Request,p:Profile,id:string){if(!validId(id))return bad("INVALID_FILE_ID",400,req);try{const x=await authorizeAsset(p,id),f=await sourceFile(x.connection,x.location.external_file_id),h=new Headers(noStore);h.set("Content-Type",cleanMime(x.asset.mime_type));h.set("Content-Disposition","attachment; filename*=UTF-8''"+encodeURIComponent(cleanName(x.asset.original_name)));if(f.size!==null)h.set("Content-Length",String(f.size));return new Response(f.response.body,{status:200,headers:h});}catch(e){return bad(errorCode(e),404,req);}}
+async function authorizeAsset(p:Profile,id:string){
+ const {data:a,error:assetError}=await db.from("file_assets").select("*").eq("id",id).eq("organization_id",p.organization_id).maybeSingle();
+ if(assetError||!a)throw new Error("FILE_NOT_FOUND");
+ const {data:archiveLink,error:archiveError}=await db.from("file_manager_files")
+  .select("is_archived").eq("organization_id",p.organization_id).eq("file_asset_id",id).maybeSingle();
+ if(archiveError)throw new Error("FILE_ACCESS_CHECK_FAILED");
+ if(archiveLink?.is_archived)throw new Error("FILE_NOT_FOUND");
+ if(p.role==="client"){
+  const {data:links,error:linksError}=await db.from("shipment_files").select("shipment_id")
+   .eq("organization_id",p.organization_id).eq("file_asset_id",id);
+  if(linksError)throw new Error("FILE_ACCESS_CHECK_FAILED");
+  const ids=(links||[]).map((x:any)=>x.shipment_id);
+  let allowed=false;
+  if(ids.length){
+   const {data:visible,error:visibleError}=await db.from("shipments").select("id")
+    .eq("organization_id",p.organization_id).eq("client_id",p.client_id||"").in("id",ids);
+   if(visibleError)throw new Error("FILE_ACCESS_CHECK_FAILED");
+   allowed=Boolean(visible?.length);
+  }
+  if(!allowed){
+   const {data:ownerFile,error:ownerFileError}=await db.from("file_manager_files").select("id")
+    .eq("organization_id",p.organization_id).eq("file_asset_id",id)
+    .eq("client_id",p.client_id||"").eq("is_archived",false).maybeSingle();
+   if(ownerFileError)throw new Error("FILE_ACCESS_CHECK_FAILED");
+   allowed=Boolean(ownerFile);
+  }
+  if(!allowed)throw new Error("FILE_ACCESS_DENIED");
+ }
+ const {data:locations,error:locationsError}=await db.from("file_locations").select("*")
+  .eq("organization_id",p.organization_id).eq("file_asset_id",id).eq("availability_status","available").order("created_at");
+ if(locationsError)throw new Error("SOURCE_LOCATION_LOOKUP_FAILED");
+ for(const l of locations||[]){
+  const c=await readConn(l.connection_id);
+  if(c&&c.organization_id===p.organization_id)return {asset:a,location:l,connection:c};
+ }
+ throw new Error("SOURCE_CONNECTION_UNAVAILABLE");
+}async function download(req:Request,p:Profile,id:string){if(!validId(id))return bad("INVALID_FILE_ID",400,req);try{const x=await authorizeAsset(p,id),f=await sourceFile(x.connection,x.location.external_file_id),h=new Headers(noStore);h.set("Content-Type",cleanMime(x.asset.mime_type));h.set("Content-Disposition","attachment; filename*=UTF-8''"+encodeURIComponent(cleanName(x.asset.original_name)));if(f.size!==null)h.set("Content-Length",String(f.size));return new Response(f.response.body,{status:200,headers:h});}catch(e){return bad(errorCode(e),404,req);}}
 async function transfer(req:Request,p:Profile,user:string){const b=await bodyJson(req),assetId=String(b.fileAssetId||""),destId=String(b.destinationConnectionId||""),destChat=String(b.destinationChatId||""),key=String(req.headers.get("Idempotency-Key")||b.idempotencyKey||"").trim();if(!validId(assetId)||!validId(destId)||!destChat||!key||key.length>180)return bad("INVALID_TRANSFER_INPUT",400,req);const s=await authorizeAsset(p,assetId),d=await ownedConn(destId,p.organization_id);if(s.connection.id===d.id)return bad("SAME_CONNECTION_USE_PLATFORM_COPY",422,req);const {data:chat}=await db.from("messenger_chats").select("enabled,shipment_id").eq("organization_id",p.organization_id).eq("connection_id",d.id).eq("external_chat_id",destChat).maybeSingle();if(!chat?.enabled)return bad("DESTINATION_CHAT_NOT_ALLOWED",403,req);const {data:job,error}=await db.from("file_transfer_jobs").insert({organization_id:p.organization_id,file_asset_id:assetId,source_location_id:s.location.id,destination_connection_id:d.id,destination_chat_id:destChat,status:"processing",idempotency_key:key,attempt_count:1,created_by:user,locked_until:new Date(Date.now()+8*60*1000).toISOString()}).select("id").single();if(error||!job)return bad(error?.code==="23505"?"IDEMPOTENCY_KEY_ALREADY_USED":"TRANSFER_JOB_CREATE_FAILED",409,req);try{const src=await sourceFile(s.connection,s.location.external_file_id),mime=cleanMime(s.asset.mime_type);if(src.size&&(src.size>(d.platform==="whatsapp"?100*1024*1024:50*1024*1024)))throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");const result=await uploadStream(d,destChat,cleanName(s.asset.original_name),mime,src.size,src.response.body!);const newAsset=await storeAsset(p.organization_id,user,d,destChat,result,mime,src.size,s.connection.platform,chat.shipment_id||null);await db.from("file_transfer_jobs").update({status:"succeeded",result_message_id:result.messageId,completed_at:new Date().toISOString(),locked_until:null,updated_at:new Date().toISOString()}).eq("id",job.id);return out({ok:true,jobId:job.id,sourceFileAssetId:assetId,destinationFileAssetId:newAsset,externalMessageId:result.messageId},201,req);}catch(e){await db.from("file_transfer_jobs").update({status:"retry",last_error_code:errorCode(e),next_attempt_at:new Date(Date.now()+60000).toISOString(),locked_until:null,updated_at:new Date().toISOString()}).eq("id",job.id);return bad("TRANSFER_FAILED_"+errorCode(e),502,req);}}
 function equal(a:string,b:string){if(a.length!==b.length)return false;let d=0;for(let i=0;i<a.length;i++)d|=a.charCodeAt(i)^b.charCodeAt(i);return d===0;}
 function hex(v:ArrayBuffer){return Array.from(new Uint8Array(v)).map(x=>x.toString(16).padStart(2,"0")).join("");}
