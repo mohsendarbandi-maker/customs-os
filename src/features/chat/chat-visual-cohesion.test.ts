@@ -9,6 +9,10 @@ const chatPage = read('src/features/chat/ChatPage.tsx');
 const hierarchy = read('src/features/chat/ChatHierarchyPanel.tsx');
 const logo = read('src/features/chat/ChatBrandLogo.tsx');
 const main = read('src/main.tsx');
+const appShell = read('src/components/AppShell.tsx');
+const aiStyles = read('src/styles/ai-workspace.css');
+const reminderI18n = read('src/features/reminders/reminderI18n.ts');
+const datePicker = read('src/features/reminders/JalaliDateTimePicker.tsx');
 
 describe('shared visual language and chat layout regressions', () => {
   it('loads the cohesion layer after the existing responsive styles', () => {
@@ -23,6 +27,39 @@ describe('shared visual language and chat layout regressions', () => {
     expect(reminders).not.toContain('data-theme={theme}');
     expect(reminders).toContain('رنگ‌بندی و حالت روشن/تیره از تنظیمات ظاهری اصلی Customs OS پیروی می‌کند.');
     expect(styles).toContain('background: var(--bg) !important');
+  });
+
+  it('renders Jalali years without thousands separators in every calendar header', () => {
+    expect(reminderI18n).toContain('useGrouping:false');
+    expect(reminders).toContain('reminderYear(calendarMonth.year,language)');
+    expect(datePicker).toContain('reminderYear(year,language)');
+    expect(reminders).not.toContain('reminderNumber(calendarMonth.year,language)');
+  });
+
+  it('keeps the reminders calendar accent bound to site-wide appearance tokens', () => {
+    expect(styles).toContain('.reminders-app-standalone .reminders-calendar-today');
+    expect(styles).toContain('background: var(--primary) !important');
+    expect(styles).toContain('.reminders-app-standalone .reminders-calendar-cell-count');
+    expect(styles).toContain('color: var(--primary) !important');
+  });
+
+  it('keeps the chat message actions menu inside the viewport using a fixed portal', () => {
+    expect(chatPage).toContain("import{createPortal}from'react-dom';");
+    expect(chatPage).toContain('getBoundingClientRect()');
+    expect(chatPage).toContain('className="chat-message-actions-menu"');
+    expect(chatPage).toContain('document.body');
+    expect(chatPage).toContain('chat-message-actions-dismiss');
+    expect(aiStyles).toContain('.chat-message-actions-menu');
+    expect(aiStyles).toContain('position: fixed;');
+  });
+
+  it('shows a styled Customs AI launcher on every authenticated app route', () => {
+    expect(appShell).toContain('<AIWorkspace pageContext={location.pathname + location.search} />');
+    expect(appShell).not.toContain("!location.pathname.startsWith('/chat') && !location.pathname.startsWith('/reminders')");
+    expect(main).toContain("import './styles/ai-workspace.css';");
+    expect(aiStyles).toContain('.ai-launcher');
+    expect(aiStyles).toContain('.ai-chat-panel');
+    expect(aiStyles).toContain('var(--primary)');
   });
 
   it('prevents the chat brand and connection status from overlapping', () => {
