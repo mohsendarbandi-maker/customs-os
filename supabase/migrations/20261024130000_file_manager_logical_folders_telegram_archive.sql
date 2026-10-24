@@ -769,6 +769,40 @@ begin
 end;
 $function$;
 
+-- The global-reference audit trigger also covers customs offices whose organization_id
+-- may be NULL. Do not create a business audit event for the internal search-index backfill.
+create or replace function public.record_global_reference_audit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_catalog, pg_temp
+as $function$
+declare
+  v_org uuid := public.user_org_id();
+begin
+  if tg_op = 'UPDATE'
+     and to_jsonb(new) ? 'file_manager_search_text'
+     and (to_jsonb(new) - 'file_manager_search_text' - 'updated_at')
+         = (to_jsonb(old) - 'file_manager_search_text' - 'updated_at') then
+    return new;
+  end if;
+
+  insert into public.audit_logs (
+    organization_id, user_id, action, table_name, record_id, old_data, new_data
+  ) values (
+    v_org,
+    auth.uid(),
+    tg_op,
+    tg_table_name,
+    case when tg_op = 'DELETE' then old.id else new.id end,
+    case when tg_op in ('DELETE', 'UPDATE') then to_jsonb(old) else null end,
+    case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) else null end
+  );
+
+  return coalesce(new, old);
+end;
+$function$;
+
 -- Populate existing metadata once. Subsequent writes are maintained by the trigger.
 update public.file_manager_folders set file_manager_search_text = file_manager_search_text;
 update public.file_manager_files set file_manager_search_text = file_manager_search_text;
