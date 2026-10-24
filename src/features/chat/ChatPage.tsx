@@ -1,4 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
+import{createPortal}from'react-dom';
 import{AlertCircle,ArrowRight,Bell,BellOff,Check,CheckCheck,ChevronDown,Clock,Hash,Loader2,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Star,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useSearchParams}from'react-router-dom';
 import{useAuth}from'../../context/AuthContext';
@@ -101,7 +102,7 @@ export const ChatPage:React.FC=()=>{
  const[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel');const[sharedConnections,setSharedConnections]=useState<Array<{id:string;target_organization_id:string;target_name:string}>>([]);
  const[selectedConnection,setSelectedConnection]=useState('');const[attachmentBusy,setAttachmentBusy]=useState(false);const[mediaState,setMediaState]=useState<MediaState>('idle');
  const[recording,setRecording]=useState(false);const[ocrBusy,setOcrBusy]=useState(false);const[pushReady,setPushReady]=useState(false);const[pushBusy,setPushBusy]=useState(false);const[settingsOpen,setSettingsOpen]=useState(false);
- const[menu,setMenu]=useState<string|null>(null);const[directoryOpen,setDirectoryOpen]=useState(false);const[directoryMode,setDirectoryMode]=useState<ChatDirectoryMode>('members');
+ const[menu,setMenu]=useState<string|null>(null);const[menuPosition,setMenuPosition]=useState<{top:number;left:number;width:number}|null>(null);const[directoryOpen,setDirectoryOpen]=useState(false);const[directoryMode,setDirectoryMode]=useState<ChatDirectoryMode>('members');
  const[folder,setFolder]=useState<ChatFolder>('all');const[newMessageCount,setNewMessageCount]=useState(0);
  const[olderLoading,setOlderLoading]=useState(false);const[hasOlder,setHasOlder]=useState(true);
  const[realtimeReady,setRealtimeReady]=useState(false);
@@ -408,8 +409,8 @@ export const ChatPage:React.FC=()=>{
  const runSearch=async()=>{if(!query.trim()){setResults([]);return}try{setResults(await searchChat(query,selectedId??undefined))}catch(e){setError(err(e))}};
  const jumpToSearchResult=(result:{id:string;conversation_id:string})=>{pendingScrollMessage.current=result.id;setResults([]);setSelectedId(result.conversation_id)};
  const retry=(clientUuid:string)=>{void retryChatMessage(clientUuid).catch(e=>setError(err(e)))};
- const react=async(m:ChatMessage,emoji:string)=>{try{await toggleChatReaction(m.id,emoji);if(selectedId)await loadConversation(selectedId,false);setMenu(null)}catch(e){setError(err(e))}};
- const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);setMenu(null);if(selectedId)await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
+ const react=async(m:ChatMessage,emoji:string)=>{try{await toggleChatReaction(m.id,emoji);if(selectedId)await loadConversation(selectedId,false);closeMessageMenu()}catch(e){setError(err(e))}};
+ const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);closeMessageMenu();if(selectedId)await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
  const editCurrent=async()=>{if(!editId||!selectedId)return;const body=normalizeFaText(text);if(!body)return;try{await editChatMessage(editId,body);setEditId(null);setText(chatDraftBeforeEdit.current);chatDraftBeforeEdit.current='';await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
  const forwardCurrent=async(targetId:string)=>{if(!forwardId)return;try{await forwardChatMessage(forwardId,targetId);setForwardId(null);void refresh();setError('پیام ارسال شد.')}catch(e){setError(err(e))}};
  const publishShipmentUpdate=async()=>{const selected=conversations.find(c=>c.conversation_id===selectedId);if(!selectedId||!selected?.shipment_id)return;try{await shareShipmentUpdate(selectedId,selected.shipment_id,shipmentStatus,shipmentNote.trim()||undefined);setShipmentUpdateOpen(false);setShipmentNote('');await loadConversation(selectedId,false);void refresh()}catch(e){setError(err(e))}};
@@ -425,6 +426,21 @@ export const ChatPage:React.FC=()=>{
   }catch(e){setError(err(e))}finally{olderLoadingRef.current=false;setOlderLoading(false)}
  },[hasOlder,messages,selectedId]);
 
+ const closeMessageMenu=()=>{setMenu(null);setMenuPosition(null);};
+ const toggleMessageMenu=(event:React.MouseEvent<HTMLButtonElement>,messageId:string)=>{
+  if(menu===messageId){closeMessageMenu();return;}
+  const rect=event.currentTarget.getBoundingClientRect();
+  const viewportWidth=window.innerWidth;
+  const viewportHeight=window.innerHeight;
+  const width=Math.min(208,Math.max(160,viewportWidth-24));
+  const maxHeight=Math.min(360,Math.max(160,viewportHeight-24));
+  let top=rect.bottom+8;
+  if(top+maxHeight>viewportHeight-12)top=rect.top-maxHeight-8;
+  top=Math.max(12,Math.min(top,Math.max(12,viewportHeight-maxHeight-12)));
+  const left=Math.max(12,Math.min(rect.right-width,Math.max(12,viewportWidth-width-12)));
+  setMenuPosition({top,left,width});
+  setMenu(messageId);
+ };
  const onScroll=()=>{const area=messageArea.current;if(!area)return;const distance=area.scrollHeight-area.scrollTop-area.clientHeight;nearBottomRef.current=distance<96;if(nearBottomRef.current)setNewMessageCount(0);if(area.scrollTop<180)void loadOlder()};
 
  const markVisibleRead=useCallback(()=>{
@@ -480,7 +496,7 @@ export const ChatPage:React.FC=()=>{
   requestAnimationFrame(jump);
  },[getMessageById,loading,messages,selectedId]);
 
- useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape'){setMenu(null);setForwardId(null);setPeopleOpen(false);setChannelOpen(false);setDirectoryOpen(false);setSettingsOpen(false)}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[]);
+ useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape'){closeMessageMenu();setForwardId(null);setPeopleOpen(false);setChannelOpen(false);setDirectoryOpen(false);setSettingsOpen(false)}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[]);
 
  const selected=conversations.find(c=>c.conversation_id===selectedId)??null;
  const voice=useVoiceCall({userId:user?.id,organizationId:profile?.organization_id,conversationId:selected?.conversation_id??null,peerUserId:selected?.type==='direct'?selected.display_user_id??null:null,peerName:selected?.display_name||selected?.title||'همکار',requestedCallId});
@@ -535,7 +551,7 @@ export const ChatPage:React.FC=()=>{
     <div className="px-3 py-2 border-b app-border"><div className="h-12 rounded-2xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو در گفتگوها" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div></div>
     <div className="chat-folder-strip px-3 py-2 border-b app-border overflow-x-auto flex gap-2">{Object.entries(folderLabels).map(([key,label])=><button type="button" key={key} onClick={()=>setFolder(key as ChatFolder)} className={"shrink-0 min-h-10 px-3 rounded-xl text-xs font-bold border app-border "+(folder===key?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]')} aria-pressed={folder===key}>{label}{key==='unread'&&unread>0?<span className="mr-1">({unread})</span>:null}</button>)}</div>
     {results.length>0&&<div className="border-b app-border max-h-48 overflow-y-auto">{results.map(r=><button type="button" key={r.id} onClick={()=>jumpToSearchResult(r)} className="w-full text-right px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5"><b className="text-xs block truncate">{r.title}</b><span className="text-[10px] app-muted block truncate mt-1">{r.snippet}</span></button>)}</div>}
-    <ChatHierarchyPanel selectedId={selectedId} onSelect={id=>{setSelectedId(id);setMessages([]);setResults([]);setMenu(null)}} conversations={conversations} folder={folder}/>
+    <ChatHierarchyPanel selectedId={selectedId} onSelect={id=>{setSelectedId(id);setMessages([]);setResults([]);closeMessageMenu()}} conversations={conversations} folder={folder}/>
    </section>
   </div>}
 
@@ -551,7 +567,7 @@ export const ChatPage:React.FC=()=>{
     {realtimeReady&&online?<Wifi size={16}/>:<WifiOff size={16}/>}
    </header>
 
-   <div ref={messageArea} onScroll={onScroll} className="chat-message-area relative flex-1 min-h-0 overflow-y-auto px-3 py-5 md:px-5 md:py-6 overscroll-contain bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(0,0,0,.025),transparent_18%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,.02),transparent_18%)]">
+   <div ref={messageArea} onScroll={()=>{if(menu!==null)closeMessageMenu();onScroll()}} className="chat-message-area relative flex-1 min-h-0 overflow-y-auto px-3 py-5 md:px-5 md:py-6 overscroll-contain bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(0,0,0,.025),transparent_18%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.03),transparent_20%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,.02),transparent_18%)]">
     {olderLoading&&<div className="absolute top-2 left-0 right-0 z-10 flex justify-center"><span className="px-3 py-1 rounded-full bg-[var(--surface)] border app-border text-[10px] app-muted shadow-sm"><Loader2 size={11} className="inline ml-1 animate-spin"/>در حال دریافت پیام‌های قدیمی…</span></div>}
     {!hasOlder&&messages.length>0&&<div className="text-center text-[10px] app-muted pb-2">ابتدای گفتگو</div>}
     {messages.map((m,index)=>{
@@ -570,18 +586,18 @@ export const ChatPage:React.FC=()=>{
            {m.edited_at&&<span>ویرایش‌شده</span>}<span>{chatTime(m.created_at)}</span>
            {own&&<span className="inline-flex items-center">{statusView(m)}</span>}
            {own&&m.delivery_status==='failed'&&<button type="button" className="mr-1 underline font-bold text-red-200" onClick={()=>retry(m.client_uuid)} aria-label="تلاش مجدد ارسال">تلاش مجدد</button>}
-           {!deleted&&!local&&<button type="button" onClick={()=>setMenu(menu===m.id?null:m.id)} aria-label="گزینه‌های پیام" className="min-h-8 min-w-8 grid place-items-center"><MoreVertical size={14}/></button>}
+           {!deleted&&!local&&<button type="button" onClick={event=>toggleMessageMenu(event,m.id)} aria-haspopup="menu" aria-expanded={menu===m.id} aria-label="گزینه‌های پیام" className="min-h-8 min-w-8 grid place-items-center"><MoreVertical size={14}/></button>}
           </div>
-          {menu===m.id&&!local&&<div className="absolute z-20 left-1 bottom-7 rounded-2xl border app-border bg-[var(--surface)] text-[var(--text)] shadow-xl p-1 min-w-48">
+          {menu===m.id&&!local&&menuPosition&&createPortal(<><button type="button" className="chat-message-actions-dismiss" aria-label="بستن منوی پیام" onClick={closeMessageMenu}/><div className="chat-message-actions-menu" role="menu" dir="rtl" style={{top:menuPosition.top,left:menuPosition.left,width:menuPosition.width}} onClick={closeMessageMenu}>
            <div className="flex gap-1 p-1 border-b app-border">{['❤️','👍','😂','😮','😢','🔥'].map(emoji=><button type="button" key={emoji} onClick={()=>void react(m,emoji)} className="h-8 w-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/10" aria-label={emoji}>{emoji}</button>)}</div>
-           <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setReply(m);setMenu(null)}}>پاسخ</button>
-           {own&&<button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{chatDraftBeforeEdit.current=text;setEditId(m.id);setText(m.body??'');setReply(null);setMenu(null)}}>ویرایش</button>}
+           <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setReply(m);closeMessageMenu()}}>پاسخ</button>
+           {own&&<button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{chatDraftBeforeEdit.current=text;setEditId(m.id);setText(m.body??'');setReply(null);closeMessageMenu()}}>ویرایش</button>}
            <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>void toggleChatStar(m.id).then(()=>selectedId?loadConversation(selectedId,false):undefined).catch(e=>setError(err(e)))}><Star size={13} className="inline ml-1"/>ستاره</button>
            <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>void toggleChatPin(m.id).then(()=>selectedId?loadConversation(selectedId,false):undefined).catch(e=>setError(err(e)))}><Pin size={13} className="inline ml-1"/>سنجاق</button>
-           <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setForwardId(m.id);setMenu(null)}}>فوروارد</button>
+           <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>{setForwardId(m.id);closeMessageMenu()}}>فوروارد</button>
            <button type="button" className="w-full text-right px-3 py-2 text-xs" onClick={()=>void remove(m,false)}><Trash2 size={13} className="inline ml-1"/>حذف برای من</button>
            {own&&<button type="button" className="w-full text-right px-3 py-2 text-xs text-red-600" onClick={()=>void remove(m,true)}>حذف برای همه</button>}
-          </div>}
+          </div></>,document.body)}
          </div>
         </div>
        </div>
