@@ -971,7 +971,9 @@ begin
 
     update public.file_manager_files
     set is_archived = false, updated_at = now()
-    where organization_id = new.organization_id and customs_document_id = new.id;
+    where organization_id = new.organization_id
+      and (customs_document_id = new.id
+        or (new.file_asset_id is not null and file_asset_id = new.file_asset_id));
   end if;
 
   return new;
@@ -1178,7 +1180,9 @@ as $$
     left join public.shipments s on s.id = cd.shipment_id and s.organization_id = cd.organization_id
     left join public.clients c on c.id = coalesce(cd.client_id, s.client_id) and c.organization_id = cd.organization_id
     left join public.file_manager_folders fm on fm.shipment_id = cd.shipment_id and fm.organization_id = cd.organization_id and fm.folder_type = 'shipment'
-    left join public.file_manager_files fm_file on fm_file.customs_document_id = cd.id and fm_file.organization_id = cd.organization_id
+    left join public.file_manager_files fm_file
+      on fm_file.organization_id = cd.organization_id
+      and (fm_file.customs_document_id = cd.id or fm_file.shipment_document_id = cd.id)
     cross join query_arg q
     where cd.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or coalesce(cd.client_id, s.client_id) = public.user_client_id())
