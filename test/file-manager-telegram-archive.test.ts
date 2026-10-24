@@ -57,7 +57,7 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(gateway).toContain('reconciled:true');
     expect(gateway).toContain('FILE_UPLOAD_RECONCILIATION_REQUIRED');
     expect(gateway).toContain('if(existing&&existing.status!=="failed")');
-    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption)');
+    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId)');
   });
 
   it('uses content-bound deterministic upload keys across all browser upload flows', () => {
@@ -75,7 +75,7 @@ describe('Telegram-backed Customs OS file manager', () => {
 
   it('enforces the Telegram download-size limit while streaming at the server', () => {
     expect(gateway).toContain('maxOverride?:number');
-    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption)');
+    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId)');
     expect(fileManagerClient).toContain('FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES = 20 * 1024 * 1024');
     expect(fileManagerClient).toContain('FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES');
   });
@@ -230,7 +230,8 @@ describe('Telegram-backed Customs OS file manager', () => {
   it('keeps the mobile folder tree in a full-height scrollable drawer and avoids a tiny nested upload scroller', () => {
     expect(fileManager).toContain('fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)]');
     expect(fileManager).toContain('min-h-0 flex-1 overflow-y-auto overscroll-contain');
-    expect(fileManager).toContain('max-h-none shrink-0 border-b app-border p-3 md:p-4 lg:max-h-64 lg:overflow-y-auto');
+    expect(fileManager).toContain('lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto lg:shadow-none');
+    expect(fileManager).toContain('className="shrink-0 border-b app-border p-3 md:p-4"');
     expect(fileManager).toContain('min-h-[60dvh] max-h-none flex-col overflow-visible');
     expect(fileManager).toContain('whitespace-normal break-words leading-5');
   });
