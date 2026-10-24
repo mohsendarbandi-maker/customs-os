@@ -96,6 +96,7 @@ create table if not exists public.file_manager_files (
   document_type text not null default 'other',
   tags text[] not null default '{}'::text[],
   metadata jsonb not null default '{}'::jsonb,
+  is_archived boolean not null default false,
   -- Optional compatibility pointer to the pre-existing Storage-backed document row.
   shipment_document_id uuid null references public.shipment_documents(id) on delete set null,
   customs_document_id uuid null references public.customs_documents(id) on delete set null,
