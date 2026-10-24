@@ -708,8 +708,8 @@ as $$
     left join public.clients cl on cl.id = s.client_id and cl.organization_id = s.organization_id
     left join public.vessels v on v.id = s.vessel_id and v.organization_id = s.organization_id
     left join public.cases ca on ca.id = s.case_id and ca.organization_id = s.organization_id
-    left join public.customs_offices o on o.id = coalesce(s.customs_office_id, ca.customs_office_id)
     left join public.shipment_customs_data scd on scd.shipment_id = s.id and scd.organization_id = s.organization_id
+    left join public.customs_offices o on o.id = coalesce(s.customs_office_id, ca.customs_office_id, scd.customs_office_id)
     left join public.customs_declarations cd on cd.shipment_id = s.id and cd.organization_id = s.organization_id
     left join public.file_manager_folders fm on fm.shipment_id = s.id and fm.organization_id = s.organization_id and fm.folder_type = 'shipment'
     cross join query_arg q
