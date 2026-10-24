@@ -720,17 +720,24 @@ on conflict do nothing;
 insert into public.file_manager_files
   (organization_id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,
    document_type,tags,metadata,customs_document_id,storage_path,created_by)
-select cd.organization_id,f.id,cd.shipment_id,coalesce(cd.client_id,s.client_id),cd.file_asset_id,
+select cd.organization_id,
+       case when cd.shipment_id is not null then fs.id else fc.id end,
+       cd.shipment_id,coalesce(cd.client_id,s.client_id),cd.file_asset_id,
        coalesce(cd.display_name,cd.original_name),coalesce(cd.mime_type,'application/octet-stream'),
        greatest(coalesce(cd.size_bytes,0),0),coalesce(cd.document_type::text,'other'),
        coalesce(cd.tags,'{}'::text[]),
        jsonb_build_object('legacyStorageBackend',coalesce(cd.storage_backend,'supabase')),
        cd.id,cd.storage_path,cd.created_by
 from public.customs_documents cd
-join public.shipments s on s.id=cd.shipment_id and s.organization_id=cd.organization_id
-join public.file_manager_folders f on f.organization_id=cd.organization_id
-  and f.shipment_id=cd.shipment_id and f.folder_type='other'
+left join public.shipments s on s.id=cd.shipment_id and s.organization_id=cd.organization_id
+left join public.file_manager_folders fs on fs.organization_id=cd.organization_id
+  and fs.shipment_id=cd.shipment_id and fs.folder_type='other'
+left join public.file_manager_folders fc on fc.organization_id=cd.organization_id
+  and fc.client_id=coalesce(cd.client_id,s.client_id) and fc.folder_type='client' and fc.shipment_id is null
 where not coalesce(cd.is_archived,false)
+  and (cd.shipment_id is not null or cd.client_id is not null)
+  and ((cd.shipment_id is not null and fs.id is not null)
+    or (cd.shipment_id is null and fc.id is not null))
   and not exists (select 1 from public.file_manager_files fm
     where fm.organization_id=cd.organization_id and fm.customs_document_id=cd.id)
 on conflict do nothing;
