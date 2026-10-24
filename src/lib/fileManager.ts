@@ -102,6 +102,7 @@ export async function uploadTelegramArchivedFile(
     folderId: string;
     shipmentId: string;
     documentType?: string;
+    documentName?: string;
     destination?: FileArchiveDestination;
     idempotencyKey?: string;
   },
@@ -117,6 +118,7 @@ export async function uploadTelegramArchivedFile(
     folderId: input.folderId,
     shipmentId: input.shipmentId,
     documentType: input.documentType || 'other',
+    ...(input.documentName ? { documentName: input.documentName } : {}),
   });
 
   const response = await authorizedRequest(
