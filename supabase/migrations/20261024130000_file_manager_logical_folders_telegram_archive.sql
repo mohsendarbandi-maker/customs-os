@@ -319,6 +319,7 @@ begin
     on scd.shipment_id = s.id and scd.organization_id = s.organization_id
   left join public.customs_offices o
     on o.id = coalesce(s.customs_office_id, ca.customs_office_id, scd.customs_office_id)
+    and o.organization_id = s.organization_id
   where s.id = p_shipment_id;
 
   if v_org is null or v_client is null or v_shipment is null then
@@ -1026,6 +1027,7 @@ as $$
     left join public.cases ca on ca.id = s.case_id and ca.organization_id = s.organization_id
     left join public.shipment_customs_data scd on scd.shipment_id = s.id and scd.organization_id = s.organization_id
     left join public.customs_offices o on o.id = coalesce(s.customs_office_id, ca.customs_office_id, scd.customs_office_id)
+    and o.organization_id = s.organization_id
     left join public.customs_declarations cd on cd.shipment_id = s.id and cd.organization_id = s.organization_id
     left join public.file_manager_folders fm on fm.shipment_id = s.id and fm.organization_id = s.organization_id and fm.folder_type = 'shipment'
     cross join query_arg q
@@ -1062,7 +1064,7 @@ as $$
       concat_ws(' • ', v.imo_number, v.mmsi_number, v.flag, v.flag_code, sl.name),
       fm.id, s.id, s.client_id, v.created_at
     from public.vessels v
-    left join public.shipping_lines sl on sl.id = v.shipping_line_id
+    left join public.shipping_lines sl on sl.id = v.shipping_line_id and sl.organization_id = v.organization_id
     left join public.shipments s on s.vessel_id = v.id and s.organization_id = v.organization_id
     left join public.file_manager_folders fm on fm.shipment_id = s.id and fm.organization_id = s.organization_id and fm.folder_type = 'shipment'
     cross join query_arg q
@@ -1086,7 +1088,7 @@ as $$
     from public.customs_declarations d
     left join public.shipments s on s.id = d.shipment_id and s.organization_id = d.organization_id
     left join public.cases ca on ca.id = d.case_id and ca.organization_id = d.organization_id
-    left join public.customs_offices o on o.id = d.customs_office_id
+    left join public.customs_offices o on o.id = d.customs_office_id and o.organization_id = d.organization_id
     left join public.file_manager_folders fm on fm.shipment_id = d.shipment_id and fm.organization_id = d.organization_id and fm.folder_type = 'shipment'
     cross join query_arg q
     where d.organization_id = public.user_org_id()
@@ -1102,7 +1104,7 @@ as $$
     from public.file_manager_folders f
     left join public.clients c on c.id = f.client_id and c.organization_id = f.organization_id
     left join public.shipments s on s.id = f.shipment_id and s.organization_id = f.organization_id
-    left join public.customs_offices o on o.id = f.customs_office_id
+    left join public.customs_offices o on o.id = f.customs_office_id and o.organization_id = f.organization_id
     cross join query_arg q
     where f.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or f.folder_type = 'root' or f.client_id = public.user_client_id())
@@ -1126,7 +1128,7 @@ as $$
     join public.file_manager_folders f on f.id = fm.folder_id and f.organization_id = fm.organization_id
     left join public.shipments s on s.id = fm.shipment_id and s.organization_id = fm.organization_id
     left join public.clients c on c.id = fm.client_id and c.organization_id = fm.organization_id
-    left join public.customs_offices o on o.id = s.customs_office_id
+    left join public.customs_offices o on o.id = s.customs_office_id and o.organization_id = s.organization_id
     cross join query_arg q
     where fm.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or fm.client_id = public.user_client_id())
@@ -1152,7 +1154,7 @@ as $$
     from public.shipment_documents sd
     join public.shipments s on s.id = sd.shipment_id and s.organization_id = sd.organization_id
     left join public.clients c on c.id = s.client_id and c.organization_id = s.organization_id
-    left join public.customs_offices o on o.id = s.customs_office_id
+    left join public.customs_offices o on o.id = s.customs_office_id and o.organization_id = s.organization_id
     left join public.file_manager_folders fm on fm.shipment_id = sd.shipment_id and fm.organization_id = sd.organization_id and fm.folder_type = 'shipment'
     left join public.file_manager_files fm_file on fm_file.shipment_document_id = sd.id and fm_file.organization_id = sd.organization_id
     cross join query_arg q
