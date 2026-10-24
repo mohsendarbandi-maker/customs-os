@@ -24,7 +24,7 @@ function parseArchiveTags(url:URL):string[]{
  try{const parsed=JSON.parse(url.searchParams.get("tags")||"[]");if(Array.isArray(parsed))value=parsed.filter((x)=>typeof x==="string");}catch{/* Ignore malformed optional tags; never affect binary upload. */}
  return [...new Set(value.map((tag)=>cleanName(tag).replace(/,/g," ").trim().slice(0,64)).filter((tag)=>tag&&tag!=="document.bin"))].slice(0,20);
 }
-const cleanMime = (s:string|null)=>{const v=(s||"application/octet-stream").split(";")[0].trim().toLowerCase();return /^[a-z0-9!#const cleanMime = (s:string|null)=>{const v=(s||"application/octet-stream").split(";")[0].trim().toLowerCase();return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(v)?v:"application/octet-stream";};^_.+-]+\/[a-z0-9!#const cleanMime = (s:string|null)=>{const v=(s||"application/octet-stream").split(";")[0].trim().toLowerCase();return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(v)?v:"application/octet-stream";};^_.+-]+$/.test(v)?v:"application/octet-stream";};
+const cleanMime = (s:string|null)=>{const v=(s||"application/octet-stream").split(";")[0].trim().toLowerCase();const parts=v.split("/");return parts.length===2&&/^[a-z0-9.+_-]+$/i.test(parts[0])&&/^[a-z0-9.+_-]+$/i.test(parts[1])?v:"application/octet-stream";};
 const ensureFileExtension=(name:string,mime:string)=>{
  const trimmed=cleanName(name),last=trimmed.split("/").pop()||trimmed;
  if(/\.[a-z0-9]{1,12}$/i.test(last))return trimmed;
