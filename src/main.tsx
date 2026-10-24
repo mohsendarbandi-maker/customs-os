@@ -5,6 +5,7 @@ import './index.css';
 import './responsive.css';
 import './styles/mobile-polish.css';
 import './styles/design-system.css';
+import './styles/reminders-redesign.css';
 import { startOfflineQueue } from './lib/offlineQueue';
 
 type BoundaryState = { hasError: boolean; message: string };
