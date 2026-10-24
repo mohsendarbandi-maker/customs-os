@@ -29,7 +29,7 @@ type FolderRow = {
 type FileRow = {
   id: string;
   folder_id: string;
-  shipment_id: string;
+  shipment_id: string | null;
   client_id: string | null;
   file_asset_id: string | null;
   original_name: string;
@@ -42,6 +42,7 @@ type FileRow = {
   shipment_document_id: string | null;
   customs_document_id: string | null;
   storage_path: string | null;
+  is_archived: boolean;
   created_at: string;
 };
 type SearchHit = {
@@ -147,9 +148,10 @@ export const FileManagerPage: React.FC = () => {
     }
     const { data, error: filesError } = await supabase
       .from('file_manager_files')
-      .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,created_at')
+      .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
       .eq('organization_id', organizationId)
       .eq('folder_id', folderId)
+      .eq('is_archived', false)
       .order('created_at', { ascending: false });
     if (filesError) throw filesError;
     setFiles((data || []) as FileRow[]);
@@ -207,7 +209,10 @@ export const FileManagerPage: React.FC = () => {
 
   const getUploadTarget = async () => {
     if (!currentFolder) throw new Error('ابتدا یک پوشه را انتخاب کنید.');
-    if (!currentFolder.shipment_id) throw new Error('برای آپلود، وارد پوشه یک محموله شوید.');
+    if (!currentFolder.shipment_id) {
+      if (currentFolder.client_id && ['client', 'custom'].includes(currentFolder.folder_type)) return currentFolder;
+      throw new Error('برای آپلود، پوشه صاحب کالا یا محموله را انتخاب کنید.');
+    }
     if (currentFolder.folder_type !== 'shipment') return currentFolder;
     const preferred = folders.find((folder) =>
       folder.parent_id === currentFolder.id && folder.folder_type === 'other');
@@ -274,8 +279,8 @@ export const FileManagerPage: React.FC = () => {
         }
         await uploadTelegramArchivedFile(file, {
           folderId: parent.id,
-          shipmentId: parent.shipment_id!,
-          documentType: parent.folder_type,
+          ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+          documentType: parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG',
           destination,
           idempotencyKey,
         });
@@ -304,7 +309,7 @@ export const FileManagerPage: React.FC = () => {
   };
 
   const createFolder = async () => {
-    if (!currentFolder || !currentFolder.shipment_id || !roleCanModifyStructure(role)) {
+    if (!currentFolder || !(currentFolder.shipment_id || (currentFolder.client_id && ['client', 'custom'].includes(currentFolder.folder_type))) || !roleCanModifyStructure(role)) {
       setError('ساخت زیرپوشه برای این کاربر مجاز نیست یا پوشه محموله انتخاب نشده است.');
       return;
     }
@@ -372,8 +377,8 @@ export const FileManagerPage: React.FC = () => {
       const writeFolder = async (folder: FolderRow, handle: any): Promise<void> => {
         const { data: folderFiles, error: folderFilesError } = await supabase
           .from('file_manager_files')
-          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,created_at')
-          .eq('organization_id', organizationId).eq('folder_id', folder.id)
+          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
+          .eq('organization_id', organizationId).eq('folder_id', folder.id).eq('is_archived', false)
           .order('created_at', { ascending: true });
         if (folderFilesError) throw folderFilesError;
         for (const row of (folderFiles || []) as FileRow[]) {
@@ -411,7 +416,7 @@ export const FileManagerPage: React.FC = () => {
     else setError('برای این نتیجه هنوز پوشه مرتبط ثبت نشده است.');
   };
 
-  const uploadEnabled = Boolean(currentFolder?.shipment_id);
+  const uploadEnabled = Boolean(currentFolder && (currentFolder.shipment_id || (currentFolder.client_id && ['client', 'custom'].includes(currentFolder.folder_type))));
   const directoryProps = { webkitdirectory: '', directory: '' } as any;
 
   return <main dir="rtl" className="min-h-screen p-4 md:p-6" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
@@ -475,11 +480,11 @@ export const FileManagerPage: React.FC = () => {
                   </React.Fragment>)}
                 </div>
                 <h2 className="mt-2 truncate text-lg font-black">{currentFolder?.display_name || 'فایل‌منیجر'}</h2>
-                <p className="mt-1 text-xs app-muted">{currentFolder?.folder_type === 'shipment' ? 'محموله · برای دسته‌بندی دقیق، وارد یکی از زیرپوشه‌ها شوید.' : currentFolder?.shipment_id ? 'پوشه اسناد محموله' : 'پوشه سازمانی'}</p>
+                <p className="mt-1 text-xs app-muted">{currentFolder?.folder_type === 'shipment' ? 'محموله · برای دسته‌بندی دقیق، وارد یکی از زیرپوشه‌ها شوید.' : currentFolder?.shipment_id ? 'پوشه اسناد محموله' : currentFolder?.client_id ? 'اسناد ثابت صاحب کالا و شرکت' : 'پوشه سازمانی'}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => void exportFolderToWindows()} disabled={!currentFolder || exporting || loading} className="rounded-xl border app-border px-3 py-2 text-sm disabled:opacity-50"><Download size={15} className="ml-1 inline" />انتقال پوشه به ویندوز</button>
-                {currentFolder?.shipment_id && roleCanModifyStructure(role) && <form onSubmit={(e) => { e.preventDefault(); void createFolder(); }} className="flex gap-1">
+                {uploadEnabled && roleCanModifyStructure(role) && <form onSubmit={(e) => { e.preventDefault(); void createFolder(); }} className="flex gap-1">
                   <input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="نام زیرپوشه" className="w-32 rounded-xl border app-border bg-[var(--surface-2)] px-2 py-2 text-sm" />
                   <button type="submit" disabled={creatingFolder || !folderName.trim()} className="rounded-xl border app-border px-3 py-2 text-sm disabled:opacity-50">{creatingFolder ? <Loader2 size={15} className="animate-spin" /> : 'ساخت پوشه'}</button>
                 </form>}
