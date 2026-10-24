@@ -105,14 +105,14 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  if(size!==null&&size>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
  const voice=mediaKind==="voice"&&(c.platform!=="telegram"||mime==="audio/ogg"||mime==="audio/opus");
  const boundary="----CustomsOS"+token(16),filename=cleanName(name).replace(/["\r\n]/g,"_");
- const caption=String(archiveCaption||"").replace(/\r/g,"").slice(0,950);
- const captionPart=c.platform==="telegram"&&caption
-  ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\\"caption\\"\r\n\r\n"+caption+"\r\n"
-  :"";
- const prefix=captionPart+(c.platform==="whatsapp"
-  ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\\"messaging_product\\"\r\n\r\nwhatsapp\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\\"type\\"\r\n\r\n"+mime+"\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\\"file\\"; filename=\\""+filename+"\\"\r\nContent-Type: "+mime+"\r\n\r\n"
-  :"--"+boundary+"\r\nContent-Disposition: form-data; name=\\""+(voice?"voice":"document")+"\\"; filename=\\""+filename+"\\"\r\nContent-Type: "+mime+"\r\n\r\n");
- const multipartBody=multipart(prefix,bounded(stream,max),"\r\n--"+boundary+"--\r\n");
+  const caption=String(archiveCaption||"").replace(/\r/g,"").slice(0,950);
+  const captionPart=c.platform==="telegram"&&caption
+   ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\"caption\"\r\n\r\n"+caption+"\r\n"
+   :"";
+  const prefix=captionPart+(c.platform==="whatsapp"
+   ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\"messaging_product\"\r\n\r\nwhatsapp\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\"type\"\r\n\r\n"+mime+"\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\"file\"; filename=\""+filename+"\"\r\nContent-Type: "+mime+"\r\n\r\n"
+   :"--"+boundary+"\r\nContent-Disposition: form-data; name=\""+(voice?"voice":"document")+"\"; filename=\""+filename+"\"\r\nContent-Type: "+mime+"\r\n\r\n");
+  const multipartBody=multipart(prefix,bounded(stream,max),"\r\n--"+boundary+"--\r\n");
  if(c.platform==="whatsapp"){
   const pid=String(c.config.phoneNumberId||c.external_account_id);
   const up=await graph(c,pid+"/media",{method:"POST",headers:{"Content-Type":"multipart/form-data; boundary="+boundary},body:multipartBody});
