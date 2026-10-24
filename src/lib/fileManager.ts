@@ -125,6 +125,7 @@ export async function uploadTelegramArchivedFile(
     shipmentId?: string;
     documentType?: string;
     documentName?: string;
+    tags?: string[];
     destination?: FileArchiveDestination;
     idempotencyKey?: string;
   },
@@ -141,6 +142,7 @@ export async function uploadTelegramArchivedFile(
     ...(input.shipmentId ? { shipmentId: input.shipmentId } : {}),
     documentType: input.documentType || 'other',
     ...(input.documentName ? { documentName: input.documentName } : {}),
+    tags: JSON.stringify((input.tags || []).slice(0, 20)),
   });
 
   const response = await authorizedRequest(
