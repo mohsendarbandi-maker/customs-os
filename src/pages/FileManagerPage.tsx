@@ -463,7 +463,7 @@ export const FileManagerPage: React.FC = () => {
       const canonicalPath = (value: string) => value.normalize('NFKC').toLocaleLowerCase('en-US');
       const ambiguousFileKeys = new Set<string>();
       const localDirectories = new Map<string, any>([['', localRoot]]);
-      const localFiles = new Map<string, { file: File; parentPath: string }>();
+      const localFiles = new Map<string, { file: File; parentPath: string; relativePath: string }>();
       const walkLocal = async (directory: any, relative: string): Promise<void> => {
         for await (const [entryName, entry] of directory.entries()) {
           const name = windowsName(String(entryName));
