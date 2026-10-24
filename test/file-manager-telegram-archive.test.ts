@@ -220,6 +220,8 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(gateway).toContain('allowUnassignedLegacy&&folder.shipment_id===null&&!folder.client_id');
     expect(gateway).toContain('folder.display_name==="اسناد نیازمند اتصال به محموله"');
     expect(gateway).toContain('LEGACY_UNASSIGNED_FOLDER_NOT_VERIFIED');
+    expect(gateway).toContain('بدون اتصال به صاحب کالا');
+    expect(gateway).toContain('بدون اتصال به محموله');
     expect(gateway).toContain('String(connection.id),isUnassignedLegacy');
   });
 
