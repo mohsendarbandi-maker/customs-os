@@ -160,6 +160,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
  const chat=u.searchParams.get("chatId")||"",folderId=u.searchParams.get("folderId")||"",
   requestedShipmentId=u.searchParams.get("shipmentId")||"",
   documentType=cleanName(u.searchParams.get("documentType")||"other"),
+   archiveTags=parseArchiveTags(u),
   name=cleanName(decodeURIComponent(req.headers.get("X-File-Name")||u.searchParams.get("filename")||"document.bin")),
   displayName=cleanName(u.searchParams.get("documentName")||name),
   mime=cleanMime(req.headers.get("Content-Type")),
