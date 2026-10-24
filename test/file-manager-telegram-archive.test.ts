@@ -5,10 +5,10 @@ import { resolve } from 'node:path';
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 describe('Telegram-backed Customs OS file manager', () => {
-  const migration = read('supabase/migrations/20261024130000_file_manager_logical_folders_telegram_archive.sql');
-  const uploadJobs = read('supabase/migrations/20261024130100_file_manager_upload_jobs.sql');
-  const unassignedMigration = read('supabase/migrations/20261024130900_file_manager_unassigned_legacy_documents.sql');
-  const grantsMigration = read('supabase/migrations/20261024131000_file_manager_minimize_table_grants.sql');
+  const migration = read('supabase/migrations/20261024130726_file_manager_logical_folders_telegram_archive.sql');
+  const uploadJobs = read('supabase/migrations/20261024130735_file_manager_upload_jobs.sql');
+  const unassignedMigration = read('supabase/migrations/20261024131814_file_manager_unassigned_legacy_documents.sql');
+  const grantsMigration = read('supabase/migrations/20261024132221_file_manager_minimize_table_grants.sql');
   const gateway = read('supabase/functions/messenger-gateway/index.ts');
   const fileManager = read('src/pages/FileManagerPage.tsx');
   const fileManagerClient = read('src/lib/fileManager.ts');
