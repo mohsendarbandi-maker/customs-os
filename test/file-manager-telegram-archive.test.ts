@@ -12,6 +12,7 @@ describe('Telegram-backed Customs OS file manager', () => {
   const fileManagerClient = read('src/lib/fileManager.ts');
   const shipmentPage = read('src/pages/ShipmentFirstPage.tsx');
   const documentPage = read('src/pages/CustomsDocumentManagerPage.tsx');
+  const clientDocumentPage = read('src/pages/ClientDocumentManagerPage.tsx');
   const preDeclaration = read('src/pages/PreDeclarationPage.tsx');
   const app = read('src/App.tsx');
   const navigation = read('src/components/AppShell.tsx');
@@ -64,6 +65,8 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(shipmentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
     expect(documentPage).toContain('uploadTelegramArchivedFile');
     expect(documentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
+    expect(clientDocumentPage).toContain('uploadTelegramArchivedFile');
+    expect(clientDocumentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
   });
 
   it('provides global business/document search, and preserves organization scoping in the RPC', () => {
@@ -82,6 +85,20 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('showDirectoryPicker');
     expect(fileManager).toContain('ساختار پوشه‌ها');
     expect(fileManager).toContain('همگام‌سازی دائمی در پس‌زمینه نیست');
+  });
+
+  it('supports owner-level documents without a shipment and hides archived file metadata', () => {
+    expect(migration).toContain('  shipment_id uuid null,');
+    expect(migration).toContain('create or replace function public.ensure_client_file_manager_folder');
+    expect(migration).toContain('create or replace function public.sync_customs_document_to_file_manager');
+    expect(migration).toContain('and not coalesce(cd.is_archived, false)');
+    expect(migration).toContain('and not fm.is_archived');
+    expect(uploadJobs).toContain('  shipment_id uuid null,');
+    expect(gateway).toContain('CUSTOMS_DOCUMENT_METADATA_SAVE_FAILED');
+    expect(gateway).toContain('ownerFileError');
+    expect(fileManager).toContain("currentFolder.folder_type === 'client'");
+    expect(clientDocumentPage).toContain('is_archived:true');
+    expect(clientDocumentPage).toContain('نسخه اصلی در آرشیو تلگرام حذف نخواهد شد');
   });
 
   it('registers the page and exposes it from the main navigation', () => {
