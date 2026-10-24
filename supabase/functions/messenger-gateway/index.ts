@@ -181,8 +181,9 @@ async function reconcileTelegramArchiveMetadata(input:{
       ?db.from("customs_declarations").select("kottaj_number,declaration_date").eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).order("created_at",{ascending:false}).limit(1).maybeSingle()
       :Promise.resolve({data:null,error:null})
     ]);
-    const ownerName=String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
-    const shipmentFolderName=String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
+    const isUnassignedLegacyFolder=folder.shipment_id===null&&folder.client_id===null&&folder.folder_type==="other"&&folder.display_name==="اسناد نیازمند اتصال به محموله";
+    const ownerName=isUnassignedLegacyFolder?"بدون اتصال به صاحب کالا":String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
+    const shipmentFolderName=isUnassignedLegacyFolder?"بدون اتصال به محموله":String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
     const currentFolderName=String(folder.display_name||folder.folder_type).replace(/[\r\n]/g," ").slice(0,160);
     const customsOfficeName=String((officeMeta as any)?.data?.name||"").replace(/[\r\n]/g," ").slice(0,100);
     const customsOfficeCode=String((officeMeta as any)?.data?.code||"").replace(/[\r\n]/g," ").slice(0,40);
@@ -496,8 +497,9 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
      ?db.from("customs_declarations").select("kottaj_number,declaration_date").eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).order("created_at",{ascending:false}).limit(1).maybeSingle()
      :Promise.resolve({data:null,error:null})
    ]);
-   const ownerName=String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
-   const shipmentFolderName=String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
+   const isUnassignedLegacyFolder=folder.shipment_id===null&&folder.client_id===null&&folder.folder_type==="other"&&folder.display_name==="اسناد نیازمند اتصال به محموله";
+    const ownerName=isUnassignedLegacyFolder?"بدون اتصال به صاحب کالا":String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
+   const shipmentFolderName=isUnassignedLegacyFolder?"بدون اتصال به محموله":String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
    const currentFolderName=String(folder.display_name||folder.folder_type).replace(/[\r\n]/g," ").slice(0,160);
    const customsOfficeName=String((officeMeta as any)?.data?.name||"").replace(/[\r\n]/g," ").slice(0,100);
    const customsOfficeCode=String((officeMeta as any)?.data?.code||"").replace(/[\r\n]/g," ").slice(0,40);
