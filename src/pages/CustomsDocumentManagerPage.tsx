@@ -377,6 +377,9 @@ export const CustomsDocumentManagerPage: React.FC = () => {
     }
   };
   const extractFields = async (d: Doc) => {
+    if (d.storage_backend === 'telegram' || d.file_asset_id) {
+      return setError('محتوای فایل‌های آرشیوشده در تلگرام طبق سیاست فایل‌منیجر برای OCR، استخراج یا تحلیل خوانده نمی‌شود.');
+    }
     if (!d.storage_path) return;
     setExtracting(d);
     setExtracted([]);
@@ -473,6 +476,15 @@ export const CustomsDocumentManagerPage: React.FC = () => {
   };
 
   const preview = async (d: Doc) => {
+    if (d.storage_backend === 'telegram' && d.file_asset_id) {
+      try {
+        const blob = await downloadTelegramArchivedFile(d.file_asset_id);
+        const url = URL.createObjectURL(blob);
+        setSelected(d);
+        setPreviewUrl(url);
+      } catch (e: any) { setError(e?.message || 'نمایش سند تلگرام ناموفق بود'); }
+      return;
+    }
     if (!d.storage_path) return setError('مسیر فایل ثبت نشده است.');
     const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(d.storage_path, 3600);
     if (error || !data?.signedUrl) {
@@ -483,6 +495,20 @@ export const CustomsDocumentManagerPage: React.FC = () => {
   };
 
   const download = async (d: Doc) => {
+    if (d.storage_backend === 'telegram' && d.file_asset_id) {
+      try {
+        const blob = await downloadTelegramArchivedFile(d.file_asset_id);
+        const u = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = u;
+        a.download = fileName(d);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.setTimeout(() => URL.revokeObjectURL(u), 2000);
+      } catch (e: any) { setError(e?.message || 'دانلود سند تلگرام ناموفق بود'); }
+      return;
+    }
     if (!d.storage_path) return;
     const { data, error } = await supabase.storage.from(BUCKET).download(d.storage_path);
     if (error) return setError(`دانلود ناموفق بود: ${error.message}`);
