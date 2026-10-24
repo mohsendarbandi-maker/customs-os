@@ -88,6 +88,7 @@ create table if not exists public.file_manager_files (
   organization_id uuid not null references public.organizations(id) on delete cascade,
   folder_id uuid not null,
   shipment_id uuid null,
+  client_id uuid null references public.clients(id) on delete set null,
   file_asset_id uuid null references public.file_assets(id) on delete restrict,
   original_name text not null,
   mime_type text not null default 'application/octet-stream',
@@ -121,6 +122,10 @@ create index if not exists file_manager_files_folder_created_idx
 
 create index if not exists file_manager_files_shipment_idx
   on public.file_manager_files (organization_id, shipment_id);
+
+create index if not exists file_manager_files_client_idx
+  on public.file_manager_files (organization_id, client_id)
+  where client_id is not null;
 
 create unique index if not exists file_manager_files_shipment_doc_uq
   on public.file_manager_files (organization_id, shipment_document_id)
