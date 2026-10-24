@@ -215,6 +215,14 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(gateway).toContain('customs-os-legacy-archive-v1:');
   });
 
+  it('only allows the private archive runner to archive ownerless legacy documents in the verified unassigned folder', () => {
+    expect(gateway).toContain('async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassignedLegacy=false)');
+    expect(gateway).toContain('allowUnassignedLegacy&&folder.shipment_id===null&&!folder.client_id');
+    expect(gateway).toContain('folder.display_name==="اسناد نیازمند اتصال به محموله"');
+    expect(gateway).toContain('LEGACY_UNASSIGNED_FOLDER_NOT_VERIFIED');
+    expect(gateway).toContain('String(connection.id),isUnassignedLegacy');
+  });
+
   it('keeps the mobile folder tree in a full-height scrollable drawer and avoids a tiny nested upload scroller', () => {
     expect(fileManager).toContain('fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)]');
     expect(fileManager).toContain('min-h-0 flex-1 overflow-y-auto overscroll-contain');
