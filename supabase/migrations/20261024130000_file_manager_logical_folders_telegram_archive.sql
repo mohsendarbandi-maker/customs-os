@@ -424,6 +424,79 @@ begin
 end;
 $$;
 
+create or replace function public.ensure_client_file_manager_folder(p_client_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $
+declare
+  v_org uuid;
+  v_client uuid;
+  v_name text;
+  v_root uuid;
+begin
+  select c.organization_id, c.id, coalesce(nullif(trim(c.name), ''), 'صاحب کالا')
+    into v_org, v_client, v_name
+  from public.clients c
+  where c.id = p_client_id;
+
+  if v_org is null or v_client is null then
+    return;
+  end if;
+
+  insert into public.file_manager_folders
+    (organization_id, parent_id, folder_key, folder_type, display_name, is_system)
+  values (v_org, null, 'owners-root', 'root', 'صاحبان کالا', true)
+  on conflict do nothing;
+
+  select f.id into v_root
+  from public.file_manager_folders f
+  where f.organization_id = v_org and f.parent_id is null and f.folder_key = 'owners-root'
+  limit 1;
+
+  if v_root is null then
+    raise exception 'FILE_MANAGER_ROOT_FOLDER_CREATE_FAILED';
+  end if;
+
+  insert into public.file_manager_folders
+    (organization_id, parent_id, folder_key, folder_type, display_name, client_id, is_system)
+  values
+    (v_org, v_root, 'client:' || v_client::text, 'client', v_name, v_client, true)
+  on conflict do nothing;
+
+  update public.file_manager_folders
+  set display_name = v_name, updated_at = now()
+  where organization_id = v_org and parent_id = v_root
+    and folder_key = 'client:' || v_client::text;
+end;
+$;
+
+revoke all on function public.ensure_client_file_manager_folder(uuid) from public, anon, authenticated;
+
+drop trigger if exists trg_ensure_client_file_manager_folder on public.clients;
+create trigger trg_ensure_client_file_manager_folder
+after insert on public.clients
+for each row execute function public.trigger_ensure_client_file_manager_folder();
+
+create or replace function public.trigger_ensure_client_file_manager_folder()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $
+begin
+  perform public.ensure_client_file_manager_folder(new.id);
+  return new;
+end;
+$;
+
+revoke all on function public.trigger_ensure_client_file_manager_folder() from public, anon, authenticated;
+drop trigger if exists trg_ensure_client_file_manager_folder on public.clients;
+create trigger trg_ensure_client_file_manager_folder
+after insert on public.clients
+for each row execute function public.trigger_ensure_client_file_manager_folder();
+
 revoke all on function public.sync_file_manager_client_folder_name() from public, anon, authenticated;
 
 drop trigger if exists trg_sync_file_manager_client_folder_name on public.clients;
