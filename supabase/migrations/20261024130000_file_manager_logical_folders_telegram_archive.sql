@@ -787,6 +787,91 @@ on public.shipment_documents
 for each row execute function public.sync_shipment_document_to_file_manager();
 
 
+-- Keep non-shipment company documents in the owner's folder as well.
+create or replace function public.sync_customs_document_to_file_manager()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $
+declare
+  v_client uuid;
+  v_shipment uuid;
+  v_folder uuid;
+begin
+  v_shipment := new.shipment_id;
+  v_client := new.client_id;
+
+  if v_shipment is not null then
+    select s.client_id into v_client
+    from public.shipments s
+    where s.id = v_shipment and s.organization_id = new.organization_id;
+    v_client := coalesce(new.client_id, v_client);
+  end if;
+
+  if coalesce(new.is_archived, false) then
+    update public.file_manager_files
+    set is_archived = true, updated_at = now()
+    where organization_id = new.organization_id
+      and (customs_document_id = new.id
+        or (new.file_asset_id is not null and file_asset_id = new.file_asset_id));
+    return new;
+  end if;
+
+  select f.id into v_folder
+  from public.file_manager_folders f
+  where f.id = new.folder_id
+    and f.organization_id = new.organization_id
+    and f.shipment_id is not distinct from v_shipment
+    and f.client_id is not distinct from v_client
+  limit 1;
+
+  if v_folder is null and v_shipment is not null then
+    select f.id into v_folder
+    from public.file_manager_folders f
+    where f.organization_id = new.organization_id
+      and f.shipment_id = v_shipment and f.folder_type = 'other'
+    limit 1;
+  elsif v_folder is null and v_client is not null then
+    select f.id into v_folder
+    from public.file_manager_folders f
+    where f.organization_id = new.organization_id
+      and f.client_id = v_client and f.folder_type = 'client'
+    limit 1;
+  end if;
+
+  if v_folder is not null then
+    insert into public.file_manager_files
+      (organization_id, folder_id, shipment_id, client_id, file_asset_id,
+       original_name, mime_type, size_bytes, document_type, tags, metadata,
+       customs_document_id, storage_path, created_by, is_archived)
+    values
+      (new.organization_id, v_folder, v_shipment, v_client, new.file_asset_id,
+       coalesce(new.display_name, new.original_name),
+       coalesce(new.mime_type, 'application/octet-stream'),
+       greatest(coalesce(new.size_bytes, 0), 0),
+       coalesce(new.document_type::text, 'other'), coalesce(new.tags, '{}'::text[]),
+       jsonb_build_object('legacyStorageBackend', coalesce(new.storage_backend, 'supabase')),
+       new.id, new.storage_path, new.created_by, false)
+    on conflict do nothing;
+
+    update public.file_manager_files
+    set is_archived = false, updated_at = now()
+    where organization_id = new.organization_id and customs_document_id = new.id;
+  end if;
+
+  return new;
+end;
+$;
+
+revoke all on function public.sync_customs_document_to_file_manager() from public, anon, authenticated;
+drop trigger if exists trg_sync_customs_document_to_file_manager on public.customs_documents;
+create trigger trg_sync_customs_document_to_file_manager
+after insert or update of shipment_id, client_id, storage_path, storage_backend, file_asset_id, folder_id,
+  original_name, display_name, mime_type, size_bytes, document_type, tags, is_archived
+on public.customs_documents
+for each row execute function public.sync_customs_document_to_file_manager();
+
 -- The gateway inserts this mapping only after Telegram confirms successful storage.
 -- File content is not scanned, OCR'd, or sent to an AI service by this path.
 comment on table public.file_manager_files is
