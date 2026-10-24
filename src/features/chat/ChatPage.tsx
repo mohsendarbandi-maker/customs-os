@@ -426,7 +426,7 @@ export const ChatPage:React.FC=()=>{
   }catch(e){setError(err(e))}finally{olderLoadingRef.current=false;setOlderLoading(false)}
  },[hasOlder,messages,selectedId]);
 
- const closeMessageMenu=()=>{setMenu(null);setMenuPosition(null);};
+ const closeMessageMenu=useCallback(()=>{setMenu(null);setMenuPosition(null);},[]);
  const toggleMessageMenu=(event:React.MouseEvent<HTMLButtonElement>,messageId:string)=>{
   if(menu===messageId){closeMessageMenu();return;}
   const rect=event.currentTarget.getBoundingClientRect();
@@ -496,7 +496,7 @@ export const ChatPage:React.FC=()=>{
   requestAnimationFrame(jump);
  },[getMessageById,loading,messages,selectedId]);
 
- useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape'){closeMessageMenu();setForwardId(null);setPeopleOpen(false);setChannelOpen(false);setDirectoryOpen(false);setSettingsOpen(false)}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[]);
+ useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape'){closeMessageMenu();setForwardId(null);setPeopleOpen(false);setChannelOpen(false);setDirectoryOpen(false);setSettingsOpen(false)}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[closeMessageMenu]);
 
  const selected=conversations.find(c=>c.conversation_id===selectedId)??null;
  const voice=useVoiceCall({userId:user?.id,organizationId:profile?.organization_id,conversationId:selected?.conversation_id??null,peerUserId:selected?.type==='direct'?selected.display_user_id??null:null,peerName:selected?.display_name||selected?.title||'همکار',requestedCallId});
