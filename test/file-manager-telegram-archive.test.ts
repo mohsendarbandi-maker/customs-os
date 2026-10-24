@@ -7,7 +7,7 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 describe('Telegram-backed Customs OS file manager', () => {
   const migration = read('supabase/migrations/20261024130726_file_manager_logical_folders_telegram_archive.sql');
   const uploadJobs = read('supabase/migrations/20261024130735_file_manager_upload_jobs.sql');
-  const reconciliationMigration = read('supabase/migrations/20261024165000_file_manager_upload_reconciliation_fields.sql');
+  const reconciliationMigration = read('supabase/migrations/20261024170055_file_manager_upload_reconciliation_fields.sql');
   const unassignedMigration = read('supabase/migrations/20261024131814_file_manager_unassigned_legacy_documents.sql');
   const grantsMigration = read('supabase/migrations/20261024132221_file_manager_minimize_table_grants.sql');
   const gateway = read('supabase/functions/messenger-gateway/index.ts');
