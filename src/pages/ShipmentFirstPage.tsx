@@ -1,4 +1,4 @@
-import React,{useEffect,useRef,useState}from'react';
+import React,{useEffect,useState}from'react';
 import{Download,ExternalLink,Plus,RefreshCw,Save,ShieldCheck,Ship,Upload}from'lucide-react';
 import{Link}from'react-router-dom';
 import{supabase}from'../lib/supabase';
@@ -8,7 +8,7 @@ import { FormDraftIndicator } from '../components/FormDraftIndicator';
 import{buildShipmentDisplayName}from'../lib/displayNames';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import {AddReminderButton} from '../features/reminders/AddReminderButton';
-import { downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
+import { createTelegramArchiveIdempotencyKey, downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
 
 type Vessel={id:string;name:string;imo_number?:string|null;flag_code?:string|null;shipping_line_id?:string|null};type ShippingLine={id:string;name:string;name_fa?:string|null};
 type Office={id:string;code:string;name:string;city:string;is_active:boolean};type Row={id:string;client_id:string|null;vessel_id:string|null;customs_office_id:string|null;shipping_line:string|null;bill_of_lading_no:string|null;bill_of_lading_year:number|null;voyage_no:string|null;origin_port:string|null;destination_port:string|null;cargo_count:number|null;cargo_count_unit:string|null;net_weight_kg:number|null;gross_weight_kg:number|null;current_status:string;current_location:string|null;display_name:string|null;case_id:string|null;transport_documents_status:'not_ready'|'ready';release_invoice_payment_status:'unpaid'|'paid';ship_passed:boolean;ship_passed_at:string|null;ship_passed_by:string|null};
@@ -23,7 +23,7 @@ const statuses=[['draft','پیش‌نویس'],['booking_confirmed','تأیید �
 
 export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
- const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const uploadKeys=useRef(new Map<string,string>());const[uploadTagInput,setUploadTagInput]=useState('');const uploadTags=[...new Set(uploadTagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
+ const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const[uploadTagInput,setUploadTagInput]=useState('');const uploadTags=[...new Set(uploadTagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
  const formDraft=useAutosavedDraft(
   formDraftKey(profile?.id,`shipment-first:${profile?.organization_id||''}`,profile?.organization_id),
@@ -118,9 +118,13 @@ export const ShipmentFirstPage:React.FC=()=>{
    const destination=await getFileArchiveDestination();
    for(const f of Array.from(files)){
     if(f.size>FILE_ARCHIVE_MAX_BYTES)throw new Error('حجم هر فایل برای آرشیو قابل بازیابی تلگرام حداکثر ۲۰ مگابایت است.');
-    const keySource=`${selected}:${f.name}:${f.size}:${f.lastModified}`;
-    let idempotencyKey=uploadKeys.current.get(keySource);
-    if(!idempotencyKey){idempotencyKey=crypto.randomUUID();uploadKeys.current.set(keySource,idempotencyKey);}
+    const idempotencyKey=await createTelegramArchiveIdempotencyKey(f,{
+     folderId:folder.id,
+     shipmentId:selected,
+     documentType:'other',
+     documentName:f.name,
+     destination,
+    });
     await uploadTelegramArchivedFile(f,{
      folderId:folder.id,
      shipmentId:selected,
@@ -132,7 +136,6 @@ export const ShipmentFirstPage:React.FC=()=>{
     });
     completed++;
    }
-   for(const f of Array.from(files)) uploadKeys.current.delete(`${selected}:${f.name}:${f.size}:${f.lastModified}`);
    await loadDocs(selected);
    setMessage(`${completed} سند در تلگرام ذخیره شد و در پوشه محموله ثبت شد.`);
   }catch(e:any){

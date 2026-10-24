@@ -17,6 +17,49 @@ export type TelegramArchiveUpload = {
 
 const FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES = 20 * 1024 * 1024;
 
+/**
+ * Builds a deterministic idempotency key from the upload context and bytes.
+ * The same file can therefore be safely retried after a page reload or network
+ * interruption, while a changed file, folder, or archive destination gets a
+ * different key. This hashes bytes only; it does not inspect or parse content.
+ */
+export async function createTelegramArchiveIdempotencyKey(
+  file: File,
+  input: {
+    folderId: string;
+    shipmentId?: string;
+    documentType?: string;
+    documentName?: string;
+    destination: FileArchiveDestination;
+  },
+): Promise<string> {
+  if (file.size <= 0 || file.size > FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES) {
+    throw new Error('حجم فایل برای آرشیو قابل بازیابی تلگرام باید بین ۱ بایت تا ۲۰ مگابایت باشد.');
+  }
+  if (!globalThis.crypto?.subtle) {
+    throw new Error('مرورگر امکان ساخت کلید امن برای جلوگیری از آپلود تکراری را ندارد؛ از مرورگر به‌روز روی HTTPS استفاده کنید.');
+  }
+
+  const contentDigest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  const contentHash = Array.from(new Uint8Array(contentDigest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const context = [
+    'customs-os-telegram-upload-v1',
+    input.folderId,
+    input.shipmentId || '',
+    input.destination.connectionId,
+    input.destination.chatId,
+    file.name,
+    file.type || 'application/octet-stream',
+    String(file.size),
+    input.documentType || 'other',
+    input.documentName || file.name,
+    contentHash,
+  ].join('\n');
+  const keyDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(context));
+  const keyHash = Array.from(new Uint8Array(keyDigest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `customs-os-upload-v1:${keyHash}`;
+}
+
 async function authorizedRequest(path: string, init: RequestInit = {}) {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) {
@@ -136,6 +179,13 @@ export async function uploadTelegramArchivedFile(
   }
 
   const destination = input.destination || await getFileArchiveDestination();
+  const idempotencyKey = input.idempotencyKey || await createTelegramArchiveIdempotencyKey(file, {
+    folderId: input.folderId,
+    ...(input.shipmentId ? { shipmentId: input.shipmentId } : {}),
+    documentType: input.documentType,
+    documentName: input.documentName,
+    destination,
+  });
   const query = new URLSearchParams({
     chatId: destination.chatId,
     folderId: input.folderId,
@@ -153,7 +203,7 @@ export async function uploadTelegramArchivedFile(
         'Content-Type': file.type || 'application/octet-stream',
         'X-File-Name': encodeURIComponent(file.name),
         'X-File-Size': String(file.size),
-        'Idempotency-Key': input.idempotencyKey || crypto.randomUUID(),
+        'Idempotency-Key': idempotencyKey,
       },
       body: file,
     },

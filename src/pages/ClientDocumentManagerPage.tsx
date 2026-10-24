@@ -1,12 +1,12 @@
-import React,{useEffect,useRef,useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import {ArrowRight,Download,FileText,Loader2,Trash2,Upload} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
-import {downloadTelegramArchivedFile,FILE_ARCHIVE_MAX_BYTES,getDefaultClientUploadFolder,getFileArchiveDestination,uploadTelegramArchivedFile} from '../lib/fileManager';
+import {createTelegramArchiveIdempotencyKey,downloadTelegramArchivedFile,FILE_ARCHIVE_MAX_BYTES,getDefaultClientUploadFolder,getFileArchiveDestination,uploadTelegramArchivedFile} from '../lib/fileManager';
 
 type Client={id:string;name:string;national_id:string|null};type Doc={id:string;original_name:string;display_name:string|null;storage_path:string;mime_type:string|null;size_bytes:number|null;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;is_archived?:boolean;created_at:string};
 const BUCKET='customs_documents';
-export const ClientDocumentManagerPage:React.FC=()=>{const[clients,setClients]=useState<Client[]>([]);const[selected,setSelected]=useState('');const[docs,setDocs]=useState<Doc[]>([]);const[busy,setBusy]=useState(false);const[message,setMessage]=useState('');const[error,setError]=useState('');const[input]=useState(()=>React.createRef<HTMLInputElement>());const[pendingFiles,setPendingFiles]=useState<File[]>([]);const[documentName,setDocumentName]=useState('');const[tagInput,setTagInput]=useState('');const uploadTags=[...new Set(tagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);const uploadKeys=useRef(new Map<string,string>());
+export const ClientDocumentManagerPage:React.FC=()=>{const[clients,setClients]=useState<Client[]>([]);const[selected,setSelected]=useState('');const[docs,setDocs]=useState<Doc[]>([]);const[busy,setBusy]=useState(false);const[message,setMessage]=useState('');const[error,setError]=useState('');const[input]=useState(()=>React.createRef<HTMLInputElement>());const[pendingFiles,setPendingFiles]=useState<File[]>([]);const[documentName,setDocumentName]=useState('');const[tagInput,setTagInput]=useState('');const uploadTags=[...new Set(tagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
  const profile=async()=>{const{data:{user}}=await supabase.auth.getUser();if(!user)throw new Error('کاربر وارد نشده است.');const{data,error}=await supabase.from('profiles').select('organization_id').eq('id',user.id).single();if(error||!data?.organization_id)throw error||new Error('سازمان کاربر مشخص نیست.');return{user,org:data.organization_id};};
  const loadClients=async()=>{const{org}=await profile();const{data,error}=await supabase.from('clients').select('id,name,national_id').eq('organization_id',org).order('name');if(error)throw error;setClients((data||[]) as Client[]);const saved=localStorage.getItem('customs_last_client');const sid=JSON.parse(saved||'null')?.id;setSelected(sid&&data?.some((x:any)=>x.id===sid)?sid:data?.[0]?.id||'')};
  const loadDocs=async(id:string)=>{if(!id)return setDocs([]);const{data,error}=await supabase.from('customs_documents').select('id,original_name,display_name,storage_path,mime_type,size_bytes,storage_backend,file_asset_id,folder_id,is_archived,created_at').eq('client_id',id).is('shipment_id',null).eq('is_archived',false).order('created_at',{ascending:false});if(error)throw error;setDocs((data||[]) as Doc[])};
@@ -21,15 +21,16 @@ export const ClientDocumentManagerPage:React.FC=()=>{const[clients,setClients]=u
    for(const f of files){
     if(!/\.(pdf|jpe?g|png)$/i.test(f.name))throw new Error('فقط PDF/JPG/PNG قابل آپلود است.');
     if(f.size<=0||f.size>FILE_ARCHIVE_MAX_BYTES)throw new Error('حجم هر فایل برای آرشیو قابل بازیابی تلگرام باید بین ۱ بایت تا ۲۰ مگابایت باشد.');
-    const keySource=`client:${selected}:${f.name}:${f.size}:${f.lastModified}`;
-    let idempotencyKey=uploadKeys.current.get(keySource);
-    if(!idempotencyKey){idempotencyKey=crypto.randomUUID();uploadKeys.current.set(keySource,idempotencyKey);}
+    const documentType='TECHNICAL_SPEC_CATALOG';
+    const documentNameToSave=files.length===1&&customName?customName:f.name;
+    const idempotencyKey=await createTelegramArchiveIdempotencyKey(f,{
+     folderId:folder.id,documentType,documentName:documentNameToSave,destination
+    });
     await uploadTelegramArchivedFile(f,{
-     folderId:folder.id,documentType:'TECHNICAL_SPEC_CATALOG',
-     documentName:files.length===1&&customName?customName:f.name,
+     folderId:folder.id,documentType,
+     documentName:documentNameToSave,
      tags:uploadTags,destination,idempotencyKey
     });
-    uploadKeys.current.delete(keySource);
     completed++;
     setPendingFiles(previous=>previous.filter(candidate=>candidate!==f));
    }
