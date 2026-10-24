@@ -161,20 +161,25 @@ describe('chat architecture invariants',()=>{
     expect(page).toContain('void loadConversation(selectedId,false)');
   });
 
-  it('includes finance and operational reminder metrics in daily reports',()=>{
-    const migration=read('supabase/migrations/20261011172442_messenger_report_finance_reminder_metrics.sql');
+  it('focuses daily reports on shipment status, completed work, pending tasks and recorded changes',()=>{
+    const snapshotMigration=read('supabase/migrations/20261024221001_improve_messenger_daily_report_content.sql');
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
-    expect(migration).toContain("'overdue_invoices', v_overdue_invoices");
-    expect(migration).toContain("'payments_received_total_irr', v_received_total_irr");
-    expect(migration).toContain("'payments_paid_total_irr', v_paid_total_irr");
-    expect(migration).toContain("'overdue_reminders', v_overdue_reminders");
-    expect(migration).toContain("'urgent_reminders', v_urgent_reminders");
-    expect(gateway).toContain('number(snapshot.overdue_invoices)');
-    expect(gateway).toContain('number(snapshot.payments_received_total_irr)');
-    expect(gateway).toContain('number(snapshot.payments_paid_total_irr)');
-    expect(gateway).toContain('number(snapshot.overdue_reminders)');
+    expect(snapshotMigration).toContain("'shipment_statuses', v_shipment_statuses");
+    expect(snapshotMigration).toContain("'completed_work', v_completed_work");
+    expect(snapshotMigration).toContain("'pending_work', v_pending_work");
+    expect(snapshotMigration).toContain("'pending_ship_passes', v_pending_ship_passes");
+    expect(snapshotMigration).toContain("'recent_changes', v_recent_changes");
+    expect(gateway).toContain('Array.isArray(snapshot.shipment_statuses)');
+    expect(gateway).toContain('Array.isArray(snapshot.completed_work)');
+    expect(gateway).toContain('Array.isArray(snapshot.pending_work)');
+    expect(gateway).toContain('Array.isArray(snapshot.recent_changes)');
+    expect(gateway).toContain('کارهای انجام‌شده');
+    expect(gateway).toContain('کارهای باقیمانده و نیازمند پیگیری');
+    expect(gateway).toContain('تغییرات ثبت‌شده');
     expect(gateway).toContain('const statusFa=(value:unknown)=>');
-    expect(gateway).toContain('item.current_status?"وضعیت: "+statusFa(item.current_status):""');
+    expect(gateway).not.toContain('number(snapshot.overdue_invoices)');
+    expect(gateway).not.toContain('number(snapshot.payments_received_total_irr)');
+    expect(gateway).not.toContain('number(snapshot.payments_paid_total_irr)');
   });
 
   it('does not retry terminally ineligible messenger deliveries',()=>{
