@@ -562,11 +562,12 @@ export const FileManagerPage: React.FC = () => {
         if (ambiguousPaths.has(relativePath) || ambiguousFileKeys.has(relativeKey)) { conflicts += 1; continue; }
         const remoteEntry = serverFilesByPath.get(relativeKey);
         const remote = remoteEntry?.file;
+        const localHash = await digest(local.file);
         if (remote) {
           if (Number(remote.size_bytes) !== local.file.size) { conflicts += 1; continue; }
           setProgress('مقایسهٔ محتوا: ' + relativePath);
           const remoteBlob = await getFileBlob(remote);
-          if (await digest(local.file) === await digest(remoteBlob)) identical += 1;
+          if (localHash === await digest(remoteBlob)) identical += 1;
           else conflicts += 1;
           continue;
         }
@@ -575,7 +576,7 @@ export const FileManagerPage: React.FC = () => {
           continue;
         }
         const parent = await ensureServerFolder(local.parentPath);
-        const keyMaterial = [organizationId, parent.id, relativePath, local.file.size, local.file.lastModified].join('|');
+        const keyMaterial = [organizationId, parent.id, relativePath, local.file.size, localHash].join('|');
         const keyHash = await digest(new Blob([keyMaterial]));
         const idempotencyKey = 'windows-sync:' + keyHash;
         setProgress('ارسال به آرشیو تلگرام: ' + relativePath);
