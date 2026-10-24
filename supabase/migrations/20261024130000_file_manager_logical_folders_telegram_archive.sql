@@ -641,9 +641,10 @@ $$;
 revoke all on function public.sync_file_manager_case_customs_office() from public, anon, authenticated;
 drop trigger if exists trg_sync_file_manager_case_customs_office on public.cases;
 create trigger trg_sync_file_manager_case_customs_office
-after update of customs_office_id on public.cases
+after update of customs_office_id, client_id on public.cases
 for each row
-when (new.customs_office_id is distinct from old.customs_office_id)
+when (new.customs_office_id is distinct from old.customs_office_id
+   or new.client_id is distinct from old.client_id)
 execute function public.sync_file_manager_case_customs_office();
 
 create or replace function public.sync_file_manager_shipment_customs_data()
