@@ -750,6 +750,44 @@ from public.shipments s
 where s.client_id is not null;
 
 
+-- Keep the existing shared-ID compatibility mirror aligned with Telegram metadata.
+create or replace function public.sync_shipment_document_to_customs_documents()
+returns trigger
+language plpgsql
+set search_path = public, pg_catalog, pg_temp
+as $function$
+begin
+  insert into public.customs_documents
+    (id, organization_id, shipment_id, original_name, display_name, storage_path, mime_type,
+     size_bytes, created_by, status, tags, created_at, updated_at, storage_backend,
+     file_asset_id, folder_id, telegram_message_id, is_archived, archived_at, archived_by, archive_reason)
+  values
+    (new.id, new.organization_id, new.shipment_id, new.original_file_name, new.document_name,
+     new.storage_path, new.mime_type, new.file_size_bytes, new.uploaded_by, 'review', '{}'::text[],
+     new.created_at, new.updated_at, new.storage_backend, new.file_asset_id, new.folder_id,
+     new.telegram_message_id, new.is_archived, new.archived_at, new.archived_by, new.archive_reason)
+  on conflict (id) do update set
+    organization_id = excluded.organization_id,
+    shipment_id = excluded.shipment_id,
+    original_name = excluded.original_name,
+    display_name = excluded.display_name,
+    storage_path = excluded.storage_path,
+    mime_type = excluded.mime_type,
+    size_bytes = excluded.size_bytes,
+    created_by = excluded.created_by,
+    updated_at = excluded.updated_at,
+    storage_backend = excluded.storage_backend,
+    file_asset_id = excluded.file_asset_id,
+    folder_id = excluded.folder_id,
+    telegram_message_id = excluded.telegram_message_id,
+    is_archived = excluded.is_archived,
+    archived_at = excluded.archived_at,
+    archived_by = excluded.archived_by,
+    archive_reason = excluded.archive_reason;
+  return new;
+end;
+$function$;
+
 -- Preserve visibility of existing Storage-backed documents under the new logical tree.
 -- These rows reference existing bytes; they do not copy or delete any file.
 insert into public.file_manager_files
@@ -790,6 +828,8 @@ where not coalesce(cd.is_archived,false)
   and (cd.shipment_id is not null or cd.client_id is not null)
   and ((cd.shipment_id is not null and fs.id is not null)
     or (cd.shipment_id is null and fc.id is not null))
+  and not exists (select 1 from public.shipment_documents sd
+    where sd.id=cd.id and sd.organization_id=cd.organization_id)
   and not exists (select 1 from public.file_manager_files fm
     where fm.organization_id=cd.organization_id and fm.customs_document_id=cd.id)
 on conflict do nothing;
@@ -1118,6 +1158,8 @@ as $$
     cross join query_arg q
     where sd.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or s.client_id = public.user_client_id())
+      and not exists (select 1 from public.customs_documents mirror
+        where mirror.id = sd.id and mirror.organization_id = sd.organization_id)
       and length(trim(coalesce(p_query, ''))) >= 2
       and not coalesce(sd.is_archived, false)
       and not coalesce(fm_file.is_archived, false)
