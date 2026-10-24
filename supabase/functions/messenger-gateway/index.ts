@@ -460,7 +460,6 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   }
   let result:any=null,assetId:string|null=null,telegramCallStarted=false;
   try{
-   telegramCallStarted=true;
    const officeId=folder.customs_office_id||shipment?.customs_office_id||null;
    const [clientMeta,shipmentFolderMeta]=await Promise.all([
     folder.client_id
@@ -494,17 +493,18 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
     archiveTags,telegramTagTokens,telegramCaption:archiveCaption,telegramFileId:null,telegramFileUniqueId:null,
     telegramChatId:chat,telegramConnectionId:c.id,telegramMessageId:null
    };
+   telegramCallStarted=true;
    result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption);
    assetMetadata.telegramFileId=result.fileId;
    assetMetadata.telegramFileUniqueId=result.uniqueId||null;
-   assetMetadata.telegramMessageId:String(result.messageId||"");
+   assetMetadata.telegramMessageId=String(result.messageId||"");
    assetMetadata.telegramChatId=chat;
    assetMetadata.telegramConnectionId=c.id;
    const {error:receiptError}=await db.from("file_manager_upload_jobs").update({
     telegram_file_id:result.fileId,telegram_file_unique_id:result.uniqueId||null,
     external_message_id:String(result.messageId||"")||null,connection_id:c.id,external_chat_id:chat,
     document_name:displayName,document_type:documentType,archive_tags:archiveTags,
-    metadata:undefined,updated_at:new Date().toISOString()
+    updated_at:new Date().toISOString()
    }).eq("id",job.id).eq("organization_id",p.organization_id);
    if(receiptError)throw new Error("FILE_UPLOAD_TELEGRAM_RECEIPT_SAVE_FAILED");
    assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment?.id??null,false,assetMetadata);
