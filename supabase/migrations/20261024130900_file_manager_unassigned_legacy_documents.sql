@@ -2,8 +2,8 @@
 -- an owner. New orphan records use the same review folder until explicitly associated.
 insert into public.file_manager_folders
   (organization_id,parent_id,folder_key,folder_type,display_name,shipment_id,client_id,
-   customs_office_id,is_system,is_editable)
-select o.id,null,'owners-root','root','صاحبان کالا',null,null,null,true,false
+   customs_office_id,is_system)
+select o.id,null,'owners-root','root','صاحبان کالا',null,null,null,true
 from public.organizations o
 where exists (
   select 1 from public.customs_documents cd
@@ -20,7 +20,7 @@ insert into public.file_manager_folders
   (organization_id,parent_id,folder_key,folder_type,display_name,shipment_id,client_id,
    customs_office_id,is_system,is_editable)
 select org.id,root.id,'unassigned-documents','other','اسناد نیازمند اتصال به محموله',
-       null,null,null,true,false
+       null,null,null,true
 from (
   select distinct cd.organization_id
   from public.customs_documents cd
