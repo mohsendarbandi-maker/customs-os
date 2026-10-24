@@ -51,6 +51,7 @@ const nav: NavItem[] = [
   { label: 'وضعیت دریا و لنگرگاه', en: 'Marine & Anchorage', to: '/marine-conditions', icon: Waves, group: 'حمل و اسناد', roles: allStaff },
   { label: 'گمرک', en: 'Customs Offices', to: '/customs-offices', icon: Landmark, group: 'حمل و اسناد', roles: management },
 { label: 'صاحب کالا', en: 'Clients', to: '/clients', icon: Contact, group: 'حمل و اسناد', roles: management },
+  { label: 'فایل‌منیجر', en: 'File Manager', to: '/file-manager', icon: Folder, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'اسناد و مجوزها', en: 'Documents & Permits', to: '/documents', icon: FileText, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'استخراج هوشمند اسناد', en: 'Document Intelligence', to: '/documents/extract', icon: FileSearch, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'قواعد مجوز', en: 'Permit Rules', to: '/permit-rules', icon: ShieldCheck, group: 'ترخیص', roles: management },
