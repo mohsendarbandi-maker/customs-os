@@ -49,8 +49,8 @@ describe('shared visual language and chat layout regressions', () => {
     expect(chatPage).toContain('className="chat-message-actions-menu"');
     expect(chatPage).toContain('document.body');
     expect(chatPage).toContain('chat-message-actions-dismiss');
-    expect(aiStyles).toContain('.chat-message-actions-menu');
-    expect(aiStyles).toContain('position: fixed;');
+    expect(styles).toContain('.chat-message-actions-menu');
+    expect(styles).toContain('position: fixed;');
   });
 
   it('shows a styled Customs AI launcher on every authenticated app route', () => {
