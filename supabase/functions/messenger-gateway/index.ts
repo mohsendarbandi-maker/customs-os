@@ -160,6 +160,8 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  return bad("FILE_ARCHIVE_NOT_CONFIGURED",409,req);
 }
 async function upload(req:Request,p:Profile,user:string,cid:string){
+ if(!["owner","admin","broker","accountant","warehouse","client"].includes(p.role))
+  return bad("FILE_ARCHIVE_ROLE_FORBIDDEN",403,req);
  const c=await ownedConn(cid,p.organization_id),u=new URL(req.url);
  const chat=u.searchParams.get("chatId")||"",folderId=u.searchParams.get("folderId")||"",
   requestedShipmentId=u.searchParams.get("shipmentId")||"",
