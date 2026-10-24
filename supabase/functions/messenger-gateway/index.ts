@@ -156,6 +156,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   requestedShipmentId=u.searchParams.get("shipmentId")||"",
   documentType=cleanName(u.searchParams.get("documentType")||"other"),
   name=cleanName(decodeURIComponent(req.headers.get("X-File-Name")||u.searchParams.get("filename")||"document.bin")),
+  displayName=cleanName(u.searchParams.get("documentName")||name),
   mime=cleanMime(req.headers.get("Content-Type")),
   h=req.headers.get("x-file-size")||req.headers.get("content-length"),
   size=h&&/^\\d+$/.test(h)?Number(h):null,
@@ -220,7 +221,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    if(fileError)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
    const {data:shipmentDocument,error:documentError}=await db.from("shipment_documents").insert({
     organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
-    document_name:name,original_file_name:name,storage_path:"telegram://"+assetId,
+    document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
     mime_type:mime,file_size_bytes:size??0,extraction_status:"not_requested",
     storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,
     telegram_message_id:String(result.messageId||"")
