@@ -107,7 +107,7 @@
   justify-content: flex-end;
   gap: 7px;
   flex: 0 0 auto;
-  min-width: max-content;
+  min-width: 0;
   max-width: 118px;
   padding: 7px 10px;
   border: 1px solid var(--border);
