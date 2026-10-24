@@ -46,7 +46,7 @@ create table if not exists public.file_manager_files (
   organization_id uuid not null references public.organizations(id) on delete cascade,
   folder_id uuid not null,
   shipment_id uuid not null,
-  file_asset_id uuid not null references public.file_assets(id) on delete restrict,
+  file_asset_id uuid null references public.file_assets(id) on delete restrict,
   original_name text not null,
   mime_type text not null default 'application/octet-stream',
   size_bytes bigint not null default 0 check (size_bytes >= 0),
@@ -56,6 +56,7 @@ create table if not exists public.file_manager_files (
   metadata jsonb not null default '{}'::jsonb,
   -- Optional compatibility pointer to the pre-existing Storage-backed document row.
   shipment_document_id uuid null references public.shipment_documents(id) on delete set null,
+  customs_document_id uuid null references public.customs_documents(id) on delete set null,
   storage_path text null,
   created_by uuid null references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -66,7 +67,10 @@ create table if not exists public.file_manager_files (
   constraint file_manager_files_shipment_same_org_fk
     foreign key (shipment_id, organization_id)
     references public.shipments(id, organization_id) on delete cascade,
-  constraint file_manager_files_asset_unique unique (organization_id, file_asset_id)
+  constraint file_manager_files_asset_unique unique (organization_id, file_asset_id),
+  constraint file_manager_files_has_source_check check (
+    file_asset_id is not null or shipment_document_id is not null or customs_document_id is not null
+  )
 );
 
 create index if not exists file_manager_files_folder_created_idx
@@ -74,6 +78,14 @@ create index if not exists file_manager_files_folder_created_idx
 
 create index if not exists file_manager_files_shipment_idx
   on public.file_manager_files (organization_id, shipment_id);
+
+create unique index if not exists file_manager_files_shipment_doc_uq
+  on public.file_manager_files (organization_id, shipment_document_id)
+  where shipment_document_id is not null;
+
+create unique index if not exists file_manager_files_customs_doc_uq
+  on public.file_manager_files (organization_id, customs_document_id)
+  where customs_document_id is not null;
 
 create index if not exists file_manager_files_tags_gin_idx
   on public.file_manager_files using gin (tags);
@@ -408,6 +420,89 @@ select public.ensure_shipment_file_manager_folders(s.id)
 from public.shipments s
 where s.client_id is not null;
 
+
+-- Preserve visibility of existing Storage-backed documents under the new logical tree.
+-- These rows reference existing bytes; they do not copy or delete any file.
+insert into public.file_manager_files
+  (organization_id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,
+   document_type,tags,metadata,shipment_document_id,storage_path,created_by)
+select sd.organization_id,f.id,sd.shipment_id,s.client_id,sd.file_asset_id,
+       sd.original_file_name,coalesce(sd.mime_type,'application/octet-stream'),
+       greatest(coalesce(sd.file_size_bytes,0),0),'other','{}'::text[],
+       jsonb_build_object('legacyStorageBackend',coalesce(sd.storage_backend,'supabase')),
+       sd.id,sd.storage_path,sd.uploaded_by
+from public.shipment_documents sd
+join public.shipments s on s.id=sd.shipment_id and s.organization_id=sd.organization_id
+join public.file_manager_folders f on f.organization_id=sd.organization_id
+  and f.shipment_id=sd.shipment_id and f.folder_type='other'
+where not coalesce(sd.is_archived,false)
+  and not exists (select 1 from public.file_manager_files fm
+    where fm.organization_id=sd.organization_id and fm.shipment_document_id=sd.id)
+on conflict do nothing;
+
+insert into public.file_manager_files
+  (organization_id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,
+   document_type,tags,metadata,customs_document_id,storage_path,created_by)
+select cd.organization_id,f.id,cd.shipment_id,coalesce(cd.client_id,s.client_id),cd.file_asset_id,
+       coalesce(cd.display_name,cd.original_name),coalesce(cd.mime_type,'application/octet-stream'),
+       greatest(coalesce(cd.size_bytes,0),0),coalesce(cd.document_type::text,'other'),
+       coalesce(cd.tags,'{}'::text[]),
+       jsonb_build_object('legacyStorageBackend',coalesce(cd.storage_backend,'supabase')),
+       cd.id,cd.storage_path,cd.created_by
+from public.customs_documents cd
+join public.shipments s on s.id=cd.shipment_id and s.organization_id=cd.organization_id
+join public.file_manager_folders f on f.organization_id=cd.organization_id
+  and f.shipment_id=cd.shipment_id and f.folder_type='other'
+where not coalesce(cd.is_archived,false)
+  and not exists (select 1 from public.shipment_documents sd
+    where sd.id=cd.id and sd.organization_id=cd.organization_id)
+  and not exists (select 1 from public.file_manager_files fm
+    where fm.organization_id=cd.organization_id and fm.customs_document_id=cd.id)
+on conflict do nothing;
+
+-- Future legacy uploads also become visible in the logical tree without copying bytes.
+create or replace function public.sync_shipment_document_to_file_manager()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $
+declare
+  v_client uuid;
+  v_folder uuid;
+begin
+  select s.client_id into v_client
+  from public.shipments s
+  where s.id=new.shipment_id and s.organization_id=new.organization_id;
+  select f.id into v_folder
+  from public.file_manager_folders f
+  where f.organization_id=new.organization_id and f.shipment_id=new.shipment_id
+    and f.folder_type='other'
+  limit 1;
+  if v_folder is not null then
+    insert into public.file_manager_files
+      (organization_id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,
+       document_type,tags,metadata,shipment_document_id,storage_path,created_by)
+    values
+      (new.organization_id,v_folder,new.shipment_id,v_client,new.file_asset_id,
+       new.original_file_name,coalesce(new.mime_type,'application/octet-stream'),
+       greatest(coalesce(new.file_size_bytes,0),0),'other','{}'::text[],
+       jsonb_build_object('legacyStorageBackend',coalesce(new.storage_backend,'supabase')),
+       new.id,new.storage_path,new.uploaded_by)
+    on conflict do nothing;
+  end if;
+  return new;
+end;
+$;
+
+revoke all on function public.sync_shipment_document_to_file_manager() from public, anon, authenticated;
+drop trigger if exists trg_sync_shipment_document_to_file_manager on public.shipment_documents;
+create trigger trg_sync_shipment_document_to_file_manager
+after insert or update of storage_path,storage_backend,file_asset_id,folder_id,original_file_name,mime_type,file_size_bytes
+on public.shipment_documents
+for each row execute function public.sync_shipment_document_to_file_manager();
+
+
 -- The gateway inserts this mapping only after Telegram confirms successful storage.
 -- File content is not scanned, OCR'd, or sent to an AI service by this path.
 comment on table public.file_manager_files is
@@ -541,13 +636,13 @@ as $$
 
     union all
 
-    select 'file'::text, fm.id, a.original_name,
-      concat_ws(' • ', a.mime_type, a.size_bytes::text, fm.document_type,
+    select 'file'::text, fm.id, coalesce(a.original_name, fm.original_name),
+      concat_ws(' • ', coalesce(a.mime_type, fm.mime_type), coalesce(a.size_bytes::text, fm.size_bytes::text), fm.document_type,
         array_to_string(fm.tags, ' '), fm.metadata::text, f.display_name,
         s.display_name, c.name, o.name),
       fm.folder_id, fm.shipment_id, fm.client_id, fm.created_at
     from public.file_manager_files fm
-    join public.file_assets a on a.id = fm.file_asset_id and a.organization_id = fm.organization_id
+    left join public.file_assets a on a.id = fm.file_asset_id and a.organization_id = fm.organization_id
     join public.file_manager_folders f on f.id = fm.folder_id and f.organization_id = fm.organization_id
     left join public.shipments s on s.id = fm.shipment_id and s.organization_id = fm.organization_id
     left join public.clients c on c.id = fm.client_id and c.organization_id = fm.organization_id
