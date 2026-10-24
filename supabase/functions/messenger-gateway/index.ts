@@ -1027,62 +1027,159 @@ async function processMessengerOutbox(req:Request){
  }
  return out({ok:true,claimed:rows.length,sent,failed,skipped},200,req);
 }function formatDailyReport(snapshot:Record<string,any>){
- const number=(value:unknown)=>new Intl.NumberFormat("fa-IR").format(Number(value||0));
- const statusFa=(value:unknown)=>{
-  const statuses:Record<string,string>={
-   draft:"پیش‌نویس",booking_confirmed:"رزرو تأییدشده",loading:"در حال بارگیری",
-   loaded:"بارگیری‌شده",departed:"حرکت‌کرده",in_transit:"در مسیر",
-   approaching_destination:"نزدیک مقصد",anchorage:"لنگرگاه",berthing:"در حال پهلوگیری",
-   discharging:"در حال تخلیه",discharged:"تخلیه‌شده",completed:"تکمیل‌شده",
-   delayed:"با تأخیر",cancelled:"لغوشده"
+  const clean=(value:unknown)=>String(value??"").replace(/[\r\n\t]+/g," ").replace(/\s+/g," ").trim();
+  const dateLabel=(value:unknown)=>{
+   const raw=clean(value);
+   const d=new Date(raw+"T12:00:00+03:30");
+   return !raw||Number.isNaN(d.getTime())?raw:new Intl.DateTimeFormat("fa-IR-u-ca-persian",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(d);
   };
-  return statuses[String(value||"").toLowerCase()]||"وضعیت نامشخص";
- };
- const rawDate=String(snapshot.report_date||"");
- const parsedDate=new Date(rawDate+"T12:00:00+03:30");
- const dateLabel=Number.isNaN(parsedDate.getTime())?rawDate:new Intl.DateTimeFormat("fa-IR-u-ca-persian",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(parsedDate);
- const lines=[
-  "📊 گزارش روزانه عملیات گمرکی",
-  "📅 تاریخ گزارش: "+dateLabel,
-  "",
-  "📦 مجموع محموله‌ها: "+number(snapshot.total_shipments),
-  "🔄 محموله‌های به‌روزشده در روز گزارش: "+number(snapshot.shipments_updated),
-  "📁 مجموع پرونده‌ها: "+number(snapshot.total_cases),
-  "🆕 پرونده‌های جدید: "+number(snapshot.cases_created),
-  "🛃 اظهارهای ثبت‌شده: "+number(snapshot.declarations_created),
-  "🚢 محموله‌های با پاس کشتی ثبت‌نشده: "+number(snapshot.ship_pass_pending),
-  "",
-  "🧾 فاکتورهای صادرشده در روز گزارش: "+number(snapshot.invoices_issued),
-  "📂 فاکتورهای باز: "+number(snapshot.open_invoices),
-  "⏰ فاکتورهای سررسیدگذشته: "+number(snapshot.overdue_invoices),
-  "💵 دریافتی‌های ثبت‌شده: "+number(snapshot.payments_received_count)+" مورد · "+number(snapshot.payments_received_total_irr)+" ریال",
-  "💸 پرداخت‌های ثبت‌شده: "+number(snapshot.payments_paid_count)+" مورد · "+number(snapshot.payments_paid_total_irr)+" ریال",
-  "",
-  "🔔 یادآورهای باز: "+number(snapshot.open_reminders),
-  "⌛ یادآورهای عقب‌افتاده: "+number(snapshot.overdue_reminders),
-  "📅 یادآورهای موعد امروز: "+number(snapshot.reminders_due_today),
-  "🚨 یادآورهای فوری: "+number(snapshot.urgent_reminders)
- ];
- const latest=Array.isArray(snapshot.latest_shipments)?snapshot.latest_shipments:[];
- if(latest.length){
-  lines.push("","آخرین تغییرات محموله‌ها:");
-  for(const [index,item] of latest.slice(0,8).entries()){
-   const label=String(item.display_name||item.bill_of_lading_no||"محموله");
-   const fields=[
-    item.bill_of_lading_no?"بارنامه: "+item.bill_of_lading_no:"",
-    item.case_number?"پرونده: "+item.case_number:"",
-    item.client_name?"صاحب کالا: "+item.client_name:"",
-    item.current_status?"وضعیت: "+statusFa(item.current_status):"",
-    item.current_location?"موقعیت: "+item.current_location:"",
-    item.cargo_description?"کالا: "+item.cargo_description:""
-   ].filter(Boolean);
-   lines.push(number(index+1)+". "+label+(fields.length?" — "+fields.join(" · "):""));
+  const dateTimeLabel=(value:unknown)=>{
+   const raw=clean(value),d=new Date(raw);
+   return !raw||Number.isNaN(d.getTime())?"":new Intl.DateTimeFormat("fa-IR-u-ca-persian",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(d);
+  };
+  const timeLabel=(value:unknown)=>{
+   const raw=clean(value),d=new Date(raw);
+   return !raw||Number.isNaN(d.getTime())?"":new Intl.DateTimeFormat("fa-IR",{timeZone:"Asia/Tehran",hour:"2-digit",minute:"2-digit"}).format(d);
+  };
+  const statusFa=(value:unknown)=>{
+   const s=clean(value).toLowerCase();
+   const statuses:Record<string,string>={
+    draft:"پیش‌نویس",booking_confirmed:"رزرو تأییدشده",loading:"در حال بارگیری",
+    loaded:"بارگیری‌شده",departed:"حرکت از مبدأ",in_transit:"در مسیر",
+    approaching_destination:"نزدیک مقصد",anchorage:"در لنگرگاه",berthing:"در حال پهلوگیری",
+    discharging:"در حال تخلیه",discharged:"تخلیه‌شده",completed:"تکمیل‌شده",
+    delayed:"دارای تأخیر",cancelled:"لغوشده",arrived:"به مقصد رسیده",
+    arrived_at_destination:"رسیده به مقصد",awaiting_documents:"در انتظار اسناد",
+    awaiting_release:"در انتظار ترخیص",customs_clearance:"در حال ترخیص",
+    released:"ترخیص‌شده",on_hold:"متوقف‌شده"
+   };
+   return statuses[s]||(!s?"وضعیت ثبت نشده":"وضعیت: "+s.replace(/_/g," "));
+  };
+  const stageFa=(value:unknown)=>{
+   const s=clean(value).toLowerCase();
+   const stages:Record<string,string>={
+    evaluation:"ارزیابی و ارزش‌گذاری",expertise:"کارشناسی",procedure:"تشریفات گمرکی",
+    port_charges:"هزینه‌های بندری",loading_permit:"مجوز بارگیری",exit:"خروج",
+    cashier:"صندوق و پرداخت",declaration:"اظهار گمرکی",inspection:"بازرسی"
+   };
+   return stages[s]||s.replace(/_/g," ");
+  };
+  const priorityFa=(value:unknown)=>{
+   const p=clean(value).toLowerCase();
+   if(p==="urgent"||p==="critical")return "فوری";
+   if(p==="high")return "با اولویت بالا";
+   return "";
+  };
+  const shipmentName=(item:any)=>clean(item.display_name||item.shipment_name||item.bill_of_lading_no||"محموله بدون نام");
+  const relatedText=(item:any)=>[clean(item.client_name),clean(item.related_name)].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(" · ");
+  const rawDate=clean(snapshot.report_date);
+  const lines=[
+   "📋 گزارش روزانه عملیات گمرکی و محموله‌ها",
+   "📅 روز گزارش: "+dateLabel(rawDate),
+   "این گزارش وضعیت جاری، اقدام‌های انجام‌شده، کارهای باز و تغییرات ثبت‌شده را نشان می‌دهد."
+  ];
+
+  const shipments=Array.isArray(snapshot.shipment_statuses)?snapshot.shipment_statuses:[];
+  const active=shipments.filter((item:any)=>!["completed","cancelled"].includes(clean(item.current_status).toLowerCase()));
+  lines.push("","🚢 وضعیت محموله‌ها");
+  if(active.length){
+   for(const item of active.slice(0,5)){
+    const details=[
+     "وضعیت: "+statusFa(item.current_status),
+     clean(item.client_name)?"صاحب کالا: "+clean(item.client_name):"",
+     clean(item.bill_of_lading_no)?"بارنامه: "+clean(item.bill_of_lading_no):"",
+     clean(item.current_location)?"موقعیت: "+clean(item.current_location):"",
+     item.eta_destination?"زمان پیش‌بینی‌شده رسیدن: "+dateTimeLabel(item.eta_destination):""
+    ].filter(Boolean);
+    lines.push("• "+shipmentName(item),"  "+details.join(" · "));
+   }
+   if(active.length>5)lines.push("محموله‌های فعال دیگری نیز در سامانه ثبت شده‌اند.");
+  }else{
+   lines.push("در حال حاضر محموله‌ای با وضعیت فعال ثبت نشده است.");
+   const completed=shipments.filter((item:any)=>clean(item.current_status).toLowerCase()==="completed").slice(0,4);
+   if(completed.length){
+    lines.push("آخرین محموله‌های تکمیل‌شده:");
+    for(const item of completed){
+     const details=[
+      "وضعیت: "+statusFa(item.current_status),
+      clean(item.client_name)?"صاحب کالا: "+clean(item.client_name):"",
+      clean(item.bill_of_lading_no)?"بارنامه: "+clean(item.bill_of_lading_no):""
+     ].filter(Boolean);
+     lines.push("• "+shipmentName(item),"  "+details.join(" · "));
+    }
+   }
   }
- }else{
-  lines.push("","در روز گزارش، محموله‌ای به‌روزرسانی نشده است.");
- }
- lines.push("","گزارش تولیدشده توسط Customs OS");
- return lines.join("\n").slice(0,3800);
+
+  const completedWork=Array.isArray(snapshot.completed_work)?snapshot.completed_work:[];
+  lines.push("","✅ کارهای انجام‌شده");
+  if(completedWork.length){
+   for(const item of completedWork.slice(0,6)){
+    const title=clean(item.title)||"اقدام تکمیل‌شده";
+    const related=relatedText(item);
+    lines.push("• "+title+(related?" — "+related:""));
+    const description=clean(item.description);
+    if(description&&description!==title)lines.push("  توضیح: "+description);
+   }
+   if(completedWork.length>6)lines.push("بقیه اقدام‌های تکمیل‌شده در سامانه ثبت شده‌اند.");
+  }else{
+   lines.push("در این بازه، اقدامی به‌عنوان انجام‌شده ثبت نشده است.");
+  }
+
+  const pendingWork=Array.isArray(snapshot.pending_work)?snapshot.pending_work:[];
+  const pendingPasses=Array.isArray(snapshot.pending_ship_passes)?snapshot.pending_ship_passes:[];
+  lines.push("","⏳ کارهای باقیمانده و نیازمند پیگیری");
+  if(pendingPasses.length){
+   for(const item of pendingPasses.slice(0,5)){
+    lines.push("• ثبت پاس کشتی — "+shipmentName(item)+(clean(item.client_name)?" · "+clean(item.client_name):""));
+   }
+   if(pendingPasses.length>5)lines.push("موارد دیگری نیز برای ثبت پاس کشتی باقی مانده است.");
+  }
+  if(pendingWork.length){
+   for(const item of pendingWork.slice(0,6)){
+    const title=clean(item.title)||"کار باز";
+    const related=relatedText(item);
+    const due=item.due_at?dateTimeLabel(item.due_at):"";
+    const priority=priorityFa(item.priority);
+    const details=[related,due?"مهلت: "+due:"",priority].filter(Boolean);
+    lines.push("• "+title+(details.length?" — "+details.join(" · "):""));
+    const description=clean(item.description);
+    if(description&&description!==title)lines.push("  توضیح: "+description);
+   }
+   if(pendingWork.length>6)lines.push("کارهای باز دیگری نیز در فهرست پیگیری وجود دارد.");
+  }
+  if(!pendingPasses.length&&!pendingWork.length)lines.push("در حال حاضر کار بازی برای پیگیری ثبت نشده است.");
+
+  const changes=Array.isArray(snapshot.recent_changes)?snapshot.recent_changes:[];
+  lines.push("","🔄 تغییرات ثبت‌شده");
+  if(changes.length){
+   for(const item of changes.slice(0,5)){
+    const kind=clean(item.change_type).toLowerCase();
+    let detail=clean(item.description);
+    if(kind==="workflow"){
+     const previous=clean(item.previous_stage),current=clean(item.current_stage);
+     detail=previous&&current
+      ?"مرحله اظهار از «"+stageFa(previous)+"» به «"+stageFa(current)+"» تغییر کرد"
+      :clean(item.event_code)==="created"?"گردش کار اظهار ایجاد شد":"وضعیت گردش کار اظهار تغییر کرد";
+    }else if(kind==="tracking"&&!detail){
+     const events:Record<string,string>={completed:"ثبت تکمیل عملیات",discharge_complete:"تکمیل تخلیه",draft:"ثبت پیش‌نویس"};
+     detail=events[clean(item.event_code)]||"رویداد رهگیری ثبت شد";
+    }else if(kind==="shipment"){
+     detail=detail||"اطلاعات محموله به‌روزرسانی شد";
+     if(clean(item.current_status))detail+="؛ وضعیت فعلی: "+statusFa(item.current_status);
+    }
+    const time=timeLabel(item.occurred_at);
+    const related=relatedText(item);
+    lines.push("• "+shipmentName(item)+(time?" ("+time+")":""));
+    lines.push("  "+(detail||"تغییر ثبت‌شده")+(related?" · "+related:""));
+    if(clean(item.current_location))lines.push("  موقعیت ثبت‌شده: "+clean(item.current_location));
+   }
+   if(changes.length>5)lines.push("تغییرات دیگری نیز ثبت شده‌اند؛ موارد مهم‌تر در بالا آمده‌اند.");
+  }else{
+   lines.push("در این بازه، تغییر یا رویداد تازه‌ای در سابقهٔ محموله‌ها ثبت نشده است.");
+  }
+
+  lines.push("","— گزارش سامانه Customs OS");
+  return lines.join("\n").slice(0,3800);
 }
 async function processDailyReports(req:Request){
  const {data:expected,error:secretError}=await db.rpc("internal_get_reminder_secret",{p_name:"messenger_outbox_cron_secret"});
