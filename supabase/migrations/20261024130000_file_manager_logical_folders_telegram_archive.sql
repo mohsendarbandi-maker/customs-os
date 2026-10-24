@@ -558,7 +558,8 @@ begin
     select s.id
     from public.shipments s
     left join public.cases ca on ca.id = s.case_id and ca.organization_id = s.organization_id
-    where coalesce(s.customs_office_id, ca.customs_office_id) = new.id
+    left join public.shipment_customs_data scd on scd.shipment_id = s.id and scd.organization_id = s.organization_id
+    where coalesce(s.customs_office_id, ca.customs_office_id, scd.customs_office_id) = new.id
       and s.organization_id = coalesce(new.organization_id, s.organization_id)
       and s.client_id is not null
   loop
