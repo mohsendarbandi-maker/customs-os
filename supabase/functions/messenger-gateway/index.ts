@@ -164,7 +164,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   max=archive&&c.platform==="telegram"?TG_DOWNLOAD_LIMIT:(c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT),
   idempotencyKey=(req.headers.get("Idempotency-Key")||"").trim();
  if(!chat||size===0||(size!==null&&size>max)||!req.body)return bad(size!==null&&size>max?"FILE_TOO_LARGE_FOR_DESTINATION":"INVALID_FILE_SIZE_CHAT_OR_BODY",413,req);
- if(archive&&(!folderId||!requestedShipmentId||!validId(folderId)||!validId(requestedShipmentId)||size===null||!idempotencyKey||idempotencyKey.length>180))
+ if(archive&&(!folderId||!validId(folderId)||(requestedShipmentId&&!validId(requestedShipmentId))||size===null||!idempotencyKey||idempotencyKey.length>180))
   return bad("INVALID_FILE_ARCHIVE_INPUT",400,req);
  const {data:mapped,error:mappedError}=await db.from("messenger_chats")
   .select("enabled,shipment_id,purpose")
@@ -173,22 +173,32 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
  if(!mapped?.enabled)return bad("CHAT_NOT_ALLOWED",403,req);
  if(archive){
   if(c.platform!=="telegram"||mapped.purpose!=="file_archive")return bad("FILE_ARCHIVE_DESTINATION_REQUIRED",403,req);
-  const {data:shipment,error:shipmentError}=await db.from("shipments")
-   .select("id,organization_id,client_id")
-   .eq("id",requestedShipmentId).eq("organization_id",p.organization_id).maybeSingle();
-  if(shipmentError||!shipment)return bad("SHIPMENT_NOT_FOUND",404,req);
-  if(p.role==="client"&&shipment.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
+  let shipment:any=null;
+  if(requestedShipmentId){
+   const {data:shipmentRow,error:shipmentError}=await db.from("shipments")
+    .select("id,organization_id,client_id")
+    .eq("id",requestedShipmentId).eq("organization_id",p.organization_id).maybeSingle();
+   if(shipmentError||!shipmentRow)return bad("SHIPMENT_NOT_FOUND",404,req);
+   shipment=shipmentRow;
+  }
   const {data:folder,error:folderError}=await db.from("file_manager_folders")
    .select("id,organization_id,shipment_id,client_id,folder_type")
    .eq("id",folderId).eq("organization_id",p.organization_id).maybeSingle();
-  if(folderError||!folder||folder.shipment_id!==shipment.id)return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
+  if(folderError||!folder)return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
+  if(shipment){
+   if(folder.shipment_id!==shipment.id||folder.client_id!==shipment.client_id)
+    return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
+   if(p.role==="client"&&shipment.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
+  }else if(folder.shipment_id!==null||!folder.client_id||!["client","custom"].includes(folder.folder_type)){
+   return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
+  }
   if(p.role==="client"&&folder.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
   let job:any=null;
   const {data:existing,error:existingError}=await db.from("file_manager_upload_jobs")
    .select("id,status,file_asset_id,external_message_id,size_bytes,attempt_count,folder_id,shipment_id,original_name,mime_type")
    .eq("organization_id",p.organization_id).eq("idempotency_key",idempotencyKey).maybeSingle();
   if(existingError)return bad("FILE_UPLOAD_JOB_LOOKUP_FAILED",500,req);
-  if(existing&&(existing.folder_id!==folderId||existing.shipment_id!==shipment.id||existing.original_name!==name||existing.mime_type!==mime||Number(existing.size_bytes)!==Number(size)))
+  if(existing&&(existing.folder_id!==folderId||existing.shipment_id!==(shipment?.id??null)||existing.original_name!==name||existing.mime_type!==mime||Number(existing.size_bytes)!==Number(size)))
    return bad("IDEMPOTENCY_KEY_REUSE_MISMATCH",409,req);
   if(existing?.status==="stored"&&existing.file_asset_id)
    return out({ok:true,fileAssetId:existing.file_asset_id,externalMessageId:existing.external_message_id,sizeBytes:existing.size_bytes,folderId,uploadJobId:existing.id,alreadyStored:true},200,req);
@@ -201,8 +211,8 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    job=retry;
   }else{
    const {data:created,error:createError}=await db.from("file_manager_upload_jobs")
-    .insert({organization_id:p.organization_id,idempotency_key:idempotencyKey,folder_id:folderId,shipment_id:shipment.id,
-      created_by:user,original_name:name,mime_type:mime,size_bytes:size??0,status:"uploading"})
+    .insert({organization_id:p.organization_id,idempotency_key:idempotencyKey,folder_id:folderId,shipment_id:shipment?.id??null,
+      created_by:user,original_name:name,mime_type:mime,size_bytes:size,status:"uploading"})
     .select("id").single();
    if(createError){
     if(createError.code==="23505")return bad("FILE_UPLOAD_JOB_ALREADY_EXISTS_RETRY_WITH_STATUS_CHECK",409,req);
@@ -213,22 +223,32 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   let result:any=null,assetId:string|null=null,telegramCallStarted=false;
   try{
    telegramCallStarted=true;
-   result=await uploadStream(c,chat,name,mime,size,req.body,"file",archive?TG_DOWNLOAD_LIMIT:undefined);
-   assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment.id,false);
-   const {data:shipmentDocument,error:documentError}=await db.from("shipment_documents").insert({
-    organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
-    document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
-    mime_type:mime,file_size_bytes:size??0,extraction_status:"not_requested",
-    storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,
-    telegram_message_id:String(result.messageId||"")
-   }).select("id").single();
-   if(documentError||!shipmentDocument)throw new Error("SHIPMENT_DOCUMENT_METADATA_SAVE_FAILED");
-   // The canonical-document trigger creates exactly one logical file row. Update it
-   // instead of inserting a second row that would violate the unique asset constraint.
+   result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT);
+   assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment?.id??null,false);
+   if(shipment){
+    const {data:shipmentDocument,error:documentError}=await db.from("shipment_documents").insert({
+     organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
+     document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
+     mime_type:mime,file_size_bytes:size,extraction_status:"not_requested",
+     storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,
+     telegram_message_id:String(result.messageId||"")
+    }).select("id").single();
+    if(documentError||!shipmentDocument)throw new Error("SHIPMENT_DOCUMENT_METADATA_SAVE_FAILED");
+   }else{
+    const {data:companyDocument,error:companyDocumentError}=await db.from("customs_documents").insert({
+     organization_id:p.organization_id,client_id:folder.client_id,shipment_id:null,case_id:null,
+     document_type:"TECHNICAL_SPEC_CATALOG",original_name:name,display_name:displayName,
+     storage_path:"telegram://"+assetId,mime_type:mime,size_bytes:size,created_by:user,status:"review",tags:[],
+     storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,
+     telegram_message_id:String(result.messageId||"")
+    }).select("id").single();
+    if(companyDocumentError||!companyDocument)throw new Error("CUSTOMS_DOCUMENT_METADATA_SAVE_FAILED");
+   }
+   // The canonical document trigger creates the logical file row; do not insert a duplicate.
    const {data:fileRow,error:fileError}=await db.from("file_manager_files").update({
-    original_name:name,mime_type:mime,size_bytes:size??0,external_message_id:String(result.messageId||""),
+    original_name:name,mime_type:mime,size_bytes:size,external_message_id:String(result.messageId||""),
     document_type:documentType,tags:[],metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId},
-    storage_path:"telegram://"+assetId,created_by:user
+    storage_path:"telegram://"+assetId,created_by:user,is_archived:false,updated_at:new Date().toISOString()
    }).eq("organization_id",p.organization_id).eq("file_asset_id",assetId).select("id").maybeSingle();
    if(fileError||!fileRow)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
    const {error:completeError}=await db.from("file_manager_upload_jobs").update({
