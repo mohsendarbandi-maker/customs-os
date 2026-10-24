@@ -408,7 +408,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   if(existing?.status==="stored"&&existing.file_asset_id)
    return out({ok:true,fileAssetId:existing.file_asset_id,externalMessageId:existing.external_message_id,sizeBytes:existing.size_bytes,folderId,uploadJobId:existing.id,alreadyStored:true},200,req);
   const staleUploading=Boolean(existing?.status==="uploading"&&existing.updated_at&&Date.now()-Date.parse(existing.updated_at)>15*60*1000);
-  const shouldReconcile=Boolean(existing&&(existing.status==="reconcile_required"||staleUploading));
+  const shouldReconcile=Boolean(existing&&(existing.status==="reconcile_required"||staleUploading||(existing.status==="failed"&&(existing.telegram_file_id||existing.file_asset_id||existing.external_message_id))));
   if(shouldReconcile){
    if(!existing.telegram_file_id&&!existing.file_asset_id&&!existing.external_message_id)
     return bad("FILE_UPLOAD_RECONCILIATION_REQUIRED",409,req);
@@ -425,7 +425,6 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
     });
     const {error:completeError}=await db.from("file_manager_upload_jobs").update({
      status:"stored",file_asset_id:repaired.assetId,external_message_id:repaired.externalMessageId||null,
-     telegram_file_id:existing.telegram_file_id,telegram_file_unique_id:existing.telegram_file_unique_id,
      connection_id:c.id,external_chat_id:chat,document_name:displayName,document_type:documentType,
      archive_tags:archiveTags,updated_at:new Date().toISOString(),completed_at:new Date().toISOString(),error_code:null
     }).eq("id",existing.id).eq("organization_id",p.organization_id).eq("status","uploading");
