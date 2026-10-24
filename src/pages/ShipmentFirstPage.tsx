@@ -23,7 +23,7 @@ const statuses=[['draft','پیش‌نویس'],['booking_confirmed','تأیید �
 
 export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
- const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const uploadKeys=useRef(new Map<string,string>());
+ const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const uploadKeys=useRef(new Map<string,string>());const[uploadTagInput,setUploadTagInput]=useState('');const uploadTags=[...new Set(uploadTagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
  const formDraft=useAutosavedDraft(
   formDraftKey(profile?.id,`shipment-first:${profile?.organization_id||''}`,profile?.organization_id),
@@ -126,6 +126,7 @@ export const ShipmentFirstPage:React.FC=()=>{
      shipmentId:selected,
      documentType:'other',
      documentName:f.name,
+     tags:uploadTags,
      destination,
      idempotencyKey,
     });
@@ -179,7 +180,9 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
      </div>
      <div className="flex items-center gap-2">
       <AddReminderButton entityType="shipments" entityId={selected} defaultTitle={`پیگیری محموله ${selectedRow?.display_name||selectedRow?.bill_of_lading_no||''}`}/>
-      <Link to={'/file-manager?shipmentId='+selected} className="px-4 py-2.5 rounded-xl border app-border font-bold text-sm">بازکردن پوشه فایل‌منیجر</Link><label className="cursor-pointer px-4 py-2.5 rounded-xl bg-blue-600 text-white font-bold">
+      <Link to={'/file-manager?shipmentId='+selected} className="px-4 py-2.5 rounded-xl border app-border font-bold text-sm">بازکردن پوشه فایل‌منیجر</Link>
+      <input value={uploadTagInput} onChange={e=>setUploadTagInput(e.target.value)} disabled={uploading} placeholder="برچسب سندها (با ویرگول)" className="max-w-48 px-3 py-2 rounded-xl border app-border bg-[var(--surface)] text-xs"/>
+      <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-blue-600 text-white font-bold">
        <Upload size={16} className="inline ml-1"/>{uploading?'در حال آپلود...':'آپلود فایل'}
        <input type="file" multiple className="hidden" disabled={uploading} onChange={e=>{void upload(e.target.files);e.currentTarget.value=''}}/>
       </label>
