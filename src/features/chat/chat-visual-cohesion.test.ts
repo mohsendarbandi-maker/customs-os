@@ -30,6 +30,8 @@ describe('shared visual language and chat layout regressions', () => {
     expect(styles).toContain('.chat-standalone .chat-app-header-main');
     expect(styles).toContain('.chat-standalone .chat-app-brand > span');
     expect(styles).toContain('text-overflow: ellipsis');
+    expect(styles).toContain('min-width: 0;');
+    expect(styles).not.toContain('min-width: max-content;');
     expect(styles).toContain('@media (max-width: 380px)');
   });
 
