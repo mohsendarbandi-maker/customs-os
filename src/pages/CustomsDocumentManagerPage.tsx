@@ -149,6 +149,8 @@ export const CustomsDocumentManagerPage: React.FC = () => {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const uploadKeys = useRef(new Map<string, string>());
   const [documentName, setDocumentName] = useState('');
+  const [tagInput, setTagInput] = useState('');
+  const uploadTags = useMemo(() => [...new Set(tagInput.split(',').map((tag) => tag.trim()).filter(Boolean))].slice(0, 20), [tagInput]);
   const [selected, setSelected] = useState<Doc | null>(null);
   const [extracting, setExtracting] = useState<Doc | null>(null);
   const [extracted, setExtracted] = useState<any[]>([]);
@@ -357,6 +359,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           shipmentId: current.id,
           documentType: inferType(f.name) || 'other',
           documentName: files.length === 1 && customName ? customName : f.name,
+          tags: uploadTags,
           destination,
           idempotencyKey,
         });
@@ -367,6 +370,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
       await loadDocs(current.id);
       setPendingFiles([]);
       setDocumentName('');
+      setTagInput('');
       setMessage(`${completed} سند مستقیماً در آرشیو تلگرام ذخیره شد؛ نسخه باینری جدیدی در Storage وب‌سایت ساخته نشد.`);
     } catch (e: any) {
       await loadDocs(current.id);
@@ -641,6 +645,13 @@ export const CustomsDocumentManagerPage: React.FC = () => {
                   <button type="button" disabled={busy} onClick={()=>{setPendingFiles([]);setDocumentName('')}} className="rounded-xl px-4 py-3 border app-border">لغو</button>
                 </div>
               </div>
+              <label className="mt-3 block">
+                <span className="mb-1 block text-xs font-bold app-muted">برچسب‌های اسناد (با ویرگول جدا کنید)</span>
+                <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} disabled={busy}
+                  placeholder="مثلاً: فاکتور، قبض انبار، بیمه، گواهی مبدأ"
+                  className="w-full rounded-xl border app-border bg-[var(--surface)] px-3 py-2 text-sm" />
+                <span className="mt-1 block text-[10px] app-muted">حداکثر ۲۰ برچسب برای هر فایل؛ در جست‌وجوی فایل‌منیجر هم قابل یافتن است.</span>
+              </label>
               {pendingFiles.length > 1 && <div className="text-[10px] app-muted mt-2">در آپلود چند فایل، نام هر فایل از نام اصلی خودش ثبت می‌شود.</div>}
             </div>
           )}
