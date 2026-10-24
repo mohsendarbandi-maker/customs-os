@@ -210,10 +210,15 @@ create policy file_manager_folders_update on public.file_manager_folders
   using (
     organization_id = public.user_org_id()
     and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse')
+    and folder_type = 'custom'
+    and is_system = false
   )
   with check (
     organization_id = public.user_org_id()
     and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse')
+    and folder_type = 'custom'
+    and is_system = false
+    and parent_id is not null
   );
 
 drop policy if exists file_manager_folders_delete on public.file_manager_folders;
