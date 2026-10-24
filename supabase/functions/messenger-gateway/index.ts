@@ -186,10 +186,16 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   let shipment:any=null;
   if(requestedShipmentId){
    const {data:shipmentRow,error:shipmentError}=await db.from("shipments")
-    .select("id,organization_id,client_id,display_name,bill_of_lading_no,customs_office_id")
+    .select("id,organization_id,client_id,case_id,display_name,bill_of_lading_no,customs_office_id")
     .eq("id",requestedShipmentId).eq("organization_id",p.organization_id).maybeSingle();
    if(shipmentError||!shipmentRow)return bad("SHIPMENT_NOT_FOUND",404,req);
    shipment=shipmentRow;
+   if(!shipment.client_id&&shipment.case_id){
+    const {data:linkedCase,error:caseError}=await db.from("cases")
+     .select("client_id").eq("id",shipment.case_id).eq("organization_id",p.organization_id).maybeSingle();
+    if(caseError)return bad("SHIPMENT_OWNER_LOOKUP_FAILED",500,req);
+    shipment.client_id=linkedCase?.client_id||null;
+   }
   }
   const {data:folder,error:folderError}=await db.from("file_manager_folders")
    .select("id,organization_id,shipment_id,client_id,folder_type,display_name,customs_office_id,parent_id")
