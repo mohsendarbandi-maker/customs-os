@@ -785,6 +785,8 @@ as $$
     cross join query_arg q
     where fm.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or fm.client_id = public.user_client_id())
+      and fm.shipment_document_id is null
+      and fm.customs_document_id is null
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
         fm.file_manager_search_text ilike q.pattern
@@ -797,34 +799,39 @@ as $$
     union all
 
     select 'document'::text, sd.id, coalesce(sd.document_name, sd.original_file_name),
-      concat_ws(' • ', sd.original_file_name, sd.mime_type, sd.file_size_bytes::text, s.display_name, c.name, o.name),
-      fm.id, sd.shipment_id, s.client_id, sd.created_at
+      concat_ws(' • ', sd.original_file_name, sd.mime_type, sd.file_size_bytes::text,
+        fm_file.document_type, array_to_string(fm_file.tags, ' '), fm_file.metadata::text,
+        s.display_name, c.name, o.name),
+      coalesce(fm_file.folder_id, fm.id), sd.shipment_id, s.client_id, sd.created_at
     from public.shipment_documents sd
     join public.shipments s on s.id = sd.shipment_id and s.organization_id = sd.organization_id
     left join public.clients c on c.id = s.client_id and c.organization_id = s.organization_id
     left join public.customs_offices o on o.id = s.customs_office_id
     left join public.file_manager_folders fm on fm.shipment_id = sd.shipment_id and fm.organization_id = sd.organization_id and fm.folder_type = 'shipment'
+    left join public.file_manager_files fm_file on fm_file.shipment_document_id = sd.id and fm_file.organization_id = sd.organization_id
     cross join query_arg q
     where sd.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or s.client_id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
-      and sd.file_manager_search_text ilike q.pattern
+      and (sd.file_manager_search_text ilike q.pattern or fm_file.file_manager_search_text ilike q.pattern)
 
     union all
 
     select 'customs_document'::text, cd.id, coalesce(cd.display_name, cd.original_name),
       concat_ws(' • ', cd.document_number, cd.tags::text, cd.document_type::text, cd.issue_date_shamsi,
-        cd.importer_name, cd.exporter_name, cd.invoice_amount::text, s.display_name, c.name),
-      fm.id, cd.shipment_id, coalesce(cd.client_id, s.client_id), cd.created_at
+        cd.importer_name, cd.exporter_name, cd.invoice_amount::text, fm_file.document_type,
+        array_to_string(fm_file.tags, ' '), fm_file.metadata::text, s.display_name, c.name),
+      coalesce(fm_file.folder_id, fm.id), cd.shipment_id, coalesce(cd.client_id, s.client_id), cd.created_at
     from public.customs_documents cd
     left join public.shipments s on s.id = cd.shipment_id and s.organization_id = cd.organization_id
     left join public.clients c on c.id = coalesce(cd.client_id, s.client_id) and c.organization_id = cd.organization_id
     left join public.file_manager_folders fm on fm.shipment_id = cd.shipment_id and fm.organization_id = cd.organization_id and fm.folder_type = 'shipment'
+    left join public.file_manager_files fm_file on fm_file.customs_document_id = cd.id and fm_file.organization_id = cd.organization_id
     cross join query_arg q
     where cd.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or coalesce(cd.client_id, s.client_id) = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
-      and cd.file_manager_search_text ilike q.pattern
+      and (cd.file_manager_search_text ilike q.pattern or fm_file.file_manager_search_text ilike q.pattern)
   )
   select h.entity_type, h.entity_id, h.title, h.details, h.folder_id, h.shipment_id, h.client_id
   from hits h
