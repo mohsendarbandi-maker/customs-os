@@ -98,8 +98,8 @@ create table if not exists public.file_manager_files (
   metadata jsonb not null default '{}'::jsonb,
   is_archived boolean not null default false,
   -- Optional compatibility pointer to the pre-existing Storage-backed document row.
-  shipment_document_id uuid null references public.shipment_documents(id) on delete set null,
-  customs_document_id uuid null references public.customs_documents(id) on delete set null,
+  shipment_document_id uuid null references public.shipment_documents(id) on delete cascade,
+  customs_document_id uuid null references public.customs_documents(id) on delete cascade,
   storage_path text null,
   created_by uuid null references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
