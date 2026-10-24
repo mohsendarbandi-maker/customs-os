@@ -601,7 +601,7 @@ begin
     left join public.shipment_customs_data scd on scd.shipment_id = s.id and scd.organization_id = s.organization_id
     where coalesce(s.customs_office_id, ca.customs_office_id, scd.customs_office_id) = new.id
       and s.organization_id = coalesce(new.organization_id, s.organization_id)
-      and s.client_id is not null
+      and (s.client_id is not null or ca.client_id is not null)
   loop
     perform public.ensure_shipment_file_manager_folders(v_shipment.id);
   end loop;
@@ -631,7 +631,6 @@ begin
     from public.shipments s
     where s.case_id = new.id
       and s.organization_id = new.organization_id
-      and s.client_id is not null
   loop
     perform public.ensure_shipment_file_manager_folders(v_shipment.id);
   end loop;
