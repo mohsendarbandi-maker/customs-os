@@ -149,9 +149,11 @@ describe('Telegram-backed Customs OS file manager', () => {
 
   it('embeds searchable folder metadata in Telegram and follows owner changes', () => {
     expect(gateway).toContain('archiveMode:"telegram_file_archive"');
-    expect(gateway).toContain('"Owner: "+ownerName');
-    expect(gateway).toContain('"Shipment / customs folder: "+shipmentFolderName');
+    expect(gateway).toContain('"صاحب کالا: "+ownerName');
+    expect(gateway).toContain('"محموله: "+shipmentFolderName');
     expect(gateway).toContain('telegramTagTokens');
+    expect(gateway).toContain('customsOfficeName');
+    expect(gateway).toContain('kottajNumber');
     expect(migration).toContain('update public.file_manager_files\n  set client_id = v_client');
     expect(migration).toContain('update public.customs_documents\n  set client_id = v_client');
     expect(preDeclaration).toContain(".eq('is_archived',false)");
