@@ -519,7 +519,7 @@ create or replace function public.set_file_manager_search_text()
 returns trigger
 language plpgsql
 set search_path = public, pg_temp
-as $
+as $$
 begin
   new.file_manager_search_text := (to_jsonb(new) - 'file_manager_search_text')::text;
   return new;
@@ -632,7 +632,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public, pg_temp
-as $
+as $$
 declare
   v_client uuid;
   v_folder uuid;
