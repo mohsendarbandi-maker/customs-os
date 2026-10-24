@@ -1843,7 +1843,7 @@ html:has(.reminders-app-standalone), body:has(.reminders-app-standalone) {
 /* Minimal Reminders mobile UI: four clear destinations and one large add action. */
 .reminders-mobile-fab{display:none}
 @media(max-width:767px){
- .reminders-app-standalone{padding-bottom:calc(158px + env(safe-area-inset-bottom))!important}
+ .reminders-app-standalone{padding-bottom:calc(184px + env(safe-area-inset-bottom))!important}
  .reminders-app-standalone>section{padding:calc(env(safe-area-inset-top) + 10px) 12px 20px!important}
  .reminders-mobile-nav{
   position:fixed!important;z-index:80!important;inset-inline:10px!important;bottom:calc(8px + env(safe-area-inset-bottom))!important;
@@ -1856,7 +1856,7 @@ html:has(.reminders-app-standalone), body:has(.reminders-app-standalone) {
  .reminders-mobile-nav>button.is-active{color:var(--primary)!important;background:color-mix(in srgb,var(--primary) 11%,transparent)!important}
  .reminders-mobile-nav>button svg{width:21px!important;height:21px!important}
  .reminders-mobile-nav>button:focus-visible{outline:3px solid var(--primary-2)!important;outline-offset:2px!important}
- .reminders-mobile-fab{display:grid!important;place-items:center!important;position:fixed!important;z-index:85!important;left:50%!important;bottom:calc(84px + env(safe-area-inset-bottom))!important;transform:translateX(-50%)!important;width:66px!important;height:66px!important;min-width:66px!important;min-height:66px!important;padding:0!important;border:3px solid var(--surface)!important;border-radius:22px!important;background:var(--primary)!important;color:#fff!important;box-shadow:0 8px 22px color-mix(in srgb,var(--primary) 35%,transparent)!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent}
+ .reminders-mobile-fab{display:grid!important;place-items:center!important;position:fixed!important;z-index:85!important;left:50%!important;bottom:calc(110px + env(safe-area-inset-bottom))!important;transform:translateX(-50%)!important;width:66px!important;height:66px!important;min-width:66px!important;min-height:66px!important;padding:0!important;border:3px solid var(--surface)!important;border-radius:22px!important;background:var(--primary)!important;color:#fff!important;box-shadow:0 8px 22px color-mix(in srgb,var(--primary) 35%,transparent)!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent}
  .reminders-mobile-fab svg{width:32px!important;height:32px!important;stroke-width:2.8}
  .reminders-mobile-fab:active{transform:translateX(-50%) scale(.94)!important}
  .reminders-mobile-fab:focus-visible{outline:3px solid var(--primary-2)!important;outline-offset:3px!important}
