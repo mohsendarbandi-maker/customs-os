@@ -240,6 +240,9 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
      telegram_message_id:String(result.messageId||"")
     }).select("id").single();
     if(documentError||!shipmentDocument)throw new Error("SHIPMENT_DOCUMENT_METADATA_SAVE_FAILED");
+    const {error:tagError}=await db.from("customs_documents").update({tags:archiveTags})
+     .eq("id",shipmentDocument.id).eq("organization_id",p.organization_id);
+    if(tagError)throw new Error("FILE_ARCHIVE_TAG_METADATA_SAVE_FAILED");
    }else{
     const {data:companyDocument,error:companyDocumentError}=await db.from("customs_documents").insert({
      organization_id:p.organization_id,client_id:folder.client_id,shipment_id:null,case_id:null,
@@ -253,7 +256,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    // The canonical document trigger creates the logical file row; do not insert a duplicate.
    const {data:fileRow,error:fileError}=await db.from("file_manager_files").update({
     original_name:name,mime_type:mime,size_bytes:size,external_message_id:String(result.messageId||""),
-    document_type:documentType,tags:[],metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId},
+    document_type:documentType,tags:archiveTags,metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId,archiveTags},
     storage_path:"telegram://"+assetId,created_by:user,is_archived:false,updated_at:new Date().toISOString()
    }).eq("organization_id",p.organization_id).eq("file_asset_id",assetId).select("id").maybeSingle();
    if(fileError||!fileRow)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
