@@ -41,6 +41,12 @@ describe('Reminders responsive redesign contract', () => {
     expect(css).toContain('@media (min-width: 1024px) and (pointer: coarse)');
   });
 
+  it('stacks the composer and date sheets above the shared mobile navigation', () => {
+    expect(css).toContain(':has(.reminders-composebar.is-open)');
+    expect(css).toContain('z-index: 340 !important');
+    expect(css).toContain('z-index: 330 !important');
+  });
+
   it('preserves safe areas, reduced-motion preferences, and horizontal overflow protection', () => {
     expect(css).toContain('env(safe-area-inset-top)');
     expect(css).toContain('env(safe-area-inset-bottom)');
