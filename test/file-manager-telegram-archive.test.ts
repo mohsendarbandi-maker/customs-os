@@ -72,6 +72,7 @@ describe('Telegram-backed Customs OS file manager', () => {
   it('provides global business/document search, and preserves organization scoping in the RPC', () => {
     expect(migration).toContain('create or replace function public.search_file_manager');
     expect(migration).toContain('security invoker');
+    expect(migration).toContain("user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client')");
     expect(migration).toContain('public.user_org_id()');
     expect(migration).toContain('public.shipment_customs_data');
     expect(migration).toContain('public.customs_declarations');
