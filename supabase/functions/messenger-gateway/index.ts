@@ -132,7 +132,113 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  }
  if(recordLog)await db.from("message_logs").insert({organization_id:org,connection_id:c.id,direction:"outbound",message_type:"document",external_message_id:result.messageId,external_chat_id:chat,file_asset_id:a.id,status:"sent",payload_summary:{name:result.name,mimeType:mime,sizeBytes:size},sent_at:new Date().toISOString()});
  return String(a.id);
-}async function upload(req:Request,p:Profile,user:string,cid:string){const c=await ownedConn(cid,p.organization_id),u=new URL(req.url),chat=u.searchParams.get("chatId")||"",name=cleanName(decodeURIComponent(req.headers.get("X-File-Name")||u.searchParams.get("filename")||"document.bin")),mime=cleanMime(req.headers.get("Content-Type")),h=req.headers.get("x-file-size")||req.headers.get("content-length"),size=h&&/^\d+$/.test(h)?Number(h):null,max=c.platform==="whatsapp"?100*1024*1024:50*1024*1024;if(!chat||size===0||(size!==null&&size>max)||!req.body)return bad("INVALID_FILE_SIZE_CHAT_OR_BODY",413,req);const {data:mapped}=await db.from("messenger_chats").select("enabled,shipment_id").eq("organization_id",p.organization_id).eq("connection_id",c.id).eq("external_chat_id",chat).maybeSingle();if(!mapped?.enabled)return bad("CHAT_NOT_ALLOWED",403,req);try{const result=await uploadStream(c,chat,name,mime,size,req.body),assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",mapped.shipment_id||null);return out({ok:true,fileAssetId:assetId,externalMessageId:result.messageId,sizeBytes:size},201,req);}catch(e){return bad(errorCode(e),502,req);}}
+}async function fileArchiveDestination(p:Profile,req:Request){
+ const {data:connections,error}=await db.from("messenger_connections")
+  .select("id,organization_id,platform,display_name,enabled")
+  .eq("organization_id",p.organization_id).eq("platform","telegram").eq("enabled",true)
+  .order("created_at",{ascending:false}).limit(10);
+ if(error)return bad("FILE_ARCHIVE_LOOKUP_FAILED",500,req);
+ for(const c of connections||[]){
+  const {data:chats,error:chatError}=await db.from("messenger_chats")
+   .select("id,external_chat_id,display_name")
+   .eq("organization_id",p.organization_id).eq("connection_id",c.id)
+   .eq("purpose","file_archive").eq("enabled",true)
+   .order("created_at",{ascending:false}).limit(1);
+  if(chatError)return bad("FILE_ARCHIVE_LOOKUP_FAILED",500,req);
+  const chat=chats?.[0];
+  if(chat)return out({ok:true,destination:{connectionId:c.id,chatId:chat.external_chat_id,displayName:chat.display_name||c.display_name||"آرشیو اسناد"}},200,req);
+ }
+ return bad("FILE_ARCHIVE_NOT_CONFIGURED",409,req);
+}
+async function upload(req:Request,p:Profile,user:string,cid:string){
+ const c=await ownedConn(cid,p.organization_id),u=new URL(req.url);
+ const chat=u.searchParams.get("chatId")||"",folderId=u.searchParams.get("folderId")||"",
+  requestedShipmentId=u.searchParams.get("shipmentId")||"",
+  documentType=cleanName(u.searchParams.get("documentType")||"other"),
+  name=cleanName(decodeURIComponent(req.headers.get("X-File-Name")||u.searchParams.get("filename")||"document.bin")),
+  mime=cleanMime(req.headers.get("Content-Type")),
+  h=req.headers.get("x-file-size")||req.headers.get("content-length"),
+  size=h&&/^\\d+$/.test(h)?Number(h):null,
+  archive=Boolean(folderId||requestedShipmentId),
+  max=archive&&c.platform==="telegram"?TG_DOWNLOAD_LIMIT:(c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT),
+  idempotencyKey=(req.headers.get("Idempotency-Key")||"").trim();
+ if(!chat||size===0||(size!==null&&size>max)||!req.body)return bad(size!==null&&size>max?"FILE_TOO_LARGE_FOR_DESTINATION":"INVALID_FILE_SIZE_CHAT_OR_BODY",413,req);
+ if(archive&&(!folderId||!requestedShipmentId||!validId(folderId)||!validId(requestedShipmentId)||!idempotencyKey||idempotencyKey.length>180))
+  return bad("INVALID_FILE_ARCHIVE_INPUT",400,req);
+ const {data:mapped,error:mappedError}=await db.from("messenger_chats")
+  .select("enabled,shipment_id,purpose")
+  .eq("organization_id",p.organization_id).eq("connection_id",c.id).eq("external_chat_id",chat).maybeSingle();
+ if(mappedError)return bad("CHAT_LOOKUP_FAILED",500,req);
+ if(!mapped?.enabled)return bad("CHAT_NOT_ALLOWED",403,req);
+ if(archive){
+  if(c.platform!=="telegram"||mapped.purpose!=="file_archive")return bad("FILE_ARCHIVE_DESTINATION_REQUIRED",403,req);
+  const {data:shipment,error:shipmentError}=await db.from("shipments")
+   .select("id,organization_id,client_id")
+   .eq("id",requestedShipmentId).eq("organization_id",p.organization_id).maybeSingle();
+  if(shipmentError||!shipment)return bad("SHIPMENT_NOT_FOUND",404,req);
+  if(p.role==="client"&&shipment.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
+  const {data:folder,error:folderError}=await db.from("file_manager_folders")
+   .select("id,organization_id,shipment_id,client_id,folder_type")
+   .eq("id",folderId).eq("organization_id",p.organization_id).maybeSingle();
+  if(folderError||!folder||folder.shipment_id!==shipment.id)return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
+  if(p.role==="client"&&folder.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
+  let job:any=null;
+  const {data:existing,error:existingError}=await db.from("file_manager_upload_jobs")
+   .select("id,status,file_asset_id,external_message_id,size_bytes")
+   .eq("organization_id",p.organization_id).eq("idempotency_key",idempotencyKey).maybeSingle();
+  if(existingError)return bad("FILE_UPLOAD_JOB_LOOKUP_FAILED",500,req);
+  if(existing?.status==="stored"&&existing.file_asset_id)
+   return out({ok:true,fileAssetId:existing.file_asset_id,externalMessageId:existing.external_message_id,sizeBytes:existing.size_bytes,folderId,uploadJobId:existing.id,alreadyStored:true},200,req);
+  if(existing&&existing.status!=="failed")return bad("FILE_UPLOAD_RECONCILIATION_REQUIRED",409,req);
+  if(existing){
+   const {data:retry,error:retryError}=await db.from("file_manager_upload_jobs")
+    .update({status:"uploading",attempt_count:(existing.attempt_count||1)+1,error_code:null,updated_at:new Date().toISOString()})
+    .eq("id",existing.id).eq("organization_id",p.organization_id).select("id").single();
+   if(retryError||!retry)return bad("FILE_UPLOAD_JOB_UPDATE_FAILED",500,req);
+   job=retry;
+  }else{
+   const {data:created,error:createError}=await db.from("file_manager_upload_jobs")
+    .insert({organization_id:p.organization_id,idempotency_key:idempotencyKey,folder_id:folderId,shipment_id:shipment.id,
+      created_by:user,original_name:name,mime_type:mime,size_bytes:size??0,status:"uploading"})
+    .select("id").single();
+   if(createError){
+    if(createError.code==="23505")return bad("FILE_UPLOAD_JOB_ALREADY_EXISTS_RETRY_WITH_STATUS_CHECK",409,req);
+    return bad("FILE_UPLOAD_JOB_CREATE_FAILED",500,req);
+   }
+   job=created;
+  }
+  let result:any=null,assetId:string|null=null,telegramCallStarted=false;
+  try{
+   telegramCallStarted=true;
+   result=await uploadStream(c,chat,name,mime,size,req.body);
+   assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment.id,false);
+   const {error:fileError}=await db.from("file_manager_files").insert({
+    organization_id:p.organization_id,folder_id:folder.id,shipment_id:shipment.id,client_id:shipment.client_id,
+    file_asset_id:assetId,document_type:documentType,tags:[],metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId},
+    created_by:user
+   });
+   if(fileError)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
+   const {error:completeError}=await db.from("file_manager_upload_jobs").update({
+    status:"stored",file_asset_id:assetId,external_message_id:String(result.messageId||""),
+    updated_at:new Date().toISOString(),completed_at:new Date().toISOString(),error_code:null
+   }).eq("id",job.id).eq("organization_id",p.organization_id);
+   if(completeError)throw new Error("FILE_UPLOAD_JOB_COMPLETE_FAILED");
+   return out({ok:true,fileAssetId:assetId,externalMessageId:result.messageId,sizeBytes:size,folderId,uploadJobId:job.id,alreadyStored:false},201,req);
+  }catch(e){
+   await db.from("file_manager_upload_jobs").update({
+    status:telegramCallStarted?"reconcile_required":"failed",
+    file_asset_id:assetId,external_message_id:result?.messageId?String(result.messageId):null,
+    error_code:errorCode(e),updated_at:new Date().toISOString()
+   }).eq("id",job.id).eq("organization_id",p.organization_id);
+   return bad(telegramCallStarted?"FILE_UPLOAD_RECONCILIATION_REQUIRED":errorCode(e),502,req);
+  }
+ }
+ if(mapped.purpose==="file_archive")return bad("FILE_ARCHIVE_FOLDER_REQUIRED",400,req);
+ const {data:assetShipment,error:assetShipmentError}=await db.from("messenger_chats")
+  .select("shipment_id").eq("organization_id",p.organization_id).eq("connection_id",c.id).eq("external_chat_id",chat).maybeSingle();
+ if(assetShipmentError)return bad("CHAT_LOOKUP_FAILED",500,req);
+ try{const result=await uploadStream(c,chat,name,mime,size,req.body),assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",assetShipment?.shipment_id||null);return out({ok:true,fileAssetId:assetId,externalMessageId:result.messageId,sizeBytes:size},201,req);}catch(e){return bad(errorCode(e),502,req);}
+}
 async function sourceFile(c:Conn,fileId:string){if(c.platform==="rubika")throw new Error("PLATFORM_TRANSPORT_UNVERIFIED");if(c.platform==="whatsapp"){const t=await accessToken(c),r=await graph(c,encodeURIComponent(fileId));const d=await r.json() as any;if(!r.ok||d.error||typeof d.url!=="string")throw new Error("WHATSAPP_MEDIA_URL_FAILED");const url=new URL(d.url);if(url.protocol!=="https:"||!(url.hostname.endsWith(".fbsbx.com")||url.hostname.endsWith(".fbcdn.net")||url.hostname.endsWith(".whatsapp.net")))throw new Error("MEDIA_HOST_REJECTED");const media=await fetch(url.toString(),{headers:{Authorization:"Bearer "+t}});if(!media.ok||!media.body)throw new Error("MEDIA_DOWNLOAD_FAILED");const cl=media.headers.get("content-length");return {response:media,size:cl&&/^\d+$/.test(cl)?Number(cl):null};}const t=await accessToken(c),d=await apiJson(botBase(c,t)+"getFile?file_id="+encodeURIComponent(fileId)),path=String(d.result?.file_path||""),size=Number(d.result?.file_size||0)||null;if(!path||(size&&size>TG_DOWNLOAD_LIMIT))throw new Error("SOURCE_FILE_OVER_DOWNLOAD_LIMIT");const base=c.platform==="telegram"?"https://api.telegram.org/file/bot":"https://tapi.bale.ai/file/bot";const r=await fetch(base+t+"/"+path);if(!r.ok||!r.body)throw new Error("SOURCE_FILE_DOWNLOAD_FAILED");return {response:r,size};}
 async function authorizeAsset(p:Profile,id:string){const {data:a}=await db.from("file_assets").select("*").eq("id",id).eq("organization_id",p.organization_id).maybeSingle();if(!a)throw new Error("FILE_NOT_FOUND");if(p.role==="client"){const {data:links}=await db.from("shipment_files").select("shipment_id").eq("organization_id",p.organization_id).eq("file_asset_id",id);const ids=(links||[]).map((x:any)=>x.shipment_id);if(!ids.length)throw new Error("FILE_ACCESS_DENIED");const {data:visible}=await db.from("shipments").select("id").eq("organization_id",p.organization_id).eq("client_id",p.client_id||"").in("id",ids);if(!visible?.length)throw new Error("FILE_ACCESS_DENIED");}const {data:locations}=await db.from("file_locations").select("*").eq("organization_id",p.organization_id).eq("file_asset_id",id).eq("availability_status","available").order("created_at");for(const l of locations||[]){const c=await readConn(l.connection_id);if(c&&c.organization_id===p.organization_id)return {asset:a,location:l,connection:c};}throw new Error("SOURCE_CONNECTION_UNAVAILABLE");}
 async function download(req:Request,p:Profile,id:string){if(!validId(id))return bad("INVALID_FILE_ID",400,req);try{const x=await authorizeAsset(p,id),f=await sourceFile(x.connection,x.location.external_file_id),h=new Headers(noStore);h.set("Content-Type",cleanMime(x.asset.mime_type));h.set("Content-Disposition","attachment; filename*=UTF-8''"+encodeURIComponent(cleanName(x.asset.original_name)));if(f.size!==null)h.set("Content-Length",String(f.size));return new Response(f.response.body,{status:200,headers:h});}catch(e){return bad(errorCode(e),404,req);}}
@@ -412,5 +518,5 @@ async function processDailyReports(req:Request){
 async function tgWebhook(req:Request,c:Conn,secretPath?:string){const s=await secret(c.webhook_secret_ref);if(c.platform==="telegram"){if(!s||!equal(req.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",s))return bad("WEBHOOK_AUTH_FAILED",401,req);}else if(!s||!secretPath||!equal(s,secretPath))return bad("WEBHOOK_AUTH_FAILED",401,req);let b:any;try{b=JSON.parse(await readText(req,1024*1024));}catch(e){return bad(errorCode(e),400,req);}const updateId=String(b.update_id??b.updateId??"");if(!updateId)return bad("WEBHOOK_EVENT_ID_MISSING",400,req);const eid=await event(c,updateId,c.platform+"-update");if(!eid)return out({ok:true,duplicate:true},200,req);try{const m=b.message||b.channel_post||b.edited_message||b.edited_channel_post||{},chat=String(m.chat?.id??""),mid=String(m.message_id??"");if(chat&&mid)await inbound(c,chat,mid,tgMedia(m),String((typeof m.text==="string"?m.text:"")||m.caption||""),String(m.from?.id||""),String([m.from?.first_name,m.from?.last_name].filter(Boolean).join(" ")||m.from?.username||""));await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);return out({ok:true},200,req);}catch(e){await db.from("webhook_events").update({status:"failed",attempt_count:1,error_code:errorCode(e)}).eq("id",eid);return bad("WEBHOOK_PROCESSING_FAILED",500,req);}}
 async function waWebhook(req:Request,c:Conn){if(req.method==="GET"){const u=new URL(req.url),s=await secret(c.verify_token_ref),challenge=u.searchParams.get("hub.challenge");if(u.searchParams.get("hub.mode")!=="subscribe"||!s||!equal(u.searchParams.get("hub.verify_token")||"",s)||challenge===null)return bad("WEBHOOK_VERIFICATION_FAILED",403,req);return new Response(challenge,{status:200,headers:{...noStore,"Content-Type":"text/plain"}});}const raw=await readText(req,1024*1024),app=await secret(c.app_secret_ref);if(!app||!await checkHmac(app,raw,req.headers.get("X-Hub-Signature-256")||""))return bad("WEBHOOK_SIGNATURE_INVALID",401,req);let b:any;try{b=JSON.parse(raw);}catch{return bad("INVALID_JSON",400,req);}try{for(const entry of b.entry||[])for(const change of entry.changes||[]){const value=change.value||{};for(const m of value.messages||[]){const id=String(m.id||"");if(!id)continue;const eid=await event(c,id,"whatsapp-message");if(!eid)continue;const type=String(m.type||"unknown"),media=m[type];const normalized=media?.id?{id:String(media.id),unique:null,name:media.filename||(type==="image"?"image.jpg":type+".bin"),mime:media.mime_type||(type==="image"?"image/jpeg":"application/octet-stream"),size:null,voice:type==="audio"}:null;await inbound(c,String(m.from||""),id,normalized,String(m.text?.body||""),String(m.from||""),String((value.contacts||[]).find((contact:any)=>String(contact.wa_id||"")===String(m.from||""))?.profile?.name||""));await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);}for(const s of value.statuses||[]){const id=String(s.id||"");if(!id)continue;const eid=await event(c,id,"whatsapp-status-"+String(s.status||"unknown"));if(!eid)continue;await db.from("message_logs").update({status:["sent","delivered","read","failed"].includes(s.status)?s.status:"unknown"}).eq("organization_id",c.organization_id).eq("connection_id",c.id).eq("external_message_id",id);await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);}}}catch(e){return bad("WEBHOOK_PROCESSING_FAILED_"+errorCode(e),500,req);}return out({ok:true},200,req);}
 async function webhook(req:Request,path:string){const m=path.match(/^\/webhooks\/messenger\/(telegram|bale|whatsapp)\/([0-9a-f-]{36})(?:\/([A-Za-z0-9_-]+))?$/i);if(!m)return bad("WEBHOOK_NOT_FOUND",404,req);const platform=m[1].toLowerCase() as Platform,c=await readConn(m[2]);if(!c||c.platform!==platform)return bad("CONNECTION_NOT_FOUND",404,req);if(platform==="whatsapp")return await waWebhook(req,c);if(req.method!=="POST")return bad("METHOD_NOT_ALLOWED",405,req);return await tgWebhook(req,c,m[3]);}
-async function route(req:Request,path:string){const ctx=await context(req),p=ctx.p;if(req.method==="GET"&&path==="/api/messenger/health")return out({ok:true,platforms:{telegram:{supported:true,maxUploadBytes:TG_UPLOAD_LIMIT,maxDownloadBytes:TG_DOWNLOAD_LIMIT},bale:{supported:true,webhookAuth:"secret_path"},whatsapp:{supported:true,maxDocumentUploadBytes:100*1024*1024,metaSetupRequired:true},rubika:{supported:false,reason:"PUBLIC_BOT_API_NOT_VERIFIED"}}},200,req);if(path==="/api/messenger/connections"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_connections").select("id,organization_id,platform,external_account_id,display_name,config,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CONNECTION_LIST_FAILED",500,req);return out({ok:true,connections:data||[]},200,req);}if(path==="/api/messenger/connections"&&req.method==="POST")return await addConnection(req,p,ctx.userId);if(path==="/api/messenger/chats"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_chats").select("id,connection_id,external_chat_id,chat_type,purpose,display_name,shipment_id,conversation_id,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CHAT_LIST_FAILED",500,req);return out({ok:true,chats:data||[]},200,req);}if(path==="/api/messenger/chats"&&req.method==="POST")return await createChat(req,p,ctx.userId);const test=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/test$/i);if(req.method==="POST"&&test){onlyManager(p);const c=await ownedConn(test[1],p.organization_id,true);try{return out({ok:true,account:await probe(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}const hook=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/register-webhook$/i);if(req.method==="POST"&&hook){onlyManager(p);const c=await ownedConn(hook[1],p.organization_id,true);try{return out({ok:true,webhookUrl:await registerHook(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}if(path==="/api/messenger/messages"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("message_logs").select("id,connection_id,direction,message_type,external_message_id,external_chat_id,status,payload_summary,created_at,file_asset_id,chat_message_id").eq("organization_id",p.organization_id).order("created_at",{ascending:false}).limit(100);if(error)return bad("MESSAGE_LIST_FAILED",500,req);return out({ok:true,messages:data||[]},200,req);}if(path==="/api/messenger/messages"&&req.method==="POST")return await sendText(req,p);const up=path.match(/^\/api\/messenger\/uploads\/([0-9a-f-]{36})$/i);if(up&&req.method==="POST")return await upload(req,p,ctx.userId,up[1]);const down=path.match(/^\/api\/messenger\/files\/([0-9a-f-]{36})\/download$/i);if(down&&req.method==="GET")return await download(req,p,down[1]);if(path==="/api/messenger/transfers"&&req.method==="POST")return await transfer(req,p,ctx.userId);return bad("ROUTE_NOT_FOUND",404,req);}
+async function route(req:Request,path:string){const ctx=await context(req),p=ctx.p;if(req.method==="GET"&&path==="/api/messenger/health")return out({ok:true,platforms:{telegram:{supported:true,maxUploadBytes:TG_UPLOAD_LIMIT,maxDownloadBytes:TG_DOWNLOAD_LIMIT},bale:{supported:true,webhookAuth:"secret_path"},whatsapp:{supported:true,maxDocumentUploadBytes:100*1024*1024,metaSetupRequired:true},rubika:{supported:false,reason:"PUBLIC_BOT_API_NOT_VERIFIED"}}},200,req);if(path==="/api/messenger/file-archive-destination"&&req.method==="GET")return await fileArchiveDestination(p,req);if(path==="/api/messenger/connections"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_connections").select("id,organization_id,platform,external_account_id,display_name,config,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CONNECTION_LIST_FAILED",500,req);return out({ok:true,connections:data||[]},200,req);}if(path==="/api/messenger/connections"&&req.method==="POST")return await addConnection(req,p,ctx.userId);if(path==="/api/messenger/chats"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_chats").select("id,connection_id,external_chat_id,chat_type,purpose,display_name,shipment_id,conversation_id,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CHAT_LIST_FAILED",500,req);return out({ok:true,chats:data||[]},200,req);}if(path==="/api/messenger/chats"&&req.method==="POST")return await createChat(req,p,ctx.userId);const test=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/test$/i);if(req.method==="POST"&&test){onlyManager(p);const c=await ownedConn(test[1],p.organization_id,true);try{return out({ok:true,account:await probe(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}const hook=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/register-webhook$/i);if(req.method==="POST"&&hook){onlyManager(p);const c=await ownedConn(hook[1],p.organization_id,true);try{return out({ok:true,webhookUrl:await registerHook(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}if(path==="/api/messenger/messages"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("message_logs").select("id,connection_id,direction,message_type,external_message_id,external_chat_id,status,payload_summary,created_at,file_asset_id,chat_message_id").eq("organization_id",p.organization_id).order("created_at",{ascending:false}).limit(100);if(error)return bad("MESSAGE_LIST_FAILED",500,req);return out({ok:true,messages:data||[]},200,req);}if(path==="/api/messenger/messages"&&req.method==="POST")return await sendText(req,p);const up=path.match(/^\/api\/messenger\/uploads\/([0-9a-f-]{36})$/i);if(up&&req.method==="POST")return await upload(req,p,ctx.userId,up[1]);const down=path.match(/^\/api\/messenger\/files\/([0-9a-f-]{36})\/download$/i);if(down&&req.method==="GET")return await download(req,p,down[1]);if(path==="/api/messenger/transfers"&&req.method==="POST")return await transfer(req,p,ctx.userId);return bad("ROUTE_NOT_FOUND",404,req);}
 Deno.serve(async(req:Request)=>{const path=req.headers.get("x-messenger-path")||new URL(req.url).pathname;if(req.method==="OPTIONS"){const h=new Headers(noStore),o=req.headers.get("Origin")||"";if(ORIGINS.has(o)){h.set("Access-Control-Allow-Origin",o);h.set("Vary","Origin");h.set("Access-Control-Allow-Headers","authorization, apikey, content-type, x-file-name, x-file-size, idempotency-key");h.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");}return new Response(null,{status:204,headers:h});}try{if(!SB||!ANON||!SERVICE)return bad("GATEWAY_CONFIGURATION_MISSING",503,req);if(path==="/api/messenger/outbox/process"&&req.method==="POST")return await processMessengerOutbox(req);if(path==="/api/messenger/reports/daily"&&req.method==="POST")return await processDailyReports(req);if(path.startsWith("/webhooks/messenger/"))return await webhook(req,path);if(path.startsWith("/api/messenger/"))return await route(req,path);return bad("ROUTE_NOT_FOUND",404,req);}catch(e){const c=errorCode(e),status=c==="MANAGER_REQUIRED"?403:c.startsWith("AUTH_")?401:c==="CONNECTION_NOT_FOUND"||c==="FILE_NOT_FOUND"?404:400;return bad(c,status,req);}});
