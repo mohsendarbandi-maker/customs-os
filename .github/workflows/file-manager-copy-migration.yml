@@ -1,0 +1,39 @@
+name: File Manager Copy Migration Test
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261024174637_file_manager_folder_copy.sql'
+      - 'test/postgres/file-manager-folder-copy.sql'
+      - '.github/workflows/file-manager-copy-migration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-migration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+      - name: Execute migration and integration assertions in isolated PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file test/postgres/file-manager-folder-copy.sql
