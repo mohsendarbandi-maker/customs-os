@@ -159,7 +159,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   displayName=cleanName(u.searchParams.get("documentName")||name),
   mime=cleanMime(req.headers.get("Content-Type")),
   h=req.headers.get("x-file-size")||req.headers.get("content-length"),
-  size=h&&/^\\d+$/.test(h)?Number(h):null,
+  size=h&&/^\d+$/.test(h)?Number(h):null,
   archive=Boolean(folderId||requestedShipmentId),
   max=archive&&c.platform==="telegram"?TG_DOWNLOAD_LIMIT:(c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT),
   idempotencyKey=(req.headers.get("Idempotency-Key")||"").trim();
