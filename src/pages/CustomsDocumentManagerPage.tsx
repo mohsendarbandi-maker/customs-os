@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 
-import { makeClientId } from '../lib/clientId';
-import { safeStorageFilename } from '../lib/safeStorageFilename';
+import { downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
 import {
   Download,
   Eye,
@@ -71,6 +70,10 @@ type Doc = {
   size_bytes: number | null;
   status: string;
   source: 'shipment_documents' | 'customs_documents';
+  storage_backend?: 'supabase' | 'telegram';
+  file_asset_id?: string | null;
+  folder_id?: string | null;
+  telegram_message_id?: string | null;
 };
 
 const BUCKET = 'customs_documents';
@@ -144,6 +147,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const uploadKeys = useRef(new Map<string, string>());
   const [documentName, setDocumentName] = useState('');
   const [selected, setSelected] = useState<Doc | null>(null);
   const [extracting, setExtracting] = useState<Doc | null>(null);
@@ -244,14 +248,14 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           supabase
             .from('shipment_documents')
             .select(
-              'id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,created_at,updated_at',
+              'id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,telegram_message_id,created_at,updated_at',
             )
             .eq('shipment_id', id)
             .order('created_at', { ascending: false }),
           supabase
             .from('customs_documents')
             .select(
-              'id,shipment_id,document_type,original_name,display_name,storage_path,mime_type,size_bytes,status,created_at',
+              'id,shipment_id,document_type,original_name,display_name,storage_path,mime_type,size_bytes,status,storage_backend,file_asset_id,folder_id,telegram_message_id,created_at',
             )
             .eq('shipment_id', id)
             .order('created_at', { ascending: false }),
@@ -270,6 +274,10 @@ export const CustomsDocumentManagerPage: React.FC = () => {
         mime_type: d.mime_type || null,
         size_bytes: d.file_size_bytes ?? null,
         status: 'canonical',
+        storage_backend: d.storage_backend || 'supabase',
+        file_asset_id: d.file_asset_id || null,
+        folder_id: d.folder_id || null,
+        telegram_message_id: d.telegram_message_id || null,
         source: 'shipment_documents',
       }));
 
@@ -286,6 +294,10 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           mime_type: d.mime_type || null,
           size_bytes: d.size_bytes ?? null,
           status: d.status || 'legacy',
+          storage_backend: d.storage_backend || 'supabase',
+          file_asset_id: d.file_asset_id || null,
+          folder_id: d.folder_id || null,
+          telegram_message_id: d.telegram_message_id || null,
           source: 'customs_documents',
         }));
 
@@ -326,40 +338,40 @@ export const CustomsDocumentManagerPage: React.FC = () => {
     setBusy(true);
     setError('');
     setMessage('');
+    let completed = 0;
     try {
-      const { user, org } = await profile();
-      for (const f of files) {
-        if (!/\.(pdf|jpe?g|png)$/i.test(f.name) && !['application/pdf','image/jpeg','image/png'].includes(f.type)) {
-          throw new Error(`فرمت «${f.name}» پشتیبانی نمی‌شود. فقط PDF/JPG/PNG.`);
+      const folder = await getDefaultShipmentUploadFolder(current.id);
+      const destination = await getFileArchiveDestination();
+      for (const f of Array.from(files)) {
+        if (f.size > FILE_ARCHIVE_MAX_BYTES) {
+          throw new Error(`حجم «${f.name}» از سقف ۲۰ مگابایت Bot API معمولی تلگرام بیشتر است.`);
         }
-        if (f.size > 50 * 1024 * 1024) throw new Error(`حجم «${f.name}» بیشتر از 50 MB است.`);
-        const safe = safeStorageFilename(f.name);
-        const mime = f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : /\.png$/i.test(f.name) ? 'image/png' : 'image/jpeg');
-        const path = `${org}/${current.id}/${makeClientId()}-${safe}`;
-        const { error: ue } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: mime, cacheControl: '3600', upsert: false });
-        if (ue) throw new Error(`آپلود «${f.name}» ناموفق بود: ${ue.message}`);
-        const { error: de } = await supabase.from('shipment_documents').insert({
-          organization_id: org,
-          shipment_id: current.id,
-          uploaded_by: user.id,
-          document_name: files.length === 1 && customName ? customName : f.name,
-          original_file_name: f.name,
-          storage_path: path,
-          mime_type: mime,
-          file_size_bytes: f.size,
-          extraction_status: 'pending',
+        const keySource = `${current.id}:${f.name}:${f.size}:${f.lastModified}`;
+        let idempotencyKey = uploadKeys.current.get(keySource);
+        if (!idempotencyKey) {
+          idempotencyKey = crypto.randomUUID();
+          uploadKeys.current.set(keySource, idempotencyKey);
+        }
+        await uploadTelegramArchivedFile(f, {
+          folderId: folder.id,
+          shipmentId: current.id,
+          documentType: inferType(f.name) || 'other',
+          documentName: files.length === 1 && customName ? customName : f.name,
+          destination,
+          idempotencyKey,
         });
-        if (de) {
-          await supabase.storage.from(BUCKET).remove([path]);
-          throw new Error(`فایل آپلود شد ولی ثبت اطلاعات سند ناموفق بود: ${de.message}`);
-        }
+        uploadKeys.current.delete(keySource);
+        completed += 1;
+        setPendingFiles((previous) => previous.filter((candidate) => candidate !== f));
       }
       await loadDocs(current.id);
       setPendingFiles([]);
       setDocumentName('');
-      setMessage('فایل با موفقیت آپلود شد.');
+      setMessage(`${completed} سند مستقیماً در آرشیو تلگرام ذخیره شد؛ نسخه باینری جدیدی در Storage وب‌سایت ساخته نشد.`);
     } catch (e: any) {
-      setError(e?.message || 'بارگذاری ناموفق بود');
+      await loadDocs(current.id);
+      setError(e?.message || 'بارگذاری در آرشیو تلگرام ناموفق بود');
+      if (completed) setMessage(`${completed} فایل ذخیره شد؛ فایل‌های باقی‌مانده در صف هستند.`);
     } finally {
       setBusy(false);
     }
