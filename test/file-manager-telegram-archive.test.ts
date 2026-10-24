@@ -7,6 +7,8 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 describe('Telegram-backed Customs OS file manager', () => {
   const migration = read('supabase/migrations/20261024130000_file_manager_logical_folders_telegram_archive.sql');
   const uploadJobs = read('supabase/migrations/20261024130100_file_manager_upload_jobs.sql');
+  const unassignedMigration = read('supabase/migrations/20261024130900_file_manager_unassigned_legacy_documents.sql');
+  const grantsMigration = read('supabase/migrations/20261024131000_file_manager_minimize_table_grants.sql');
   const gateway = read('supabase/functions/messenger-gateway/index.ts');
   const fileManager = read('src/pages/FileManagerPage.tsx');
   const fileManagerClient = read('src/lib/fileManager.ts');
@@ -134,6 +136,21 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(migration).toContain('update public.customs_documents\n  set client_id = v_client');
     expect(preDeclaration).toContain(".eq('is_archived',false)");
     expect(documentPage).toContain(".eq('is_archived', false)");
+  });
+
+  it('keeps orphan legacy documents visible without guessing their owner or moving bytes', () => {
+    expect(unassignedMigration).toContain("'unassigned-documents'");
+    expect(unassignedMigration).toContain("'اسناد نیازمند اتصال به محموله'");
+    expect(unassignedMigration).toContain("'legacy_document_without_owner_or_shipment'");
+    expect(unassignedMigration).toContain('new.organization_id');
+    expect(unassignedMigration).toContain('on conflict do nothing');
+  });
+
+  it('removes default TRUNCATE and direct-write grants from archive tables', () => {
+    expect(grantsMigration).toContain('revoke all on table public.file_manager_upload_jobs from public, anon, authenticated');
+    expect(grantsMigration).toContain('grant select, insert, update on table public.file_manager_folders to authenticated');
+    expect(grantsMigration).toContain('grant select, update on table public.file_manager_files to authenticated');
+    expect(grantsMigration).toContain('grant all on table public.file_manager_folders, public.file_manager_files, public.file_manager_upload_jobs to service_role');
   });
 
   it('registers the page and exposes it from the main navigation', () => {
