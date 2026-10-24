@@ -70,7 +70,7 @@ const folderSlug = (value: string) =>
   value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '-').replace(/[^\p{L}\p{N}_-]/gu, '').slice(0, 72) || crypto.randomUUID();
 
 const roleCanModifyStructure = (role?: string | null) =>
-  ['owner', 'admin', 'broker', 'accountant', 'warehouse'].includes(String(role || ''));
+  ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'].includes(String(role || ''));
 
 export const FileManagerPage: React.FC = () => {
   const { profile } = useAuth();

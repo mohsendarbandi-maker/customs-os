@@ -108,6 +108,12 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('همگام‌سازی خودکار پس‌زمینه در این نسخه وجود ندارد');
   });
 
+  it('allows client-scoped users to create custom folders while RLS scopes their access', () => {
+    expect(fileManager).toContain("['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'].includes(String(role || ''))");
+    expect(migration).toContain("and public.user_role()::text = 'client'");
+    expect(migration).toContain('parent.client_id = public.user_client_id()');
+  });
+
   it('supports owner-level documents without a shipment and hides archived file metadata', () => {
     expect(migration).toContain('  shipment_id uuid null,');
     expect(migration).toContain('create or replace function public.ensure_client_file_manager_folder');
