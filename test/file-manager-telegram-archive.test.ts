@@ -46,7 +46,7 @@ describe('Telegram-backed Customs OS file manager', () => {
 
   it('enforces the Telegram download-size limit while streaming at the server', () => {
     expect(gateway).toContain('maxOverride?:number');
-    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT)');
+    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption)');
     expect(fileManagerClient).toContain('FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES = 20 * 1024 * 1024');
     expect(fileManagerClient).toContain('FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES');
   });
