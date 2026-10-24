@@ -162,8 +162,8 @@ describe('Telegram-backed Customs OS file manager', () => {
 
   it('embeds searchable folder metadata in Telegram and follows owner changes', () => {
     expect(gateway).toContain('archiveMode:"telegram_file_archive"');
-    expect(gateway).toContain('"صاحب کالا: "+ownerName');
-    expect(gateway).toContain('"محموله: "+shipmentFolderName');
+    expect(gateway).toContain('"صاحب کالا: "+ownerName.slice(0,90)');
+    expect(gateway).toContain('"محموله: "+shipmentFolderName.slice(0,120)');
     expect(gateway).toContain('telegramTagTokens');
     expect(gateway).toContain('customsOfficeName');
     expect(gateway).toContain('kottajNumber');
