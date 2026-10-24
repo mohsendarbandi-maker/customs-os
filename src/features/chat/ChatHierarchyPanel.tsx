@@ -98,7 +98,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
     const children=shipmentsByOwner.get(owner.conversation_id)??[];
     const expanded=folder==='owners'?false:folder==='shipments'?true:(open[owner.conversation_id]??false);
     const selectedOwner=selectedId===owner.conversation_id;
-    const unreadCount=Number(owner.unread_count)+children.reduce((total,item)=>total+Number(item.unread_count),0);
+    const unreadCount=(Number(owner.unread_count)||0)+children.reduce((total,item)=>total+(Number(item.unread_count)||0),0);
     return <article key={owner.conversation_id} className={'chat-owner-card '+(selectedOwner?'is-selected':'')}>
      <div className="chat-owner-row">
       {folder==='owners'
