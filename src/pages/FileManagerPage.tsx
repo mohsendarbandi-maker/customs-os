@@ -133,7 +133,7 @@ export const FileManagerPage: React.FC = () => {
       const requested =
         rows.find((folder) => folder.id === requestedFolder) ||
         rows.find((folder) => folder.shipment_id === requestedShipment && folder.folder_type === 'shipment') ||
-        rows.find((folder) => folder.parent_id === null && folder.folder_type === 'root') ||
+        rows.find((folder) => folder.parent_id === null && folder.folder_key === 'owners-root') ||
         rows[0] || null;
       setSelectedFolderId((previous) => rows.some((folder) => folder.id === previous) ? previous : requested?.id || '');
     } catch (e) {
