@@ -87,7 +87,7 @@ create table if not exists public.file_manager_files (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   folder_id uuid not null,
-  shipment_id uuid not null,
+  shipment_id uuid null,
   file_asset_id uuid null references public.file_assets(id) on delete restrict,
   original_name text not null,
   mime_type text not null default 'application/octet-stream',
