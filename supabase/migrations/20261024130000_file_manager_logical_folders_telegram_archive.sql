@@ -484,6 +484,57 @@ after update of name, code on public.customs_offices
 for each row
 execute function public.sync_file_manager_customs_office_name();
 
+create or replace function public.sync_file_manager_case_customs_office()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_shipment record;
+begin
+  for v_shipment in
+    select s.id
+    from public.shipments s
+    where s.case_id = new.id
+      and s.organization_id = new.organization_id
+      and s.client_id is not null
+  loop
+    perform public.ensure_shipment_file_manager_folders(v_shipment.id);
+  end loop;
+  return new;
+end;
+$$;
+
+revoke all on function public.sync_file_manager_case_customs_office() from public, anon, authenticated;
+drop trigger if exists trg_sync_file_manager_case_customs_office on public.cases;
+create trigger trg_sync_file_manager_case_customs_office
+after update of customs_office_id on public.cases
+for each row
+when (new.customs_office_id is distinct from old.customs_office_id)
+execute function public.sync_file_manager_case_customs_office();
+
+create or replace function public.sync_file_manager_shipment_customs_data()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.shipment_id is not null then
+    perform public.ensure_shipment_file_manager_folders(new.shipment_id);
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.sync_file_manager_shipment_customs_data() from public, anon, authenticated;
+drop trigger if exists trg_sync_file_manager_shipment_customs_data on public.shipment_customs_data;
+create trigger trg_sync_file_manager_shipment_customs_data
+after insert or update of customs_office_id on public.shipment_customs_data
+for each row
+execute function public.sync_file_manager_shipment_customs_data();
+
 -- Maintain indexed metadata-only search text. This flattens database columns, never file bytes.
 create or replace function public.set_file_manager_search_text()
 returns trigger
