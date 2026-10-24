@@ -514,6 +514,73 @@ after update of name, code on public.customs_offices
 for each row
 execute function public.sync_file_manager_customs_office_name();
 
+-- Maintain indexed metadata-only search text. This flattens database columns, never file bytes.
+create or replace function public.set_file_manager_search_text()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $
+begin
+  new.file_manager_search_text := (to_jsonb(new) - 'file_manager_search_text')::text;
+  return new;
+end;
+$;
+
+revoke all on function public.set_file_manager_search_text() from public, anon, authenticated;
+
+alter table public.file_manager_folders add column if not exists file_manager_search_text text not null default '';
+alter table public.file_manager_files add column if not exists file_manager_search_text text not null default '';
+alter table public.shipments add column if not exists file_manager_search_text text not null default '';
+alter table public.clients add column if not exists file_manager_search_text text not null default '';
+alter table public.vessels add column if not exists file_manager_search_text text not null default '';
+alter table public.cases add column if not exists file_manager_search_text text not null default '';
+alter table public.customs_offices add column if not exists file_manager_search_text text not null default '';
+alter table public.shipping_lines add column if not exists file_manager_search_text text not null default '';
+alter table public.shipment_customs_data add column if not exists file_manager_search_text text not null default '';
+alter table public.customs_declarations add column if not exists file_manager_search_text text not null default '';
+alter table public.shipment_documents add column if not exists file_manager_search_text text not null default '';
+alter table public.customs_documents add column if not exists file_manager_search_text text not null default '';
+
+do $
+declare t text;
+begin
+  foreach t in array array[
+    'file_manager_folders','file_manager_files','shipments','clients','vessels','cases',
+    'customs_offices','shipping_lines','shipment_customs_data','customs_declarations',
+    'shipment_documents','customs_documents'
+  ] loop
+    execute format('drop trigger if exists trg_file_manager_search_text on public.%I', t);
+    execute format('create trigger trg_file_manager_search_text before insert or update on public.%I for each row execute function public.set_file_manager_search_text()', t);
+  end loop;
+end $;
+
+create index if not exists file_manager_folders_search_text_trgm_idx on public.file_manager_folders using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists file_manager_files_search_text_trgm_idx on public.file_manager_files using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists shipments_search_text_trgm_idx on public.shipments using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists clients_search_text_trgm_idx on public.clients using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists vessels_search_text_trgm_idx on public.vessels using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists cases_search_text_trgm_idx on public.cases using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists customs_offices_search_text_trgm_idx on public.customs_offices using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists shipping_lines_search_text_trgm_idx on public.shipping_lines using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists shipment_customs_data_search_text_trgm_idx on public.shipment_customs_data using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists customs_declarations_search_text_trgm_idx on public.customs_declarations using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists shipment_documents_search_text_trgm_idx on public.shipment_documents using gin (file_manager_search_text extensions.gin_trgm_ops);
+create index if not exists customs_documents_search_text_trgm_idx on public.customs_documents using gin (file_manager_search_text extensions.gin_trgm_ops);
+
+-- Populate existing metadata once. Subsequent writes are maintained by the trigger.
+update public.file_manager_folders set file_manager_search_text = file_manager_search_text;
+update public.file_manager_files set file_manager_search_text = file_manager_search_text;
+update public.shipments set file_manager_search_text = file_manager_search_text;
+update public.clients set file_manager_search_text = file_manager_search_text;
+update public.vessels set file_manager_search_text = file_manager_search_text;
+update public.cases set file_manager_search_text = file_manager_search_text;
+update public.customs_offices set file_manager_search_text = file_manager_search_text;
+update public.shipping_lines set file_manager_search_text = file_manager_search_text;
+update public.shipment_customs_data set file_manager_search_text = file_manager_search_text;
+update public.customs_declarations set file_manager_search_text = file_manager_search_text;
+update public.shipment_documents set file_manager_search_text = file_manager_search_text;
+update public.customs_documents set file_manager_search_text = file_manager_search_text;
+
 -- Backfill only the logical tree for existing shipments. No existing file bytes or rows move.
 select public.ensure_shipment_file_manager_folders(s.id)
 from public.shipments s
@@ -650,14 +717,14 @@ as $$
       and (public.user_role()::text <> 'client' or s.client_id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
-        to_jsonb(s)::text ilike q.pattern
+        s.file_manager_search_text ilike q.pattern
         or coalesce(cl.name, '') ilike q.pattern
         or coalesce(v.name, '') ilike q.pattern
         or coalesce(o.name, '') ilike q.pattern
         or coalesce(o.code, '') ilike q.pattern
-        or to_jsonb(ca)::text ilike q.pattern
-        or to_jsonb(scd)::text ilike q.pattern
-        or to_jsonb(cd)::text ilike q.pattern
+        or ca.file_manager_search_text ilike q.pattern
+        or scd.file_manager_search_text ilike q.pattern
+        or cd.file_manager_search_text ilike q.pattern
       )
 
     union all
@@ -671,7 +738,7 @@ as $$
     where c.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or c.id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
-      and to_jsonb(c)::text ilike q.pattern
+      and c.file_manager_search_text ilike q.pattern
 
     union all
 
@@ -691,7 +758,7 @@ as $$
             and sx.client_id = public.user_client_id())
       )
       and length(trim(coalesce(p_query, ''))) >= 2
-      and (to_jsonb(v)::text ilike q.pattern or coalesce(sl.name, '') ilike q.pattern)
+      and (v.file_manager_search_text ilike q.pattern or coalesce(sl.name, '') ilike q.pattern)
 
     union all
 
@@ -709,7 +776,7 @@ as $$
     where d.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or coalesce(s.client_id, ca.client_id) = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
-      and (to_jsonb(d)::text ilike q.pattern or to_jsonb(ca)::text ilike q.pattern or coalesce(s.display_name, '') ilike q.pattern)
+      and (d.file_manager_search_text ilike q.pattern or ca.file_manager_search_text ilike q.pattern or coalesce(s.display_name, '') ilike q.pattern)
 
     union all
 
@@ -750,7 +817,7 @@ as $$
       and (public.user_role()::text <> 'client' or fm.client_id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
-        to_jsonb(fm)::text ilike q.pattern
+        fm.file_manager_search_text ilike q.pattern
         or f.display_name ilike q.pattern
         or s.display_name ilike q.pattern
         or c.name ilike q.pattern
@@ -771,7 +838,7 @@ as $$
     where sd.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or s.client_id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
-      and to_jsonb(sd)::text ilike q.pattern
+      and sd.file_manager_search_text ilike q.pattern
 
     union all
 
@@ -787,7 +854,7 @@ as $$
     where cd.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or coalesce(cd.client_id, s.client_id) = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
-      and to_jsonb(cd)::text ilike q.pattern
+      and cd.file_manager_search_text ilike q.pattern
   )
   select h.entity_type, h.entity_id, h.title, h.details, h.folder_id, h.shipment_id, h.client_id
   from hits h
