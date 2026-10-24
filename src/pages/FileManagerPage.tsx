@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   downloadTelegramArchivedFile,
   FILE_ARCHIVE_MAX_BYTES,
+  createTelegramArchiveIdempotencyKey,
   getFileArchiveDestination,
   uploadTelegramArchivedFile,
 } from '../lib/fileManager';
@@ -94,7 +95,6 @@ export const FileManagerPage: React.FC = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [progress, setProgress] = useState('');
-  const uploadKeys = useRef(new Map<string, string>());
   const directoryInput = useRef<HTMLInputElement | null>(null);
 
   const currentFolder = useMemo(
@@ -276,21 +276,22 @@ export const FileManagerPage: React.FC = () => {
         const segments = relativePath.split('/').filter(Boolean).slice(0, -1);
         let parent = target;
         for (const segment of segments) parent = await getOrCreateSubfolder(parent, segment);
-        const keySource = `${parent.id}:${file.name}:${file.size}:${file.lastModified}`;
-        let idempotencyKey = uploadKeys.current.get(keySource);
-        if (!idempotencyKey) {
-          idempotencyKey = crypto.randomUUID();
-          uploadKeys.current.set(keySource, idempotencyKey);
-        }
+        const documentType = parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG';
+        const idempotencyKey = await createTelegramArchiveIdempotencyKey(file, {
+          folderId: parent.id,
+          ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+          documentType,
+          documentName: file.name,
+          destination,
+        });
         await uploadTelegramArchivedFile(file, {
           folderId: parent.id,
           ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
-          documentType: parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG',
+          documentType,
           tags: uploadTags,
           destination,
           idempotencyKey,
         });
-        uploadKeys.current.delete(keySource);
         completed += 1;
         setPendingFiles((previous) => previous.filter((candidate) => candidate !== file));
         setProgress(`ذخیره در تلگرام: ${completed} از ${pendingFiles.length}`);
