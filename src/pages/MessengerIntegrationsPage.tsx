@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useState} from "react";
-import {ArrowLeft,RefreshCw,Send,Plug,UploadCloud,CheckCircle2,ShieldAlert,ChevronDown,MessageSquare,FileArchive,Settings2,CircleHelp} from "lucide-react";
+import {ArrowLeft,RefreshCw,Send,Plug,UploadCloud,CheckCircle2,ShieldAlert,ChevronDown,MessageSquare,FileArchive,Settings2,HelpCircle} from "lucide-react";
 import {useNavigate} from "react-router-dom";
 import {supabase} from "../lib/supabase";
 import {listConversations} from "../features/chat/api";
@@ -189,7 +189,7 @@ export const MessengerIntegrationsPage:React.FC=()=>{
 
  <details className="group overflow-hidden rounded-2xl border app-border bg-[var(--surface)]">
   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
-   <div className="flex min-w-0 items-center gap-3"><span className="rounded-xl bg-[var(--surface-2)] p-2"><CircleHelp size={18}/></span><div><h2 className="font-bold">راهنمای رفع مشکل واتساپ</h2><p className="mt-1 text-xs app-muted">کدام خطا با VPN حل می‌شود و کدام به محدودیت کشور مربوط است؟</p></div></div>
+   <div className="flex min-w-0 items-center gap-3"><span className="rounded-xl bg-[var(--surface-2)] p-2"><HelpCircle size={18}/></span><div><h2 className="font-bold">راهنمای رفع مشکل واتساپ</h2><p className="mt-1 text-xs app-muted">کدام خطا با VPN حل می‌شود و کدام به محدودیت کشور مربوط است؟</p></div></div>
    <ChevronDown size={18} className="shrink-0 transition-transform group-open:rotate-180"/>
   </summary>
   <div className="space-y-3 border-t app-border p-4 text-sm leading-7">
