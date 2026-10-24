@@ -172,7 +172,7 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
   const {data:created,error:createError}=await db.from("messenger_archive_topics").insert({
    organization_id:org,connection_id:c.id,external_chat_id:chat,topic_key:topicKey,
    client_id:clientId,topic_name:topicName,status:"creating",updated_at:new Date().toISOString()
-  }).select("id,topic_id,status").single();
+  }).select("id,topic_id,status,last_error_code").single();
   if(createError){
    if(createError.code==="23505"){
     const latest=await readTopic();
@@ -181,14 +181,17 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
    }
    throw new Error("TELEGRAM_OWNER_TOPIC_CREATE_RECORD_FAILED");
   }
+  if(!created)throw new Error("TELEGRAM_OWNER_TOPIC_CREATE_RECORD_FAILED");
   row=created;
  }else{
   const {data:claimed,error:claimError}=await db.from("messenger_archive_topics").update({
    status:"creating",topic_name:topicName,last_error_code:null,updated_at:new Date().toISOString()
-  }).eq("id",row.id).eq("status","failed").select("id,topic_id,status").maybeSingle();
+  }).eq("id",row.id).eq("status","failed").select("id,topic_id,status,last_error_code").maybeSingle();
   if(claimError||!claimed)throw new Error("TELEGRAM_OWNER_TOPIC_SETUP_IN_PROGRESS");
   row=claimed;
  }
+ if(!row)throw new Error("TELEGRAM_OWNER_TOPIC_SETUP_IN_PROGRESS");
+ const topicRowId=row.id;
  try{
   const response=await apiJson(botBase(c,await accessToken(c))+"createForumTopic",{
    method:"POST",headers:{"Content-Type":"application/json"},
@@ -198,12 +201,12 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
   if(!Number.isSafeInteger(threadId)||threadId<=0)throw new Error("TELEGRAM_TOPIC_ID_MISSING");
   const {error:saveError}=await db.from("messenger_archive_topics").update({
    topic_id:threadId,status:"ready",last_error_code:null,updated_at:new Date().toISOString()
-  }).eq("id",row.id);
+  }).eq("id",topicRowId);
   if(saveError)throw new Error("TELEGRAM_OWNER_TOPIC_SAVE_FAILED");
   return threadId;
  }catch(e){
   const code=errorCode(e);
-  await db.from("messenger_archive_topics").update({status:"failed",last_error_code:code,updated_at:new Date().toISOString()}).eq("id",row.id);
+  await db.from("messenger_archive_topics").update({status:"failed",last_error_code:code,updated_at:new Date().toISOString()}).eq("id",topicRowId);
   if(code==="UPSTREAM_400")throw new Error("TELEGRAM_FORUM_REQUIRED: گروه آرشیو باید سوپرگروه خصوصی با Topics فعال باشد و ربات دسترسی مدیریت تاپیک داشته باشد.");
   throw e;
  }
