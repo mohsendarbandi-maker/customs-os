@@ -181,8 +181,9 @@ async function reconcileTelegramArchiveMetadata(input:{
       ?db.from("customs_declarations").select("kottaj_number,declaration_date").eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).order("created_at",{ascending:false}).limit(1).maybeSingle()
       :Promise.resolve({data:null,error:null})
     ]);
-    const ownerName=String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
-    const shipmentFolderName=String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
+    const isUnassignedLegacyFolder=folder.folder_key==="unassigned-documents"&&folder.shipment_id===null&&folder.client_id===null&&!shipment;
+    const ownerName=isUnassignedLegacyFolder?"بدون اتصال به صاحب کالا":String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
+    const shipmentFolderName=isUnassignedLegacyFolder?"بدون اتصال به محموله":String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
     const currentFolderName=String(folder.display_name||folder.folder_type).replace(/[\r\n]/g," ").slice(0,160);
     const customsOfficeName=String((officeMeta as any)?.data?.name||"").replace(/[\r\n]/g," ").slice(0,100);
     const customsOfficeCode=String((officeMeta as any)?.data?.code||"").replace(/[\r\n]/g," ").slice(0,40);
@@ -406,7 +407,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
    }
   }
   const {data:folder,error:folderError}=await db.from("file_manager_folders")
-   .select("id,organization_id,shipment_id,client_id,folder_type,display_name,customs_office_id,parent_id")
+   .select("id,organization_id,shipment_id,client_id,folder_type,folder_key,display_name,customs_office_id,parent_id")
    .eq("id",folderId).eq("organization_id",p.organization_id).maybeSingle();
   if(folderError||!folder)return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
   if(shipment){
@@ -415,8 +416,15 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
    if(p.role==="client"&&shipment.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
   }else{
    const validOwnedFolder=folder.shipment_id===null&&Boolean(folder.client_id)&&["client","custom"].includes(folder.folder_type);
-   const validUnassignedLegacy=allowUnassignedLegacy&&folder.shipment_id===null&&!folder.client_id
-    &&folder.folder_type==="other"&&folder.display_name==="اسناد نیازمند اتصال به محموله";
+   let validUnassignedLegacy=false;
+   if(allowUnassignedLegacy&&folder.shipment_id===null&&!folder.client_id&&folder.folder_type==="other"&&
+      folder.folder_key==="unassigned-documents"&&folder.parent_id){
+    const {data:parent,error:parentError}=await db.from("file_manager_folders")
+     .select("id,parent_id,folder_key,folder_type")
+     .eq("id",folder.parent_id).eq("organization_id",p.organization_id).maybeSingle();
+    if(parentError)return bad("FILE_ARCHIVE_FOLDER_SCOPE_LOOKUP_FAILED",500,req);
+    validUnassignedLegacy=Boolean(parent&&parent.parent_id===null&&parent.folder_key==="owners-root"&&parent.folder_type==="root");
+   }
    if(!validOwnedFolder&&!validUnassignedLegacy)return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
   }
   if(p.role==="client"&&folder.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
@@ -496,8 +504,9 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
      ?db.from("customs_declarations").select("kottaj_number,declaration_date").eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).order("created_at",{ascending:false}).limit(1).maybeSingle()
      :Promise.resolve({data:null,error:null})
    ]);
-   const ownerName=String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
-   const shipmentFolderName=String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
+   const isUnassignedLegacyFolder=folder.folder_key==="unassigned-documents"&&folder.shipment_id===null&&folder.client_id===null&&!shipment;
+   const ownerName=isUnassignedLegacyFolder?"بدون اتصال به صاحب کالا":String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
+   const shipmentFolderName=isUnassignedLegacyFolder?"بدون اتصال به محموله":String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
    const currentFolderName=String(folder.display_name||folder.folder_type).replace(/[\r\n]/g," ").slice(0,160);
    const customsOfficeName=String((officeMeta as any)?.data?.name||"").replace(/[\r\n]/g," ").slice(0,100);
    const customsOfficeCode=String((officeMeta as any)?.data?.code||"").replace(/[\r\n]/g," ").slice(0,40);
@@ -800,11 +809,16 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
    const isUnassignedLegacy=!row.shipment_id&&!row.client_id;
    if(isUnassignedLegacy){
     const {data:sourceFolder,error:sourceFolderError}=await db.from("file_manager_folders")
-     .select("id,organization_id,shipment_id,client_id,folder_type,display_name")
+     .select("id,organization_id,shipment_id,client_id,folder_type,folder_key,parent_id")
      .eq("id",folderId).eq("organization_id",organizationId).maybeSingle();
     if(sourceFolderError||!sourceFolder||sourceFolder.shipment_id!==null||sourceFolder.client_id!==null||
-      sourceFolder.folder_type!=="other"||sourceFolder.display_name!=="اسناد نیازمند اتصال به محموله")
+      sourceFolder.folder_type!=="other"||sourceFolder.folder_key!=="unassigned-documents"||!sourceFolder.parent_id)
      throw new Error("LEGACY_UNASSIGNED_FOLDER_NOT_VERIFIED");
+    const {data:sourceParent,error:sourceParentError}=await db.from("file_manager_folders")
+     .select("id,parent_id,folder_key,folder_type")
+     .eq("id",sourceFolder.parent_id).eq("organization_id",organizationId).maybeSingle();
+    if(sourceParentError||!sourceParent||sourceParent.parent_id!==null||sourceParent.folder_key!=="owners-root"||sourceParent.folder_type!=="root")
+     throw new Error("LEGACY_UNASSIGNED_PARENT_NOT_VERIFIED");
    }
    const tags=[...new Set([...(Array.isArray(row.tags)?row.tags.filter((t:any)=>typeof t==="string"):[]),"آرشیو_قبلی"])].slice(0,8);
    const url=new URL("https://darbandicommercial.ir/api/messenger/uploads/"+String(connection.id));
