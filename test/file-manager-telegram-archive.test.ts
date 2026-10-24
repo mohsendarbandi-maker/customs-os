@@ -96,7 +96,7 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(uploadJobs).toContain('  shipment_id uuid null,');
     expect(gateway).toContain('CUSTOMS_DOCUMENT_METADATA_SAVE_FAILED');
     expect(gateway).toContain('ownerFileError');
-    expect(fileManager).toContain("currentFolder.folder_type === 'client'");
+    expect(fileManager).toContain("['client', 'custom'].includes(currentFolder.folder_type)");
     expect(clientDocumentPage).toContain('is_archived:true');
     expect(clientDocumentPage).toContain('نسخه اصلی در آرشیو تلگرام حذف نخواهد شد');
   });
