@@ -7,7 +7,7 @@ create table if not exists public.file_manager_upload_jobs (
   organization_id uuid not null references public.organizations(id) on delete cascade,
   idempotency_key text not null,
   folder_id uuid not null,
-  shipment_id uuid not null,
+  shipment_id uuid null,
   created_by uuid null references auth.users(id) on delete set null,
   original_name text not null,
   mime_type text not null,
