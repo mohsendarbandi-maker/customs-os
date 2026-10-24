@@ -256,28 +256,28 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
      ?db.from("customs_declarations").select("kottaj_number,declaration_date").eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).order("created_at",{ascending:false}).limit(1).maybeSingle()
      :Promise.resolve({data:null,error:null})
    ]);
-   const ownerName=String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\\r\\n]/g," ").slice(0,160);
-   const shipmentFolderName=String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\\r\\n]/g," ").slice(0,220);
-   const currentFolderName=String(folder.display_name||folder.folder_type).replace(/[\\r\\n]/g," ").slice(0,160);
-   const customsOfficeName=String((officeMeta as any)?.data?.name||"").replace(/[\\r\\n]/g," ").slice(0,100);
-   const customsOfficeCode=String((officeMeta as any)?.data?.code||"").replace(/[\\r\\n]/g," ").slice(0,40);
-   const kottajNumber=String((declarationMeta as any)?.data?.kottaj_number||"").replace(/[\\r\\n]/g," ").slice(0,80);
-   const declarationDate=String((declarationMeta as any)?.data?.declaration_date||"").replace(/[\\r\\n]/g," ").slice(0,40);
-   const telegramTagTokens=archiveTags.map((tag:string)=>"#"+tag.normalize("NFKC").replace(/\\s+/g,"_").replace(/[^\\p{L}\\p{N}_-]/gu,"").slice(0,48)).filter(Boolean);
-   const searchHashtags=[...new Set(["#CustomsOS","#آرشیو_اسناد",...telegramTagTokens])].join(" ");
-   const archiveCaption=[
+   const ownerName=String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
+   const shipmentFolderName=String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
+   const currentFolderName=String(folder.display_name||folder.folder_type).replace(/[\r\n]/g," ").slice(0,160);
+   const customsOfficeName=String((officeMeta as any)?.data?.name||"").replace(/[\r\n]/g," ").slice(0,100);
+   const customsOfficeCode=String((officeMeta as any)?.data?.code||"").replace(/[\r\n]/g," ").slice(0,40);
+   const kottajNumber=String((declarationMeta as any)?.data?.kottaj_number||"").replace(/[\r\n]/g," ").slice(0,80);
+   const declarationDate=String((declarationMeta as any)?.data?.declaration_date||"").replace(/[\r\n]/g," ").slice(0,40);
+   const telegramTagTokens=archiveTags.slice(0,8).map((tag:string)=>"#"+tag.normalize("NFKC").replace(/\s+/g,"_").replace(/[^\p{L}\p{N}_-]/gu,"").slice(0,36)).filter(Boolean);
+   const searchHashtags=[...new Set(["#CustomsOS","#آرشیو_اسناد",...telegramTagTokens])].join(" ").slice(0,300);
+   const captionDetails=[
     "📁 آرشیو فایل Customs OS",
     "نام فایل: "+displayName,
-    "صاحب کالا: "+ownerName,
-    "محموله: "+shipmentFolderName,
-    customsOfficeName ? "گمرک: "+customsOfficeName+(customsOfficeCode?" · کد "+customsOfficeCode:"") : (customsOfficeCode?"کد گمرک: "+customsOfficeCode:""),
+    "صاحب کالا: "+ownerName.slice(0,90),
+    "محموله: "+shipmentFolderName.slice(0,120),
+    customsOfficeName ? "گمرک: "+customsOfficeName.slice(0,70)+(customsOfficeCode?" · کد "+customsOfficeCode:"") : (customsOfficeCode?"کد گمرک: "+customsOfficeCode:""),
     kottajNumber ? "کوتاژ: "+kottajNumber : "",
     declarationDate ? "تاریخ اظهار: "+declarationDate : "",
-    "پوشه: "+currentFolderName,
+    "پوشه: "+currentFolderName.slice(0,70),
     shipment?.id ? "شناسه محموله: "+String(shipment.id) : "",
-    "برچسب‌ها: "+(archiveTags.length?archiveTags.join(", "):"-"),
-    "جست‌وجو: "+searchHashtags
-   ].filter(Boolean).join("\\n").slice(0,950);
+    "برچسب‌ها: "+(archiveTags.length?archiveTags.slice(0,8).join(", "):"-")
+   ].filter(Boolean).join("\n").slice(0,620);
+   const archiveCaption=(captionDetails+"\nجست‌وجو: "+searchHashtags).slice(0,950);
    const assetMetadata={
     archiveMode:"telegram_file_archive",documentName:displayName,originalName:name,folderId:folder.id,folderName:currentFolderName,
     shipmentFolderName,ownerName,folderType:folder.folder_type,parentFolderId:folder.parent_id||null,
