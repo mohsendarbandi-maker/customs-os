@@ -19,7 +19,7 @@ on conflict do nothing;
 insert into public.file_manager_folders
   (organization_id,parent_id,folder_key,folder_type,display_name,shipment_id,client_id,
    customs_office_id,is_system)
-select org.id,root.id,'unassigned-documents','other','اسناد نیازمند اتصال به محموله',
+select org.organization_id,root.id,'unassigned-documents','other','اسناد نیازمند اتصال به محموله',
        null,null,null,true
 from (
   select distinct cd.organization_id
