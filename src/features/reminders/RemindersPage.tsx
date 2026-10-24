@@ -376,8 +376,11 @@ export const RemindersPage:React.FC=()=>{
   speechShouldContinueRef.current=false;
   if(speechRestartTimerRef.current!==null){window.clearTimeout(speechRestartTimerRef.current);speechRestartTimerRef.current=null;}
   const activeRecognition=speechRecognitionRef.current;
-  speechRecognitionRef.current=null;
-  try{activeRecognition?.stop();}catch{}
+  if(!activeRecognition){setRecording(false);return;}
+  // Keep the instance attached until onend commits the final transcript segment.
+  try{activeRecognition.stop();}catch{
+   if(speechRecognitionRef.current===activeRecognition)speechRecognitionRef.current=null;
+  }
   setRecording(false);
  };
  const startDictation=()=>{
