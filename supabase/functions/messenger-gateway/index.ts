@@ -94,9 +94,9 @@ async function sendText(req:Request,p:Profile){
  }
 }function bounded(body:ReadableStream<Uint8Array>,max:number){const r=body.getReader();let total=0;return new ReadableStream<Uint8Array>({async pull(c){const v=await r.read();if(v.done){c.close();try{r.releaseLock();}catch{}return;}total+=v.value.byteLength;if(total>max){await r.cancel();c.error(new Error("FILE_TOO_LARGE"));return;}c.enqueue(v.value);},async cancel(reason){await r.cancel(reason).catch(()=>{});}});}
 function multipart(prefix:string,file:ReadableStream<Uint8Array>,suffix:string){const enc=new TextEncoder(),parts=[new Response(enc.encode(prefix)).body!,file,new Response(enc.encode(suffix)).body!];let i=0,r:ReadableStreamDefaultReader<Uint8Array>|null=null;return new ReadableStream<Uint8Array>({async pull(c){while(i<parts.length){if(!r)r=parts[i].getReader();const v=await r.read();if(!v.done){c.enqueue(v.value);return;}r.releaseLock();r=null;i++;}c.close();},async cancel(reason){if(r)await r.cancel(reason).catch(()=>{});for(let n=i+1;n<parts.length;n++)await parts[n].cancel(reason).catch(()=>{});}});}
-async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:number|null,stream:ReadableStream<Uint8Array>,mediaKind:"file"|"voice"="file"){
+async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:number|null,stream:ReadableStream<Uint8Array>,mediaKind:"file"|"voice"="file",maxOverride?:number){
  if(c.platform==="rubika")throw new Error("PLATFORM_TRANSPORT_UNVERIFIED");
- const max=c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT;
+ const max=maxOverride??(c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT);
  if(size!==null&&size>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
  const voice=mediaKind==="voice"&&(c.platform!=="telegram"||mime==="audio/ogg"||mime==="audio/opus");
  const boundary="----CustomsOS"+token(16),filename=cleanName(name).replace(/["\r\n]/g,"_");
@@ -211,7 +211,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   let result:any=null,assetId:string|null=null,telegramCallStarted=false;
   try{
    telegramCallStarted=true;
-   result=await uploadStream(c,chat,name,mime,size,req.body);
+   result=await uploadStream(c,chat,name,mime,size,req.body,"file",archive?TG_DOWNLOAD_LIMIT:undefined);
    assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment.id,false);
    const {error:fileError}=await db.from("file_manager_files").insert({
     organization_id:p.organization_id,folder_id:folder.id,shipment_id:shipment.id,client_id:shipment.client_id,
