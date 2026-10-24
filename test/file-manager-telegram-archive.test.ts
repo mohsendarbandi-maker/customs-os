@@ -80,11 +80,14 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain("supabase.rpc('search_file_manager'");
   });
 
-  it('provides manual Windows folder import/export while being explicit that this is not background sync', () => {
+  it('supports safe bidirectional Windows sync without overwriting or deleting conflicts', () => {
     expect(fileManager).toContain('webkitdirectory');
     expect(fileManager).toContain('showDirectoryPicker');
-    expect(fileManager).toContain('ساختار پوشه‌ها');
-    expect(fileManager).toContain('همگام‌سازی دائمی در پس‌زمینه نیست');
+    expect(fileManager).toContain('syncWindowsFolder');
+    expect(fileManager).toContain('همگام‌سازی دوطرفه ویندوز');
+    expect(fileManager).toContain("crypto.subtle.digest('SHA-256', bytes)");
+    expect(fileManager).toContain('هیچ فایلی از هیچ‌کدام از دو طرف حذف یا بازنویسی نشد.');
+    expect(fileManager).toContain('همگام‌سازی خودکار پس‌زمینه در این نسخه وجود ندارد');
   });
 
   it('supports owner-level documents without a shipment and hides archived file metadata', () => {
