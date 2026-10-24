@@ -34,3 +34,5 @@ alter table public.file_manager_upload_jobs enable row level security;
 create index if not exists file_manager_upload_jobs_pending_idx
   on public.file_manager_upload_jobs (status, updated_at)
   where status in ('uploading','reconcile_required');
+
+grant all on public.file_manager_upload_jobs to service_role;
