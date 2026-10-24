@@ -75,6 +75,27 @@ export async function getFileArchiveDestination(): Promise<FileArchiveDestinatio
  * No OCR, extraction, antivirus/content scanning or AI processing is invoked
  * by this File Manager upload path. Access controls remain server-enforced.
  */
+export async function getDefaultShipmentUploadFolder(shipmentId: string): Promise<{ id: string; shipment_id: string; folder_type: string }> {
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth.user) throw new Error('کاربر وارد نشده است.');
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', auth.user.id)
+    .single();
+  if (profileError || !profile?.organization_id) throw new Error('سازمان کاربر مشخص نیست.');
+  const { data: folder, error } = await supabase
+    .from('file_manager_folders')
+    .select('id,shipment_id,folder_type')
+    .eq('organization_id', profile.organization_id)
+    .eq('shipment_id', shipmentId)
+    .eq('folder_type', 'other')
+    .maybeSingle();
+  if (error) throw error;
+  if (!folder) throw new Error('پوشه محموله آماده نیست؛ ابتدا محموله را ذخیره کنید یا ساختار پوشه‌ها را بررسی کنید.');
+  return folder as { id: string; shipment_id: string; folder_type: string };
+}
+
 export async function uploadTelegramArchivedFile(
   file: File,
   input: {
