@@ -7,6 +7,7 @@ import './styles/mobile-polish.css';
 import './styles/design-system.css';
 import './styles/reminders-redesign.css';
 import './styles/chat-reminders-cohesion.css';
+import './styles/ai-workspace.css';
 import { startOfflineQueue } from './lib/offlineQueue';
 
 type BoundaryState = { hasError: boolean; message: string };
