@@ -621,8 +621,6 @@ join public.shipments s on s.id=cd.shipment_id and s.organization_id=cd.organiza
 join public.file_manager_folders f on f.organization_id=cd.organization_id
   and f.shipment_id=cd.shipment_id and f.folder_type='other'
 where not coalesce(cd.is_archived,false)
-  and not exists (select 1 from public.shipment_documents sd
-    where sd.id=cd.id and sd.organization_id=cd.organization_id)
   and not exists (select 1 from public.file_manager_files fm
     where fm.organization_id=cd.organization_id and fm.customs_document_id=cd.id)
 on conflict do nothing;
