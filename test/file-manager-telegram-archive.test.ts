@@ -9,6 +9,7 @@ describe('Telegram-backed Customs OS file manager', () => {
   const uploadJobs = read('supabase/migrations/20261024130735_file_manager_upload_jobs.sql');
   const unassignedMigration = read('supabase/migrations/20261024131814_file_manager_unassigned_legacy_documents.sql');
   const grantsMigration = read('supabase/migrations/20261024132221_file_manager_minimize_table_grants.sql');
+  const folderCopyMigration = read('supabase/migrations/20261024172000_file_manager_folder_copy.sql');
   const gateway = read('supabase/functions/messenger-gateway/index.ts');
   const fileManager = read('src/pages/FileManagerPage.tsx');
   const fileManagerClient = read('src/lib/fileManager.ts');
@@ -170,6 +171,21 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(grantsMigration).toContain('grant select, insert, update on table public.file_manager_folders to authenticated');
     expect(grantsMigration).toContain('grant select, update on table public.file_manager_files to authenticated');
     expect(grantsMigration).toContain('grant all on table public.file_manager_folders, public.file_manager_files, public.file_manager_upload_jobs to service_role');
+  });
+
+  it('adds a safe copy-folder RPC that aliases bytes without moving storage', () => {
+    expect(folderCopyMigration).toContain('copy_file_manager_folder');
+    expect(folderCopyMigration).toContain('FILE_MANAGER_COPY_SCOPE_MISMATCH');
+    expect(folderCopyMigration).toContain('FILE_MANAGER_COPY_CLIENT_SCOPE_FORBIDDEN');
+    expect(folderCopyMigration).toContain('copyAliasFileAssetId');
+    expect(folderCopyMigration).toContain("and not (fm.metadata ? 'copyAliasSourceFileId')");
+  });
+
+  it('adds searchable Persian Telegram archive captions with customs and kottaj details', () => {
+    expect(gateway).toContain('📁 آرشیو فایل Customs OS');
+    expect(gateway).toContain('customsOfficeName');
+    expect(gateway).toContain('kottajNumber');
+    expect(gateway).toContain('searchHashtags');
   });
 
   it('registers the page and exposes it from the main navigation', () => {

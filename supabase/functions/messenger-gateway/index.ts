@@ -242,35 +242,47 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   try{
    telegramCallStarted=true;
    const officeId=folder.customs_office_id||shipment?.customs_office_id||null;
-   const [clientMeta,shipmentFolderMeta]=await Promise.all([
+   const [clientMeta,shipmentFolderMeta,officeMeta,declarationMeta]=await Promise.all([
     folder.client_id
      ?db.from("clients").select("name").eq("id",folder.client_id).eq("organization_id",p.organization_id).maybeSingle()
      :Promise.resolve({data:null,error:null}),
     shipment
      ?db.from("file_manager_folders").select("display_name").eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).eq("folder_type","shipment").maybeSingle()
+     :Promise.resolve({data:null,error:null}),
+    officeId
+     ?db.from("customs_offices").select("name,code").eq("id",officeId).maybeSingle()
+     :Promise.resolve({data:null,error:null}),
+    shipment
+     ?db.from("customs_declarations").select("kottaj_number,declaration_date").eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).order("created_at",{ascending:false}).limit(1).maybeSingle()
      :Promise.resolve({data:null,error:null})
    ]);
-   const ownerName=String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
-   const shipmentFolderName=String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
-   const currentFolderName=String(folder.display_name||folder.folder_type).replace(/[\r\n]/g," ").slice(0,160);
-   const telegramTagTokens=archiveTags.map((tag:string)=>"#"+tag.normalize("NFKC").replace(/\s+/g,"_").replace(/[^\p{L}\p{N}_-]/gu,"").slice(0,48)).filter(Boolean);
+   const ownerName=String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\\r\\n]/g," ").slice(0,160);
+   const shipmentFolderName=String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\\r\\n]/g," ").slice(0,220);
+   const currentFolderName=String(folder.display_name||folder.folder_type).replace(/[\\r\\n]/g," ").slice(0,160);
+   const customsOfficeName=String((officeMeta as any)?.data?.name||"").replace(/[\\r\\n]/g," ").slice(0,100);
+   const customsOfficeCode=String((officeMeta as any)?.data?.code||"").replace(/[\\r\\n]/g," ").slice(0,40);
+   const kottajNumber=String((declarationMeta as any)?.data?.kottaj_number||"").replace(/[\\r\\n]/g," ").slice(0,80);
+   const declarationDate=String((declarationMeta as any)?.data?.declaration_date||"").replace(/[\\r\\n]/g," ").slice(0,40);
+   const telegramTagTokens=archiveTags.map((tag:string)=>"#"+tag.normalize("NFKC").replace(/\\s+/g,"_").replace(/[^\\p{L}\\p{N}_-]/gu,"").slice(0,48)).filter(Boolean);
+   const searchHashtags=[...new Set(["#CustomsOS","#آرشیو_اسناد",...telegramTagTokens])].join(" ");
    const archiveCaption=[
-    "Customs OS · File Archive",
-    "File: "+displayName,
-    "Owner: "+ownerName,
-    "Shipment / customs folder: "+shipmentFolderName,
-    "Selected folder: "+currentFolderName,
-    "Folder ID: "+folder.id,
-    "Owner ID: "+String(folder.client_id||"-"),
-    "Shipment ID: "+String(shipment?.id||"-"),
-    "Customs Office ID: "+String(officeId||"-"),
-    "Tags: "+(archiveTags.length?archiveTags.join(", "):"-"),
-    "Tag tokens: "+(telegramTagTokens.join(" ")||"-")
-   ].join("\n").slice(0,950);
+    "📁 آرشیو فایل Customs OS",
+    "نام فایل: "+displayName,
+    "صاحب کالا: "+ownerName,
+    "محموله: "+shipmentFolderName,
+    customsOfficeName ? "گمرک: "+customsOfficeName+(customsOfficeCode?" · کد "+customsOfficeCode:"") : (customsOfficeCode?"کد گمرک: "+customsOfficeCode:""),
+    kottajNumber ? "کوتاژ: "+kottajNumber : "",
+    declarationDate ? "تاریخ اظهار: "+declarationDate : "",
+    "پوشه: "+currentFolderName,
+    shipment?.id ? "شناسه محموله: "+String(shipment.id) : "",
+    "برچسب‌ها: "+(archiveTags.length?archiveTags.join(", "):"-"),
+    "جست‌وجو: "+searchHashtags
+   ].filter(Boolean).join("\\n").slice(0,950);
    const assetMetadata={
     archiveMode:"telegram_file_archive",documentName:displayName,originalName:name,folderId:folder.id,folderName:currentFolderName,
     shipmentFolderName,ownerName,folderType:folder.folder_type,parentFolderId:folder.parent_id||null,
     clientId:folder.client_id||null,shipmentId:shipment?.id||null,customsOfficeId:officeId,
+    customsOfficeName,customsOfficeCode,kottajNumber,declarationDate,
     archiveTags,telegramTagTokens,telegramCaption:archiveCaption
    };
    result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption);
