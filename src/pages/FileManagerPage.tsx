@@ -61,7 +61,7 @@ const byteLabel = (bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} مگابایت`;
 };
 const windowsName = (value: string) =>
-  value.normalize('NFKC').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/g, '').slice(0, 120) || 'بدون نام';
+  value.normalize('NFKC').replace(/[<>:"\/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/g, '').slice(0, 120) || 'بدون نام';
 const folderSlug = (value: string) =>
   value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '-').replace(/[^\p{L}\p{N}_-]/gu, '').slice(0, 72) || crypto.randomUUID();
 
@@ -71,6 +71,7 @@ const roleCanModifyStructure = (role?: string | null) =>
 export const FileManagerPage: React.FC = () => {
   const { profile } = useAuth();
   const [params, setParams] = useSearchParams();
+  const initialRoute = useRef({ folderId: params.get('folderId'), shipmentId: params.get('shipmentId') });
   const organizationId = profile?.organization_id || '';
   const role = profile?.role || '';
   const [folders, setFolders] = useState<FolderRow[]>([]);
@@ -124,8 +125,8 @@ export const FileManagerPage: React.FC = () => {
       if (folderError) throw folderError;
       const rows = (data || []) as FolderRow[];
       setFolders(rows);
-      const requestedFolder = params.get('folderId');
-      const requestedShipment = params.get('shipmentId');
+      const requestedFolder = initialRoute.current.folderId;
+      const requestedShipment = initialRoute.current.shipmentId;
       const requested =
         rows.find((folder) => folder.id === requestedFolder) ||
         rows.find((folder) => folder.shipment_id === requestedShipment && folder.folder_type === 'shipment') ||
@@ -288,7 +289,8 @@ export const FileManagerPage: React.FC = () => {
         }
       }
       await loadFolders();
-      await loadFiles(selectedFolderId);
+      if (currentFolder?.folder_type === 'shipment') setSelectedFolderId(target.id);
+      await loadFiles(currentFolder?.folder_type === 'shipment' ? target.id : selectedFolderId);
       setMessage(`${completed} فایل در تلگرام ذخیره و در پوشه انتخاب‌شده ثبت شد.`);
       setPendingFiles([]);
       setProgress('');
