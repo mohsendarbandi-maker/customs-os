@@ -601,6 +601,10 @@ export const FileManagerPage: React.FC = () => {
         const slash = relativePath.lastIndexOf('/');
         const parentPath = slash >= 0 ? relativePath.slice(0, slash) : '';
         const filename = slash >= 0 ? relativePath.slice(slash + 1) : relativePath;
+        if (remote.file_asset_id && Number(remote.size_bytes) > FILE_ARCHIVE_MAX_BYTES) {
+          oversized += 1;
+          continue;
+        }
         setProgress('دریافت از آرشیو تلگرام: ' + relativePath);
         const blob = await getFileBlob(remote);
         const directory = await ensureLocalFolder(parentPath);
