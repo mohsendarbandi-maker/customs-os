@@ -109,6 +109,16 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(migration).toContain('fm_file.customs_document_id = cd.id or fm_file.shipment_document_id = cd.id');
   });
 
+  it('uses one file-manager row for shipment/customs documents sharing the same legacy ID', () => {
+    expect(migration).toContain('customs_document_id,storage_path,created_by');
+    expect(migration).toContain('case when exists (select 1 from public.customs_documents mirror');
+    expect(migration).toContain('customs_document_id=coalesce(v_customs_mirror,customs_document_id)');
+    expect(migration).toContain('shipment_document_id=coalesce(v_shipment_mirror,shipment_document_id)');
+    expect(migration).toContain('or customs_document_id=new.id');
+    expect(migration).toContain('or shipment_document_id=new.id');
+    expect(migration).toContain('get diagnostics v_rows = row_count');
+  });
+
   it('registers the page and exposes it from the main navigation', () => {
     expect(app).toContain('path="/file-manager"');
     expect(app).toContain("import('./pages/FileManagerPage')");
