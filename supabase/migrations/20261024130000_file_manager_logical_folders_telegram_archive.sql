@@ -753,6 +753,15 @@ declare
   v_client uuid;
   v_folder uuid;
 begin
+  if coalesce(new.is_archived, false) then
+    update public.file_manager_files
+    set is_archived = true, updated_at = now()
+    where organization_id = new.organization_id
+      and (shipment_document_id = new.id
+        or (new.file_asset_id is not null and file_asset_id = new.file_asset_id));
+    return new;
+  end if;
+
   select s.client_id into v_client
   from public.shipments s
   where s.id=new.shipment_id and s.organization_id=new.organization_id;
@@ -781,15 +790,20 @@ begin
        jsonb_build_object('legacyStorageBackend',coalesce(new.storage_backend,'supabase')),
        new.id,new.storage_path,new.uploaded_by)
     on conflict do nothing;
+    update public.file_manager_files
+    set is_archived = false, updated_at = now()
+    where organization_id = new.organization_id
+      and (shipment_document_id = new.id
+        or (new.file_asset_id is not null and file_asset_id = new.file_asset_id));
   end if;
   return new;
 end;
-$$;
+$;
 
 revoke all on function public.sync_shipment_document_to_file_manager() from public, anon, authenticated;
 drop trigger if exists trg_sync_shipment_document_to_file_manager on public.shipment_documents;
 create trigger trg_sync_shipment_document_to_file_manager
-after insert or update of storage_path,storage_backend,file_asset_id,folder_id,original_file_name,mime_type,file_size_bytes
+after insert or update of storage_path,storage_backend,file_asset_id,folder_id,original_file_name,mime_type,file_size_bytes,is_archived
 on public.shipment_documents
 for each row execute function public.sync_shipment_document_to_file_manager();
 
@@ -1026,6 +1040,7 @@ as $$
       and (public.user_role()::text <> 'client' or fm.client_id = public.user_client_id())
       and fm.shipment_document_id is null
       and fm.customs_document_id is null
+      and not fm.is_archived
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
         fm.file_manager_search_text ilike q.pattern
@@ -1052,6 +1067,8 @@ as $$
     where sd.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or s.client_id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
+      and not coalesce(sd.is_archived, false)
+      and not coalesce(fm_file.is_archived, false)
       and (sd.file_manager_search_text ilike q.pattern or fm_file.file_manager_search_text ilike q.pattern)
 
     union all
@@ -1070,6 +1087,8 @@ as $$
     where cd.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or coalesce(cd.client_id, s.client_id) = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
+      and not coalesce(cd.is_archived, false)
+      and not coalesce(fm_file.is_archived, false)
       and (cd.file_manager_search_text ilike q.pattern or fm_file.file_manager_search_text ilike q.pattern)
   )
   select h.entity_type, h.entity_id, h.title, h.details, h.folder_id, h.shipment_id, h.client_id
