@@ -184,7 +184,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   if(p.role==="client"&&folder.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
   let job:any=null;
   const {data:existing,error:existingError}=await db.from("file_manager_upload_jobs")
-   .select("id,status,file_asset_id,external_message_id,size_bytes")
+   .select("id,status,file_asset_id,external_message_id,size_bytes,attempt_count")
    .eq("organization_id",p.organization_id).eq("idempotency_key",idempotencyKey).maybeSingle();
   if(existingError)return bad("FILE_UPLOAD_JOB_LOOKUP_FAILED",500,req);
   if(existing?.status==="stored"&&existing.file_asset_id)
@@ -214,7 +214,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment.id,false);
    const {error:fileError}=await db.from("file_manager_files").insert({
     organization_id:p.organization_id,folder_id:folder.id,shipment_id:shipment.id,client_id:shipment.client_id,
-    file_asset_id:assetId,document_type:documentType,tags:[],metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId},
+    file_asset_id:assetId,original_name:name,mime_type:mime,size_bytes:size??0,external_message_id:String(result.messageId||""),document_type:documentType,tags:[],metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId},
     created_by:user
    });
    if(fileError)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
