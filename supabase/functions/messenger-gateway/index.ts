@@ -731,7 +731,136 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
  const payload={externalUserId:userId||null,senderName:String(senderName||"").trim().slice(0,160)||null,text:text||null,...(media?{name:cleanExternalName||"document.bin",mimeType:cleanMime(media.mime),sizeBytes:media.size||null,internalAttachmentMirrored:Boolean(internalStoragePath),mirrorError:mirrorErrorCode}: {})};
  const {error:logError}=await db.from("message_logs").insert({organization_id:c.organization_id,connection_id:c.id,direction:"inbound",message_type:media?"document":"text",external_message_id:msgId,external_chat_id:chatId,file_asset_id:fileAssetId,chat_message_id:coreMessageId,status:"received",payload_summary:payload});
  if(logError&&logError.code!=="23505")throw new Error("INBOUND_LOG_SAVE_FAILED");
-}async function processMessengerOutbox(req:Request){
+}async function processLegacyFileArchive(req:Request){
+ const {data:expected,error:secretError}=await db.rpc("internal_get_reminder_secret",{p_name:"messenger_outbox_cron_secret"});
+ if(secretError||typeof expected!=="string"||!expected||!equal(req.headers.get("x-messenger-outbox-cron-secret")||"",expected))return bad("UNAUTHORIZED",401,req);
+ let input:any;
+ try{input=await bodyJson(req);}catch{return bad("INVALID_JSON",400,req);}
+ const organizationId=String(input.organizationId||"");
+ if(!validId(organizationId))return bad("INVALID_ORGANIZATION_ID",400,req);
+ const limit=Math.min(5,Math.max(1,Math.floor(Number(input.limit)||5)));
+ const retryFailed=input.retryFailed===true;
+ const {data:operator,error:operatorError}=await db.from("profiles")
+  .select("id,organization_id,role,is_active,client_id")
+  .eq("organization_id",organizationId).eq("is_active",true).in("role",["owner","admin"])
+  .limit(1).maybeSingle();
+ if(operatorError||!operator)return bad("FILE_ARCHIVE_MANAGER_NOT_FOUND",403,req);
+ const {data:connection,error:connectionError}=await db.from("messenger_connections")
+  .select("*").eq("organization_id",organizationId).eq("platform","telegram").eq("enabled",true)
+  .order("created_at",{ascending:false}).limit(1).maybeSingle();
+ if(connectionError||!connection)return bad("FILE_ARCHIVE_CONNECTION_NOT_FOUND",409,req);
+ const {data:destination,error:destinationError}=await db.from("messenger_chats")
+  .select("id,connection_id,external_chat_id,display_name,enabled,purpose")
+  .eq("organization_id",organizationId).eq("connection_id",connection.id)
+  .eq("purpose","file_archive").eq("enabled",true).order("created_at",{ascending:false}).limit(1).maybeSingle();
+ if(destinationError||!destination)return bad("FILE_ARCHIVE_DESTINATION_NOT_FOUND",409,req);
+ const {data:rows,error:rowsError}=await db.from("file_manager_files")
+  .select("id,organization_id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,document_type,tags,metadata,storage_path,is_archived,created_at")
+  .eq("organization_id",organizationId).eq("is_archived",false).is("file_asset_id",null)
+  .not("storage_path","is",null).order("created_at",{ascending:true}).limit(200);
+ if(rowsError)return bad("LEGACY_ARCHIVE_SOURCE_LOOKUP_FAILED",500,req);
+ const candidates=(rows||[]).filter((row:any)=>{
+  const meta=row.metadata&&typeof row.metadata==="object"?row.metadata:{};
+  return meta.legacyStorageBackend==="supabase"&&
+   !String(row.storage_path||"").startsWith("telegram://")&&
+   meta.legacyArchiveStatus!=="archived"&&
+   (retryFailed||meta.legacyArchiveStatus!=="failed");
+ });
+ let processed=0,archived=0,failed=0,skipped=0;
+ const errors:Array<{name:string;code:string}>=[];
+ async function noteFailure(row:any,code:string){
+  const {data:current,error:lookupError}=await db.from("file_manager_files")
+   .select("id,metadata").eq("id",row.id).eq("organization_id",organizationId).maybeSingle();
+  if(lookupError||!current)return;
+  const previous=current.metadata&&typeof current.metadata==="object"?current.metadata:{};
+  await db.from("file_manager_files").update({metadata:{
+   ...previous,legacyArchiveStatus:"failed",legacyArchiveError:code,
+   legacyArchiveAttemptedAt:new Date().toISOString(),
+   legacyArchiveAttempts:(Number(previous.legacyArchiveAttempts)||0)+1
+  },updated_at:new Date().toISOString()}).eq("id",row.id).eq("organization_id",organizationId);
+ }
+ for(const row of candidates.slice(0,limit) as any[]){
+  processed++;
+  try{
+   const path=String(row.storage_path||"");
+   if(!path||path.startsWith("/")||path.includes("..")||path.startsWith("telegram://"))throw new Error("LEGACY_STORAGE_PATH_INVALID");
+   const {data:file,error:fileError}=await db.storage.from("customs_documents").download(path);
+   if(fileError||!file)throw new Error("LEGACY_SOURCE_DOWNLOAD_FAILED");
+   const size=Number(file.size||0);
+   if(size<=0||size> TG_DOWNLOAD_LIMIT || (Number(row.size_bytes||0)>0&&Number(row.size_bytes)!==size))
+    throw new Error(size>TG_DOWNLOAD_LIMIT?"FILE_TOO_LARGE_FOR_DESTINATION":"LEGACY_SOURCE_SIZE_MISMATCH");
+   const digest=await crypto.subtle.digest("SHA-256",await file.arrayBuffer());
+   const hash=[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("");
+   const idempotencyKey="customs-os-legacy-archive-v1:"+String(row.id)+":"+hash;
+   const folderId=String(row.folder_id||"");
+   if(!validId(folderId))throw new Error("FILE_ARCHIVE_FOLDER_INVALID");
+   const tags=[...new Set([...(Array.isArray(row.tags)?row.tags.filter((t:any)=>typeof t==="string"):[]),"آرشیو_قبلی"])].slice(0,8);
+   const url=new URL("https://darbandicommercial.ir/api/messenger/uploads/"+String(connection.id));
+   url.searchParams.set("chatId",String(destination.external_chat_id));
+   url.searchParams.set("folderId",folderId);
+   if(row.shipment_id)url.searchParams.set("shipmentId",String(row.shipment_id));
+   url.searchParams.set("documentType",cleanName(String(row.document_type||"other")));
+   url.searchParams.set("documentName",cleanName(String(row.original_name||"document.bin")));
+   url.searchParams.set("tags",JSON.stringify(tags));
+   const headers=new Headers({
+    "Content-Type":cleanMime(String(row.mime_type||file.type||"application/octet-stream")),
+    "X-File-Name":encodeURIComponent(String(row.original_name||"document.bin")),
+    "X-File-Size":String(size),"Idempotency-Key":idempotencyKey
+   });
+   const syntheticRequest=new Request(url.toString(),{method:"POST",headers,body:file.stream()});
+   const uploadResponse=await upload(syntheticRequest,{
+    id:String(operator.id),organization_id:organizationId,role:String(operator.role),is_active:true,client_id:null
+   } as Profile,String(operator.id),String(connection.id));
+   const responseText=await uploadResponse.text();
+   let result:any={};
+   try{result=JSON.parse(responseText);}catch{/* Preserve only a sanitized error below. */}
+   if(!uploadResponse.ok||result.ok!==true)throw new Error(String(result.error||"LEGACY_TELEGRAM_UPLOAD_FAILED"));
+   const assetId=String(result.fileAssetId||"");
+   if(!validId(assetId))throw new Error("LEGACY_ARCHIVE_ASSET_RECEIPT_MISSING");
+   const {data:canonical,error:canonicalError}=await db.from("file_manager_files")
+    .select("id,file_asset_id,is_archived").eq("organization_id",organizationId)
+    .eq("file_asset_id",assetId).eq("is_archived",false).limit(1).maybeSingle();
+   if(canonicalError||!canonical)throw new Error("LEGACY_ARCHIVE_CANONICAL_RECORD_MISSING");
+   const {data:source,error:sourceError}=await db.from("file_manager_files")
+    .select("id,file_asset_id,is_archived,metadata,storage_path").eq("id",row.id)
+    .eq("organization_id",organizationId).maybeSingle();
+   if(sourceError||!source)throw new Error("LEGACY_ARCHIVE_SOURCE_RECHECK_FAILED");
+   if(source.file_asset_id&&source.file_asset_id!==assetId)throw new Error("LEGACY_ARCHIVE_SOURCE_CHANGED");
+   const sourceMetadata=source.metadata&&typeof source.metadata==="object"?source.metadata:{};
+   const now=new Date().toISOString();
+   const nextMetadata={...sourceMetadata,legacyArchiveStatus:"archived",legacyArchiveAt:now,
+    legacyArchiveFileAssetId:assetId,legacyArchiveMessageId:String(result.externalMessageId||""),
+    legacyStoragePathPreserved:path,legacyArchiveAttempts:(Number(sourceMetadata.legacyArchiveAttempts)||0)+1};
+   const patch:any={metadata:nextMetadata,updated_at:now};
+   if(source.file_asset_id===assetId){
+    patch.is_archived=false;
+    patch.storage_path="telegram://"+assetId;
+   }else{
+    // Keep the original Storage object and its path; hide only the old list row
+    // after confirming that the Telegram-backed replacement is active.
+    patch.is_archived=true;
+   }
+   const {data:updated,error:updateError}=await db.from("file_manager_files").update(patch)
+    .eq("id",row.id).eq("organization_id",organizationId).select("id").maybeSingle();
+   if(updateError||!updated)throw new Error("LEGACY_ARCHIVE_SOURCE_UPDATE_FAILED");
+   archived++;
+  }catch(e){
+   failed++;
+   const code=errorCode(e);
+   errors.push({name:String(row.original_name||row.id).slice(0,120),code});
+   await noteFailure(row,code);
+  }
+ }
+ const {data:remainingRows,error:remainingError}=await db.from("file_manager_files")
+  .select("id,metadata").eq("organization_id",organizationId).eq("is_archived",false)
+  .is("file_asset_id",null).not("storage_path","is",null).limit(250);
+ const remaining=(remainingRows||[]).filter((row:any)=>row.metadata?.legacyStorageBackend==="supabase"&&row.metadata?.legacyArchiveStatus!=="archived");
+ return out({ok:true,organizationId,destination:destination.display_name||"آرشیو تلگرام",
+  processed,archived,failed,skipped,remaining:remainingError?null:remaining.length,
+  errors:errors.slice(0,10),retryFailedAvailable:failed>0},200,req);
+}
+
+async function processMessengerOutbox(req:Request){
  const {data:expected,error:secretError}=await db.rpc("internal_get_reminder_secret",{p_name:"messenger_outbox_cron_secret"});
  if(secretError||typeof expected!=="string"||!expected||!equal(req.headers.get("x-messenger-outbox-cron-secret")||"",expected))return bad("UNAUTHORIZED",401,req);
  const {data:rows,error}=await db.rpc("messenger_claim_delivery_outbox",{p_limit:40});
@@ -921,4 +1050,4 @@ async function tgWebhook(req:Request,c:Conn,secretPath?:string){const s=await se
 async function waWebhook(req:Request,c:Conn){if(req.method==="GET"){const u=new URL(req.url),s=await secret(c.verify_token_ref),challenge=u.searchParams.get("hub.challenge");if(u.searchParams.get("hub.mode")!=="subscribe"||!s||!equal(u.searchParams.get("hub.verify_token")||"",s)||challenge===null)return bad("WEBHOOK_VERIFICATION_FAILED",403,req);return new Response(challenge,{status:200,headers:{...noStore,"Content-Type":"text/plain"}});}const raw=await readText(req,1024*1024),app=await secret(c.app_secret_ref);if(!app||!await checkHmac(app,raw,req.headers.get("X-Hub-Signature-256")||""))return bad("WEBHOOK_SIGNATURE_INVALID",401,req);let b:any;try{b=JSON.parse(raw);}catch{return bad("INVALID_JSON",400,req);}try{for(const entry of b.entry||[])for(const change of entry.changes||[]){const value=change.value||{};for(const m of value.messages||[]){const id=String(m.id||"");if(!id)continue;const eid=await event(c,id,"whatsapp-message");if(!eid)continue;const type=String(m.type||"unknown"),media=m[type];const normalized=media?.id?{id:String(media.id),unique:null,name:media.filename||(type==="image"?"image.jpg":type+".bin"),mime:media.mime_type||(type==="image"?"image/jpeg":"application/octet-stream"),size:null,voice:type==="audio"}:null;await inbound(c,String(m.from||""),id,normalized,String(m.text?.body||""),String(m.from||""),String((value.contacts||[]).find((contact:any)=>String(contact.wa_id||"")===String(m.from||""))?.profile?.name||""));await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);}for(const s of value.statuses||[]){const id=String(s.id||"");if(!id)continue;const eid=await event(c,id,"whatsapp-status-"+String(s.status||"unknown"));if(!eid)continue;await db.from("message_logs").update({status:["sent","delivered","read","failed"].includes(s.status)?s.status:"unknown"}).eq("organization_id",c.organization_id).eq("connection_id",c.id).eq("external_message_id",id);await db.from("webhook_events").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",eid);}}}catch(e){return bad("WEBHOOK_PROCESSING_FAILED_"+errorCode(e),500,req);}return out({ok:true},200,req);}
 async function webhook(req:Request,path:string){const m=path.match(/^\/webhooks\/messenger\/(telegram|bale|whatsapp)\/([0-9a-f-]{36})(?:\/([A-Za-z0-9_-]+))?$/i);if(!m)return bad("WEBHOOK_NOT_FOUND",404,req);const platform=m[1].toLowerCase() as Platform,c=await readConn(m[2]);if(!c||c.platform!==platform)return bad("CONNECTION_NOT_FOUND",404,req);if(platform==="whatsapp")return await waWebhook(req,c);if(req.method!=="POST")return bad("METHOD_NOT_ALLOWED",405,req);return await tgWebhook(req,c,m[3]);}
 async function route(req:Request,path:string){const ctx=await context(req),p=ctx.p;if(req.method==="GET"&&path==="/api/messenger/health")return out({ok:true,platforms:{telegram:{supported:true,maxUploadBytes:TG_UPLOAD_LIMIT,maxDownloadBytes:TG_DOWNLOAD_LIMIT},bale:{supported:true,webhookAuth:"secret_path"},whatsapp:{supported:true,maxDocumentUploadBytes:100*1024*1024,metaSetupRequired:true},rubika:{supported:false,reason:"PUBLIC_BOT_API_NOT_VERIFIED"}}},200,req);if(path==="/api/messenger/file-archive-destination"&&req.method==="GET")return await fileArchiveDestination(p,req);if(path==="/api/messenger/connections"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_connections").select("id,organization_id,platform,external_account_id,display_name,config,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CONNECTION_LIST_FAILED",500,req);return out({ok:true,connections:data||[]},200,req);}if(path==="/api/messenger/connections"&&req.method==="POST")return await addConnection(req,p,ctx.userId);if(path==="/api/messenger/chats"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("messenger_chats").select("id,connection_id,external_chat_id,chat_type,purpose,display_name,shipment_id,conversation_id,enabled,created_at").eq("organization_id",p.organization_id).order("created_at",{ascending:false});if(error)return bad("CHAT_LIST_FAILED",500,req);return out({ok:true,chats:data||[]},200,req);}if(path==="/api/messenger/chats"&&req.method==="POST")return await createChat(req,p,ctx.userId);const test=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/test$/i);if(req.method==="POST"&&test){onlyManager(p);const c=await ownedConn(test[1],p.organization_id,true);try{return out({ok:true,account:await probe(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}const hook=path.match(/^\/api\/messenger\/connections\/([0-9a-f-]{36})\/register-webhook$/i);if(req.method==="POST"&&hook){onlyManager(p);const c=await ownedConn(hook[1],p.organization_id,true);try{return out({ok:true,webhookUrl:await registerHook(c)},200,req);}catch(e){return bad(errorCode(e),502,req);}}if(path==="/api/messenger/messages"&&req.method==="GET"){onlyManager(p);const {data,error}=await db.from("message_logs").select("id,connection_id,direction,message_type,external_message_id,external_chat_id,status,payload_summary,created_at,file_asset_id,chat_message_id").eq("organization_id",p.organization_id).order("created_at",{ascending:false}).limit(100);if(error)return bad("MESSAGE_LIST_FAILED",500,req);return out({ok:true,messages:data||[]},200,req);}if(path==="/api/messenger/messages"&&req.method==="POST")return await sendText(req,p);const up=path.match(/^\/api\/messenger\/uploads\/([0-9a-f-]{36})$/i);if(up&&req.method==="POST")return await upload(req,p,ctx.userId,up[1]);const down=path.match(/^\/api\/messenger\/files\/([0-9a-f-]{36})\/download$/i);if(down&&req.method==="GET")return await download(req,p,down[1]);if(path==="/api/messenger/transfers"&&req.method==="POST")return await transfer(req,p,ctx.userId);return bad("ROUTE_NOT_FOUND",404,req);}
-Deno.serve(async(req:Request)=>{const path=req.headers.get("x-messenger-path")||new URL(req.url).pathname;if(req.method==="OPTIONS"){const h=new Headers(noStore),o=req.headers.get("Origin")||"";if(ORIGINS.has(o)){h.set("Access-Control-Allow-Origin",o);h.set("Vary","Origin");h.set("Access-Control-Allow-Headers","authorization, apikey, content-type, x-file-name, x-file-size, idempotency-key");h.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");}return new Response(null,{status:204,headers:h});}try{if(!SB||!ANON||!SERVICE)return bad("GATEWAY_CONFIGURATION_MISSING",503,req);if(path==="/api/messenger/outbox/process"&&req.method==="POST")return await processMessengerOutbox(req);if(path==="/api/messenger/reports/daily"&&req.method==="POST")return await processDailyReports(req);if(path.startsWith("/webhooks/messenger/"))return await webhook(req,path);if(path.startsWith("/api/messenger/"))return await route(req,path);return bad("ROUTE_NOT_FOUND",404,req);}catch(e){const c=errorCode(e),status=c==="MANAGER_REQUIRED"?403:c.startsWith("AUTH_")?401:c==="CONNECTION_NOT_FOUND"||c==="FILE_NOT_FOUND"?404:400;return bad(c,status,req);}});
+Deno.serve(async(req:Request)=>{const path=req.headers.get("x-messenger-path")||new URL(req.url).pathname;if(req.method==="OPTIONS"){const h=new Headers(noStore),o=req.headers.get("Origin")||"";if(ORIGINS.has(o)){h.set("Access-Control-Allow-Origin",o);h.set("Vary","Origin");h.set("Access-Control-Allow-Headers","authorization, apikey, content-type, x-file-name, x-file-size, idempotency-key");h.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");}return new Response(null,{status:204,headers:h});}try{if(!SB||!ANON||!SERVICE)return bad("GATEWAY_CONFIGURATION_MISSING",503,req);if(path==="/api/messenger/outbox/process"&&req.method==="POST")return await processMessengerOutbox(req);if(path==="/api/messenger/archive/legacy/process"&&req.method==="POST")return await processLegacyFileArchive(req);if(path==="/api/messenger/reports/daily"&&req.method==="POST")return await processDailyReports(req);if(path.startsWith("/webhooks/messenger/"))return await webhook(req,path);if(path.startsWith("/api/messenger/"))return await route(req,path);return bad("ROUTE_NOT_FOUND",404,req);}catch(e){const c=errorCode(e),status=c==="MANAGER_REQUIRED"?403:c.startsWith("AUTH_")?401:c==="CONNECTION_NOT_FOUND"||c==="FILE_NOT_FOUND"?404:400;return bad(c,status,req);}});

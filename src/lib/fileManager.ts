@@ -74,11 +74,16 @@ async function authorizedRequest(path: string, init: RequestInit = {}) {
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(path, {
-    ...init,
-    headers,
-    cache: 'no-store',
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...init,
+      headers,
+      cache: 'no-store',
+    });
+  } catch {
+    throw new Error('درخواست آپلود به سرور نرسید. اتصال اینترنت را بررسی کنید؛ اگر دوباره تکرار شد، صفحهٔ فایل‌منیجر را تازه‌سازی کنید و ارسال را مجدداً انجام دهید.');
+  }
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
     const body = await response.json().catch(() => ({}));
@@ -93,7 +98,18 @@ async function authorizedRequest(path: string, init: RequestInit = {}) {
       if (code === 'FILE_TOO_LARGE_FOR_DESTINATION') {
         throw new Error('حجم فایل از سقف قابل بازیابی در Bot API معمولی تلگرام بیشتر است (۲۰ مگابایت). برای فایل بزرگ‌تر باید زیرساخت Bot API مناسب پیکربندی شود.');
       }
-      throw new Error(code);
+      const uploadErrors: Record<string, string> = {
+        FILE_ARCHIVE_FOLDER_INVALID: 'پوشهٔ انتخاب‌شده به این محموله یا صاحب کالا تعلق ندارد. پوشهٔ درست محموله را دوباره انتخاب کنید.',
+        FILE_ARCHIVE_ROLE_FORBIDDEN: 'مجوز لازم برای آرشیو این فایل را ندارید.',
+        FILE_ARCHIVE_DESTINATION_REQUIRED: 'مقصد انتخاب‌شده، آرشیو فایل تلگرام نیست؛ مقصد «mohsen» را در تنظیمات آرشیو بررسی کنید.',
+        CHAT_NOT_ALLOWED: 'مقصد تلگرام فعال یا مجاز نیست. اتصال و مقصد آرشیو را بررسی کنید.',
+        INVALID_FILE_ARCHIVE_INPUT: 'مشخصات آپلود کامل به سرور نرسید. صفحه را تازه‌سازی کنید و فایل را دوباره انتخاب کنید.',
+        FILE_UPLOAD_JOB_CREATE_FAILED: 'سرور نتوانست صف آپلود را ثبت کند؛ هیچ تأیید معتبری از ارسال فایل دریافت نشد.',
+        TELEGRAM_UPLOAD_FAILED: 'تلگرام فایل را نپذیرفت. اتصال ربات و دسترسی آن به چت «mohsen» را بررسی کنید.',
+        FILE_UPLOAD_TELEGRAM_RECEIPT_SAVE_FAILED: 'تلگرام ممکن است فایل را دریافت کرده باشد، اما ثبت رسید سرور ناموفق بود؛ برای جلوگیری از تکرار، وضعیت آرشیو باید بازیابی شود.',
+        FILE_ARCHIVE_METADATA_SAVE_FAILED: 'ارسال انجام شد، اما ثبت مشخصات فایل در وب‌سایت کامل نشد؛ وضعیت آرشیو باید بازیابی شود.',
+      };
+      throw new Error(uploadErrors[code] || `خطای آپلود: ${code}`);
     }
     return body;
   }

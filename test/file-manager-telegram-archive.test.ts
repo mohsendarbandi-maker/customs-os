@@ -205,6 +205,24 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(gateway).toContain('searchHashtags');
   });
 
+  it('archives legacy Supabase documents through the private cron-gated Telegram path without deleting Storage originals', () => {
+    expect(gateway).toContain('async function processLegacyFileArchive(req:Request)');
+    expect(gateway).toContain('internal_get_reminder_secret",{p_name:"messenger_outbox_cron_secret"}');
+    expect(gateway).toContain('path==="/api/messenger/archive/legacy/process"&&req.method==="POST"');
+    expect(gateway).toContain('db.storage.from("customs_documents").download(path)');
+    expect(gateway).toContain('legacyStoragePathPreserved:path');
+    expect(gateway).toContain('patch.is_archived=true');
+    expect(gateway).toContain('customs-os-legacy-archive-v1:');
+  });
+
+  it('keeps the mobile folder tree in a full-height scrollable drawer and avoids a tiny nested upload scroller', () => {
+    expect(fileManager).toContain('fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)]');
+    expect(fileManager).toContain('min-h-0 flex-1 overflow-y-auto overscroll-contain');
+    expect(fileManager).toContain('max-h-none shrink-0 border-b app-border p-3 md:p-4 lg:max-h-64 lg:overflow-y-auto');
+    expect(fileManager).toContain('min-h-[60dvh] max-h-none flex-col overflow-visible');
+    expect(fileManager).toContain('whitespace-normal break-words leading-5');
+  });
+
   it('registers the page and exposes it from the main navigation', () => {
     expect(app).toContain('path="/file-manager"');
     expect(app).toContain("import('./pages/FileManagerPage')");
