@@ -141,40 +141,6 @@
 .ai-composer-hint { padding: 7px 4px 0; color: var(--text-muted); font-size: 9px; line-height: 1.5; text-align: center; }
 .ai-doc-toast { position: absolute; z-index: 4; inset-inline: 12px; bottom: 115px; max-height: 38%; overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); box-shadow: 0 12px 36px rgb(0 0 0 / 18%); }
 
-.chat-message-actions-dismiss {
-  position: fixed;
-  z-index: 1199;
-  inset: 0;
-  width: 100vw;
-  height: 100dvh;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: default;
-}
-.chat-message-actions-menu {
-  position: fixed;
-  z-index: 1200;
-  max-width: calc(100vw - 24px);
-  max-height: min(70dvh, 360px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 16px 42px rgb(0 0 0 / 22%);
-  font-size: 13px;
-}
-.chat-message-actions-menu > button { min-height: 40px; border-radius: 10px; }
-.chat-message-actions-menu > button:hover { background: color-mix(in srgb, var(--primary) 8%, var(--surface-2)); }
 @media (max-width: 767px) {
   .ai-launcher { width: 50px; height: 50px; inset-inline-end: 12px; bottom: calc(92px + env(safe-area-inset-bottom)); border-radius: 16px; }
   .ai-chat-panel { inset-inline: 10px; bottom: calc(82px + env(safe-area-inset-bottom)); width: auto; height: min(650px, calc(100dvh - 110px - env(safe-area-inset-bottom))); min-height: min(320px, calc(100dvh - 110px)); max-height: calc(100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); border-radius: 21px; }
