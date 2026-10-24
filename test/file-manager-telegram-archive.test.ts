@@ -231,6 +231,11 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('whitespace-normal break-words leading-5');
   });
 
+  it('keeps upload guidance reachable on mobile and shows complete folder-card labels', () => {
+    expect(fileManager).toContain('disabled={!currentFolder} title={uploadEnabled?');
+    expect(fileManager).toContain('whitespace-normal break-words text-sm font-bold leading-5');
+  });
+
   it('registers the page and exposes it from the main navigation', () => {
     expect(app).toContain('path="/file-manager"');
     expect(app).toContain("import('./pages/FileManagerPage')");
