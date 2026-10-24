@@ -54,7 +54,7 @@ export async function createTelegramArchiveIdempotencyKey(
     input.documentType || 'other',
     input.documentName || file.name,
     contentHash,
-  ].join('\\n');
+  ].join('\n');
   const keyDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(context));
   const keyHash = Array.from(new Uint8Array(keyDigest), (byte) => byte.toString(16).padStart(2, '0')).join('');
   return `customs-os-upload-v1:${keyHash}`;
