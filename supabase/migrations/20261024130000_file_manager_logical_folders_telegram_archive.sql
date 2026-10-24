@@ -132,37 +132,7 @@ create unique index if not exists file_manager_files_customs_doc_uq
 create index if not exists file_manager_files_tags_gin_idx
   on public.file_manager_files using gin (tags);
 
--- Existing pg_trgm is installed in the extensions schema; these indexes accelerate
--- the most common substring searches without fetching full tables into the browser.
-create index if not exists file_manager_folders_display_name_trgm_idx
-  on public.file_manager_folders using gin (display_name extensions.gin_trgm_ops);
 
-create index if not exists file_manager_files_original_name_trgm_idx
-  on public.file_manager_files using gin (original_name extensions.gin_trgm_ops);
-
-create index if not exists clients_name_trgm_idx
-  on public.clients using gin (name extensions.gin_trgm_ops);
-
-create index if not exists shipments_display_name_trgm_idx
-  on public.shipments using gin (display_name extensions.gin_trgm_ops);
-
-create index if not exists shipments_bill_of_lading_no_trgm_idx
-  on public.shipments using gin (bill_of_lading_no extensions.gin_trgm_ops);
-
-create index if not exists vessels_name_trgm_idx
-  on public.vessels using gin (name extensions.gin_trgm_ops);
-
-create index if not exists customs_declarations_kottaj_number_trgm_idx
-  on public.customs_declarations using gin (kottaj_number extensions.gin_trgm_ops);
-
-create index if not exists shipment_documents_original_name_trgm_idx
-  on public.shipment_documents using gin (original_file_name extensions.gin_trgm_ops);
-
-create index if not exists customs_documents_original_name_trgm_idx
-  on public.customs_documents using gin (original_name extensions.gin_trgm_ops);
-
-create index if not exists customs_documents_display_name_trgm_idx
-  on public.customs_documents using gin (display_name extensions.gin_trgm_ops);
 
 alter table public.file_manager_folders enable row level security;
 alter table public.file_manager_files enable row level security;
