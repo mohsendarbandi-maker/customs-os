@@ -364,7 +364,7 @@ async function reconcileTelegramArchiveMetadata(input:{
  return {assetId,externalMessageId};
 }
 
-async function upload(req:Request,p:Profile,user:string,cid:string){
+async function upload(req:Request,p:Profile,user:string,cid:string,allowLegacyUnassignedArchive=false){
  if(!["owner","admin","broker","accountant","warehouse","client"].includes(p.role))
   return bad("FILE_ARCHIVE_ROLE_FORBIDDEN",403,req);
  const c=await ownedConn(cid,p.organization_id),u=new URL(req.url);
@@ -406,7 +406,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    }
   }
   const {data:folder,error:folderError}=await db.from("file_manager_folders")
-   .select("id,organization_id,shipment_id,client_id,folder_type,display_name,customs_office_id,parent_id")
+   .select("id,organization_id,shipment_id,client_id,folder_type,folder_key,display_name,customs_office_id,parent_id")
    .eq("id",folderId).eq("organization_id",p.organization_id).maybeSingle();
   if(folderError||!folder)return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
   if(shipment){
@@ -414,7 +414,16 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
     return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
    if(p.role==="client"&&shipment.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
   }else if(folder.shipment_id!==null||!folder.client_id||!["client","custom"].includes(folder.folder_type)){
-   return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
+   let approvedLegacyUnassigned=false;
+   if(allowLegacyUnassignedArchive&&folder.shipment_id===null&&folder.client_id===null&&
+      folder.folder_type==="other"&&folder.folder_key==="unassigned-documents"&&folder.parent_id){
+    const {data:parent,error:parentError}=await db.from("file_manager_folders")
+     .select("id,parent_id,folder_key,folder_type")
+     .eq("id",folder.parent_id).eq("organization_id",p.organization_id).maybeSingle();
+    if(parentError)return bad("FILE_ARCHIVE_FOLDER_SCOPE_LOOKUP_FAILED",500,req);
+    approvedLegacyUnassigned=Boolean(parent&&parent.parent_id===null&&parent.folder_key==="owners-root"&&parent.folder_type==="root");
+   }
+   if(!approvedLegacyUnassigned)return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
   }
   if(p.role==="client"&&folder.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
   let job:any=null;
@@ -810,7 +819,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
    const syntheticRequest=new Request(url.toString(),{method:"POST",headers,body:file.stream()});
    const uploadResponse=await upload(syntheticRequest,{
     id:String(operator.id),organization_id:organizationId,role:String(operator.role),is_active:true,client_id:null
-   } as Profile,String(operator.id),String(connection.id));
+   } as Profile,String(operator.id),String(connection.id),true);
    const responseText=await uploadResponse.text();
    let result:any={};
    try{result=JSON.parse(responseText);}catch{/* Preserve only a sanitized error below. */}
