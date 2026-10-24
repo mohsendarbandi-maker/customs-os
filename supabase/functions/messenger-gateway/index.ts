@@ -159,6 +159,193 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  }
  return bad("FILE_ARCHIVE_NOT_CONFIGURED",409,req);
 }
+async function reconcileTelegramArchiveMetadata(input:{
+ p:Profile; user:string; c:Conn; chat:string; folder:any; shipment:any; job:any;
+ folderId:string; name:string; displayName:string; mime:string; size:number;
+ documentType:string; archiveTags:string[];
+}):Promise<{assetId:string;externalMessageId:string}>{
+ const {p,user,c,chat,folder,shipment,job,folderId,name,displayName,mime,size,documentType,archiveTags}=input;
+ const now=new Date().toISOString();
+ const officeId=folder.customs_office_id||shipment?.customs_office_id||null;
+ const [clientMeta,shipmentFolderMeta]=await Promise.all([
+  folder.client_id
+   ?db.from("clients").select("name").eq("id",folder.client_id).eq("organization_id",p.organization_id).maybeSingle()
+   :Promise.resolve({data:null,error:null}),
+  shipment
+   ?db.from("file_manager_folders").select("display_name").eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).eq("folder_type","shipment").maybeSingle()
+   :Promise.resolve({data:null,error:null})
+ ]);
+ const ownerName=String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
+ const shipmentFolderName=String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
+ const currentFolderName=String(folder.display_name||folder.folder_type).replace(/[\r\n]/g," ").slice(0,160);
+ const telegramTagTokens=archiveTags.map((tag:string)=>"#"+tag.normalize("NFKC").replace(/\s+/g,"_").replace(/[^\p{L}\p{N}_-]/gu,"").slice(0,48)).filter(Boolean);
+ const archiveCaption=String(job.telegram_caption||[
+  "Customs OS · File Archive","File: "+displayName,"Owner: "+ownerName,
+  "Shipment / customs folder: "+shipmentFolderName,"Selected folder: "+currentFolderName,
+  "Folder ID: "+folder.id,"Owner ID: "+String(folder.client_id||"-"),
+  "Shipment ID: "+String(shipment?.id||"-"),"Customs Office ID: "+String(officeId||"-"),
+  "Tags: "+(archiveTags.length?archiveTags.join(", "):"-"),"Tag tokens: "+(telegramTagTokens.join(" ")||"-")
+ ].join("\n").slice(0,950));
+ const receiptMeta={
+  archiveMode:"telegram_file_archive",idempotencyKey:job.idempotency_key,
+  documentName:displayName,originalName:name,folderId:folder.id,folderName:currentFolderName,
+  shipmentFolderName,ownerName,folderType:folder.folder_type,parentFolderId:folder.parent_id||null,
+  clientId:folder.client_id||null,shipmentId:shipment?.id||null,customsOfficeId:officeId,
+  archiveTags,telegramTagTokens,telegramFileId:job.telegram_file_id||null,
+  telegramFileUniqueId:job.telegram_file_unique_id||null,telegramChatId:chat,
+  telegramConnectionId:c.id,telegramMessageId:job.external_message_id||null,telegramCaption:archiveCaption
+ };
+ let asset:any=null;
+ if(job.file_asset_id){
+  const {data,error}=await db.from("file_assets").select("id,metadata")
+   .eq("id",job.file_asset_id).eq("organization_id",p.organization_id).maybeSingle();
+  if(error)throw new Error("FILE_ARCHIVE_RECONCILIATION_ASSET_LOOKUP_FAILED");
+  asset=data;
+ }
+ if(!asset){
+  const {data,error}=await db.from("file_assets").select("id,metadata")
+   .eq("organization_id",p.organization_id).eq("metadata->>idempotencyKey",job.idempotency_key)
+   .order("created_at",{ascending:false}).limit(1).maybeSingle();
+  if(error)throw new Error("FILE_ARCHIVE_RECONCILIATION_ASSET_LOOKUP_FAILED");
+  asset=data;
+ }
+ let location:any=null;
+ if(!asset&&job.external_message_id){
+  const {data,error}=await db.from("file_locations").select("file_asset_id")
+   .eq("organization_id",p.organization_id).eq("connection_id",c.id)
+   .eq("external_chat_id",chat).eq("external_message_id",job.external_message_id)
+   .order("created_at",{ascending:false}).limit(1).maybeSingle();
+  if(error)throw new Error("FILE_ARCHIVE_RECONCILIATION_LOCATION_LOOKUP_FAILED");
+  if(data?.file_asset_id){
+   const {data:found,error:foundError}=await db.from("file_assets").select("id,metadata")
+    .eq("id",data.file_asset_id).eq("organization_id",p.organization_id).maybeSingle();
+   if(foundError)throw new Error("FILE_ARCHIVE_RECONCILIATION_ASSET_LOOKUP_FAILED");
+   asset=found;
+  }
+ }
+ if(!asset&&!job.telegram_file_id)throw new Error("FILE_UPLOAD_TELEGRAM_RECEIPT_MISSING");
+ if(!asset){
+  const initialMetadata={transferMode:"stream",...receiptMeta,telegramFileId:job.telegram_file_id,
+   telegramFileUniqueId:job.telegram_file_unique_id||null,telegramMessageId:job.external_message_id||null};
+  const {data,error}=await db.from("file_assets").insert({
+   organization_id:p.organization_id,original_name:name,mime_type:mime,size_bytes:size,
+   source_platform:"website",created_by:user,metadata:initialMetadata
+  }).select("id,metadata").single();
+  if(error||!data)throw new Error("FILE_ARCHIVE_RECONCILIATION_ASSET_CREATE_FAILED");
+  asset=data;
+ }
+ const assetId=String(asset.id);
+ const assetMetadata=asset.metadata&&typeof asset.metadata==="object"?asset.metadata:{};
+ const {data:locations,error:locationLookupError}=await db.from("file_locations")
+  .select("id,connection_id,external_file_id,external_file_unique_id,external_chat_id,external_message_id")
+  .eq("organization_id",p.organization_id).eq("file_asset_id",assetId)
+  .order("created_at",{ascending:false}).limit(1);
+ if(locationLookupError)throw new Error("FILE_ARCHIVE_RECONCILIATION_LOCATION_LOOKUP_FAILED");
+ location=locations?.[0]||null;
+ if(location&&(location.connection_id!==c.id||location.external_chat_id!==chat))
+  throw new Error("FILE_ARCHIVE_RECONCILIATION_DESTINATION_MISMATCH");
+ const telegramFileId=String(job.telegram_file_id||assetMetadata.telegramFileId||location?.external_file_id||"");
+ const telegramFileUniqueId=job.telegram_file_unique_id||assetMetadata.telegramFileUniqueId||location?.external_file_unique_id||null;
+ const externalMessageId=String(job.external_message_id||assetMetadata.telegramMessageId||location?.external_message_id||"");
+ if(!telegramFileId)throw new Error("FILE_UPLOAD_TELEGRAM_RECEIPT_MISSING");
+ const finalMetadata={...assetMetadata,...receiptMeta,telegramFileId,telegramFileUniqueId,telegramMessageId:externalMessageId};
+ const {error:assetUpdateError}=await db.from("file_assets").update({
+  original_name:name,mime_type:mime,size_bytes:size,metadata:finalMetadata
+ }).eq("id",assetId).eq("organization_id",p.organization_id);
+ if(assetUpdateError)throw new Error("FILE_ARCHIVE_RECONCILIATION_ASSET_UPDATE_FAILED");
+ const {error:jobReceiptError}=await db.from("file_manager_upload_jobs").update({
+  file_asset_id:assetId,telegram_file_id:telegramFileId,telegram_file_unique_id:telegramFileUniqueId,
+  external_message_id:externalMessageId||null,connection_id:c.id,external_chat_id:chat,
+  document_name:displayName,document_type:documentType,archive_tags:archiveTags,updated_at:now
+ }).eq("id",job.id).eq("organization_id",p.organization_id).eq("status","uploading");
+ if(jobReceiptError)throw new Error("FILE_ARCHIVE_RECONCILIATION_JOB_RECEIPT_FAILED");
+ if(location){
+  const {error}=await db.from("file_locations").update({
+   external_file_id:telegramFileId,external_file_unique_id:telegramFileUniqueId,
+   external_message_id:externalMessageId||null,availability_status:"available",
+   metadata:{streamed:true,...finalMetadata}
+  }).eq("id",location.id).eq("organization_id",p.organization_id);
+  if(error)throw new Error("FILE_ARCHIVE_RECONCILIATION_LOCATION_UPDATE_FAILED");
+ }else{
+  const {error}=await db.from("file_locations").insert({
+   organization_id:p.organization_id,file_asset_id:assetId,connection_id:c.id,
+   external_file_id:telegramFileId,external_file_unique_id:telegramFileUniqueId,
+   external_chat_id:chat,external_message_id:externalMessageId||null,
+   availability_status:"available",metadata:{streamed:true,...finalMetadata}
+  });
+  if(error)throw new Error("FILE_ARCHIVE_RECONCILIATION_LOCATION_SAVE_FAILED");
+ }
+ if(shipment){
+  const {error:shipmentFileError}=await db.from("shipment_files").upsert({
+   organization_id:p.organization_id,shipment_id:shipment.id,file_asset_id:assetId,
+   document_type:mime==="application/pdf"?"customs_document":"other",created_by:user
+  },{onConflict:"shipment_id,file_asset_id,document_type"});
+  if(shipmentFileError)throw new Error("FILE_ARCHIVE_RECONCILIATION_SHIPMENT_LINK_FAILED");
+  const {data:docs,error:docLookupError}=await db.from("shipment_documents").select("id")
+   .eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).eq("file_asset_id",assetId)
+   .order("created_at",{ascending:false}).limit(1);
+  if(docLookupError)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_LOOKUP_FAILED");
+  let shipmentDoc=docs?.[0]||null;
+  if(!shipmentDoc){
+   const {data,error}=await db.from("shipment_documents").insert({
+    organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
+    document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
+    mime_type:mime,file_size_bytes:size,extraction_status:"not_requested",storage_backend:"telegram",
+    file_asset_id:assetId,folder_id:folderId,telegram_message_id:externalMessageId
+   }).select("id").single();
+   if(error||!data)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_CREATE_FAILED");
+   shipmentDoc=data;
+  }else{
+   const {error}=await db.from("shipment_documents").update({
+    document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
+    mime_type:mime,file_size_bytes:size,extraction_status:"not_requested",storage_backend:"telegram",
+    file_asset_id:assetId,folder_id:folderId,telegram_message_id:externalMessageId,
+    is_archived:false,archived_at:null,archived_by:null,archive_reason:null,updated_at:now
+   }).eq("id",shipmentDoc.id).eq("organization_id",p.organization_id);
+   if(error)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_UPDATE_FAILED");
+  }
+  const {error:mirrorError}=await db.from("customs_documents").update({
+   tags:archiveTags,storage_path:"telegram://"+assetId,mime_type:mime,size_bytes:size,
+   storage_backend:"telegram",file_asset_id:assetId,folder_id:folderId,telegram_message_id:externalMessageId,
+   is_archived:false,archived_at:null,archived_by:null,archive_reason:null,updated_at:now
+  }).eq("id",shipmentDoc.id).eq("organization_id",p.organization_id);
+  if(mirrorError)throw new Error("FILE_ARCHIVE_RECONCILIATION_CUSTOMS_MIRROR_FAILED");
+ }else{
+  const {data:docs,error:docLookupError}=await db.from("customs_documents").select("id")
+   .eq("organization_id",p.organization_id).eq("file_asset_id",assetId)
+   .order("created_at",{ascending:false}).limit(1);
+  if(docLookupError)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_LOOKUP_FAILED");
+  let companyDoc=docs?.[0]||null;
+  if(!companyDoc){
+   const {data,error}=await db.from("customs_documents").insert({
+    organization_id:p.organization_id,client_id:folder.client_id,shipment_id:null,case_id:null,
+    document_type:"TECHNICAL_SPEC_CATALOG",original_name:name,display_name:displayName,
+    storage_path:"telegram://"+assetId,mime_type:mime,size_bytes:size,created_by:user,status:"review",
+    tags:archiveTags,storage_backend:"telegram",file_asset_id:assetId,folder_id:folderId,
+    telegram_message_id:externalMessageId
+   }).select("id").single();
+   if(error||!data)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_CREATE_FAILED");
+   companyDoc=data;
+  }else{
+   const {error}=await db.from("customs_documents").update({
+    original_name:name,display_name:displayName,storage_path:"telegram://"+assetId,mime_type:mime,size_bytes:size,
+    tags:archiveTags,storage_backend:"telegram",file_asset_id:assetId,folder_id:folderId,
+    telegram_message_id:externalMessageId,is_archived:false,archived_at:null,
+    archived_by:null,archive_reason:null,updated_at:now
+   }).eq("id",companyDoc.id).eq("organization_id",p.organization_id);
+   if(error)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_UPDATE_FAILED");
+  }
+ }
+ const {data:fileRow,error:fileError}=await db.from("file_manager_files").update({
+  folder_id:folderId,shipment_id:shipment?.id??null,client_id:folder.client_id||null,
+  original_name:name,mime_type:mime,size_bytes:size,external_message_id:externalMessageId||null,
+  document_type:documentType,tags:archiveTags,metadata:{transferMode:"stream",source:"file_manager",...finalMetadata},
+  storage_path:"telegram://"+assetId,created_by:user,is_archived:false,updated_at:now
+ }).eq("organization_id",p.organization_id).eq("file_asset_id",assetId).select("id").maybeSingle();
+ if(fileError||!fileRow)throw new Error("FILE_ARCHIVE_RECONCILIATION_FILE_MANAGER_ROW_MISSING");
+ return {assetId,externalMessageId};
+}
+
 async function upload(req:Request,p:Profile,user:string,cid:string){
  if(!["owner","admin","broker","accountant","warehouse","client"].includes(p.role))
   return bad("FILE_ARCHIVE_ROLE_FORBIDDEN",403,req);
@@ -213,24 +400,57 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   if(p.role==="client"&&folder.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
   let job:any=null;
   const {data:existing,error:existingError}=await db.from("file_manager_upload_jobs")
-   .select("id,status,file_asset_id,external_message_id,size_bytes,attempt_count,folder_id,shipment_id,original_name,mime_type")
+   .select("id,status,file_asset_id,external_message_id,size_bytes,attempt_count,folder_id,shipment_id,original_name,mime_type,connection_id,external_chat_id,document_name,document_type,telegram_file_id,telegram_file_unique_id,archive_tags,updated_at")
    .eq("organization_id",p.organization_id).eq("idempotency_key",idempotencyKey).maybeSingle();
   if(existingError)return bad("FILE_UPLOAD_JOB_LOOKUP_FAILED",500,req);
-  if(existing&&(existing.folder_id!==folderId||existing.shipment_id!==(shipment?.id??null)||existing.original_name!==name||existing.mime_type!==mime||Number(existing.size_bytes)!==Number(size)))
+  if(existing&&(existing.folder_id!==folderId||existing.shipment_id!==(shipment?.id??null)||existing.original_name!==name||existing.mime_type!==mime||Number(existing.size_bytes)!==Number(size)||(existing.connection_id&&existing.connection_id!==c.id)||(existing.external_chat_id&&existing.external_chat_id!==chat)||(existing.document_name&&existing.document_name!==displayName)||(existing.document_type&&existing.document_type!==documentType)))
    return bad("IDEMPOTENCY_KEY_REUSE_MISMATCH",409,req);
   if(existing?.status==="stored"&&existing.file_asset_id)
    return out({ok:true,fileAssetId:existing.file_asset_id,externalMessageId:existing.external_message_id,sizeBytes:existing.size_bytes,folderId,uploadJobId:existing.id,alreadyStored:true},200,req);
+  const staleUploading=Boolean(existing?.status==="uploading"&&existing.updated_at&&Date.now()-Date.parse(existing.updated_at)>15*60*1000);
+  const shouldReconcile=Boolean(existing&&(existing.status==="reconcile_required"||staleUploading));
+  if(shouldReconcile){
+   if(!existing.telegram_file_id&&!existing.file_asset_id&&!existing.external_message_id)
+    return bad("FILE_UPLOAD_RECONCILIATION_REQUIRED",409,req);
+   const {data:claimed,error:claimError}=await db.from("file_manager_upload_jobs").update({
+    status:"uploading",attempt_count:(existing.attempt_count||1)+1,error_code:null,connection_id:c.id,
+    external_chat_id:chat,document_name:displayName,document_type:documentType,archive_tags:archiveTags,updated_at:new Date().toISOString()
+   }).eq("id",existing.id).eq("organization_id",p.organization_id).eq("status",existing.status)
+    .eq("updated_at",existing.updated_at).select("id").maybeSingle();
+   if(claimError||!claimed)return bad("FILE_UPLOAD_RECONCILIATION_IN_PROGRESS",409,req);
+   try{
+    const repaired=await reconcileTelegramArchiveMetadata({
+     p,user,c,chat,folder,shipment,job:{...existing,...claimed,status:"uploading"},
+     folderId,name,displayName,mime,size,documentType,archiveTags
+    });
+    const {error:completeError}=await db.from("file_manager_upload_jobs").update({
+     status:"stored",file_asset_id:repaired.assetId,external_message_id:repaired.externalMessageId||null,
+     telegram_file_id:existing.telegram_file_id,telegram_file_unique_id:existing.telegram_file_unique_id,
+     connection_id:c.id,external_chat_id:chat,document_name:displayName,document_type:documentType,
+     archive_tags:archiveTags,updated_at:new Date().toISOString(),completed_at:new Date().toISOString(),error_code:null
+    }).eq("id",existing.id).eq("organization_id",p.organization_id).eq("status","uploading");
+    if(completeError)throw new Error("FILE_UPLOAD_JOB_COMPLETE_FAILED");
+    return out({ok:true,fileAssetId:repaired.assetId,externalMessageId:repaired.externalMessageId||null,sizeBytes:size,folderId,uploadJobId:existing.id,alreadyStored:true,reconciled:true},200,req);
+   }catch(e){
+    const code=errorCode(e);
+    await db.from("file_manager_upload_jobs").update({status:"reconcile_required",error_code:code,updated_at:new Date().toISOString()})
+     .eq("id",existing.id).eq("organization_id",p.organization_id);
+    return bad("FILE_UPLOAD_RECONCILIATION_REQUIRED",502,req);
+   }
+  }
   if(existing&&existing.status!=="failed")return bad("FILE_UPLOAD_RECONCILIATION_REQUIRED",409,req);
   if(existing){
    const {data:retry,error:retryError}=await db.from("file_manager_upload_jobs")
-    .update({status:"uploading",attempt_count:(existing.attempt_count||1)+1,error_code:null,updated_at:new Date().toISOString()})
+    .update({status:"uploading",attempt_count:(existing.attempt_count||1)+1,error_code:null,connection_id:c.id,
+     external_chat_id:chat,document_name:displayName,document_type:documentType,archive_tags:archiveTags,updated_at:new Date().toISOString()})
     .eq("id",existing.id).eq("organization_id",p.organization_id).select("id").single();
    if(retryError||!retry)return bad("FILE_UPLOAD_JOB_UPDATE_FAILED",500,req);
    job=retry;
   }else{
    const {data:created,error:createError}=await db.from("file_manager_upload_jobs")
     .insert({organization_id:p.organization_id,idempotency_key:idempotencyKey,folder_id:folderId,shipment_id:shipment?.id??null,
-      created_by:user,original_name:name,mime_type:mime,size_bytes:size,status:"uploading"})
+      created_by:user,original_name:name,mime_type:mime,size_bytes:size,status:"uploading",connection_id:c.id,
+      external_chat_id:chat,document_name:displayName,document_type:documentType,archive_tags:archiveTags})
     .select("id").single();
    if(createError){
     if(createError.code==="23505")return bad("FILE_UPLOAD_JOB_ALREADY_EXISTS_RETRY_WITH_STATUS_CHECK",409,req);
@@ -268,13 +488,29 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
     "Tag tokens: "+(telegramTagTokens.join(" ")||"-")
    ].join("\n").slice(0,950);
    const assetMetadata={
-    archiveMode:"telegram_file_archive",documentName:displayName,originalName:name,folderId:folder.id,folderName:currentFolderName,
+    archiveMode:"telegram_file_archive",idempotencyKey,documentName:displayName,originalName:name,folderId:folder.id,folderName:currentFolderName,
     shipmentFolderName,ownerName,folderType:folder.folder_type,parentFolderId:folder.parent_id||null,
     clientId:folder.client_id||null,shipmentId:shipment?.id||null,customsOfficeId:officeId,
-    archiveTags,telegramTagTokens,telegramCaption:archiveCaption
+    archiveTags,telegramTagTokens,telegramCaption:archiveCaption,telegramFileId:null,telegramFileUniqueId:null,
+    telegramChatId:chat,telegramConnectionId:c.id,telegramMessageId:null
    };
    result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption);
+   assetMetadata.telegramFileId=result.fileId;
+   assetMetadata.telegramFileUniqueId=result.uniqueId||null;
+   assetMetadata.telegramMessageId:String(result.messageId||"");
+   assetMetadata.telegramChatId=chat;
+   assetMetadata.telegramConnectionId=c.id;
+   const {error:receiptError}=await db.from("file_manager_upload_jobs").update({
+    telegram_file_id:result.fileId,telegram_file_unique_id:result.uniqueId||null,
+    external_message_id:String(result.messageId||"")||null,connection_id:c.id,external_chat_id:chat,
+    document_name:displayName,document_type:documentType,archive_tags:archiveTags,
+    metadata:undefined,updated_at:new Date().toISOString()
+   }).eq("id",job.id).eq("organization_id",p.organization_id);
+   if(receiptError)throw new Error("FILE_UPLOAD_TELEGRAM_RECEIPT_SAVE_FAILED");
    assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment?.id??null,false,assetMetadata);
+   const {error:assetLinkError}=await db.from("file_manager_upload_jobs").update({file_asset_id:assetId,updated_at:new Date().toISOString()})
+    .eq("id",job.id).eq("organization_id",p.organization_id);
+   if(assetLinkError)throw new Error("FILE_UPLOAD_JOB_ASSET_LINK_FAILED");
    if(shipment){
     const {data:shipmentDocument,error:documentError}=await db.from("shipment_documents").insert({
      organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
@@ -305,7 +541,9 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    }).eq("organization_id",p.organization_id).eq("file_asset_id",assetId).select("id").maybeSingle();
    if(fileError||!fileRow)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
    const {error:completeError}=await db.from("file_manager_upload_jobs").update({
-    status:"stored",file_asset_id:assetId,external_message_id:String(result.messageId||""),
+    status:"stored",file_asset_id:assetId,external_message_id:String(result.messageId||"")||null,
+    telegram_file_id:result.fileId,telegram_file_unique_id:result.uniqueId||null,
+    connection_id:c.id,external_chat_id:chat,document_name:displayName,document_type:documentType,archive_tags:archiveTags,
     updated_at:new Date().toISOString(),completed_at:new Date().toISOString(),error_code:null
    }).eq("id",job.id).eq("organization_id",p.organization_id);
    if(completeError)throw new Error("FILE_UPLOAD_JOB_COMPLETE_FAILED");
@@ -314,9 +552,19 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    const code=errorCode(e);
    const definitelyRejected=!result&&["TELEGRAM_UPLOAD_FAILED","FILE_TOO_LARGE_FOR_DESTINATION","REQUEST_BODY_TOO_LARGE"].includes(code);
    const nextStatus=definitelyRejected||!telegramCallStarted?"failed":"reconcile_required";
+   let discoveredAssetId=assetId;
+   if(!discoveredAssetId){
+    const {data:priorAsset}=await db.from("file_assets").select("id")
+     .eq("organization_id",p.organization_id).eq("metadata->>idempotencyKey",idempotencyKey)
+     .order("created_at",{ascending:false}).limit(1).maybeSingle();
+    discoveredAssetId=priorAsset?.id||null;
+   }
    await db.from("file_manager_upload_jobs").update({
     status:nextStatus,
-    file_asset_id:assetId,external_message_id:result?.messageId?String(result.messageId):null,
+    file_asset_id:discoveredAssetId,
+    telegram_file_id:result?.fileId||null,telegram_file_unique_id:result?.uniqueId||null,
+    external_message_id:result?.messageId?String(result.messageId):null,
+    connection_id:c.id,external_chat_id:chat,document_name:displayName,document_type:documentType,archive_tags:archiveTags,
     error_code:code,updated_at:new Date().toISOString()
    }).eq("id",job.id).eq("organization_id",p.organization_id);
    return bad(nextStatus==="failed"?code:"FILE_UPLOAD_RECONCILIATION_REQUIRED",502,req);
