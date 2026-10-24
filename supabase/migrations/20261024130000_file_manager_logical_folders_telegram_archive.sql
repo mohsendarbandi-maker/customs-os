@@ -432,8 +432,20 @@ begin
     where organization_id = v_org and parent_id = v_shipment_folder_id
       and folder_key = v_child.folder_key;
   end loop;
+
+  -- If shipment ownership changes, the logical file metadata must follow the new owner.
+  -- This updates only database links/metadata; it never moves or duplicates the file bytes.
+  update public.file_manager_files
+  set client_id = v_client, updated_at = now()
+  where organization_id = v_org and shipment_id = v_shipment
+    and client_id is distinct from v_client;
+
+  update public.customs_documents
+  set client_id = v_client, updated_at = now()
+  where organization_id = v_org and shipment_id = v_shipment
+    and client_id is distinct from v_client;
 end;
-$$;
+$;
 
 revoke all on function public.ensure_shipment_file_manager_folders(uuid) from public, anon, authenticated;
 
