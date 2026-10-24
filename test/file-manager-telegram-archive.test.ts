@@ -218,8 +218,12 @@ describe('Telegram-backed Customs OS file manager', () => {
   it('only allows the private archive runner to archive ownerless legacy documents in the verified unassigned folder', () => {
     expect(gateway).toContain('async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassignedLegacy=false)');
     expect(gateway).toContain('allowUnassignedLegacy&&folder.shipment_id===null&&!folder.client_id');
-    expect(gateway).toContain('folder.display_name==="اسناد نیازمند اتصال به محموله"');
+    expect(gateway).toContain('folder.folder_key==="unassigned-documents"');
+    expect(gateway).toContain('parent.folder_key==="owners-root"');
     expect(gateway).toContain('LEGACY_UNASSIGNED_FOLDER_NOT_VERIFIED');
+    expect(gateway).toContain('LEGACY_UNASSIGNED_PARENT_NOT_VERIFIED');
+    expect(gateway).toContain('بدون اتصال به صاحب کالا');
+    expect(gateway).toContain('بدون اتصال به محموله');
     expect(gateway).toContain('String(connection.id),isUnassignedLegacy');
   });
 
