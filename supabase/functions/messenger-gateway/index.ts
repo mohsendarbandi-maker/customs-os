@@ -364,7 +364,7 @@ async function reconcileTelegramArchiveMetadata(input:{
  return {assetId,externalMessageId};
 }
 
-async function upload(req:Request,p:Profile,user:string,cid:string){
+async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassignedLegacy=false){
  if(!["owner","admin","broker","accountant","warehouse","client"].includes(p.role))
   return bad("FILE_ARCHIVE_ROLE_FORBIDDEN",403,req);
  const c=await ownedConn(cid,p.organization_id),u=new URL(req.url);
@@ -413,8 +413,11 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    if(folder.shipment_id!==shipment.id||folder.client_id!==shipment.client_id)
     return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
    if(p.role==="client"&&shipment.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
-  }else if(folder.shipment_id!==null||!folder.client_id||!["client","custom"].includes(folder.folder_type)){
-   return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
+  }else{
+   const validOwnedFolder=folder.shipment_id===null&&Boolean(folder.client_id)&&["client","custom"].includes(folder.folder_type);
+   const validUnassignedLegacy=allowUnassignedLegacy&&folder.shipment_id===null&&!folder.client_id
+    &&folder.folder_type==="other"&&folder.display_name==="اسناد نیازمند اتصال به محموله";
+   if(!validOwnedFolder&&!validUnassignedLegacy)return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
   }
   if(p.role==="client"&&folder.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
   let job:any=null;
@@ -794,6 +797,15 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
    const idempotencyKey="customs-os-legacy-archive-v1:"+String(row.id)+":"+hash;
    const folderId=String(row.folder_id||"");
    if(!validId(folderId))throw new Error("FILE_ARCHIVE_FOLDER_INVALID");
+   const isUnassignedLegacy=!row.shipment_id&&!row.client_id;
+   if(isUnassignedLegacy){
+    const {data:sourceFolder,error:sourceFolderError}=await db.from("file_manager_folders")
+     .select("id,organization_id,shipment_id,client_id,folder_type,display_name")
+     .eq("id",folderId).eq("organization_id",organizationId).maybeSingle();
+    if(sourceFolderError||!sourceFolder||sourceFolder.shipment_id!==null||sourceFolder.client_id!==null||
+      sourceFolder.folder_type!=="other"||sourceFolder.display_name!=="اسناد نیازمند اتصال به محموله")
+     throw new Error("LEGACY_UNASSIGNED_FOLDER_NOT_VERIFIED");
+   }
    const tags=[...new Set([...(Array.isArray(row.tags)?row.tags.filter((t:any)=>typeof t==="string"):[]),"آرشیو_قبلی"])].slice(0,8);
    const url=new URL("https://darbandicommercial.ir/api/messenger/uploads/"+String(connection.id));
    url.searchParams.set("chatId",String(destination.external_chat_id));
@@ -810,7 +822,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
    const syntheticRequest=new Request(url.toString(),{method:"POST",headers,body:file.stream()});
    const uploadResponse=await upload(syntheticRequest,{
     id:String(operator.id),organization_id:organizationId,role:String(operator.role),is_active:true,client_id:null
-   } as Profile,String(operator.id),String(connection.id));
+   } as Profile,String(operator.id),String(connection.id),isUnassignedLegacy);
    const responseText=await uploadResponse.text();
    let result:any={};
    try{result=JSON.parse(responseText);}catch{/* Preserve only a sanitized error below. */}
