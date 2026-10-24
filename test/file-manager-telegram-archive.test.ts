@@ -46,6 +46,19 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(gateway).toContain('status:"stored"');
   });
 
+  it('uses content-bound deterministic upload keys across all browser upload flows', () => {
+    expect(fileManagerClient).toContain("crypto.subtle.digest('SHA-256'");
+    expect(fileManagerClient).toContain('input.destination.connectionId');
+    expect(fileManagerClient).toContain('input.folderId');
+    expect(fileManagerClient).toContain("return `customs-os-upload-v1:${keyHash}`");
+    expect(fileManager).toContain('createTelegramArchiveIdempotencyKey(file');
+    expect(shipmentPage).toContain('createTelegramArchiveIdempotencyKey(f');
+    expect(clientDocumentPage).toContain('createTelegramArchiveIdempotencyKey(f');
+    expect(fileManager).not.toContain('uploadKeys.current');
+    expect(shipmentPage).not.toContain('uploadKeys.current');
+    expect(clientDocumentPage).not.toContain('uploadKeys.current');
+  });
+
   it('enforces the Telegram download-size limit while streaming at the server', () => {
     expect(gateway).toContain('maxOverride?:number');
     expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption)');
