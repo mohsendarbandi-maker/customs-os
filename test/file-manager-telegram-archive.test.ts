@@ -101,6 +101,14 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(clientDocumentPage).toContain('نسخه اصلی در آرشیو تلگرام حذف نخواهد شد');
   });
 
+  it('keeps the existing shared-ID document mirror and avoids duplicate search entries', () => {
+    expect(migration).toContain('create or replace function public.sync_shipment_document_to_customs_documents()');
+    expect(migration).toContain('new.storage_backend, new.file_asset_id, new.folder_id');
+    expect(migration).toContain('where sd.id=cd.id and sd.organization_id=cd.organization_id');
+    expect(migration).toContain('where mirror.id = sd.id and mirror.organization_id = sd.organization_id');
+    expect(migration).toContain('fm_file.customs_document_id = cd.id or fm_file.shipment_document_id = cd.id');
+  });
+
   it('registers the page and exposes it from the main navigation', () => {
     expect(app).toContain('path="/file-manager"');
     expect(app).toContain("import('./pages/FileManagerPage')");
