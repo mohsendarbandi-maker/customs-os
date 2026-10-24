@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowRight, CheckCircle2, ChevronLeft, Download, FileText, Folder,
-  FolderOpen, Loader2, RefreshCw, Search, Upload, UploadCloud, X,
+  ArrowRight, CheckCircle2, ChevronDown, ChevronLeft, Copy, ClipboardPaste,
+  Download, Eye, FileText, Folder, FolderOpen, Loader2, MessageCircle,
+  RefreshCw, Search, Upload, UploadCloud, X,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
@@ -14,6 +15,7 @@ import {
   getFileArchiveDestination,
   uploadTelegramArchivedFile,
 } from '../lib/fileManager';
+import { folderToneClass, getFolderSubtreeCounts, isCopyableFolder } from '../lib/fileManagerExplorer';
 
 type FolderRow = {
   id: string;
@@ -95,6 +97,16 @@ export const FileManagerPage: React.FC = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [progress, setProgress] = useState('');
+  const [treeOpen, setTreeOpen] = useState(false);
+  const [uploadPanelOpen, setUploadPanelOpen] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
+  const [folderFileCounts, setFolderFileCounts] = useState<Record<string, number>>({});
+  const [archiveDestination, setArchiveDestination] = useState<{ connectionId:string; chatId:string; displayName:string } | null>(null);
+  const [archiveDestinationStatus, setArchiveDestinationStatus] = useState<'checking'|'ready'|'unavailable'>('checking');
+  const [clipboardFolderId, setClipboardFolderId] = useState<string | null>(null);
+  const [copyingFolder, setCopyingFolder] = useState(false);
+  const [folderCopyAvailable, setFolderCopyAvailable] = useState(false);
+  const [preview, setPreview] = useState<{url:string; name:string; mime:string} | null>(null);
   const directoryInput = useRef<HTMLInputElement | null>(null);
 
   const currentFolder = useMemo(
@@ -106,6 +118,17 @@ export const FileManagerPage: React.FC = () => {
       a.display_name.localeCompare(b.display_name, 'fa')),
     [folders, selectedFolderId],
   );
+  const folderChildrenByParent = useMemo(() => {
+    const index = new Map<string, FolderRow[]>();
+    for (const folder of folders) {
+      if (!folder.parent_id) continue;
+      const list = index.get(folder.parent_id) || [];
+      list.push(folder); index.set(folder.parent_id, list);
+    }
+    for (const list of index.values()) list.sort((a,b) => a.display_name.localeCompare(b.display_name,'fa'));
+    return index;
+  }, [folders]);
+  const folderDescendantCounts = useMemo(() => getFolderSubtreeCounts(folders, folderFileCounts), [folders, folderFileCounts]);
   const breadcrumbs = useMemo(() => {
     const result: FolderRow[] = [];
     let cursor = currentFolder;
@@ -131,6 +154,17 @@ export const FileManagerPage: React.FC = () => {
       if (folderError) throw folderError;
       const rows = (data || []) as FolderRow[];
       setFolders(rows);
+      try {
+        const counts: Record<string,number> = {};
+        for (let offset=0; ; offset+=500) {
+          const {data:fileRows,error:countError}=await supabase.from('file_manager_files').select('id,folder_id')
+            .eq('organization_id',organizationId).eq('is_archived',false).order('id',{ascending:true}).range(offset,offset+499);
+          if(countError) throw countError;
+          for(const row of fileRows||[]) counts[row.folder_id]=(counts[row.folder_id]||0)+1;
+          if((fileRows||[]).length<500) break;
+        }
+        setFolderFileCounts(counts);
+      } catch { setFolderFileCounts({}); }
       const requestedFolder = initialRoute.current.folderId;
       const requestedShipment = initialRoute.current.shipmentId;
       const requested =
@@ -139,6 +173,11 @@ export const FileManagerPage: React.FC = () => {
         rows.find((folder) => folder.parent_id === null && folder.folder_key === 'owners-root') ||
         rows[0] || null;
       setSelectedFolderId((previous) => rows.some((folder) => folder.id === previous) ? previous : requested?.id || '');
+      if(requested){
+        const expand=new Set<string>(); let cursor:FolderRow|undefined=requested; let hops=0;
+        while(cursor&&hops<30){if(rows.some(folder=>folder.parent_id===cursor!.id))expand.add(cursor.id);cursor=cursor.parent_id?rows.find(folder=>folder.id===cursor!.parent_id):undefined;hops++;}
+        setExpandedFolders(old=>new Set([...old,...expand]));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'دریافت ساختار پوشه‌ها ناموفق بود.');
     } finally {
@@ -163,7 +202,29 @@ export const FileManagerPage: React.FC = () => {
   }, [organizationId]);
 
   useEffect(() => { void loadFolders(); }, [loadFolders]);
-  useEffect(() => { if (selectedFolderId) setParams((previous) => { const next = new URLSearchParams(previous); next.set('folderId', selectedFolderId); return next; }, { replace: true }); }, [selectedFolderId, setParams]);
+  useEffect(() => {
+    if(!folders.length) return;
+    const routeFolder=params.get('folderId');
+    if(routeFolder&&folders.some(folder=>folder.id===routeFolder)&&routeFolder!==selectedFolderId)setSelectedFolderId(routeFolder);
+  },[params,folders,selectedFolderId]);
+  useEffect(() => {
+    let cancelled=false;
+    void getFileArchiveDestination().then(destination=>{if(!cancelled){setArchiveDestination(destination);setArchiveDestinationStatus('ready');}})
+      .catch(()=>{if(!cancelled){setArchiveDestination(null);setArchiveDestinationStatus('unavailable');}});
+    return ()=>{cancelled=true;};
+  },[]);
+  useEffect(() => {
+    let cancelled=false;
+    void (async()=>{
+      try {
+        const {error:rpcError}=await supabase.rpc('copy_file_manager_folder',{p_source_folder_id:null,p_target_parent_id:null,p_new_display_name:null});
+        if(!cancelled)setFolderCopyAvailable(Boolean(rpcError&&rpcError.message.includes('FILE_MANAGER_COPY_INVALID_INPUT')));
+      } catch {
+        if(!cancelled)setFolderCopyAvailable(false);
+      }
+    })();
+    return ()=>{cancelled=true;};
+  },[]);
   useEffect(() => {
     if (!selectedFolderId) return;
     let cancelled = false;
@@ -200,16 +261,13 @@ export const FileManagerPage: React.FC = () => {
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [query]);
 
-  const chooseFolder = (folder: FolderRow) => {
+  const chooseFolder = (folder:FolderRow) => {
     setSelectedFolderId(folder.id);
-    setQuery('');
-    setHits([]);
-    setError('');
-    setMessage('');
-    const next = new URLSearchParams(params);
-    next.set('folderId', folder.id);
-    if (folder.shipment_id) next.set('shipmentId', folder.shipment_id);
-    setParams(next, { replace: true });
+    setExpandedFolders(previous=>{const next=new Set(previous);next.add(folder.id);let c:FolderRow|undefined=folder;let n=0;while(c&&n<30){if(c.parent_id)next.add(c.parent_id);c=c.parent_id?folders.find(item=>item.id===c!.parent_id):undefined;n++;}return next;});
+    setTreeOpen(false);setQuery('');setHits([]);setError('');setMessage('');
+    const next=new URLSearchParams(params);next.set('folderId',folder.id);
+    if(folder.shipment_id)next.set('shipmentId',folder.shipment_id);else next.delete('shipmentId');
+    setParams(next);
   };
 
   const getUploadTarget = async () => {
@@ -303,7 +361,7 @@ export const FileManagerPage: React.FC = () => {
       await loadFolders();
       if (currentFolder?.folder_type === 'shipment') setSelectedFolderId(target.id);
       await loadFiles(currentFolder?.folder_type === 'shipment' ? target.id : selectedFolderId);
-      setMessage(`${completed} فایل در تلگرام ذخیره و در پوشه انتخاب‌شده ثبت شد.`);
+      setMessage(completed + ' فایل به گفت‌وگوی تلگرام «' + destination.displayName + '» ارسال شد و در همین پوشه ثبت شد. برای یافتن، نام فایل یا برچسب را در همان گفتگو جست‌وجو کنید.');
       setPendingFiles([]);
       setProgress('');
     } catch (e) {
@@ -348,6 +406,8 @@ export const FileManagerPage: React.FC = () => {
   };
 
   const getFileBlob = async (file: FileRow): Promise<Blob> => {
+    const copyAliasAssetId = typeof file.metadata?.copyAliasFileAssetId === 'string' ? file.metadata.copyAliasFileAssetId : '';
+    if (copyAliasAssetId) return downloadTelegramArchivedFile(copyAliasAssetId);
     if (file.file_asset_id) return downloadTelegramArchivedFile(file.file_asset_id);
     if (file.storage_path) {
       const { data, error: storageError } = await supabase.storage.from('customs_documents').download(file.storage_path);
@@ -357,15 +417,43 @@ export const FileManagerPage: React.FC = () => {
     throw new Error('مسیر بازیابی فایل ثبت نشده است.');
   };
 
-  const downloadFile = async (file: FileRow) => {
+  const downloadFile = async (file:FileRow) => {
     setError('');
-    try {
-      const blob = await getFileBlob(file);
-      saveBlob(blob, file.original_name || 'document.bin');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'دریافت فایل ناموفق بود.');
-    }
+    try {const blob=await getFileBlob(file);saveBlob(blob,file.original_name||'document.bin');}
+    catch(e){setError(e instanceof Error?e.message:'دریافت فایل ناموفق بود.');}
   };
+  const previewDocument=async(file:FileRow)=>{
+    const mime=(file.mime_type||'').toLowerCase();
+    if(!(mime.startsWith('image/')||mime==='application/pdf'||mime==='text/plain')){setError('پیش‌نمایش این نوع فایل پشتیبانی نمی‌شود؛ از دانلود استفاده کنید.');return;}
+    setError('');
+    try{const blob=await getFileBlob(file);setPreview({url:URL.createObjectURL(blob),name:file.original_name||'document.bin',mime});}
+    catch(e){setError(e instanceof Error?e.message:'نمایش فایل ناموفق بود.');}
+  };
+  const copyFileNameForTelegram=async(name:string)=>{
+    try{await navigator.clipboard.writeText(name);setMessage('نام فایل کپی شد؛ آن را در گفت‌وگوی آرشیو تلگرام جست‌وجو کنید.');}
+    catch{setError('کپی نام فایل پشتیبانی نمی‌شود؛ نام را دستی انتخاب کنید.');}
+  };
+  const beginCopyFolder=(folder:FolderRow)=>{
+    if(!isCopyableFolder(folder)){setError('پوشه‌های ریشه، صاحب کالا و محموله کپی نمی‌شوند.');return;}
+    if(!folderCopyAvailable){setError('کپی کامل پوشه نیازمند migration دیتابیس است؛ فعلاً هیچ فایلی تغییر نکرد.');return;}
+    setClipboardFolderId(folder.id);setError('');setMessage('پوشه برای کپی انتخاب شد؛ مقصد را باز کنید و «چسباندن پوشه» را بزنید.');
+  };
+  const pasteCopiedFolder=async()=>{
+    if(!clipboardFolderId||!currentFolder||currentFolder.folder_type==='root')return;
+    setCopyingFolder(true);setError('');setMessage('');
+    try{
+      const {data,error:copyError}=await supabase.rpc('copy_file_manager_folder',{p_source_folder_id:clipboardFolderId,p_target_parent_id:currentFolder.id,p_new_display_name:null});
+      if(copyError)throw copyError;
+      const newId=typeof data==='string'?data:(Array.isArray(data)?data[0]?.copy_file_manager_folder:null);
+      if(!newId)throw new Error('شناسه پوشهٔ کپی‌شده دریافت نشد.');
+      await loadFolders();const next=new URLSearchParams(params);next.set('folderId',newId);next.delete('shipmentId');setParams(next);setSelectedFolderId(newId);
+      setMessage('ساختار پوشه کپی شد؛ فایل اصلی در تلگرام/Storage دوباره آپلود یا حذف نشد.');
+    }catch(e){
+      const m=e instanceof Error?e.message:String(e);
+      setError(m.includes('FILE_MANAGER_COPY_SCOPE_MISMATCH')?'فقط در همان صاحب کالا/محموله کپی کنید تا مالکیت تغییر نکند.':m.includes('PGRST202')||m.toLowerCase().includes('schema cache')?'قابلیت کپی هنوز در دیتابیس فعال نیست؛ هیچ فایلی تغییر نکرد.':m);
+    }finally{setCopyingFolder(false);await loadFolders().catch(()=>undefined);}
+  };
+  useEffect(()=>()=>{if(preview?.url)URL.revokeObjectURL(preview.url);},[preview?.url]);
 
   const exportFolderToWindows = async () => {
     if (!currentFolder) return;
@@ -646,6 +734,20 @@ export const FileManagerPage: React.FC = () => {
     else setError('برای این نتیجه هنوز پوشه مرتبط ثبت نشده است.');
   };
 
+  const toggleFolderExpansion=(id:string)=>setExpandedFolders(previous=>{const next=new Set(previous);if(next.has(id))next.delete(id);else next.add(id);return next;});
+  const renderFolderNode=(folder:FolderRow,depth=0):React.ReactNode=>{
+    const children=folderChildrenByParent.get(folder.id)||[],expanded=expandedFolders.has(folder.id),count=folderDescendantCounts[folder.id]||0,selected=selectedFolderId===folder.id;
+    return <div key={folder.id} className="select-none">
+      <div className={'flex items-center gap-1 rounded-lg '+(selected?'bg-[var(--primary)]/10':'hover:bg-[var(--surface-2)]')} style={{paddingInlineStart:depth*12}}>
+        <button type="button" onClick={()=>toggleFolderExpansion(folder.id)} disabled={!children.length} aria-expanded={expanded} aria-label={expanded?'بستن زیرپوشه‌ها':'بازکردن زیرپوشه‌ها'} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md app-muted disabled:opacity-20">{children.length?(expanded?<ChevronDown size={14}/>:<ChevronLeft size={14}/>):<span className="h-1 w-1 rounded-full bg-[var(--border)]"/>}</button>
+        <button type="button" onClick={()=>chooseFolder(folder)} title={folder.display_name} className={'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-right text-sm '+(selected?'font-bold text-[var(--primary)]':'')}>
+          <span className={'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={16}/>:<Folder size={16}/>}</span>
+          <span className="min-w-0 flex-1 truncate">{folder.display_name}</span>{count>0&&<span className="rounded-full bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px]">{count}</span>}
+        </button>
+      </div>
+      {expanded&&children.map(child=>renderFolderNode(child,depth+1))}
+    </div>;
+  };
   const uploadEnabled = Boolean(currentFolder && (currentFolder.shipment_id || (currentFolder.client_id && ['client', 'custom'].includes(currentFolder.folder_type))));
   const directoryProps = { webkitdirectory: '', directory: '' } as any;
 
@@ -667,6 +769,19 @@ export const FileManagerPage: React.FC = () => {
         </div>
       </header>
 
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border app-border bg-[var(--surface)] px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600"><MessageCircle size={18}/></span>
+          <div className="min-w-0">
+            <div className="text-sm font-bold">مقصد آرشیو تلگرام: {archiveDestinationStatus==='checking'?'در حال بررسی…':archiveDestination?.displayName||'در دسترس نیست'}</div>
+            <p className="mt-0.5 text-xs app-muted">فایل‌های جدید به همین گفتگو می‌روند؛ در تلگرام نام فایل یا برچسب را در همان گفتگو جست‌وجو کنید.</p>
+          </div>
+        </div>
+        {['owner','admin'].includes(role)&&<Link to="/settings/messengers" className="shrink-0 rounded-lg border app-border px-3 py-2 text-xs">تنظیم مقصد</Link>}
+        {archiveDestinationStatus==='unavailable'&&<span className="text-xs text-amber-600">مقصد فعال پیدا نشد</span>}
+      </section>
+      <p className="text-xs app-muted">اسناد قدیمی با برچسب «بایگانی قبلی وب‌سایت» خودکار به تلگرام منتقل نمی‌شوند؛ فقط فایل‌هایی که از مسیر آرشیو تلگرام آپلود شوند در آن گفتگو ظاهر می‌شوند.</p>
+
       <section className="rounded-2xl border app-border bg-[var(--surface)] p-3">
         <label className="relative block">
           <Search size={18} className="absolute right-3 top-3.5 app-muted" />
@@ -686,90 +801,54 @@ export const FileManagerPage: React.FC = () => {
       {message && <div className="flex items-start gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm"><CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-500" /><span>{message}</span></div>}
       {progress && <div className="flex items-center gap-2 rounded-xl border app-border p-3 text-sm app-muted"><Loader2 size={16} className="animate-spin" />{progress}</div>}
 
-      <section className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="rounded-2xl border app-border bg-[var(--surface)] p-3">
-          <div className="flex items-center justify-between px-2 pb-2"><h2 className="font-black">ساختار پوشه‌ها</h2><span className="text-xs app-muted">{folders.length}</span></div>
-          {folders.filter((folder) => folder.folder_type === 'root').map((root) => <div key={root.id} className="mb-1">
-            <button type="button" onClick={() => chooseFolder(root)} className={`flex w-full items-center gap-2 rounded-xl p-3 text-right font-bold ${selectedFolderId === root.id ? 'bg-[var(--primary)]/10 text-[var(--primary)]' : 'hover:bg-[var(--surface-2)]'}`}><FolderOpen size={17} />{root.display_name}</button>
-            {folders.filter((child) => child.parent_id === root.id).map((client) => <div key={client.id} className="mr-3">
-              <button type="button" onClick={() => chooseFolder(client)} className={`flex w-full items-center gap-2 rounded-xl p-2.5 text-right text-sm ${selectedFolderId === client.id ? 'bg-[var(--primary)]/10 text-[var(--primary)]' : 'hover:bg-[var(--surface-2)]'}`}><Folder size={15} /> <span className="truncate">{client.display_name}</span></button>
-              {folders.filter((child) => child.parent_id === client.id).map((shipment) => <button key={shipment.id} type="button" onClick={() => chooseFolder(shipment)} className={`mr-3 flex w-[calc(100%-0.75rem)] items-start gap-2 rounded-xl p-2.5 text-right text-xs ${selectedFolderId === shipment.id ? 'bg-[var(--primary)]/10 text-[var(--primary)]' : 'hover:bg-[var(--surface-2)]'}`}><FolderOpen size={14} className="mt-0.5 shrink-0" /><span className="line-clamp-2">{shipment.display_name}</span></button>)}
-            </div>)}
-          </div>)}
-          {!folders.length && <div className="p-6 text-center text-sm app-muted">ساختار پوشه هنوز بارگذاری نشده است.</div>}
+      <section className="grid items-start gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
+        <aside className={(treeOpen?'block':'hidden')+' lg:block overflow-y-auto rounded-2xl border app-border bg-[var(--surface)] p-3 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-10rem)]'}>
+          <div className="mb-2 flex items-center justify-between gap-2 px-1"><h2 className="font-black">پوشه‌ها</h2><span className="text-xs app-muted">{folders.length} پوشه</span></div>
+          <div className="space-y-0.5">{folders.filter(folder=>folder.parent_id===null).map(root=>renderFolderNode(root))}
+            {!folders.length&&<div className="p-5 text-center text-sm app-muted">ساختار پوشه هنوز بارگذاری نشده است.</div>}
+          </div>
+          <div className="mt-3 border-t app-border pt-3 text-[11px] app-muted">رنگ، نوع پوشه را مشخص می‌کند؛ عدد کنار پوشه یعنی در آن یا زیرپوشه‌هایش سند فعال وجود دارد.</div>
         </aside>
-
-        <section className="min-w-0 rounded-2xl border app-border bg-[var(--surface)]">
-          <div className="border-b app-border p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-1 text-xs app-muted">
-                  {breadcrumbs.map((crumb, index) => <React.Fragment key={crumb.id}>
-                    {index > 0 && <ChevronLeft size={13} />}
-                    <button type="button" onClick={() => chooseFolder(crumb)} className={index === breadcrumbs.length - 1 ? 'font-bold text-[var(--text)]' : 'hover:text-[var(--primary)]'}>{crumb.display_name}</button>
-                  </React.Fragment>)}
-                </div>
-                <h2 className="mt-2 truncate text-lg font-black">{currentFolder?.display_name || 'فایل‌منیجر'}</h2>
-                <p className="mt-1 text-xs app-muted">{currentFolder?.folder_type === 'shipment' ? 'محموله · برای دسته‌بندی دقیق، وارد یکی از زیرپوشه‌ها شوید.' : currentFolder?.shipment_id ? 'پوشه اسناد محموله' : currentFolder?.client_id ? 'اسناد ثابت صاحب کالا و شرکت' : 'پوشه سازمانی'}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => void syncWindowsFolder()} disabled={!currentFolder || syncing || exporting || uploading || loading} className="rounded-xl border app-border px-3 py-2 text-sm disabled:opacity-50">{syncing ? <Loader2 size={15} className="ml-1 inline animate-spin" /> : <RefreshCw size={15} className="ml-1 inline" />}همگام‌سازی دوطرفه ویندوز</button>
-                <button type="button" onClick={() => void exportFolderToWindows()} disabled={!currentFolder || exporting || syncing || loading} className="rounded-xl border app-border px-3 py-2 text-sm disabled:opacity-50"><Download size={15} className="ml-1 inline" />انتقال پوشه به ویندوز</button>
-                {uploadEnabled && roleCanModifyStructure(role) && <form onSubmit={(e) => { e.preventDefault(); void createFolder(); }} className="flex gap-1">
-                  <input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="نام زیرپوشه" className="w-32 rounded-xl border app-border bg-[var(--surface-2)] px-2 py-2 text-sm" />
-                  <button type="submit" disabled={creatingFolder || !folderName.trim()} className="rounded-xl border app-border px-3 py-2 text-sm disabled:opacity-50">{creatingFolder ? <Loader2 size={15} className="animate-spin" /> : 'ساخت پوشه'}</button>
-                </form>}
+        <section className="flex min-w-0 max-h-[calc(100dvh-15rem)] min-h-[380px] flex-col overflow-hidden rounded-2xl border app-border bg-[var(--surface)]">
+          <div className="shrink-0 border-b app-border p-3 md:p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <button type="button" onClick={()=>setTreeOpen(v=>!v)} className="rounded-lg border app-border px-2.5 py-1.5 text-xs lg:hidden">{treeOpen?'بستن فهرست':'فهرست پوشه‌ها'}</button>
+              <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs app-muted">{breadcrumbs.map((crumb,i)=><React.Fragment key={crumb.id}>{i>0&&<ChevronLeft size={13}/>}<button type="button" onClick={()=>chooseFolder(crumb)} className={i===breadcrumbs.length-1?'max-w-32 truncate font-bold text-[var(--text)]':'max-w-24 truncate hover:text-[var(--primary)]'}>{crumb.display_name}</button></React.Fragment>)}</div>
+              <span className="shrink-0 text-[10px] app-muted">{loading?'در حال بارگذاری…':'نمای پوشه'}</span>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 flex-1"><h2 className="truncate text-lg font-black">{currentFolder?.display_name||'فایل‌منیجر'}</h2><p className="mt-1 text-xs app-muted">{currentFolder?.folder_type==='shipment'?'محموله':currentFolder?.folder_type==='accounting_finance'?'حسابداری مالی':currentFolder?.client_id?'اسناد صاحب کالا':'پوشه سازمانی'}</p></div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button type="button" onClick={()=>setUploadPanelOpen(v=>!v)} disabled={!currentFolder} className="rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><UploadCloud size={14} className="ml-1 inline"/>{uploadPanelOpen?'بستن آپلود':'آپلود فایل'}</button>
+                {currentFolder&&isCopyableFolder(currentFolder)&&<button type="button" onClick={()=>beginCopyFolder(currentFolder)} disabled={!folderCopyAvailable||copyingFolder} title={folderCopyAvailable?'کپی پوشه همراه با زیرپوشه‌ها':'برای کپی کامل، migration دیتابیس لازم است'} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-40"><Copy size={14} className="ml-1 inline"/>کپی</button>}
+                {clipboardFolderId&&<button type="button" onClick={()=>void pasteCopiedFolder()} disabled={!folderCopyAvailable||copyingFolder||!currentFolder||currentFolder.folder_type==='root'} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-40">{copyingFolder?<Loader2 size={14} className="ml-1 inline animate-spin"/>:<ClipboardPaste size={14} className="ml-1 inline"/>}چسباندن</button>}
+                <button type="button" onClick={()=>void syncWindowsFolder()} disabled={!currentFolder||syncing||exporting||uploading||loading} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-50">{syncing?<Loader2 size={14} className="ml-1 inline animate-spin"/>:<RefreshCw size={14} className="ml-1 inline"/>}همگام‌سازی ویندوز</button>
+                <button type="button" onClick={()=>void exportFolderToWindows()} disabled={!currentFolder||exporting||syncing||loading} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-50"><Download size={14} className="ml-1 inline"/>خروجی پوشه</button>
+                {uploadEnabled&&roleCanModifyStructure(role)&&<form onSubmit={e=>{e.preventDefault();void createFolder();}} className="flex gap-1"><input value={folderName} onChange={e=>setFolderName(e.target.value)} placeholder="نام زیرپوشه" aria-label="نام زیرپوشه جدید" className="w-28 rounded-lg border app-border bg-[var(--surface-2)] px-2 py-2 text-xs"/><button type="submit" disabled={creatingFolder||!folderName.trim()} className="rounded-lg border app-border px-2.5 py-2 text-xs disabled:opacity-50">{creatingFolder?<Loader2 size={14} className="animate-spin"/>:'ساخت پوشه'}</button></form>}
               </div>
             </div>
           </div>
-
-          {currentFolder && <div className="border-b app-border p-4">
+          {currentFolder&&uploadPanelOpen&&<div className="max-h-64 shrink-0 overflow-y-auto border-b app-border p-3 md:p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-bold text-white">
-                <UploadCloud size={16} /> انتخاب فایل
-                <input type="file" multiple className="hidden" disabled={!uploadEnabled || uploading || syncing} onChange={(e) => { setPendingFiles((old) => [...old, ...Array.from(e.target.files || [])]); e.currentTarget.value = ''; }} />
-              </label>
-              <button type="button" onClick={() => directoryInput.current?.click()} disabled={!uploadEnabled || uploading} className="flex items-center gap-2 rounded-xl border app-border px-4 py-2.5 text-sm disabled:opacity-40"><FolderOpen size={16} />انتخاب پوشه ویندوز</button>
-              <input ref={directoryInput} {...directoryProps} type="file" multiple className="hidden" disabled={!uploadEnabled || uploading} onChange={(e) => { setPendingFiles((old) => [...old, ...Array.from(e.target.files || [])]); e.currentTarget.value = ''; }} />
-              <span className="text-xs app-muted">هر فایل حداکثر ۲۰ مگابایت؛ فایل اصلی مستقیماً به آرشیو تلگرام می‌رود.</span>
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-bold text-white"><UploadCloud size={16}/>انتخاب فایل<input type="file" multiple className="hidden" disabled={!uploadEnabled||uploading||syncing} onChange={e=>{setPendingFiles(old=>[...old,...Array.from(e.target.files||[])]);e.currentTarget.value='';}}/></label>
+              <button type="button" onClick={()=>directoryInput.current?.click()} disabled={!uploadEnabled||uploading} className="flex items-center gap-2 rounded-xl border app-border px-4 py-2.5 text-sm disabled:opacity-40"><FolderOpen size={16}/>انتخاب پوشه ویندوز</button>
+              <input ref={directoryInput} {...directoryProps} type="file" multiple className="hidden" disabled={!uploadEnabled||uploading} onChange={e=>{setPendingFiles(old=>[...old,...Array.from(e.target.files||[])]);e.currentTarget.value='';}}/>
+              <span className="text-xs app-muted">حداکثر ۲۰ مگابایت برای بازیابی از Bot API فعلی تلگرام.</span>
             </div>
-            <label className="mt-3 block">
-              <span className="mb-1 block text-xs font-bold app-muted">برچسب‌های سند (با ویرگول جدا کنید)</span>
-              <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} disabled={uploading}
-                placeholder="مثلاً: فاکتور، قبض انبار، بیمه، گواهی مبدأ"
-                className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2 text-sm" />
-              <span className="mt-1 block text-[10px] app-muted">حداکثر ۲۰ برچسب؛ برای جست‌وجوی سریع روی نام و فرادادهٔ سند هم اثر می‌گذارد.</span>
-            </label>
-            {pendingFiles.length > 0 && <div className="mt-3 rounded-xl border app-border bg-[var(--surface-2)] p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2"><b className="text-sm">{pendingFiles.length} فایل در صف</b><button type="button" onClick={() => setPendingFiles([])} disabled={uploading} className="text-xs app-muted underline">پاک‌کردن صف</button></div>
-              <div className="mt-2 max-h-36 space-y-1 overflow-auto">{pendingFiles.slice(0, 40).map((file, index) => <div key={file.name + file.size + file.lastModified + index} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate">{(file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name}</span><span className="shrink-0 app-muted">{byteLabel(file.size)}</span></div>)}{pendingFiles.length > 40 && <div className="text-xs app-muted">و {pendingFiles.length - 40} فایل دیگر…</div>}</div>
-              <button type="button" onClick={() => void archiveFiles()} disabled={uploading} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}آپلود در تلگرام و ثبت فراداده</button>
-            </div>}
-            {!uploadEnabled && <p className="mt-2 text-xs app-muted">برای آپلود، پوشه صاحب کالا یا محموله را انتخاب کنید.</p>}
+            <label className="mt-3 block"><span className="mb-1 block text-xs font-bold app-muted">برچسب‌های قابل جست‌وجو در تلگرام</span><input value={tagInput} onChange={e=>setTagInput(e.target.value)} disabled={uploading} placeholder="فاکتور، قبض انبار، بیمه…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2 text-sm"/><span className="mt-1 block text-[10px] app-muted">با ویرگول جدا کنید؛ برچسب‌ها در سایت و کپشن تلگرام ثبت می‌شوند.</span></label>
+            {pendingFiles.length>0&&<div className="mt-3 rounded-xl border app-border bg-[var(--surface-2)] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><b className="text-sm">{pendingFiles.length} فایل در صف</b><button type="button" onClick={()=>setPendingFiles([])} disabled={uploading} className="text-xs app-muted underline">پاک‌کردن صف</button></div><div className="mt-2 max-h-28 space-y-1 overflow-auto">{pendingFiles.slice(0,40).map((file,index)=><div key={file.name+file.size+file.lastModified+index} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate">{(file as File&{webkitRelativePath?:string}).webkitRelativePath||file.name}</span><span className="shrink-0 app-muted">{byteLabel(file.size)}</span></div>)}{pendingFiles.length>40&&<div className="text-xs app-muted">و {pendingFiles.length-40} فایل دیگر…</div>}</div><button type="button" onClick={()=>void archiveFiles()} disabled={uploading} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{uploading?<Loader2 size={16} className="animate-spin"/>:<Upload size={16}/>}ارسال به آرشیو تلگرام و ثبت فراداده</button></div>}
+            {!uploadEnabled&&<p className="mt-2 text-xs app-muted">برای آپلود، پوشه صاحب کالا یا محموله را انتخاب کنید.</p>}
           </div>}
-
-          <div className="p-4">
-            {childFolders.length > 0 && <div className="mb-5">
-              <h3 className="mb-2 text-xs font-bold app-muted">پوشه‌ها ({childFolders.length})</h3>
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map((folder) => <button type="button" key={folder.id} onClick={() => chooseFolder(folder)} className="flex min-w-0 items-center gap-3 rounded-xl border app-border p-3 text-right hover:bg-[var(--surface-2)]">
-                <FolderOpen size={22} className="shrink-0 text-[var(--primary)]" />
-                <span className="min-w-0"><span className="block truncate text-sm font-bold">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type === 'accounting_finance' ? 'پوشه حسابداری مالی' : folder.is_system ? 'پوشه پیش‌فرض' : 'پوشه سفارشی'}</span></span>
-              </button>)}</div>
-            </div>}
-            <div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-bold app-muted">اسناد این پوشه ({files.length})</h3>{loading && <Loader2 size={15} className="animate-spin app-muted" />}</div>
-            {files.length === 0 ? <div className="rounded-xl border border-dashed app-border p-8 text-center text-sm app-muted">در این پوشه سندی وجود ندارد.</div> : <div className="space-y-2">{files.map((file) => {
-              const isTelegram = Boolean(file.file_asset_id);
-              const displayName = typeof file.metadata?.documentName === 'string' ? file.metadata.documentName : file.original_name;
-              const tags = Array.isArray(file.tags) ? file.tags.slice(0, 6) : [];
-              return <div key={file.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border app-border p-3">
-                <div className="flex min-w-0 items-center gap-3"><FileText size={20} className="shrink-0 text-[var(--primary)]" /><div className="min-w-0"><div className="truncate text-sm font-bold">{displayName}</div>{displayName !== file.original_name && <div className="mt-0.5 truncate text-[10px] app-muted">فایل اصلی: {file.original_name}</div>}{tags.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{tags.map((tag) => <span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span>{byteLabel(file.size_bytes)}</span><span>·</span><span>{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><span>·</span><span className={isTelegram ? 'text-emerald-600' : 'text-amber-600'}>{isTelegram ? 'آرشیو تلگرام' : 'بایگانی قبلی وب‌سایت'}</span></div></div></div>
-                <button type="button" onClick={() => void downloadFile(file)} className="rounded-lg border app-border px-3 py-2 text-xs"><Download size={14} className="ml-1 inline" />دانلود</button>
-              </div>;
-            })}</div>}
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b app-border px-3 py-2.5 text-xs"><b className="truncate">{currentFolder?.display_name||'پوشه'} · {files.length} سند</b><span>{childFolders.length} زیرپوشه</span></div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3 md:p-4">
+            {childFolders.length>0&&<div className="mb-4"><div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-xs font-bold app-muted">پوشه‌ها</h3><span className="text-[10px] app-muted">برای ورود کلیک کنید</span></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 rounded-xl border app-border p-1.5 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold" title={folder.display_name}>{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'پوشه پیش‌فرض':'پوشه سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی پوشه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
+            {files.length>0&&<div className="overflow-hidden rounded-xl border app-border"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
+            {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این پوشه خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
           </div>
         </section>
       </section>
-      <p className="text-xs app-muted">فایل‌های جدید بدون OCR، استخراج محتوا یا اسکن امنیتی محتوا ذخیره می‌شوند؛ کنترل دسترسی و جداسازی سازمانی حفظ می‌شود. «انتقال پوشه به ویندوز» و آپلود پوشه، انتقال دستی هستند و در این نسخه، همگام‌سازی دائمی پس‌زمینه نیستند.</p>
+      <p className="text-xs app-muted">فایل‌های جدید بدون OCR یا استخراج محتوا ارسال می‌شوند؛ کنترل دسترسی و جداسازی سازمانی حفظ می‌شود. همگام‌سازی ویندوز دستی است و در پس‌زمینه اجرا نمی‌شود.</p>
+      {preview&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3" role="dialog" aria-modal="true" aria-label={'پیش‌نمایش '+preview.name}><section className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border app-border bg-[var(--surface)] shadow-2xl"><header className="flex shrink-0 items-center justify-between gap-3 border-b app-border px-4 py-3"><b className="min-w-0 truncate text-sm">{preview.name}</b><button type="button" onClick={()=>setPreview(null)} className="rounded-lg border app-border p-2" aria-label="بستن پیش‌نمایش"><X size={17}/></button></header><div className="min-h-0 flex-1 overflow-auto p-2">{preview.mime.startsWith('image/')?<img src={preview.url} alt={preview.name} className="mx-auto max-h-[82dvh] max-w-full object-contain"/>:preview.mime==='application/pdf'?<iframe src={preview.url} title={preview.name} className="h-[82dvh] w-full rounded-lg bg-white"/>:<iframe src={preview.url} title={preview.name} sandbox="" className="h-[82dvh] w-full rounded-lg bg-white"/>}</div></section></div>}
     </div>
   </main>;
 };
