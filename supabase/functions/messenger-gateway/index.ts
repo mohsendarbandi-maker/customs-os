@@ -266,7 +266,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
     "Tag tokens: "+(telegramTagTokens.join(" ")||"-")
    ].join("\n").slice(0,950);
    const assetMetadata={
-    archiveMode:"telegram_file_archive",folderId:folder.id,folderName:currentFolderName,
+    archiveMode:"telegram_file_archive",documentName:displayName,originalName:name,folderId:folder.id,folderName:currentFolderName,
     shipmentFolderName,ownerName,folderType:folder.folder_type,parentFolderId:folder.parent_id||null,
     clientId:folder.client_id||null,shipmentId:shipment?.id||null,customsOfficeId:officeId,
     archiveTags,telegramTagTokens,telegramCaption:archiveCaption
