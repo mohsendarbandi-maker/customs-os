@@ -140,6 +140,40 @@ grant select, insert, update, delete on public.file_manager_folders to authentic
 grant select on public.file_manager_files to authenticated;
 grant all on public.file_manager_folders, public.file_manager_files to service_role;
 
+create or replace function public.validate_custom_file_manager_folder_parent()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $
+declare
+  v_parent record;
+begin
+  if new.folder_type <> 'custom' then
+    return new;
+  end if;
+
+  select f.organization_id, f.shipment_id, f.client_id
+    into v_parent
+  from public.file_manager_folders f
+  where f.id = new.parent_id;
+
+  if v_parent.organization_id is distinct from new.organization_id
+     or v_parent.shipment_id is distinct from new.shipment_id
+     or v_parent.client_id is distinct from new.client_id then
+    raise exception 'FILE_MANAGER_CUSTOM_FOLDER_PARENT_MISMATCH';
+  end if;
+
+  return new;
+end;
+$;
+
+revoke all on function public.validate_custom_file_manager_folder_parent() from public, anon, authenticated;
+drop trigger if exists trg_validate_custom_file_manager_folder_parent on public.file_manager_folders;
+create trigger trg_validate_custom_file_manager_folder_parent
+before insert or update of parent_id, client_id, shipment_id, folder_type, organization_id
+on public.file_manager_folders
+for each row execute function public.validate_custom_file_manager_folder_parent();
+
 drop policy if exists file_manager_folders_select on public.file_manager_folders;
 create policy file_manager_folders_select on public.file_manager_folders
   for select to authenticated
@@ -158,6 +192,10 @@ create policy file_manager_folders_insert on public.file_manager_folders
   with check (
     organization_id = public.user_org_id()
     and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse')
+    and folder_type = 'custom'
+    and is_system = false
+    and parent_id is not null
+    and (shipment_id is not null or client_id is not null)
   );
 
 drop policy if exists file_manager_folders_update on public.file_manager_folders;
@@ -651,6 +689,9 @@ update public.shipment_documents set file_manager_search_text = file_manager_sea
 update public.customs_documents set file_manager_search_text = file_manager_search_text;
 
 -- Backfill only the logical tree for existing shipments. No existing file bytes or rows move.
+select public.ensure_client_file_manager_folder(c.id)
+from public.clients c;
+
 select public.ensure_shipment_file_manager_folders(s.id)
 from public.shipments s
 where s.client_id is not null;
