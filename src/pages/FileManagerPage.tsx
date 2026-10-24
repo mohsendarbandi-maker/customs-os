@@ -88,6 +88,8 @@ export const FileManagerPage: React.FC = () => {
   const [exporting, setExporting] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
+  const [tagInput, setTagInput] = useState('');
+  const uploadTags = useMemo(() => [...new Set(tagInput.split(',').map((tag) => tag.trim()).filter(Boolean))].slice(0, 20), [tagInput]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [progress, setProgress] = useState('');
@@ -283,6 +285,7 @@ export const FileManagerPage: React.FC = () => {
           folderId: parent.id,
           ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
           documentType: parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG',
+          tags: uploadTags,
           destination,
           idempotencyKey,
         });
@@ -504,6 +507,13 @@ export const FileManagerPage: React.FC = () => {
               <input ref={directoryInput} {...directoryProps} type="file" multiple className="hidden" disabled={!uploadEnabled || uploading} onChange={(e) => { setPendingFiles((old) => [...old, ...Array.from(e.target.files || [])]); e.currentTarget.value = ''; }} />
               <span className="text-xs app-muted">هر فایل حداکثر ۲۰ مگابایت؛ فایل اصلی مستقیماً به آرشیو تلگرام می‌رود.</span>
             </div>
+            <label className="mt-3 block">
+              <span className="mb-1 block text-xs font-bold app-muted">برچسب‌های سند (با ویرگول جدا کنید)</span>
+              <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} disabled={uploading}
+                placeholder="مثلاً: فاکتور، قبض انبار، بیمه، گواهی مبدأ"
+                className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2 text-sm" />
+              <span className="mt-1 block text-[10px] app-muted">حداکثر ۲۰ برچسب؛ برای جست‌وجوی سریع روی نام و فرادادهٔ سند هم اثر می‌گذارد.</span>
+            </label>
             {pendingFiles.length > 0 && <div className="mt-3 rounded-xl border app-border bg-[var(--surface-2)] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2"><b className="text-sm">{pendingFiles.length} فایل در صف</b><button type="button" onClick={() => setPendingFiles([])} disabled={uploading} className="text-xs app-muted underline">پاک‌کردن صف</button></div>
               <div className="mt-2 max-h-36 space-y-1 overflow-auto">{pendingFiles.slice(0, 40).map((file, index) => <div key={file.name + file.size + file.lastModified + index} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate">{(file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name}</span><span className="shrink-0 app-muted">{byteLabel(file.size)}</span></div>)}{pendingFiles.length > 40 && <div className="text-xs app-muted">و {pendingFiles.length - 40} فایل دیگر…</div>}</div>
