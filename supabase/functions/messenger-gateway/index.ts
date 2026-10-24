@@ -234,21 +234,36 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   try{
    telegramCallStarted=true;
    const officeId=folder.customs_office_id||shipment?.customs_office_id||null;
+   const [clientMeta,shipmentFolderMeta]=await Promise.all([
+    folder.client_id
+     ?db.from("clients").select("name").eq("id",folder.client_id).eq("organization_id",p.organization_id).maybeSingle()
+     :Promise.resolve({data:null,error:null}),
+    shipment
+     ?db.from("file_manager_folders").select("display_name").eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).eq("folder_type","shipment").maybeSingle()
+     :Promise.resolve({data:null,error:null})
+   ]);
+   const ownerName=String((clientMeta as any)?.data?.name||folder.display_name||"صاحب کالا").replace(/[\r\n]/g," ").slice(0,160);
+   const shipmentFolderName=String((shipmentFolderMeta as any)?.data?.display_name||shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا").replace(/[\r\n]/g," ").slice(0,220);
+   const currentFolderName=String(folder.display_name||folder.folder_type).replace(/[\r\n]/g," ").slice(0,160);
+   const telegramTagTokens=archiveTags.map((tag:string)=>"#"+tag.normalize("NFKC").replace(/\s+/g,"_").replace(/[^\p{L}\p{N}_-]/gu,"").slice(0,48)).filter(Boolean);
    const archiveCaption=[
     "Customs OS · File Archive",
     "File: "+displayName,
-    "Folder: "+String(folder.display_name||folder.folder_type),
+    "Owner: "+ownerName,
+    "Shipment / customs folder: "+shipmentFolderName,
+    "Selected folder: "+currentFolderName,
     "Folder ID: "+folder.id,
     "Owner ID: "+String(folder.client_id||"-"),
-    "Shipment: "+String(shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا"),
     "Shipment ID: "+String(shipment?.id||"-"),
     "Customs Office ID: "+String(officeId||"-"),
-    "Tags: "+(archiveTags.length?archiveTags.join(", "):"-")
+    "Tags: "+(archiveTags.length?archiveTags.join(", "):"-"),
+    "Tag tokens: "+(telegramTagTokens.join(" ")||"-")
    ].join("\n").slice(0,950);
    const assetMetadata={
-    archiveMode:"telegram_file_archive",folderId:folder.id,folderName:String(folder.display_name||folder.folder_type),
-    folderType:folder.folder_type,parentFolderId:folder.parent_id||null,clientId:folder.client_id||null,
-    shipmentId:shipment?.id||null,customsOfficeId:officeId,archiveTags,telegramCaption:archiveCaption
+    archiveMode:"telegram_file_archive",folderId:folder.id,folderName:currentFolderName,
+    shipmentFolderName,ownerName,folderType:folder.folder_type,parentFolderId:folder.parent_id||null,
+    clientId:folder.client_id||null,shipmentId:shipment?.id||null,customsOfficeId:officeId,
+    archiveTags,telegramTagTokens,telegramCaption:archiveCaption
    };
    result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption);
    assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment?.id??null,false,assetMetadata);
