@@ -1172,6 +1172,11 @@ as $$
       and length(trim(coalesce(p_query, ''))) >= 2
       and not coalesce(sd.is_archived, false)
       and not coalesce(fm_file.is_archived, false)
+      -- Shipment documents mirrored into customs_documents are emitted only once below.
+      and not exists (
+        select 1 from public.customs_documents cd
+        where cd.id = sd.id and cd.organization_id = sd.organization_id
+      )
       and (sd.file_manager_search_text ilike q.pattern or fm_file.file_manager_search_text ilike q.pattern)
 
     union all
