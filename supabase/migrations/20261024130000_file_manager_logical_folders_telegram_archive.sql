@@ -309,17 +309,19 @@ declare
   v_shipment_folder_id uuid;
   v_child record;
 begin
-  select s.organization_id, s.client_id, s.id,
-         coalesce(nullif(trim(c.name), ''), 'صاحب کالا'),
+  select s.organization_id, coalesce(s.client_id, ca.client_id), s.id,
+         coalesce(nullif(trim(c.name), ''), nullif(trim(case_client.name), ''), 'صاحب کالا'),
          coalesce(nullif(trim(s.display_name), ''), 'محموله ' || left(s.id::text, 8)),
          coalesce(s.customs_office_id, ca.customs_office_id, scd.customs_office_id),
          coalesce(nullif(trim(o.name), ''), nullif(trim(o.code), ''), 'گمرک نامشخص')
   into v_org, v_client, v_shipment, v_client_name, v_shipment_name, v_office_id, v_office_name
   from public.shipments s
-  left join public.clients c
-    on c.id = s.client_id and c.organization_id = s.organization_id
   left join public.cases ca
     on ca.id = s.case_id and ca.organization_id = s.organization_id
+  left join public.clients c
+    on c.id = s.client_id and c.organization_id = s.organization_id
+  left join public.clients case_client
+    on case_client.id = ca.client_id and case_client.organization_id = s.organization_id
   left join public.shipment_customs_data scd
     on scd.shipment_id = s.id and scd.organization_id = s.organization_id
   left join public.customs_offices o
@@ -468,7 +470,7 @@ create trigger trg_ensure_shipment_file_manager_folders
 after insert or update of client_id, case_id, customs_office_id, display_name
 on public.shipments
 for each row
-when (new.client_id is not null)
+when (new.client_id is not null or new.case_id is not null)
 execute function public.trigger_ensure_shipment_file_manager_folders();
 
 create or replace function public.sync_file_manager_client_folder_name()
@@ -765,7 +767,9 @@ from public.clients c;
 
 select public.ensure_shipment_file_manager_folders(s.id)
 from public.shipments s
-where s.client_id is not null;
+where s.client_id is not null
+   or exists (select 1 from public.cases ca
+     where ca.id=s.case_id and ca.organization_id=s.organization_id and ca.client_id is not null);
 
 
 -- Keep the existing shared-ID compatibility mirror aligned with Telegram metadata.
