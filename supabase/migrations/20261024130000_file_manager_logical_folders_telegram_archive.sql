@@ -34,6 +34,48 @@ create unique index if not exists file_manager_folders_child_key_uq
   on public.file_manager_folders (organization_id, parent_id, folder_key)
   where parent_id is not null;
 
+-- Let existing document workflows reference Telegram bytes without copying them to Supabase Storage.
+alter table public.shipment_documents
+  add column if not exists storage_backend text not null default 'supabase',
+  add column if not exists file_asset_id uuid null references public.file_assets(id) on delete set null,
+  add column if not exists folder_id uuid null references public.file_manager_folders(id) on delete set null,
+  add column if not exists telegram_message_id text null;
+
+alter table public.customs_documents
+  add column if not exists storage_backend text not null default 'supabase',
+  add column if not exists file_asset_id uuid null references public.file_assets(id) on delete set null,
+  add column if not exists folder_id uuid null references public.file_manager_folders(id) on delete set null,
+  add column if not exists telegram_message_id text null;
+
+alter table public.shipment_documents
+  drop constraint if exists shipment_documents_extraction_status_check;
+
+alter table public.shipment_documents
+  add constraint shipment_documents_extraction_status_check
+  check (extraction_status in ('pending','processing','completed','failed','not_requested'));
+
+alter table public.shipment_documents
+  drop constraint if exists shipment_documents_storage_backend_check;
+
+alter table public.shipment_documents
+  add constraint shipment_documents_storage_backend_check
+  check (storage_backend in ('supabase','telegram'));
+
+alter table public.customs_documents
+  drop constraint if exists customs_documents_storage_backend_check;
+
+alter table public.customs_documents
+  add constraint customs_documents_storage_backend_check
+  check (storage_backend in ('supabase','telegram'));
+
+create index if not exists shipment_documents_file_asset_idx
+  on public.shipment_documents (organization_id, file_asset_id)
+  where file_asset_id is not null;
+
+create index if not exists customs_documents_file_asset_idx
+  on public.customs_documents (organization_id, file_asset_id)
+  where file_asset_id is not null;
+
 create index if not exists file_manager_folders_org_parent_idx
   on public.file_manager_folders (organization_id, parent_id, display_name);
 
@@ -700,46 +742,3 @@ $$;
 
 revoke all on function public.search_file_manager(text, integer) from public, anon;
 grant execute on function public.search_file_manager(text, integer) to authenticated;
-
-
--- Let existing document workflows reference Telegram bytes without copying them to Supabase Storage.
-alter table public.shipment_documents
-  add column if not exists storage_backend text not null default 'supabase',
-  add column if not exists file_asset_id uuid null references public.file_assets(id) on delete set null,
-  add column if not exists folder_id uuid null references public.file_manager_folders(id) on delete set null,
-  add column if not exists telegram_message_id text null;
-
-alter table public.customs_documents
-  add column if not exists storage_backend text not null default 'supabase',
-  add column if not exists file_asset_id uuid null references public.file_assets(id) on delete set null,
-  add column if not exists folder_id uuid null references public.file_manager_folders(id) on delete set null,
-  add column if not exists telegram_message_id text null;
-
-alter table public.shipment_documents
-  drop constraint if exists shipment_documents_extraction_status_check;
-
-alter table public.shipment_documents
-  add constraint shipment_documents_extraction_status_check
-  check (extraction_status in ('pending','processing','completed','failed','not_requested'));
-
-alter table public.shipment_documents
-  drop constraint if exists shipment_documents_storage_backend_check;
-
-alter table public.shipment_documents
-  add constraint shipment_documents_storage_backend_check
-  check (storage_backend in ('supabase','telegram'));
-
-alter table public.customs_documents
-  drop constraint if exists customs_documents_storage_backend_check;
-
-alter table public.customs_documents
-  add constraint customs_documents_storage_backend_check
-  check (storage_backend in ('supabase','telegram'));
-
-create index if not exists shipment_documents_file_asset_idx
-  on public.shipment_documents (organization_id, file_asset_id)
-  where file_asset_id is not null;
-
-create index if not exists customs_documents_file_asset_idx
-  on public.customs_documents (organization_id, file_asset_id)
-  where file_asset_id is not null;
