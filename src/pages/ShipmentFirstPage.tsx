@@ -129,9 +129,9 @@ export const ShipmentFirstPage:React.FC=()=>{
      destination,
      idempotencyKey,
     });
-    uploadKeys.current.delete(keySource);
     completed++;
    }
+   for(const f of Array.from(files)) uploadKeys.current.delete(`${selected}:${f.name}:${f.size}:${f.lastModified}`);
    await loadDocs(selected);
    setMessage(`${completed} سند در تلگرام ذخیره شد و در پوشه محموله ثبت شد.`);
   }catch(e:any){
