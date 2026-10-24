@@ -132,6 +132,38 @@ create unique index if not exists file_manager_files_customs_doc_uq
 create index if not exists file_manager_files_tags_gin_idx
   on public.file_manager_files using gin (tags);
 
+-- Existing pg_trgm is installed in the extensions schema; these indexes accelerate
+-- the most common substring searches without fetching full tables into the browser.
+create index if not exists file_manager_folders_display_name_trgm_idx
+  on public.file_manager_folders using gin (display_name extensions.gin_trgm_ops);
+
+create index if not exists file_manager_files_original_name_trgm_idx
+  on public.file_manager_files using gin (original_name extensions.gin_trgm_ops);
+
+create index if not exists clients_name_trgm_idx
+  on public.clients using gin (name extensions.gin_trgm_ops);
+
+create index if not exists shipments_display_name_trgm_idx
+  on public.shipments using gin (display_name extensions.gin_trgm_ops);
+
+create index if not exists shipments_bill_of_lading_no_trgm_idx
+  on public.shipments using gin (bill_of_lading_no extensions.gin_trgm_ops);
+
+create index if not exists vessels_name_trgm_idx
+  on public.vessels using gin (name extensions.gin_trgm_ops);
+
+create index if not exists customs_declarations_kottaj_number_trgm_idx
+  on public.customs_declarations using gin (kottaj_number extensions.gin_trgm_ops);
+
+create index if not exists shipment_documents_original_name_trgm_idx
+  on public.shipment_documents using gin (original_file_name extensions.gin_trgm_ops);
+
+create index if not exists customs_documents_original_name_trgm_idx
+  on public.customs_documents using gin (original_name extensions.gin_trgm_ops);
+
+create index if not exists customs_documents_display_name_trgm_idx
+  on public.customs_documents using gin (display_name extensions.gin_trgm_ops);
+
 alter table public.file_manager_folders enable row level security;
 alter table public.file_manager_files enable row level security;
 grant select, insert, update, delete on public.file_manager_folders to authenticated;
@@ -281,7 +313,7 @@ begin
   select s.organization_id, s.client_id, s.id,
          coalesce(nullif(trim(c.name), ''), 'صاحب کالا'),
          coalesce(nullif(trim(s.display_name), ''), 'محموله ' || left(s.id::text, 8)),
-         coalesce(s.customs_office_id, ca.customs_office_id),
+         coalesce(s.customs_office_id, ca.customs_office_id, scd.customs_office_id),
          coalesce(nullif(trim(o.name), ''), nullif(trim(o.code), ''), 'گمرک نامشخص')
   into v_org, v_client, v_shipment, v_client_name, v_shipment_name, v_office_id, v_office_name
   from public.shipments s
@@ -289,8 +321,10 @@ begin
     on c.id = s.client_id and c.organization_id = s.organization_id
   left join public.cases ca
     on ca.id = s.case_id and ca.organization_id = s.organization_id
+  left join public.shipment_customs_data scd
+    on scd.shipment_id = s.id and scd.organization_id = s.organization_id
   left join public.customs_offices o
-    on o.id = coalesce(s.customs_office_id, ca.customs_office_id)
+    on o.id = coalesce(s.customs_office_id, ca.customs_office_id, scd.customs_office_id)
   where s.id = p_shipment_id;
 
   if v_org is null or v_client is null or v_shipment is null then
