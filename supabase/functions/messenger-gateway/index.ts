@@ -603,8 +603,9 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
     archiveTags,telegramTagTokens,telegramCaption:archiveCaption,telegramFileId:null,telegramFileUniqueId:null,
     telegramChatId:chat,telegramConnectionId:c.id,telegramMessageId:null
    };
-   telegramCallStarted=true;
    const ownerTopicId=await ensureTelegramOwnerTopic(c,chat,p.organization_id,folder.client_id||null,ownerName);
+   // Topic creation happens before any file-send request. Keep deterministic forum setup failures retryable.
+   telegramCallStarted=true;
    result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId);
    assetMetadata.telegramFileId=result.fileId;
    assetMetadata.telegramFileUniqueId=result.uniqueId||null;
