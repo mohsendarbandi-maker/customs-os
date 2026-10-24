@@ -1849,7 +1849,9 @@ html:has(.reminders-app-standalone), body:has(.reminders-app-standalone) {
  .reminders-mobile-fab svg{width:32px!important;height:32px!important;stroke-width:2.8}
  .reminders-mobile-fab:active{transform:translateX(-50%) scale(.94)!important}
  .reminders-mobile-fab:focus-visible{outline:3px solid var(--primary-2)!important;outline-offset:3px!important}
- .reminders-app-standalone .reminders-hub-actions{display:none!important}
+ .reminders-app-standalone .reminders-hub-actions{display:flex!important;gap:5px!important}
+ .reminders-app-standalone .reminders-hub-actions button{width:42px!important;min-width:42px!important;height:42px!important;min-height:42px!important}
+ .reminders-app-standalone .reminders-hub-actions button:nth-child(2),.reminders-app-standalone .reminders-hub-actions button:nth-child(3){display:none!important}
  .reminders-app-standalone .reminders-hub-screen{display:flex!important;flex-direction:column!important;gap:12px!important;min-height:calc(100dvh - 115px)!important;height:auto!important;overflow:visible!important;padding:10px 12px 18px!important}
  .reminders-app-standalone .reminders-home-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
  .reminders-app-standalone .reminders-home-stat.is-future,.reminders-app-standalone .reminders-home-stat.is-open{display:none!important}
