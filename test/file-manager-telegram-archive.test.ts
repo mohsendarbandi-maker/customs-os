@@ -7,6 +7,7 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 describe('Telegram-backed Customs OS file manager', () => {
   const migration = read('supabase/migrations/20261024130726_file_manager_logical_folders_telegram_archive.sql');
   const uploadJobs = read('supabase/migrations/20261024130735_file_manager_upload_jobs.sql');
+  const reconciliationMigration = read('supabase/migrations/20261024170055_file_manager_upload_reconciliation_fields.sql');
   const unassignedMigration = read('supabase/migrations/20261024131814_file_manager_unassigned_legacy_documents.sql');
   const grantsMigration = read('supabase/migrations/20261024132221_file_manager_minimize_table_grants.sql');
   const folderCopyMigration = read('supabase/migrations/20261024172000_file_manager_folder_copy.sql');
@@ -45,6 +46,18 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(uploadJobs).toContain("'reconcile_required'");
     expect(gateway).toContain('FILE_UPLOAD_RECONCILIATION_REQUIRED');
     expect(gateway).toContain('status:"stored"');
+  });
+
+  it('persists Telegram upload receipts and repairs interrupted metadata without re-uploading', () => {
+    expect(reconciliationMigration).toContain('telegram_file_id text null');
+    expect(reconciliationMigration).toContain('connection_id uuid null');
+    expect(reconciliationMigration).toContain('archive_tags text[] not null default');
+    expect(gateway).toContain('telegram_file_id:result.fileId');
+    expect(gateway).toContain('async function reconcileTelegramArchiveMetadata');
+    expect(gateway).toContain('reconciled:true');
+    expect(gateway).toContain('FILE_UPLOAD_RECONCILIATION_REQUIRED');
+    expect(gateway).toContain('if(existing&&existing.status!=="failed")');
+    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption)');
   });
 
   it('uses content-bound deterministic upload keys across all browser upload flows', () => {
