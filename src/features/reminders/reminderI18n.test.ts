@@ -1,7 +1,7 @@
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe,expect,it} from 'vitest';
-import {formatReminderDate,formatReminderDateTime,reminderNumber,reminderText,ReminderLocaleTree} from './reminderI18n';
+import {formatReminderDate,formatReminderDateTime,reminderNumber,reminderYear,reminderText,ReminderLocaleTree} from './reminderI18n';
 
 describe('reminder bilingual presentation',()=>{
  it('translates core actions and removes literal newline escape artifacts',()=>{
@@ -60,5 +60,7 @@ describe('reminder bilingual presentation',()=>{
   expect(formatReminderDateTime(date,'en')).toContain('·');
   expect(reminderNumber(1234,'fa')).toBe('۱٬۲۳۴');
   expect(reminderNumber(1234,'en')).toBe('1,234');
+  expect(reminderYear(1405,'fa')).toBe('۱۴۰۵');
+  expect(reminderYear(1405,'en')).toBe('1405');
  });
 });
