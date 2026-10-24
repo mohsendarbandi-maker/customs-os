@@ -469,7 +469,7 @@ begin
   where organization_id = v_org and shipment_id = v_shipment
     and client_id is distinct from v_client;
 end;
-$;
+$$;
 
 revoke all on function public.ensure_shipment_file_manager_folders(uuid) from public, anon, authenticated;
 
