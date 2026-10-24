@@ -229,6 +229,8 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(gateway).toContain('parent.folder_key==="owners-root"');
     expect(gateway).toContain('String(operator.id),String(connection.id),true');
     expect(gateway).toContain('FILE_ARCHIVE_FOLDER_SCOPE_LOOKUP_FAILED');
+    expect(gateway).toContain('بدون اتصال به صاحب کالا');
+    expect(gateway).toContain('بدون اتصال به محموله');
   });
 
   it('registers the page and exposes it from the main navigation', () => {
