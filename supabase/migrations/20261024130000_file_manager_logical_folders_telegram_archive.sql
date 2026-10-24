@@ -474,11 +474,6 @@ $;
 
 revoke all on function public.ensure_client_file_manager_folder(uuid) from public, anon, authenticated;
 
-drop trigger if exists trg_ensure_client_file_manager_folder on public.clients;
-create trigger trg_ensure_client_file_manager_folder
-after insert on public.clients
-for each row execute function public.trigger_ensure_client_file_manager_folder();
-
 create or replace function public.trigger_ensure_client_file_manager_folder()
 returns trigger
 language plpgsql
