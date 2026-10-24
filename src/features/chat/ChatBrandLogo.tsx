@@ -7,8 +7,8 @@ export const ChatBrandLogo: React.FC<{ size?: number }> = ({ size = 48 }) => (
     style={{
       width: size,
       height: size,
-      background: 'linear-gradient(145deg,#0b7ea4,#075a78)',
-      boxShadow: '0 10px 26px rgba(11,126,164,.22)',
+      background: 'linear-gradient(145deg,var(--primary),color-mix(in srgb,var(--primary) 72%,var(--bg)))',
+      boxShadow: '0 10px 26px color-mix(in srgb,var(--primary) 22%,transparent)',
     }}
   >
     <svg width={size * 0.58} height={size * 0.58} viewBox="0 0 64 64" fill="none" aria-hidden="true">
@@ -17,10 +17,10 @@ export const ChatBrandLogo: React.FC<{ size?: number }> = ({ size = 48 }) => (
         fill="white"
         fillOpacity=".96"
       />
-      <circle cx="22" cy="26.5" r="3.2" fill="#0b7ea4" />
-      <circle cx="32" cy="26.5" r="3.2" fill="#0b7ea4" />
-      <circle cx="42" cy="26.5" r="3.2" fill="#0b7ea4" />
-      <path d="M18 36c4.3 3.6 8.9 5.4 14 5.4S41.7 39.6 46 36" stroke="#0b7ea4" strokeWidth="2.8" strokeLinecap="round" />
+      <circle cx="22" cy="26.5" r="3.2" fill="var(--primary)" />
+      <circle cx="32" cy="26.5" r="3.2" fill="var(--primary)" />
+      <circle cx="42" cy="26.5" r="3.2" fill="var(--primary)" />
+      <path d="M18 36c4.3 3.6 8.9 5.4 14 5.4S41.7 39.6 46 36" stroke="var(--primary)" strokeWidth="2.8" strokeLinecap="round" />
     </svg>
   </div>
 );
