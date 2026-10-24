@@ -253,6 +253,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
               'id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,telegram_message_id,created_at,updated_at',
             )
             .eq('shipment_id', id)
+            .eq('is_archived', false)
             .order('created_at', { ascending: false }),
           supabase
             .from('customs_documents')
@@ -260,6 +261,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
               'id,shipment_id,document_type,original_name,display_name,storage_path,mime_type,size_bytes,status,storage_backend,file_asset_id,folder_id,telegram_message_id,created_at',
             )
             .eq('shipment_id', id)
+            .eq('is_archived', false)
             .order('created_at', { ascending: false }),
         ]);
 
