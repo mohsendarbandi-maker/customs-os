@@ -718,10 +718,10 @@ as $$
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
         s.file_manager_search_text ilike q.pattern
-        or coalesce(cl.name, '') ilike q.pattern
-        or coalesce(v.name, '') ilike q.pattern
-        or coalesce(o.name, '') ilike q.pattern
-        or coalesce(o.code, '') ilike q.pattern
+        or cl.file_manager_search_text ilike q.pattern
+        or v.file_manager_search_text ilike q.pattern
+        or o.file_manager_search_text ilike q.pattern
+        
         or ca.file_manager_search_text ilike q.pattern
         or scd.file_manager_search_text ilike q.pattern
         or cd.file_manager_search_text ilike q.pattern
@@ -758,7 +758,7 @@ as $$
             and sx.client_id = public.user_client_id())
       )
       and length(trim(coalesce(p_query, ''))) >= 2
-      and (v.file_manager_search_text ilike q.pattern or coalesce(sl.name, '') ilike q.pattern)
+      and (v.file_manager_search_text ilike q.pattern or sl.file_manager_search_text ilike q.pattern)
 
     union all
 
@@ -794,9 +794,9 @@ as $$
       and (
         f.display_name ilike q.pattern
         or f.folder_key ilike q.pattern
-        or c.name ilike q.pattern
-        or s.display_name ilike q.pattern
-        or o.name ilike q.pattern
+        or c.file_manager_search_text ilike q.pattern
+        or s.file_manager_search_text ilike q.pattern
+        or o.file_manager_search_text ilike q.pattern
         or o.code ilike q.pattern
       )
 
@@ -818,7 +818,7 @@ as $$
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
         fm.file_manager_search_text ilike q.pattern
-        or f.display_name ilike q.pattern
+        or f.file_manager_search_text ilike q.pattern
         or s.display_name ilike q.pattern
         or c.name ilike q.pattern
         or o.name ilike q.pattern
