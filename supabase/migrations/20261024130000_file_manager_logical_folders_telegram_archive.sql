@@ -204,6 +204,26 @@ create policy file_manager_folders_insert on public.file_manager_folders
     and (shipment_id is not null or client_id is not null)
   );
 
+drop policy if exists file_manager_folders_insert_client_custom on public.file_manager_folders;
+create policy file_manager_folders_insert_client_custom on public.file_manager_folders
+  for insert to authenticated
+  with check (
+    organization_id = public.user_org_id()
+    and public.user_role()::text = 'client'
+    and folder_type = 'custom'
+    and is_system = false
+    and client_id = public.user_client_id()
+    and parent_id is not null
+    and exists (
+      select 1
+      from public.file_manager_folders parent
+      where parent.id = file_manager_folders.parent_id
+        and parent.organization_id = file_manager_folders.organization_id
+        and parent.client_id = public.user_client_id()
+        and parent.shipment_id is not distinct from file_manager_folders.shipment_id
+    )
+  );
+
 drop policy if exists file_manager_folders_update on public.file_manager_folders;
 create policy file_manager_folders_update on public.file_manager_folders
   for update to authenticated
