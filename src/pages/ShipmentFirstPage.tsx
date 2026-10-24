@@ -1,30 +1,29 @@
-import React,{useEffect,useState}from'react';
+import React,{useEffect,useRef,useState}from'react';
 import{Download,ExternalLink,Plus,RefreshCw,Save,ShieldCheck,Ship,Upload}from'lucide-react';
 import{Link}from'react-router-dom';
 import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
 import { useAutosavedDraft, formDraftKey } from '../hooks/useAutosavedDraft';
 import { FormDraftIndicator } from '../components/FormDraftIndicator';
-import { safeStorageFilename } from '../lib/safeStorageFilename';
 import{buildShipmentDisplayName}from'../lib/displayNames';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import {AddReminderButton} from '../features/reminders/AddReminderButton';
+import { downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
 
 type Vessel={id:string;name:string;imo_number?:string|null;flag_code?:string|null;shipping_line_id?:string|null};type ShippingLine={id:string;name:string;name_fa?:string|null};
 type Office={id:string;code:string;name:string;city:string;is_active:boolean};type Row={id:string;client_id:string|null;vessel_id:string|null;customs_office_id:string|null;shipping_line:string|null;bill_of_lading_no:string|null;bill_of_lading_year:number|null;voyage_no:string|null;origin_port:string|null;destination_port:string|null;cargo_count:number|null;cargo_count_unit:string|null;net_weight_kg:number|null;gross_weight_kg:number|null;current_status:string;current_location:string|null;display_name:string|null;case_id:string|null;transport_documents_status:'not_ready'|'ready';release_invoice_payment_status:'unpaid'|'paid';ship_passed:boolean;ship_passed_at:string|null;ship_passed_by:string|null};
 type Form={ownerId:string;shippingLine:string;billOfLading:string;year:string;voyage:string;vessel:string;imo:string;flag:string;originPort:string;destinationPort:string;count:string;unit:string;net:string;gross:string;status:string;location:string;transportDocumentsStatus:'not_ready'|'ready';releaseInvoicePaymentStatus:'unpaid'|'paid'};
-type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;created_at:string};
+type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;created_at:string};
 const BUCKET='customs_documents';
 const empty:Form={ownerId:'',shippingLine:'',billOfLading:'',year:String(new Date().getFullYear()),voyage:'',vessel:'',imo:'',flag:'',originPort:'',destinationPort:'',count:'',unit:'رول',net:'',gross:'',status:'draft',location:'',transportDocumentsStatus:'not_ready',releaseInvoicePaymentStatus:'unpaid'};
 const digits=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const num=(v:string)=>{const n=Number(digits(v).replace(/[٬,]/g,''));return Number.isFinite(n)?n:null};
 const same=(a:string,b:string)=>String(a||'').trim().localeCompare(String(b||'').trim(),'fa',{sensitivity:'base'})===0;
 const statuses=[['draft','پیش‌نویس'],['booking_confirmed','تأیید رزرو'],['loading','در حال بارگیری'],['loaded','بارگیری کامل'],['departed','حرکت'],['in_transit','در مسیر'],['approaching_destination','نزدیک مقصد'],['anchorage','لنگرگاه'],['berthing','پهلوگیری'],['discharging','در حال تخلیه'],['discharged','تخلیه کامل'],['completed','تکمیل'],['delayed','تأخیر'],['cancelled','لغو']];
-const safe=(n:string)=>safeStorageFilename(n);
 
 export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
- const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);
+ const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const uploadKeys=useRef(new Map<string,string>());const[uploadTagInput,setUploadTagInput]=useState('');const uploadTags=[...new Set(uploadTagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
  const formDraft=useAutosavedDraft(
   formDraftKey(profile?.id,`shipment-first:${profile?.organization_id||''}`,profile?.organization_id),
@@ -56,7 +55,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  };
  const loadDocs=async(id:string)=>{
   if(!id){setDocs([]);return}
-  const{data,error}=await supabase.from('shipment_documents').select('id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,created_at').eq('shipment_id',id).order('created_at',{ascending:false});
+  const{data,error}=await supabase.from('shipment_documents').select('id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,created_at').eq('shipment_id',id).order('created_at',{ascending:false});
   if(error){setMessage(error.message);return} setDocs((data||[]) as Doc[]);
  };
  const load=async()=>{
@@ -113,22 +112,50 @@ export const ShipmentFirstPage:React.FC=()=>{
  const upload=async(files:FileList|null)=>{
   if(!files?.length||!selected)return setMessage('ابتدا محموله را ذخیره و انتخاب کنید.');
   setUploading(true);setMessage('');
+  let completed=0;
   try{
-   const{data:{user}}=await supabase.auth.getUser();if(!user)throw new Error('کاربر وارد نشده است.');
-   if(!profile?.organization_id)throw new Error('سازمان کاربر مشخص نیست.');
+   const folder=await getDefaultShipmentUploadFolder(selected);
+   const destination=await getFileArchiveDestination();
    for(const f of Array.from(files)){
-    if(!['application/pdf','image/jpeg','image/png'].includes(f.type)&&!/\.(pdf|jpe?g|png)$/i.test(f.name))throw new Error('فقط PDF، JPG و PNG مجاز است.');
-    if(f.size>50*1024*1024)throw new Error('حجم هر فایل نباید بیشتر از ۵۰ مگابایت باشد.');
-    const mime=f.type||(/\.pdf$/i.test(f.name)?'application/pdf':/\.png$/i.test(f.name)?'image/png':'image/jpeg');
-    const path=`${profile.organization_id}/${selected}/${crypto.randomUUID()}-${safe(f.name)}`;
-    const{error:ue}=await supabase.storage.from(BUCKET).upload(path,f,{contentType:mime,cacheControl:'3600',upsert:false});if(ue)throw ue;
-    const{error:de}=await supabase.from('shipment_documents').insert({organization_id:profile.organization_id,shipment_id:selected,uploaded_by:user.id,document_name:f.name,original_file_name:f.name,storage_path:path,mime_type:mime,file_size_bytes:f.size});if(de){await supabase.storage.from(BUCKET).remove([path]);throw de}
+    if(f.size>FILE_ARCHIVE_MAX_BYTES)throw new Error('حجم هر فایل برای آرشیو قابل بازیابی تلگرام حداکثر ۲۰ مگابایت است.');
+    const keySource=`${selected}:${f.name}:${f.size}:${f.lastModified}`;
+    let idempotencyKey=uploadKeys.current.get(keySource);
+    if(!idempotencyKey){idempotencyKey=crypto.randomUUID();uploadKeys.current.set(keySource,idempotencyKey);}
+    await uploadTelegramArchivedFile(f,{
+     folderId:folder.id,
+     shipmentId:selected,
+     documentType:'other',
+     documentName:f.name,
+     tags:uploadTags,
+     destination,
+     idempotencyKey,
+    });
+    completed++;
    }
-   await loadDocs(selected);setMessage('اسناد محموله با موفقیت در پرونده محموله ثبت شدند.');
-  }catch(e:any){setMessage(e?.message||'آپلود اسناد ناموفق بود')}finally{setUploading(false)}
- };
- const download=async(d:Doc)=>{const{data,error}=await supabase.storage.from(BUCKET).createSignedUrl(d.storage_path,600);if(error)return setMessage(error.message);window.open(data.signedUrl,'_blank','noopener,noreferrer')};
- const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMessage('');try{const{error:e}=await supabase.rpc('set_shipment_ship_pass',{p_shipment_id:selected,p_passed:passed});if(e)throw e;setMessage(passed?'پاس کشتی ثبت شد.':'پاس کشتی لغو شد.');await load()}catch(e:any){setMessage(e?.message||'ثبت پاس کشتی انجام نشد')}finally{setBusy(false)}};
+   for(const f of Array.from(files)) uploadKeys.current.delete(`${selected}:${f.name}:${f.size}:${f.lastModified}`);
+   await loadDocs(selected);
+   setMessage(`${completed} سند در تلگرام ذخیره شد و در پوشه محموله ثبت شد.`);
+  }catch(e:any){
+   await loadDocs(selected);
+   const base=e?.message||'آرشیو اسناد ناموفق بود';
+   setMessage(completed? `${completed} سند در تلگرام ذخیره شد؛ فایل بعدی نیازمند بررسی است. ${base}`:base);
+  }finally{setUploading(false)}
+};
+const download=async(d:Doc)=>{
+ if(d.storage_backend==='telegram'&&d.file_asset_id){
+  try{
+   const blob=await downloadTelegramArchivedFile(d.file_asset_id);
+   const url=URL.createObjectURL(blob),a=document.createElement('a');
+   a.href=url;a.download=d.original_file_name||d.document_name||'document.bin';
+   document.body.appendChild(a);a.click();a.remove();window.setTimeout(()=>URL.revokeObjectURL(url),2000);
+  }catch(e:any){setMessage(e?.message||'دریافت فایل تلگرام ناموفق بود')}
+  return;
+ }
+ const{data,error}=await supabase.storage.from(BUCKET).createSignedUrl(d.storage_path,600);
+ if(error)return setMessage(error.message);
+ window.open(data.signedUrl,'_blank','noopener,noreferrer');
+};
+const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMessage('');try{const{error:e}=await supabase.rpc('set_shipment_ship_pass',{p_shipment_id:selected,p_passed:passed});if(e)throw e;setMessage(passed?'پاس کشتی ثبت شد.':'پاس کشتی لغو شد.');await load()}catch(e:any){setMessage(e?.message||'ثبت پاس کشتی انجام نشد')}finally{setBusy(false)}};
  const selectedRow=rows.find(r=>r.id===selected);
  const vessel=selectedRow?vessels.find(v=>v.id===selectedRow.vessel_id):vessels.find(v=>same(v.name,form.vessel));
  const openPre=selected?'/operations?tab=pre-declaration&shipmentId='+encodeURIComponent(selected):'/operations';
@@ -153,9 +180,11 @@ export const ShipmentFirstPage:React.FC=()=>{
      </div>
      <div className="flex items-center gap-2">
       <AddReminderButton entityType="shipments" entityId={selected} defaultTitle={`پیگیری محموله ${selectedRow?.display_name||selectedRow?.bill_of_lading_no||''}`}/>
+      <Link to={'/file-manager?shipmentId='+selected} className="px-4 py-2.5 rounded-xl border app-border font-bold text-sm">بازکردن پوشه فایل‌منیجر</Link>
+      <input value={uploadTagInput} onChange={e=>setUploadTagInput(e.target.value)} disabled={uploading} placeholder="برچسب سندها (با ویرگول)" className="max-w-48 px-3 py-2 rounded-xl border app-border bg-[var(--surface)] text-xs"/>
       <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-blue-600 text-white font-bold">
        <Upload size={16} className="inline ml-1"/>{uploading?'در حال آپلود...':'آپلود فایل'}
-       <input type="file" multiple accept="application/pdf,image/jpeg,image/png" className="hidden" disabled={uploading} onChange={e=>{void upload(e.target.files);e.currentTarget.value=''}}/>
+       <input type="file" multiple className="hidden" disabled={uploading} onChange={e=>{void upload(e.target.files);e.currentTarget.value=''}}/>
       </label>
      </div>
     </div>

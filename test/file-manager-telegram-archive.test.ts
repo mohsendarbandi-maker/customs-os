@@ -1,0 +1,144 @@
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
+
+describe('Telegram-backed Customs OS file manager', () => {
+  const migration = read('supabase/migrations/20261024130000_file_manager_logical_folders_telegram_archive.sql');
+  const uploadJobs = read('supabase/migrations/20261024130100_file_manager_upload_jobs.sql');
+  const gateway = read('supabase/functions/messenger-gateway/index.ts');
+  const fileManager = read('src/pages/FileManagerPage.tsx');
+  const fileManagerClient = read('src/lib/fileManager.ts');
+  const shipmentPage = read('src/pages/ShipmentFirstPage.tsx');
+  const documentPage = read('src/pages/CustomsDocumentManagerPage.tsx');
+  const clientDocumentPage = read('src/pages/ClientDocumentManagerPage.tsx');
+  const preDeclaration = read('src/pages/PreDeclarationPage.tsx');
+  const app = read('src/App.tsx');
+  const navigation = read('src/components/AppShell.tsx');
+
+  it('creates owner and shipment folders idempotently, with required finance subfolder and customs name', () => {
+    expect(migration).toContain("'owners-root', 'root', 'صاحبان کالا'");
+    expect(migration).toContain("'accounting-finance', 'accounting_finance', 'حسابداری مالی'");
+    expect(migration).toContain("v_shipment_name || ' - ' || v_office_name");
+    expect(migration).toContain("'shipment:' || v_shipment::text");
+    expect(migration).toContain('on conflict do nothing');
+    expect(migration).toContain('trg_ensure_shipment_file_manager_folders');
+  });
+
+  it('keeps Telegram as the archive transport and never routes archives to daily-report chat', () => {
+    expect(gateway).toContain('path==="/api/messenger/file-archive-destination"');
+    expect(gateway).toContain('.eq("purpose","file_archive").eq("enabled",true)');
+    expect(gateway).toContain('mapped.purpose!=="file_archive"');
+    expect(gateway).toContain('FILE_ARCHIVE_NOT_CONFIGURED');
+    expect(fileManagerClient).toContain('/api/messenger/file-archive-destination');
+  });
+
+  it('stores file metadata, Telegram message identity and durable upload idempotency state', () => {
+    expect(migration).toContain('create table if not exists public.file_manager_files');
+    expect(migration).toContain('external_message_id text null');
+    expect(migration).toContain('file_asset_id uuid null');
+    expect(uploadJobs).toContain('file_manager_upload_jobs_idempotency_uq');
+    expect(uploadJobs).toContain("'reconcile_required'");
+    expect(gateway).toContain('FILE_UPLOAD_RECONCILIATION_REQUIRED');
+    expect(gateway).toContain('status:"stored"');
+  });
+
+  it('enforces the Telegram download-size limit while streaming at the server', () => {
+    expect(gateway).toContain('maxOverride?:number');
+    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption)');
+    expect(fileManagerClient).toContain('FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES = 20 * 1024 * 1024');
+    expect(fileManagerClient).toContain('FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES');
+  });
+
+  it('does not OCR, inspect or send new Telegram-backed file contents to AI', () => {
+    expect(fileManager).not.toContain('tesseract');
+    expect(fileManager).not.toContain('ai-assistant');
+    expect(fileManager).toContain('uploadTelegramArchivedFile');
+    expect(documentPage).toContain("d.storage_backend === 'telegram' || d.file_asset_id");
+    expect(preDeclaration).toContain("docs.filter(d=>d.storage_backend!=='telegram'&&!d.file_asset_id)");
+  });
+
+  it('shares one Telegram upload path between shipment creation and document manager', () => {
+    expect(shipmentPage).toContain('uploadTelegramArchivedFile');
+    expect(shipmentPage).toContain('getDefaultShipmentUploadFolder(selected)');
+    expect(shipmentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
+    expect(documentPage).toContain('uploadTelegramArchivedFile');
+    expect(documentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
+    expect(clientDocumentPage).toContain('uploadTelegramArchivedFile');
+    expect(clientDocumentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
+  });
+
+  it('provides global business/document search, and preserves organization scoping in the RPC', () => {
+    expect(migration).toContain('create or replace function public.search_file_manager');
+    expect(migration).toContain('security invoker');
+    expect(migration).toContain("user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse', 'client')");
+    expect(migration).toContain('public.user_org_id()');
+    expect(migration).toContain('public.shipment_customs_data');
+    expect(migration).toContain('public.customs_declarations');
+    expect(migration).toContain('public.vessels');
+    expect(migration).toContain('public.file_manager_files');
+    expect(fileManager).toContain("supabase.rpc('search_file_manager'");
+  });
+
+  it('supports safe bidirectional Windows sync without overwriting or deleting conflicts', () => {
+    expect(fileManager).toContain('webkitdirectory');
+    expect(fileManager).toContain('showDirectoryPicker');
+    expect(fileManager).toContain('syncWindowsFolder');
+    expect(fileManager).toContain('همگام‌سازی دوطرفه ویندوز');
+    expect(fileManager).toContain("crypto.subtle.digest('SHA-256', bytes)");
+    expect(fileManager).toContain('const keyMaterial = [organizationId, parent.id, relativePath, local.file.size, localHash].join');
+    expect(fileManager).toContain('هیچ فایلی از هیچ‌کدام از دو طرف حذف یا بازنویسی نشد.');
+    expect(fileManager).toContain('remote.file_asset_id && Number(remote.size_bytes) > FILE_ARCHIVE_MAX_BYTES');
+    expect(fileManager).toContain('همگام‌سازی خودکار پس‌زمینه در این نسخه وجود ندارد');
+  });
+
+  it('supports owner-level documents without a shipment and hides archived file metadata', () => {
+    expect(migration).toContain('  shipment_id uuid null,');
+    expect(migration).toContain('create or replace function public.ensure_client_file_manager_folder');
+    expect(migration).toContain('create or replace function public.sync_customs_document_to_file_manager');
+    expect(migration).toContain('and not coalesce(cd.is_archived, false)');
+    expect(migration).toContain('and not fm.is_archived');
+    expect(uploadJobs).toContain('  shipment_id uuid null,');
+    expect(gateway).toContain('CUSTOMS_DOCUMENT_METADATA_SAVE_FAILED');
+    expect(gateway).toContain('ownerFileError');
+    expect(fileManager).toContain("['client', 'custom'].includes(currentFolder.folder_type)");
+    expect(clientDocumentPage).toContain('is_archived:true');
+    expect(clientDocumentPage).toContain('نسخه اصلی در آرشیو تلگرام حذف نخواهد شد');
+  });
+
+  it('keeps the existing shared-ID document mirror and avoids duplicate search entries', () => {
+    expect(migration).toContain('create or replace function public.sync_shipment_document_to_customs_documents()');
+    expect(migration).toContain('new.storage_backend, new.file_asset_id, new.folder_id');
+    expect(migration).toContain('where sd.id=cd.id and sd.organization_id=cd.organization_id');
+    expect(migration).toContain('where mirror.id = sd.id and mirror.organization_id = sd.organization_id');
+    expect(migration).toContain('fm_file.customs_document_id = cd.id or fm_file.shipment_document_id = cd.id');
+  });
+
+  it('uses one file-manager row for shipment/customs documents sharing the same legacy ID', () => {
+    expect(migration).toContain('customs_document_id,storage_path,created_by');
+    expect(migration).toContain('case when exists (select 1 from public.customs_documents mirror');
+    expect(migration).toContain('customs_document_id=coalesce(v_customs_mirror,customs_document_id)');
+    expect(migration).toContain('shipment_document_id=coalesce(v_shipment_mirror,shipment_document_id)');
+    expect(migration).toContain('or customs_document_id=new.id');
+    expect(migration).toContain('or shipment_document_id=new.id');
+    expect(migration).toContain('get diagnostics v_rows = row_count');
+  });
+
+  it('embeds searchable folder metadata in Telegram and follows owner changes', () => {
+    expect(gateway).toContain('archiveMode:"telegram_file_archive"');
+    expect(gateway).toContain('"Owner: "+ownerName');
+    expect(gateway).toContain('"Shipment / customs folder: "+shipmentFolderName');
+    expect(gateway).toContain('telegramTagTokens');
+    expect(migration).toContain('update public.file_manager_files\n  set client_id = v_client');
+    expect(migration).toContain('update public.customs_documents\n  set client_id = v_client');
+    expect(preDeclaration).toContain(".eq('is_archived',false)");
+    expect(documentPage).toContain(".eq('is_archived', false)");
+  });
+
+  it('registers the page and exposes it from the main navigation', () => {
+    expect(app).toContain('path="/file-manager"');
+    expect(app).toContain("import('./pages/FileManagerPage')");
+    expect(navigation).toContain("to: '/file-manager'");
+  });
+});
