@@ -218,6 +218,18 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
     created_by:user
    });
    if(fileError)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
+   const {data:shipmentDocument,error:documentError}=await db.from("shipment_documents").insert({
+    organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
+    document_name:name,original_file_name:name,storage_path:"telegram://"+assetId,
+    mime_type:mime,file_size_bytes:size??0,extraction_status:"not_requested",
+    storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,
+    telegram_message_id:String(result.messageId||"")
+   }).select("id").single();
+   if(documentError||!shipmentDocument)throw new Error("SHIPMENT_DOCUMENT_METADATA_SAVE_FAILED");
+   const {error:linkError}=await db.from("file_manager_files")
+    .update({shipment_document_id:shipmentDocument.id})
+    .eq("organization_id",p.organization_id).eq("file_asset_id",assetId);
+   if(linkError)throw new Error("FILE_ARCHIVE_DOCUMENT_LINK_FAILED");
    const {error:completeError}=await db.from("file_manager_upload_jobs").update({
     status:"stored",file_asset_id:assetId,external_message_id:String(result.messageId||""),
     updated_at:new Date().toISOString(),completed_at:new Date().toISOString(),error_code:null
