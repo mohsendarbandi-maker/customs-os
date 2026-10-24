@@ -89,6 +89,7 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain("crypto.subtle.digest('SHA-256', bytes)");
     expect(fileManager).toContain('const keyMaterial = [organizationId, parent.id, relativePath, local.file.size, localHash].join');
     expect(fileManager).toContain('هیچ فایلی از هیچ‌کدام از دو طرف حذف یا بازنویسی نشد.');
+    expect(fileManager).toContain('remote.file_asset_id && Number(remote.size_bytes) > FILE_ARCHIVE_MAX_BYTES');
     expect(fileManager).toContain('همگام‌سازی خودکار پس‌زمینه در این نسخه وجود ندارد');
   });
 
