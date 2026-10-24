@@ -215,12 +215,6 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    telegramCallStarted=true;
    result=await uploadStream(c,chat,name,mime,size,req.body,"file",archive?TG_DOWNLOAD_LIMIT:undefined);
    assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment.id,false);
-   const {error:fileError}=await db.from("file_manager_files").insert({
-    organization_id:p.organization_id,folder_id:folder.id,shipment_id:shipment.id,client_id:shipment.client_id,
-    file_asset_id:assetId,original_name:name,mime_type:mime,size_bytes:size??0,external_message_id:String(result.messageId||""),document_type:documentType,tags:[],metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId},
-    created_by:user
-   });
-   if(fileError)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
    const {data:shipmentDocument,error:documentError}=await db.from("shipment_documents").insert({
     organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
     document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
@@ -229,10 +223,14 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
     telegram_message_id:String(result.messageId||"")
    }).select("id").single();
    if(documentError||!shipmentDocument)throw new Error("SHIPMENT_DOCUMENT_METADATA_SAVE_FAILED");
-   const {error:linkError}=await db.from("file_manager_files")
-    .update({shipment_document_id:shipmentDocument.id})
-    .eq("organization_id",p.organization_id).eq("file_asset_id",assetId);
-   if(linkError)throw new Error("FILE_ARCHIVE_DOCUMENT_LINK_FAILED");
+   // The canonical-document trigger creates exactly one logical file row. Update it
+   // instead of inserting a second row that would violate the unique asset constraint.
+   const {data:fileRow,error:fileError}=await db.from("file_manager_files").update({
+    original_name:name,mime_type:mime,size_bytes:size??0,external_message_id:String(result.messageId||""),
+    document_type:documentType,tags:[],metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId},
+    storage_path:"telegram://"+assetId,created_by:user
+   }).eq("organization_id",p.organization_id).eq("file_asset_id",assetId).select("id").maybeSingle();
+   if(fileError||!fileRow)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
    const {error:completeError}=await db.from("file_manager_upload_jobs").update({
     status:"stored",file_asset_id:assetId,external_message_id:String(result.messageId||""),
     updated_at:new Date().toISOString(),completed_at:new Date().toISOString(),error_code:null
