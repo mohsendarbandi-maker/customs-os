@@ -160,27 +160,6 @@ create policy file_manager_folders_insert on public.file_manager_folders
     and public.user_role()::text in ('owner', 'admin', 'broker', 'accountant', 'warehouse')
   );
 
-drop policy if exists file_manager_folders_insert_client_custom on public.file_manager_folders;
-create policy file_manager_folders_insert_client_custom on public.file_manager_folders
-  for insert to authenticated
-  with check (
-    organization_id = public.user_org_id()
-    and public.user_role()::text = 'client'
-    and folder_type = 'custom'
-    and is_system = false
-    and client_id = public.user_client_id()
-    and shipment_id is not null
-    and parent_id is not null
-    and exists (
-      select 1
-      from public.file_manager_folders parent
-      where parent.id = file_manager_folders.parent_id
-        and parent.organization_id = file_manager_folders.organization_id
-        and parent.shipment_id = file_manager_folders.shipment_id
-        and parent.client_id = public.user_client_id()
-    )
-  );
-
 drop policy if exists file_manager_folders_update on public.file_manager_folders;
 create policy file_manager_folders_update on public.file_manager_folders
   for update to authenticated
@@ -662,11 +641,20 @@ begin
   select s.client_id into v_client
   from public.shipments s
   where s.id=new.shipment_id and s.organization_id=new.organization_id;
+  -- Prefer the exact folder selected by the uploader; use "other" only for legacy records.
   select f.id into v_folder
   from public.file_manager_folders f
-  where f.organization_id=new.organization_id and f.shipment_id=new.shipment_id
-    and f.folder_type='other'
+  where f.id=new.folder_id
+    and f.organization_id=new.organization_id
+    and f.shipment_id=new.shipment_id
   limit 1;
+  if v_folder is null then
+    select f.id into v_folder
+    from public.file_manager_folders f
+    where f.organization_id=new.organization_id and f.shipment_id=new.shipment_id
+      and f.folder_type='other'
+    limit 1;
+  end if;
   if v_folder is not null then
     insert into public.file_manager_files
       (organization_id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,
