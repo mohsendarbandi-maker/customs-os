@@ -19,6 +19,11 @@ const isPlatform = (v:unknown):v is Platform=>["telegram","bale","rubika","whats
 const manager = (p:Profile)=>p.role==="owner"||p.role==="admin";
 const errorCode = (e:unknown)=>(e instanceof Error?e.message:String(e)).replace(/[^A-Za-z0-9_.:-]/g,"_").slice(0,96)||"UPSTREAM_ERROR";
 const cleanName = (s:string)=>s.normalize("NFKC").replace(/[\/\\]/g,"_").split("").map(ch=>{const n=ch.charCodeAt(0);return n<32||n===127?"_":ch;}).join("").replace(/^\.+/,"").trim().slice(0,180)||"document.bin";
+function parseArchiveTags(url:URL):string[]{
+ let value:string[]=[];
+ try{const parsed=JSON.parse(url.searchParams.get("tags")||"[]");if(Array.isArray(parsed))value=parsed.filter((x)=>typeof x==="string");}catch{/* Ignore malformed optional tags; never affect binary upload. */}
+ return [...new Set(value.map((tag)=>cleanName(tag).replace(/,/g," ").trim().slice(0,64)).filter((tag)=>tag&&tag!=="document.bin"))].slice(0,20);
+}
 const cleanMime = (s:string|null)=>{const v=(s||"application/octet-stream").split(";")[0].trim().toLowerCase();return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(v)?v:"application/octet-stream";};
 const token = (n=32)=>{const b=crypto.getRandomValues(new Uint8Array(n));return btoa(String.fromCharCode(...b)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");};
 function out(body:unknown,status=200,req?:Request){const h=new Headers({...noStore,"Content-Type":"application/json; charset=utf-8"});const origin=req?.headers.get("Origin")||"";if(ORIGINS.has(origin)){h.set("Access-Control-Allow-Origin",origin);h.set("Vary","Origin");h.set("Access-Control-Allow-Headers","authorization, apikey, content-type, x-file-name, x-file-size, idempotency-key");h.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");}return new Response(JSON.stringify(body),{status,headers:h});}
@@ -238,7 +243,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
     const {data:companyDocument,error:companyDocumentError}=await db.from("customs_documents").insert({
      organization_id:p.organization_id,client_id:folder.client_id,shipment_id:null,case_id:null,
      document_type:"TECHNICAL_SPEC_CATALOG",original_name:name,display_name:displayName,
-     storage_path:"telegram://"+assetId,mime_type:mime,size_bytes:size,created_by:user,status:"review",tags:[],
+     storage_path:"telegram://"+assetId,mime_type:mime,size_bytes:size,created_by:user,status:"review",tags:archiveTags,
      storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,
      telegram_message_id:String(result.messageId||"")
     }).select("id").single();
