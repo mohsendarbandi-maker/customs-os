@@ -216,8 +216,8 @@ export const FileManagerPage: React.FC = () => {
   useEffect(() => {
     let cancelled=false;
     void supabase.rpc('copy_file_manager_folder',{p_source_folder_id:null,p_target_parent_id:null,p_new_display_name:null})
-      .then(({error:rpcError})=>{if(!cancelled)setFolderCopyAvailable(Boolean(rpcError&&rpcError.message.includes('FILE_MANAGER_COPY_INVALID_INPUT')));})
-      .catch(()=>{if(!cancelled)setFolderCopyAvailable(false);});
+      .then(({error:rpcError})=>{if(!cancelled)setFolderCopyAvailable(Boolean(rpcError&&rpcError.message.includes('FILE_MANAGER_COPY_INVALID_INPUT')));},
+        ()=>{if(!cancelled)setFolderCopyAvailable(false);});
     return ()=>{cancelled=true;};
   },[]);
   useEffect(() => {
