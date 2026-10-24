@@ -903,8 +903,9 @@ begin
     return new;
   end if;
 
-  select s.client_id into v_client
+  select coalesce(s.client_id, ca.client_id) into v_client
   from public.shipments s
+  left join public.cases ca on ca.id=s.case_id and ca.organization_id=s.organization_id
   where s.id=new.shipment_id and s.organization_id=new.organization_id;
 
   select f.id into v_folder
@@ -995,8 +996,9 @@ begin
   v_client := new.client_id;
 
   if v_shipment is not null then
-    select s.client_id into v_client
+    select coalesce(s.client_id, ca.client_id) into v_client
     from public.shipments s
+    left join public.cases ca on ca.id=s.case_id and ca.organization_id=s.organization_id
     where s.id = v_shipment and s.organization_id = new.organization_id;
     v_client := coalesce(new.client_id, v_client);
   end if;
