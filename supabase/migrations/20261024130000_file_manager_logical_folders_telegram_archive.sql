@@ -145,7 +145,7 @@ create or replace function public.validate_custom_file_manager_folder_parent()
 returns trigger
 language plpgsql
 set search_path = public, pg_temp
-as $
+as $$
 declare
   v_parent record;
 begin
@@ -166,7 +166,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 revoke all on function public.validate_custom_file_manager_folder_parent() from public, anon, authenticated;
 drop trigger if exists trg_validate_custom_file_manager_folder_parent on public.file_manager_folders;
@@ -468,7 +468,7 @@ returns void
 language plpgsql
 security definer
 set search_path = public, pg_temp
-as $
+as $$
 declare
   v_org uuid;
   v_client uuid;
@@ -509,7 +509,7 @@ begin
   where organization_id = v_org and parent_id = v_root
     and folder_key = 'client:' || v_client::text;
 end;
-$;
+$$;
 
 revoke all on function public.ensure_client_file_manager_folder(uuid) from public, anon, authenticated;
 
@@ -518,12 +518,12 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public, pg_temp
-as $
+as $$
 begin
   perform public.ensure_client_file_manager_folder(new.id);
   return new;
 end;
-$;
+$$;
 
 revoke all on function public.trigger_ensure_client_file_manager_folder() from public, anon, authenticated;
 drop trigger if exists trg_ensure_client_file_manager_folder on public.clients;
@@ -798,7 +798,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 revoke all on function public.sync_shipment_document_to_file_manager() from public, anon, authenticated;
 drop trigger if exists trg_sync_shipment_document_to_file_manager on public.shipment_documents;
@@ -814,7 +814,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public, pg_temp
-as $
+as $$
 declare
   v_client uuid;
   v_shipment uuid;
@@ -883,7 +883,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 revoke all on function public.sync_customs_document_to_file_manager() from public, anon, authenticated;
 drop trigger if exists trg_sync_customs_document_to_file_manager on public.customs_documents;
