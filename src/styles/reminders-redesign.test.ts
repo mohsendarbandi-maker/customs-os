@@ -27,6 +27,12 @@ describe('Reminders responsive redesign contract', () => {
     expect(css).toContain('.reminders-compose-actions .reminders-submit-button');
   });
 
+  it('keeps theme choices readable and reflects the selected theme', () => {
+    expect(css).toContain('.reminders-theme-options button.is-active');
+    expect(css).toContain('.reminders-app-standalone[data-theme="dark"]');
+    expect(css).toContain('grid-template-columns: minmax(0, 1fr) !important');
+  });
+
   it('defines phone, tablet, desktop, and short-landscape layouts', () => {
     expect(css).toContain('@media (max-width: 767px)');
     expect(css).toContain('@media (min-width: 768px) and (max-width: 1023px)');
