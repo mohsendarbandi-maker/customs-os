@@ -23,7 +23,7 @@ const statuses=[['draft','پیش‌نویس'],['booking_confirmed','تأیید �
 
 export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
- const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);
+ const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const uploadKeys=useRef(new Map<string,string>());
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
  const formDraft=useAutosavedDraft(
   formDraftKey(profile?.id,`shipment-first:${profile?.organization_id||''}`,profile?.organization_id),
