@@ -86,6 +86,7 @@ export const FileManagerPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [tagInput, setTagInput] = useState('');
@@ -408,6 +409,216 @@ export const FileManagerPage: React.FC = () => {
       if (saved) setMessage(`تا پیش از خطا، ${saved} فایل روی ویندوز ذخیره شد.`);
     } finally {
       setExporting(false);
+      setProgress('');
+    }
+  };
+
+  // Manual bidirectional Windows sync. Never deletes either side; differing files are reported as conflicts.
+  const syncWindowsFolder = async () => {
+    if (!currentFolder || !uploadEnabled || !roleCanModifyStructure(role)) {
+      setError('برای همگام‌سازی، پوشه صاحب کالا یا یک زیرپوشه اسناد را انتخاب کنید.');
+      return;
+    }
+    if (currentFolder.folder_type === 'shipment' || currentFolder.folder_type === 'root') {
+      setError('برای همگام‌سازی کامل صاحب کالا، پوشه خود صاحب کالا را انتخاب کنید؛ برای همگام‌سازی محموله، یکی از زیرپوشه‌های آن را انتخاب کنید.');
+      return;
+    }
+    const picker = (window as any).showDirectoryPicker;
+    if (typeof picker !== 'function') {
+      setError('همگام‌سازی پوشه ویندوز در این مرورگر پشتیبانی نمی‌شود؛ از Chrome یا Edge روی ویندوز استفاده کنید.');
+      return;
+    }
+
+    setSyncing(true);
+    setError('');
+    setMessage('');
+    setProgress('بررسی ساختار پوشه‌ها…');
+    let uploaded = 0;
+    let downloaded = 0;
+    let identical = 0;
+    let conflicts = 0;
+    let oversized = 0;
+    try {
+      const localRoot = await picker({ mode: 'readwrite' });
+      const folderPathById = new Map<string, string>([[currentFolder.id, '']]);
+      const serverFolderByPath = new Map<string, FolderRow>([['', currentFolder]]);
+      const ambiguousPaths = new Set<string>();
+      const queue: FolderRow[] = [currentFolder];
+      while (queue.length) {
+        const parent = queue.shift()!;
+        const parentPath = folderPathById.get(parent.id) ?? '';
+        for (const child of folders.filter((item) => item.parent_id === parent.id)) {
+          const segment = windowsName(child.display_name);
+          const childPath = parentPath ? parentPath + '/' + segment : segment;
+          if (serverFolderByPath.has(childPath)) {
+            ambiguousPaths.add(childPath);
+            continue;
+          }
+          folderPathById.set(child.id, childPath);
+          serverFolderByPath.set(childPath, child);
+          queue.push(child);
+        }
+      }
+
+      const localDirectories = new Map<string, any>([['', localRoot]]);
+      const localFiles = new Map<string, { file: File; parentPath: string }>();
+      const walkLocal = async (directory: any, relative: string): Promise<void> => {
+        for await (const [entryName, entry] of directory.entries()) {
+          const name = windowsName(String(entryName));
+          const relativePath = relative ? relative + '/' + name : name;
+          if (entry.kind === 'directory') {
+            if (localDirectories.has(relativePath)) {
+              ambiguousPaths.add(relativePath);
+              continue;
+            }
+            localDirectories.set(relativePath, entry);
+            await walkLocal(entry, relativePath);
+          } else if (entry.kind === 'file' && !['desktop.ini', 'thumbs.db', '.ds_store'].includes(name.toLowerCase())) {
+            if (localFiles.has(relativePath)) {
+              ambiguousPaths.add(relativePath);
+              continue;
+            }
+            localFiles.set(relativePath, { file: await entry.getFile(), parentPath: relative });
+          }
+        }
+      };
+      await walkLocal(localRoot, '');
+
+      const folderIds = [...folderPathById.keys()];
+      const serverFiles: FileRow[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error: listError } = await supabase
+          .from('file_manager_files')
+          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
+          .eq('organization_id', organizationId)
+          .in('folder_id', folderIds)
+          .eq('is_archived', false)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + 499);
+        if (listError) throw listError;
+        const batch = (data || []) as FileRow[];
+        serverFiles.push(...batch);
+        if (batch.length < 500) break;
+      }
+
+      const serverFilesByPath = new Map<string, FileRow>();
+      for (const file of serverFiles) {
+        const parentPath = folderPathById.get(file.folder_id);
+        if (parentPath === undefined) continue;
+        const relativePath = parentPath ? parentPath + '/' + windowsName(file.original_name) : windowsName(file.original_name);
+        if (serverFilesByPath.has(relativePath)) ambiguousPaths.add(relativePath);
+        else serverFilesByPath.set(relativePath, file);
+      }
+
+      const ensureServerFolder = async (relativePath: string): Promise<FolderRow> => {
+        const existing = serverFolderByPath.get(relativePath);
+        if (existing) return existing;
+        const parts = relativePath.split('/').filter(Boolean);
+        const parentPath = parts.slice(0, -1).join('/');
+        const parent = await ensureServerFolder(parentPath);
+        const segment = parts[parts.length - 1];
+        const matching = folders.find((item) => item.parent_id === parent.id && windowsName(item.display_name) === segment);
+        const folder = matching || await getOrCreateSubfolder(parent, segment);
+        serverFolderByPath.set(relativePath, folder);
+        folderPathById.set(folder.id, relativePath);
+        return folder;
+      };
+
+      const ensureLocalFolder = async (relativePath: string): Promise<any> => {
+        if (localDirectories.has(relativePath)) return localDirectories.get(relativePath);
+        const parts = relativePath.split('/').filter(Boolean);
+        let path = '';
+        let handle = localRoot;
+        for (const part of parts) {
+          path = path ? path + '/' + part : part;
+          if (localDirectories.has(path)) {
+            handle = localDirectories.get(path);
+          } else {
+            handle = await handle.getDirectoryHandle(part, { create: true });
+            localDirectories.set(path, handle);
+          }
+        }
+        return handle;
+      };
+
+      // Ensure server-side folders that already exist also exist on the selected Windows tree.
+      for (const folderPath of [...serverFolderByPath.keys()].filter(Boolean).sort((a, b) => a.split('/').length - b.split('/').length)) {
+        if (!ambiguousPaths.has(folderPath)) await ensureLocalFolder(folderPath);
+      }
+
+      const destination = await getFileArchiveDestination();
+      const digest = async (blob: Blob): Promise<string> => {
+        const bytes = await blob.arrayBuffer();
+        const hash = await crypto.subtle.digest('SHA-256', bytes);
+        return Array.from(new Uint8Array(hash)).map((value) => value.toString(16).padStart(2, '0')).join('');
+      };
+
+      for (const [relativePath, local] of localFiles) {
+        if (ambiguousPaths.has(relativePath)) { conflicts += 1; continue; }
+        const remote = serverFilesByPath.get(relativePath);
+        if (remote) {
+          if (Number(remote.size_bytes) !== local.file.size) { conflicts += 1; continue; }
+          setProgress('مقایسهٔ محتوا: ' + relativePath);
+          const remoteBlob = await getFileBlob(remote);
+          if (await digest(local.file) === await digest(remoteBlob)) identical += 1;
+          else conflicts += 1;
+          continue;
+        }
+        if (local.file.size <= 0 || local.file.size > FILE_ARCHIVE_MAX_BYTES) {
+          oversized += 1;
+          continue;
+        }
+        const parent = await ensureServerFolder(local.parentPath);
+        const keyMaterial = [organizationId, parent.id, relativePath, local.file.size, local.file.lastModified].join('|');
+        const keyHash = await digest(new Blob([keyMaterial]));
+        const idempotencyKey = 'windows-sync:' + keyHash;
+        setProgress('ارسال به آرشیو تلگرام: ' + relativePath);
+        await uploadTelegramArchivedFile(local.file, {
+          folderId: parent.id,
+          ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+          documentType: parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG',
+          tags: [],
+          destination,
+          idempotencyKey,
+        });
+        uploaded += 1;
+      }
+
+      for (const [relativePath, remote] of serverFilesByPath) {
+        if (ambiguousPaths.has(relativePath) || localFiles.has(relativePath)) {
+          if (ambiguousPaths.has(relativePath) && !localFiles.has(relativePath)) conflicts += 1;
+          continue;
+        }
+        const slash = relativePath.lastIndexOf('/');
+        const parentPath = slash >= 0 ? relativePath.slice(0, slash) : '';
+        const filename = slash >= 0 ? relativePath.slice(slash + 1) : relativePath;
+        setProgress('دریافت از آرشیو تلگرام: ' + relativePath);
+        const blob = await getFileBlob(remote);
+        const directory = await ensureLocalFolder(parentPath);
+        const fileHandle = await directory.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        downloaded += 1;
+      }
+
+      await loadFolders();
+      await loadFiles(selectedFolderId);
+      const parts = [
+        'همگام‌سازی دستی تمام شد.',
+        uploaded + ' فایل به آرشیو ارسال شد',
+        downloaded + ' فایل از آرشیو دریافت شد',
+        identical + ' فایل یکسان بود',
+        conflicts + ' تعارض برای بررسی دستی نگه داشته شد',
+      ];
+      if (oversized) parts.push(oversized + ' فایل بزرگ‌تر از ۲۰ مگابایت رد شد');
+      parts.push('هیچ فایلی از هیچ‌کدام از دو طرف حذف یا بازنویسی نشد.');
+      setMessage(parts.join('؛ ') + ' همگام‌سازی خودکار پس‌زمینه در این نسخه وجود ندارد.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'همگام‌سازی پوشه ویندوز کامل نشد.');
+      if (uploaded || downloaded) setMessage('تا پیش از خطا: ' + uploaded + ' فایل ارسال و ' + downloaded + ' فایل دریافت شد؛ اجرای بعدی تعارض‌ها را بازنویسی نمی‌کند.');
+    } finally {
+      setSyncing(false);
       setProgress('');
     }
   };
