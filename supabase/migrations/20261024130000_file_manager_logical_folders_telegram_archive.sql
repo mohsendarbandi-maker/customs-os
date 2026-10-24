@@ -776,7 +776,7 @@ as $$
     where d.organization_id = public.user_org_id()
       and (public.user_role()::text <> 'client' or coalesce(s.client_id, ca.client_id) = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
-      and (d.file_manager_search_text ilike q.pattern or ca.file_manager_search_text ilike q.pattern or coalesce(s.display_name, '') ilike q.pattern)
+      and (d.file_manager_search_text ilike q.pattern or ca.file_manager_search_text ilike q.pattern or s.file_manager_search_text ilike q.pattern)
 
     union all
 
@@ -792,12 +792,11 @@ as $$
       and (public.user_role()::text <> 'client' or f.folder_type = 'root' or f.client_id = public.user_client_id())
       and length(trim(coalesce(p_query, ''))) >= 2
       and (
-        f.display_name ilike q.pattern
-        or f.folder_key ilike q.pattern
+        f.file_manager_search_text ilike q.pattern
         or c.file_manager_search_text ilike q.pattern
         or s.file_manager_search_text ilike q.pattern
         or o.file_manager_search_text ilike q.pattern
-        or o.code ilike q.pattern
+        
       )
 
     union all
@@ -819,9 +818,9 @@ as $$
       and (
         fm.file_manager_search_text ilike q.pattern
         or f.file_manager_search_text ilike q.pattern
-        or s.display_name ilike q.pattern
-        or c.name ilike q.pattern
-        or o.name ilike q.pattern
+        or s.file_manager_search_text ilike q.pattern
+        or c.file_manager_search_text ilike q.pattern
+        or o.file_manager_search_text ilike q.pattern
       )
 
     union all
