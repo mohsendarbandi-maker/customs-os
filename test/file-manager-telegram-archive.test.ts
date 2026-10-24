@@ -223,6 +223,14 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('whitespace-normal break-words leading-5');
   });
 
+  it('allows only the trusted legacy-archive path to use the unassigned system folder', () => {
+    expect(gateway).toContain('allowLegacyUnassignedArchive=false');
+    expect(gateway).toContain('folder.folder_key==="unassigned-documents"');
+    expect(gateway).toContain('parent.folder_key==="owners-root"');
+    expect(gateway).toContain('String(operator.id),String(connection.id),true');
+    expect(gateway).toContain('FILE_ARCHIVE_FOLDER_SCOPE_LOOKUP_FAILED');
+  });
+
   it('registers the page and exposes it from the main navigation', () => {
     expect(app).toContain('path="/file-manager"');
     expect(app).toContain("import('./pages/FileManagerPage')");
