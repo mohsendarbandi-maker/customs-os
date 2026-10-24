@@ -1391,3 +1391,21 @@
     flex-basis: 30px !important;
   }
 }
+
+
+/* Keep modal sheets above the shared app header/dock, while preserving nested picker order. */
+.reminders-app-standalone:has(.reminders-composebar.is-open),
+.reminders-app-standalone:has(.reminders-calendar-backdrop),
+.reminders-app-standalone:has(.reminders-calendar-day-overlay) {
+  position: relative !important;
+  z-index: 200 !important;
+}
+.reminders-app-standalone .reminders-calendar-backdrop {
+  z-index: 340 !important;
+}
+.reminders-app-standalone .reminders-calendar-day-overlay {
+  z-index: 330 !important;
+}
+.reminders-app-standalone .reminders-composebar.is-open {
+  z-index: 280 !important;
+}
