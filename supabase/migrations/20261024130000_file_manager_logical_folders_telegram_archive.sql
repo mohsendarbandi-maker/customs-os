@@ -828,9 +828,9 @@ as $$
       and (
         fm.file_manager_search_text ilike q.pattern
         or f.file_manager_search_text ilike q.pattern
-        or s.display_name ilike q.pattern
-        or c.name ilike q.pattern
-        or o.name ilike q.pattern
+        or s.file_manager_search_text ilike q.pattern
+        or c.file_manager_search_text ilike q.pattern
+        or o.file_manager_search_text ilike q.pattern
       )
 
     union all
