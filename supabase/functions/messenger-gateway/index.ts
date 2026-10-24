@@ -24,7 +24,21 @@ function parseArchiveTags(url:URL):string[]{
  try{const parsed=JSON.parse(url.searchParams.get("tags")||"[]");if(Array.isArray(parsed))value=parsed.filter((x)=>typeof x==="string");}catch{/* Ignore malformed optional tags; never affect binary upload. */}
  return [...new Set(value.map((tag)=>cleanName(tag).replace(/,/g," ").trim().slice(0,64)).filter((tag)=>tag&&tag!=="document.bin"))].slice(0,20);
 }
-const cleanMime = (s:string|null)=>{const v=(s||"application/octet-stream").split(";")[0].trim().toLowerCase();return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(v)?v:"application/octet-stream";};
+const cleanMime = (s:string|null)=>{const v=(s||"application/octet-stream").split(";")[0].trim().toLowerCase();return /^[a-z0-9!#const cleanMime = (s:string|null)=>{const v=(s||"application/octet-stream").split(";")[0].trim().toLowerCase();return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(v)?v:"application/octet-stream";};^_.+-]+\/[a-z0-9!#const cleanMime = (s:string|null)=>{const v=(s||"application/octet-stream").split(";")[0].trim().toLowerCase();return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(v)?v:"application/octet-stream";};^_.+-]+$/.test(v)?v:"application/octet-stream";};
+const ensureFileExtension=(name:string,mime:string)=>{
+ const trimmed=cleanName(name),last=trimmed.split("/").pop()||trimmed;
+ if(/\.[a-z0-9]{1,12}$/i.test(last))return trimmed;
+ const ext:Record<string,string>={
+  "application/pdf":"pdf","image/jpeg":"jpg","image/png":"png","image/gif":"gif","image/webp":"webp","image/heic":"heic","image/heif":"heif",
+  "application/zip":"zip","application/x-zip-compressed":"zip","application/vnd.rar":"rar","application/x-7z-compressed":"7z",
+  "text/plain":"txt","text/csv":"csv","text/xml":"xml","application/xml":"xml","application/json":"json",
+  "application/msword":"doc","application/vnd.openxmlformats-officedocument.wordprocessingml.document":"docx",
+  "application/vnd.ms-excel":"xls","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":"xlsx",
+  "application/vnd.ms-powerpoint":"ppt","application/vnd.openxmlformats-officedocument.presentationml.presentation":"pptx",
+  "application/octet-stream":"bin","audio/mpeg":"mp3","audio/ogg":"ogg","audio/wav":"wav","video/mp4":"mp4"
+ };
+ return trimmed+"."+(ext[mime]||"bin");
+};
 const token = (n=32)=>{const b=crypto.getRandomValues(new Uint8Array(n));return btoa(String.fromCharCode(...b)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");};
 function out(body:unknown,status=200,req?:Request){const h=new Headers({...noStore,"Content-Type":"application/json; charset=utf-8"});const origin=req?.headers.get("Origin")||"";if(ORIGINS.has(origin)){h.set("Access-Control-Allow-Origin",origin);h.set("Vary","Origin");h.set("Access-Control-Allow-Headers","authorization, apikey, content-type, x-file-name, x-file-size, idempotency-key");h.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");}return new Response(JSON.stringify(body),{status,headers:h});}
 const bad=(code:string,status=400,req?:Request)=>out({ok:false,error:code},status,req);
@@ -99,7 +113,7 @@ async function sendText(req:Request,p:Profile){
  }
 }function bounded(body:ReadableStream<Uint8Array>,max:number){const r=body.getReader();let total=0;return new ReadableStream<Uint8Array>({async pull(c){const v=await r.read();if(v.done){c.close();try{r.releaseLock();}catch{}return;}total+=v.value.byteLength;if(total>max){await r.cancel();c.error(new Error("FILE_TOO_LARGE"));return;}c.enqueue(v.value);},async cancel(reason){await r.cancel(reason).catch(()=>{});}});}
 function multipart(prefix:string,file:ReadableStream<Uint8Array>,suffix:string){const enc=new TextEncoder(),parts=[new Response(enc.encode(prefix)).body!,file,new Response(enc.encode(suffix)).body!];let i=0,r:ReadableStreamDefaultReader<Uint8Array>|null=null;return new ReadableStream<Uint8Array>({async pull(c){while(i<parts.length){if(!r)r=parts[i].getReader();const v=await r.read();if(!v.done){c.enqueue(v.value);return;}r.releaseLock();r=null;i++;}c.close();},async cancel(reason){if(r)await r.cancel(reason).catch(()=>{});for(let n=i+1;n<parts.length;n++)await parts[n].cancel(reason).catch(()=>{});}});}
-async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:number|null,stream:ReadableStream<Uint8Array>,mediaKind:"file"|"voice"="file",maxOverride?:number,archiveCaption?:string){
+async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:number|null,stream:ReadableStream<Uint8Array>,mediaKind:"file"|"voice"="file",maxOverride?:number,archiveCaption?:string,telegramThreadId?:number|null){
  if(c.platform==="rubika")throw new Error("PLATFORM_TRANSPORT_UNVERIFIED");
  const max=maxOverride??(c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT);
  if(size!==null&&size>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
@@ -109,7 +123,10 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
   const captionPart=c.platform==="telegram"&&caption
    ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\"caption\"\r\n\r\n"+caption+"\r\n"
    :"";
-  const prefix=captionPart+(c.platform==="whatsapp"
+  const threadPart=c.platform==="telegram"&&telegramThreadId!==undefined&&telegramThreadId!==null
+   ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\"message_thread_id\"\r\n\r\n"+String(telegramThreadId)+"\r\n"
+   :"";
+  const prefix=captionPart+threadPart+(c.platform==="whatsapp"
    ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\"messaging_product\"\r\n\r\nwhatsapp\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\"type\"\r\n\r\n"+mime+"\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\"file\"; filename=\""+filename+"\"\r\nContent-Type: "+mime+"\r\n\r\n"
    :"--"+boundary+"\r\nContent-Disposition: form-data; name=\""+(voice?"voice":"document")+"\"; filename=\""+filename+"\"\r\nContent-Type: "+mime+"\r\n\r\n");
   const multipartBody=multipart(prefix,bounded(stream,max),"\r\n--"+boundary+"--\r\n");
@@ -141,7 +158,57 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  }
  if(recordLog)await db.from("message_logs").insert({organization_id:org,connection_id:c.id,direction:"outbound",message_type:"document",external_message_id:result.messageId,external_chat_id:chat,file_asset_id:a.id,status:"sent",payload_summary:{name:result.name,mimeType:mime,sizeBytes:size},sent_at:new Date().toISOString()});
  return String(a.id);
-}async function fileArchiveDestination(p:Profile,req:Request){
+}async function ensureTelegramOwnerTopic(c:Conn,chat:string,org:string,clientId:string|null,ownerName:string):Promise<number>{
+ if(c.platform!=="telegram")throw new Error("TELEGRAM_ARCHIVE_CONNECTION_REQUIRED");
+ const topicKey=clientId||"unassigned";
+ const readTopic=async()=>await db.from("messenger_archive_topics").select("id,topic_id,status,last_error_code")
+  .eq("organization_id",org).eq("connection_id",c.id).eq("external_chat_id",chat).eq("topic_key",topicKey).maybeSingle();
+ let {data:row,error}=await readTopic();
+ if(error)throw new Error("TELEGRAM_OWNER_TOPIC_LOOKUP_FAILED");
+ if(row?.status==="ready"&&Number(row.topic_id)>0)return Number(row.topic_id);
+ if(row?.status==="creating")throw new Error("TELEGRAM_OWNER_TOPIC_SETUP_IN_PROGRESS");
+ const topicName=("👤 "+ownerName).replace(/[\r\n]/g," ").slice(0,120)||"صاحب کالا";
+ if(!row){
+  const {data:created,error:createError}=await db.from("messenger_archive_topics").insert({
+   organization_id:org,connection_id:c.id,external_chat_id:chat,topic_key:topicKey,
+   client_id:clientId,topic_name:topicName,status:"creating",updated_at:new Date().toISOString()
+  }).select("id,topic_id,status").single();
+  if(createError){
+   if(createError.code==="23505"){
+    const latest=await readTopic();
+    if(latest.data?.status==="ready"&&Number(latest.data.topic_id)>0)return Number(latest.data.topic_id);
+    throw new Error("TELEGRAM_OWNER_TOPIC_SETUP_IN_PROGRESS");
+   }
+   throw new Error("TELEGRAM_OWNER_TOPIC_CREATE_RECORD_FAILED");
+  }
+  row=created;
+ }else{
+  const {data:claimed,error:claimError}=await db.from("messenger_archive_topics").update({
+   status:"creating",topic_name:topicName,last_error_code:null,updated_at:new Date().toISOString()
+  }).eq("id",row.id).eq("status","failed").select("id,topic_id,status").maybeSingle();
+  if(claimError||!claimed)throw new Error("TELEGRAM_OWNER_TOPIC_SETUP_IN_PROGRESS");
+  row=claimed;
+ }
+ try{
+  const response=await apiJson(botBase(c,await accessToken(c))+"createForumTopic",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({chat_id:chat,name:topicName})
+  });
+  const threadId=Number(response.result?.message_thread_id||0);
+  if(!Number.isSafeInteger(threadId)||threadId<=0)throw new Error("TELEGRAM_TOPIC_ID_MISSING");
+  const {error:saveError}=await db.from("messenger_archive_topics").update({
+   topic_id:threadId,status:"ready",last_error_code:null,updated_at:new Date().toISOString()
+  }).eq("id",row.id);
+  if(saveError)throw new Error("TELEGRAM_OWNER_TOPIC_SAVE_FAILED");
+  return threadId;
+ }catch(e){
+  const code=errorCode(e);
+  await db.from("messenger_archive_topics").update({status:"failed",last_error_code:code,updated_at:new Date().toISOString()}).eq("id",row.id);
+  if(code==="UPSTREAM_400")throw new Error("TELEGRAM_FORUM_REQUIRED: گروه آرشیو باید سوپرگروه خصوصی با Topics فعال باشد و ربات دسترسی مدیریت تاپیک داشته باشد.");
+  throw e;
+ }
+}
+async function fileArchiveDestination(p:Profile,req:Request){
  const {data:connections,error}=await db.from("messenger_connections")
   .select("id,organization_id,platform,display_name,enabled")
   .eq("organization_id",p.organization_id).eq("platform","telegram").eq("enabled",true)
@@ -373,9 +440,10 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
   requestedShipmentId=u.searchParams.get("shipmentId")||"",
   documentType=cleanName(u.searchParams.get("documentType")||"other"),
    archiveTags=parseArchiveTags(u),
-  name=cleanName(decodeURIComponent(req.headers.get("X-File-Name")||u.searchParams.get("filename")||"document.bin")),
-  displayName=cleanName(u.searchParams.get("documentName")||name),
+  rawName=cleanName(decodeURIComponent(req.headers.get("X-File-Name")||u.searchParams.get("filename")||"document.bin")),
   mime=cleanMime(req.headers.get("Content-Type")),
+  name=ensureFileExtension(rawName,mime),
+  displayName=ensureFileExtension(cleanName(u.searchParams.get("documentName")||name),mime),
   h=req.headers.get("x-file-size")||req.headers.get("content-length"),
   size=h&&/^\d+$/.test(h)?Number(h):null,
   archive=Boolean(folderId||requestedShipmentId),
@@ -536,7 +604,8 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
     telegramChatId:chat,telegramConnectionId:c.id,telegramMessageId:null
    };
    telegramCallStarted=true;
-   result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption);
+   const ownerTopicId=await ensureTelegramOwnerTopic(c,chat,p.organization_id,folder.client_id||null,ownerName);
+   result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId);
    assetMetadata.telegramFileId=result.fileId;
    assetMetadata.telegramFileUniqueId=result.uniqueId||null;
    assetMetadata.telegramMessageId=String(result.messageId||"");
