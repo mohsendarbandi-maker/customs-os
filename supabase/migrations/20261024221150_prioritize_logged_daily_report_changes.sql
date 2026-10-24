@@ -282,6 +282,7 @@ begin
   select coalesce(jsonb_agg(to_jsonb(t) order by case when t.change_type in ('tracking','workflow') then 0 else 1 end, t.occurred_at desc), '[]'::jsonb)
     into v_recent_changes
   from (
+    select * from (
     select
       e.created_at as occurred_at,
       'tracking'::text as change_type,
@@ -363,7 +364,8 @@ begin
         where d.organization_id = s.organization_id and d.shipment_id = s.id
           and w.created_at >= v_start and w.created_at < v_end
       )
-    order by case when change_type in ('tracking','workflow') then 0 else 1 end, occurred_at desc
+    ) changes
+    order by case when changes.change_type in ('tracking','workflow') then 0 else 1 end, changes.occurred_at desc
     limit 10
   ) t;
 
