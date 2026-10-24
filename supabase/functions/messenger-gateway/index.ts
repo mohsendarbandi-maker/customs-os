@@ -99,15 +99,19 @@ async function sendText(req:Request,p:Profile){
  }
 }function bounded(body:ReadableStream<Uint8Array>,max:number){const r=body.getReader();let total=0;return new ReadableStream<Uint8Array>({async pull(c){const v=await r.read();if(v.done){c.close();try{r.releaseLock();}catch{}return;}total+=v.value.byteLength;if(total>max){await r.cancel();c.error(new Error("FILE_TOO_LARGE"));return;}c.enqueue(v.value);},async cancel(reason){await r.cancel(reason).catch(()=>{});}});}
 function multipart(prefix:string,file:ReadableStream<Uint8Array>,suffix:string){const enc=new TextEncoder(),parts=[new Response(enc.encode(prefix)).body!,file,new Response(enc.encode(suffix)).body!];let i=0,r:ReadableStreamDefaultReader<Uint8Array>|null=null;return new ReadableStream<Uint8Array>({async pull(c){while(i<parts.length){if(!r)r=parts[i].getReader();const v=await r.read();if(!v.done){c.enqueue(v.value);return;}r.releaseLock();r=null;i++;}c.close();},async cancel(reason){if(r)await r.cancel(reason).catch(()=>{});for(let n=i+1;n<parts.length;n++)await parts[n].cancel(reason).catch(()=>{});}});}
-async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:number|null,stream:ReadableStream<Uint8Array>,mediaKind:"file"|"voice"="file",maxOverride?:number){
+async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:number|null,stream:ReadableStream<Uint8Array>,mediaKind:"file"|"voice"="file",maxOverride?:number,archiveCaption?:string){
  if(c.platform==="rubika")throw new Error("PLATFORM_TRANSPORT_UNVERIFIED");
  const max=maxOverride??(c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT);
  if(size!==null&&size>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
  const voice=mediaKind==="voice"&&(c.platform!=="telegram"||mime==="audio/ogg"||mime==="audio/opus");
  const boundary="----CustomsOS"+token(16),filename=cleanName(name).replace(/["\r\n]/g,"_");
- const prefix=c.platform==="whatsapp"
-  ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\"messaging_product\"\r\n\r\nwhatsapp\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\"type\"\r\n\r\n"+mime+"\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\"file\"; filename=\""+filename+"\"\r\nContent-Type: "+mime+"\r\n\r\n"
-  :"--"+boundary+"\r\nContent-Disposition: form-data; name=\""+(voice?"voice":"document")+"\"; filename=\""+filename+"\"\r\nContent-Type: "+mime+"\r\n\r\n";
+ const caption=String(archiveCaption||"").replace(/\r/g,"").slice(0,950);
+ const captionPart=c.platform==="telegram"&&caption
+  ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\\"caption\\"\r\n\r\n"+caption+"\r\n"
+  :"";
+ const prefix=captionPart+(c.platform==="whatsapp"
+  ?"--"+boundary+"\r\nContent-Disposition: form-data; name=\\"messaging_product\\"\r\n\r\nwhatsapp\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\\"type\\"\r\n\r\n"+mime+"\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\\"file\\"; filename=\\""+filename+"\\"\r\nContent-Type: "+mime+"\r\n\r\n"
+  :"--"+boundary+"\r\nContent-Disposition: form-data; name=\\""+(voice?"voice":"document")+"\\"; filename=\\""+filename+"\\"\r\nContent-Type: "+mime+"\r\n\r\n");
  const multipartBody=multipart(prefix,bounded(stream,max),"\r\n--"+boundary+"--\r\n");
  if(c.platform==="whatsapp"){
   const pid=String(c.config.phoneNumberId||c.external_account_id);
@@ -126,10 +130,10 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  const d=await r.json() as any,result=voice?d.result?.voice:d.result?.document;
  if(!r.ok||d.ok===false||!result?.file_id)throw new Error(c.platform.toUpperCase()+"_UPLOAD_FAILED");
  return {fileId:String(result.file_id),uniqueId:result.file_unique_id?String(result.file_unique_id):null,messageId:String(d.result?.message_id||""),name:filename};
-}async function storeAsset(org:string,user:string|null,c:Conn,chat:string,result:any,mime:string,size:number|null,source:string,shipment:string|null,recordLog=true){
- const {data:a,error}=await db.from("file_assets").insert({organization_id:org,original_name:result.name,mime_type:mime,size_bytes:size,source_platform:source,created_by:user,metadata:{transferMode:"stream"}}).select("id").single();
+}async function storeAsset(org:string,user:string|null,c:Conn,chat:string,result:any,mime:string,size:number|null,source:string,shipment:string|null,recordLog=true,assetMetadata:Record<string,unknown>={}){
+ const {data:a,error}=await db.from("file_assets").insert({organization_id:org,original_name:result.name,mime_type:mime,size_bytes:size,source_platform:source,created_by:user,metadata:{transferMode:"stream",...assetMetadata}}).select("id").single();
  if(error||!a)throw new Error("FILE_METADATA_SAVE_FAILED");
- const {error:le}=await db.from("file_locations").insert({organization_id:org,file_asset_id:a.id,connection_id:c.id,external_file_id:result.fileId,external_file_unique_id:result.uniqueId,external_chat_id:chat,external_message_id:result.messageId,availability_status:"available",metadata:{streamed:true}});
+ const {error:le}=await db.from("file_locations").insert({organization_id:org,file_asset_id:a.id,connection_id:c.id,external_file_id:result.fileId,external_file_unique_id:result.uniqueId,external_chat_id:chat,external_message_id:result.messageId,availability_status:"available",metadata:{streamed:true,...assetMetadata}});
  if(le)throw new Error("FILE_LOCATION_SAVE_FAILED");
  if(shipment){
   const {error:shipmentError}=await db.from("shipment_files").upsert({organization_id:org,shipment_id:shipment,file_asset_id:a.id,document_type:mime==="application/pdf"?"customs_document":"other",created_by:user},{onConflict:"shipment_id,file_asset_id,document_type"});
@@ -182,13 +186,13 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   let shipment:any=null;
   if(requestedShipmentId){
    const {data:shipmentRow,error:shipmentError}=await db.from("shipments")
-    .select("id,organization_id,client_id")
+    .select("id,organization_id,client_id,display_name,bill_of_lading_no,customs_office_id")
     .eq("id",requestedShipmentId).eq("organization_id",p.organization_id).maybeSingle();
    if(shipmentError||!shipmentRow)return bad("SHIPMENT_NOT_FOUND",404,req);
    shipment=shipmentRow;
   }
   const {data:folder,error:folderError}=await db.from("file_manager_folders")
-   .select("id,organization_id,shipment_id,client_id,folder_type")
+   .select("id,organization_id,shipment_id,client_id,folder_type,display_name,customs_office_id,parent_id")
    .eq("id",folderId).eq("organization_id",p.organization_id).maybeSingle();
   if(folderError||!folder)return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
   if(shipment){
@@ -229,8 +233,25 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
   let result:any=null,assetId:string|null=null,telegramCallStarted=false;
   try{
    telegramCallStarted=true;
-   result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT);
-   assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment?.id??null,false);
+   const officeId=folder.customs_office_id||shipment?.customs_office_id||null;
+   const archiveCaption=[
+    "Customs OS · File Archive",
+    "File: "+displayName,
+    "Folder: "+String(folder.display_name||folder.folder_type),
+    "Folder ID: "+folder.id,
+    "Owner ID: "+String(folder.client_id||"-"),
+    "Shipment: "+String(shipment?.display_name||shipment?.bill_of_lading_no||"اسناد صاحب کالا"),
+    "Shipment ID: "+String(shipment?.id||"-"),
+    "Customs Office ID: "+String(officeId||"-"),
+    "Tags: "+(archiveTags.length?archiveTags.join(", "):"-")
+   ].join("\n").slice(0,950);
+   const assetMetadata={
+    archiveMode:"telegram_file_archive",folderId:folder.id,folderName:String(folder.display_name||folder.folder_type),
+    folderType:folder.folder_type,parentFolderId:folder.parent_id||null,clientId:folder.client_id||null,
+    shipmentId:shipment?.id||null,customsOfficeId:officeId,archiveTags,telegramCaption:archiveCaption
+   };
+   result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption);
+   assetId=await storeAsset(p.organization_id,user,c,chat,result,mime,size,"website",shipment?.id??null,false,assetMetadata);
    if(shipment){
     const {data:shipmentDocument,error:documentError}=await db.from("shipment_documents").insert({
      organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
@@ -256,7 +277,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
    // The canonical document trigger creates the logical file row; do not insert a duplicate.
    const {data:fileRow,error:fileError}=await db.from("file_manager_files").update({
     original_name:name,mime_type:mime,size_bytes:size,external_message_id:String(result.messageId||""),
-    document_type:documentType,tags:archiveTags,metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId,archiveTags},
+    document_type:documentType,tags:archiveTags,metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId,...assetMetadata},
     storage_path:"telegram://"+assetId,created_by:user,is_archived:false,updated_at:new Date().toISOString()
    }).eq("organization_id",p.organization_id).eq("file_asset_id",assetId).select("id").maybeSingle();
    if(fileError||!fileRow)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
