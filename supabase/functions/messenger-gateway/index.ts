@@ -485,7 +485,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string){
     "Tags: "+(archiveTags.length?archiveTags.join(", "):"-"),
     "Tag tokens: "+(telegramTagTokens.join(" ")||"-")
    ].join("\n").slice(0,950);
-   const assetMetadata={
+   const assetMetadata:Record<string,unknown>={
     archiveMode:"telegram_file_archive",idempotencyKey,documentName:displayName,originalName:name,folderId:folder.id,folderName:currentFolderName,
     shipmentFolderName,ownerName,folderType:folder.folder_type,parentFolderId:folder.parent_id||null,
     clientId:folder.client_id||null,shipmentId:shipment?.id||null,customsOfficeId:officeId,
