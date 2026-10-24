@@ -494,7 +494,7 @@ begin
   new.file_manager_search_text := (to_jsonb(new) - 'file_manager_search_text')::text;
   return new;
 end;
-$;
+$$;
 
 revoke all on function public.set_file_manager_search_text() from public, anon, authenticated;
 
@@ -511,7 +511,7 @@ alter table public.customs_declarations add column if not exists file_manager_se
 alter table public.shipment_documents add column if not exists file_manager_search_text text not null default '';
 alter table public.customs_documents add column if not exists file_manager_search_text text not null default '';
 
-do $
+do $$
 declare t text;
 begin
   foreach t in array array[
@@ -522,7 +522,7 @@ begin
     execute format('drop trigger if exists trg_file_manager_search_text on public.%I', t);
     execute format('create trigger trg_file_manager_search_text before insert or update on public.%I for each row execute function public.set_file_manager_search_text()', t);
   end loop;
-end $;
+end $$;
 
 create index if not exists file_manager_folders_search_text_trgm_idx on public.file_manager_folders using gin (file_manager_search_text extensions.gin_trgm_ops);
 create index if not exists file_manager_files_search_text_trgm_idx on public.file_manager_files using gin (file_manager_search_text extensions.gin_trgm_ops);
@@ -629,7 +629,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 revoke all on function public.sync_shipment_document_to_file_manager() from public, anon, authenticated;
 drop trigger if exists trg_sync_shipment_document_to_file_manager on public.shipment_documents;
