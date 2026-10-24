@@ -460,6 +460,8 @@ export const FileManagerPage: React.FC = () => {
         }
       }
 
+      const canonicalPath = (value: string) => value.normalize('NFKC').toLocaleLowerCase('en-US');
+      const ambiguousFileKeys = new Set<string>();
       const localDirectories = new Map<string, any>([['', localRoot]]);
       const localFiles = new Map<string, { file: File; parentPath: string }>();
       const walkLocal = async (directory: any, relative: string): Promise<void> => {
@@ -474,11 +476,12 @@ export const FileManagerPage: React.FC = () => {
             localDirectories.set(relativePath, entry);
             await walkLocal(entry, relativePath);
           } else if (entry.kind === 'file' && !['desktop.ini', 'thumbs.db', '.ds_store'].includes(name.toLowerCase())) {
-            if (localFiles.has(relativePath)) {
-              ambiguousPaths.add(relativePath);
+            const key = canonicalPath(relativePath);
+            if (localFiles.has(key)) {
+              ambiguousFileKeys.add(key);
               continue;
             }
-            localFiles.set(relativePath, { file: await entry.getFile(), parentPath: relative });
+            localFiles.set(key, { file: await entry.getFile(), parentPath: relative, relativePath });
           }
         }
       };
@@ -501,13 +504,14 @@ export const FileManagerPage: React.FC = () => {
         if (batch.length < 500) break;
       }
 
-      const serverFilesByPath = new Map<string, FileRow>();
+      const serverFilesByPath = new Map<string, { file: FileRow; relativePath: string }>();
       for (const file of serverFiles) {
         const parentPath = folderPathById.get(file.folder_id);
         if (parentPath === undefined) continue;
         const relativePath = parentPath ? parentPath + '/' + windowsName(file.original_name) : windowsName(file.original_name);
-        if (serverFilesByPath.has(relativePath)) ambiguousPaths.add(relativePath);
-        else serverFilesByPath.set(relativePath, file);
+        const key = canonicalPath(relativePath);
+        if (serverFilesByPath.has(key)) ambiguousFileKeys.add(key);
+        else serverFilesByPath.set(key, { file, relativePath });
       }
 
       const ensureServerFolder = async (relativePath: string): Promise<FolderRow> => {
@@ -553,9 +557,11 @@ export const FileManagerPage: React.FC = () => {
         return Array.from(new Uint8Array(hash)).map((value) => value.toString(16).padStart(2, '0')).join('');
       };
 
-      for (const [relativePath, local] of localFiles) {
-        if (ambiguousPaths.has(relativePath)) { conflicts += 1; continue; }
-        const remote = serverFilesByPath.get(relativePath);
+      for (const [relativeKey, local] of localFiles) {
+        const relativePath = local.relativePath;
+        if (ambiguousPaths.has(relativePath) || ambiguousFileKeys.has(relativeKey)) { conflicts += 1; continue; }
+        const remoteEntry = serverFilesByPath.get(relativeKey);
+        const remote = remoteEntry?.file;
         if (remote) {
           if (Number(remote.size_bytes) !== local.file.size) { conflicts += 1; continue; }
           setProgress('مقایسهٔ محتوا: ' + relativePath);
@@ -584,9 +590,11 @@ export const FileManagerPage: React.FC = () => {
         uploaded += 1;
       }
 
-      for (const [relativePath, remote] of serverFilesByPath) {
-        if (ambiguousPaths.has(relativePath) || localFiles.has(relativePath)) {
-          if (ambiguousPaths.has(relativePath) && !localFiles.has(relativePath)) conflicts += 1;
+      for (const [relativeKey, remoteEntry] of serverFilesByPath) {
+        const relativePath = remoteEntry.relativePath;
+        const remote = remoteEntry.file;
+        if (ambiguousFileKeys.has(relativeKey) || localFiles.has(relativeKey)) {
+          if (ambiguousFileKeys.has(relativeKey) && !localFiles.has(relativeKey)) conflicts += 1;
           continue;
         }
         const slash = relativePath.lastIndexOf('/');
