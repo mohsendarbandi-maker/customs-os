@@ -179,7 +179,7 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
      </div>
      <div className="flex items-center gap-2">
       <AddReminderButton entityType="shipments" entityId={selected} defaultTitle={`پیگیری محموله ${selectedRow?.display_name||selectedRow?.bill_of_lading_no||''}`}/>
-      <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-blue-600 text-white font-bold">
+      <Link to={'/file-manager?shipmentId='+selected} className="px-4 py-2.5 rounded-xl border app-border font-bold text-sm">بازکردن پوشه فایل‌منیجر</Link><label className="cursor-pointer px-4 py-2.5 rounded-xl bg-blue-600 text-white font-bold">
        <Upload size={16} className="inline ml-1"/>{uploading?'در حال آپلود...':'آپلود فایل'}
        <input type="file" multiple className="hidden" disabled={uploading} onChange={e=>{void upload(e.target.files);e.currentTarget.value=''}}/>
       </label>
