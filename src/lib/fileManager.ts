@@ -103,6 +103,7 @@ export async function uploadTelegramArchivedFile(
     shipmentId: string;
     documentType?: string;
     destination?: FileArchiveDestination;
+    idempotencyKey?: string;
   },
 ): Promise<TelegramArchiveUpload> {
   if (file.size <= 0) throw new Error('فایل خالی است.');
@@ -126,7 +127,7 @@ export async function uploadTelegramArchivedFile(
         'Content-Type': file.type || 'application/octet-stream',
         'X-File-Name': encodeURIComponent(file.name),
         'X-File-Size': String(file.size),
-        'Idempotency-Key': crypto.randomUUID(),
+        'Idempotency-Key': input.idempotencyKey || crypto.randomUUID(),
       },
       body: file,
     },
@@ -137,12 +138,24 @@ export async function uploadTelegramArchivedFile(
 
 export async function downloadTelegramArchivedFile(fileAssetId: string): Promise<Blob> {
   if (!fileAssetId) throw new Error('شناسه فایل معتبر نیست.');
-  const response = await authorizedRequest(
-    `/api/messenger/files/${encodeURIComponent(fileAssetId)}/download`,
-    { method: 'GET' },
-  );
-  if (!(response instanceof Response)) {
-    throw new Error('پاسخ دانلود فایل معتبر نیست.');
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.access_token) throw new Error('نشست معتبر نیست؛ دوباره وارد وب‌سایت شوید.');
+  const headers = new Headers();
+  headers.set('Authorization', `Bearer ${data.session.access_token}`);
+  const apiKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+  if (apiKey) headers.set('apikey', apiKey);
+  const response = await fetch(`/api/messenger/files/${encodeURIComponent(fileAssetId)}/download`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const code = String(body?.error || 'FILE_DOWNLOAD_FAILED');
+    if (code === 'SOURCE_FILE_OVER_DOWNLOAD_LIMIT') {
+      throw new Error('بازیابی این فایل از Bot API معمولی تلگرام پشتیبانی نمی‌شود؛ برای فایل‌های بزرگ‌تر، Local Bot API Server لازم است.');
+    }
+    throw new Error(code);
   }
   return response.blob();
 }
