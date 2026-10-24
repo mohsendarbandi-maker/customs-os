@@ -61,6 +61,8 @@ const byteLabel = (bytes: number) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} کیلوبایت`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} مگابایت`;
 };
+// Windows disallows control characters in file and directory names.
+// eslint-disable-next-line no-control-regex
 const windowsName = (value: string) =>
   value.normalize('NFKC').replace(/[<>:"\/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/g, '').slice(0, 120) || 'بدون نام';
 const folderSlug = (value: string) =>
