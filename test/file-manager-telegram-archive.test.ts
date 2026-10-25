@@ -56,8 +56,10 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(gateway).toContain('async function reconcileTelegramArchiveMetadata');
     expect(gateway).toContain('reconciled:true');
     expect(gateway).toContain('FILE_UPLOAD_RECONCILIATION_REQUIRED');
-    expect(gateway).toContain('if(existing&&existing.status!=="failed")');
-    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId)');
+    expect(gateway).toContain('if(existing&&existing.status!=="failed"&&!retryBeforeTelegram)');
+    expect(gateway).toContain('telegram_call_started_at:startedAt');
+    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,sourceBody,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId)');
+    expect(gateway).toContain('FILE_UPLOAD_RECONCILIATION_REQUIRED');
   });
 
   it('uses content-bound deterministic upload keys across all browser upload flows', () => {
@@ -75,7 +77,9 @@ describe('Telegram-backed Customs OS file manager', () => {
 
   it('enforces the Telegram download-size limit while streaming at the server', () => {
     expect(gateway).toContain('maxOverride?:number');
-    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId)');
+    expect(gateway).toContain('sourceBody=req.body');
+    expect(gateway).toContain('uploadStream(c,chat,name,mime,size,sourceBody,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId)');
+    expect(gateway).toContain('X-File-Upload-Staging-Path');
     expect(fileManagerClient).toContain('FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES = 20 * 1024 * 1024');
     expect(fileManagerClient).toContain('FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES');
   });
