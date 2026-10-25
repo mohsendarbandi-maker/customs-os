@@ -2,6 +2,7 @@ import { supabase } from '../../lib/supabase';
 import { makeClientId } from '../../lib/clientId';
 import { sendChatRpc } from '../../lib/offlineQueue';
 import type { ChatConversation, ChatMessage, ChatMessageReceipt } from './types';
+import { mergeChatConversationSources } from './conversationModel';
 
 const unwrap = <T>(result: { data: T | null; error: { message: string } | null }): T => {
   if (result.error) throw new Error(result.error.message);
@@ -84,12 +85,7 @@ export async function listConversations(): Promise<ChatConversation[]> {
     shipment_status: item.shipment_status,
   }));
 
-  return [...regular, ...hierarchyConversations].sort((a, b) => {
-    if ((a.hierarchy_kind === 'owner_group') !== (b.hierarchy_kind === 'owner_group')) {
-      return a.hierarchy_kind === 'owner_group' ? -1 : 1;
-    }
-    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-  });
+  return mergeChatConversationSources(regular, hierarchyConversations);
 }
 
 async function enrichMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
