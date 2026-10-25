@@ -77,8 +77,10 @@ export const PwaLifecycle: React.FC = () => {
       }, 1500);
     };
 
-    if (document.readyState === 'complete') start();
-    else window.addEventListener('load', start, { once: true });
+    // Start independently of the load event: this component can mount after
+    // window.load has already fired, in which case waiting for that event hangs
+    // registration forever. A delayed registration still keeps startup lightweight.
+    start();
 
     const onInstall = (event: Event) => {
       event.preventDefault();
@@ -94,7 +96,6 @@ export const PwaLifecycle: React.FC = () => {
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
-      window.removeEventListener('load', start);
       window.removeEventListener('beforeinstallprompt', onInstall);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
