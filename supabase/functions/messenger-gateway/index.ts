@@ -158,7 +158,7 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  }
  if(recordLog)await db.from("message_logs").insert({organization_id:org,connection_id:c.id,direction:"outbound",message_type:"document",external_message_id:result.messageId,external_chat_id:chat,file_asset_id:a.id,status:"sent",payload_summary:{name:result.name,mimeType:mime,sizeBytes:size},sent_at:new Date().toISOString()});
  return String(a.id);
-}async function ensureTelegramOwnerTopic(c:Conn,chat:string,org:string,clientId:string|null,ownerName:string):Promise<number>{
+}async function ensureTelegramOwnerTopic(c:Conn,chat:string,org:string,clientId:string|null,ownerName:string):Promise<number|null>{
  if(c.platform!=="telegram")throw new Error("TELEGRAM_ARCHIVE_CONNECTION_REQUIRED");
  const topicKey=clientId||"unassigned";
  const readTopic=async()=>await db.from("messenger_archive_topics").select("id,topic_id,status,last_error_code")
