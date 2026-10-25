@@ -1,0 +1,318 @@
+/* Mobile polish: compact File Manager, consistent reminders appearance, readable shipment cards. */
+@media (max-width: 767px) {
+  .customs-home {
+    padding-bottom: calc(136px + env(safe-area-inset-bottom)) !important;
+  }
+  .file-manager-page {
+    padding-bottom: calc(136px + env(safe-area-inset-bottom)) !important;
+  }
+  .file-manager-page > div > header {
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .file-manager-page > div > header > div:first-child {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+  .file-manager-page h1 {
+    font-size: 1.2rem !important;
+    line-height: 1.35 !important;
+    overflow-wrap: anywhere;
+  }
+  .file-manager-page-actions {
+    display: grid !important;
+    width: 100%;
+    grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr) minmax(0, .9fr);
+    gap: 6px !important;
+  }
+  .file-manager-page-actions > a,
+  .file-manager-page-actions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    min-height: 42px;
+    padding-inline: 6px !important;
+    text-align: center;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .file-manager-archive-status {
+    min-width: 0;
+    padding: 9px !important;
+    gap: 8px !important;
+  }
+  .file-manager-archive-status > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 7px;
+  }
+  .file-manager-archive-status > div:first-child > div {
+    min-width: 0;
+  }
+  .file-manager-archive-status .text-sm {
+    display: block;
+    max-width: 100%;
+    font-size: 12px !important;
+    line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .file-manager-archive-status > a {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 0 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .file-manager-archive-help {
+    margin-block: -2px 0;
+    padding-inline: 2px;
+    line-height: 1.6;
+  }
+  .file-manager-archive-help summary {
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  .file-manager-archive-help p {
+    margin: 0 0 6px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--surface-2);
+    line-height: 1.7;
+  }
+  .file-manager-page section.rounded-2xl > label input {
+    min-height: 46px;
+  }
+
+  .shipment-status-toolbar {
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+  .shipment-status-toolbar > div:first-child {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 7px;
+  }
+  .shipment-status-toolbar > div:first-child h2 {
+    font-size: 13px !important;
+  }
+  .shipment-status-toolbar > div:first-child > span {
+    font-size: 10px !important;
+  }
+  .shipment-status-search {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    margin: 0;
+    order: 3;
+  }
+  .shipment-compact-list {
+    display: flex !important;
+    flex-direction: column;
+    gap: 9px;
+    width: 100%;
+    min-width: 0;
+    padding: 9px;
+    overflow: visible !important;
+  }
+  .shipment-compact-row {
+    display: grid !important;
+    width: 100%;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    grid-template-columns: minmax(0, 1fr) 36px !important;
+    grid-template-rows: auto auto auto auto;
+    align-items: center;
+    gap: 8px 7px !important;
+    padding: 11px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 14px;
+    background: var(--surface-2);
+  }
+  .shipment-name {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    min-width: 0;
+    padding: 0 !important;
+    align-items: flex-start;
+    gap: 3px;
+  }
+  .shipment-name b {
+    display: -webkit-box !important;
+    max-width: 100%;
+    white-space: normal !important;
+    overflow: hidden !important;
+    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+  }
+  .shipment-name span {
+    max-width: 100%;
+    font-size: 10px !important;
+    line-height: 1.4;
+  }
+  .shipment-go {
+    grid-column: 2;
+    grid-row: 1;
+    width: 36px;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    align-self: start;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  }
+  .shipment-kottaj {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+    max-width: 100%;
+    min-width: 0;
+    padding: 4px 9px;
+    border-radius: 8px;
+    background: var(--surface);
+    direction: rtl !important;
+    text-align: start !important;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 10px !important;
+    line-height: 1.5;
+  }
+  .shipment-stages {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    display: grid !important;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: start;
+    justify-content: stretch;
+    gap: 3px !important;
+    padding: 9px 0 5px;
+    border-top: 1px solid var(--border);
+  }
+  .shipment-stage-dot {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100% !important;
+    height: auto !important;
+    min-width: 0 !important;
+    flex: 0 1 auto !important;
+    gap: 4px;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+  .shipment-stage-number {
+    display: grid;
+    place-items: center;
+    width: 27px;
+    height: 27px;
+    border: 1.5px solid var(--border);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1;
+  }
+  .shipment-stage-label {
+    display: block !important;
+    max-width: 100%;
+    color: var(--text-muted);
+    font-size: 9px !important;
+    font-weight: 700;
+    line-height: 1.3;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+  }
+  .shipment-stage-dot.done .shipment-stage-number {
+    border-color: var(--success);
+    background: color-mix(in srgb, var(--success) 9%, var(--surface));
+    color: var(--success);
+  }
+  .shipment-stage-dot.current .shipment-stage-number {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: #fff;
+  }
+  .shipment-stage-dot.chosen .shipment-stage-number {
+    outline: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+    outline-offset: 2px;
+  }
+  .shipment-stage-dot.current .shipment-stage-label,
+  .shipment-stage-dot.chosen .shipment-stage-label {
+    color: var(--primary);
+  }
+  .shipment-current-stage {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    justify-content: flex-start;
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    padding-top: 7px;
+    border-top: 1px solid var(--border);
+    color: var(--primary);
+    font-size: 12px !important;
+    font-weight: 800;
+    white-space: normal;
+    text-align: start;
+  }
+  .shipment-warnings,
+  .shipment-expanded {
+    width: auto;
+    min-width: 0 !important;
+    max-width: 100%;
+    margin: -9px 9px 0;
+    overflow-wrap: anywhere;
+  }
+  .shipment-warnings {
+    gap: 7px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-top: 0;
+    border-radius: 0 0 12px 12px;
+    font-size: 10px !important;
+    line-height: 1.55;
+  }
+  .shipment-warnings span {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .shipment-expanded {
+    margin-top: -1px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .shipment-expanded-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+  .shipment-details-grid {
+    gap: 7px 12px;
+    font-size: 11px !important;
+    line-height: 1.6;
+  }
+  .exit-three-checks {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
