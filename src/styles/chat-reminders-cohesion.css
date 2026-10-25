@@ -3,7 +3,8 @@
 /* Reminders intentionally inherit --primary, --surface and theme from the global AppearanceProvider.
    Do not add a page-local palette here: the main site's data-theme/data-comfort controls those tokens. */
 .reminders-app-standalone {
-  background: var(--bg) !important;
+  background: transparent !important;
+  background-color: transparent !important;
   color: var(--text) !important;
 }
 .reminders-app-standalone .reminders-theme-options { display: none !important; }
