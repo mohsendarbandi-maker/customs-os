@@ -18,7 +18,6 @@ import{parseRealtimeMessage,parseRealtimeReaction,parseRealtimeRead,parseRealtim
 import{useVoiceCall}from'./voiceCall';
 import{VoiceCallPanel}from'./VoiceCallPanel';
 import{ChatSettingsPanel}from'./ChatSettingsPanel';
-import{CustomsAIOperatorPanel as ChatAIOperatorPanel}from'../../components/AIOperatorPanel';
 
 type Person={id:string;full_name:string;phone:string|null;role:string};
 type ChatFolder='all'|'coworkers'|'groups'|'owners'|'shipments'|'unread';
@@ -533,7 +532,6 @@ export const ChatPage:React.FC=()=>{
  role={profile?.role}
  onNewMessage={()=>void openPeople('direct')}
  onOpenDirectory={openDirectory}
- onOpenAi={()=>setError('پنل هوش مصنوعی در پایین صفحه باز است.')}
  onOpenSettings={()=>setSettingsOpen(true)}
 />}
   </div>
@@ -543,22 +541,22 @@ export const ChatPage:React.FC=()=>{
     <header className="chat-conversation-panel-heading shrink-0 px-3 border-b app-border flex items-center gap-2">
      <div className="chat-conversation-panel-title min-w-0 flex-1">
       <b>{folder==='groups'?'گروه‌ها و کانال‌ها':folder==='coworkers'?'گفتگوهای مستقیم':folder==='owners'?'صاحبان کالا':folder==='shipments'?'گروه‌های محموله':folder==='unread'?'خوانده‌نشده':'گفتگوها'}</b>
-      <span>{folder==='groups'?'گروه‌های ارتباطی سازمان':folder==='coworkers'?'گفتگو با همکاران':folder==='owners'?'گفتگوهای هر صاحب کالا':folder==='shipments'?'گروه‌های مرتبط با محموله':unread?String(unread)+' پیام خوانده‌نشده':'فهرست گفتگوهای سازمان'}</span>
+      
      </div>
      <button type="button" className="chat-header-action is-icon" onClick={()=>void openPeople('direct')} aria-label="پیام جدید" title="پیام جدید"><Plus size={18}/></button>
      {profile?.role!=='client'&&<button type="button" className="chat-header-action is-primary" onClick={()=>{setChannelType('group');setChannelOpen(true)}} aria-label="گروه جدید"><Users size={16}/><span>گروه جدید</span></button>}
     </header>
-    <div className="px-3 py-2 border-b app-border"><div className="h-12 rounded-2xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو در گفتگوها" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div></div>
-    <div className="chat-folder-strip px-3 py-2 border-b app-border overflow-x-auto flex gap-2">{Object.entries(folderLabels).map(([key,label])=><button type="button" key={key} onClick={()=>setFolder(key as ChatFolder)} className={"shrink-0 min-h-10 px-3 rounded-xl text-xs font-bold border app-border "+(folder===key?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]')} aria-pressed={folder===key}>{label}{key==='unread'&&unread>0?<span className="mr-1">({unread})</span>:null}</button>)}</div>
+    <div className="chat-search-row px-3 py-1.5 border-b app-border"><div className="h-10 rounded-xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو در گفتگوها" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div></div>
+    <div className="chat-folder-strip px-2 py-1 border-b app-border overflow-x-auto flex gap-2">{Object.entries(folderLabels).map(([key,label])=><button type="button" key={key} onClick={()=>setFolder(key as ChatFolder)} className={"shrink-0 min-h-9 px-2.5 rounded-lg text-[11px] font-bold border app-border "+(folder===key?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]')} aria-pressed={folder===key}>{label}{key==='unread'&&unread>0?<span className="mr-1">({unread})</span>:null}</button>)}</div>
     {results.length>0&&<div className="border-b app-border max-h-48 overflow-y-auto">{results.map(r=><button type="button" key={r.id} onClick={()=>jumpToSearchResult(r)} className="w-full text-right px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5"><b className="text-xs block truncate">{r.title}</b><span className="text-[10px] app-muted block truncate mt-1">{r.snippet}</span></button>)}</div>}
     <ChatHierarchyPanel selectedId={selectedId} onSelect={id=>{setSelectedId(id);setMessages([]);setResults([]);closeMessageMenu()}} conversations={conversations} folder={folder}/>
    </section>
   </div>}
 
-  {selected&&<section className="flex-1 min-w-0 rounded-none md:rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex flex-col">
-   <header className="h-[72px] shrink-0 border-b app-border px-3 md:px-4 flex items-center gap-2">
-    <button type="button" className="h-12 w-12 shrink-0 rounded-full flex items-center justify-center md:hidden" onClick={()=>{setSelectedId(null);setMessages([]);setReply(null)}} aria-label="بازگشت"><ArrowRight size={19}/></button>
-    <div className="h-12 w-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold">{selected.type==='direct'?(title(selected).slice(0,1)||'?'):selected.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</div>
+  {selected&&<section className="chat-conversation-view flex-1 min-h-0 min-w-0 rounded-none md:rounded-2xl md:border app-border bg-[var(--surface)] overflow-hidden flex flex-col">
+   <header className="chat-conversation-header h-14 shrink-0 border-b app-border px-2 md:px-4 flex items-center gap-2">
+    <button type="button" className="h-10 w-10 shrink-0 rounded-full flex items-center justify-center md:hidden" onClick={()=>{setSelectedId(null);setMessages([]);setReply(null)}} aria-label="بازگشت"><ArrowRight size={19}/></button>
+    <div className="h-10 w-10 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold">{selected.type==='direct'?(title(selected).slice(0,1)||'?'):selected.type==='company_channel'?<Hash size={19}/>:<Users size={19}/>}</div>
     <div className="flex-1 min-w-0"><b className="block truncate text-[16px]">{title(selected)}</b><div className="text-[12px] app-muted truncate">{selected.type==='direct'?(typingUsers.length?'در حال نوشتن…':selected.display_phone||'گفتگوی مستقیم'):(typingUsers.length?'در حال نوشتن…':realtimeState==='ready'?'آنلاین':'در حال همگام‌سازی')}</div></div>
     {selected.shipment_id&&<button type="button" className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>setShipmentUpdateOpen(true)} aria-label="وضعیت محموله"><PackageCheck size={17}/></button>}
     {(selected.type==='group'||selected.type==='company_channel')&&<button type="button" className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" onClick={()=>void openPeople('member')} aria-label="افزودن عضو"><UserPlus size={16}/></button>}
@@ -609,7 +607,7 @@ export const ChatPage:React.FC=()=>{
 
    {(reply||editId)&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">{editId?'در حال ویرایش پیام':'پاسخ به: '+(reply?.body||'پیام پیوست‌دار')}</div><button type="button" className="icon-btn" onClick={()=>{setReply(null);setEditId(null);setText(chatDraftBeforeEdit.current);chatDraftBeforeEdit.current=''}} aria-label="لغو"><X size={15}/></button></div>}
 
-   <div className="shrink-0 border-t app-border p-3 md:p-3 bg-[var(--surface)]" style={{paddingBottom:'max(12px,env(safe-area-inset-bottom))'}}>
+   <div className="chat-composer shrink-0 border-t app-border px-2 py-2 md:p-3 bg-[var(--surface)]" style={{paddingBottom:'max(8px,env(safe-area-inset-bottom))'}}>
     <input ref={fileInput} type="file" className="hidden" accept="image/*,application/pdf,text/plain,.doc,.docx,.xls,.xlsx" onChange={e=>{const file=e.target.files?.[0];e.currentTarget.value='';void chooseAttachment(file)}}/>
     <div className="flex items-end gap-1.5 md:gap-2">
      <button type="button" className="h-12 w-12 shrink-0 rounded-full border app-border flex items-center justify-center disabled:opacity-40" disabled={attachmentBusy} onClick={()=>fileInput.current?.click()} aria-label="پیوست"><Paperclip size={18}/></button>
@@ -622,7 +620,6 @@ export const ChatPage:React.FC=()=>{
    </div>
   </section>}
 
-  <ChatFeatureBoundary><ChatAIOperatorPanel pageContext="chat — آمار محموله‌ها، پرونده‌ها و عملیات سازمانی"/></ChatFeatureBoundary>
   <ChatFeatureBoundary><ChatSettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)}/></ChatFeatureBoundary>
   <ChatFeatureBoundary><VoiceCallPanel controller={voice}/></ChatFeatureBoundary>
 

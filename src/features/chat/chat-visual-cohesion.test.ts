@@ -53,9 +53,10 @@ describe('shared visual language and chat layout regressions', () => {
     expect(styles).toContain('position: fixed;');
   });
 
-  it('shows a styled Customs AI launcher on every authenticated app route', () => {
-    expect(appShell).toContain('<AIWorkspace pageContext={location.pathname + location.search} />');
-    expect(appShell).not.toContain("!location.pathname.startsWith('/chat') && !location.pathname.startsWith('/reminders')");
+  it('keeps the floating AI launchers out of Chat while preserving the shared assistant elsewhere', () => {
+    expect(appShell).toContain("!location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />");
+    expect(chatPage).not.toContain('ChatAIOperatorPanel');
+    expect(chatPage).not.toContain('onOpenAi=');
     expect(main).toContain("import './styles/ai-workspace.css';");
     expect(aiStyles).toContain('.ai-launcher');
     expect(aiStyles).toContain('.ai-chat-panel');
@@ -76,6 +77,30 @@ describe('shared visual language and chat layout regressions', () => {
     expect(logo).toContain('var(--primary)');
     expect(logo).not.toContain('#0b7ea4');
     expect(logo).not.toContain('#075a78');
+  });
+
+  it('keeps the selected conversation and composer in a min-height-zero flex column', () => {
+    expect(chatPage).toContain('className="chat-conversation-view flex-1 min-h-0 min-w-0');
+    expect(chatPage).toContain('className="chat-composer shrink-0');
+    expect(styles).toContain('.chat-standalone .chat-message-area');
+    expect(styles).toContain('.chat-standalone .chat-composer');
+    expect(styles).toContain('display: flex !important');
+  });
+
+  it('removes the redundant explanatory line and compacts both inbox headings', () => {
+    expect(chatPage).not.toContain('فهرست گفتگوهای سازمان');
+    expect(chatPage).toContain('chat-search-row');
+    expect(chatPage).toContain('h-10 rounded-xl');
+    expect(styles).toContain('min-height: 50px !important');
+    expect(styles).toContain('chat-quick-nav-item');
+  });
+
+  it('shows owner/shipment unread activity in a single hierarchy row per conversation', () => {
+    expect(hierarchy).toContain('buildChatInboxRows(conversations,folder)');
+    expect(hierarchy).toContain('chat-owner-new-activity');
+    expect(hierarchy).toContain('chat-owner-open-chat');
+    expect(hierarchy).toContain('shipment.last_message_body');
+    expect(hierarchy).toContain('aria-expanded={expanded}');
   });
 
   it('renders compact, accessible group and owner/shipment rows', () => {

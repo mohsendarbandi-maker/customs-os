@@ -1,5 +1,5 @@
 import React,{useMemo,useState}from'react';
-import{MoreHorizontal,Phone,Plus,UserPlus,Users}from'lucide-react';
+import{MoreHorizontal,Phone,Plus,UserPlus}from'lucide-react';
 import{supabase}from'../../lib/supabase';
 import type{UserRole}from'../../context/AuthContext';
 
@@ -12,11 +12,10 @@ type QuickNavProps={
  role:UserRole|null|undefined;
  onNewMessage:()=>void;
  onOpenDirectory:(mode:ChatDirectoryMode)=>void;
- onOpenAi:()=>void;
  onOpenSettings:()=>void;
 };
 
-export const ChatQuickNav:React.FC<QuickNavProps>=({people,role,onNewMessage,onOpenDirectory,onOpenAi,onOpenSettings})=>{
+export const ChatQuickNav:React.FC<QuickNavProps>=({people,role,onNewMessage,onOpenDirectory,onOpenSettings})=>{
  const [moreOpen,setMoreOpen]=useState(false);
  const canManageDirectory=role!=='client';
  const act=(callback:()=>void)=>{callback();setMoreOpen(false);};
@@ -26,7 +25,6 @@ export const ChatQuickNav:React.FC<QuickNavProps>=({people,role,onNewMessage,onO
   {moreOpen&&<div className="absolute top-full left-0 z-50 mt-2 min-w-48 rounded-2xl border app-border bg-[var(--surface)] p-2 shadow-xl" role="menu">
    <button type="button" role="menuitem" className="w-full min-h-11 rounded-xl px-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5" onClick={()=>act(()=>onOpenDirectory('calls'))}><Phone size={16}/><span>تماس‌ها</span></button>
    {canManageDirectory&&<button type="button" role="menuitem" className="w-full min-h-11 rounded-xl px-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5" onClick={()=>act(()=>onOpenDirectory('members'))}><UserPlus size={16}/><span>اعضای داخلی</span><span className="mr-auto text-xs app-muted">{people.length}</span></button>}
-   <button type="button" role="menuitem" className="w-full min-h-11 rounded-xl px-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5" onClick={()=>act(onOpenAi)}><Users size={16}/><span>دستیار هوش مصنوعی</span></button>
    <button type="button" role="menuitem" className="w-full min-h-11 rounded-xl px-3 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5" onClick={()=>act(onOpenSettings)}><MoreHorizontal size={16}/><span>تنظیمات چت</span></button>
   </div>}
  </div>;

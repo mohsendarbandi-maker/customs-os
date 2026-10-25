@@ -632,7 +632,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <button type="button" className={location.pathname.startsWith('/chat')?'is-active':''} aria-current={location.pathname.startsWith('/chat')?'page':undefined} onClick={()=>go('/chat')}><MessageCircle size={21}/><span>چت</span></button>
         <button ref={moreTriggerRef} type="button" className={mobileOpen?'is-active':''} aria-label="بیشتر" aria-haspopup="dialog" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}><Layers3 size={21}/><span>بیشتر</span></button>
       </nav>}
-      <AIWorkspace pageContext={location.pathname + location.search} />
+      {!location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />}
     </div>
   );
 };
