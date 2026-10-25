@@ -740,6 +740,17 @@ function hex(v:ArrayBuffer){return Array.from(new Uint8Array(v)).map(x=>x.toStri
 async function checkHmac(secretValue:string,raw:string,header:string){if(!header.startsWith("sha256="))return false;const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(secretValue),{name:"HMAC",hash:"SHA-256"},false,["sign"]);return equal("sha256="+hex(await crypto.subtle.sign("HMAC",k,new TextEncoder().encode(raw))),header.toLowerCase());}
 async function event(c:Conn,id:string,type:string){const {data,error}=await db.from("webhook_events").upsert({organization_id:c.organization_id,connection_id:c.id,external_event_id:id,event_type:type,status:"received"},{onConflict:"connection_id,external_event_id,event_type",ignoreDuplicates:true}).select("id").maybeSingle();if(error)throw new Error("WEBHOOK_EVENT_SAVE_FAILED");return data?.id?String(data.id):null;}
 function tgMedia(m:any){for(const k of ["document","video","audio","voice","animation","video_note"])if(m?.[k]?.file_id){const f=m[k];return{id:String(f.file_id),unique:f.file_unique_id||null,name:f.file_name||(k==="voice"?"voice.ogg":k+".bin"),mime:f.mime_type||"application/octet-stream",size:Number(f.file_size||0)||null,voice:k==="voice"};}if(Array.isArray(m?.photo)&&m.photo.length){const f=m.photo[m.photo.length-1];return{id:String(f.file_id),unique:f.file_unique_id||null,name:"photo.jpg",mime:"image/jpeg",size:Number(f.file_size||0)||null};}return null;}
+function inferInboundDocumentType(name:string):string{
+ const n=String(name||"").normalize("NFKC").toLowerCase();
+ if(/declaration|customs.?declaration|اظهارنامه|کوتاژ/.test(n))return "CUSTOMS_DECLARATION_PRINT";
+ if(/pro.?forma|پروفرما|پروفورما/.test(n))return "PROFORMA_INVOICE";
+ if(/commercial.?invoice|کامرشال|سیاهه/.test(n))return "COMMERCIAL_INVOICE";
+ if(/packing.?list|پکینگ.?لیست|بسته.?بندی/.test(n))return "PACKING_LIST";
+ if(/bill.?of.?lading|\bbl\b|بارنامه/.test(n))return "BILL_OF_LADING";
+ if(/certificate.?of.?origin|گواهی.?مبدا|گواهی.?مبدأ/.test(n))return "CERTIFICATE_OF_ORIGIN";
+ if(/warehouse.?receipt|قبض.?انبار/.test(n))return "WAREHOUSE_RECEIPT";
+ return "other";
+}
 async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:string="",userId?:string,senderName?:string){
  const {data:chat,error:chatError}=await db.from("messenger_chats").select("enabled,shipment_id,client_id,conversation_id,purpose").eq("organization_id",c.organization_id).eq("connection_id",c.id).eq("external_chat_id",chatId).maybeSingle();
  if(chatError)throw new Error("CHAT_MAPPING_READ_FAILED");
@@ -804,7 +815,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
     shipment_id:linkedShipmentId,client_id:linkedClientId||targetFolder.client_id||null,
     file_asset_id:a.id,original_name:cleanExternalName||"document.bin",mime_type:cleanMime(media.mime),
     size_bytes:Number(media.size||0),external_message_id:msgId,
-    document_type:media.mime==="application/pdf"?"CUSTOMS_DECLARATION_PRINT":"other",
+    document_type:inferInboundDocumentType(cleanExternalName||"document.bin"),
     tags:["messenger_inbound",c.platform],
     metadata:{source:"messenger_inbound",sourcePlatform:c.platform,externalChatId:chatId,externalMessageId:msgId,conversationId:chat.conversation_id||null},
     storage_path:"telegram://"+String(a.id),created_by:null,is_archived:false,updated_at:new Date().toISOString()
