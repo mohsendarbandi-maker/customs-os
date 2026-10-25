@@ -55,16 +55,16 @@
   .chat-standalone .chat-app-brand small { font-size: 11px !important; }
   .chat-standalone .chat-app-header-status { font-size: 11px !important; }
   .chat-standalone .chat-quick-nav {
-    gap: 7px !important;
-    padding: 8px 10px !important;
+    gap: 6px !important;
+    padding: 5px 10px !important;
   }
   .chat-standalone .chat-quick-nav-item {
-    min-width: 72px !important;
-    min-height: 48px !important;
-    height: 48px !important;
-    padding-inline: 11px !important;
-    gap: 6px !important;
-    font-size: 12px !important;
+    min-width: 0 !important;
+    min-height: 38px !important;
+    height: 38px !important;
+    padding: 0 10px !important;
+    gap: 5px !important;
+    font-size: 11px !important;
   }
   .chat-standalone .chat-quick-nav-item svg {
     width: 18px !important;
@@ -72,9 +72,9 @@
   }
   .chat-standalone .chat-quick-nav-item em { font-size: 10px !important; min-width: 18px; height: 18px; }
   .chat-standalone .chat-folder-strip button {
-    min-height: 44px !important;
-    padding-inline: 14px !important;
-    font-size: 13px !important;
+    min-height: 36px !important;
+    padding-inline: 10px !important;
+    font-size: 11px !important;
   }
   .chat-standalone [class~="text-[9px]"] { font-size: 11px !important; line-height: 1.45; }
   .chat-standalone [class~="text-[10px]"] { font-size: 12px !important; line-height: 1.5; }
@@ -94,14 +94,11 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
   }
-  .chat-standalone section:first-child button:not(.chat-quick-nav-item) {
-    min-height: 64px;
-  }
 }
 
 @media (max-width: 380px) {
   .chat-standalone .chat-quick-nav { gap: 5px !important; padding-inline: 7px !important; }
-  .chat-standalone .chat-quick-nav-item { min-width: 68px !important; padding-inline: 8px !important; }
+  .chat-standalone .chat-quick-nav-item { min-width: 0 !important; padding-inline: 8px !important; }
 }
 
 /* Dedicated mobile layout for the standalone reminders workspace. */
