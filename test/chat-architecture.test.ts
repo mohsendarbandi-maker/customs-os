@@ -203,4 +203,11 @@ describe('chat architecture invariants',()=>{
     expect(page).toContain('شمارهٔ موبایل را وارد نکنید');
   });
 
+  it('allows disabled messenger destinations to be discovered before internal conversation mapping',()=>{
+    const migration=read('supabase/migrations/20261025215436_allow_disabled_messenger_chat_discovery.sql');
+    expect(migration).toContain('enabled IS NOT TRUE');
+    expect(migration).toContain("purpose NOT IN ('inbox', 'shipment_notifications', 'shipment')");
+    expect(migration).toContain('conversation_id IS NOT NULL');
+  });
+
 });
