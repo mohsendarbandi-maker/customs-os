@@ -158,7 +158,7 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  }
  if(recordLog)await db.from("message_logs").insert({organization_id:org,connection_id:c.id,direction:"outbound",message_type:"document",external_message_id:result.messageId,external_chat_id:chat,file_asset_id:a.id,status:"sent",payload_summary:{name:result.name,mimeType:mime,sizeBytes:size},sent_at:new Date().toISOString()});
  return String(a.id);
-}async function ensureTelegramOwnerTopic(c:Conn,chat:string,org:string,clientId:string|null,ownerName:string):Promise<number>{
+}async function ensureTelegramOwnerTopic(c:Conn,chat:string,org:string,clientId:string|null,ownerName:string):Promise<number|null>{
  if(c.platform!=="telegram")throw new Error("TELEGRAM_ARCHIVE_CONNECTION_REQUIRED");
  const topicKey=clientId||"unassigned";
  const readTopic=async()=>await db.from("messenger_archive_topics").select("id,topic_id,status,last_error_code")
@@ -166,6 +166,7 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  let {data:row,error}=await readTopic();
  if(error)throw new Error("TELEGRAM_OWNER_TOPIC_LOOKUP_FAILED");
  if(row?.status==="ready"&&Number(row.topic_id)>0)return Number(row.topic_id);
+ if(row?.status==="failed"&&row.last_error_code==="FORUM_UNSUPPORTED")return null;
  if(row?.status==="creating")throw new Error("TELEGRAM_OWNER_TOPIC_SETUP_IN_PROGRESS");
  const topicName=("👤 "+ownerName).replace(/[\r\n]/g," ").slice(0,120)||"صاحب کالا";
  if(!row){
@@ -207,7 +208,11 @@ async function uploadStream(c:Conn,chat:string,name:string,mime:string,size:numb
  }catch(e){
   const code=errorCode(e);
   await db.from("messenger_archive_topics").update({status:"failed",last_error_code:code,updated_at:new Date().toISOString()}).eq("id",topicRowId);
-  if(code==="UPSTREAM_400")throw new Error("TELEGRAM_FORUM_REQUIRED: گروه آرشیو باید سوپرگروه خصوصی با Topics فعال باشد و ربات دسترسی مدیریت تاپیک داشته باشد.");
+  if(code==="UPSTREAM_400"){
+   await db.from("messenger_archive_topics").update({status:"failed",last_error_code:"FORUM_UNSUPPORTED",updated_at:new Date().toISOString()}).eq("id",topicRowId);
+   // Site folders and the searchable Telegram caption remain authoritative; Forum Topics are optional.
+   return null;
+  }
   throw e;
  }
 }
@@ -736,7 +741,7 @@ async function checkHmac(secretValue:string,raw:string,header:string){if(!header
 async function event(c:Conn,id:string,type:string){const {data,error}=await db.from("webhook_events").upsert({organization_id:c.organization_id,connection_id:c.id,external_event_id:id,event_type:type,status:"received"},{onConflict:"connection_id,external_event_id,event_type",ignoreDuplicates:true}).select("id").maybeSingle();if(error)throw new Error("WEBHOOK_EVENT_SAVE_FAILED");return data?.id?String(data.id):null;}
 function tgMedia(m:any){for(const k of ["document","video","audio","voice","animation","video_note"])if(m?.[k]?.file_id){const f=m[k];return{id:String(f.file_id),unique:f.file_unique_id||null,name:f.file_name||(k==="voice"?"voice.ogg":k+".bin"),mime:f.mime_type||"application/octet-stream",size:Number(f.file_size||0)||null,voice:k==="voice"};}if(Array.isArray(m?.photo)&&m.photo.length){const f=m.photo[m.photo.length-1];return{id:String(f.file_id),unique:f.file_unique_id||null,name:"photo.jpg",mime:"image/jpeg",size:Number(f.file_size||0)||null};}return null;}
 async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:string="",userId?:string,senderName?:string){
- const {data:chat,error:chatError}=await db.from("messenger_chats").select("enabled,shipment_id,conversation_id,purpose").eq("organization_id",c.organization_id).eq("connection_id",c.id).eq("external_chat_id",chatId).maybeSingle();
+ const {data:chat,error:chatError}=await db.from("messenger_chats").select("enabled,shipment_id,client_id,conversation_id,purpose").eq("organization_id",c.organization_id).eq("connection_id",c.id).eq("external_chat_id",chatId).maybeSingle();
  if(chatError)throw new Error("CHAT_MAPPING_READ_FAILED");
  if(!chat?.enabled)return;
  if(chat.conversation_id){
@@ -751,6 +756,41 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
   fileAssetId=String(a.id);
   const {error:le}=await db.from("file_locations").insert({organization_id:c.organization_id,file_asset_id:a.id,connection_id:c.id,external_file_id:String(media.id),external_file_unique_id:media.unique||null,external_chat_id:chatId,external_message_id:msgId,availability_status:"available",metadata:{inbound:true}});
   if(le)throw new Error("FILE_LOCATION_SAVE_FAILED");
+  // Make inbound Bale/Telegram/WhatsApp files available from the canonical File Manager
+  // when the external chat is linked to a shipment or cargo-owner folder.
+  let targetFolder:any=null;
+  let targetFolderError:any=null;
+  if(chat.shipment_id){
+   const {data:folder,error:folderError}=await db.from("file_manager_folders")
+    .select("id,client_id,shipment_id,folder_type")
+    .eq("organization_id",c.organization_id).eq("shipment_id",chat.shipment_id)
+    .eq("folder_type","shipment").order("created_at",{ascending:true}).limit(1).maybeSingle();
+   targetFolder=folder;targetFolderError=folderError;
+  }else if(chat.client_id){
+   const {data:folder,error:folderError}=await db.from("file_manager_folders")
+    .select("id,client_id,shipment_id,folder_type")
+    .eq("organization_id",c.organization_id).eq("client_id",chat.client_id)
+    .is("shipment_id",null).eq("folder_type","client")
+    .order("created_at",{ascending:true}).limit(1).maybeSingle();
+   targetFolder=folder;targetFolderError=folderError;
+  }
+  if(targetFolderError){
+   mirrorErrorCode=mirrorErrorCode||"FILE_MANAGER_FOLDER_LOOKUP_FAILED";
+  }else if(targetFolder){
+   const {error:fileManagerError}=await db.from("file_manager_files").upsert({
+    organization_id:c.organization_id,folder_id:targetFolder.id,
+    shipment_id:chat.shipment_id||null,client_id:chat.client_id||targetFolder.client_id||null,
+    file_asset_id:a.id,original_name:cleanExternalName||"document.bin",mime_type:cleanMime(media.mime),
+    size_bytes:Number(media.size||0),external_message_id:msgId,
+    document_type:media.mime==="application/pdf"?"CUSTOMS_DECLARATION_PRINT":"other",
+    tags:["messenger_inbound",c.platform],
+    metadata:{source:"messenger_inbound",sourcePlatform:c.platform,externalChatId:chatId,externalMessageId:msgId,conversationId:chat.conversation_id||null},
+    storage_path:"telegram://"+String(a.id),created_by:null,is_archived:false,updated_at:new Date().toISOString()
+   },{onConflict:"organization_id,file_asset_id"});
+   if(fileManagerError)mirrorErrorCode=mirrorErrorCode||"FILE_MANAGER_METADATA_SAVE_FAILED";
+  }else{
+   mirrorErrorCode=mirrorErrorCode||"FILE_MANAGER_FOLDER_NOT_FOUND";
+  }
   if(chat.shipment_id){
    const {error:shipmentFileError}=await db.from("shipment_files").upsert({organization_id:c.organization_id,shipment_id:chat.shipment_id,file_asset_id:a.id,document_type:media.mime==="application/pdf"?"customs_document":"other"},{onConflict:"shipment_id,file_asset_id,document_type"});
    if(shipmentFileError)throw new Error("SHIPMENT_FILE_LINK_FAILED");

@@ -99,7 +99,7 @@ export const ChatPage:React.FC=()=>{
  const[shipmentUpdateOpen,setShipmentUpdateOpen]=useState(false);const[shipmentStatus,setShipmentStatus]=useState('در حال بررسی');const[shipmentNote,setShipmentNote]=useState('');
  const[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct');const[channelOpen,setChannelOpen]=useState(false);const[channelTitle,setChannelTitle]=useState('');
  const[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel');const[sharedConnections,setSharedConnections]=useState<Array<{id:string;target_organization_id:string;target_name:string}>>([]);
- const[selectedConnection,setSelectedConnection]=useState('');const[attachmentBusy,setAttachmentBusy]=useState(false);const[mediaState,setMediaState]=useState<MediaState>('idle');
+ const[selectedConnection,setSelectedConnection]=useState('');const[attachmentBusy,setAttachmentBusy]=useState(false);const[mediaState,setMediaState]=useState<MediaState>('idle');const[attachmentProgress,setAttachmentProgress]=useState<number|null>(null);
  const[recording,setRecording]=useState(false);const[ocrBusy,setOcrBusy]=useState(false);const[pushReady,setPushReady]=useState(false);const[pushBusy,setPushBusy]=useState(false);const[settingsOpen,setSettingsOpen]=useState(false);
  const[menu,setMenu]=useState<string|null>(null);const[menuPosition,setMenuPosition]=useState<{top:number;left:number;width:number}|null>(null);const[directoryOpen,setDirectoryOpen]=useState(false);const[directoryMode,setDirectoryMode]=useState<ChatDirectoryMode>('members');
  const[folder,setFolder]=useState<ChatFolder>('all');const[newMessageCount,setNewMessageCount]=useState(0);
@@ -350,12 +350,12 @@ export const ChatPage:React.FC=()=>{
  const chooseAttachment=async(file?:File)=>{
   if(!file||!selectedId||!profile?.organization_id||attachmentBusy)return;
   if(file.size>50*1024*1024){setError('حجم فایل بیش از ۵۰MB است.');return}
-  setAttachmentBusy(true);setMediaState('preparing');
+  setAttachmentBusy(true);setAttachmentProgress(null);setMediaState('preparing');
   try{
-   setMediaState('uploading');await sendFileMessage(selectedId,profile.organization_id,file,'file');setMediaState('committed');
+   setMediaState('uploading');await sendFileMessage(selectedId,profile.organization_id,file,'file',percentage=>setAttachmentProgress(percentage));setMediaState('committed');
    if(file.type.startsWith('image/')){setOcrBusy(true);try{const ocr=await import('tesseract.js').then(module=>module.recognize(file,'fas+eng'));const ocrText=String(ocr.data?.text||'').trim();if(ocrText)setText(ocrText)}catch{}finally{setOcrBusy(false)}}
    await loadConversation(selectedId,false);await refresh();
-  }catch(e){setError(err(e))}finally{setAttachmentBusy(false);setMediaState('idle')}
+  }catch(e){setError(err(e))}finally{setAttachmentBusy(false);setMediaState('idle');setAttachmentProgress(null)}
  };
 
  const toggleVoice=async()=>{
@@ -615,7 +615,7 @@ export const ChatPage:React.FC=()=>{
      <textarea value={text} onChange={e=>{setText(e.target.value);broadcastTyping(Boolean(e.target.value.trim()))}} onBlur={()=>broadcastTyping(false)} onKeyDown={e=>{const sendOnEnter=document.querySelector<HTMLElement>('.chat-standalone')?.dataset.chatSendOnEnter!=='false';if(e.key==='Enter'&&!e.shiftKey&&sendOnEnter){e.preventDefault();void send()}}} placeholder={online?'پیام بنویسید…':'آفلاین؛ پیام در صف ارسال می‌ماند…'} rows={1} className="flex-1 resize-none min-h-12 max-h-32 rounded-[24px] border app-border bg-transparent px-4 py-3 outline-none text-[15px]"/>
      <button type="button" className="h-12 w-12 shrink-0 rounded-full bg-[var(--primary)] text-white flex items-center justify-center disabled:opacity-40" disabled={!text.trim()||attachmentBusy} onClick={()=>void send()} aria-label="ارسال"><Send size={18}/></button>
     </div>
-    {mediaState!=='idle'&&<div className="mt-2 px-1 text-[10px] app-muted flex items-center gap-2">{mediaState==='recording'?'در حال ضبط صدا…':mediaState==='preparing'?'در حال آماده‌سازی…':mediaState==='uploading'?'در حال بارگذاری فایل…':'فایل ارسال شد.'}{mediaState==='uploading'&&<span className="h-1.5 flex-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden"><span className="block h-full w-full bg-[var(--primary)] animate-pulse"/></span>}</div>}
+    {mediaState!=='idle'&&<div className="mt-2 px-1 text-[10px] app-muted flex items-center gap-2">{mediaState==='recording'?'در حال ضبط صدا…':mediaState==='preparing'?'در حال آماده‌سازی…':mediaState==='uploading'?(attachmentProgress===null?'در حال بارگذاری فایل…':'در حال بارگذاری فایل… '+Math.round(attachmentProgress)+'%'):'فایل ارسال شد.'}{mediaState==='uploading'&&<span className="h-1.5 flex-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden"><span className={'block h-full bg-[var(--primary)] '+(attachmentProgress===null?'w-full animate-pulse':'')} style={attachmentProgress===null?undefined:{width:Math.max(0,Math.min(100,attachmentProgress))+'%'}}/></span>}</div>}
     {ocrBusy&&<div className="text-[10px] app-muted mt-1 px-1">در حال OCR تصویر…</div>}
    </div>
   </section>}
