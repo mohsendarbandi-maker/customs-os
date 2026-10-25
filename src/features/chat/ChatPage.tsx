@@ -115,6 +115,10 @@ export const ChatPage:React.FC=()=>{
  useEffect(()=>{queueSyncRef.current=queueItems},[queueItems]);
  useEffect(()=>{messagesRef.current=messages},[messages]);
  useEffect(()=>{selectedIdRef.current=selectedId},[selectedId]);
+ useEffect(()=>{
+  // Push notifications deep-link to /chat?conversation=<id>. Select that thread whenever the URL changes.
+  if(requestedConversationId)setSelectedId(requestedConversationId);
+ },[requestedConversationId]);
 
   useEffect(()=>{
    const key=chatDraftKey;
@@ -578,7 +582,7 @@ export const ChatPage:React.FC=()=>{
           {!own&&(selected.type!=='direct'||Boolean(m.external_sender_name))&&m.sender_name&&document.querySelector<HTMLElement>('.chat-standalone')?.dataset.chatShowSenderNames!=='false'&&<div className="text-[10px] font-bold mb-1 app-muted">{m.sender_name}</div>}
           {quoted&&<button type="button" className="w-full text-right mb-2 px-2 py-1 rounded-lg border border-current/20 text-[10px] opacity-80" onClick={()=>document.getElementById('msg-'+quoted.id)?.scrollIntoView({behavior:'smooth',block:'center'})}>{quoted.body||'پیام پیوست‌دار'}</button>}
           {deleted?<div className="text-sm italic opacity-80">این پیام حذف شده است.</div>:m.body&&<div className="chat-message-text text-[17px] leading-8 whitespace-pre-wrap break-words">{m.body}</div>}
-          {!deleted&&(m.attachments??[]).map(a=>a.security_status==='clean'&&a.url?(a.mime_type.startsWith('audio/')?<audio key={a.id} controls src={a.url} onPlay={()=>{if(!own)void markPlayed(m.id).catch(()=>{})}} className="mt-2 w-full max-w-[280px]" aria-label="پیام صوتی"/>:<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline"><Paperclip size={14}/><span className="truncate">{a.original_name}</span></a>):<div key={a.id} className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs">{a.security_status==='blocked'?'فایل مسدود شد.':'فایل در حال بررسی امنیتی است…'}</div>)}
+          {!deleted&&(m.attachments??[]).map(a=>a.security_status==='clean'&&a.url?(a.mime_type.startsWith('audio/')?<audio key={a.id} controls src={a.url} onPlay={()=>{if(!own)void markPlayed(m.id).catch(()=>{})}} className="mt-2 w-full max-w-[280px]" aria-label="پیام صوتی"/>:<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 rounded-xl bg-black/10 dark:bg-white/10 px-3 py-2 text-xs underline"><Paperclip size={14}/><span className="truncate">{a.original_name}</span></a>):a.security_status==='blocked'?<div key={a.id} className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs">فایل مسدود شد.</div>:null)}
           {(m.reactions??[]).length>0&&<div className="flex flex-wrap gap-1 mt-2">{Array.from(new Set((m.reactions??[]).map(r=>r.emoji))).map(emoji=><button type="button" key={emoji} onClick={()=>void react(m,emoji)} className="rounded-full px-2 py-1 text-[11px] bg-black/10 dark:bg-white/10">{emoji} {((m.reactions??[]).filter(r=>r.emoji===emoji)).length}</button>)}</div>}
           <div className={"flex items-center justify-end gap-1 mt-1 text-[11px] "+(own?'text-white/75':'app-muted')}>
            {m.edited_at&&<span>ویرایش‌شده</span>}<span>{chatTime(m.created_at)}</span>
