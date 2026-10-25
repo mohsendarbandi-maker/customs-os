@@ -42,9 +42,9 @@ jobs:
       - name: Cloudflare Worker dry run
         run: npx wrangler@4 deploy --dry-run
 
-      - name: Assert AI Operator is statically wired
+      - name: Keep AI Operator available without floating over the chat inbox
         run: |
-          ! grep -F "React.lazy" src/features/chat/ChatPage.tsx
-          ! grep -F "AIOperatorPanel as ChatAIOperatorPanel" src/features/chat/ChatPage.tsx
-          grep -F "CustomsAIOperatorPanel as ChatAIOperatorPanel" src/features/chat/ChatPage.tsx
+          ! grep -F "React.lazy" src/components/AIOperatorPanel.tsx
+          ! grep -F "ChatAIOperatorPanel" src/features/chat/ChatPage.tsx
           grep -F "export const CustomsAIOperatorPanel" src/components/AIOperatorPanel.tsx
+          grep -F "!location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />" src/components/AppShell.tsx
