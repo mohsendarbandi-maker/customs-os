@@ -102,7 +102,7 @@ async function enrichMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
     supabase
       .from('chat_attachments')
       .select(
-        'id,message_id,storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform',
+        'id,message_id,storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform,security_status,security_checked_at,security_error',
       )
       .in('message_id', ids)
       .is('deleted_at', null),
