@@ -456,8 +456,12 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
   size=h&&/^\d+$/.test(h)?Number(h):null,
   archive=Boolean(folderId||requestedShipmentId),
   max=archive&&c.platform==="telegram"?TG_DOWNLOAD_LIMIT:(c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT),
-  idempotencyKey=(req.headers.get("Idempotency-Key")||"").trim();
- if(!chat||size===0||(size!==null&&size>max)||!req.body)return bad(size!==null&&size>max?"FILE_TOO_LARGE_FOR_DESTINATION":"INVALID_FILE_SIZE_CHAT_OR_BODY",413,req);
+  idempotencyKey=(req.headers.get("Idempotency-Key")||"").trim(),
+  stagingPath=(req.headers.get("X-File-Upload-Staging-Path")||"").trim();
+ const stagingPrefix=p.organization_id+"/";
+ const stagingName=stagingPath.startsWith(stagingPrefix)?stagingPath.slice(stagingPrefix.length):"";
+ if(stagingPath&&(!archive||!/^[0-9a-f]{64}$/.test(stagingName)))return bad("INVALID_STAGING_PATH",400,req);
+ if(!chat||size===0||(size!==null&&size>max)||(!req.body&&!stagingPath))return bad(size!==null&&size>max?"FILE_TOO_LARGE_FOR_DESTINATION":"INVALID_FILE_SIZE_CHAT_OR_BODY",413,req);
  if(archive&&(!folderId||!validId(folderId)||(requestedShipmentId&&!validId(requestedShipmentId))||size===null||!idempotencyKey||idempotencyKey.length>180))
   return bad("INVALID_FILE_ARCHIVE_INPUT",400,req);
  const {data:mapped,error:mappedError}=await db.from("messenger_chats")
@@ -506,15 +510,18 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
   if(p.role==="client"&&folder.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
   let job:any=null;
   const {data:existing,error:existingError}=await db.from("file_manager_upload_jobs")
-   .select("id,status,file_asset_id,external_message_id,size_bytes,attempt_count,folder_id,shipment_id,original_name,mime_type,connection_id,external_chat_id,document_name,document_type,telegram_file_id,telegram_file_unique_id,archive_tags,updated_at")
+   .select("id,status,file_asset_id,external_message_id,size_bytes,attempt_count,folder_id,shipment_id,original_name,mime_type,connection_id,external_chat_id,document_name,document_type,telegram_file_id,telegram_file_unique_id,archive_tags,staging_path,telegram_call_started_at,updated_at")
    .eq("organization_id",p.organization_id).eq("idempotency_key",idempotencyKey).maybeSingle();
   if(existingError)return bad("FILE_UPLOAD_JOB_LOOKUP_FAILED",500,req);
-  if(existing&&(existing.folder_id!==folderId||existing.shipment_id!==(shipment?.id??null)||existing.original_name!==name||existing.mime_type!==mime||Number(existing.size_bytes)!==Number(size)||(existing.connection_id&&existing.connection_id!==c.id)||(existing.external_chat_id&&existing.external_chat_id!==chat)||(existing.document_name&&existing.document_name!==displayName)||(existing.document_type&&existing.document_type!==documentType)))
+  if(existing&&(existing.folder_id!==folderId||existing.shipment_id!==(shipment?.id??null)||existing.original_name!==name||existing.mime_type!==mime||Number(existing.size_bytes)!==Number(size)||(existing.connection_id&&existing.connection_id!==c.id)||(existing.external_chat_id&&existing.external_chat_id!==chat)||(existing.document_name&&existing.document_name!==displayName)||(existing.document_type&&existing.document_type!==documentType)||(existing.staging_path&&existing.staging_path!==stagingPath)))
    return bad("IDEMPOTENCY_KEY_REUSE_MISMATCH",409,req);
-  if(existing?.status==="stored"&&existing.file_asset_id)
+  if(existing?.status==="stored"&&existing.file_asset_id){
+   if(stagingPath)await db.storage.from("file-upload-staging").remove([stagingPath]).catch(()=>({error:null}));
    return out({ok:true,fileAssetId:existing.file_asset_id,externalMessageId:existing.external_message_id,sizeBytes:existing.size_bytes,folderId,uploadJobId:existing.id,alreadyStored:true},200,req);
+  }
   const staleUploading=Boolean(existing?.status==="uploading"&&existing.updated_at&&Date.now()-Date.parse(existing.updated_at)>15*60*1000);
-  const shouldReconcile=Boolean(existing&&(existing.status==="reconcile_required"||staleUploading||(existing.status==="failed"&&(existing.telegram_file_id||existing.file_asset_id||existing.external_message_id))));
+  const retryBeforeTelegram=Boolean(existing&&staleUploading&&stagingPath&&existing.staging_path===stagingPath&&!existing.telegram_call_started_at&&!existing.telegram_file_id&&!existing.file_asset_id&&!existing.external_message_id);
+  const shouldReconcile=Boolean(existing&&(existing.status==="reconcile_required"||(staleUploading&&!retryBeforeTelegram)||(existing.status==="failed"&&(existing.telegram_file_id||existing.file_asset_id||existing.external_message_id))));
   if(existing&&shouldReconcile){
    if(!existing.telegram_file_id&&!existing.file_asset_id&&!existing.external_message_id)
     return bad("FILE_UPLOAD_RECONCILIATION_REQUIRED",409,req);
@@ -543,19 +550,21 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
     return bad("FILE_UPLOAD_RECONCILIATION_REQUIRED",502,req);
    }
   }
-  if(existing&&existing.status!=="failed")return bad("FILE_UPLOAD_RECONCILIATION_REQUIRED",409,req);
+  if(existing&&existing.status!=="failed"&&!retryBeforeTelegram)return bad("FILE_UPLOAD_RECONCILIATION_REQUIRED",409,req);
   if(existing){
    const {data:retry,error:retryError}=await db.from("file_manager_upload_jobs")
     .update({status:"uploading",attempt_count:(existing.attempt_count||1)+1,error_code:null,connection_id:c.id,
-     external_chat_id:chat,document_name:displayName,document_type:documentType,archive_tags:archiveTags,updated_at:new Date().toISOString()})
-    .eq("id",existing.id).eq("organization_id",p.organization_id).select("id").single();
+     external_chat_id:chat,document_name:displayName,document_type:documentType,archive_tags:archiveTags,
+     staging_path:stagingPath||null,telegram_call_started_at:null,updated_at:new Date().toISOString()})
+    .eq("id",existing.id).eq("organization_id",p.organization_id).eq("status",existing.status).eq("updated_at",existing.updated_at).select("id").single();
    if(retryError||!retry)return bad("FILE_UPLOAD_JOB_UPDATE_FAILED",500,req);
    job=retry;
   }else{
    const {data:created,error:createError}=await db.from("file_manager_upload_jobs")
     .insert({organization_id:p.organization_id,idempotency_key:idempotencyKey,folder_id:folderId,shipment_id:shipment?.id??null,
       created_by:user,original_name:name,mime_type:mime,size_bytes:size,status:"uploading",connection_id:c.id,
-      external_chat_id:chat,document_name:displayName,document_type:documentType,archive_tags:archiveTags})
+      external_chat_id:chat,document_name:displayName,document_type:documentType,archive_tags:archiveTags,
+      staging_path:stagingPath||null,telegram_call_started_at:null})
     .select("id").single();
    if(createError){
     if(createError.code==="23505")return bad("FILE_UPLOAD_JOB_ALREADY_EXISTS_RETRY_WITH_STATUS_CHECK",409,req);
@@ -612,9 +621,24 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
     telegramChatId:chat,telegramConnectionId:c.id,telegramMessageId:null
    };
    const ownerTopicId=await ensureTelegramOwnerTopic(c,chat,p.organization_id,folder.client_id||null,ownerName);
-   // Topic creation happens before any file-send request. Keep deterministic forum setup failures retryable.
+   let sourceBody=req.body;
+   if(stagingPath){
+    const {data:signed,error:signedError}=await db.storage.from("file-upload-staging").createSignedUrl(stagingPath,300);
+    if(signedError||!signed?.signedUrl)throw new Error("STAGED_FILE_SIGNED_URL_FAILED");
+    const stagedResponse=await fetch(signed.signedUrl);
+    if(!stagedResponse.ok||!stagedResponse.body)throw new Error("STAGED_FILE_DOWNLOAD_FAILED");
+    const stagedSize=Number(stagedResponse.headers.get("content-length")||0);
+    if(stagedSize>0&&stagedSize!==size)throw new Error("STAGED_FILE_SIZE_MISMATCH");
+    sourceBody=stagedResponse.body;
+   }
+   // Persist a conservative marker immediately before the outbound Bot API request.
+   const startedAt=new Date().toISOString();
+   const {error:startError}=await db.from("file_manager_upload_jobs").update({telegram_call_started_at:startedAt,updated_at:startedAt})
+    .eq("id",job.id).eq("organization_id",p.organization_id).eq("status","uploading");
+   if(startError)throw new Error("FILE_UPLOAD_JOB_START_FAILED");
    telegramCallStarted=true;
-   result=await uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId);
+   if(!sourceBody)throw new Error("UPLOAD_SOURCE_BODY_MISSING");
+   result=await uploadStream(c,chat,name,mime,size,sourceBody,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId);
    assetMetadata.telegramFileId=result.fileId;
    assetMetadata.telegramFileUniqueId=result.uniqueId||null;
    assetMetadata.telegramMessageId=String(result.messageId||"");
@@ -667,6 +691,10 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
     updated_at:new Date().toISOString(),completed_at:new Date().toISOString(),error_code:null
    }).eq("id",job.id).eq("organization_id",p.organization_id);
    if(completeError)throw new Error("FILE_UPLOAD_JOB_COMPLETE_FAILED");
+   if(stagingPath){
+    const {error:cleanupError}=await db.storage.from("file-upload-staging").remove([stagingPath]);
+    if(cleanupError)console.error("[File upload] completed Telegram archive but temporary staging cleanup failed:",cleanupError.message);
+   }
    return out({ok:true,fileAssetId:assetId,externalMessageId:result.messageId,sizeBytes:size,folderId,uploadJobId:job.id,alreadyStored:false},201,req);
   }catch(e){
    const code=errorCode(e);
@@ -678,6 +706,10 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
      .eq("organization_id",p.organization_id).eq("metadata->>idempotencyKey",idempotencyKey)
      .order("created_at",{ascending:false}).limit(1).maybeSingle();
     discoveredAssetId=priorAsset?.id||null;
+   }
+   if(nextStatus==="failed"&&stagingPath){
+    const {error:cleanupError}=await db.storage.from("file-upload-staging").remove([stagingPath]);
+    if(cleanupError)console.error("[File upload] failed to remove rejected temporary upload:",cleanupError.message);
    }
    await db.from("file_manager_upload_jobs").update({
     status:nextStatus,

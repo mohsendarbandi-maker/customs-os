@@ -383,7 +383,13 @@ export default {
     // Route every browser-facing Supabase API through this Worker. Do not cache
     // authenticated API responses: each request may contain tenant-specific data.
     if (/^\/(?:auth|rest|storage|realtime|functions|graphql)\/v1(?:\/|$)/.test(url.pathname)) {
+      const isResumableStorageUpload = /^\/storage\/v1\/upload\/resumable(?:\/|$)/.test(url.pathname);
       const target = new URL(url.pathname + url.search, env.SUPABASE_URL);
+      if (isResumableStorageUpload) {
+        // Large TUS uploads use the dedicated Storage host while staying behind
+        // the established same-origin Worker endpoint.
+        target.hostname = new URL(env.SUPABASE_URL).hostname.replace(/\.supabase\.co$/i, '.storage.supabase.co');
+      }
       const headers = new Headers(request.headers);
       headers.delete('host');
       headers.delete('content-length');
@@ -407,6 +413,25 @@ export default {
         if (isWebSocket || upstream.status === 101) return upstream;
 
         const responseHeaders = new Headers(upstream.headers);
+        if (isResumableStorageUpload) {
+          const location = responseHeaders.get('Location');
+          if (location) {
+            try {
+              const uploadLocation = new URL(location, target);
+              if (
+                uploadLocation.hostname === target.hostname &&
+                /^\/storage\/v1\/upload\/resumable(?:\/|$)/.test(uploadLocation.pathname)
+              ) {
+                responseHeaders.set(
+                  'Location',
+                  new URL(uploadLocation.pathname + uploadLocation.search, url.origin).toString(),
+                );
+              }
+            } catch {
+              // Unexpected Storage Location is left intact so the client can report it.
+            }
+          }
+        }
         responseHeaders.set('Cache-Control', 'no-store, private');
         responseHeaders.delete('content-length');
         return new Response(upstream.body, {

@@ -344,6 +344,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
     setMessage('');
     let completed = 0;
     try {
+      const { org } = await profile();
       const folder = await getDefaultShipmentUploadFolder(current.id);
       const destination = await getFileArchiveDestination();
       for (const f of Array.from(files)) {
@@ -357,6 +358,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           uploadKeys.current.set(keySource, idempotencyKey);
         }
         await uploadTelegramArchivedFile(f, {
+          organizationId: org,
           folderId: folder.id,
           shipmentId: current.id,
           documentType: inferType(f.name) || 'other',
@@ -364,6 +366,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           tags: uploadTags,
           destination,
           idempotencyKey,
+          onProgress: setMessage,
         });
         uploadKeys.current.delete(keySource);
         completed += 1;
