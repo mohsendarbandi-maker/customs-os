@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { uploadResumableStorageFile, RESUMABLE_UPLOAD_THRESHOLD } from './resumableStorageUpload';
 
 export type FileArchiveDestination = {
   connectionId: string;
@@ -180,6 +181,7 @@ export async function getDefaultClientUploadFolder(clientId: string): Promise<{ 
 export async function uploadTelegramArchivedFile(
   file: File,
   input: {
+    organizationId: string;
     folderId: string;
     shipmentId?: string;
     documentType?: string;
@@ -187,6 +189,7 @@ export async function uploadTelegramArchivedFile(
     tags?: string[];
     destination?: FileArchiveDestination;
     idempotencyKey?: string;
+    onProgress?: (message: string) => void;
   },
 ): Promise<TelegramArchiveUpload> {
   if (file.size <= 0) throw new Error('فایل خالی است.');
@@ -211,6 +214,28 @@ export async function uploadTelegramArchivedFile(
     tags: JSON.stringify((input.tags || []).slice(0, 20)),
   });
 
+  let stagingPath: string | null = null;
+  if (file.size > RESUMABLE_UPLOAD_THRESHOLD) {
+    if (!input.organizationId) throw new Error('سازمان کاربر برای آپلود امن مشخص نیست.');
+    const stageDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(idempotencyKey));
+    const stageName = Array.from(new Uint8Array(stageDigest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    stagingPath = input.organizationId + '/' + stageName;
+    const { data: existingStage, error: stageLookupError } = await supabase.storage
+      .from('file-upload-staging')
+      .list(input.organizationId, { limit: 10, search: stageName });
+    if (stageLookupError) throw new Error('بررسی فایل موقت آپلود ناموفق بود: ' + stageLookupError.message);
+    const isAlreadyStaged = (existingStage || []).some((item) => item.name === stageName);
+    if (!isAlreadyStaged) {
+      input.onProgress?.('آپلود امنِ قابل ادامه: ' + file.name + ' · ۰٪');
+      await uploadResumableStorageFile('file-upload-staging', stagingPath, file, (percentage) => {
+        input.onProgress?.('آپلود امنِ قابل ادامه: ' + file.name + ' · ' + percentage + '٪');
+      });
+    } else {
+      input.onProgress?.('فایل موقت قبلی پیدا شد؛ ادامهٔ آرشیو بدون آپلود دوباره: ' + file.name);
+    }
+  }
+
+  input.onProgress?.('در حال آرشیو در تلگرام: ' + file.name);
   const response = await authorizedRequest(
     `/api/messenger/uploads/${encodeURIComponent(destination.connectionId)}?${query.toString()}`,
     {
@@ -220,8 +245,9 @@ export async function uploadTelegramArchivedFile(
         'X-File-Name': encodeURIComponent(file.name),
         'X-File-Size': String(file.size),
         'Idempotency-Key': idempotencyKey,
+        ...(stagingPath ? { 'X-File-Upload-Staging-Path': stagingPath } : {}),
       },
-      body: file,
+      body: stagingPath ? undefined : file,
     },
   );
   if (!response?.fileAssetId) throw new Error('تلگرام فایل را تأیید نکرد؛ وضعیت ذخیره‌سازی قطعی نیست.');
