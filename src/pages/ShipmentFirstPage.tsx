@@ -114,6 +114,7 @@ export const ShipmentFirstPage:React.FC=()=>{
   setUploading(true);setMessage('');
   let completed=0;
   try{
+   if(!profile?.organization_id)throw new Error('سازمان کاربر مشخص نیست؛ دوباره وارد شوید.');
    const folder=await getDefaultShipmentUploadFolder(selected);
    const destination=await getFileArchiveDestination();
    for(const f of Array.from(files)){
@@ -126,6 +127,7 @@ export const ShipmentFirstPage:React.FC=()=>{
      destination,
     });
     await uploadTelegramArchivedFile(f,{
+     organizationId:profile.organization_id,
      folderId:folder.id,
      shipmentId:selected,
      documentType:'other',
@@ -133,6 +135,7 @@ export const ShipmentFirstPage:React.FC=()=>{
      tags:uploadTags,
      destination,
      idempotencyKey,
+     onProgress:setMessage,
     });
     completed++;
    }
