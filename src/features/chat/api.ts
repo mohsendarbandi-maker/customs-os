@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase';
+import * as tus from 'tus-js-client';
 import { makeClientId } from '../../lib/clientId';
 import { sendChatRpc } from '../../lib/offlineQueue';
 import type { ChatConversation, ChatMessage, ChatMessageReceipt } from './types';
@@ -426,11 +427,104 @@ export async function createConversation(input: {
   return unwrap(result);
 }
 
+const CHAT_RESUMABLE_UPLOAD_THRESHOLD = 6 * 1024 * 1024;
+
+/**
+ * Large chat attachments use TUS so an interrupted network does not force the
+ * user to restart the whole transfer. Production stays on the first-party
+ * Cloudflare Worker; the Worker routes resumable Storage requests upstream.
+ */
+function chatResumableUploadEndpoint(): string {
+  const env = (import.meta as any).env;
+  const configuredUrl = String(env.VITE_SUPABASE_URL || '').trim();
+  const isLocalDevelopment =
+    typeof window !== 'undefined' &&
+    ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+  if (isLocalDevelopment && configuredUrl) {
+    const directStorage = new URL(configuredUrl);
+    directStorage.hostname = directStorage.hostname.replace(/\.supabase\.co$/i, '.storage.supabase.co');
+    directStorage.pathname = '/storage/v1/upload/resumable';
+    directStorage.search = '';
+    directStorage.hash = '';
+    return directStorage.toString();
+  }
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : configuredUrl;
+  return new URL('/storage/v1/upload/resumable', origin).toString();
+}
+
+function uploadLargeChatFile(
+  storagePath: string,
+  file: File,
+  onProgress?: (percentage: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+
+    void (async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (error || !data.session?.access_token) {
+        throw new Error('نشست معتبر نیست؛ دوباره وارد وب‌سایت شوید.');
+      }
+
+      const apiKey = String((import.meta as any).env.VITE_SUPABASE_ANON_KEY || '');
+      if (!apiKey) throw new Error('کلید عمومی Storage در تنظیمات وب‌سایت موجود نیست.');
+
+      const contentType = file.type || 'application/octet-stream';
+      const upload = new tus.Upload(file, {
+        endpoint: chatResumableUploadEndpoint(),
+        headers: {
+          Authorization: `Bearer ${data.session.access_token}`,
+          apikey: apiKey,
+          'x-upsert': 'false',
+        },
+        chunkSize: CHAT_RESUMABLE_UPLOAD_THRESHOLD,
+        retryDelays: [0, 1000, 3000, 5000, 10000],
+        storeFingerprintForResuming: true,
+        removeFingerprintOnSuccess: true,
+        metadata: {
+          bucketName: 'chat-files',
+          objectName: storagePath,
+          contentType,
+          cacheControl: '3600',
+        },
+        onProgress(bytesUploaded, bytesTotal) {
+          const percent = bytesTotal > 0 ? Math.floor((bytesUploaded / bytesTotal) * 100) : 0;
+          onProgress?.(Math.max(0, Math.min(100, percent)));
+        },
+        onError(error) {
+          fail(error);
+        },
+        onSuccess() {
+          onProgress?.(100);
+          if (settled) return;
+          settled = true;
+          resolve();
+        },
+      });
+
+      const previousUploads = await upload.findPreviousUploads();
+      const previous = previousUploads.find((item) => item.metadata?.objectName === storagePath);
+      if (previous) upload.resumeFromPreviousUpload(previous);
+      upload.start();
+    })().catch((error: unknown) => {
+      fail(error instanceof Error ? error : new Error(String(error)));
+    });
+  });
+}
+
 export async function sendFileMessage(
   conversationId: string,
   organizationId: string,
   file: File,
   messageType: 'file' | 'voice' = 'file',
+  onProgress?: (percentage: number) => void,
 ): Promise<ChatMessage> {
   const clientUuid = makeClientId();
   const result = await sendChatRpc({
@@ -449,13 +543,18 @@ export async function sendFileMessage(
   const storagePath = `quarantine/${organizationId}/${conversationId}/${objectId}`;
 
   try {
-    const upload = await supabase.storage.from('chat-files').upload(storagePath, file, {
-      contentType: file.type || 'application/octet-stream',
-      cacheControl: '3600',
-      upsert: false,
-    });
-
-    if (upload.error) throw new Error(upload.error.message);
+    if (file.size > CHAT_RESUMABLE_UPLOAD_THRESHOLD) {
+      await uploadLargeChatFile(storagePath, file, onProgress);
+    } else {
+      onProgress?.(0);
+      const upload = await supabase.storage.from('chat-files').upload(storagePath, file, {
+        contentType: file.type || 'application/octet-stream',
+        cacheControl: '3600',
+        upsert: false,
+      });
+      if (upload.error) throw new Error(upload.error.message);
+      onProgress?.(100);
+    }
 
     const attachment = await supabase.rpc('chat_register_attachment', {
       p_conversation_id: conversationId,
