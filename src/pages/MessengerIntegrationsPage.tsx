@@ -47,6 +47,12 @@ export const MessengerIntegrationsPage:React.FC=()=>{
     <label className="block text-xs font-bold sm:col-span-2">پیام‌رسان
      <select className={field+" mt-1"} value={platform} onChange={e=>{setPlatform(e.target.value);setError("");setNotice("");}}><option value="telegram">تلگرام</option><option value="bale">بله</option><option value="whatsapp">واتساپ تجاری (Cloud API)</option><option value="rubika" disabled>روبیکا (API عمومی تأیید نشده)</option></select>
     </label>
+    {platform==="bale"&&<div className="rounded-xl border app-border bg-[var(--surface-2)] p-3 text-xs leading-6 sm:col-span-2">
+     <p className="font-bold">اتصال بله به چت داخلی سایت</p>
+     <p>توکن ربات بله را وارد کنید؛ پس از ثبت، سامانه وب‌هوک را خودکار ثبت می‌کند.</p>
+     <p>سپس در بخش «۳. مقصدها و کانال گزارش»، همین اتصال بله را انتخاب کنید، کاربرد را روی «گفتگوی دوطرفه» بگذارید و گفتگوی داخلی متناظر را انتخاب و ذخیره کنید. از کاربرد «آرشیو فایل‌ها» برای بله استفاده نکنید؛ آرشیو فایل‌منیجر فعلاً به مقصد تلگرام متصل است.</p>
+     <p>ربات باید به گفت‌وگو/گروه مقصد اضافه شده باشد. پس از ذخیره مقصد، پیام‌های دریافتی بله در همان گفتگوی داخلی سایت نمایش داده می‌شوند و پاسخ‌های متنی سایت از همان اتصال ارسال می‌شوند.</p>
+    </div>}
     {platform==="whatsapp"&&<div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-6 sm:col-span-2">
      <p className="font-bold text-amber-600">قبل از ورود اطلاعات واتساپ</p>
      <p>اگر Meta پیام می‌دهد کشور شما پشتیبانی نمی‌شود، VPN معمولاً مشکل را حل نمی‌کند. دسترسی WhatsApp Business Platform به کشور کسب‌وکار و شمارهٔ ثبت‌شده وابسته است؛ شماره‌های ایران (+98) برای API تجاری پشتیبانی نمی‌شوند. کشور یا مشخصات غیرواقعی وارد نکنید.</p>
