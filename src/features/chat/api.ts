@@ -102,7 +102,7 @@ async function enrichMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
     supabase
       .from('chat_attachments')
       .select(
-        'id,message_id,storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform,security_status,security_checked_at,security_error',
+        'id,message_id,storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform',
       )
       .in('message_id', ids)
       .is('deleted_at', null),
@@ -130,11 +130,7 @@ async function enrichMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
 
   const enrichedAttachments = await Promise.all(
     (attachmentsResult.data ?? []).map(async (attachment) => {
-      if (
-        attachment.security_status !== 'clean' ||
-        !attachment.storage_path ||
-        attachment.storage_path.startsWith('quarantine/')
-      ) {
+      if (!attachment.storage_path) {
         return { ...attachment, url: null };
       }
 
