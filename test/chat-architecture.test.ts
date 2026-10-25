@@ -193,4 +193,14 @@ describe('chat architecture invariants',()=>{
     expect(gateway).toContain('claimed:rows.length,sent,failed,skipped');
   });
 
+  it('discovers Bale private chat IDs and explains that phone numbers are not chat IDs',()=>{
+    const gateway=read('supabase/functions/messenger-gateway/index.ts');
+    const page=read('src/pages/MessengerIntegrationsPage.tsx');
+    expect(gateway).toContain('BALE_PRIVATE_CHAT_DISCOVERY_SAVE_FAILED');
+    expect(gateway).toContain('شناسهٔ گفت‌وگوی بله (Chat ID) شما:');
+    expect(gateway).toContain('BALE_CHAT_ID_NOT_FOUND');
+    expect(page).toContain('شناسهٔ گفت‌وگو (Chat ID)');
+    expect(page).toContain('شمارهٔ موبایل را وارد نکنید');
+  });
+
 });
