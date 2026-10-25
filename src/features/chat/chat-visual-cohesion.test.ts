@@ -26,7 +26,7 @@ describe('shared visual language and chat layout regressions', () => {
     expect(reminders).not.toContain('setTheme(');
     expect(reminders).not.toContain('data-theme={theme}');
     expect(reminders).toContain('رنگ‌بندی و حالت روشن/تیره از تنظیمات ظاهری اصلی Customs OS پیروی می‌کند.');
-    expect(styles).toContain('background: var(--bg) !important');
+    expect(styles).toContain('background: transparent !important');
   });
 
   it('renders Jalali years without thousands separators in every calendar header', () => {
