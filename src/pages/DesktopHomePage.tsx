@@ -118,7 +118,6 @@ export const DesktopHomePage:React.FC=()=>{
    </MotionWidget>
    <MotionWidget id="shipments" title="وضعیت محموله‌ها" editing={editingLayout} order={widgetOrder.indexOf('shipments')} span={widgetSpans.shipments} onMove={moveWidget} onShift={shiftWidget} onResize={resizeWidget}>
    <section className="customs-shipments-section">
-    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-1 border-b border-[var(--border)]"><div><div className="text-[10px] tracking-widest text-[var(--primary)] font-bold mb-1">LIVE OPERATIONS</div><h2 className="text-lg font-black">وضعیت محموله‌ها</h2><p className="text-xs app-muted mt-1">مراحل عملیات در یک نگاه؛ از ثبت محموله تا خروج گمرکی</p></div><Link to="/operations" className="customs-line-button">همه محموله‌ها <ChevronLeft size={15}/></Link></div>
     <div className="customs-status-board"><LatestShipmentStatuses/></div>
    </section>
    </MotionWidget>
