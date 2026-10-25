@@ -127,9 +127,13 @@ html,body,#root{min-height:100%;margin:0;max-width:100%;overflow-x:hidden}html{s
 .shipment-name{display:flex;flex-direction:column;align-items:flex-start;min-width:0;gap:2px;border:0;background:transparent;color:var(--text);text-align:right}
 .shipment-name b,.shipment-name span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .shipment-name b{font-size:11px;font-weight:850}.shipment-name span,.shipment-meta{font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.shipment-stages{display:flex;align-items:center;justify-content:space-between;gap:4px}
-.shipment-stage-dot{width:19px;height:19px;flex:0 0 19px;border:1px solid var(--border);border-radius:50%;font-size:9px;background:transparent;color:var(--text-muted);display:grid;place-items:center;padding:0}
-.shipment-stage-dot.done{border-color:var(--success);color:var(--success)}.shipment-stage-dot.current,.shipment-stage-dot.chosen{background:var(--primary);border-color:var(--primary);color:white}
+.shipment-stages{display:flex;align-items:center;justify-content:space-between;gap:4px;min-width:0}
+.shipment-stage-dot{width:19px;height:19px;flex:0 0 19px;min-width:0;border:0;border-radius:0;font-size:9px;background:transparent;color:var(--text-muted);display:grid;place-items:center;padding:0;overflow:visible}
+.shipment-stage-number{width:19px;height:19px;display:grid;place-items:center;border:1px solid var(--border);border-radius:50%;font-size:9px;background:var(--surface);color:var(--text-muted)}
+.shipment-stage-label{display:none}
+.shipment-stage-dot.done .shipment-stage-number{border-color:var(--success);color:var(--success);background:color-mix(in srgb,var(--success) 8%,var(--surface))}
+.shipment-stage-dot.current .shipment-stage-number,.shipment-stage-dot.chosen .shipment-stage-number{background:var(--primary);border-color:var(--primary);color:#fff}
+.shipment-stage-dot.chosen .shipment-stage-number{outline:2px solid color-mix(in srgb,var(--primary) 24%,transparent);outline-offset:2px}
 .shipment-current-stage{display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;border:0;background:transparent;color:var(--text-muted);font-size:10px}
 .shipment-go{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:27px;min-height:27px;border:1px solid var(--border);border-radius:7px;color:var(--primary-2);font-size:10px;text-decoration:none;white-space:nowrap}
 .shipment-warnings{display:flex;flex-wrap:wrap;gap:6px 12px;padding:4px 10px 6px;border-bottom:1px solid var(--border);font-size:10px;color:var(--warning)}
