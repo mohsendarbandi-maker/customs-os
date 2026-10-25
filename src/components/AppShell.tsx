@@ -14,6 +14,7 @@ import { CustomsLogo } from './CustomsLogo';
 import { AIWorkspace } from './AIWorkspace';
 import { OperationalAlertsDropdown } from './OperationalAlertsDropdown';
 import { Avatar } from './ui';
+import { CloudSyncStatus } from './CloudSyncStatus';
 
 type NavItem = {
   label: string;
@@ -528,10 +529,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             <div className="flex-1" />
             <div className="flex items-center gap-2">
               {profile && <OperationalAlertsDropdown refreshKey={location.pathname} />}
-              <span className={`app-online-chip ${online ? 'is-online' : 'is-offline'}`}>
-                <span className="app-online-dot" />
-                <span>{online ? 'آنلاین' : 'آفلاین'}</span>
-              </span>
+              <CloudSyncStatus online={online} enabled={Boolean(profile)} />
               <button className="theme-cycle-btn" title="تغییر حالت نمایش" onClick={cycleTheme}>
                 {comfort === 'reading' ? (
                   <BookOpen size={16} />
