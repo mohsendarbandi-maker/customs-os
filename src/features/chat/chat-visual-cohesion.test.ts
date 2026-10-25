@@ -128,9 +128,11 @@ describe('shared visual language and chat layout regressions', () => {
     expect(chatPage).toContain('if(requestedConversationId)setSelectedId(requestedConversationId)');
   });
 
-  it('does not expose pending attachment scan status in the chat timeline', () => {
+  it('does not expose scan status or block attachment links in the chat timeline', () => {
     expect(chatPage).not.toContain('فایل در حال بررسی امنیتی است…');
-    expect(chatPage).toContain("a.security_status==='clean'&&a.url");
-    expect(chatPage).toContain("a.security_status==='blocked'?<div key={a.id}");
+    expect(chatPage).not.toContain("a.security_status==='clean'");
+    expect(chatPage).not.toContain("a.security_status==='blocked'");
+    expect(chatPage).not.toContain('فایل مسدود شد.');
+    expect(chatPage).toContain("map(a=>a.url?(a.mime_type.startsWith('audio/')");
   });
 });
