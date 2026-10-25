@@ -16,6 +16,7 @@ export const ClientDocumentManagerPage:React.FC=()=>{const[clients,setClients]=u
   setBusy(true);setError('');setMessage('');
   let completed=0;
   try{
+   const {org}=await profile();
    const folder=await getDefaultClientUploadFolder(selected);
    const destination=await getFileArchiveDestination();
    for(const f of files){
@@ -27,9 +28,10 @@ export const ClientDocumentManagerPage:React.FC=()=>{const[clients,setClients]=u
      folderId:folder.id,documentType,documentName:documentNameToSave,destination
     });
     await uploadTelegramArchivedFile(f,{
-     folderId:folder.id,documentType,
+     organizationId:org,folderId:folder.id,documentType,
      documentName:documentNameToSave,
-     tags:uploadTags,destination,idempotencyKey
+     tags:uploadTags,destination,idempotencyKey,
+     onProgress:setMessage
     });
     completed++;
     setPendingFiles(previous=>previous.filter(candidate=>candidate!==f));
