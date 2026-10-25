@@ -19,8 +19,8 @@ describe('inbound messenger files use canonical File Manager metadata', () => {
 
   it('indexes an inbound file only under the configured shipment or cargo-owner folder', () => {
     expect(gateway).toContain('.select("enabled,shipment_id,client_id,conversation_id,purpose")');
-    expect(gateway).toContain('.eq("shipment_id",chat.shipment_id)');
-    expect(gateway).toContain('.eq("client_id",chat.client_id)');
+    expect(gateway).toContain('.eq("shipment_id",linkedShipmentId)');
+    expect(gateway).toContain('.eq("client_id",linkedClientId)');
     expect(gateway).toContain('file_asset_id:a.id');
     expect(gateway).toContain('storage_path:"telegram://"+String(a.id)');
     expect(gateway).toContain('onConflict:"organization_id,file_asset_id"');
