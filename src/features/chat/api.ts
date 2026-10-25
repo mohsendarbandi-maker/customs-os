@@ -593,7 +593,7 @@ export async function sendFileMessage(
   const message = result.data as ChatMessage;
 
   const objectId = makeClientId();
-  const storagePath = `quarantine/${organizationId}/${conversationId}/${objectId}`;
+  const storagePath = `${organizationId}/${conversationId}/${objectId}`;
 
   try {
     await uploadChatStorageObject(storagePath, file, onProgress);
