@@ -28,9 +28,31 @@ describe('large chat attachments use resumable Storage uploads', () => {
     expect(page).toContain('Math.round(attachmentProgress)');
   });
 
-  it('keeps the existing quarantine and attachment registration flow after upload', () => {
-    expect(api).toContain('quarantine/${organizationId}/${conversationId}/${objectId}');
+  it('uploads chat attachments directly to their conversation path without quarantine', () => {
+    expect(api).toContain('const storagePath = `${organizationId}/${conversationId}/${objectId}`;');
+    expect(api).not.toContain('quarantine/${organizationId}/${conversationId}/${objectId}');
     expect(api).toContain("supabase.rpc('chat_register_attachment'");
     expect(api).toContain("supabase.storage.from('chat-files').remove([storagePath])");
+  });
+});
+
+describe('chat attachment scanning is disabled', () => {
+  const migration = read('supabase/migrations/20261026010000_disable_chat_attachment_scanning.sql');
+  const scanner = read('supabase/functions/scan-chat-file/index.ts');
+
+  it('removes the database scan triggers and scheduled scanner, defaulting new attachments to available', () => {
+    expect(migration).toContain('DROP TRIGGER IF EXISTS trg_chat_attachment_scan');
+    expect(migration).toContain('DROP TRIGGER IF EXISTS trg_chat_attachment_security_prepare');
+    expect(migration).toContain("ALTER COLUMN security_status SET DEFAULT 'clean'");
+    expect(migration).toContain("cron.unschedule");
+    expect(migration).toContain('chat_files_insert_direct');
+    expect(migration).toContain("'^'||v_org::text||'/'||p_conversation_id::text");
+  });
+
+  it('keeps the scan edge endpoint inert so residual invocations cannot inspect or block files', () => {
+    expect(scanner).toContain('enabled:false');
+    expect(scanner).not.toContain('scan(b,a.original_name,a.mime_type)');
+    expect(scanner).not.toContain('.move(quarantinePath,finalPath)');
+    expect(scanner).not.toContain("from('chat-files').download");
   });
 });
