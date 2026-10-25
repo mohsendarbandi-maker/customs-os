@@ -96,14 +96,22 @@ describe('chat architecture invariants',()=>{
     expect(integration).toContain('(["inbox","shipment_notifications","shipment"].includes(purpose)&&!conversationId)');
   });
 
-  it('does not deliver quarantined or unscanned chat attachments to external messengers',()=>{
+  it('makes chat attachments immediately available without scan gates',()=>{
     const gateway=read('supabase/functions/messenger-gateway/index.ts');
     const scanner=read('supabase/functions/scan-chat-file/index.ts');
-    expect(gateway).toContain('security_status==="clean"');
-    expect(gateway).toContain('startsWith("quarantine/")');
-    expect(gateway).toContain('ATTACHMENT_NOT_CLEAN_OR_NOT_READY');
-    expect(scanner).toContain('security_status:"clean"');
-    expect(scanner).toContain('from("chat-files").move(quarantinePath,finalPath)');
+    const chatApi=read('src/features/chat/api.ts');
+    const chatPage=read('src/features/chat/ChatPage.tsx');
+    expect(gateway).toContain('const attachment=(attachments||[]).find((a:any)=>Boolean(a.storage_path))');
+    expect(gateway).not.toContain('security_status==="clean"');
+    expect(gateway).not.toContain('ATTACHMENT_BLOCKED_BY_SECURITY_SCAN');
+    expect(gateway).not.toContain('ATTACHMENT_NOT_CLEAN_OR_NOT_READY');
+    expect(gateway).not.toContain('quarantine/');
+    expect(scanner).toContain('enabled:false');
+    expect(scanner).not.toContain('security_status:"clean"');
+    expect(scanner).not.toContain('from("chat-files").move(quarantinePath,finalPath)');
+    expect(chatApi).not.toContain("attachment.security_status !== 'clean'");
+    expect(chatPage).not.toContain("a.security_status==='blocked'");
+    expect(chatPage).not.toContain('فایل مسدود شد.');
   });
 
   it('uses a durable retry queue for internal-to-external text and file delivery',()=>{
@@ -116,7 +124,7 @@ describe('chat architecture invariants',()=>{
     expect(scheduler).toContain('messenger-delivery-outbox-every-minute');
     expect(mediaMigration).toContain("('text','file','voice')");
     expect(gateway).toContain('messenger_claim_delivery_outbox');
-    expect(gateway).toContain('ATTACHMENT_BLOCKED_BY_SECURITY_SCAN');
+    expect(gateway).toContain('FILE_TOO_LARGE_FOR_DESTINATION');
   });
 
   it('sends one real daily report per Tehran-local date and skips duplicates',()=>{
