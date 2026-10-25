@@ -84,6 +84,13 @@ describe('one canonical Customs OS PWA', () => {
     expect(mainEntry).toContain('ReactDOM.createRoot(rootElement).render(');
   });
 
+  it('starts service-worker registration even when the load event has already fired', () => {
+    expect(pwaLifecycle).toContain('registerSW({');
+    expect(pwaLifecycle).toContain('immediate: true');
+    expect(pwaLifecycle).toContain('    start();');
+    expect(pwaLifecycle).not.toContain("else window.addEventListener('load', start, { once: true })");
+  });
+
   it('preserves Supabase auto-refresh and performs throttled recovery on visibility, focus and pageshow', () => {
     expect(supabaseClient).toContain('persistSession: true');
     expect(supabaseClient).toContain('autoRefreshToken: true');
