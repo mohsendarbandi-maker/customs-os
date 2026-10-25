@@ -833,7 +833,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
    try{
     const source=await sourceFile(c,String(media.id)),buffer=await source.response.arrayBuffer();
     if(buffer.byteLength<=0||buffer.byteLength>maxMirror)throw new Error("INBOUND_FILE_SIZE_OUT_OF_RANGE");
-    const mime=cleanMime(media.mime),storagePath="quarantine/"+c.organization_id+"/"+chat.conversation_id+"/"+crypto.randomUUID();
+    const mime=cleanMime(media.mime),storagePath=c.organization_id+"/"+chat.conversation_id+"/"+crypto.randomUUID();
     const blob=new Blob([buffer],{type:mime});
     const {error:uploadError}=await db.storage.from("chat-files").upload(storagePath,blob,{contentType:mime,cacheControl:"3600",upsert:false});
     if(uploadError)throw new Error("INBOUND_CHAT_STORAGE_UPLOAD_FAILED");
@@ -1056,13 +1056,10 @@ async function processMessengerOutbox(req:Request){
     externalMessageId=await sendTextToPlatform(c as Conn,String(chat.external_chat_id),bodyText.slice(0,4000));
     payloadSummary={...payloadSummary,text:bodyText.slice(0,4000),charCount:bodyText.length};
    }else if(message.message_type==="file"||message.message_type==="voice"){
-    const {data:attachments,error:attachmentError}=await db.from("chat_attachments").select("id,storage_path,original_name,mime_type,size_bytes,security_status,deleted_at").eq("message_id",message.id).is("deleted_at",null).order("created_at",{ascending:true});
+    const {data:attachments,error:attachmentError}=await db.from("chat_attachments").select("id,storage_path,original_name,mime_type,size_bytes,deleted_at").eq("message_id",message.id).is("deleted_at",null).order("created_at",{ascending:true});
     if(attachmentError)throw new Error("ATTACHMENT_LOOKUP_FAILED");
-    const attachment=(attachments||[]).find((a:any)=>a.security_status==="clean"&&a.storage_path&&!String(a.storage_path).startsWith("quarantine/"));
-    if(!attachment){
-     if((attachments||[]).some((a:any)=>a.security_status==="blocked"))throw new Error("ATTACHMENT_BLOCKED_BY_SECURITY_SCAN");
-     throw new Error("ATTACHMENT_NOT_CLEAN_OR_NOT_READY");
-    }
+    const attachment=(attachments||[]).find((a:any)=>Boolean(a.storage_path));
+    if(!attachment)throw new Error("ATTACHMENT_NOT_FOUND");
     const max=c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT;
     const expectedSize=Number(attachment.size_bytes||0)||null;
     if(expectedSize!==null&&expectedSize>max)throw new Error("FILE_TOO_LARGE_FOR_DESTINATION");
