@@ -748,28 +748,22 @@
   }
 }
 
-/* Reminders redesign: teal/ocean palette, list-first hierarchy, animated CSS artwork.
-   Intentionally no static stock-photo hero: the illustration is composed from UI shapes. */
+/* Reminders use the same global appearance tokens as every Customs OS screen. */
 .reminders-app-standalone {
-  --primary: #087f8c;
-  --bg: #f2f9fa;
-  --surface: #ffffff;
-  --surface-2: #e8f4f5;
-  --border: #cfe3e6;
-  --text: #15343b;
-  --text-muted: #58757d;
-  background:
-    radial-gradient(ellipse at 8% 0%, rgba(8,127,140,.075), transparent 36rem),
-    radial-gradient(ellipse at 95% 20%, rgba(34,166,177,.065), transparent 32rem),
-    var(--bg);
-  color: var(--text);
+  background: transparent !important;
+  color: var(--text) !important;
 }
 .reminders-app-standalone .reminders-hub-hero {
-  background: linear-gradient(118deg, #075b70 0%, #087f8c 48%, #18a7a5 100%);
+  background: linear-gradient(
+    118deg,
+    color-mix(in srgb, var(--primary) 84%, var(--bg)),
+    var(--primary) 52%,
+    color-mix(in srgb, var(--primary-2) 42%, var(--primary))
+  );
   background-size: 220% 220%;
   animation: reminders-ocean-flow 13s ease-in-out infinite;
-  border-color: rgba(19,151,164,.42);
-  box-shadow: 0 17px 38px rgba(8,127,140,.19);
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 .reminders-app-standalone .reminders-hero-orbit-one {
   animation: reminders-orbit-drift 22s linear infinite;
@@ -779,26 +773,26 @@
 }
 .reminders-app-standalone .reminders-smart-card:hover,
 .reminders-app-standalone .reminders-category-card:hover {
-  border-color: color-mix(in srgb, #087f8c 48%, var(--border));
-  box-shadow: 0 12px 28px rgba(8,91,112,.12);
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--primary) 10%, transparent);
 }
 .reminders-app-standalone .reminders-hub-search:focus-visible,
 .reminders-app-standalone .reminders-up-next-row button:focus-visible {
-  outline: 3px solid color-mix(in srgb, #087f8c 48%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--primary) 44%, transparent);
   outline-offset: 2px;
 }
 .reminders-app-standalone .reminders-up-next {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 22px;
-  background: color-mix(in srgb, var(--surface) 96%, #c9f0ee);
-  box-shadow: 0 9px 28px rgba(13,67,78,.065);
+  background: color-mix(in srgb, var(--surface) 96%, var(--primary) 4%);
+  box-shadow: 0 9px 28px color-mix(in srgb, var(--text) 6%, transparent);
 }
 .reminders-app-standalone .reminders-up-next .reminders-section-title {
   margin: 0;
   padding: 16px 17px 12px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(110deg, color-mix(in srgb, #087f8c 7%, var(--surface)), var(--surface));
+  background: linear-gradient(110deg, color-mix(in srgb, var(--primary) 7%, var(--surface)), var(--surface));
 }
 .reminders-app-standalone .reminders-up-next .reminders-section-title p {
   margin: 4px 0 0;
@@ -812,7 +806,7 @@
   transition: background .18s ease;
 }
 .reminders-app-standalone .reminders-up-next-row:hover {
-  background: color-mix(in srgb, #087f8c 5%, var(--surface));
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
 }
 .reminders-app-standalone .reminders-up-next-row + .reminders-up-next-row {
   border-top: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
@@ -821,12 +815,12 @@
   width: 29px;
   height: 29px;
   flex-basis: 29px;
-  border-color: #78a6ad;
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
   transition: background .18s ease, border-color .18s ease, transform .18s ease;
 }
 .reminders-app-standalone .reminders-up-next-check:hover {
-  border-color: #087f8c;
-  background: color-mix(in srgb, #087f8c 9%, var(--surface));
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, var(--surface));
   transform: scale(1.04);
 }
 @keyframes reminders-ocean-flow {
@@ -845,6 +839,7 @@
   .reminders-app-standalone .reminders-up-next-row strong { font-size: 13px; }
   .reminders-app-standalone .reminders-up-next-row small { font-size: 11px; }
 }
+
 @media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
   .reminders-app-standalone { padding-bottom: calc(68px + env(safe-area-inset-bottom)) !important; }
   .reminders-app-standalone .reminders-hub-header { padding-block: 6px !important; }
