@@ -91,7 +91,7 @@ export function buildChatInboxRows(
     );
 
     return {
-      kind: 'owner',
+      kind: 'owner' as const,
       owner,
       children,
       unreadCount: unreadCountOf(owner) + childUnread,
