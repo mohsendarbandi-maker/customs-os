@@ -349,12 +349,14 @@ export const FileManagerPage: React.FC = () => {
         });
         setProgress('در حال ارسال به تلگرام: ' + file.name);
         await uploadTelegramArchivedFile(file, {
+          organizationId,
           folderId: parent.id,
           ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
           documentType,
           tags: uploadTags,
           destination,
           idempotencyKey,
+          onProgress: setProgress,
         });
         completed += 1;
         setPendingFiles((previous) => previous.filter((candidate) => candidate !== file));
@@ -677,12 +679,14 @@ export const FileManagerPage: React.FC = () => {
         const idempotencyKey = 'windows-sync:' + keyHash;
         setProgress('ارسال به آرشیو تلگرام: ' + relativePath);
         await uploadTelegramArchivedFile(local.file, {
+          organizationId,
           folderId: parent.id,
           ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
           documentType: parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG',
           tags: [],
           destination,
           idempotencyKey,
+          onProgress: setProgress,
         });
         uploaded += 1;
       }
