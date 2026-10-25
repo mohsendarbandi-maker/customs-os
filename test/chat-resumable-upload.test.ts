@@ -41,9 +41,9 @@ describe('chat attachment scanning is disabled', () => {
   const scanner = read('supabase/functions/scan-chat-file/index.ts');
 
   it('removes the database scan triggers and scheduled scanner, defaulting new attachments to available', () => {
-    expect(migration).toContain('DROP TRIGGER IF EXISTS trg_chat_attachment_scan');
-    expect(migration).toContain('DROP TRIGGER IF EXISTS trg_chat_attachment_security_prepare');
-    expect(migration).toContain("ALTER COLUMN security_status SET DEFAULT 'clean'");
+    expect(migration).toContain('drop trigger if exists trg_chat_attachment_scan');
+    expect(migration).toContain('drop trigger if exists trg_chat_attachment_security_prepare');
+    expect(migration).toContain("alter column security_status set default 'clean'");
     expect(migration).toContain("cron.unschedule");
     expect(migration).toContain('chat_files_insert_direct');
     expect(migration).toContain("'^'||v_org::text||'/'||p_conversation_id::text");
