@@ -7,6 +7,7 @@ import {
   subscribeOfflineQueue,
   type QueuedRpc,
 } from '../lib/offlineQueue';
+import { supabase } from '../lib/supabase';
 
 type CloudSyncStatusProps = {
   online: boolean;
@@ -43,9 +44,6 @@ export const CloudSyncStatus: React.FC<CloudSyncStatusProps> = ({ online, enable
     };
   }, [enabled]);
 
-  const failedCount = items.filter((item) => item.state === 'failed').length;
-  const queuedCount = items.length - failedCount;
-
   const syncNow = async () => {
     if (!enabled || !online || busy) return;
 
@@ -57,6 +55,19 @@ export const CloudSyncStatus: React.FC<CloudSyncStatusProps> = ({ online, enable
     setBusy(true);
     setFeedback('');
     try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session?.user) {
+        throw new Error('برای همگام‌سازی باید وارد حساب شوید.');
+      }
+      const { data: cloudProfile, error: cloudError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', sessionData.session.user.id)
+        .maybeSingle();
+      if (cloudError || !cloudProfile) {
+        throw new Error('اتصال به داده‌های ابری تأیید نشد.');
+      }
+
       // Failed chat items can be retried by their stable client UUID.
       const queued = await listQueue();
       for (const item of queued) {
@@ -96,11 +107,9 @@ export const CloudSyncStatus: React.FC<CloudSyncStatusProps> = ({ online, enable
 
   const label = !online
     ? 'آفلاین'
-    : failedCount > 0
-      ? failedCount.toLocaleString('fa-IR') + ' مورد با خطا'
-      : queuedCount > 0
-        ? queuedCount.toLocaleString('fa-IR') + ' تغییر در صف'
-        : 'ابر متصل';
+    : items.length > 0
+      ? items.length.toLocaleString('fa-IR') + ' تغییر در صف'
+      : 'ابر متصل';
 
   return (
     <div className="flex items-center gap-2 min-w-0" title="داده‌ها بین دستگاه‌هایی که با یک حساب و سازمان وارد شده‌اند از فضای ابری مشترک می‌شوند.">
