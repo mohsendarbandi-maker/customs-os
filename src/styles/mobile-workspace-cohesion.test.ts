@@ -4,10 +4,12 @@ import { describe, expect, it } from 'vitest';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 const responsive = read('src/responsive.css');
+const mobileStyles = read('src/styles/mobile-workspace-cohesion.css');
 const remindersCohesion = read('src/styles/chat-reminders-cohesion.css');
 const fileManager = read('src/pages/FileManagerPage.tsx');
 const shipments = read('src/components/LatestShipmentStatuses.tsx');
 const home = read('src/pages/DesktopHomePage.tsx');
+const mainStyles = read('src/main.tsx');
 
 describe('mobile visual cohesion regressions', () => {
   it('lets reminders inherit the global site palette and background', () => {
@@ -28,22 +30,23 @@ describe('mobile visual cohesion regressions', () => {
     expect(fileManager).toContain('placeholder="جست‌وجوی صاحب کالا، محموله یا سند…"');
     expect(fileManager).not.toContain('پوشه‌بندی خودکار بر اساس صاحب کالا، محموله و گمرک؛ آرشیو فایل اصلی در تلگرام.');
     expect(fileManager).not.toContain('فایل‌های جدید به همین گفتگو می‌روند؛ در تلگرام نام فایل یا برچسب را در همان گفتگو جست‌وجو کنید.');
-    expect(responsive).toContain('.file-manager-page-actions');
-    expect(responsive).toContain('.file-manager-archive-help');
+    expect(mobileStyles).toContain('.file-manager-page-actions');
+    expect(mobileStyles).toContain('.file-manager-archive-help');
   });
 
   it('renders shipment progress as a labeled five-step card on phones, not a clipped 740px row', () => {
     expect(shipments).toContain('shortLabel:\'انبار\'');
     expect(shipments).toContain('className="shipment-stage-number"');
     expect(shipments).toContain('className="shipment-stage-label"');
-    expect(responsive).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
-    expect(responsive).toContain('.shipment-compact-row');
-    expect(responsive).toContain('min-width: 0 !important');
+    expect(mobileStyles).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
+    expect(mobileStyles).toContain('.shipment-compact-row');
+    expect(mobileStyles).toContain('min-width: 0 !important');
   });
 
   it('removes the duplicate explanation above the shipment status card', () => {
     expect(home).toContain('<LatestShipmentStatuses/>');
     expect(home).not.toContain('مراحل عملیات در یک نگاه؛ از ثبت محموله تا خروج گمرکی');
     expect(home).not.toContain('LIVE OPERATIONS');
+    expect(mainStyles).toContain("import './styles/mobile-workspace-cohesion.css';");
   });
 });
