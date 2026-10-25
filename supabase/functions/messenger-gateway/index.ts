@@ -760,16 +760,38 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
   // when the external chat is linked to a shipment or cargo-owner folder.
   let targetFolder:any=null;
   let targetFolderError:any=null;
-  if(chat.shipment_id){
+  let linkedShipmentId:string|null=chat.shipment_id||null;
+  let linkedClientId:string|null=chat.client_id||null;
+  // Messenger UI links an external destination to an internal conversation. Resolve
+  // its canonical shipment/owner hierarchy when the external mapping lacks explicit IDs.
+  if(chat.conversation_id&&(!linkedShipmentId||!linkedClientId)){
+   const {data:room,error:roomError}=await db.from("chat_conversations")
+    .select("shipment_id,cargo_owner_id,hierarchy_kind,parent_conversation_id")
+    .eq("id",chat.conversation_id).eq("organization_id",c.organization_id)
+    .is("deleted_at",null).maybeSingle();
+   if(roomError)targetFolderError=roomError;
+   if(room){
+    linkedShipmentId=linkedShipmentId||room.shipment_id||null;
+    linkedClientId=linkedClientId||room.cargo_owner_id||null;
+   }
+  }
+  if(linkedShipmentId&&!linkedClientId){
+   const {data:linkedShipment,error:linkedShipmentError}=await db.from("shipments")
+    .select("client_id").eq("id",linkedShipmentId).eq("organization_id",c.organization_id).maybeSingle();
+   if(linkedShipmentError)targetFolderError=linkedShipmentError;
+   linkedClientId=linkedClientId||linkedShipment?.client_id||null;
+  }
+  if(!targetFolderError&&linkedShipmentId){
    const {data:folder,error:folderError}=await db.from("file_manager_folders")
     .select("id,client_id,shipment_id,folder_type")
-    .eq("organization_id",c.organization_id).eq("shipment_id",chat.shipment_id)
+    .eq("organization_id",c.organization_id).eq("shipment_id",linkedShipmentId)
     .eq("folder_type","shipment").order("created_at",{ascending:true}).limit(1).maybeSingle();
    targetFolder=folder;targetFolderError=folderError;
-  }else if(chat.client_id){
+  }
+  if(!targetFolderError&&!targetFolder&&linkedClientId){
    const {data:folder,error:folderError}=await db.from("file_manager_folders")
     .select("id,client_id,shipment_id,folder_type")
-    .eq("organization_id",c.organization_id).eq("client_id",chat.client_id)
+    .eq("organization_id",c.organization_id).eq("client_id",linkedClientId)
     .is("shipment_id",null).eq("folder_type","client")
     .order("created_at",{ascending:true}).limit(1).maybeSingle();
    targetFolder=folder;targetFolderError=folderError;
@@ -779,7 +801,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
   }else if(targetFolder){
    const {error:fileManagerError}=await db.from("file_manager_files").upsert({
     organization_id:c.organization_id,folder_id:targetFolder.id,
-    shipment_id:chat.shipment_id||null,client_id:chat.client_id||targetFolder.client_id||null,
+    shipment_id:linkedShipmentId,client_id:linkedClientId||targetFolder.client_id||null,
     file_asset_id:a.id,original_name:cleanExternalName||"document.bin",mime_type:cleanMime(media.mime),
     size_bytes:Number(media.size||0),external_message_id:msgId,
     document_type:media.mime==="application/pdf"?"CUSTOMS_DECLARATION_PRINT":"other",
@@ -791,8 +813,8 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
   }else{
    mirrorErrorCode=mirrorErrorCode||"FILE_MANAGER_FOLDER_NOT_FOUND";
   }
-  if(chat.shipment_id){
-   const {error:shipmentFileError}=await db.from("shipment_files").upsert({organization_id:c.organization_id,shipment_id:chat.shipment_id,file_asset_id:a.id,document_type:media.mime==="application/pdf"?"customs_document":"other"},{onConflict:"shipment_id,file_asset_id,document_type"});
+  if(linkedShipmentId){
+   const {error:shipmentFileError}=await db.from("shipment_files").upsert({organization_id:c.organization_id,shipment_id:linkedShipmentId,file_asset_id:a.id,document_type:media.mime==="application/pdf"?"customs_document":"other"},{onConflict:"shipment_id,file_asset_id,document_type"});
    if(shipmentFileError)throw new Error("SHIPMENT_FILE_LINK_FAILED");
   }
   const maxMirror=c.platform==="whatsapp"?50*1024*1024:TG_DOWNLOAD_LIMIT;
