@@ -966,7 +966,7 @@
   -webkit-line-clamp: 2;
 }
 .reminders-app-standalone .reminders-calendar-event.is-holiday { color: #c62828; }
-.reminders-app-standalone .reminders-calendar-event.is-observance { color: #087f8c; }
+.reminders-app-standalone .reminders-calendar-event.is-observance { color: var(--primary); }
 .reminders-app-standalone .reminders-calendar-event.is-friday { color: var(--text-muted); }
 @media (max-width: 767px) {
   .reminders-app-standalone .reminders-calendar-cell { min-width: 0; overflow: hidden; }
