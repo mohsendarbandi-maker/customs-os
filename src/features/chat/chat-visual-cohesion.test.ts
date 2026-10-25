@@ -121,4 +121,16 @@ describe('shared visual language and chat layout regressions', () => {
     expect(styles).toContain('@media (min-width: 768px)');
     expect(styles).toContain('env(safe-area-inset-top)');
   });
+
+
+  it('opens the requested conversation when a push notification deep-links into chat', () => {
+    expect(chatPage).toContain("const requestedConversationId=searchParams.get('conversation')");
+    expect(chatPage).toContain('if(requestedConversationId)setSelectedId(requestedConversationId)');
+  });
+
+  it('does not expose pending attachment scan status in the chat timeline', () => {
+    expect(chatPage).not.toContain('فایل در حال بررسی امنیتی است…');
+    expect(chatPage).toContain("a.security_status==='clean'&&a.url");
+    expect(chatPage).toContain("a.security_status==='blocked'?<div key={a.id}");
+  });
 });
