@@ -87,19 +87,29 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { profile, signOut } = useAuth();
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
 
-  // Touch-capable devices must keep the mobile shell even when "Request Desktop Website"
-  // or an attached trackpad reports a wide viewport/fine pointer (notably iPadOS).
+  // iOS "Request Desktop Website" can report a 980px CSS viewport on a phone.
+  // Use the real device screen width as a second signal so the primary domain cannot
+  // accidentally render a dense desktop workspace inside a phone-sized screen.
+  const getNarrowDevice = () => {
+    if (typeof window === 'undefined') return false;
+    const viewportWidth = window.visualViewport?.width || window.innerWidth;
+    const deviceWidth = window.screen?.width || viewportWidth;
+    return Math.min(viewportWidth, deviceWidth) < 768;
+  };
+
+  // Touch-capable devices keep the touch shell, while phone-sized screens always
+  // use phone layout even when Safari requests a desktop viewport.
   const getDesktopLayout = () => {
     if (typeof window === 'undefined') return true;
-    // Dedicated mobile origin is mobile-first by contract. Never let Safari zoom,
-    // Request Desktop Website, or pointer media queries switch this origin to desktop.
     if (window.location.hostname.toLowerCase() === 'mobile.darbandicommercial.ir') return false;
+    if (getNarrowDevice()) return false;
     const wideViewport = window.matchMedia('(min-width: 1024px)').matches;
     const finePointer = window.matchMedia('(pointer: fine)').matches;
     const hasTouch = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
     return wideViewport && finePointer && !hasTouch;
   };
   const [isDesktop, setIsDesktop] = useState(getDesktopLayout);
+  const [isNarrowDevice, setIsNarrowDevice] = useState(getNarrowDevice);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState('');
@@ -115,6 +125,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     const updateLayout = () => {
       const nextIsDesktop = getDesktopLayout();
       setIsDesktop(nextIsDesktop);
+      setIsNarrowDevice(getNarrowDevice());
       if (nextIsDesktop) setMobileOpen(false);
     };
     updateLayout();
@@ -122,11 +133,13 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     pointerMedia.addEventListener('change', updateLayout);
     window.addEventListener('resize', updateLayout, { passive: true });
     window.addEventListener('orientationchange', updateLayout, { passive: true });
+    window.visualViewport?.addEventListener('resize', updateLayout, { passive: true });
     return () => {
       widthMedia.removeEventListener('change', updateLayout);
       pointerMedia.removeEventListener('change', updateLayout);
       window.removeEventListener('resize', updateLayout);
       window.removeEventListener('orientationchange', updateLayout);
+      window.visualViewport?.removeEventListener('resize', updateLayout);
     };
   }, []);
 
@@ -358,7 +371,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             ?.label || 'Customs OS';
 
   return (
-    <div className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'}`} dir="rtl">
+    <div className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''}`} dir="rtl">
       {/* Desktop navigation is mounted only at >=1024px. It is not merely hidden on phones. */}
       {isDesktop && (
         <aside className={`app-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`}>

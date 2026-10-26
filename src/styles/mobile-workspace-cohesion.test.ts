@@ -10,6 +10,9 @@ const fileManager = read('src/pages/FileManagerPage.tsx');
 const shipments = read('src/components/LatestShipmentStatuses.tsx');
 const home = read('src/pages/DesktopHomePage.tsx');
 const mainStyles = read('src/main.tsx');
+const appShell = read('src/components/AppShell.tsx');
+const appearanceContext = read('src/context/AppearanceContext.tsx');
+const appearanceSettings = read('src/pages/SettingsEnterprisePage.tsx');
 
 describe('mobile visual cohesion regressions', () => {
   it('lets reminders inherit the global site palette and background', () => {
@@ -81,5 +84,52 @@ describe('non-auth mobile UI review fixes', () => {
     expect(refinements).toContain('.app-shell');
     expect(refinements).not.toContain('.future-auth');
     expect(refinements).not.toContain('.login-page');
+  });
+});
+
+
+describe('primary-domain mobile viewport and selectable UI presets', () => {
+  it('detects phones even when Safari requests a desktop-sized viewport', () => {
+    expect(appShell).toContain('window.screen?.width');
+    expect(appShell).toContain('Math.min(viewportWidth, deviceWidth) < 768');
+    expect(appShell).toContain("isNarrowDevice ? 'is-narrow-device' : ''");
+    expect(appShell).toContain('if (getNarrowDevice()) return false;');
+  });
+
+  it('persists the selected UI preset per user and applies it to the document root', () => {
+    expect(appearanceContext).toContain("type LayoutPreset='standard'|'cards'|'compact'");
+    expect(appearanceContext).toContain('layoutPreset:settings.layoutPreset');
+    expect(appearanceContext).toContain('document.documentElement.dataset.layoutPreset=appearance.layoutPreset');
+    expect(appearanceContext).toContain('setLayoutPreset');
+    expect(appearanceSettings).toContain("'layoutPreset'");
+  });
+
+  it('offers three accessible layout choices in Appearance settings with live preview', () => {
+    expect(appearanceSettings).toContain('layout-preset-options');
+    expect(appearanceSettings).toContain("title:'استاندارد'");
+    expect(appearanceSettings).toContain("title:'کارت‌محور'");
+    expect(appearanceSettings).toContain("title:'فشرده'");
+    expect(appearanceSettings).toContain('aria-pressed={(settings.layoutPreset||\'standard\')===p.value}');
+    expect(appearanceSettings).toContain('appearance.setLayoutPreset');
+  });
+
+  it('applies narrow-device responsive content rules independently of CSS viewport media queries', () => {
+    expect(mobileStyles).toContain('.app-shell.is-narrow-device .app-content');
+    expect(mobileStyles).toContain('.app-shell.is-narrow-device .customs-home .customs-widget-grid');
+    expect(mobileStyles).toContain('.app-shell.is-narrow-device .app-mobile-dock');
+    expect(mobileStyles).toContain('.layout-preset-options');
+    expect(mobileStyles).toContain('.app-shell.is-narrow-device .ai-launcher');
+    expect(mobileStyles).toContain('var(--app-mobile-tabbar-height, 68px) + 24px');
+    expect(mobileStyles).toContain('.app-shell.is-narrow-device .shipment-compact-row');
+    expect(mobileStyles).toContain('.app-shell.is-narrow-device .shipment-stages');
+    expect(mobileStyles).toContain('.app-shell.is-narrow-device .shipment-stage-label');
+  });
+
+  it('provides separate visual treatments for card and compact layout presets', () => {
+    expect(mobileStyles).toContain('html[data-layout-preset="cards"]');
+    expect(mobileStyles).toContain('html[data-layout-preset="compact"]');
+    expect(mobileStyles).toContain('.layout-preset-preview.standard');
+    expect(mobileStyles).toContain('.layout-preset-preview.cards');
+    expect(mobileStyles).toContain('.layout-preset-preview.compact');
   });
 });
