@@ -1312,3 +1312,18 @@ body {
 .visual-theme-option.is-selected { border-color:var(--primary)!important; box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 24%,transparent),var(--shadow); }
 .visual-theme-swatches i { display:block; width:28px; height:20px; border:1px solid rgba(128,128,128,.25); border-radius:7px; }
 @media (prefers-reduced-motion: reduce) { .visual-theme-option { transition:none; } }
+
+
+/* Reserve room for the always-reachable dock in the open conversation view. */
+@media (max-width: 1023px), (pointer: coarse) {
+  .app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone {
+    padding-bottom: calc(var(--app-mobile-tabbar-height, 62px) + env(safe-area-inset-bottom) + 8px) !important;
+    box-sizing: border-box !important;
+  }
+  html:has(.app-shell input:focus) .app-mobile-viewport-dock,
+  html:has(.app-shell textarea:focus) .app-mobile-viewport-dock,
+  html:has(.app-shell select:focus) .app-mobile-viewport-dock,
+  html:has(.app-shell [contenteditable="true"]:focus) .app-mobile-viewport-dock {
+    display: none !important;
+  }
+}
