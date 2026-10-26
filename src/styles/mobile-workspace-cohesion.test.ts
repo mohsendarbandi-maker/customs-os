@@ -50,3 +50,36 @@ describe('mobile visual cohesion regressions', () => {
     expect(mainStyles).toContain("import './styles/mobile-workspace-cohesion.css';");
   });
 });
+
+
+describe('non-auth mobile UI review fixes', () => {
+  it('keeps primary mobile navigation labels readable and wrap-safe', () => {
+    expect(mobileStyles).toContain('.app-shell .app-mobile-dock > button');
+    expect(mobileStyles).toContain('font-size: 12px !important;');
+    expect(mobileStyles).toContain('-webkit-line-clamp: 2;');
+  });
+
+  it('prevents dashboard dates, statistics, and shipment stages from being unnecessarily truncated', () => {
+    expect(mobileStyles).toContain('.app-shell .customs-home header p');
+    expect(mobileStyles).toContain('white-space: normal !important;');
+    expect(mobileStyles).toContain('.app-shell .customs-home .customs-stat > span');
+    expect(mobileStyles).toContain('.app-shell .shipment-stage-label');
+    expect(mobileStyles).toContain('font-size: 10px !important;');
+  });
+
+  it('keeps dialog content and horizontal data views usable on touch screens', () => {
+    expect(mobileStyles).toContain('100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px');
+    expect(mobileStyles).toContain('overscroll-behavior: contain;');
+    expect(mobileStyles).toContain('.app-content .future-route-stage .overflow-x-auto');
+    expect(mobileStyles).toContain('-webkit-overflow-scrolling: touch;');
+  });
+
+  it('scopes the refinements to the application shell and does not style the sign-in view', () => {
+    const start = mobileStyles.lastIndexOf('/* Mobile UI review refinements.');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const refinements = mobileStyles.slice(start);
+    expect(refinements).toContain('.app-shell');
+    expect(refinements).not.toContain('.future-auth');
+    expect(refinements).not.toContain('.login-page');
+  });
+});
