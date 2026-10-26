@@ -109,7 +109,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return wideViewport && finePointer && !hasTouch;
   };
   const [isDesktop, setIsDesktop] = useState(getDesktopLayout);
-  const isNarrowDevice = getNarrowDevice();
+  const [isNarrowDevice, setIsNarrowDevice] = useState(getNarrowDevice);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState('');
@@ -125,6 +125,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     const updateLayout = () => {
       const nextIsDesktop = getDesktopLayout();
       setIsDesktop(nextIsDesktop);
+      setIsNarrowDevice(getNarrowDevice());
       if (nextIsDesktop) setMobileOpen(false);
     };
     updateLayout();
@@ -132,11 +133,13 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     pointerMedia.addEventListener('change', updateLayout);
     window.addEventListener('resize', updateLayout, { passive: true });
     window.addEventListener('orientationchange', updateLayout, { passive: true });
+    window.visualViewport?.addEventListener('resize', updateLayout, { passive: true });
     return () => {
       widthMedia.removeEventListener('change', updateLayout);
       pointerMedia.removeEventListener('change', updateLayout);
       window.removeEventListener('resize', updateLayout);
       window.removeEventListener('orientationchange', updateLayout);
+      window.visualViewport?.removeEventListener('resize', updateLayout);
     };
   }, []);
 
