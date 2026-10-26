@@ -120,6 +120,9 @@ describe('primary-domain mobile viewport and selectable UI presets', () => {
     expect(mobileStyles).toContain('.layout-preset-options');
     expect(mobileStyles).toContain('.app-shell.is-narrow-device .ai-launcher');
     expect(mobileStyles).toContain('var(--app-mobile-tabbar-height, 68px) + 24px');
+    expect(mobileStyles).toContain('.app-shell.is-narrow-device .shipment-compact-row');
+    expect(mobileStyles).toContain('.app-shell.is-narrow-device .shipment-stages');
+    expect(mobileStyles).toContain('.app-shell.is-narrow-device .shipment-stage-label');
   });
 
   it('provides separate visual treatments for card and compact layout presets', () => {
