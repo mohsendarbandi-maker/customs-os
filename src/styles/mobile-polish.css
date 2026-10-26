@@ -1219,7 +1219,7 @@ body {
   position: fixed !important;
   inset-inline: 10px !important;
   inset-block-end: calc(8px + env(safe-area-inset-bottom)) !important;
-  z-index: 2147483000 !important;
+  z-index: 120 !important;
   display: grid !important;
   grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   align-items: stretch !important;
