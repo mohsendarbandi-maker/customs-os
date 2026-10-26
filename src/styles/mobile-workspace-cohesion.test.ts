@@ -26,7 +26,7 @@ describe('mobile visual cohesion regressions', () => {
     expect(appearanceContext).toContain('document.documentElement.dataset.visualStyle=appearance.visualStyle');
     expect(appearanceSettings).toContain('visual-theme-options');
     for (const theme of ['ocean', 'aurora', 'glass', 'emerald', 'sunset', 'minimal']) {
-      expect(mobilePolish).toContain(`data-visual-style="${theme}"`);
+      expect(mobileStyles).toContain(`data-visual-style="${theme}"`);
       expect(appearanceSettings).toContain(`value:'${theme}'`);
     }
   });
