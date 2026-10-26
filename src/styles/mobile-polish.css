@@ -766,7 +766,6 @@
   .app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone {
     height: 100dvh !important;
   }
-  .app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock { display: none !important; }
   /* Reminders previously owned a second fixed tab bar and forced the whole root
      into a hidden 100dvh viewport. Their route keeps its content and quick-add,
      but the shared shell is the only navigation and page content may scroll. */
