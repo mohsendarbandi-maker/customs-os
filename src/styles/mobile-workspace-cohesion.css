@@ -530,6 +530,11 @@
   white-space: normal !important;
 }
 
+
+.app-shell.is-narrow-device .app-content .future-route-stage .layout-preset-options {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
 /* Three switchable workspace presentations controlled from Settings > Appearance. */
 .layout-preset-option {
   min-width: 0;
