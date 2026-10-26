@@ -682,6 +682,133 @@ html[data-layout-preset="compact"] .app-shell .app-content .future-route-stage .
   min-width: 0;
 }
 
+
+/* Shipment progress must become readable cards even when CSS media queries see
+   a desktop viewport but the physical device is a phone. */
+.app-shell.is-narrow-device .shipment-compact-list {
+  display: flex !important;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 9px;
+  overflow: visible !important;
+}
+.app-shell.is-narrow-device .shipment-compact-row {
+  display: grid !important;
+  width: 100%;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  grid-template-columns: minmax(0, 1fr) 36px !important;
+  grid-template-rows: auto auto auto auto;
+  align-items: center;
+  gap: 8px 7px !important;
+  padding: 11px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.app-shell.is-narrow-device .shipment-name {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 0 !important;
+  align-items: flex-start;
+  gap: 3px;
+}
+.app-shell.is-narrow-device .shipment-name b {
+  display: -webkit-box !important;
+  max-width: 100%;
+  white-space: normal !important;
+  overflow: hidden !important;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+.app-shell.is-narrow-device .shipment-name span {
+  max-width: 100%;
+  font-size: 11px !important;
+  line-height: 1.4;
+}
+.app-shell.is-narrow-device .shipment-go {
+  grid-column: 2;
+  grid-row: 1;
+  width: 36px;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  align-self: start;
+  border-radius: 10px;
+}
+.app-shell.is-narrow-device .shipment-kottaj {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: start;
+  max-width: 100%;
+  min-width: 0;
+  padding: 4px 9px;
+  border-radius: 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 11px !important;
+  line-height: 1.5;
+}
+.app-shell.is-narrow-device .shipment-stages {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: grid !important;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: start;
+  justify-content: stretch;
+  gap: 3px !important;
+  padding: 9px 0 5px;
+  border-top: 1px solid var(--border);
+}
+.app-shell.is-narrow-device .shipment-stage-dot {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100% !important;
+  height: auto !important;
+  min-width: 0 !important;
+  flex: 0 1 auto !important;
+  gap: 4px;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+.app-shell.is-narrow-device .shipment-stage-label {
+  display: block !important;
+  max-width: 100%;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere;
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+  text-align: center;
+}
+.app-shell.is-narrow-device .shipment-current-stage {
+  grid-column: 1 / -1;
+  grid-row: 4;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-size: 12px !important;
+  font-weight: 800;
+  white-space: normal;
+  text-align: start;
+}
+
 /* Dashboard-specific rules for phones using a desktop-sized viewport. */
 .app-shell.is-narrow-device .customs-home {
   padding-bottom: calc(136px + env(safe-area-inset-bottom)) !important;
