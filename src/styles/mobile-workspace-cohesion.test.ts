@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 const responsive = read('src/responsive.css');
 const mobileStyles = read('src/styles/mobile-workspace-cohesion.css');
+const mobilePolish = read('src/styles/mobile-polish.css');
 const remindersCohesion = read('src/styles/chat-reminders-cohesion.css');
 const fileManager = read('src/pages/FileManagerPage.tsx');
 const shipments = read('src/components/LatestShipmentStatuses.tsx');
@@ -15,6 +16,21 @@ const appearanceContext = read('src/context/AppearanceContext.tsx');
 const appearanceSettings = read('src/pages/SettingsEnterprisePage.tsx');
 
 describe('mobile visual cohesion regressions', () => {
+  it('keeps the mobile navigation dock attached to the viewport and exposes full visual themes', () => {
+    expect(appShell).toContain('createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock"');
+    expect(appShell).toContain('document.body');
+    expect(mobilePolish).toContain('.app-mobile-viewport-dock {');
+    expect(mobilePolish).toContain('position: fixed !important');
+    expect(mobilePolish).toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
+    expect(appearanceContext).toContain('type VisualStyle=');
+    expect(appearanceContext).toContain('document.documentElement.dataset.visualStyle=appearance.visualStyle');
+    expect(appearanceSettings).toContain('visual-theme-options');
+    for (const theme of ['ocean', 'aurora', 'glass', 'emerald', 'sunset', 'minimal']) {
+      expect(mobilePolish).toContain(`data-visual-style="${theme}"`);
+      expect(appearanceSettings).toContain(`value:'${theme}'`);
+    }
+  });
+
   it('lets reminders inherit the global site palette and background', () => {
     const start = responsive.indexOf('/* Reminders use the same global appearance tokens');
     const end = responsive.indexOf('@media (orientation: landscape) and (max-height: 520px)', start);
