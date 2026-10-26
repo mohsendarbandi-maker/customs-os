@@ -38,7 +38,7 @@ const AppearanceContext=createContext<AppearanceState|null>(null);
 
 const defaults:StoredAppearance={
  theme:'dark',
- accentColor:'#0A66C2',
+ accentColor:'#168BD2',
  comfort:'normal',
  density:'comfortable',
  layoutPreset:'standard',
@@ -95,7 +95,7 @@ export const AppearanceProvider:React.FC<{children:React.ReactNode}>=({children}
  const setComfort=(v:ComfortMode)=>persist({comfort:v});
  const setDensity=(v:Density)=>persist({density:v});
  const setLayoutPreset=(v:LayoutPreset)=>persist({layoutPreset:v==='cards'||v==='compact'?v:'standard'});
- const setVisualStyle=(v:VisualStyle)=>persist({visualStyle:['ocean','aurora','glass','emerald','sunset','minimal'].includes(v)?v:'ocean'});
+ const setVisualStyle=(v:VisualStyle)=>{const palettes:Record<VisualStyle,string>={ocean:'#168BD2',aurora:'#A78BFA',glass:'#38BDF8',emerald:'#10B981',sunset:'#FB923C',minimal:'#475569'};const selected=['ocean','aurora','glass','emerald','sunset','minimal'].includes(v)?v:'ocean';persist({visualStyle:selected,accentColor:palettes[selected]});};
  const setSidebarCollapsed=(v:boolean)=>persist({sidebarCollapsed:v});
 
  useEffect(()=>{
