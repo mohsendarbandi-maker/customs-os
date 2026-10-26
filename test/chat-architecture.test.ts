@@ -34,8 +34,9 @@ describe('chat architecture invariants',()=>{
 
   it('keeps reminder creation simple and collapses optional shipment linking',()=>{
     const page=read('src/features/reminders/RemindersPage.tsx');
-    expect(page).toContain('<details className="mt-2 rounded-xl border app-border bg-[var(--surface-2)] p-2.5">');
-    expect(page).toContain("{quickShipment?quickShipment.label:'اختیاری'}");
+    expect(page).toContain('<details open={Boolean(quickShipmentSearch||quickShipment)} className="mt-2 rounded-xl border app-border bg-[var(--surface-2)] p-2.5">');
+    expect(page).toContain("{quickShipment?quickShipment.label:'انتخاب محموله (اختیاری)'}");
+    expect(page).toContain('محموله به یادآور متصل است');
     expect(page).toContain('<details className="rounded-2xl border app-border p-3"><summary');
   });
 
