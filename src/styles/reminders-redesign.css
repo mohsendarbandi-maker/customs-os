@@ -1409,3 +1409,35 @@
 .reminders-app-standalone .reminders-composebar.is-open {
   z-index: 280 !important;
 }
+
+
+/* iOS date picker overflow fix: respect safe areas and keep all controls reachable. */
+.reminders-app-standalone .reminders-calendar-backdrop {
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)) !important;
+}
+.reminders-app-standalone .reminders-calendar-panel {
+  min-height: 0 !important;
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
+}
+@media (max-width: 767px) {
+  .reminders-app-standalone .reminders-calendar-backdrop {
+    align-items: flex-end !important;
+    justify-content: center !important;
+    padding: max(8px, env(safe-area-inset-top)) 0 0 !important;
+  }
+  .reminders-app-standalone .reminders-calendar-panel {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 4px) !important;
+    margin: auto 0 0 !important;
+    padding: 14px 12px max(16px, env(safe-area-inset-bottom)) !important;
+    border-radius: 22px 22px 0 0 !important;
+  }
+}
