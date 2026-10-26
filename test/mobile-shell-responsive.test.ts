@@ -29,7 +29,7 @@ describe('iOS touch-first application shell', () => {
 
   it('mounts exactly one primary navigation and places all secondary routes in More', () => {
     const dockStart = shell.indexOf('className="app-mobile-dock app-mobile-viewport-dock"');
-    const dockEnd = shell.indexOf('</nav>}', dockStart);
+    const dockEnd = shell.indexOf('</nav>, document.body)}', dockStart);
     expect(dockStart).toBeGreaterThanOrEqual(0);
     expect(dockEnd).toBeGreaterThan(dockStart);
     const dock = shell.slice(dockStart, dockEnd);
