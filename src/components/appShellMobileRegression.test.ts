@@ -50,7 +50,7 @@ describe('single mobile shell navigation regressions', () => {
   });
 
   it('provides exactly five primary mobile tabs and a three-column More sheet', () => {
-    const start = shell.indexOf('{!isDesktop && <nav className="app-mobile-dock"');
+    const start = shell.indexOf('{!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock"');
     expect(start).toBeGreaterThan(-1);
     const dock = shell.slice(start, shell.indexOf('</nav>}', start));
     expect(dock.match(/<button\b/g)).toHaveLength(5);
