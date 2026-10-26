@@ -53,8 +53,8 @@ describe('iOS touch-first application shell', () => {
     expect(mobileCss).toContain('padding: 10px 12px calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important');
     expect(mobileCss).toContain('bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important');
     expect(mobileCss).toContain('.shipment-status-search { position: relative !important; inset: auto !important; }');
-    expect(mobileCss).toContain('.app-shell:has(input:focus) .app-mobile-dock');
-    expect(mobileCss).toContain('.app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock');
+    expect(mobileCss).toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
+    expect(mobileCss).toContain('.app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone');
     expect(baseCss).toContain('*{box-sizing:border-box;min-width:0}');
   });
 
