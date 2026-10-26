@@ -9,9 +9,11 @@ const TEHRAN_TIME=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',hour12
 const timeFrom=(date:Date)=>{const p=TEHRAN_TIME.formatToParts(date);return{hour:Number(p.find(x=>x.type==='hour')?.value??0),minute:Number(p.find(x=>x.type==='minute')?.value??0)};};
 export const JalaliDateTimePicker:React.FC<Props>=({value,onChange,onClose,allDay,onAllDayChange,language='fa',onClear,onApply})=>{
  const now=new Date(),initial=toJalali(value),initialTime=timeFrom(value);
+ const valueYear=initial.year,valueMonth=initial.month,valueDay=initial.day,valueHour=initialTime.hour,valueMinute=initialTime.minute;
  const [month,setMonth]=useState(initial.month),[year,setYear]=useState(initial.year),[selectedDay,setSelectedDay]=useState(initial.day),[hour,setHour]=useState(initialTime.hour),[minute,setMinute]=useState(initialTime.minute);
  const t=(v:string)=>reminderText(v,language);
- useEffect(()=>{const j=toJalali(value),time=timeFrom(value);setMonth(j.month);setYear(j.year);setSelectedDay(j.day);setHour(time.hour);setMinute(time.minute);},[value]);
+ // Ignore parent re-renders that only replace a fallback new Date() by a different millisecond value.
+ useEffect(()=>{setMonth(valueMonth);setYear(valueYear);setSelectedDay(valueDay);setHour(valueHour);setMinute(valueMinute);},[valueYear,valueMonth,valueDay,valueHour,valueMinute]);
  const days=useMemo(()=>{const len=jalaliMonthLength(year,month),first=zonedJalaliToDate(year,month,1),offset=jalaliWeekday(first);return Array.from({length:offset+len},(_,i)=>i<offset?null:i-offset+1);},[year,month]);
  const shift=(amount:number)=>{let m=month+amount,y=year;if(m<1){m=12;y--}if(m>12){m=1;y++}setMonth(m);setYear(y);setSelectedDay(d=>Math.min(d,jalaliMonthLength(y,m)));};
  const setDraft=(date:Date)=>{const j=toJalali(date),time=timeFrom(date);setMonth(j.month);setYear(j.year);setSelectedDay(j.day);setHour(time.hour);setMinute(time.minute);};
