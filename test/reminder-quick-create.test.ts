@@ -7,8 +7,12 @@ const source = fs.readFileSync(path.join(root, 'src/features/reminders/Reminders
 
 describe('reminder quick-create shipment linking', () => {
   it('sends the selected shipment and its case through the tenant-validated create RPC payload', () => {
-    expect(source).toContain("shipment_id:shipment?.id??null,case_id:shipment?.caseId??null");
+    expect(source).toContain("shipment_id:shipment?.id??null,case_id:shipment?.caseId??null,entity_type:shipment?'shipments':null,entity_id:shipment?.id??null");
     expect(source).toContain("rpcWithOfflineQueue('create_operational_reminder',{p_payload:payload})");
+    expect(source).toContain("queryKey:['reminder-shipment-labels',profile?.organization_id,linkedShipmentIds.join(',')]");
+    expect(source).toContain('محموله به یادآور متصل است');
+    expect(source).toContain('shipmentDisplayName(r.shipment_id)');
+    expect(source).toContain('normalizeFaText(q)');
     expect(source).toContain(".eq('organization_id',profile.organization_id)");
   });
 

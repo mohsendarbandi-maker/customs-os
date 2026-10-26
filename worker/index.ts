@@ -283,45 +283,11 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Route real phone browser navigations from the primary domain to the
-    // dedicated mobile hostname. Keep the full path and query string so deep
-    // links continue to work. Use a temporary redirect to avoid caching a
-    // phone/desktop decision in the browser; never redirect assets or APIs.
-    const requestHost = url.hostname.toLowerCase();
-    const isPrimaryDomain = requestHost === 'darbandicommercial.ir' ||
-      requestHost === 'www.darbandicommercial.ir';
-    const userAgent = request.headers.get('user-agent') || '';
-    const mobileClientHint = request.headers.get('sec-ch-ua-mobile') === '?1';
-    const phoneUserAgent = /iPhone|iPod|Android.+Mobile|Windows Phone|IEMobile|Opera Mini|Mobile Safari/i.test(userAgent);
-    const isDocumentNavigation =
-      request.method === 'GET' &&
-      (request.headers.get('sec-fetch-dest') === 'document' ||
-        (request.headers.get('accept') || '').includes('text/html'));
-    const isNonPageRequest =
-      url.pathname.startsWith('/api/') ||
-      /^\/(?:auth|rest|storage|realtime|functions|graphql|webhooks)(?:\/|$)/i.test(url.pathname) ||
-      /\.(?:js|mjs|css|map|png|jpe?g|gif|webp|svg|ico|webmanifest|json|txt|woff2?|ttf|eot)$/i.test(url.pathname);
+    // Keep desktop and phone browsers on the same canonical app origin. Mobile
+    // layout differences are handled by the shared responsive UI, not host redirects.
 
-    if (isPrimaryDomain && isDocumentNavigation && !isNonPageRequest &&
-        (mobileClientHint || phoneUserAgent)) {
-      const mobileUrl = new URL(url.toString());
-      mobileUrl.protocol = 'https:';
-      mobileUrl.hostname = 'mobile.darbandicommercial.ir';
-      mobileUrl.port = '';
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: mobileUrl.toString(),
-          'Cache-Control': 'no-store',
-          'Vary': 'User-Agent, Sec-CH-UA-Mobile',
-          'X-Customs-OS-Mobile-Redirect': '1',
-        },
-      });
-    }
-
-    // Chat and Reminders remain aliases of the unified app. The mobile hostname
-    // is intentionally NOT an alias: it is a dedicated mobile-first entry point
-    // sharing the same authenticated app and same-origin Cloudflare/Supabase proxy.
+    // Chat and Reminders remain aliases of the unified app; all aliases resolve
+    // to the same authenticated app and same-origin Cloudflare/Supabase proxy.
     const legacyHost = url.hostname.toLowerCase();
     const isLegacyAppOrigin = [
       'chat.darbandicommercial.ir',
