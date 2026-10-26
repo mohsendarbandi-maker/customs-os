@@ -632,6 +632,36 @@ html[data-layout-preset="compact"] .app-shell .app-content .future-route-stage .
 }
 
 
+
+.app-shell.is-narrow-device .app-content .future-route-stage [class~="text-[9px]"] {
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+}
+.app-shell.is-narrow-device .app-content .future-route-stage [class~="text-[10px]"],
+.app-shell.is-narrow-device .app-content .future-route-stage [class~="text-[11px]"] {
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+.app-shell.is-narrow-device .app-content .future-route-stage [class~="text-xs"] {
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+.app-shell.is-narrow-device .app-content .future-route-stage [role="dialog"] {
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.app-shell.is-narrow-device .app-content .future-route-stage section.rounded-xl,
+.app-shell.is-narrow-device .app-content .future-route-stage section.rounded-2xl,
+.app-shell.is-narrow-device .app-content .future-route-stage article.rounded-xl,
+.app-shell.is-narrow-device .app-content .future-route-stage article.rounded-2xl {
+  max-width: 100%;
+  min-width: 0;
+}
+
 /* Dashboard-specific rules for phones using a desktop-sized viewport. */
 .app-shell.is-narrow-device .customs-home {
   padding-bottom: calc(136px + env(safe-area-inset-bottom)) !important;
