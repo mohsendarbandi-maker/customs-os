@@ -6,18 +6,21 @@ type ThemeMode='light'|'dark';
 type ComfortMode='normal'|'soft'|'warm'|'reading';
 type Density='comfortable'|'compact';
 type LayoutPreset='standard'|'cards'|'compact';
+type VisualStyle='ocean'|'aurora'|'glass'|'emerald'|'sunset'|'minimal';
 type AppearanceState={
  theme:ThemeMode;
  accentColor:string;
  comfort:ComfortMode;
  density:Density;
  layoutPreset:LayoutPreset;
+ visualStyle:VisualStyle;
  sidebarCollapsed:boolean;
  setTheme:(v:ThemeMode)=>void;
  setAccentColor:(v:string)=>void;
  setComfort:(v:ComfortMode)=>void;
  setDensity:(v:Density)=>void;
  setLayoutPreset:(v:LayoutPreset)=>void;
+ setVisualStyle:(v:VisualStyle)=>void;
  setSidebarCollapsed:(v:boolean)=>void;
 };
 
@@ -27,6 +30,7 @@ type StoredAppearance={
  comfort:ComfortMode;
  density:Density;
  layoutPreset:LayoutPreset;
+ visualStyle:VisualStyle;
  sidebarCollapsed:boolean;
 };
 
@@ -38,6 +42,7 @@ const defaults:StoredAppearance={
  comfort:'normal',
  density:'comfortable',
  layoutPreset:'standard',
+ visualStyle:'ocean',
  sidebarCollapsed:false,
 };
 
@@ -52,6 +57,7 @@ const readAppearance=(userId:string|null|undefined):StoredAppearance=>{
     : defaults.comfort,
    density:settings.density==='compact'?'compact':'comfortable',
    layoutPreset:settings.layoutPreset==='cards'||settings.layoutPreset==='compact'||settings.layoutPreset==='standard'?settings.layoutPreset:'standard',
+   visualStyle:['ocean','aurora','glass','emerald','sunset','minimal'].includes(String(settings.visualStyle))?settings.visualStyle as VisualStyle:defaults.visualStyle,
    sidebarCollapsed:settings.sidebarCollapsed===true,
   };
  }catch{
@@ -89,6 +95,7 @@ export const AppearanceProvider:React.FC<{children:React.ReactNode}>=({children}
  const setComfort=(v:ComfortMode)=>persist({comfort:v});
  const setDensity=(v:Density)=>persist({density:v});
  const setLayoutPreset=(v:LayoutPreset)=>persist({layoutPreset:v==='cards'||v==='compact'?v:'standard'});
+ const setVisualStyle=(v:VisualStyle)=>persist({visualStyle:['ocean','aurora','glass','emerald','sunset','minimal'].includes(v)?v:'ocean'});
  const setSidebarCollapsed=(v:boolean)=>persist({sidebarCollapsed:v});
 
  useEffect(()=>{
@@ -98,6 +105,7 @@ export const AppearanceProvider:React.FC<{children:React.ReactNode}>=({children}
   document.documentElement.dataset.comfort=appearance.comfort;
   document.documentElement.dataset.density=appearance.density;
   document.documentElement.dataset.layoutPreset=appearance.layoutPreset;
+  document.documentElement.dataset.visualStyle=appearance.visualStyle;
   document.documentElement.dataset.sidebar=appearance.sidebarCollapsed?'collapsed':'expanded';
  },[appearance]);
 
@@ -107,12 +115,14 @@ export const AppearanceProvider:React.FC<{children:React.ReactNode}>=({children}
   comfort:appearance.comfort,
   density:appearance.density,
   layoutPreset:appearance.layoutPreset,
+  visualStyle:appearance.visualStyle,
   sidebarCollapsed:appearance.sidebarCollapsed,
   setTheme,
   setAccentColor,
   setComfort,
   setDensity,
   setLayoutPreset,
+  setVisualStyle,
   setSidebarCollapsed,
  }),[appearance]);
 
