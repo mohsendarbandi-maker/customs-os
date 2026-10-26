@@ -75,7 +75,8 @@ describe('single mobile shell navigation regressions', () => {
     expect(shell).toContain("const bare = location.pathname === '/login' || location.pathname === '/onboarding'");
     expect(shell).not.toContain("const bare = location.pathname === '/login' || location.pathname === '/chat'");
     expect(reminders).not.toContain('<nav className="reminders-mobile-nav"');
-    expect(mobileCss).toContain('.app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock');
+    expect(mobileCss).not.toContain('.app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-mobile-dock { display: none !important; }');
+    expect(mobileCss).toContain('.app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone');
   });
 
   it('keeps the tablet header flex-based and the dock grid-based', () => {
