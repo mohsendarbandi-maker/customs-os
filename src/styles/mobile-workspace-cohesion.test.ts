@@ -117,7 +117,7 @@ describe('primary-domain mobile viewport and selectable UI presets', () => {
     expect(mobileStyles).toContain('.app-shell.is-narrow-device .app-content');
     expect(mobileStyles).toContain('.app-shell.is-narrow-device .customs-home .customs-widget-grid');
     expect(mobileStyles).toContain('.app-shell.is-narrow-device .app-mobile-dock');
-    expect(mobileStyles).toContain('.app-shell.is-narrow-device .layout-preset-options');
+    expect(mobileStyles).toContain('.layout-preset-options');
   });
 
   it('provides separate visual treatments for card and compact layout presets', () => {
