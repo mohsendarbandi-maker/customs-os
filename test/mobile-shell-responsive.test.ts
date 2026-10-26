@@ -21,14 +21,14 @@ describe('iOS touch-first application shell', () => {
     expect(shell).toContain("getDesktopLayout");
     expect(shell).toContain("window.location.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
     expect(shell).toContain('{isDesktop && (');
-    expect(shell).toContain('{!isDesktop && <nav className="app-mobile-dock"');
+    expect(shell).toContain('{!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock"');
     expect(mobileCss).toContain('@media (max-width: 1023px), (pointer: coarse)');
     expect(mobileCss).toContain('.app-sidebar, .app-topbar, .app-scrim, .app-mobile-drawer');
     expect(mobileCss).toContain('Desktop navigation is also removed from the React tree');
   });
 
   it('mounts exactly one primary navigation and places all secondary routes in More', () => {
-    const dockStart = shell.indexOf('className="app-mobile-dock"');
+    const dockStart = shell.indexOf('className="app-mobile-dock app-mobile-viewport-dock"');
     const dockEnd = shell.indexOf('</nav>}', dockStart);
     expect(dockStart).toBeGreaterThanOrEqual(0);
     expect(dockEnd).toBeGreaterThan(dockStart);
