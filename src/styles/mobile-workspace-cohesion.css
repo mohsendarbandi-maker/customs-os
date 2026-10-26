@@ -870,3 +870,36 @@ html[data-layout-preset="compact"] .app-shell .app-content .future-route-stage .
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
 }
+
+/* User-selectable complete palettes; keep these after legacy design-system tokens. */
+
+:root[data-visual-style="ocean"] {
+  --bg:#081321; --surface:#101f32; --surface-2:#172b42; --surface-3:#203a53;
+  --text:#e9f5ff; --text-muted:#9ab4c8; --border:#28445b; --primary:#168bd2; --primary-2:#38d9d0;
+  --hero-a:#123f63; --hero-b:#087eaf; --shadow:0 16px 42px rgba(1,12,25,.24); color-scheme:dark;
+}
+:root[data-visual-style="aurora"] {
+  --bg:#0b0a1b; --surface:#17142b; --surface-2:#211d3d; --surface-3:#302850;
+  --text:#f5f1ff; --text-muted:#b6accf; --border:#41345d; --primary:#a78bfa; --primary-2:#4ee7f2;
+  --hero-a:#37215c; --hero-b:#6d28d9; --shadow:0 16px 42px rgba(8,4,24,.32); color-scheme:dark;
+}
+:root[data-visual-style="glass"] {
+  --bg:#091521; --surface:rgba(19,37,57,.92); --surface-2:rgba(35,57,79,.88); --surface-3:#2b4861;
+  --text:#edf8ff; --text-muted:#a5c0d2; --border:#3c5b72; --primary:#38bdf8; --primary-2:#5eead4;
+  --hero-a:#164e63; --hero-b:#0369a1; --shadow:0 18px 46px rgba(1,10,22,.3); color-scheme:dark;
+}
+:root[data-visual-style="emerald"] {
+  --bg:#071712; --surface:#0e241c; --surface-2:#16352a; --surface-3:#204737;
+  --text:#eafff4; --text-muted:#9bc7b1; --border:#285341; --primary:#10b981; --primary-2:#a3e635;
+  --hero-a:#14532d; --hero-b:#047857; --shadow:0 16px 42px rgba(1,15,8,.28); color-scheme:dark;
+}
+:root[data-visual-style="sunset"] {
+  --bg:#1a1111; --surface:#291b1a; --surface-2:#3a2522; --surface-3:#4a3029;
+  --text:#fff3e9; --text-muted:#d2b3a4; --border:#5b3b32; --primary:#fb923c; --primary-2:#fda4af;
+  --hero-a:#7c2d12; --hero-b:#c2410c; --shadow:0 16px 42px rgba(22,8,4,.3); color-scheme:dark;
+}
+:root[data-visual-style="minimal"] {
+  --bg:#f3f6fb; --surface:#ffffff; --surface-2:#edf2f8; --surface-3:#e2eaf4;
+  --text:#182338; --text-muted:#64748b; --border:#d4deeb; --primary:#475569; --primary-2:#0f766e;
+  --hero-a:#dbeafe; --hero-b:#cbd5e1; --shadow:0 12px 32px rgba(30,41,59,.08); color-scheme:light;
+}
