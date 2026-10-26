@@ -316,3 +316,87 @@
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+
+/* Mobile UI review refinements.
+   These selectors require the app shell, so sign-in/onboarding remain untouched. */
+@media (max-width: 1023px), (pointer: coarse) {
+  .app-shell .app-mobile-dock > button {
+    min-height: 52px !important;
+    padding-inline: 2px !important;
+    font-size: 12px !important;
+    line-height: 1.25;
+    white-space: normal !important;
+  }
+
+  .app-shell .app-mobile-dock > button > span {
+    display: -webkit-box;
+    max-width: 100%;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    text-align: center;
+    text-overflow: clip;
+    white-space: normal !important;
+    overflow-wrap: normal;
+    line-height: 1.25;
+  }
+
+  .app-shell .app-mobile-dock > button svg {
+    flex: 0 0 auto;
+    width: 21px;
+    height: 21px;
+  }
+
+  .app-shell .app-content .future-route-stage .overflow-x-auto {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .app-shell [role="dialog"]:not(.app-more-sheet):not(.reminders-calendar-day-dialog) {
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-shell .customs-home header p {
+    max-width: 100%;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    white-space: normal !important;
+  }
+
+  .app-shell .customs-home .customs-stat {
+    min-height: 82px;
+  }
+
+  .app-shell .customs-home .customs-stat > span {
+    min-width: 0;
+    display: block;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    overflow-wrap: normal;
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+  }
+
+  .app-shell .shipment-stage-label {
+    max-width: 100%;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+}
