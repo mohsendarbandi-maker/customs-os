@@ -30,8 +30,11 @@ export function shipmentSearchVariants(raw:string):string[]{
  const variants=new Set<string>();
  for(const digits of digitScripts){
   const withDigits=normalized.replace(/\d/g,d=>digits[Number(d)]);
-  variants.add(withDigits);
-  variants.add(withDigits.replace(/ی/g,'ي').replace(/ک/g,'ك'));
+  for(const yeh of ['ی','ي']){
+   for(const kaf of ['ک','ك']){
+    variants.add(withDigits.replace(/ی/g,yeh).replace(/ک/g,kaf));
+   }
+  }
  }
  const original=raw.trim().replace(/[,()%_*]/g,' ').replace(/\s+/g,' ').trim();
  if(original.length>=2)variants.add(original);
