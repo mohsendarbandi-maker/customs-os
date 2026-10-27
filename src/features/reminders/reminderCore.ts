@@ -21,6 +21,26 @@ const timeParts=(raw:string)=>{const m=raw.match(/(?:ساعت\s*|at\s*)?(\d{1,2}
 const nextYearIfPast=(j:JalaliDate,n:JalaliDate)=>j.month<n.month||(j.month===n.month&&j.day<n.day)?j.year+1:j.year;
 const weekdayOf=(d:Date)=>{const j=local(d),g=toGregorian(j.year,j.month,j.day);return ['SU','MO','TU','WE','TH','FR','SA'][new Date(Date.UTC(g.gy,g.gm-1,g.gd)).getUTCDay()];};
 
+/** Generate matching forms for shipment names and bill-of-lading numbers that may mix
+ * Latin, Persian, or Arabic digits and yeh/kaf spellings in existing customs records. */
+export function shipmentSearchVariants(raw:string):string[]{
+ const normalized=normalizeFaText(raw).replace(/[,()%_*]/g,' ').replace(/\s+/g,' ').trim();
+ if(normalized.length<2)return[];
+ const digitScripts=['0123456789','۰۱۲۳۴۵۶۷۸۹','٠١٢٣٤٥٦٧٨٩'];
+ const variants=new Set<string>();
+ for(const digits of digitScripts){
+  const withDigits=normalized.replace(/\d/g,d=>digits[Number(d)]);
+  for(const yeh of ['ی','ي']){
+   for(const kaf of ['ک','ك']){
+    variants.add(withDigits.replace(/ی/g,yeh).replace(/ک/g,kaf));
+   }
+  }
+ }
+ const original=raw.trim().replace(/[,()%_*]/g,' ').replace(/\s+/g,' ').trim();
+ if(original.length>=2)variants.add(original);
+ return Array.from(variants).filter(value=>value.length>=2);
+}
+
 export function parseReminder(input:string,now=new Date()):ParsedReminder{
  let text=normalizeFaText(input),priority:ReminderPriority='normal',kind:ReminderKind='other',recurrenceRule:string|null=null,linkQuery:string|null=null,assigneeName:string|null=null,confidence=.25;
  if(text.includes('!!')){priority='urgent';text=text.replace(/!!/g,' ');confidence+=.1;}else if(text.includes('!')){priority='high';text=text.replace(/!/g,' ');confidence+=.05;}

@@ -11,8 +11,8 @@ describe('reminder quick-create shipment linking', () => {
     expect(source).toContain("rpcWithOfflineQueue('create_operational_reminder',{p_payload:payload})");
     expect(source).toContain("queryKey:['reminder-shipment-labels',profile?.organization_id,linkedShipmentIds.join(',')]");
     expect(source).toContain('محموله به یادآور متصل است');
-    expect(source).toContain('shipmentDisplayName(r.shipment_id)');
-    expect(source).toContain('normalizeFaText(q)');
+    expect(source).toContain('shipmentDisplayName(reminderShipmentId(r)!)');
+    expect(source).toContain('shipmentSearchVariants(q)');
     expect(source).toContain(".eq('organization_id',profile.organization_id)");
   });
 
