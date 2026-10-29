@@ -42,6 +42,17 @@ describe('chat attachments and forwarding', () => {
     expect(api).toContain('SIGNED_ATTACHMENT_URL_CACHE_TTL_MS = 50 * 60 * 1000');
     expect(api).toContain('createSignedUrl(storagePath, 3600)');
   });
+  it('times out stalled TUS handshake, offset checks, and chunk uploads so the direct fallback can run', () => {
+    expect(api).toContain('const TUS_HANDSHAKE_TIMEOUT_MS = 30_000');
+    expect(api).toContain('const TUS_OFFSET_TIMEOUT_MS = 20_000');
+    expect(api).toContain('const TUS_CHUNK_TIMEOUT_MS = 120_000');
+    expect(api).toContain('async function fetchWithTimeout(');
+    expect(api).toContain('const create = await fetchWithTimeout(endpoint, {');
+    expect(api).toContain('TUS_OFFSET_TIMEOUT_MS');
+    expect(api).toContain('xhr.timeout = TUS_CHUNK_TIMEOUT_MS');
+    expect(api).toContain("confirmedOffset === offset");
+    expect(api).toContain("uploadError.message.includes('بیش از حد طول کشید')");
+  });
   it('prevents duplicate forward requests while a file is being transferred', () => {
     expect(page).toContain('const[forwardingBusy,setForwardingBusy]=useState(false)');
     expect(page).toContain('if(!forwardId||forwardingBusy)return');
