@@ -13,6 +13,7 @@ describe('authenticated REST read cache', () => {
   it('partitions cache by the current user and organization and validates the active bearer token', () => {
     expect(source).toContain("'auth-profile'");
     expect(source).toContain('cachedProfile?.payload?.is_active !== true');
+    expect(source).toContain('Date.now() - knownScope.checkedAt < 30_000');
     expect(source).toContain('saveOfflineQueryCache(\'rest-get:\' + namespace, userId, organizationId, payload)');
     expect(source).toContain("request.headers.get('authorization') !== 'Bearer ' + scope.accessToken");
   });
