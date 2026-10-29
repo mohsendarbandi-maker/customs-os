@@ -893,6 +893,21 @@ export async function forwardChatMessage(
         throw new Error('حجم پیوست از محدوده مجاز ذخیره‌سازی خارج است.');
       }
 
+      const existingAttachment = await supabase
+        .from('chat_attachments')
+        .select('id,size_bytes')
+        .eq('message_id', forwarded.id)
+        .eq('storage_path', storagePath)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (existingAttachment.error) throw new Error(existingAttachment.error.message);
+      if (existingAttachment.data) {
+        if (Number(existingAttachment.data.size_bytes) !== fileSize) {
+          throw new Error('مسیر پیوست موجود است اما اندازهٔ آن مطابقت ندارد.');
+        }
+        continue;
+      }
+
       const registered = await supabase.rpc('chat_register_attachment', {
         p_conversation_id: targetConversationId,
         p_message_id: forwarded.id,
