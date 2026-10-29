@@ -31,6 +31,7 @@ describe('workspace cache persistence', () => {
     const app = read('src/App.tsx');
     expect(cache).toContain('(scope && activeScope.current !== scope)');
     expect(cache).toContain('hydrate(queryClient, safeState)');
+    expect(cache).toContain('setScopeSwitching(true)');
     expect(app).toContain('staleTime:2*60*1000');
     expect(app).toContain('gcTime:24*60*60*1000');
     expect(app).toContain('refetchOnReconnect:true');
