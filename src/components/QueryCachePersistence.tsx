@@ -80,10 +80,11 @@ export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({
       return () => { cancelled = true; };
     }
 
+    const previousScope = activeScope.current;
     activeScope.current = null;
     restoreInProgress.current = true;
     setReadyScope(null);
-    queryClient.clear();
+    if (previousScope && previousScope !== scope) queryClient.clear();
     void readOfflineQueryCache<CachedQuerySnapshot>(CACHE_NAMESPACE, user.id, profile!.organization_id)
       .then((cached) => {
         if (cancelled) return;
