@@ -90,7 +90,7 @@ export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({
     const previousScope = activeScope.current;
     activeScope.current = null;
     restoreInProgress.current = true;
-    setScopeSwitching(Boolean(previousScope && previousScope !== scope));
+    setScopeSwitching(true);
     if (previousScope && previousScope !== scope) queryClient.clear();
     void readOfflineQueryCache<CachedQuerySnapshot>(CACHE_NAMESPACE, user.id, profile!.organization_id)
       .then((cached) => {
