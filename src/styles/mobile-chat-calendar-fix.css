@@ -19,12 +19,12 @@ html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock {
 }
 .app-shell.is-chat-route {
   width: 100%;
-  height: 100dvh;
-  min-height: 100dvh !important;
+  height: var(--chat-visible-height, 100dvh);
+  min-height: 0 !important;
 }
 .app-shell.is-chat-route .app-main.is-chat-main {
   width: auto;
-  height: 100dvh;
+  height: var(--chat-visible-height, 100dvh);
   min-height: 0 !important;
 }
 .app-shell.is-chat-route .app-content.is-chat-content {
@@ -187,21 +187,24 @@ html[data-theme="light"] #root input[type="time"] { color-scheme: light; }
 
 @media (max-width: 767px) {
   .app-shell.is-chat-route {
+    position: fixed !important;
+    inset-inline: 0 !important;
+    top: var(--chat-visible-top, 0px) !important;
     width: 100%;
-    height: 100dvh;
-    min-height: 100dvh !important;
+    height: var(--chat-visible-height, 100dvh) !important;
+    min-height: 0 !important;
     padding: 0 !important;
   }
   .app-shell.is-chat-route .app-main.is-chat-main {
     width: 100% !important;
-    height: 100dvh;
+    height: var(--chat-visible-height, 100dvh) !important;
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
   }
   .app-shell.is-chat-route .chat-composer {
-    margin: 6px 8px max(8px, env(safe-area-inset-bottom)) !important;
+    margin: 6px 8px 6px !important;
     border-radius: 18px !important;
     padding: 8px !important;
   }
