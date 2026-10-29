@@ -1,0 +1,278 @@
+/* Mobile chat + calendar accessibility pass.
+   Chat is a dedicated workspace: don't stack the global shell chrome over its own
+   header/composer. The mobile dock is portalled to body, so target it from html:has(). */
+.app-shell.is-chat-route .app-topbar,
+.app-shell.is-chat-route .app-mobilebar {
+  display: none !important;
+}
+html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock {
+  display: none !important;
+}
+.app-shell.is-chat-route,
+.app-shell.is-chat-route .app-main,
+.app-shell.is-chat-route .app-content,
+.app-shell.is-chat-route .future-route-stage,
+.app-shell.is-chat-route .chat-standalone {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.app-shell.is-chat-route {
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh !important;
+}
+.app-shell.is-chat-route .app-main.is-chat-main {
+  width: auto;
+  height: 100dvh;
+  min-height: 0 !important;
+}
+.app-shell.is-chat-route .app-content.is-chat-content {
+  width: 100% !important;
+  height: 100%;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.app-shell.is-chat-route .future-route-stage.is-chat-stage {
+  width: 100%;
+  height: 100%;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  animation: none !important;
+  transform: none !important;
+  filter: none !important;
+}
+.app-shell.is-chat-route .chat-standalone {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  max-width: 100% !important;
+}
+.app-shell.is-chat-route .chat-message-area {
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  padding-bottom: 16px !important;
+  scroll-padding-bottom: 18px;
+}
+.app-shell.is-chat-route .chat-composer {
+  position: relative !important;
+  z-index: 3;
+  flex: 0 0 auto !important;
+  margin: 7px 8px 8px !important;
+  padding: 10px !important;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border)) !important;
+  border-radius: 20px !important;
+  background: color-mix(in srgb, var(--surface) 94%, transparent) !important;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .20), inset 0 1px 0 rgba(255,255,255,.035) !important;
+  backdrop-filter: blur(18px);
+}
+.app-shell.is-chat-route .chat-composer textarea {
+  min-height: 48px;
+  max-height: min(132px, 22dvh) !important;
+  padding-block: 11px !important;
+  line-height: 1.55 !important;
+  resize: none;
+}
+.app-shell.is-chat-route .chat-conversation-view {
+  min-height: 0 !important;
+  height: 100%;
+}
+.app-shell.is-chat-route .chat-conversation-header {
+  flex: 0 0 auto;
+}
+
+/* Readable calendar controls across phone, tablet and desktop.
+   Preserve the existing Jalali calculation/data model; this is presentation only. */
+#root input[type="date"],
+#root input[type="datetime-local"],
+#root input[type="month"],
+#root input[type="time"] {
+  min-height: 48px !important;
+  padding: 8px 12px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  background-color: var(--surface-2) !important;
+  color: var(--text) !important;
+  font-size: 16px !important;
+  font-weight: 700;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+html[data-theme="dark"] #root input[type="date"],
+html[data-theme="dark"] #root input[type="datetime-local"],
+html[data-theme="dark"] #root input[type="month"],
+html[data-theme="dark"] #root input[type="time"] { color-scheme: dark; }
+html[data-theme="light"] #root input[type="date"],
+html[data-theme="light"] #root input[type="datetime-local"],
+html[data-theme="light"] #root input[type="month"],
+html[data-theme="light"] #root input[type="time"] { color-scheme: light; }
+
+.reminders-app-standalone .reminders-calendar-month-toolbar > strong {
+  font-size: clamp(16px, 2vw, 20px) !important;
+  line-height: 1.5 !important;
+  color: var(--text) !important;
+  font-variant-numeric: tabular-nums;
+}
+.reminders-app-standalone .reminders-calendar-weekdays > span {
+  min-height: 34px !important;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+  font-weight: 850 !important;
+  color: var(--text) !important;
+}
+.reminders-app-standalone .reminders-calendar-cell {
+  min-height: 60px !important;
+  padding: 6px 3px !important;
+  gap: 4px !important;
+}
+.reminders-app-standalone .reminders-calendar-cell-day {
+  width: 31px !important;
+  height: 31px !important;
+  font-size: 15px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  color: var(--text) !important;
+}
+.reminders-app-standalone .reminders-calendar-cell[aria-pressed="true"] .reminders-calendar-cell-day {
+  background: var(--primary) !important;
+  color: #fff !important;
+}
+.reminders-app-standalone .reminders-calendar-cell-count {
+  min-width: 20px !important;
+  min-height: 19px !important;
+  padding-inline: 5px !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+  color: var(--primary) !important;
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface)) !important;
+}
+.reminders-app-standalone .reminders-calendar-panel {
+  color: var(--text);
+  -webkit-overflow-scrolling: touch;
+}
+.reminders-app-standalone .reminders-calendar-panel .grid.grid-cols-7 button {
+  min-height: 44px !important;
+  padding: 4px 2px !important;
+  font-size: 15px !important;
+  line-height: 1.35 !important;
+  font-weight: 850 !important;
+  color: var(--text);
+}
+.reminders-app-standalone .reminders-calendar-panel .grid.grid-cols-7 button[aria-pressed="true"] {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+}
+.reminders-app-standalone .reminders-calendar-panel > .grid.grid-cols-7.text-center {
+  color: var(--text) !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+}
+.reminders-app-standalone .reminders-calendar-panel > .grid.grid-cols-7.text-center > div {
+  min-height: 32px;
+  display: grid;
+  place-items: center;
+  line-height: 1.4;
+}
+.reminders-app-standalone .reminders-calendar-panel .reminders-calendar-shortcut {
+  min-height: 44px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 767px) {
+  .app-shell.is-chat-route {
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh !important;
+    padding: 0 !important;
+  }
+  .app-shell.is-chat-route .app-main.is-chat-main {
+    width: 100% !important;
+    height: 100dvh;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  .app-shell.is-chat-route .chat-composer {
+    margin: 6px 8px max(8px, env(safe-area-inset-bottom)) !important;
+    border-radius: 18px !important;
+    padding: 8px !important;
+  }
+  .app-shell.is-chat-route .chat-message-area {
+    padding: 12px 10px 16px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-month-toolbar {
+    grid-template-columns: 40px minmax(0, 1fr) 40px auto !important;
+    gap: 5px !important;
+    min-height: 56px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-month-toolbar > strong {
+    font-size: 16px !important;
+    overflow-wrap: normal;
+  }
+  .reminders-app-standalone .reminders-calendar-weekdays {
+    gap: 2px !important;
+    padding: 8px 4px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-weekdays > span {
+    min-height: 32px !important;
+    padding-inline: 0 !important;
+    font-size: 12px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-cell {
+    min-height: 58px !important;
+    padding: 5px 1px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-cell-day {
+    width: 29px !important;
+    height: 29px !important;
+    font-size: 14px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-cell-count {
+    min-width: 19px !important;
+    min-height: 18px !important;
+    font-size: 11px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-panel {
+    max-height: calc(100dvh - env(safe-area-inset-top) - 4px) !important;
+    padding: 14px 12px max(16px, env(safe-area-inset-bottom)) !important;
+  }
+  .reminders-app-standalone .reminders-calendar-panel .grid.grid-cols-7 {
+    gap: 3px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-panel .grid.grid-cols-7 button {
+    min-height: 44px !important;
+    font-size: 15px !important;
+  }
+}
+@media (max-width: 380px) {
+  .reminders-app-standalone .reminders-calendar-cell {
+    min-height: 54px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-cell-day {
+    width: 27px !important;
+    height: 27px !important;
+    font-size: 13px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-panel .grid.grid-cols-7 button {
+    min-height: 42px !important;
+    font-size: 14px !important;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .reminders-app-standalone .reminders-calendar-cell {
+    min-height: 46px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-cell-day {
+    width: 27px !important;
+    height: 27px !important;
+    font-size: 14px !important;
+  }
+}
