@@ -994,7 +994,7 @@ html[data-theme="light"] #root input[type="time"] { color-scheme: light; }
 
 /* Premium iOS-like bottom dock: generous tap targets, separated pill surfaces,
    safe-area-aware positioning, and a distinct selected destination. */
-@media (max-width: 767px) {
+@media (max-width: 767px), (pointer: coarse) {
   body .app-mobile-viewport-dock {
     position: fixed !important;
     inset-inline: 10px !important;
@@ -1077,7 +1077,7 @@ html[data-theme="light"] #root input[type="time"] { color-scheme: light; }
 .reminders-app-standalone .reminders-header-add {
   margin-inline: 4px !important;
 }
-@media (max-width: 767px) {
+@media (max-width: 767px), (pointer: coarse) {
   .reminders-app-standalone .reminders-hub-actions { gap: 8px !important; }
   .reminders-app-standalone .reminders-hub-actions .reminders-hub-add {
     width: 44px !important;
