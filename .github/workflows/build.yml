@@ -622,7 +622,7 @@ jobs:
                   pathname: window.location.pathname,
                   search: window.location.search,
                   rootText: document.querySelector('#root')?.textContent?.trim() || '',
-                  manifestHref: document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.getAttribute('href') || '',
+                  manifestHref: document.querySelector('link[rel="manifest"]')?.getAttribute('href') || '',
                 }));
                 if (
                   mobileEntry.pathname !== '/reminders/login' ||
