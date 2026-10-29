@@ -24,11 +24,14 @@ describe('chat attachments and forwarding', () => {
     const forward = api.slice(start, end);
     expect(forward).toContain(".from('chat_attachments')");
     expect(forward).toContain("supabase.storage.from('chat-files').download(attachment.storage_path)");
-    expect(forward).toContain('await uploadChatStorageObject(storagePath, file)');
+    expect(forward).toContain('await uploadChatForwardAttachment(storagePath, file)');
     expect(forward).toContain("supabase.rpc('chat_register_attachment'");
     expect(forward).toContain('await deleteForAll(forwarded.id)');
     expect(forward).toContain('sourceAttachments.length === 0');
     expect(forward).toContain('if (!attachment.storage_path)');
+    expect(forward).toContain('operationId = makeClientId()');
+    expect(forward.indexOf('await uploadChatForwardAttachment(storagePath, file)')).toBeLessThan(forward.indexOf("supabase.rpc('chat_forward_message'"));
+    expect(api).toContain('function deriveForwardAttachmentObjectId(operationId: string, index: number)');
   });
   it('falls back to the authenticated Storage SDK when resumable upload fails', () => {
     expect(api).toContain('catch (resumableError)');
@@ -44,6 +47,8 @@ describe('chat attachments and forwarding', () => {
   });
   it('prevents duplicate forward requests while a file is being transferred', () => {
     expect(page).toContain('const[forwardingBusy,setForwardingBusy]=useState(false)');
+    expect(page).toContain('const[forwardOperationId,setForwardOperationId]=useState<string|null>(null)');
+    expect(page).toContain('const forwardingBusyRef=useRef(false)');
     expect(page).toContain('if(!forwardId||forwardingBusy)return');
     expect(page).toContain('disabled={forwardingBusy}');
     expect(page).toContain('در حال انتقال پیام و پیوست‌ها');
