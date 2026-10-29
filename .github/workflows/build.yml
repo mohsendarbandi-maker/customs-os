@@ -259,6 +259,12 @@ jobs:
               exit 1
             fi
 
+            echo "Checking service worker script availability"
+            sw_status="$(curl --silent --show-error --max-time 20 -D /tmp/sw.headers -o /tmp/sw.js -w '%{http_code}' "$base/sw.js?__sw_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}")"
+            test "$sw_status" = "200"
+            grep -Eiq '^content-type: (application|text)/(javascript|ecmascript)' /tmp/sw.headers
+            test -s /tmp/sw.js
+
             echo "Checking the one canonical manifest and all declared PNG icons"
             curl --fail --silent --show-error --location --max-time 30 -o /tmp/customs-manifest.json "$base/manifest.webmanifest?__pwa_smoke=${GITHUB_RUN_ID}"
             node -e '
@@ -450,13 +456,36 @@ jobs:
               try {
                 const offlinePage = await offlineContext.newPage();
                 const offlineUrl = baseURL + '/?__offline_reopen_smoke=' + encodeURIComponent(smokeToken);
+                offlinePage.on('console', (message) => {
+                  if (message.type() === 'error') errors.push(`offline console: ${message.text()}`);
+                });
+                offlinePage.on('requestfailed', (request) => {
+                  if (/sw\.js|workbox|\.(js|mjs)(\?|$)/i.test(request.url())) {
+                    errors.push(`offline requestfailed: ${request.url()} — ${request.failure()?.errorText || 'unknown'}`);
+                  }
+                });
                 await offlinePage.goto(offlineUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
                 await expect(offlinePage.locator('#root')).toBeAttached();
+                const registrationState = await offlinePage.evaluate(async () =>
+                  (await navigator.serviceWorker?.getRegistrations() || []).map((registration) => ({
+                    scope: registration.scope,
+                    active: registration.active?.state || null,
+                    waiting: registration.waiting?.state || null,
+                    installing: registration.installing?.state || null,
+                  })),
+                );
+                console.log('Service worker registration state:', JSON.stringify(registrationState));
                 await expect.poll(
-                  async () => await offlinePage.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
-                  { timeout: 20000, message: 'Service worker did not take control of the app shell' },
+                  async () => await offlinePage.evaluate(async () =>
+                    (await navigator.serviceWorker?.getRegistrations() || []).some((registration) => registration.active?.state === 'activated'),
+                  ),
+                  { timeout: 20000, message: `Service worker did not activate: ${JSON.stringify(registrationState)}; errors: ${errors.join(' | ') || 'none'}` },
                 ).toBe(true);
                 await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                await expect.poll(
+                  async () => await offlinePage.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
+                  { timeout: 20000, message: `Service worker did not control the reloaded app shell; errors: ${errors.join(' | ') || 'none'}` },
+                ).toBe(true);
                 await expect.poll(
                   async () => (await offlinePage.locator('#root').innerText()).trim(),
                   { timeout: 15000, message: 'App shell did not render before offline reopen' },
