@@ -17,6 +17,103 @@
         window.location.replace(secureUrl.toString());
       })();
     </script>
+    <script>
+      // Keep phones on the mobile hostname while preserving the existing auth session.
+      // A nonce-scoped, exact-origin postMessage bridge moves only the current Supabase
+      // session between our two first-party hosts; tokens never enter the URL or logs.
+      (() => {
+        const host = window.location.hostname.toLowerCase();
+        if (window.location.protocol !== 'https:' ||
+            !['darbandicommercial.ir', 'www.darbandicommercial.ir'].includes(host) ||
+            window.location.pathname === '/__auth-bridge.html') return;
+        // Keep installed iOS PWAs inside the origin covered by their manifest scope.
+        // The same responsive mobile UI is available there without a cross-origin escape.
+        if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) return;
+        const ua = navigator.userAgent || '';
+        const appleTablet = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+        const touchSmall = window.matchMedia('(pointer: coarse)').matches &&
+          Math.min(window.screen.width || window.innerWidth, window.screen.height || window.innerHeight) < 650;
+        const mobileDevice = /android|iphone|ipad|ipod|mobile/i.test(ua) || appleTablet || touchSmall;
+        if (!mobileDevice) return;
+        const params = new URLSearchParams(window.location.search);
+        // OAuth must complete on the origin where its PKCE verifier was created.
+        if (['code', 'error', 'error_description', 'access_token', 'refresh_token', 'type']
+          .some((key) => params.has(key)) ||
+          /(?:access_token|refresh_token|error)=/.test(window.location.hash)) return;
+
+        const mobileOrigin = 'https://mobile.darbandicommercial.ir';
+        const target = new URL(window.location.href);
+        target.protocol = 'https:';
+        target.hostname = 'mobile.darbandicommercial.ir';
+        target.port = '';
+        const storageKey = 'customs-os-auth-v3';
+        let mainSession = null;
+        try { mainSession = window.localStorage.getItem(storageKey); } catch {}
+        const nonce = (window.crypto && typeof window.crypto.randomUUID === 'function')
+          ? window.crypto.randomUUID()
+          : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+        const frame = document.createElement('iframe');
+        frame.title = 'Customs OS session bridge';
+        frame.setAttribute('aria-hidden', 'true');
+        frame.tabIndex = -1;
+        frame.style.cssText = 'position:fixed;width:1px;height:1px;left:-10px;top:-10px;opacity:0;pointer-events:none;border:0';
+        let completed = false;
+        let timer = null;
+        let chosenSession = mainSession;
+        const cleanup = () => {
+          if (timer !== null) window.clearTimeout(timer);
+          window.removeEventListener('message', onMessage);
+          frame.remove();
+        };
+        const finish = () => {
+          if (completed) return;
+          completed = true;
+          cleanup();
+          window.location.replace(target.toString());
+        };
+        const fallback = () => {
+          if (completed) return;
+          completed = true;
+          cleanup();
+          // A failed bridge must never strand an unauthenticated visitor on an
+          // unreachable mobile hostname. The primary origin remains usable; retry
+          // mobile routing on a later navigation once the bridge host responds.
+        };
+        const onMessage = (event) => {
+          if (event.origin !== mobileOrigin || event.source !== frame.contentWindow ||
+              !event.data || event.data.nonce !== nonce) return;
+          if (event.data.type === 'customs-auth-bridge-ready') {
+            const mobileSession = typeof event.data.value === 'string' ? event.data.value : null;
+            const expires = (raw) => {
+              try {
+                const value = JSON.parse(raw);
+                return Number(value?.expires_at ?? value?.currentSession?.expires_at ?? 0);
+              } catch { return 0; }
+            };
+            if (!chosenSession || (mobileSession && expires(mobileSession) > expires(chosenSession))) {
+              chosenSession = mobileSession;
+            }
+            try {
+              if (chosenSession) window.localStorage.setItem(storageKey, chosenSession);
+            } catch {}
+            frame.contentWindow?.postMessage({
+              type: 'customs-auth-sync',
+              nonce,
+              value: chosenSession,
+            }, mobileOrigin);
+          } else if (event.data.type === 'customs-auth-synced') {
+            finish();
+          } else if (event.data.type === 'customs-auth-sync-failed') {
+            fallback();
+          }
+        };
+        window.addEventListener('message', onMessage);
+        frame.addEventListener('error', fallback, { once: true });
+        frame.src = mobileOrigin + '/__auth-bridge.html#' + encodeURIComponent(nonce);
+        document.documentElement.appendChild(frame);
+        timer = window.setTimeout(fallback, 4500);
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0A4D8C" />

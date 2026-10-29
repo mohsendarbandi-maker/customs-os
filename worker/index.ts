@@ -283,6 +283,31 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    // The mobile-host auth bridge is a tiny static document, not the SPA shell.
+    // It uses strict postMessage origin checks and never places session data in URLs.
+    if (url.pathname === '/__auth-bridge.html' && ['GET', 'HEAD'].includes(request.method)) {
+      const bridgeUrl = new URL(request.url);
+      bridgeUrl.hostname = 'customs.mohsen-darbandi.workers.dev';
+      bridgeUrl.search = '';
+      bridgeUrl.hash = '';
+      const upstream = await env.ASSETS.fetch(new Request(bridgeUrl, request));
+      const headers = new Headers(upstream.headers);
+      headers.set('Cache-Control', 'no-store, private');
+      headers.set('X-Content-Type-Options', 'nosniff');
+      headers.set('Referrer-Policy', 'no-referrer');
+      headers.delete('X-Frame-Options');
+      headers.set(
+        'Content-Security-Policy',
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-ancestors https://darbandicommercial.ir https://www.darbandicommercial.ir; base-uri 'none'; form-action 'none'",
+      );
+      headers.set('Content-Type', 'text/html; charset=utf-8');
+      return new Response(request.method === 'HEAD' ? null : upstream.body, {
+        status: upstream.status,
+        statusText: upstream.statusText,
+        headers,
+      });
+    }
+
     // Keep desktop and phone browsers on the same canonical app origin. Mobile
     // layout differences are handled by the shared responsive UI, not host redirects.
 

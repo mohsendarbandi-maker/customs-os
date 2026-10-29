@@ -1088,3 +1088,53 @@ html[data-theme="light"] #root input[type="time"] { color-scheme: light; }
   }
   .reminders-app-standalone .reminders-hub-header { margin-bottom: 10px !important; }
 }
+
+
+/* The reminder FAB was only given mobile dimensions in the old stylesheet; it
+   never had fixed positioning, so it flowed into the reminder list. */
+.reminders-app-standalone .reminders-mobile-fab {
+  position: fixed !important;
+  inset-inline-start: auto !important;
+  inset-inline-end: 18px !important;
+  bottom: calc(92px + env(safe-area-inset-bottom)) !important;
+  z-index: 240 !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 58px !important;
+  min-width: 58px !important;
+  height: 58px !important;
+  min-height: 58px !important;
+  padding: 0 !important;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent) !important;
+  border-radius: 19px !important;
+  background: var(--primary) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--primary) 30%, transparent),
+    0 3px 8px rgba(10, 22, 44, .14) !important;
+  transform: translateZ(0);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.reminders-app-standalone .reminders-mobile-fab svg {
+  width: 28px !important;
+  height: 28px !important;
+  stroke-width: 2.4 !important;
+}
+.reminders-app-standalone .reminders-mobile-fab:active {
+  transform: scale(.94) !important;
+}
+@media (min-width: 1024px) and (pointer: fine) {
+  .reminders-app-standalone .reminders-mobile-fab { display: none !important; }
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .reminders-app-standalone .reminders-mobile-fab {
+    inset-inline-end: 16px !important;
+    bottom: calc(92px + env(safe-area-inset-bottom)) !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    height: 56px !important;
+    min-height: 56px !important;
+    border-radius: 18px !important;
+  }
+  .reminders-app-standalone .reminders-hub-actions { gap: 8px !important; }
+}

@@ -248,6 +248,17 @@ jobs:
               exit 1
             fi
 
+            echo "Checking mobile-host auth bridge and security headers"
+            bridge_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/mobile-bridge.headers -o /tmp/mobile-bridge.html -w '%{http_code}' "https://mobile.darbandicommercial.ir/__auth-bridge.html?__smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}")"
+            test "$bridge_status" = "200"
+            grep -Fqi 'Cache-Control: no-store, private' /tmp/mobile-bridge.headers
+            grep -Fqi 'frame-ancestors https://darbandicommercial.ir' /tmp/mobile-bridge.headers
+            grep -Fq 'customs-auth-sync' /tmp/mobile-bridge.html
+            if grep -Eqi '^x-frame-options:' /tmp/mobile-bridge.headers; then
+              echo "Mobile auth bridge must rely on its narrow CSP frame-ancestors allowlist."
+              exit 1
+            fi
+
             echo "Checking the one canonical manifest and all declared PNG icons"
             curl --fail --silent --show-error --location --max-time 30 -o /tmp/customs-manifest.json "$base/manifest.webmanifest?__pwa_smoke=${GITHUB_RUN_ID}"
             node -e '
@@ -341,15 +352,24 @@ jobs:
             gateway_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/messenger-gateway.json -w '%{http_code}' "$base/webhooks/messenger/telegram/00000000-0000-4000-8000-000000000000")"
             test "$gateway_status" = "404"
 
-            echo "Checking primary HTML has one manifest and no mobile-origin redirect"
+            echo "Checking primary HTML has one static manifest plus the mobile auth handoff"
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-main.html "$base/?__canonical_pwa_smoke=${GITHUB_RUN_ID}"
             grep -Fq '<link rel="manifest" href="/manifest.webmanifest" />' /tmp/customs-main.html
             test "$(grep -o 'rel="manifest"' /tmp/customs-main.html | wc -l | tr -d ' ')" = "1"
             grep -Fq 'rel="apple-touch-icon" sizes="180x180" href="/pwa/mobile-icon-180.png' /tmp/customs-main.html
-            if grep -Eq 'mobile\.darbandicommercial\.ir|chat-app-v4\.webmanifest|chat-subdomain\.webmanifest|manifest-reminders\.webmanifest|reminders-subdomain\.webmanifest|mobile-subdomain\.webmanifest|apple-touch-icon-precomposed' /tmp/customs-main.html; then
+            grep -Fq "target.hostname = 'mobile.darbandicommercial.ir'" /tmp/customs-main.html
+            grep -Fq "type: 'customs-auth-sync'" /tmp/customs-main.html
+            if grep -Eq 'chat-app-v4\\.webmanifest|chat-subdomain\\.webmanifest|manifest-reminders\\.webmanifest|reminders-subdomain\\.webmanifest|mobile-subdomain\\.webmanifest|apple-touch-icon-precomposed' /tmp/customs-main.html; then
               echo "Legacy origin/manifest/icon selection remains in primary HTML."
               exit 1
             fi
+
+            echo "Checking the auth bridge is private and correctly frame-scoped"
+            bridge_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/auth-bridge.headers -o /tmp/auth-bridge.html -w '%{http_code}' "$base/__auth-bridge.html?__bridge_smoke=${GITHUB_RUN_ID}")"
+            test "$bridge_status" = "200"
+            grep -Fq 'customs-auth-bridge-ready' /tmp/auth-bridge.html
+            grep -Fqi 'Cache-Control: no-store, private' /tmp/auth-bridge.headers
+            grep -Fqi 'frame-ancestors https://darbandicommercial.ir' /tmp/auth-bridge.headers
 
             echo "Checking legacy PWA launch URL returns to canonical home"
             pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
@@ -416,6 +436,44 @@ jobs:
                 async () => (await page.locator('#root').innerText()).trim(),
                 { timeout: 15000, message: `React did not render visible content into #root\nErrors: ${errors.join(' | ') || 'none'}\nScripts: ${scriptResponses.join(' | ') || 'none'}` },
               ).not.toBe('');
+
+              // Verify an already-visited app opens from service-worker cache while offline.
+              // Use an isolated browser context so expected offline API failures do not affect
+              // the normal online smoke test's JavaScript/network assertions.
+              const offlineContext = await browser.newContext();
+              try {
+                const offlinePage = await offlineContext.newPage();
+                const offlineUrl = baseURL + '/?__offline_reopen_smoke=' + encodeURIComponent(smokeToken);
+                await offlinePage.goto(offlineUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await expect(offlinePage.locator('#root')).toBeAttached();
+                await expect.poll(
+                  async () => await offlinePage.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
+                  { timeout: 20000, message: 'Service worker did not take control of the app shell' },
+                ).toBe(true);
+                await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  { timeout: 15000, message: 'App shell did not render before offline reopen' },
+                ).not.toBe('');
+                await offlineContext.setOffline(true);
+                await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 12000 });
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  { timeout: 12000, message: 'Visited app did not render from cached shell while offline' },
+                ).not.toBe('');
+                const offlineShell = await offlinePage.evaluate(() => ({
+                  controlled: Boolean(navigator.serviceWorker?.controller),
+                  rootText: document.querySelector('#root')?.textContent?.trim() || '',
+                  build: document.querySelector('meta[name="theme-color"]')?.getAttribute('content') || '',
+                }));
+                if (!offlineShell.controlled || !offlineShell.rootText) {
+                  throw new Error(`Cached app shell failed to reopen offline: ${JSON.stringify(offlineShell)}`);
+                }
+                console.log('Offline app-shell reopen passed:', JSON.stringify(offlineShell));
+                await offlineContext.setOffline(false);
+              } finally {
+                await offlineContext.close();
+              }
 
               const chatPage = await page.context().newPage();
               const chatErrors = [];
@@ -528,6 +586,50 @@ jobs:
                 console.log('Touch-first layout retained at a wide viewport:', JSON.stringify(touchLayout));
               } finally {
                 await touchContext.close();
+              }
+
+              // Verify the primary domain hands an iPhone browser to the mobile
+              // hostname, retaining the deep link and transferring auth only through
+              // the nonce-scoped first-party bridge (never through URL parameters).
+              const mobileRedirectContext = await browser.newContext({
+                viewport: { width: 390, height: 844 },
+                screen: { width: 390, height: 844 },
+                deviceScaleFactor: 3,
+                isMobile: true,
+                hasTouch: true,
+                userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+              });
+              try {
+                const mobileRedirectPage = await mobileRedirectContext.newPage();
+                const mobileRedirectErrors = [];
+                mobileRedirectPage.on('pageerror', (error) => mobileRedirectErrors.push(error.message));
+                await mobileRedirectPage.goto(baseURL + '/reminders/login?__mobile_redirect_smoke=' + encodeURIComponent(smokeToken), {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 30000,
+                });
+                await expect.poll(
+                  async () => new URL(mobileRedirectPage.url()).hostname,
+                  { timeout: 15000, message: 'iPhone browser did not transition to the mobile hostname' },
+                ).toBe('mobile.darbandicommercial.ir');
+                const mobileEntry = await mobileRedirectPage.evaluate(() => ({
+                  hostname: window.location.hostname,
+                  pathname: window.location.pathname,
+                  search: window.location.search,
+                  rootText: document.querySelector('#root')?.textContent?.trim() || '',
+                  manifestHref: document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.getAttribute('href') || '',
+                }));
+                if (
+                  mobileEntry.pathname !== '/reminders/login' ||
+                  !mobileEntry.search.includes('__mobile_redirect_smoke=') ||
+                  mobileEntry.manifestHref !== '/manifest.webmanifest' ||
+                  !mobileEntry.rootText
+                ) {
+                  throw new Error(`Mobile hostname handoff lost the route or failed to render: ${JSON.stringify(mobileEntry)}`);
+                }
+                if (mobileRedirectErrors.length) throw new Error(mobileRedirectErrors.join('; '));
+                console.log('iPhone routing and mobile shell render passed:', JSON.stringify(mobileEntry));
+              } finally {
+                await mobileRedirectContext.close();
               }
 
               const manifestHref = await remindersPage.locator('link[rel="manifest"]').getAttribute('href');
