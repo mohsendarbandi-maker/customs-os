@@ -11,6 +11,12 @@ describe('static asset cache headers', () => {
     expect(worker).toContain("url.pathname.startsWith('/assets/')");
   });
 
+  it('resolves hashed assets against the incoming custom domain instead of a workers.dev host rewrite', () => {
+    expect(worker).toContain('const assetBase = new URL(request.url)');
+    expect(worker).toContain('const assetRequest = new Request(assetBase, request)');
+    expect(worker).not.toContain("assetBase.hostname = 'customs.mohsen-darbandi.workers.dev'");
+  });
+
   it('keeps the HTML shell and authenticated APIs outside the static asset cache policy', () => {
     expect(worker).toContain("headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')");
     expect(worker).toContain("url.pathname.startsWith('/api/')");

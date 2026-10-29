@@ -557,8 +557,10 @@ export default {
       !url.pathname.startsWith('/api/') &&
       !isStaticAsset &&
       (url.pathname === '/' || url.pathname.startsWith('/chat') || accept.includes('text/html'));
+    // Resolve assets against the incoming hostname. The ASSETS binding is attached
+    // to this Worker and serves the same manifest on each custom domain; rewriting
+    // the host to workers.dev can miss freshly uploaded hashed files on custom hosts.
     const assetBase = new URL(request.url);
-    assetBase.hostname = 'customs.mohsen-darbandi.workers.dev';
     const assetRequest = new Request(assetBase, request);
     const htmlAssetUrl = new URL('/__builds/' + encodeURIComponent(BUILD_SIGNATURE) + '/index.html', assetBase);
     let response = isHtmlNavigation

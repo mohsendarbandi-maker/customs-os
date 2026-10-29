@@ -318,6 +318,12 @@ jobs:
               echo "::error::Dedicated mobile host did not serve the app shell directly: HTTP ${mobile_status}, Location=${mobile_location}"
               exit 1
             fi
+            mobile_script_src="$(sed -n 's/.*<script[^>]*type="module"[^>]*src="\([^"]*\)".*/\1/p' /tmp/mobile.html | head -n 1)"
+            case "$mobile_script_src" in /assets/*.js) ;; *) echo "Invalid mobile module path: $mobile_script_src"; exit 1;; esac
+            mobile_asset_status="$(curl --silent --show-error --max-time 20 -D /tmp/mobile-asset.headers -o /tmp/mobile-asset.js -w '%{http_code}' "https://mobile.darbandicommercial.ir$mobile_script_src")"
+            test "$mobile_asset_status" = "200"
+            grep -Eiq '^content-type: (application|text)/(javascript|ecmascript)' /tmp/mobile-asset.headers
+            test -s /tmp/mobile-asset.js
 
             legacy_manifest_status=""
             legacy_manifest_location=""
