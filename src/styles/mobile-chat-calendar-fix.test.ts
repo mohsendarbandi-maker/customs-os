@@ -16,6 +16,8 @@ describe('mobile chat viewport and calendar legibility', () => {
     expect(shell).toContain("isChatRoute ? 'is-chat-content' : ''");
     expect(shell).toContain("isChatRoute ? 'is-chat-stage' : ''");
     expect(css).toContain('.app-shell.is-chat-route .app-mobilebar');
+    expect(shell).toContain('window.visualViewport');
+    expect(css).toContain('var(--chat-visible-height, 100dvh)');
     expect(css).toContain('html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock');
     expect(css).toContain('.app-shell.is-chat-route .app-topbar');
     expect(main).toContain("import './styles/mobile-chat-calendar-fix.css';");
