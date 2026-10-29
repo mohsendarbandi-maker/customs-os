@@ -683,7 +683,7 @@ export const ChatPage:React.FC=()=>{
 
    <div className="chat-composer shrink-0 border-t app-border px-2 py-2 md:p-3 bg-[var(--surface)]" style={{paddingBottom:'max(8px,env(safe-area-inset-bottom))'}}>
     <input ref={fileInput} type="file" multiple className="hidden" accept="*/*" onChange={e=>{const files=Array.from(e.currentTarget.files??[]);e.currentTarget.value='';chooseAttachments(files)}}/>
-    {pendingFiles.length>0&&<section className="mb-2 max-h-[34dvh] overflow-y-auto rounded-2xl border app-border bg-[var(--surface-2)] p-2.5" aria-label="فایل‌های آمادهٔ ارسال">
+    {pendingFiles.length>0&&<section data-unsaved={pendingFiles.length > 0 ? 'true' : undefined} className="mb-2 max-h-[34dvh] overflow-y-auto rounded-2xl border app-border bg-[var(--surface-2)] p-2.5" aria-label="فایل‌های آمادهٔ ارسال">
      <div className="flex items-center justify-between gap-2 px-1 pb-2"><b className="text-xs">فایل‌های آمادهٔ ارسال · {pendingFiles.length}</b><button type="button" className="min-h-9 px-2 rounded-lg border app-border text-xs" disabled={attachmentBusy} onClick={()=>setPendingFiles([])}>پاک‌کردن همه</button></div>
      <div className="space-y-2">{pendingFiles.map(item=><div key={item.id} className="grid grid-cols-[minmax(0,1fr)_40px] gap-2 rounded-xl border app-border bg-[var(--surface)] p-2">
       <div className="min-w-0"><div className="flex items-center gap-2 text-xs font-bold"><Paperclip size={14} className="shrink-0"/><span className="truncate" title={item.file.name}>{item.file.name}</span><span className="shrink-0 app-muted">{(item.file.size/1024/1024).toFixed(1)}MB</span></div>
