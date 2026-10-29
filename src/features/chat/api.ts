@@ -561,15 +561,46 @@ async function uploadChatStorageObject(
   file: File,
   onProgress?: (percentage: number) => void,
 ): Promise<void> {
-  if (file.size > TUS_THRESHOLD_BYTES) {
-    await uploadChatAttachmentResumable(storagePath, file, onProgress);
-    return;
-  }
-  const upload = await supabase.storage.from('chat-files').upload(storagePath, file, {
+  const uploadDirect = () => supabase.storage.from('chat-files').upload(storagePath, file, {
     contentType: file.type || 'application/octet-stream',
     cacheControl: '3600',
     upsert: false,
   });
+
+  if (file.size > TUS_THRESHOLD_BYTES) {
+    try {
+      await uploadChatAttachmentResumable(storagePath, file, onProgress);
+      return;
+    } catch (resumableError) {
+      // The app's same-origin proxy can fail the TUS handshake/Location handoff on
+      // mobile browsers even though the regular authenticated Storage upload works.
+      // Try the supported SDK upload before failing the message, keeping the same
+      // unique object path so attachment registration can proceed normally.
+      const resumableMessage = resumableError instanceof Error
+        ? resumableError.message
+        : String(resumableError);
+      const fallback = await uploadDirect();
+      if (fallback.error) {
+        // A final TUS PATCH may have committed the object before the client lost
+        // the response. Accept it only when Storage confirms the exact byte size.
+        if (/already exists|duplicate|409/i.test(fallback.error.message)) {
+          const info = await supabase.storage.from('chat-files').info(storagePath);
+          if (!info.error && Number(info.data?.size) === file.size) {
+            onProgress?.(100);
+            return;
+          }
+        }
+        throw new Error(
+          'آپلود قابل‌ادامه ناموفق بود: ' + resumableMessage +
+          '؛ آپلود جایگزین هم ناموفق بود: ' + fallback.error.message,
+        );
+      }
+      onProgress?.(100);
+      return;
+    }
+  }
+
+  const upload = await uploadDirect();
   if (upload.error) throw new Error(upload.error.message);
 }
 
