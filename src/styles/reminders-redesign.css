@@ -1449,9 +1449,9 @@
     position: fixed !important;
     z-index: 120 !important;
     inset-inline-start: auto !important;
-    inset-inline-end: max(14px, env(safe-area-inset-right)) !important;
+    inset-inline-end: auto !important;
     left: auto !important;
-    right: auto !important;
+    right: max(14px, env(safe-area-inset-right)) !important;
     bottom: calc(94px + env(safe-area-inset-bottom)) !important;
     width: 56px !important;
     min-width: 56px !important;
