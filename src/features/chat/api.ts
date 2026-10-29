@@ -742,74 +742,195 @@ export async function editChatMessage(messageId: string, body: string): Promise<
   return unwrap(result) as ChatMessage;
 }
 
+function deriveForwardAttachmentObjectId(operationId: string, index: number): string {
+  const normalized = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operationId)
+    ? operationId.toLowerCase()
+    : makeClientId();
+  const hex = normalized.replace(/-/g, '');
+  const suffix = ((BigInt('0x' + hex.slice(20)) + BigInt(index)) & 0xffffffffffffn)
+    .toString(16)
+    .padStart(12, '0');
+  const id = hex.slice(0, 20) + suffix;
+  return id.slice(0, 8) + '-' + id.slice(8, 12) + '-' + id.slice(12, 16) + '-' + id.slice(16, 20) + '-' + id.slice(20);
+}
+
+/**
+ * Forwarded media uses the regular same-origin Storage upload endpoint rather
+ * than the custom TUS handshake. The app's Worker proxies ordinary Storage
+ * uploads consistently on mobile; the old resumable path could stall before
+ * registering the copied attachment and leave an empty forwarded message.
+ * Stable object paths make retries idempotent when a response is lost in transit.
+ */
+async function uploadChatForwardAttachment(storagePath: string, file: File): Promise<void> {
+  const storage = supabase.storage.from('chat-files');
+  const delays = [0, 700, 1600];
+  let lastError = 'خطای نامشخص در ذخیره‌سازی فایل';
+
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt] > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    }
+
+    try {
+      const upload = await storage.upload(storagePath, file, {
+        contentType: file.type || 'application/octet-stream',
+        cacheControl: '3600',
+        upsert: false,
+      });
+      if (!upload.error) return;
+
+      lastError = upload.error.message || lastError;
+      if (/already exists|duplicate|409/i.test(lastError)) {
+        const info = await storage.info(storagePath);
+        if (!info.error && Number(info.data?.size) === file.size) return;
+      }
+
+      // Authorization, policy, and bucket limit failures will not heal on retry.
+      if (/(?:400|401|403|413)|forbidden|not authorized|permission denied|file size limit|maximum file size|not allowed/i.test(lastError)) {
+        break;
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (/(?:400|401|403|413)|forbidden|not authorized|permission denied|file size limit|maximum file size|not allowed/i.test(lastError)) {
+        break;
+      }
+
+      // If Storage committed the object but the response was lost, verify the
+      // stable path before deciding the whole forwarding operation failed.
+      const info = await storage.info(storagePath).catch(() => null);
+      if (info && !info.error && Number(info.data?.size) === file.size) return;
+    }
+  }
+
+  throw new Error('ذخیرهٔ فایل در گفتگوی مقصد ناموفق بود: ' + lastError);
+}
+
 export async function forwardChatMessage(
   messageId: string,
   targetConversationId: string,
+  operationId = makeClientId(),
 ): Promise<ChatMessage> {
-  const result = await supabase.rpc('chat_forward_message', {
-    p_message_id: messageId,
-    p_target_conversation_id: targetConversationId,
-    p_client_uuid: makeClientId(),
-  });
-  const forwarded = unwrap(result) as ChatMessage;
+  const sourceMessageResult = await supabase
+    .from('chat_messages')
+    .select('message_type')
+    .eq('id', messageId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (sourceMessageResult.error) throw new Error(sourceMessageResult.error.message);
+  if (!sourceMessageResult.data) throw new Error('پیام مبدا در دسترس نیست.');
+
   const sourceResult = await supabase
     .from('chat_attachments')
     .select('storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform')
     .eq('message_id', messageId)
     .is('deleted_at', null);
-  if (sourceResult.error) {
-    try { await deleteForAll(forwarded.id); } catch {}
-    throw new Error(sourceResult.error.message);
-  }
+  if (sourceResult.error) throw new Error(sourceResult.error.message);
 
   const sourceAttachments = sourceResult.data ?? [];
-  if (
-    (forwarded.message_type === 'file' || forwarded.message_type === 'voice') &&
-    sourceAttachments.length === 0
-  ) {
-    try { await deleteForAll(forwarded.id); } catch {}
+  const sourceType = sourceMessageResult.data.message_type;
+  if ((sourceType === 'file' || sourceType === 'voice') && sourceAttachments.length === 0) {
     throw new Error('پیوست این پیام پیدا نشد؛ پیام بدون فایل منتقل نشد.');
   }
 
+  let targetOrganizationId: string | null = null;
+  if (sourceAttachments.length) {
+    const targetResult = await supabase
+      .from('chat_conversations')
+      .select('organization_id')
+      .eq('id', targetConversationId)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (targetResult.error) throw new Error(targetResult.error.message);
+    targetOrganizationId = targetResult.data?.organization_id ?? null;
+    if (!targetOrganizationId) throw new Error('گفتگوی مقصد در دسترس نیست یا عضویت شما معتبر نیست.');
+  }
+
   const copiedPaths: string[] = [];
+  const copiedFileSizes: number[] = [];
+  const clientUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operationId)
+    ? operationId
+    : makeClientId();
+  let forwarded: ChatMessage | null = null;
+
   try {
-    for (const attachment of sourceAttachments) {
+    // Copy the binary files first. If Storage fails, no destination message is
+    // created, so the recipient never sees an empty file message.
+    for (let index = 0; index < sourceAttachments.length; index += 1) {
+      const attachment = sourceAttachments[index];
       if (!attachment.storage_path) {
         throw new Error('مسیر فایل اصلی موجود نیست؛ پیام منتقل نشد.');
       }
+
       const download = await supabase.storage.from('chat-files').download(attachment.storage_path);
       if (download.error || !download.data) {
-        throw new Error(download.error?.message || 'پیوست اصلی قابل دریافت نیست.');
+        throw new Error('دریافت فایل اصلی ناموفق بود: ' + (download.error?.message || 'فایل در دسترس نیست.'));
       }
 
-      const objectId = makeClientId();
-      const storagePath = forwarded.organization_id + '/' + targetConversationId + '/' + objectId;
+      const objectId = deriveForwardAttachmentObjectId(clientUuid, index);
+      const storagePath = targetOrganizationId + '/' + targetConversationId + '/' + objectId;
       const file = new File([download.data], attachment.original_name || 'attachment', {
         type: attachment.mime_type || 'application/octet-stream',
       });
-      await uploadChatStorageObject(storagePath, file);
+
+      // Add it before upload so a response-loss failure still attempts cleanup.
       copiedPaths.push(storagePath);
+      copiedFileSizes.push(file.size);
+      await uploadChatForwardAttachment(storagePath, file);
+    }
+
+    const result = await supabase.rpc('chat_forward_message', {
+      p_message_id: messageId,
+      p_target_conversation_id: targetConversationId,
+      p_client_uuid: clientUuid,
+    });
+    forwarded = unwrap(result) as ChatMessage;
+
+    for (let index = 0; index < sourceAttachments.length; index += 1) {
+      const attachment = sourceAttachments[index];
+      const storagePath = targetOrganizationId + '/' + targetConversationId + '/' + deriveForwardAttachmentObjectId(clientUuid, index);
+      const fileSize = copiedFileSizes[index] ?? attachment.size_bytes ?? 0;
+      if (fileSize <= 0 || fileSize > 52_428_800) {
+        throw new Error('حجم پیوست از محدوده مجاز ذخیره‌سازی خارج است.');
+      }
+
+      const existingAttachment = await supabase
+        .from('chat_attachments')
+        .select('id,size_bytes')
+        .eq('message_id', forwarded.id)
+        .eq('storage_path', storagePath)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (existingAttachment.error) throw new Error(existingAttachment.error.message);
+      if (existingAttachment.data) {
+        if (Number(existingAttachment.data.size_bytes) !== fileSize) {
+          throw new Error('مسیر پیوست موجود است اما اندازهٔ آن مطابقت ندارد.');
+        }
+        continue;
+      }
 
       const registered = await supabase.rpc('chat_register_attachment', {
         p_conversation_id: targetConversationId,
         p_message_id: forwarded.id,
         p_storage_path: storagePath,
-        p_original_name: attachment.original_name || file.name,
-        p_mime_type: attachment.mime_type || file.type || 'application/octet-stream',
-        p_size_bytes: attachment.size_bytes ?? file.size,
+        p_original_name: attachment.original_name || 'attachment',
+        p_mime_type: attachment.mime_type || 'application/octet-stream',
+        p_size_bytes: fileSize,
         p_duration_seconds: attachment.duration_seconds ?? null,
         p_waveform: attachment.waveform ?? null,
         p_thumbnail_path: null,
       });
-      if (registered.error) throw new Error(registered.error.message);
+      if (registered.error) throw new Error('فایل کپی شد اما ثبت پیوست ناموفق بود: ' + registered.error.message);
     }
+
     return forwarded;
   } catch (error) {
+    if (forwarded?.id) {
+      try { await deleteForAll(forwarded.id); } catch {}
+    }
     if (copiedPaths.length) {
       try { await supabase.storage.from('chat-files').remove(copiedPaths); } catch {}
     }
-    try { await deleteForAll(forwarded.id); } catch {}
-    throw error;
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }
 

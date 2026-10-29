@@ -31,8 +31,14 @@ describe('chat attachment workflows', () => {
     const api = read('src/features/chat/api.ts');
     expect(api).toContain("from('chat_attachments')");
     expect(api).toContain("from('chat-files').download(attachment.storage_path)");
-    expect(api).toContain('uploadChatStorageObject(storagePath, file)');
+    expect(api).toContain('uploadChatForwardAttachment(storagePath, file)');
     expect(api).toContain("rpc('chat_register_attachment'");
     expect(api).toContain('p_conversation_id: targetConversationId');
+    const forwardStart = api.indexOf('export async function forwardChatMessage(');
+    const forwardEnd = api.indexOf('\nexport async function shareShipmentUpdate', forwardStart);
+    const forward = api.slice(forwardStart, forwardEnd);
+    expect(forward.indexOf('await uploadChatForwardAttachment(storagePath, file)')).toBeLessThan(forward.indexOf("supabase.rpc('chat_forward_message'"));
+    expect(forward).toContain('operationId = makeClientId()');
+    expect(forward).toContain('const existingAttachment = await supabase');
   });
 });
