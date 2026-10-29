@@ -95,7 +95,7 @@ export const ChatPage:React.FC=()=>{
  const[typingUsers,setTypingUsers]=useState<string[]>([]);const[people,setPeople]=useState<Person[]>([]);
  const[peopleOpen,setPeopleOpen]=useState(false);const[personQuery,setPersonQuery]=useState('');
  const[query,setQuery]=useState('');const[results,setResults]=useState<Array<{kind:string;id:string;conversation_id:string;title:string;snippet:string;created_at:string}>>([]);
- const[reply,setReply]=useState<ChatMessage|null>(null);const[editId,setEditId]=useState<string|null>(null);const[forwardId,setForwardId]=useState<string|null>(null);
+ const[reply,setReply]=useState<ChatMessage|null>(null);const[editId,setEditId]=useState<string|null>(null);const[forwardId,setForwardId]=useState<string|null>(null);const[forwardingBusy,setForwardingBusy]=useState(false);
  const[shipmentUpdateOpen,setShipmentUpdateOpen]=useState(false);const[shipmentStatus,setShipmentStatus]=useState('در حال بررسی');const[shipmentNote,setShipmentNote]=useState('');
  const[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct');const[channelOpen,setChannelOpen]=useState(false);const[channelTitle,setChannelTitle]=useState('');
  const[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel');const[sharedConnections,setSharedConnections]=useState<Array<{id:string;target_organization_id:string;target_name:string}>>([]);
@@ -485,7 +485,7 @@ export const ChatPage:React.FC=()=>{
  const react=async(m:ChatMessage,emoji:string)=>{try{await toggleChatReaction(m.id,emoji);if(selectedId)await loadConversation(selectedId,false);closeMessageMenu()}catch(e){setError(err(e))}};
  const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);closeMessageMenu();if(selectedId)await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
  const editCurrent=async()=>{if(!editId||!selectedId)return;const body=normalizeFaText(text);if(!body)return;try{await editChatMessage(editId,body);setEditId(null);setText(chatDraftBeforeEdit.current);chatDraftBeforeEdit.current='';await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
- const forwardCurrent=async(targetId:string)=>{if(!forwardId)return;try{await forwardChatMessage(forwardId,targetId);setForwardId(null);setError(null);setSuccess('پیام و پیوست‌ها به گفتگو ارسال شدند.');void refresh()}catch(e){setSuccess(null);setError(err(e))}};
+ const forwardCurrent=async(targetId:string)=>{if(!forwardId||forwardingBusy)return;setForwardingBusy(true);setError(null);setSuccess(null);try{await forwardChatMessage(forwardId,targetId);setForwardId(null);setError(null);setSuccess('پیام و پیوست‌ها به گفتگو ارسال شدند.');void refresh()}catch(e){setSuccess(null);setError(err(e))}finally{setForwardingBusy(false)}};
  const publishShipmentUpdate=async()=>{const selected=conversations.find(c=>c.conversation_id===selectedId);if(!selectedId||!selected?.shipment_id)return;try{await shareShipmentUpdate(selectedId,selected.shipment_id,shipmentStatus,shipmentNote.trim()||undefined);setShipmentUpdateOpen(false);setShipmentNote('');await loadConversation(selectedId,false);void refresh()}catch(e){setError(err(e))}};
 
  const loadOlder=useCallback(async()=>{
@@ -569,7 +569,7 @@ export const ChatPage:React.FC=()=>{
   requestAnimationFrame(jump);
  },[getMessageById,loading,messages,selectedId]);
 
- useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape'){closeMessageMenu();setForwardId(null);setPeopleOpen(false);setChannelOpen(false);setDirectoryOpen(false);setSettingsOpen(false)}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[closeMessageMenu]);
+ useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape'){closeMessageMenu();if(!forwardingBusy)setForwardId(null);setPeopleOpen(false);setChannelOpen(false);setDirectoryOpen(false);setSettingsOpen(false)}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[closeMessageMenu,forwardingBusy]);
 
  const selected=conversations.find(c=>c.conversation_id===selectedId)??null;
  const voice=useVoiceCall({userId:user?.id,organizationId:profile?.organization_id,conversationId:selected?.conversation_id??null,peerUserId:selected?.type==='direct'?selected.display_user_id??null:null,peerName:selected?.display_name||selected?.title||'همکار',requestedCallId});
@@ -737,10 +737,11 @@ export const ChatPage:React.FC=()=>{
    </div>
   </div>}
 
-  {forwardId&&<div className="fixed inset-0 z-[620] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>setForwardId(null)}>
+  {forwardId&&<div className="fixed inset-0 z-[620] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>{if(!forwardingBusy)setForwardId(null)}}>
    <div dir="rtl" className="w-full md:max-w-lg max-h-[82vh] overflow-hidden rounded-t-3xl md:rounded-2xl bg-[var(--surface)] border app-border shadow-2xl" onClick={e=>e.stopPropagation()}>
-    <div className="p-4 border-b app-border flex items-center justify-between"><b>فوروارد پیام</b><button type="button" onClick={()=>setForwardId(null)} aria-label="بستن"><X size={16}/></button></div>
-    <div className="max-h-[60vh] overflow-y-auto p-2">{conversations.filter(c=>c.conversation_id!==selectedId).map(c=><button type="button" key={c.conversation_id} onClick={()=>void forwardCurrent(c.conversation_id)} className="w-full min-h-[62px] rounded-xl px-3 py-2 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5"><div className="h-10 w-10 rounded-full bg-[var(--primary)] text-white flex items-center justify-center">{c.type==='company_channel'?<Hash size={16}/>:<Users size={16}/>}</div><div className="min-w-0 flex-1"><b className="block truncate text-sm">{title(c)}</b><span className="block truncate text-xs app-muted mt-1">{c.last_message_body||'گفتگو'}</span></div></button>)}</div>
+    <div className="p-4 border-b app-border flex items-center justify-between"><b>فوروارد پیام</b><button type="button" disabled={forwardingBusy} onClick={()=>setForwardId(null)} aria-label="بستن" className="disabled:opacity-40"><X size={16}/></button></div>
+    {forwardingBusy&&<div role="status" aria-live="polite" className="px-4 py-3 text-sm text-center app-muted">در حال انتقال پیام و پیوست‌ها؛ لطفاً صبر کنید…</div>}
+    <div className="max-h-[60vh] overflow-y-auto p-2">{conversations.filter(c=>c.conversation_id!==selectedId).map(c=><button type="button" key={c.conversation_id} disabled={forwardingBusy} onClick={()=>void forwardCurrent(c.conversation_id)} className="w-full min-h-[62px] rounded-xl px-3 py-2 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"><div className="h-10 w-10 rounded-full bg-[var(--primary)] text-white flex items-center justify-center">{c.type==='company_channel'?<Hash size={16}/>:<Users size={16}/>}</div><div className="min-w-0 flex-1"><b className="block truncate text-sm">{title(c)}</b><span className="block truncate text-xs app-muted mt-1">{c.last_message_body||'گفتگو'}</span></div></button>)}</div>
    </div>
   </div>}
 
