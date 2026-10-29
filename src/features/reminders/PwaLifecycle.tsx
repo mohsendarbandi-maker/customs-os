@@ -5,6 +5,8 @@ import { useLocation } from 'react-router-dom';
 const isIos = () =>
   /iphone|ipad|ipod/i.test(navigator.userAgent) && !/android/i.test(navigator.userAgent);
 
+const isAndroid = () => /android/i.test(navigator.userAgent);
+
 const standalone = () =>
   window.matchMedia('(display-mode: standalone)').matches ||
   Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
@@ -19,6 +21,7 @@ type UpdateSW = (reloadPage?: boolean) => Promise<void>;
 export const PwaLifecycle: React.FC = () => {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [iosGuide, setIosGuide] = useState(false);
+  const [androidGuide, setAndroidGuide] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [newVersionAvailable, setNewVersionAvailable] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -85,6 +88,7 @@ export const PwaLifecycle: React.FC = () => {
     const onInstall = (event: Event) => {
       event.preventDefault();
       setInstallEvent(event as BeforeInstallPromptEvent);
+      setAndroidGuide(false);
     };
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
@@ -121,16 +125,28 @@ export const PwaLifecycle: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
     try {
       if (isIos() && !standalone() && localStorage.getItem('customs-os-ios-install-dismissed') !== '1') {
         setIosGuide(true);
       }
+      // Some Android browsers do not dispatch beforeinstallprompt. Offer manual
+      // browser-menu instructions instead of silently omitting the install path.
+      if (isAndroid() && !standalone() && localStorage.getItem('customs-os-android-install-dismissed') !== '1') {
+        timer = setTimeout(() => {
+          if (!standalone()) setAndroidGuide(true);
+        }, 1800);
+      }
     } catch (error) {
       console.warn('[PWA] localStorage unavailable:', error);
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
-  const install = async () => {
+  useEffect(() => {
+    const visualViewport = window.visualViewport;  const install = async () => {
     if (!installEvent) return;
     await installEvent.prompt();
     setInstallEvent(null);
@@ -143,6 +159,15 @@ export const PwaLifecycle: React.FC = () => {
       console.warn('[PWA] unable to persist iOS guide state:', error);
     }
     setIosGuide(false);
+  };
+
+  const dismissAndroid = () => {
+    try {
+      localStorage.setItem('customs-os-android-install-dismissed', '1');
+    } catch (error) {
+      console.warn('[PWA] unable to persist Android install guide state:', error);
+    }
+    setAndroidGuide(false);
   };
 
   const activateUpdate = async () => {
@@ -183,7 +208,23 @@ export const PwaLifecycle: React.FC = () => {
           </ol>
           <div className="flex gap-2 mt-3">
             <button onClick={dismissIos} className="min-h-11 flex-1 rounded-xl bg-[var(--primary)] text-white font-bold">متوجه شدم</button>
-            <button onClick={() => setIosGuide(false)} className="min-h-11 px-4 rounded-xl border app-border">بستن</button>
+            <button onClick={dismissIos} className="min-h-11 px-4 rounded-xl border app-border">بعداً</button>
+          </div>
+        </div>
+      )}
+
+
+      {androidGuide && !installEvent && !standalone() && (
+        <div dir="rtl" className="pwa-android-install-guide fixed inset-x-3 bottom-3 z-[500] rounded-2xl border app-border bg-[var(--surface)] p-4 shadow-2xl">
+          <b>نصب رایگان Customs OS در اندروید</b>
+          <ol className="text-xs app-muted mt-2 space-y-1 pr-4 list-decimal">
+            <li>در Chrome، منوی سه‌نقطهٔ بالای صفحه را باز کنید.</li>
+            <li>«Install app / نصب برنامه» یا «Add to Home screen / افزودن به صفحهٔ اصلی» را بزنید.</li>
+            <li>نصب را تأیید کنید؛ برنامه از صفحهٔ اصلی باز می‌شود و نیازی به Play Store ندارد.</li>
+          </ol>
+          <div className="flex gap-2 mt-3">
+            <button onClick={dismissAndroid} className="min-h-11 flex-1 rounded-xl bg-[var(--primary)] text-white font-bold">متوجه شدم</button>
+            <button onClick={dismissAndroid} className="min-h-11 px-4 rounded-xl border app-border">بعداً</button>
           </div>
         </div>
       )}
