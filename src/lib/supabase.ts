@@ -24,7 +24,7 @@ type CachedRestResponse = {
 
 const nativeFetch: typeof fetch = globalThis.fetch.bind(globalThis);
 const restCacheScopes = new Map<string, string>();
-const MAX_CACHED_REST_BODY_CHARS = 1_500_000;
+const MAX_CACHED_REST_BODY_CHARS = 400_000;
 const REST_RESPONSE_HEADERS = [
   'content-type',
   'content-range',
