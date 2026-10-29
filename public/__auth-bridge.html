@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>Customs OS session bridge</title>
+</head>
+<body>
+<script>
+(() => {
+  'use strict';
+  const MAIN_ORIGIN = 'https://darbandicommercial.ir';
+  const STORAGE_KEY = 'customs-os-auth-v3';
+  const nonce = window.location.hash.slice(1);
+  if (!nonce || nonce.length > 160 || window.parent === window) return;
+  const send = (type, extra = {}) => {
+    window.parent.postMessage({ type, nonce, ...extra }, MAIN_ORIGIN);
+  };
+  const readSession = () => {
+    try { return window.localStorage.getItem(STORAGE_KEY); } catch { return null; }
+  };
+  window.addEventListener('message', (event) => {
+    if (event.origin !== MAIN_ORIGIN || event.source !== window.parent ||
+        !event.data || event.data.nonce !== nonce ||
+        event.data.type !== 'customs-auth-sync') return;
+    try {
+      if (typeof event.data.value === 'string' && event.data.value.length > 0) {
+        window.localStorage.setItem(STORAGE_KEY, event.data.value);
+      }
+      send('customs-auth-synced');
+    } catch {
+      send('customs-auth-sync-failed');
+    }
+  });
+  send('customs-auth-bridge-ready', { value: readSession() });
+})();
+</script>
+</body>
+</html>
