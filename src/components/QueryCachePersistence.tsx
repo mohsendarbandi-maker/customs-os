@@ -123,14 +123,19 @@ export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({
     const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
       if (event.type === 'updated' && event.query.state.status === 'success') schedule();
     });
-    const onPageHide = () => {
+    const persistOnHide = () => {
       if (writeTimer.current) clearTimeout(writeTimer.current);
       persist();
     };
-    window.addEventListener('pagehide', onPageHide);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') persistOnHide();
+    };
+    window.addEventListener('pagehide', persistOnHide);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       unsubscribe();
-      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pagehide', persistOnHide);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (writeTimer.current) clearTimeout(writeTimer.current);
     };
   }, [profile, queryClient, user]);
