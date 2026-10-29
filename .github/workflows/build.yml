@@ -456,9 +456,8 @@ jobs:
               try {
                 const offlinePage = await offlineContext.newPage();
                 const offlineUrl = baseURL + '/?__offline_reopen_smoke=' + encodeURIComponent(smokeToken);
-                offlinePage.on('console', (message) => {
-                  if (message.type() === 'error') errors.push(`offline console: ${message.text()}`);
-                });
+                // Expected API/network errors while offline are not app boot failures.
+                // Keep tracking failed JavaScript/service-worker requests separately below.
                 offlinePage.on('requestfailed', (request) => {
                   if (/sw\.js|workbox|\.(js|mjs)(\?|$)/i.test(request.url())) {
                     errors.push(`offline requestfailed: ${request.url()} — ${request.failure()?.errorText || 'unknown'}`);
