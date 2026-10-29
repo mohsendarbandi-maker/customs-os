@@ -78,13 +78,13 @@ const getRestCacheScope = async () => {
     if (!userId || !session?.access_token) return null;
     const knownOrganizationId = restCacheScopes.get(userId);
     if (knownOrganizationId) return { userId, organizationId: knownOrganizationId, accessToken: session.access_token };
-    const cachedProfile = await readOfflineQueryCache<{ organization_id?: string | null }>(
+    const cachedProfile = await readOfflineQueryCache<{ organization_id?: string | null; is_active?: boolean }>(
       'auth-profile',
       userId,
       userId,
     ).catch(() => null);
     const organizationId = cachedProfile?.payload?.organization_id;
-    if (!organizationId) return null;
+    if (cachedProfile?.payload?.is_active !== true || !organizationId) return null;
     restCacheScopes.set(userId, organizationId);
     return { userId, organizationId, accessToken: session.access_token };
   } catch {
