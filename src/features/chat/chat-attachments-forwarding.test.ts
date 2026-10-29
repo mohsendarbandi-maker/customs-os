@@ -10,6 +10,14 @@ describe('chat attachments and forwarding', () => {
     expect(page).toContain('item.caption.trim()||undefined');
     expect(page).toContain('ارسال '+pendingFiles.length+' فایل');
   });
+  it('keeps special group destinations when the regular conversation list is empty', () => {
+    const start = api.indexOf('export async function listConversations()');
+    const end = api.indexOf('async function enrichMessages', start);
+    const listing = api.slice(start, end);
+    expect(listing).toContain('const hierarchy = await listChatHierarchy()');
+    expect(listing).toContain('return mergeChatConversationSources(regular, hierarchyConversations)');
+    expect(listing).not.toContain('if (!conversations.length) return conversations');
+  });
   it('copies file attachments to the destination conversation when forwarding', () => {
     const start = api.indexOf('export async function forwardChatMessage(');
     const end = api.indexOf('\nexport async function shareShipmentUpdate', start);
