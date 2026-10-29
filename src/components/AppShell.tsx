@@ -111,6 +111,32 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return wideViewport && finePointer && !hasTouch;
   };
   const [isDesktop, setIsDesktop] = useState(getDesktopLayout);
+
+  // Keep the chat composer attached to the actually visible iOS viewport when the
+  // browser chrome or the software keyboard changes the visual viewport.
+  useEffect(() => {
+    if (!isChatRoute) return;
+    const shell = document.querySelector<HTMLElement>('.app-shell.is-chat-route');
+    if (!shell) return;
+    const viewport = window.visualViewport;
+    const syncVisibleViewport = () => {
+      shell.style.setProperty('--chat-visible-height', `${Math.round(viewport?.height ?? window.innerHeight)}px`);
+      shell.style.setProperty('--chat-visible-top', `${Math.round(viewport?.offsetTop ?? 0)}px`);
+    };
+    syncVisibleViewport();
+    viewport?.addEventListener('resize', syncVisibleViewport);
+    viewport?.addEventListener('scroll', syncVisibleViewport);
+    window.addEventListener('resize', syncVisibleViewport, { passive: true });
+    window.addEventListener('orientationchange', syncVisibleViewport, { passive: true });
+    return () => {
+      viewport?.removeEventListener('resize', syncVisibleViewport);
+      viewport?.removeEventListener('scroll', syncVisibleViewport);
+      window.removeEventListener('resize', syncVisibleViewport);
+      window.removeEventListener('orientationchange', syncVisibleViewport);
+      shell.style.removeProperty('--chat-visible-height');
+      shell.style.removeProperty('--chat-visible-top');
+    };
+  }, [isChatRoute]);
   const [isNarrowDevice, setIsNarrowDevice] = useState(getNarrowDevice);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
