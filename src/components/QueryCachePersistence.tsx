@@ -8,7 +8,7 @@ const MAX_SNAPSHOT_BYTES = 3_500_000;
 const MAX_PERSISTED_QUERIES = 45;
 const BLOCKED_QUERY_TERMS = [
   'auth', 'session', 'token', 'password', 'secret', 'credential',
-  'chat', 'message', 'attachment', 'fileblob', 'signed_url', 'signedurl',
+  'chat', 'message', 'attachment', 'fileblob', 'blob', 'binary', 'storage', 'signed_url', 'signedurl',
   'document_content', 'documentcontent', 'download',
 ];
 
