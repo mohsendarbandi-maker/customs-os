@@ -11,6 +11,8 @@ describe('workspace cache persistence', () => {
     expect(cache).toContain('activeScope.current !== currentScope');
     expect(cache).toContain('activeScope.current && activeScope.current !== scope');
     expect(cache).toContain('if (previousScope && previousScope !== scope) queryClient.clear()');
+    expect(cache).toContain("activeScope.current.split(':', 1)[0] !== user.id");
+    expect(cache).toContain('(user && activeUserId !== user.id)');
     expect(cache).not.toContain('if (scope && readyScope !== scope)');
     expect(cache).toContain('queryClient.clear()');
   });
