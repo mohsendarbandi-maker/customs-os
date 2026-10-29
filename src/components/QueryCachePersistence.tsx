@@ -76,8 +76,10 @@ export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({
         activeScope.current = null;
         restoreInProgress.current = false;
         queryClient.clear();
+        setScopeSwitching(true);
+      } else {
+        setScopeSwitching(false);
       }
-      setScopeSwitching(false);
       return () => { cancelled = true; };
     }
     if (activeScope.current === scope) {
