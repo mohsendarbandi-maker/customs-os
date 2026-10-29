@@ -9,7 +9,7 @@ describe('workspace cache persistence', () => {
     expect(cache).toContain('readOfflineQueryCache<CachedQuerySnapshot>(CACHE_NAMESPACE, user.id, profile!.organization_id)');
     expect(cache).toContain('saveOfflineQueryCache(CACHE_NAMESPACE, user.id, profile.organization_id, snapshot)');
     expect(cache).toContain('activeScope.current !== currentScope');
-    expect(cache).toContain('(scope && activeScope.current !== scope)');
+    expect(cache).toContain('(scope && hydratedScope !== scope)');
     expect(cache).toContain('if (previousScope && previousScope !== scope) queryClient.clear()');
     expect(cache).toContain('const [scopeSwitching, setScopeSwitching] = useState(false)');
     expect(cache).toContain('scopeSwitching ||');
@@ -29,9 +29,10 @@ describe('workspace cache persistence', () => {
   it('gates route data hooks until the user-scoped snapshot is hydrated and keeps queries warm', () => {
     const cache = read('src/components/QueryCachePersistence.tsx');
     const app = read('src/App.tsx');
-    expect(cache).toContain('(scope && activeScope.current !== scope)');
+    expect(cache).toContain('(scope && hydratedScope !== scope)');
     expect(cache).toContain('hydrate(queryClient, safeState)');
     expect(cache).toContain('setScopeSwitching(true)');
+    expect(cache).toContain('setHydratedScope(scope)');
     expect(app).toContain('staleTime:2*60*1000');
     expect(app).toContain('gcTime:24*60*60*1000');
     expect(app).toContain('refetchOnReconnect:true');
