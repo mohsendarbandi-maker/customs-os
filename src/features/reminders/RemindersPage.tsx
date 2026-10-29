@@ -487,7 +487,7 @@ export const RemindersPage:React.FC=()=>{
         </div>
         <div className="reminders-hub-actions">
           <button type="button" onClick={()=>goToSection('search')} aria-label={t('جست‌وجو')} title={t('جست‌وجو')}><Search size={19}/></button>
-          <button type="button" onClick={openComposer} aria-label={t('یادآور جدید')} title={t('یادآور جدید')}><Plus size={20}/></button>
+          <button type="button" className="reminders-hub-add" onClick={openComposer} aria-label={t('یادآور جدید')} title={t('یادآور جدید')}><Plus size={20}/></button>
           <button type="button" onClick={()=>void openPush()} aria-label={t('اعلان‌ها')} title={t('اعلان‌ها')}><Bell size={18}/></button>
           <button type="button" onClick={()=>goToSection('settings')} aria-label={t('تنظیمات')} title={t('تنظیمات')}><Languages size={18}/></button>
         </div>
