@@ -172,31 +172,39 @@ export const ChatPage:React.FC=()=>{
  useEffect(()=>{latestMessageRef.current=[...messages].filter(m=>!m.id.startsWith('local-')).pop()??latestMessageRef.current},[messages]);
 
  const conversationCacheHydrated = useRef<string|null>(null);
+ const conversationRefreshInFlight = useRef<{scope:string|null;promise:Promise<void>}|null>(null);
  const refresh=useCallback(async()=>{
   const userId=user?.id, organizationId=profile?.organization_id;
-  const scope=userId&&organizationId?`${userId}:${organizationId}`:null;
-  let cachedConversationList:ChatConversation[]|null=null;
-  if(scope&&conversationCacheHydrated.current!==scope){
-   conversationCacheHydrated.current=scope;
+  const scope=userId&&organizationId?userId+':'+organizationId:null;
+  const inFlight=conversationRefreshInFlight.current;
+  if(inFlight&&inFlight.scope===scope)return inFlight.promise;
+  const task=(async()=>{
+   let cachedConversationList:ChatConversation[]|null=null;
+   if(scope&&conversationCacheHydrated.current!==scope){
+    conversationCacheHydrated.current=scope;
+    try{
+     const cached=await readOfflineQueryCache<ChatConversation[]>('chat-conversations',userId,organizationId);
+     if(Array.isArray(cached?.payload)){
+      cachedConversationList=cached.payload;
+      setConversations(cached.payload);
+      setLoading(false);
+     }
+    }catch{}
+   }
    try{
-    const cached=await readOfflineQueryCache<ChatConversation[]>('chat-conversations',userId,organizationId);
-    if(Array.isArray(cached?.payload)){
-     cachedConversationList=cached.payload;
-     setConversations(cached.payload);
-     setLoading(false);
-    }
-   }catch{}
+    const latest=await listConversations();
+    setConversations(latest);
+    if(userId&&organizationId)void saveOfflineQueryCache('chat-conversations',userId,organizationId,latest).catch(()=>undefined);
+    setError(null);
+   }catch(e){
+    if(!cachedConversationList)setError(err(e));
+   }finally{setLoading(false)}
+  })();
+  conversationRefreshInFlight.current={scope,promise:task};
+  try{await task}finally{
+   if(conversationRefreshInFlight.current?.promise===task)conversationRefreshInFlight.current=null;
   }
-  try{
-   const latest=await listConversations();
-   setConversations(latest);
-   if(userId&&organizationId)void saveOfflineQueryCache('chat-conversations',userId,organizationId,latest).catch(()=>undefined);
-   setError(null);
-  }catch(e){
-   if(!cachedConversationList)setError(err(e));
-  }finally{setLoading(false)}
  },[profile?.organization_id,user?.id]);
-
  const scrollBottom=useCallback((smooth=true)=>{
   requestAnimationFrame(()=>bottom.current?.scrollIntoView({behavior:smooth?'smooth':'auto',block:'end'}));
  },[]);
@@ -273,20 +281,26 @@ export const ChatPage:React.FC=()=>{
  },[flushChatOutbox,selectedId]);
 
  useEffect(()=>{
-  if(!profile?.organization_id)return;
+  const organizationId=profile?.organization_id;
+  if(!organizationId)return;
+  let active=true;
   void (async()=>{
     try{
-      const {data}=await supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',profile.organization_id).eq('is_active',true).order('full_name');
-      setPeople((data??[])as Person[]);
-    }catch{setPeople([])}
+      const {data}=await supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',organizationId).eq('is_active',true).order('full_name');
+      if(active)setPeople((data??[])as Person[]);
+    }catch{if(active)setPeople([])}
   })();
-  void listOrgConnections().then(setSharedConnections).catch(()=>setSharedConnections([]));
+  void listOrgConnections().then(data=>{if(active)setSharedConnections(data)}).catch(()=>{if(active)setSharedConnections([])});
   void refresh();
-  const on=()=>{setOnline(true);setRealtimeState('connecting');void flushChatOutbox();if(selectedId)void loadConversation(selectedId,false)};
+  return()=>{active=false};
+ },[profile?.organization_id,refresh]);
+
+ useEffect(()=>{
+  const on=()=>{setOnline(true);setRealtimeState('connecting');void flushChatOutbox();const activeConversationId=selectedIdRef.current;if(activeConversationId)void loadConversation(activeConversationId,false)};
   const off=()=>{setOnline(false);setRealtimeState('offline')};
   window.addEventListener('online',on);window.addEventListener('offline',off);
   return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off)};
- },[flushChatOutbox,loadConversation,profile?.organization_id,refresh,selectedId]);
+ },[flushChatOutbox,loadConversation]);
 
  useEffect(()=>{
   if(!selectedId||!user?.id)return;
