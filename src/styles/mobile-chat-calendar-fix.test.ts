@@ -35,6 +35,8 @@ describe('mobile chat viewport and calendar legibility', () => {
 
   it('increases the legibility of the Jalali date picker and every month-grid date label', () => {
     expect(css).toContain('.reminders-calendar-panel .grid.grid-cols-7 button');
+    expect(css).toContain('max-height: none !important;');
+    expect(css).toContain('reminders-calendar-backdrop[role="dialog"]');
     expect(css).toContain('min-height: 44px !important');
     expect(css).toContain('.reminders-calendar-cell-day');
     expect(css).toContain('font-size: 15px !important');
