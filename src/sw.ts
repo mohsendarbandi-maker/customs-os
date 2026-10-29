@@ -10,7 +10,7 @@ cleanupOutdatedCaches();
 // A previously visited route is returned from Cache Storage after a short timeout;
 // fresh HTML replaces it whenever the network responds. API routes are not navigations
 // and remain uncached here, so tenant-specific data and authenticated responses stay private.
-registerRoute(({request})=>request.mode==='navigate',new NetworkFirst({
+registerRoute(({request,url})=>request.mode==='navigate'&&!['code','error','error_description','access_token','refresh_token','type'].some(key=>url.searchParams.has(key)),new NetworkFirst({
  cacheName:'customs-os-navigation-v2',
  networkTimeoutSeconds:2,
 }));
