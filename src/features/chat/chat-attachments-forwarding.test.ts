@@ -36,6 +36,12 @@ describe('chat attachments and forwarding', () => {
     expect(api).toContain("supabase.storage.from('chat-files').info(storagePath)");
     expect(api).toContain('آپلود جایگزین هم ناموفق بود');
   });
+  it('caches signed attachment URLs in memory and coalesces concurrent signing requests', () => {
+    expect(api).toContain('signedAttachmentUrlCache');
+    expect(api).toContain('signedAttachmentUrlPending');
+    expect(api).toContain('SIGNED_ATTACHMENT_URL_CACHE_TTL_MS = 50 * 60 * 1000');
+    expect(api).toContain('createSignedUrl(storagePath, 3600)');
+  });
   it('prevents duplicate forward requests while a file is being transferred', () => {
     expect(page).toContain('const[forwardingBusy,setForwardingBusy]=useState(false)');
     expect(page).toContain('if(!forwardId||forwardingBusy)return');
