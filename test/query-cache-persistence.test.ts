@@ -14,7 +14,7 @@ describe('workspace cache persistence', () => {
     expect(cache).toContain('const [scopeSwitching, setScopeSwitching] = useState(false)');
     expect(cache).toContain('scopeSwitching ||');
     expect(cache).toContain("activeScope.current.split(':', 1)[0] !== user.id");
-    expect(cache).toContain('(user && activeUserId !== user.id)');
+    expect(cache).toContain('(activeScope.current && (!user || activeUserId !== user.id))');
     expect(cache).not.toContain('if (scope && readyScope !== scope)');
     expect(cache).toContain('queryClient.clear()');
   });
