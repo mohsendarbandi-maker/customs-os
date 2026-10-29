@@ -48,7 +48,8 @@ const canCacheRestRead = (request: Request) => {
   if (
     !table ||
     table === 'rpc' ||
-    /^(?:profiles|chat(?:_|$)|chat_|documents?$|document_|file|storage|finance|invoice|payment|bank|audit|notification|push|messenger|webhook|credential|secret|auth|user_settings|user_roles|api_keys)/i.test(table)
+    /^(?:profiles|chat(?:_|$)|storage|finance|invoice|payment|bank|audit|notification|push|messenger|webhook|credential|secret|auth|user_settings|user_roles|api_keys|client|customer|contact|declaration|pre_declaration|shipment_cost|receipt)/i.test(table) ||
+    /(?:^|_)(?:documents?|files?|attachments?|credentials?|secrets?|financial|invoices?|payments?|banks?|audits?|customers?|clients?|contacts?|declarations?|shipment_costs?|receipts?)(?:_|$)/i.test(table)
   ) return false;
   if (!request.headers.has('authorization')) return false;
   if (/(?:phone|email|password|secret|token|tax_id|passport|document_number|storage_path|signed_url)/i.test(url.search)) return false;
