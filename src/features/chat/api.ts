@@ -626,16 +626,13 @@ async function uploadChatStorageObject(
       const resumableMessage = resumableError instanceof Error
         ? resumableError.message
         : String(resumableError);
-      let fallback;
-      try {
-        fallback = await uploadDirect();
-      } catch (fallbackError) {
+      const fallback = await uploadDirect().catch((fallbackError: unknown) => {
         const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
         throw new Error(
           'آپلود قابل‌ادامه ناموفق بود: ' + resumableMessage +
           '؛ آپلود جایگزین هم ناموفق بود: ' + fallbackMessage,
         );
-      }
+      });
       if (fallback.error) {
         // A final TUS PATCH may have committed the object before the client lost
         // the response. Accept it only when Storage confirms the exact byte size.
