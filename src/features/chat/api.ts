@@ -13,57 +13,62 @@ const unwrap = <T>(result: { data: T | null; error: { message: string } | null }
 export async function listConversations(): Promise<ChatConversation[]> {
   const result = await supabase.rpc('chat_conversation_list', { p_limit: 100 });
   const conversations = unwrap(result) as ChatConversation[];
-  if (!conversations.length) return conversations;
 
   const { data: sessionData } = await supabase.auth.getSession();
   const userId = sessionData.session?.user.id;
   if (!userId) return conversations;
 
-  const conversationIds = conversations.map((item) => item.conversation_id);
-  const members = await supabase
-    .from('chat_conversation_members')
-    .select('conversation_id,user_id')
-    .in('conversation_id', conversationIds)
-    .is('deleted_at', null)
-    .is('left_at', null)
-    .neq('user_id', userId);
+  // Keep the hierarchy lookup independent of the ordinary conversation query.
+  // Special owner/shipment groups can exist even when the regular list is empty,
+  // and must remain valid forwarding destinations in that case.
+  let regular = conversations;
+  if (conversations.length) {
+    const conversationIds = conversations.map((item) => item.conversation_id);
+    const members = await supabase
+      .from('chat_conversation_members')
+      .select('conversation_id,user_id')
+      .in('conversation_id', conversationIds)
+      .is('deleted_at', null)
+      .is('left_at', null)
+      .neq('user_id', userId);
 
-  if (members.error || !members.data?.length) return conversations;
+    if (!members.error && members.data?.length) {
+      const partnerIds = [...new Set(members.data.map((item) => item.user_id))];
+      const profiles = await supabase
+        .from('profiles')
+        .select('id,full_name,phone')
+        .in('id', partnerIds)
+        .eq('is_active', true);
 
-  const partnerIds = [...new Set(members.data.map((item) => item.user_id))];
-  const profiles = await supabase
-    .from('profiles')
-    .select('id,full_name,phone')
-    .in('id', partnerIds)
-    .eq('is_active', true);
+      if (!profiles.error) {
+        const profileMap = new Map((profiles.data ?? []).map((item) => [item.id, item]));
+        const partnerMap = new Map<string, { full_name: string; phone: string | null }>();
+        const partnerIdMap = new Map<string, string>();
 
-  if (profiles.error) return conversations;
+        for (const member of members.data) {
+          const person = profileMap.get(member.user_id);
+          if (person && !partnerMap.has(member.conversation_id)) {
+            partnerMap.set(member.conversation_id, person);
+            partnerIdMap.set(member.conversation_id, member.user_id);
+          }
+        }
 
-  const profileMap = new Map((profiles.data ?? []).map((item) => [item.id, item]));
-  const partnerMap = new Map<string, { full_name: string; phone: string | null }>();
-  const partnerIdMap = new Map<string, string>();
-
-  for (const member of members.data) {
-    const person = profileMap.get(member.user_id);
-    if (person && !partnerMap.has(member.conversation_id)) {
-      partnerMap.set(member.conversation_id, person);
-      partnerIdMap.set(member.conversation_id, member.user_id);
+        regular = conversations
+          .filter((conversation) => conversation.type !== 'direct' || partnerMap.has(conversation.conversation_id))
+          .map((conversation) => {
+            const person = conversation.type === 'direct' ? partnerMap.get(conversation.conversation_id) : undefined;
+            return person
+              ? {
+                  ...conversation,
+                  display_name: person.full_name || null,
+                  display_phone: person.phone,
+                  display_user_id: partnerIdMap.get(conversation.conversation_id) ?? null,
+                }
+              : conversation;
+          });
+      }
     }
   }
-
-  const regular = conversations
-    .filter((conversation) => conversation.type !== 'direct' || partnerMap.has(conversation.conversation_id))
-    .map((conversation) => {
-      const person = conversation.type === 'direct' ? partnerMap.get(conversation.conversation_id) : undefined;
-      return person
-        ? {
-            ...conversation,
-            display_name: person.full_name || null,
-            display_phone: person.phone,
-            display_user_id: partnerIdMap.get(conversation.conversation_id) ?? null,
-          }
-        : conversation;
-    });
 
   const hierarchy = await listChatHierarchy();
   const hierarchyConversations: ChatConversation[] = hierarchy.map((item) => ({
