@@ -1138,3 +1138,57 @@ html[data-theme="light"] #root input[type="time"] { color-scheme: light; }
   }
   .reminders-app-standalone .reminders-hub-actions { gap: 8px !important; }
 }
+
+/* Keep the brightness selector independent from the chosen visual palette.
+   These overrides intentionally follow the full palette declarations above. */
+html[data-theme="light"][data-visual-style="ocean"] {
+  --bg:#f3f8fc; --surface:#ffffff; --surface-2:#eaf2f8; --surface-3:#dceaf5;
+  --text:#13283c; --text-muted:#536c80; --border:#c9d9e7; --primary:#0878b7; --primary-2:#087f82;
+  --hero-a:#d7eefa; --hero-b:#bfe8f7; --shadow:0 12px 32px rgba(20,50,75,.08); color-scheme:light;
+}
+html[data-theme="light"][data-visual-style="aurora"] {
+  --bg:#faf8ff; --surface:#ffffff; --surface-2:#f1eafa; --surface-3:#e8ddf7;
+  --text:#291b3d; --text-muted:#705e89; --border:#d9c9ea; --primary:#7c3aed; --primary-2:#087f9b;
+  --hero-a:#efe3ff; --hero-b:#ded0ff; --shadow:0 12px 32px rgba(65,35,100,.09); color-scheme:light;
+}
+html[data-theme="light"][data-visual-style="glass"] {
+  --bg:#f2f8fc; --surface:rgba(255,255,255,.96); --surface-2:rgba(229,243,252,.94); --surface-3:#d8eaf5;
+  --text:#123047; --text-muted:#58788f; --border:#bdd5e5; --primary:#0284c7; --primary-2:#0f8c87;
+  --hero-a:#d8f2fa; --hero-b:#c5e8f8; --shadow:0 12px 32px rgba(15,55,85,.08); color-scheme:light;
+}
+html[data-theme="light"][data-visual-style="emerald"] {
+  --bg:#f2fbf6; --surface:#ffffff; --surface-2:#e4f5eb; --surface-3:#d2ecdd;
+  --text:#123a2a; --text-muted:#507966; --border:#b8dbc8; --primary:#047857; --primary-2:#4d7c0f;
+  --hero-a:#d8f4e3; --hero-b:#b8ebcf; --shadow:0 12px 32px rgba(12,65,42,.08); color-scheme:light;
+}
+html[data-theme="light"][data-visual-style="sunset"] {
+  --bg:#fff7f2; --surface:#ffffff; --surface-2:#ffebe0; --surface-3:#ffdcc8;
+  --text:#43261e; --text-muted:#8a6558; --border:#eac8b8; --primary:#c2410c; --primary-2:#be185d;
+  --hero-a:#ffe3d1; --hero-b:#ffd0b3; --shadow:0 12px 32px rgba(100,40,15,.08); color-scheme:light;
+}
+html[data-theme="light"][data-visual-style="minimal"] {
+  --bg:#f3f6fb; --surface:#ffffff; --surface-2:#edf2f8; --surface-3:#e2eaf4;
+  --text:#182338; --text-muted:#64748b; --border:#d4deeb; --primary:#475569; --primary-2:#0f766e;
+  --hero-a:#dbeafe; --hero-b:#cbd5e1; --shadow:0 12px 32px rgba(30,41,59,.08); color-scheme:light;
+}
+html[data-theme="dark"][data-visual-style="minimal"] {
+  --bg:#0b1220; --surface:#141e2e; --surface-2:#1c2a3d; --surface-3:#28384d;
+  --text:#edf4ff; --text-muted:#a3b4c9; --border:#33465d; --primary:#94a3b8; --primary-2:#2dd4bf;
+  --hero-a:#20334c; --hero-b:#2b415c; --shadow:0 16px 42px rgba(0,0,0,.28); color-scheme:dark;
+}
+
+/* Comfort presets are deliberate reading palettes; apply them after theme/palette
+   tokens so soft/warm/reading are meaningful with every visual style. */
+html[data-comfort="soft"][data-visual-style] {
+  --bg:#eef2f5; --surface:#f8fafb; --surface-2:#e9eef2; --surface-3:#e2e8ec;
+  --text:#25303a; --text-muted:#65727d; --border:#d4dce3;
+  --hero-a:#d8e8ef; --hero-b:#c9e7ef; --shadow:0 10px 28px rgba(35,55,70,.07);
+  --primary:color-mix(in srgb, var(--primary) 76%, #102234); color-scheme:light;
+}
+html[data-comfort="warm"][data-visual-style],
+html[data-comfort="reading"][data-visual-style] {
+  --bg:#f3efe5; --surface:#faf7ef; --surface-2:#eee8d9; --surface-3:#e5decc;
+  --text:#3b3a35; --text-muted:#777165; --border:#d8cfbc;
+  --hero-a:#eadfca; --hero-b:#ead7b5; --shadow:0 10px 26px rgba(70,55,30,.07);
+  --primary:color-mix(in srgb, var(--primary) 72%, #2b2118); color-scheme:light;
+}
