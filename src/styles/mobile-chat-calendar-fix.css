@@ -22,6 +22,15 @@ html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock {
   height: var(--chat-visible-height, 100dvh);
   min-height: 0 !important;
 }
+.app-shell.is-narrow-device.is-chat-route {
+  position: fixed !important;
+  inset-inline: 0 !important;
+  top: var(--chat-visible-top, 0px) !important;
+  width: 100% !important;
+  height: var(--chat-visible-height, 100dvh) !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+}
 .app-shell.is-chat-route .app-main.is-chat-main {
   width: auto;
   height: var(--chat-visible-height, 100dvh);
