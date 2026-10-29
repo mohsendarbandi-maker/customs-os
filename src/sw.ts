@@ -2,13 +2,18 @@
 import {clientsClaim} from 'workbox-core';
 import {cleanupOutdatedCaches,matchPrecache,precacheAndRoute} from 'workbox-precaching';
 import {registerRoute,setCatchHandler} from 'workbox-routing';
-import {NetworkOnly} from 'workbox-strategies';
+import {NetworkFirst} from 'workbox-strategies';
 
 declare const self: ServiceWorkerGlobalScope;
 cleanupOutdatedCaches();
-// Register network-only navigation before the precache route, so cached HTML never
-// pins an old build. When offline, the catch handler below returns the precached app shell.
-registerRoute(({request})=>request.mode==='navigate',new NetworkOnly());
+// Prefer the network when it is healthy, but do not make every app reopen wait on it.
+// A previously visited route is returned from Cache Storage after a short timeout;
+// fresh HTML replaces it whenever the network responds. API routes are not navigations
+// and remain uncached here, so tenant-specific data and authenticated responses stay private.
+registerRoute(({request})=>request.mode==='navigate',new NetworkFirst({
+ cacheName:'customs-os-navigation-v2',
+ networkTimeoutSeconds:2,
+}));
 precacheAndRoute(self.__WB_MANIFEST);
 setCatchHandler(async({request})=>{
  if(request.mode!=='navigate')return Response.error();

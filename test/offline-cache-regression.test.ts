@@ -13,10 +13,13 @@ const reminders = read('src/features/reminders/RemindersPage.tsx');
 const auth = read('src/context/AuthContext.tsx');
 
 describe('offline and background-update safety', () => {
-  it('uses network-first navigation with a precached app-shell fallback', () => {
-    const navigationRoute = serviceWorker.indexOf("registerRoute(({request})=>request.mode==='navigate',new NetworkOnly())");
+  it('uses short-timeout network-first navigation cache with a precached offline shell', () => {
+    const navigationRoute = serviceWorker.indexOf("registerRoute(({request})=>request.mode==='navigate',new NetworkFirst({");
     const precacheRoute = serviceWorker.indexOf('precacheAndRoute(self.__WB_MANIFEST)');
     expect(navigationRoute).toBeGreaterThan(-1);
+    expect(serviceWorker).toContain("cacheName:'customs-os-navigation-v2'");
+    expect(serviceWorker).toContain('networkTimeoutSeconds:2');
+    expect(serviceWorker).not.toContain("new NetworkOnly()");
     expect(precacheRoute).toBeGreaterThan(navigationRoute);
     expect(serviceWorker).toContain("matchPrecache('/index.html')");
     expect(serviceWorker).toContain("matchPrecache('/offline.html')");

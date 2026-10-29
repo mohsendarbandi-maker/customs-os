@@ -574,13 +574,14 @@ export async function sendFileMessage(
   file: File,
   messageType: 'file' | 'voice' = 'file',
   onProgress?: (percentage: number) => void,
+  caption?: string,
 ): Promise<ChatMessage> {
   const clientUuid = makeClientId();
   const result = await sendChatRpc({
     p_conversation_id: conversationId,
     p_client_uuid: clientUuid,
     p_message_type: messageType,
-    p_body: null,
+    p_body: caption?.trim() || null,
     p_reply_to_message_id: null,
     p_forwarded_from_message_id: null,
     p_thread_root_message_id: null,
@@ -661,7 +662,55 @@ export async function forwardChatMessage(
     p_target_conversation_id: targetConversationId,
     p_client_uuid: makeClientId(),
   });
-  return unwrap(result) as ChatMessage;
+  const forwarded = unwrap(result) as ChatMessage;
+  const sourceResult = await supabase
+    .from('chat_attachments')
+    .select('storage_path,original_name,mime_type,size_bytes,duration_seconds,waveform')
+    .eq('message_id', messageId)
+    .is('deleted_at', null);
+  if (sourceResult.error) {
+    try { await deleteForAll(forwarded.id); } catch {}
+    throw new Error(sourceResult.error.message);
+  }
+
+  const copiedPaths: string[] = [];
+  try {
+    for (const attachment of sourceResult.data ?? []) {
+      if (!attachment.storage_path) continue;
+      const download = await supabase.storage.from('chat-files').download(attachment.storage_path);
+      if (download.error || !download.data) {
+        throw new Error(download.error?.message || 'پیوست اصلی قابل دریافت نیست.');
+      }
+
+      const objectId = makeClientId();
+      const storagePath = forwarded.organization_id + '/' + targetConversationId + '/' + objectId;
+      const file = new File([download.data], attachment.original_name || 'attachment', {
+        type: attachment.mime_type || 'application/octet-stream',
+      });
+      await uploadChatStorageObject(storagePath, file);
+      copiedPaths.push(storagePath);
+
+      const registered = await supabase.rpc('chat_register_attachment', {
+        p_conversation_id: targetConversationId,
+        p_message_id: forwarded.id,
+        p_storage_path: storagePath,
+        p_original_name: attachment.original_name || file.name,
+        p_mime_type: attachment.mime_type || file.type || 'application/octet-stream',
+        p_size_bytes: attachment.size_bytes ?? file.size,
+        p_duration_seconds: attachment.duration_seconds ?? null,
+        p_waveform: attachment.waveform ?? null,
+        p_thumbnail_path: null,
+      });
+      if (registered.error) throw new Error(registered.error.message);
+    }
+    return forwarded;
+  } catch (error) {
+    if (copiedPaths.length) {
+      try { await supabase.storage.from('chat-files').remove(copiedPaths); } catch {}
+    }
+    try { await deleteForAll(forwarded.id); } catch {}
+    throw error;
+  }
 }
 
 export async function shareShipmentUpdate(

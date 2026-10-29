@@ -581,6 +581,24 @@ export default {
     }
     const finalHeaders = new Headers(response.headers);
     finalHeaders.set('X-Customs-OS-Build', BUILD_SIGNATURE);
+
+    // Fingerprinted Vite assets are immutable and should be reused by the browser
+    // for a year. The HTML shell above stays no-store so deployments are discovered
+    // safely; authenticated /api responses are handled earlier and never enter this
+    // static-asset cache policy.
+    if (request.method === 'GET' && url.pathname.startsWith('/assets/')) {
+      finalHeaders.set('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (
+      request.method === 'GET' &&
+      isStaticAsset &&
+      !url.pathname.startsWith('/api/') &&
+      !url.pathname.startsWith('/auth/') &&
+      !url.pathname.startsWith('/rest/') &&
+      !url.pathname.startsWith('/storage/') &&
+      !url.pathname.startsWith('/realtime/')
+    ) {
+      finalHeaders.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    }
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers: finalHeaders });
   },
 };

@@ -990,3 +990,101 @@ html[data-theme="light"] #root input[type="time"] { color-scheme: light; }
   background: color-mix(in srgb, var(--primary) 7%, var(--surface)) !important;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent) !important;
 }
+
+
+/* Premium iOS-like bottom dock: generous tap targets, separated pill surfaces,
+   safe-area-aware positioning, and a distinct selected destination. */
+@media (max-width: 767px) {
+  body .app-mobile-viewport-dock {
+    position: fixed !important;
+    inset-inline: 10px !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    z-index: 1100 !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 5px !important;
+    width: auto !important;
+    height: 70px !important;
+    min-height: 70px !important;
+    padding: 7px !important;
+    border: 1px solid color-mix(in srgb, var(--border) 80%, transparent) !important;
+    border-radius: 24px !important;
+    background: color-mix(in srgb, var(--surface) 88%, transparent) !important;
+    box-shadow: 0 10px 34px rgba(8, 20, 42, .19), 0 1px 3px rgba(8, 20, 42, .09) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.45) !important;
+    backdrop-filter: blur(24px) saturate(1.45) !important;
+    overflow: visible !important;
+  }
+  body .app-mobile-viewport-dock > button {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    min-width: 0 !important;
+    min-height: 54px !important;
+    height: 54px !important;
+    padding: 4px 2px !important;
+    border: 1px solid transparent !important;
+    border-radius: 16px !important;
+    background: transparent !important;
+    color: var(--text-muted) !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+  }
+  body .app-mobile-viewport-dock > button svg {
+    width: 24px !important;
+    height: 24px !important;
+    flex: 0 0 24px !important;
+    stroke-width: 1.9 !important;
+  }
+  body .app-mobile-viewport-dock > button.is-active {
+    border-color: color-mix(in srgb, var(--primary) 22%, var(--border)) !important;
+    background: color-mix(in srgb, var(--primary) 12%, var(--surface)) !important;
+    color: var(--primary) !important;
+  }
+  body .app-mobile-viewport-dock > button:active {
+    transform: scale(.96);
+    background: color-mix(in srgb, var(--primary) 17%, var(--surface)) !important;
+  }
+  body .app-shell:not(.is-chat-route) .app-content {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* Separate the reminder create action from its neighbours and give it a clear
+   touch target so it no longer blends into the adjacent list/actions on phones. */
+.reminders-app-standalone .reminders-hub-actions {
+  gap: 10px !important;
+}
+.reminders-app-standalone .reminders-hub-actions .reminders-hub-add {
+  display: inline-grid !important;
+  place-items: center !important;
+  margin-inline-start: 3px !important;
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border)) !important;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface)) !important;
+  color: var(--primary) !important;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--primary) 11%, transparent);
+}
+.reminders-app-standalone .reminders-hub-header {
+  margin-bottom: 6px !important;
+}
+.reminders-app-standalone .reminders-header-add {
+  margin-inline: 4px !important;
+}
+@media (max-width: 767px) {
+  .reminders-app-standalone .reminders-hub-actions { gap: 8px !important; }
+  .reminders-app-standalone .reminders-hub-actions .reminders-hub-add {
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 44px !important;
+    margin-inline-start: 2px !important;
+    border-radius: 15px !important;
+  }
+  .reminders-app-standalone .reminders-hub-header { margin-bottom: 10px !important; }
+}

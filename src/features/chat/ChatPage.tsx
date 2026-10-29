@@ -99,7 +99,7 @@ export const ChatPage:React.FC=()=>{
  const[shipmentUpdateOpen,setShipmentUpdateOpen]=useState(false);const[shipmentStatus,setShipmentStatus]=useState('در حال بررسی');const[shipmentNote,setShipmentNote]=useState('');
  const[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct');const[channelOpen,setChannelOpen]=useState(false);const[channelTitle,setChannelTitle]=useState('');
  const[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel');const[sharedConnections,setSharedConnections]=useState<Array<{id:string;target_organization_id:string;target_name:string}>>([]);
- const[selectedConnection,setSelectedConnection]=useState('');const[attachmentBusy,setAttachmentBusy]=useState(false);const[mediaState,setMediaState]=useState<MediaState>('idle');const[attachmentProgress,setAttachmentProgress]=useState<number|null>(null);
+ const[selectedConnection,setSelectedConnection]=useState('');const[attachmentBusy,setAttachmentBusy]=useState(false);const[mediaState,setMediaState]=useState<MediaState>('idle');const[attachmentProgress,setAttachmentProgress]=useState<number|null>(null);const[pendingFiles,setPendingFiles]=useState<Array<{id:string;file:File;caption:string}>>([]);
  const[recording,setRecording]=useState(false);const[ocrBusy,setOcrBusy]=useState(false);const[pushReady,setPushReady]=useState(false);const[pushBusy,setPushBusy]=useState(false);const[settingsOpen,setSettingsOpen]=useState(false);
  const[menu,setMenu]=useState<string|null>(null);const[menuPosition,setMenuPosition]=useState<{top:number;left:number;width:number}|null>(null);const[directoryOpen,setDirectoryOpen]=useState(false);const[directoryMode,setDirectoryMode]=useState<ChatDirectoryMode>('members');
  const[folder,setFolder]=useState<ChatFolder>('all');const[newMessageCount,setNewMessageCount]=useState(0);
@@ -351,15 +351,35 @@ export const ChatPage:React.FC=()=>{
   try{const conn=sharedConnections.find(x=>x.id===selectedConnection);const c=await createConversation({type:channelType,title:name,sharedWithOrganizationId:conn?.target_organization_id??null,orgConnectionId:conn?.id??null});setChannelTitle('');setChannelOpen(false);await refresh();setSelectedId(c.id)}catch(e){setError(err(e))}
  };
 
- const chooseAttachment=async(file?:File)=>{
-  if(!file||!selectedId||!profile?.organization_id||attachmentBusy)return;
-  if(file.size>50*1024*1024){setError('حجم فایل بیش از ۵۰MB است.');return}
+ const chooseAttachments=(files:File[])=>{
+  if(!selectedId||!profile?.organization_id||!files.length||attachmentBusy)return;
+  if(pendingFiles.length+files.length>10){setError('هر بار حداکثر ۱۰ فایل را انتخاب کنید.');return}
+  const oversized=files.find(file=>file.size>50*1024*1024);
+  if(oversized){setError('حجم هر فایل باید کمتر از ۵۰MB باشد: '+oversized.name);return}
+  setPendingFiles(current=>[...current,...files.map(file=>({id:makeClientId(),file,caption:''}))]);
+ };
+ const updatePendingFile=(id:string,patch:Partial<{caption:string}>)=>{
+  setPendingFiles(current=>current.map(item=>item.id===id?{...item,...patch}:item));
+ };
+ const sendPendingAttachments=async()=>{
+  if(!selectedId||!profile?.organization_id||!pendingFiles.length||attachmentBusy)return;
+  const conversationId=selectedId,organizationId=profile.organization_id,batch=[...pendingFiles];
   setAttachmentBusy(true);setAttachmentProgress(null);setMediaState('preparing');
   try{
-   setMediaState('uploading');await sendFileMessage(selectedId,profile.organization_id,file,'file',percentage=>setAttachmentProgress(percentage));setMediaState('committed');
-   if(file.type.startsWith('image/')){setOcrBusy(true);try{const ocr=await import('tesseract.js').then(module=>module.recognize(file,'fas+eng'));const ocrText=String(ocr.data?.text||'').trim();if(ocrText)setText(ocrText)}catch{}finally{setOcrBusy(false)}}
-   await loadConversation(selectedId,false);await refresh();
-  }catch(e){setError(err(e))}finally{setAttachmentBusy(false);setMediaState('idle');setAttachmentProgress(null)}
+   for(const item of batch){
+    setMediaState('uploading');setAttachmentProgress(0);
+    await sendFileMessage(conversationId,organizationId,item.file,'file',percentage=>setAttachmentProgress(percentage),item.caption.trim()||undefined);
+    setPendingFiles(current=>current.filter(file=>file.id!==item.id));
+    if(batch.length===1&&item.file.type.startsWith('image/')){
+     setOcrBusy(true);
+     try{const ocr=await import('tesseract.js').then(module=>module.recognize(item.file,'fas+eng'));const ocrText=String(ocr.data?.text||'').trim();if(ocrText)setText(ocrText)}catch{}finally{setOcrBusy(false)}
+    }
+   }
+   setMediaState('committed');
+   if(selectedIdRef.current===conversationId)await loadConversation(conversationId,false);
+   await refresh();
+  }catch(e){setError(err(e))}
+  finally{setAttachmentBusy(false);setMediaState('idle');setAttachmentProgress(null)}
  };
 
  const toggleVoice=async()=>{
@@ -612,7 +632,17 @@ export const ChatPage:React.FC=()=>{
    {(reply||editId)&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">{editId?'در حال ویرایش پیام':'پاسخ به: '+(reply?.body||'پیام پیوست‌دار')}</div><button type="button" className="icon-btn" onClick={()=>{setReply(null);setEditId(null);setText(chatDraftBeforeEdit.current);chatDraftBeforeEdit.current=''}} aria-label="لغو"><X size={15}/></button></div>}
 
    <div className="chat-composer shrink-0 border-t app-border px-2 py-2 md:p-3 bg-[var(--surface)]" style={{paddingBottom:'max(8px,env(safe-area-inset-bottom))'}}>
-    <input ref={fileInput} type="file" className="hidden" accept="image/*,application/pdf,text/plain,.doc,.docx,.xls,.xlsx" onChange={e=>{const file=e.target.files?.[0];e.currentTarget.value='';void chooseAttachment(file)}}/>
+    <input ref={fileInput} type="file" multiple className="hidden" accept="image/*,application/pdf,text/plain,.doc,.docx,.xls,.xlsx" onChange={e=>{const files=Array.from(e.currentTarget.files??[]);e.currentTarget.value='';chooseAttachments(files)}}/>
+    {pendingFiles.length>0&&<section className="mb-2 max-h-[34dvh] overflow-y-auto rounded-2xl border app-border bg-[var(--surface-2)] p-2.5" aria-label="فایل‌های آمادهٔ ارسال">
+     <div className="flex items-center justify-between gap-2 px-1 pb-2"><b className="text-xs">فایل‌های آمادهٔ ارسال · {pendingFiles.length}</b><button type="button" className="min-h-9 px-2 rounded-lg border app-border text-xs" disabled={attachmentBusy} onClick={()=>setPendingFiles([])}>پاک‌کردن همه</button></div>
+     <div className="space-y-2">{pendingFiles.map(item=><div key={item.id} className="grid grid-cols-[minmax(0,1fr)_40px] gap-2 rounded-xl border app-border bg-[var(--surface)] p-2">
+      <div className="min-w-0"><div className="flex items-center gap-2 text-xs font-bold"><Paperclip size={14} className="shrink-0"/><span className="truncate" title={item.file.name}>{item.file.name}</span><span className="shrink-0 app-muted">{(item.file.size/1024/1024).toFixed(1)}MB</span></div>
+       <input value={item.caption} disabled={attachmentBusy} onChange={e=>updatePendingFile(item.id,{caption:e.target.value})} placeholder="توضیح این فایل (اختیاری)" aria-label={"توضیح فایل "+item.file.name} className="mt-2 w-full min-h-10 rounded-lg border app-border bg-[var(--surface-2)] px-3 text-sm disabled:opacity-60"/>
+      </div>
+      <button type="button" disabled={attachmentBusy} onClick={()=>setPendingFiles(current=>current.filter(file=>file.id!==item.id))} className="min-h-10 self-start rounded-lg border app-border disabled:opacity-40" aria-label={"حذف "+item.file.name}><X size={16}/></button>
+     </div>)}</div>
+     <button type="button" onClick={()=>void sendPendingAttachments()} disabled={attachmentBusy||!selectedId} className="mt-2 w-full min-h-11 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50">{attachmentBusy?'در حال ارسال فایل‌ها…':'ارسال '+pendingFiles.length+' فایل'}</button>
+    </section>}
     <div className="flex items-end gap-1.5 md:gap-2">
      <button type="button" className="h-12 w-12 shrink-0 rounded-full border app-border flex items-center justify-center disabled:opacity-40" disabled={attachmentBusy} onClick={()=>fileInput.current?.click()} aria-label="پیوست"><Paperclip size={18}/></button>
      <button type="button" className={"h-11 w-11 shrink-0 rounded-full border app-border flex items-center justify-center "+(recording?'bg-red-600 text-white':'')} disabled={attachmentBusy} onClick={()=>void toggleVoice()} aria-label={recording?'توقف ضبط':'ضبط صدا'}>{recording?<MicOff size={18}/>:<Mic size={18}/>}</button>
