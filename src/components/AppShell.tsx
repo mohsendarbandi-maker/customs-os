@@ -84,6 +84,7 @@ const canSee = (item: NavItem, role?: UserRole | null) =>
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
+  const isChatRoute = location.pathname.startsWith('/chat');
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
@@ -110,6 +111,32 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return wideViewport && finePointer && !hasTouch;
   };
   const [isDesktop, setIsDesktop] = useState(getDesktopLayout);
+
+  // Keep the chat composer attached to the actually visible iOS viewport when the
+  // browser chrome or the software keyboard changes the visual viewport.
+  useEffect(() => {
+    if (!isChatRoute) return;
+    const shell = document.querySelector<HTMLElement>('.app-shell.is-chat-route');
+    if (!shell) return;
+    const viewport = window.visualViewport;
+    const syncVisibleViewport = () => {
+      shell.style.setProperty('--chat-visible-height', `${Math.round(viewport?.height ?? window.innerHeight)}px`);
+      shell.style.setProperty('--chat-visible-top', `${Math.round(viewport?.offsetTop ?? 0)}px`);
+    };
+    syncVisibleViewport();
+    viewport?.addEventListener('resize', syncVisibleViewport);
+    viewport?.addEventListener('scroll', syncVisibleViewport);
+    window.addEventListener('resize', syncVisibleViewport, { passive: true });
+    window.addEventListener('orientationchange', syncVisibleViewport, { passive: true });
+    return () => {
+      viewport?.removeEventListener('resize', syncVisibleViewport);
+      viewport?.removeEventListener('scroll', syncVisibleViewport);
+      window.removeEventListener('resize', syncVisibleViewport);
+      window.removeEventListener('orientationchange', syncVisibleViewport);
+      shell.style.removeProperty('--chat-visible-height');
+      shell.style.removeProperty('--chat-visible-top');
+    };
+  }, [isChatRoute]);
   const [isNarrowDevice, setIsNarrowDevice] = useState(getNarrowDevice);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -372,7 +399,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             ?.label || 'Customs OS';
 
   return (
-    <div className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''}`} dir="rtl">
+    <div className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''} ${isChatRoute ? 'is-chat-route' : ''}`} dir="rtl">
       {/* Desktop navigation is mounted only at >=1024px. It is not merely hidden on phones. */}
       {isDesktop && (
         <aside className={`app-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
@@ -531,7 +558,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       )}
 
       {/* ── Main content ── */}
-      <main className={`app-main ${sidebarCollapsed ? 'sidebar-compact' : ''}`}>
+      <main className={`app-main ${sidebarCollapsed ? 'sidebar-compact' : ''} ${isChatRoute ? 'is-chat-main' : ''}`}>
         {isDesktop && <header className="app-topbar">
           <div className="flex items-center gap-3 min-w-0">
             <div className="hidden lg:block">
@@ -631,8 +658,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             </div>
           </div>
         </header>}
-        <div className="app-content">
-          <div key={location.pathname + location.search} className="future-route-stage">
+        <div className={`app-content ${isChatRoute ? 'is-chat-content' : ''}`}>
+          <div key={location.pathname + location.search} className={`future-route-stage ${isChatRoute ? 'is-chat-stage' : ''}`}>
             {children}
           </div>
         </div>

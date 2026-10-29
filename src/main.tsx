@@ -9,6 +9,7 @@ import './styles/reminders-redesign.css';
 import './styles/chat-reminders-cohesion.css';
 import './styles/ai-workspace.css';
 import './styles/mobile-workspace-cohesion.css';
+import './styles/mobile-chat-calendar-fix.css';
 import { startOfflineQueue } from './lib/offlineQueue';
 
 type BoundaryState = { hasError: boolean; message: string };
