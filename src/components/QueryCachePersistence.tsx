@@ -61,6 +61,7 @@ export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({
   const restoreInProgress = useRef(false);
   const writeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scopeSwitching, setScopeSwitching] = useState(false);
+  const [hydratedScope, setHydratedScope] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,28 +70,32 @@ export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({
       restoreInProgress.current = false;
       queryClient.clear();
       setScopeSwitching(false);
+      setHydratedScope(null);
       return () => { cancelled = true; };
     }
     if (!scope) {
       if (activeScope.current && user && activeScope.current.split(':', 1)[0] !== user.id) {
-        activeScope.current = null;
-        restoreInProgress.current = false;
-        queryClient.clear();
-        setScopeSwitching(true);
+         activeScope.current = null;
+         restoreInProgress.current = false;
+         queryClient.clear();
+         setScopeSwitching(true);
+         setHydratedScope(null);
       } else {
         setScopeSwitching(false);
       }
       return () => { cancelled = true; };
     }
     if (activeScope.current === scope) {
-      setScopeSwitching(false);
+       setHydratedScope(scope);
+       setScopeSwitching(false);
       return () => { cancelled = true; };
     }
 
     const previousScope = activeScope.current;
-    activeScope.current = null;
-    restoreInProgress.current = true;
-    setScopeSwitching(Boolean(previousScope && previousScope !== scope));
+     activeScope.current = null;
+     restoreInProgress.current = true;
+     setHydratedScope(null);
+     setScopeSwitching(true);
     if (previousScope && previousScope !== scope) queryClient.clear();
     void readOfflineQueryCache<CachedQuerySnapshot>(CACHE_NAMESPACE, user.id, profile!.organization_id)
       .then((cached) => {
@@ -108,8 +113,9 @@ export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({
       .finally(() => {
         if (cancelled) return;
         activeScope.current = scope;
-        restoreInProgress.current = false;
-        setScopeSwitching(false);
+         restoreInProgress.current = false;
+         setHydratedScope(scope);
+         setScopeSwitching(false);
       });
     return () => { cancelled = true; };
   }, [profile?.organization_id, profile?.id, queryClient, scope, user, user?.id]);
@@ -154,7 +160,8 @@ export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({
   const activeUserId = activeScope.current?.split(':', 1)[0] ?? null;
   if (
     scopeSwitching ||
-    (activeScope.current && ((scope && activeScope.current !== scope) || (user && activeUserId !== user.id)))
+    (scope && hydratedScope !== scope) ||
+    (activeScope.current && (!user || activeUserId !== user.id))
   ) {
     return (
       <div dir="rtl" className="min-h-[100dvh] grid place-items-center bg-[var(--bg)] text-[var(--text)]" aria-busy="true">

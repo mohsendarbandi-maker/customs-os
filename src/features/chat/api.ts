@@ -10,6 +10,53 @@ const unwrap = <T>(result: { data: T | null; error: { message: string } | null }
   return result.data;
 };
 
+type SignedAttachmentUrl = { url: string; expiresAt: number };
+const signedAttachmentUrlCache = new Map<string, SignedAttachmentUrl>();
+const signedAttachmentUrlPending = new Map<string, Promise<string | null>>();
+const SIGNED_ATTACHMENT_URL_CACHE_TTL_MS = 50 * 60 * 1000;
+const SIGNED_ATTACHMENT_URL_CACHE_LIMIT = 200;
+
+// Signed URLs expire after one hour. Reuse them in this app session for 50 minutes,
+// and coalesce concurrent refreshes so every chat re-render does not sign every file again.
+async function getSignedAttachmentUrl(storagePath: string, userId: string): Promise<string | null> {
+  const cacheKey = userId + ':' + storagePath;
+  const now = Date.now();
+  const cached = signedAttachmentUrlCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    signedAttachmentUrlCache.delete(cacheKey);
+    signedAttachmentUrlCache.set(cacheKey, cached);
+    return cached.url;
+  }
+  if (cached) signedAttachmentUrlCache.delete(cacheKey);
+
+  const pending = signedAttachmentUrlPending.get(cacheKey);
+  if (pending) return pending;
+
+  const request = (async (): Promise<string | null> => {
+    try {
+      const signed = await supabase.storage.from('chat-files').createSignedUrl(storagePath, 3600);
+      const url = signed.data?.signedUrl;
+      if (signed.error || !url) return null;
+      while (signedAttachmentUrlCache.size >= SIGNED_ATTACHMENT_URL_CACHE_LIMIT) {
+        const oldest = signedAttachmentUrlCache.keys().next().value;
+        if (oldest === undefined) break;
+        signedAttachmentUrlCache.delete(oldest);
+      }
+      signedAttachmentUrlCache.set(cacheKey, {
+        url,
+        expiresAt: Date.now() + SIGNED_ATTACHMENT_URL_CACHE_TTL_MS,
+      });
+      return url;
+    } catch {
+      return null;
+    } finally {
+      signedAttachmentUrlPending.delete(cacheKey);
+    }
+  })();
+  signedAttachmentUrlPending.set(cacheKey, request);
+  return request;
+}
+
 export async function listConversations(): Promise<ChatConversation[]> {
   const result = await supabase.rpc('chat_conversation_list', { p_limit: 100 });
   const conversations = unwrap(result) as ChatConversation[];
@@ -133,15 +180,15 @@ async function enrichMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
   if (starsResult.error) throw new Error(starsResult.error.message);
   if (receiptsResult.error) throw new Error(receiptsResult.error.message);
 
+  const sessionResult = await supabase.auth.getSession();
+  const signingUserId = sessionResult.data.session?.user.id ?? null;
   const enrichedAttachments = await Promise.all(
-    (attachmentsResult.data ?? []).map(async (attachment) => {
-      if (!attachment.storage_path) {
-        return { ...attachment, url: null };
-      }
-
-      const signed = await supabase.storage.from('chat-files').createSignedUrl(attachment.storage_path, 3600);
-      return { ...attachment, url: signed.data?.signedUrl ?? null };
-    }),
+    (attachmentsResult.data ?? []).map(async (attachment) => ({
+      ...attachment,
+      url: attachment.storage_path && signingUserId
+        ? await getSignedAttachmentUrl(attachment.storage_path, signingUserId)
+        : null,
+    })),
   );
 
   const byMessage = new Map<string, ChatMessage['attachments']>();
@@ -561,15 +608,52 @@ async function uploadChatStorageObject(
   file: File,
   onProgress?: (percentage: number) => void,
 ): Promise<void> {
-  if (file.size > TUS_THRESHOLD_BYTES) {
-    await uploadChatAttachmentResumable(storagePath, file, onProgress);
-    return;
-  }
-  const upload = await supabase.storage.from('chat-files').upload(storagePath, file, {
+  const uploadDirect = () => supabase.storage.from('chat-files').upload(storagePath, file, {
     contentType: file.type || 'application/octet-stream',
     cacheControl: '3600',
     upsert: false,
   });
+
+  if (file.size > TUS_THRESHOLD_BYTES) {
+    try {
+      await uploadChatAttachmentResumable(storagePath, file, onProgress);
+      return;
+    } catch (resumableError) {
+      // The app's same-origin proxy can fail the TUS handshake/Location handoff on
+      // mobile browsers even though the regular authenticated Storage upload works.
+      // Try the supported SDK upload before failing the message, keeping the same
+      // unique object path so attachment registration can proceed normally.
+      const resumableMessage = resumableError instanceof Error
+        ? resumableError.message
+        : String(resumableError);
+      const fallback = await uploadDirect().catch((fallbackError: unknown) => {
+        const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        throw new Error(
+          'آپلود قابل‌ادامه ناموفق بود: ' + resumableMessage +
+          '؛ آپلود جایگزین هم ناموفق بود: ' + fallbackMessage,
+        );
+      });
+      if (fallback.error) {
+        // A final TUS PATCH may have committed the object before the client lost
+        // the response. Accept it only when Storage confirms the exact byte size.
+        if (/already exists|duplicate|409/i.test(fallback.error.message)) {
+          const info = await supabase.storage.from('chat-files').info(storagePath);
+          if (!info.error && Number(info.data?.size) === file.size) {
+            onProgress?.(100);
+            return;
+          }
+        }
+        throw new Error(
+          'آپلود قابل‌ادامه ناموفق بود: ' + resumableMessage +
+          '؛ آپلود جایگزین هم ناموفق بود: ' + fallback.error.message,
+        );
+      }
+      onProgress?.(100);
+      return;
+    }
+  }
+
+  const upload = await uploadDirect();
   if (upload.error) throw new Error(upload.error.message);
 }
 
