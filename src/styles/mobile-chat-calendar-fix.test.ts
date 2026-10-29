@@ -44,4 +44,33 @@ describe('mobile chat viewport and calendar legibility', () => {
     expect(css).toContain('color: var(--text) !important');
     expect(css).toContain('@media (max-width: 380px)');
   });
+
+  it('renders the month calendar as seven horizontal columns and always exposes day numbers', () => {
+    const remindersPage = read('src/features/reminders/RemindersPage.tsx');
+    expect(remindersPage).toContain('reminders-calendar-weekday-short');
+    expect(remindersPage).toContain('reminders-calendar-cell-day');
+    expect(css).toContain('grid-template-columns: repeat(7, minmax(0, 1fr)) !important;');
+    expect(css).toContain('-webkit-text-fill-color: var(--text) !important;');
+    expect(css).toContain('.reminders-calendar-weekday-full { display: none !important; }');
+    expect(css).toContain('white-space: nowrap !important;');
+  });
+
+  it('renders the date picker with explicit seven-column classes and a visible number span', () => {
+    const picker = read('src/features/reminders/JalaliDateTimePicker.tsx');
+    expect(picker).toContain('reminders-calendar-picker-weekdays');
+    expect(picker).toContain('reminders-calendar-picker-days');
+    expect(picker).toContain('reminders-calendar-picker-day-number');
+    expect(css).toContain('.reminders-calendar-panel .reminders-calendar-picker-day-number');
+    expect(css).toContain('overflow-y: auto !important;');
+    expect(css).toContain('text-orientation: mixed !important;');
+  });
+
+  it('keeps shipment results in a horizontal grid with a readable label and bill-of-lading number', () => {
+    const remindersPage = read('src/features/reminders/RemindersPage.tsx');
+    expect(remindersPage).toContain('reminders-shipment-search-result');
+    expect(remindersPage).toContain('reminders-shipment-selected');
+    expect(css).toContain('grid-template-columns: 36px minmax(0, 1fr) 36px !important;');
+    expect(css).toContain('word-break: normal !important;');
+  });
+
 });

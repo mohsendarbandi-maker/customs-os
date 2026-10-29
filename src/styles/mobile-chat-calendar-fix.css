@@ -303,3 +303,404 @@ html[data-theme="light"] #root input[type="time"] { color-scheme: light; }
     font-size: 14px !important;
   }
 }
+
+
+/* Final, explicit reminder calendar and shipment-result layout contract.
+   These selectors avoid utility-only geometry for controls that must stay legible. */
+.reminders-app-standalone .reminders-calendar-month-grid {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+.reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-weekdays,
+.reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-days {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  grid-auto-flow: row !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  writing-mode: horizontal-tb !important;
+}
+.reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-weekdays > span {
+  display: grid !important;
+  place-items: center !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  min-height: 32px !important;
+  padding: 0 1px !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: keep-all !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  color: var(--text) !important;
+}
+.reminders-app-standalone .reminders-calendar-weekday-full { display: inline !important; }
+.reminders-app-standalone .reminders-calendar-weekday-short { display: none !important; }
+.reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-cell {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  writing-mode: horizontal-tb !important;
+}
+.reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-cell-day {
+  display: grid !important;
+  place-items: center !important;
+  flex: 0 0 31px !important;
+  width: 31px !important;
+  height: 31px !important;
+  min-width: 25px !important;
+  min-height: 25px !important;
+  max-width: 100% !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  border-radius: 10px !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  font-variant-numeric: tabular-nums;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  white-space: nowrap !important;
+  writing-mode: horizontal-tb !important;
+}
+.reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-cell.is-today .reminders-calendar-cell-day,
+.reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-cell[aria-pressed="true"] .reminders-calendar-cell-day {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  background: var(--primary) !important;
+}
+.reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-cell-count {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 19px !important;
+  min-height: 18px !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+}
+.reminders-app-standalone .reminders-calendar-panel {
+  width: min(100%, 460px) !important;
+  max-width: 460px !important;
+  height: auto !important;
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+.reminders-app-standalone .reminders-calendar-picker-weekdays,
+.reminders-app-standalone .reminders-calendar-picker-days {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  grid-auto-flow: row !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  gap: 4px !important;
+  align-items: stretch !important;
+  direction: rtl;
+  writing-mode: horizontal-tb !important;
+}
+.reminders-app-standalone .reminders-calendar-picker-weekdays {
+  margin: 0 0 5px !important;
+  text-align: center !important;
+}
+.reminders-app-standalone .reminders-calendar-picker-weekday {
+  display: grid !important;
+  place-items: center !important;
+  min-width: 0 !important;
+  min-height: 30px !important;
+  width: 100% !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: keep-all !important;
+  writing-mode: horizontal-tb !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+  color: var(--text-muted) !important;
+}
+.reminders-app-standalone .reminders-calendar-picker-empty {
+  display: block !important;
+  min-width: 0 !important;
+  min-height: 40px !important;
+  aspect-ratio: 1 / 1;
+}
+.reminders-app-standalone .reminders-calendar-panel .reminders-calendar-picker-day {
+  display: grid !important;
+  place-items: center !important;
+  align-self: stretch !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 42px !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+  font-size: 16px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+  font-variant-numeric: tabular-nums;
+  text-align: center !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+.reminders-app-standalone .reminders-calendar-panel .reminders-calendar-picker-day-number {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  -webkit-text-fill-color: inherit !important;
+  font-size: inherit !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+  text-indent: 0 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  white-space: nowrap !important;
+  writing-mode: horizontal-tb !important;
+}
+.reminders-app-standalone .reminders-calendar-panel .reminders-calendar-picker-day.is-today {
+  border-color: var(--primary) !important;
+}
+.reminders-app-standalone .reminders-calendar-panel .reminders-calendar-picker-day[aria-pressed="true"] {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  box-shadow: inset 0 0 0 1px var(--primary) !important;
+}
+.reminders-app-standalone .reminders-calendar-panel .reminders-calendar-picker-day[aria-pressed="true"] .reminders-calendar-picker-day-number {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+.reminders-app-standalone .reminders-calendar-panel .reminders-calendar-picker-day.is-today:not([aria-pressed="true"]) {
+  outline: 1px solid var(--primary) !important;
+  outline-offset: -2px;
+}
+
+/* Shipment search: fixed icon/text/action columns keep names horizontal. */
+.reminders-app-standalone .reminders-shipment-search-result,
+.reminders-app-standalone .reminders-shipment-selected {
+  display: grid !important;
+  grid-template-columns: 36px minmax(0, 1fr) 36px !important;
+  grid-auto-flow: row !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  min-height: 58px !important;
+  height: auto !important;
+  padding: 9px 10px !important;
+  border-radius: 13px !important;
+  text-align: start !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+.reminders-app-standalone .reminders-shipment-search-result-icon,
+.reminders-app-standalone .reminders-shipment-selected-icon {
+  display: grid !important;
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  place-items: center !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  border-radius: 10px !important;
+  background: var(--surface-2) !important;
+  color: var(--primary) !important;
+}
+.reminders-app-standalone .reminders-shipment-search-result-copy,
+.reminders-app-standalone .reminders-shipment-selected-copy {
+  display: flex !important;
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  unicode-bidi: plaintext;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  word-break: normal !important;
+  overflow-wrap: anywhere !important;
+}
+.reminders-app-standalone .reminders-shipment-search-result-name,
+.reminders-app-standalone .reminders-shipment-selected-name {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 850 !important;
+  line-height: 1.5 !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: anywhere !important;
+  text-orientation: mixed !important;
+  writing-mode: horizontal-tb !important;
+  color: var(--text) !important;
+}
+.reminders-app-standalone .reminders-shipment-search-result-bl,
+.reminders-app-standalone .reminders-shipment-selected-bl,
+.reminders-app-standalone .reminders-shipment-selected-status {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+  font-weight: 500 !important;
+  color: var(--text-muted) !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+.reminders-app-standalone .reminders-shipment-selected-status {
+  color: #16845b !important;
+  font-weight: 750 !important;
+}
+.reminders-app-standalone .reminders-shipment-selected-remove,
+.reminders-app-standalone .reminders-shipment-search-result-action {
+  display: grid !important;
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+  place-items: center !important;
+  width: 36px !important;
+  height: 40px !important;
+  min-width: 36px !important;
+  min-height: 40px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 10px !important;
+  color: var(--text-muted) !important;
+}
+.reminders-app-standalone .reminders-shipment-search-result:hover {
+  background: var(--surface-2) !important;
+}
+@media (max-width: 767px) {
+  .reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-weekdays > span {
+    min-height: 35px !important;
+    padding-inline: 0 !important;
+  }
+  .reminders-app-standalone .reminders-calendar-weekday-full { display: none !important; }
+  .reminders-app-standalone .reminders-calendar-weekday-short {
+    display: block !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    font-size: 13px !important;
+    font-weight: 900 !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    color: var(--text) !important;
+  }
+  .reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-cell-day {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 15px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-panel .reminders-calendar-picker-weekdays,
+  .reminders-app-standalone .reminders-calendar-panel .reminders-calendar-picker-days {
+    gap: 3px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-panel .reminders-calendar-picker-day {
+    min-height: 40px !important;
+    aspect-ratio: auto !important;
+    font-size: 15px !important;
+  }
+  .reminders-app-standalone .reminders-shipment-search-result,
+  .reminders-app-standalone .reminders-shipment-selected {
+    grid-template-columns: 34px minmax(0, 1fr) 32px !important;
+    gap: 8px !important;
+    padding: 9px 8px !important;
+    min-height: 58px !important;
+  }
+  .reminders-app-standalone .reminders-shipment-search-result-icon,
+  .reminders-app-standalone .reminders-shipment-selected-icon {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+  }
+}
+@media (max-width: 370px) {
+  .reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-weekday-short {
+    font-size: 12px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-month-grid .reminders-calendar-cell-day {
+    width: 27px !important;
+    height: 27px !important;
+    font-size: 14px !important;
+  }
+  .reminders-app-standalone .reminders-calendar-panel .reminders-calendar-picker-day {
+    min-height: 36px !important;
+    font-size: 14px !important;
+  }
+}
+
+/* Restore the intended card treatment as the shipment results now use semantic classes. */
+.reminders-app-standalone .reminders-shipment-search-result {
+  border: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  font-size: 14px !important;
+  cursor: pointer;
+}
+.reminders-app-standalone .reminders-shipment-search-result:hover {
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--border)) !important;
+  background: var(--surface-2) !important;
+}
+.reminders-app-standalone .reminders-shipment-selected {
+  border: 1px solid color-mix(in srgb, var(--success, #16845b) 38%, var(--border)) !important;
+  background: color-mix(in srgb, var(--success, #16845b) 6%, var(--surface)) !important;
+  color: var(--text) !important;
+}
+.reminders-app-standalone .reminders-shipment-selected-icon {
+  background: color-mix(in srgb, var(--success, #16845b) 12%, var(--surface)) !important;
+  color: var(--success, #16845b) !important;
+}
+.reminders-app-standalone .reminders-shipment-selected-remove {
+  border: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  color: var(--text-muted) !important;
+}
