@@ -27,6 +27,8 @@ describe('chat attachments and forwarding', () => {
     expect(forward).toContain('await uploadChatStorageObject(storagePath, file)');
     expect(forward).toContain("supabase.rpc('chat_register_attachment'");
     expect(forward).toContain('await deleteForAll(forwarded.id)');
+    expect(forward).toContain('sourceAttachments.length === 0');
+    expect(forward).toContain('if (!attachment.storage_path)');
   });
   it('shows forwarding success separately from errors', () => {
     expect(page).toContain("setSuccess('پیام و پیوست‌ها به گفتگو ارسال شدند.')");
