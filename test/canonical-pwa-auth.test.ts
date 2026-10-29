@@ -34,7 +34,7 @@ describe('one canonical Customs OS PWA', () => {
     expect(html).toContain('name="apple-mobile-web-app-capable" content="yes"');
     expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="black-translucent"');
     expect(html).not.toContain('apple-touch-icon-precomposed');
-    expect(html).not.toContain('mobile.darbandicommercial.ir');
+    // Mobile hostname appears only in the device-routing bootstrap, not in a manifest or icon link.\n    expect(html).toContain("target.hostname = 'mobile.darbandicommercial.ir'");\n    expect(html).toContain('const links = html.match');
     expect(html).not.toContain('manifest-reminders.webmanifest');
     expect(html).not.toContain('chat-app-v4.webmanifest');
     expect(html).not.toContain('link.setAttribute(\'href\', manifest)');
