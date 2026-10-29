@@ -154,7 +154,8 @@ export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({
   const activeUserId = activeScope.current?.split(':', 1)[0] ?? null;
   if (
     scopeSwitching ||
-    (activeScope.current && ((scope && activeScope.current !== scope) || (user && activeUserId !== user.id)))
+    (scope && activeScope.current !== scope) ||
+    (activeScope.current && (!user || activeUserId !== user.id))
   ) {
     return (
       <div dir="rtl" className="min-h-[100dvh] grid place-items-center bg-[var(--bg)] text-[var(--text)]" aria-busy="true">
