@@ -8,7 +8,7 @@ describe('mobile hostname handoff', () => {
     const html = read('index.html');
     expect(html).toContain('mobile.darbandicommercial.ir');
     expect(html).toContain('window.location.replace(target.toString())');
-    expect(html).toContain("target.pathname");
+    expect(html).toContain('const target = new URL(window.location.href)');
     expect(html).toContain('navigator.maxTouchPoints');
   });
   it('transfers auth only via nonce-scoped postMessage and never via URL parameters', () => {
