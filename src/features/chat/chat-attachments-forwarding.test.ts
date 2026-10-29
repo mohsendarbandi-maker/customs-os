@@ -30,6 +30,8 @@ describe('chat attachments and forwarding', () => {
     expect(forward).toContain('sourceAttachments.length === 0');
     expect(forward).toContain('if (!attachment.storage_path)');
     expect(forward).toContain('operationId = makeClientId()');
+    expect(forward).toContain('const existingAttachment = await supabase');
+    expect(forward).toContain('if (existingAttachment.data)');
     expect(forward.indexOf('await uploadChatForwardAttachment(storagePath, file)')).toBeLessThan(forward.indexOf("supabase.rpc('chat_forward_message'"));
     expect(api).toContain('function deriveForwardAttachmentObjectId(operationId: string, index: number)');
   });
