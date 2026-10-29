@@ -164,6 +164,21 @@ html[data-theme="light"] #root input[type="time"] { color-scheme: light; }
   color: var(--text);
   -webkit-overflow-scrolling: touch;
 }
+
+/* Keep the full-screen picker backdrop full-screen; generic dialog rules must
+   constrain only the inner panel, not shrink the overlay itself. */
+.app-shell .reminders-app-standalone .reminders-calendar-backdrop[role="dialog"]:not(.app-more-sheet):not(.reminders-calendar-day-dialog) {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  max-width: none !important;
+  height: 100dvh !important;
+  max-height: none !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
 .reminders-app-standalone .reminders-calendar-panel .grid.grid-cols-7 button {
   min-height: 44px !important;
   padding: 4px 2px !important;
