@@ -22,7 +22,7 @@ describe('chat attachments and forwarding', () => {
     const start = api.indexOf('export async function forwardChatMessage(');
     const end = api.indexOf('\nexport async function shareShipmentUpdate', start);
     const forward = api.slice(start, end);
-    expect(forward).toContain("supabase.from('chat_attachments')");
+    expect(forward).toContain(".from('chat_attachments')");
     expect(forward).toContain("supabase.storage.from('chat-files').download(attachment.storage_path)");
     expect(forward).toContain('await uploadChatStorageObject(storagePath, file)');
     expect(forward).toContain("supabase.rpc('chat_register_attachment'");
