@@ -8,7 +8,7 @@ describe('chat attachments and forwarding', () => {
     expect(page).toContain('type="file" multiple className="hidden" accept="*/*"');
     expect(page).toContain('هر بار حداکثر ۱۰ فایل را انتخاب کنید');
     expect(page).toContain('item.caption.trim()||undefined');
-    expect(page).toContain('ارسال '+pendingFiles.length+' فایل');
+    expect(page).toContain("ارسال '+pendingFiles.length+' فایل");
   });
   it('keeps special group destinations when the regular conversation list is empty', () => {
     const start = api.indexOf('export async function listConversations()');
