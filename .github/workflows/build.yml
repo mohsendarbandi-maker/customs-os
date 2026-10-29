@@ -341,15 +341,24 @@ jobs:
             gateway_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/messenger-gateway.json -w '%{http_code}' "$base/webhooks/messenger/telegram/00000000-0000-4000-8000-000000000000")"
             test "$gateway_status" = "404"
 
-            echo "Checking primary HTML has one manifest and no mobile-origin redirect"
+            echo "Checking primary HTML has one static manifest plus the mobile auth handoff"
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-main.html "$base/?__canonical_pwa_smoke=${GITHUB_RUN_ID}"
             grep -Fq '<link rel="manifest" href="/manifest.webmanifest" />' /tmp/customs-main.html
             test "$(grep -o 'rel="manifest"' /tmp/customs-main.html | wc -l | tr -d ' ')" = "1"
             grep -Fq 'rel="apple-touch-icon" sizes="180x180" href="/pwa/mobile-icon-180.png' /tmp/customs-main.html
-            if grep -Eq 'mobile\.darbandicommercial\.ir|chat-app-v4\.webmanifest|chat-subdomain\.webmanifest|manifest-reminders\.webmanifest|reminders-subdomain\.webmanifest|mobile-subdomain\.webmanifest|apple-touch-icon-precomposed' /tmp/customs-main.html; then
+            grep -Fq "target.hostname = 'mobile.darbandicommercial.ir'" /tmp/customs-main.html
+            grep -Fq "type: 'customs-auth-sync'" /tmp/customs-main.html
+            if grep -Eq 'chat-app-v4\\.webmanifest|chat-subdomain\\.webmanifest|manifest-reminders\\.webmanifest|reminders-subdomain\\.webmanifest|mobile-subdomain\\.webmanifest|apple-touch-icon-precomposed' /tmp/customs-main.html; then
               echo "Legacy origin/manifest/icon selection remains in primary HTML."
               exit 1
             fi
+
+            echo "Checking the auth bridge is private and correctly frame-scoped"
+            bridge_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/auth-bridge.headers -o /tmp/auth-bridge.html -w '%{http_code}' "$base/__auth-bridge.html?__bridge_smoke=${GITHUB_RUN_ID}")"
+            test "$bridge_status" = "200"
+            grep -Fq 'customs-auth-bridge-ready' /tmp/auth-bridge.html
+            grep -Fqi 'Cache-Control: no-store, private' /tmp/auth-bridge.headers
+            grep -Fqi 'frame-ancestors https://darbandicommercial.ir' /tmp/auth-bridge.headers
 
             echo "Checking legacy PWA launch URL returns to canonical home"
             pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
