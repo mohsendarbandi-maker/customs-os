@@ -9,7 +9,7 @@ const MAX_PERSISTED_QUERIES = 45;
 const BLOCKED_QUERY_TERMS = [
   'auth', 'session', 'token', 'password', 'secret', 'credential',
   'chat', 'message', 'attachment', 'fileblob', 'blob', 'binary', 'storage', 'signed_url', 'signedurl',
-  'document_content', 'documentcontent', 'download',
+  'document', 'document_content', 'documentcontent', 'file-manager', 'file_manager', 'download',
 ];
 
 type CachedQuerySnapshot = { version: 1; state: DehydratedState };
@@ -53,7 +53,7 @@ const createBoundedSnapshot = (queryClient: ReturnType<typeof useQueryClient>): 
  */
 export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const queryClient = useQueryClient();
-  const { user, profile, loading } = useAuth();
+  const { user, profile } = useAuth();
   const scope = user && profile?.id === user.id && profile.organization_id
     ? `${user.id}:${profile.organization_id}`
     : null;
