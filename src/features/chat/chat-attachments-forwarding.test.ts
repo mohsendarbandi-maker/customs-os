@@ -30,6 +30,18 @@ describe('chat attachments and forwarding', () => {
     expect(forward).toContain('sourceAttachments.length === 0');
     expect(forward).toContain('if (!attachment.storage_path)');
   });
+  it('falls back to the authenticated Storage SDK when resumable upload fails', () => {
+    expect(api).toContain('catch (resumableError)');
+    expect(api).toContain("supabase.storage.from('chat-files').upload(storagePath, file");
+    expect(api).toContain("supabase.storage.from('chat-files').info(storagePath)");
+    expect(api).toContain('آپلود جایگزین هم ناموفق بود');
+  });
+  it('prevents duplicate forward requests while a file is being transferred', () => {
+    expect(page).toContain('const[forwardingBusy,setForwardingBusy]=useState(false)');
+    expect(page).toContain('if(!forwardId||forwardingBusy)return');
+    expect(page).toContain('disabled={forwardingBusy}');
+    expect(page).toContain('در حال انتقال پیام و پیوست‌ها');
+  });
   it('shows forwarding success separately from errors', () => {
     expect(page).toContain("setSuccess('پیام و پیوست‌ها به گفتگو ارسال شدند.')");
     expect(page).toContain('role="status" aria-live="polite"');
