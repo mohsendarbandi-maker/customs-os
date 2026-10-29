@@ -623,7 +623,17 @@ async function uploadChatAttachmentResumable(
       if (retries > retryDelays.length) throw uploadError;
       await new Promise((resolve) => setTimeout(resolve, retryDelays[retries - 1]));
       // A failed PATCH may still have reached Storage; HEAD prevents resending accepted bytes.
-      offset = await readOffset();
+      const confirmedOffset = await readOffset();
+      // If the chunk timed out and Storage confirms that no bytes were accepted,
+      // stop retrying the same stalled transfer and let the direct SDK fallback run.
+      if (
+        confirmedOffset === offset &&
+        uploadError instanceof Error &&
+        uploadError.message.includes('بیش از حد طول کشید')
+      ) {
+        throw uploadError;
+      }
+      offset = confirmedOffset;
       onProgress?.(Math.min(99, (offset / file.size) * 100));
     }
   }
