@@ -50,6 +50,8 @@ describe('chat attachments and forwarding', () => {
     expect(api).toContain('const create = await fetchWithTimeout(endpoint, {');
     expect(api).toContain('TUS_OFFSET_TIMEOUT_MS');
     expect(api).toContain('xhr.timeout = TUS_CHUNK_TIMEOUT_MS');
+    expect(api).toContain("confirmedOffset === offset");
+    expect(api).toContain("uploadError.message.includes('بیش از حد طول کشید')");
   });
   it('prevents duplicate forward requests while a file is being transferred', () => {
     expect(page).toContain('const[forwardingBusy,setForwardingBusy]=useState(false)');
