@@ -72,10 +72,11 @@ const getRestCacheScope = async () => {
   if (!supabaseClient) return null;
   try {
     const { data } = await supabaseClient.auth.getSession();
-    const userId = data.session?.user.id;
-    if (!userId) return null;
+    const session = data.session;
+    const userId = session?.user.id;
+    if (!userId || !session?.access_token) return null;
     const knownOrganizationId = restCacheScopes.get(userId);
-    if (knownOrganizationId) return { userId, organizationId: knownOrganizationId };
+    if (knownOrganizationId) return { userId, organizationId: knownOrganizationId, accessToken: session.access_token };
     const cachedProfile = await readOfflineQueryCache<{ organization_id?: string | null }>(
       'auth-profile',
       userId,
@@ -84,7 +85,7 @@ const getRestCacheScope = async () => {
     const organizationId = cachedProfile?.payload?.organization_id;
     if (!organizationId) return null;
     restCacheScopes.set(userId, organizationId);
-    return { userId, organizationId };
+    return { userId, organizationId, accessToken: session.access_token };
   } catch {
     return null;
   }
@@ -123,7 +124,7 @@ const cachedRestFetch: typeof fetch = async (input, init) => {
   if (!canCacheRestRead(request)) return nativeFetch(input, init);
 
   const scope = await getRestCacheScope();
-  if (!scope) return nativeFetch(input, init);
+  if (!scope || request.headers.get('authorization') !== 'Bearer ' + scope.accessToken) return nativeFetch(input, init);
 
   const vary = [
     request.url,
