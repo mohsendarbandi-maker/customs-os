@@ -797,8 +797,8 @@ async function uploadChatForwardAttachment(storagePath: string, file: File): Pro
 
       // If Storage committed the object but the response was lost, verify the
       // stable path before deciding the whole forwarding operation failed.
-      const info = await storage.info(storagePath).catch(() => ({ data: null, error: new Error('Storage info unavailable') }));
-      if (!info.error && Number(info.data?.size) === file.size) return;
+      const info = await storage.info(storagePath).catch(() => null);
+      if (info && !info.error && Number(info.data?.size) === file.size) return;
     }
   }
 
@@ -846,6 +846,10 @@ export async function forwardChatMessage(
   }
 
   const copiedPaths: string[] = [];
+  const copiedFileSizes: number[] = [];
+  const clientUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operationId)
+    ? operationId
+    : makeClientId();
   let forwarded: ChatMessage | null = null;
 
   try {
@@ -862,7 +866,7 @@ export async function forwardChatMessage(
         throw new Error('دریافت فایل اصلی ناموفق بود: ' + (download.error?.message || 'فایل در دسترس نیست.'));
       }
 
-      const objectId = deriveForwardAttachmentObjectId(operationId, index);
+      const objectId = deriveForwardAttachmentObjectId(clientUuid, index);
       const storagePath = targetOrganizationId + '/' + targetConversationId + '/' + objectId;
       const file = new File([download.data], attachment.original_name || 'attachment', {
         type: attachment.mime_type || 'application/octet-stream',
@@ -870,20 +874,21 @@ export async function forwardChatMessage(
 
       // Add it before upload so a response-loss failure still attempts cleanup.
       copiedPaths.push(storagePath);
+      copiedFileSizes.push(file.size);
       await uploadChatForwardAttachment(storagePath, file);
     }
 
     const result = await supabase.rpc('chat_forward_message', {
       p_message_id: messageId,
       p_target_conversation_id: targetConversationId,
-      p_client_uuid: operationId,
+      p_client_uuid: clientUuid,
     });
     forwarded = unwrap(result) as ChatMessage;
 
     for (let index = 0; index < sourceAttachments.length; index += 1) {
       const attachment = sourceAttachments[index];
-      const storagePath = targetOrganizationId + '/' + targetConversationId + '/' + deriveForwardAttachmentObjectId(operationId, index);
-      const fileSize = attachment.size_bytes ?? 0;
+      const storagePath = targetOrganizationId + '/' + targetConversationId + '/' + deriveForwardAttachmentObjectId(clientUuid, index);
+      const fileSize = copiedFileSizes[index] ?? attachment.size_bytes ?? 0;
       if (fileSize <= 0 || fileSize > 52_428_800) {
         throw new Error('حجم پیوست از محدوده مجاز ذخیره‌سازی خارج است.');
       }
