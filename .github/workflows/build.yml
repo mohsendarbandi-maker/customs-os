@@ -248,6 +248,17 @@ jobs:
               exit 1
             fi
 
+            echo "Checking mobile-host auth bridge and security headers"
+            bridge_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/mobile-bridge.headers -o /tmp/mobile-bridge.html -w '%{http_code}' "https://mobile.darbandicommercial.ir/__auth-bridge.html?__smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}")"
+            test "$bridge_status" = "200"
+            grep -Fqi 'Cache-Control: no-store, private' /tmp/mobile-bridge.headers
+            grep -Fqi 'frame-ancestors https://darbandicommercial.ir' /tmp/mobile-bridge.headers
+            grep -Fq 'customs-auth-sync' /tmp/mobile-bridge.html
+            if grep -Eqi '^x-frame-options:' /tmp/mobile-bridge.headers; then
+              echo "Mobile auth bridge must rely on its narrow CSP frame-ancestors allowlist."
+              exit 1
+            fi
+
             echo "Checking the one canonical manifest and all declared PNG icons"
             curl --fail --silent --show-error --location --max-time 30 -o /tmp/customs-manifest.json "$base/manifest.webmanifest?__pwa_smoke=${GITHUB_RUN_ID}"
             node -e '
