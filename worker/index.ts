@@ -293,7 +293,11 @@ export default {
       headers.set('Cache-Control', 'no-store, private');
       headers.set('X-Content-Type-Options', 'nosniff');
       headers.set('Referrer-Policy', 'no-referrer');
-      headers.set('X-Frame-Options', 'SAMEORIGIN');
+      headers.delete('X-Frame-Options');
+      headers.set(
+        'Content-Security-Policy',
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-ancestors https://darbandicommercial.ir https://www.darbandicommercial.ir; base-uri 'none'; form-action 'none'",
+      );
       headers.set('Content-Type', 'text/html; charset=utf-8');
       return new Response(request.method === 'HEAD' ? null : upstream.body, {
         status: upstream.status,
