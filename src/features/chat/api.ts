@@ -18,17 +18,18 @@ const SIGNED_ATTACHMENT_URL_CACHE_LIMIT = 200;
 
 // Signed URLs expire after one hour. Reuse them in this app session for 50 minutes,
 // and coalesce concurrent refreshes so every chat re-render does not sign every file again.
-async function getSignedAttachmentUrl(storagePath: string): Promise<string | null> {
+async function getSignedAttachmentUrl(storagePath: string, userId: string): Promise<string | null> {
+  const cacheKey = userId + ':' + storagePath;
   const now = Date.now();
-  const cached = signedAttachmentUrlCache.get(storagePath);
+  const cached = signedAttachmentUrlCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
-    signedAttachmentUrlCache.delete(storagePath);
-    signedAttachmentUrlCache.set(storagePath, cached);
+    signedAttachmentUrlCache.delete(cacheKey);
+    signedAttachmentUrlCache.set(cacheKey, cached);
     return cached.url;
   }
-  if (cached) signedAttachmentUrlCache.delete(storagePath);
+  if (cached) signedAttachmentUrlCache.delete(cacheKey);
 
-  const pending = signedAttachmentUrlPending.get(storagePath);
+  const pending = signedAttachmentUrlPending.get(cacheKey);
   if (pending) return pending;
 
   const request = (async (): Promise<string | null> => {
@@ -41,7 +42,7 @@ async function getSignedAttachmentUrl(storagePath: string): Promise<string | nul
         if (oldest === undefined) break;
         signedAttachmentUrlCache.delete(oldest);
       }
-      signedAttachmentUrlCache.set(storagePath, {
+      signedAttachmentUrlCache.set(cacheKey, {
         url,
         expiresAt: Date.now() + SIGNED_ATTACHMENT_URL_CACHE_TTL_MS,
       });
@@ -49,10 +50,10 @@ async function getSignedAttachmentUrl(storagePath: string): Promise<string | nul
     } catch {
       return null;
     } finally {
-      signedAttachmentUrlPending.delete(storagePath);
+      signedAttachmentUrlPending.delete(cacheKey);
     }
   })();
-  signedAttachmentUrlPending.set(storagePath, request);
+  signedAttachmentUrlPending.set(cacheKey, request);
   return request;
 }
 
@@ -179,10 +180,14 @@ async function enrichMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
   if (starsResult.error) throw new Error(starsResult.error.message);
   if (receiptsResult.error) throw new Error(receiptsResult.error.message);
 
+  const sessionResult = await supabase.auth.getSession();
+  const signingUserId = sessionResult.data.session?.user.id ?? null;
   const enrichedAttachments = await Promise.all(
     (attachmentsResult.data ?? []).map(async (attachment) => ({
       ...attachment,
-      url: attachment.storage_path ? await getSignedAttachmentUrl(attachment.storage_path) : null,
+      url: attachment.storage_path && signingUserId
+        ? await getSignedAttachmentUrl(attachment.storage_path, signingUserId)
+        : null,
     })),
   );
 
@@ -621,7 +626,16 @@ async function uploadChatStorageObject(
       const resumableMessage = resumableError instanceof Error
         ? resumableError.message
         : String(resumableError);
-      const fallback = await uploadDirect();
+      let fallback;
+      try {
+        fallback = await uploadDirect();
+      } catch (fallbackError) {
+        const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        throw new Error(
+          'آپلود قابل‌ادامه ناموفق بود: ' + resumableMessage +
+          '؛ آپلود جایگزین هم ناموفق بود: ' + fallbackMessage,
+        );
+      }
       if (fallback.error) {
         // A final TUS PATCH may have committed the object before the client lost
         // the response. Accept it only when Storage confirms the exact byte size.
