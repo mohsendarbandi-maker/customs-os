@@ -26,6 +26,15 @@ describe('workspace cache persistence', () => {
     expect(cache).toContain("'document_content'");
     expect(cache).toContain('MAX_SNAPSHOT_BYTES');
   });
+  it('gates route data hooks until the user-scoped snapshot is hydrated and keeps queries warm', () => {
+    const cache = read('src/components/QueryCachePersistence.tsx');
+    const app = read('src/App.tsx');
+    expect(cache).toContain('(scope && activeScope.current !== scope)');
+    expect(cache).toContain('hydrate(queryClient, safeState)');
+    expect(app).toContain('staleTime:2*60*1000');
+    expect(app).toContain('gcTime:24*60*60*1000');
+    expect(app).toContain('refetchOnReconnect:true');
+  });
   it('restores the cached auth profile before launching the background profile refresh', () => {
     const auth = read('src/context/AuthContext.tsx');
     expect(auth).toContain("'auth-profile'");
