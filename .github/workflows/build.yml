@@ -426,6 +426,44 @@ jobs:
                 { timeout: 15000, message: `React did not render visible content into #root\nErrors: ${errors.join(' | ') || 'none'}\nScripts: ${scriptResponses.join(' | ') || 'none'}` },
               ).not.toBe('');
 
+              // Verify an already-visited app opens from service-worker cache while offline.
+              // Use an isolated browser context so expected offline API failures do not affect
+              // the normal online smoke test's JavaScript/network assertions.
+              const offlineContext = await browser.newContext();
+              try {
+                const offlinePage = await offlineContext.newPage();
+                const offlineUrl = baseURL + '/?__offline_reopen_smoke=' + encodeURIComponent(smokeToken);
+                await offlinePage.goto(offlineUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await expect(offlinePage.locator('#root')).toBeAttached();
+                await expect.poll(
+                  async () => await offlinePage.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
+                  { timeout: 20000, message: 'Service worker did not take control of the app shell' },
+                ).toBe(true);
+                await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  { timeout: 15000, message: 'App shell did not render before offline reopen' },
+                ).not.toBe('');
+                await offlineContext.setOffline(true);
+                await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 12000 });
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  { timeout: 12000, message: 'Visited app did not render from cached shell while offline' },
+                ).not.toBe('');
+                const offlineShell = await offlinePage.evaluate(() => ({
+                  controlled: Boolean(navigator.serviceWorker?.controller),
+                  rootText: document.querySelector('#root')?.textContent?.trim() || '',
+                  build: document.querySelector('meta[name="theme-color"]')?.getAttribute('content') || '',
+                }));
+                if (!offlineShell.controlled || !offlineShell.rootText) {
+                  throw new Error(`Cached app shell failed to reopen offline: ${JSON.stringify(offlineShell)}`);
+                }
+                console.log('Offline app-shell reopen passed:', JSON.stringify(offlineShell));
+                await offlineContext.setOffline(false);
+              } finally {
+                await offlineContext.close();
+              }
+
               const chatPage = await page.context().newPage();
               const chatErrors = [];
               const chatScripts = [];
