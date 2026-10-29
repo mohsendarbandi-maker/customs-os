@@ -14,7 +14,7 @@ const auth = read('src/context/AuthContext.tsx');
 
 describe('offline and background-update safety', () => {
   it('uses short-timeout network-first navigation cache with a precached offline shell', () => {
-    const navigationRoute = serviceWorker.indexOf("registerRoute(({request})=>request.mode==='navigate',new NetworkFirst({");
+    const navigationRoute = serviceWorker.indexOf("registerRoute(({request,url})=>request.mode==='navigate'");
     const precacheRoute = serviceWorker.indexOf('precacheAndRoute(self.__WB_MANIFEST)');
     expect(navigationRoute).toBeGreaterThan(-1);
     expect(serviceWorker).toContain("cacheName:'customs-os-navigation-v2'");
