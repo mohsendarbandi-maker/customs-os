@@ -678,10 +678,21 @@ export async function forwardChatMessage(
     throw new Error(sourceResult.error.message);
   }
 
+  const sourceAttachments = sourceResult.data ?? [];
+  if (
+    (forwarded.message_type === 'file' || forwarded.message_type === 'voice') &&
+    sourceAttachments.length === 0
+  ) {
+    try { await deleteForAll(forwarded.id); } catch {}
+    throw new Error('پیوست این پیام پیدا نشد؛ پیام بدون فایل منتقل نشد.');
+  }
+
   const copiedPaths: string[] = [];
   try {
-    for (const attachment of sourceResult.data ?? []) {
-      if (!attachment.storage_path) continue;
+    for (const attachment of sourceAttachments) {
+      if (!attachment.storage_path) {
+        throw new Error('مسیر فایل اصلی موجود نیست؛ پیام منتقل نشد.');
+      }
       const download = await supabase.storage.from('chat-files').download(attachment.storage_path);
       if (download.error || !download.data) {
         throw new Error(download.error?.message || 'پیوست اصلی قابل دریافت نیست.');
