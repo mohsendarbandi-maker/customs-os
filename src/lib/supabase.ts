@@ -23,6 +23,7 @@ type CachedRestResponse = {
 };
 
 const nativeFetch: typeof fetch = globalThis.fetch.bind(globalThis);
+let authClient: SupabaseClient | null = null;
 const restCacheScopes = new Map<string, string>();
 const MAX_CACHED_REST_BODY_CHARS = 400_000;
 const REST_RESPONSE_HEADERS = [
@@ -69,9 +70,9 @@ const hashCacheKey = async (value: string) => {
 };
 
 const getRestCacheScope = async () => {
-  if (!supabaseClient) return null;
+  if (!authClient) return null;
   try {
-    const { data } = await supabaseClient.auth.getSession();
+    const { data } = await authClient.auth.getSession();
     const session = data.session;
     const userId = session?.user.id;
     if (!userId || !session?.access_token) return null;
@@ -103,10 +104,11 @@ const cacheRestResponse = async (
   try {
     const body = await response.text();
     if (!body || body.length > MAX_CACHED_REST_BODY_CHARS) return;
-    const headers = REST_RESPONSE_HEADERS
-      .map(name => [name, response.headers.get(name)] as const)
-      .filter((entry): entry is readonly [string, string] => entry[1] !== null)
-      .map(([name, value]) => [name, value] as [string, string]);
+    const headers: Array<[string, string]> = [];
+    for (const name of REST_RESPONSE_HEADERS) {
+      const value = response.headers.get(name);
+      if (value !== null) headers.push([name, value]);
+    }
     const payload: CachedRestResponse = { status: response.status, headers, body };
     await saveOfflineQueryCache('rest-get:' + namespace, userId, organizationId, payload);
   } catch {
@@ -184,6 +186,7 @@ const baseClient = createClient(supabaseUrl, supabaseAnonKey, {
     storage: authSessionStorage,
   },
 });
+authClient = baseClient;
 attachSupabaseClient(baseClient);
 if (typeof window !== 'undefined') startOfflineQueue();
 
