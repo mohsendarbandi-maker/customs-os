@@ -24,7 +24,7 @@ type CachedRestResponse = {
 
 const nativeFetch: typeof fetch = globalThis.fetch.bind(globalThis);
 let authClient: SupabaseClient | null = null;
-const restCacheScopes = new Map<string, string>();
+const restCacheScopes = new Map<string, { organizationId: string; checkedAt: number }>();
 const MAX_CACHED_REST_BODY_CHARS = 400_000;
 const REST_RESPONSE_HEADERS = [
   'content-type',
@@ -76,16 +76,21 @@ const getRestCacheScope = async () => {
     const session = data.session;
     const userId = session?.user.id;
     if (!userId || !session?.access_token) return null;
-    const knownOrganizationId = restCacheScopes.get(userId);
-    if (knownOrganizationId) return { userId, organizationId: knownOrganizationId, accessToken: session.access_token };
+    const knownScope = restCacheScopes.get(userId);
+    if (knownScope && Date.now() - knownScope.checkedAt < 30_000) {
+      return { userId, organizationId: knownScope.organizationId, accessToken: session.access_token };
+    }
     const cachedProfile = await readOfflineQueryCache<{ organization_id?: string | null; is_active?: boolean }>(
       'auth-profile',
       userId,
       userId,
     ).catch(() => null);
     const organizationId = cachedProfile?.payload?.organization_id;
-    if (cachedProfile?.payload?.is_active !== true || !organizationId) return null;
-    restCacheScopes.set(userId, organizationId);
+    if (cachedProfile?.payload?.is_active !== true || !organizationId) {
+      restCacheScopes.delete(userId);
+      return null;
+    }
+    restCacheScopes.set(userId, { organizationId, checkedAt: Date.now() });
     return { userId, organizationId, accessToken: session.access_token };
   } catch {
     return null;
