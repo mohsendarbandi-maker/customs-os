@@ -7,7 +7,7 @@ describe('authenticated REST read cache', () => {
     expect(source).toContain("request.method !== 'GET'");
     expect(source).toContain("url.pathname.startsWith('/rest/v1/')");
     expect(source).toContain("table === 'rpc'");
-    expect(source).toContain('profiles|chat(?:_|$)|chat_|documents?);
+    expect(source).toContain('profiles|chat(?:_|$)|chat_|documents?');
     expect(source).toContain('MAX_CACHED_REST_BODY_CHARS');
   });
   it('partitions cache by the current user and organization and validates the active bearer token', () => {
