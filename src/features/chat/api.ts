@@ -10,6 +10,52 @@ const unwrap = <T>(result: { data: T | null; error: { message: string } | null }
   return result.data;
 };
 
+type SignedAttachmentUrl = { url: string; expiresAt: number };
+const signedAttachmentUrlCache = new Map<string, SignedAttachmentUrl>();
+const signedAttachmentUrlPending = new Map<string, Promise<string | null>>();
+const SIGNED_ATTACHMENT_URL_CACHE_TTL_MS = 50 * 60 * 1000;
+const SIGNED_ATTACHMENT_URL_CACHE_LIMIT = 200;
+
+// Signed URLs expire after one hour. Reuse them in this app session for 50 minutes,
+// and coalesce concurrent refreshes so every chat re-render does not sign every file again.
+async function getSignedAttachmentUrl(storagePath: string): Promise<string | null> {
+  const now = Date.now();
+  const cached = signedAttachmentUrlCache.get(storagePath);
+  if (cached && cached.expiresAt > now) {
+    signedAttachmentUrlCache.delete(storagePath);
+    signedAttachmentUrlCache.set(storagePath, cached);
+    return cached.url;
+  }
+  if (cached) signedAttachmentUrlCache.delete(storagePath);
+
+  const pending = signedAttachmentUrlPending.get(storagePath);
+  if (pending) return pending;
+
+  const request = (async (): Promise<string | null> => {
+    try {
+      const signed = await supabase.storage.from('chat-files').createSignedUrl(storagePath, 3600);
+      const url = signed.data?.signedUrl;
+      if (signed.error || !url) return null;
+      while (signedAttachmentUrlCache.size >= SIGNED_ATTACHMENT_URL_CACHE_LIMIT) {
+        const oldest = signedAttachmentUrlCache.keys().next().value;
+        if (oldest === undefined) break;
+        signedAttachmentUrlCache.delete(oldest);
+      }
+      signedAttachmentUrlCache.set(storagePath, {
+        url,
+        expiresAt: Date.now() + SIGNED_ATTACHMENT_URL_CACHE_TTL_MS,
+      });
+      return url;
+    } catch {
+      return null;
+    } finally {
+      signedAttachmentUrlPending.delete(storagePath);
+    }
+  })();
+  signedAttachmentUrlPending.set(storagePath, request);
+  return request;
+}
+
 export async function listConversations(): Promise<ChatConversation[]> {
   const result = await supabase.rpc('chat_conversation_list', { p_limit: 100 });
   const conversations = unwrap(result) as ChatConversation[];
@@ -134,14 +180,10 @@ async function enrichMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
   if (receiptsResult.error) throw new Error(receiptsResult.error.message);
 
   const enrichedAttachments = await Promise.all(
-    (attachmentsResult.data ?? []).map(async (attachment) => {
-      if (!attachment.storage_path) {
-        return { ...attachment, url: null };
-      }
-
-      const signed = await supabase.storage.from('chat-files').createSignedUrl(attachment.storage_path, 3600);
-      return { ...attachment, url: signed.data?.signedUrl ?? null };
-    }),
+    (attachmentsResult.data ?? []).map(async (attachment) => ({
+      ...attachment,
+      url: attachment.storage_path ? await getSignedAttachmentUrl(attachment.storage_path) : null,
+    })),
   );
 
   const byMessage = new Map<string, ChatMessage['attachments']>();
