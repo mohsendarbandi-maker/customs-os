@@ -539,6 +539,50 @@ jobs:
                 await touchContext.close();
               }
 
+              // Verify the primary domain hands an iPhone browser to the mobile
+              // hostname, retaining the deep link and transferring auth only through
+              // the nonce-scoped first-party bridge (never through URL parameters).
+              const mobileRedirectContext = await browser.newContext({
+                viewport: { width: 390, height: 844 },
+                screen: { width: 390, height: 844 },
+                deviceScaleFactor: 3,
+                isMobile: true,
+                hasTouch: true,
+                userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+              });
+              try {
+                const mobileRedirectPage = await mobileRedirectContext.newPage();
+                const mobileRedirectErrors = [];
+                mobileRedirectPage.on('pageerror', (error) => mobileRedirectErrors.push(error.message));
+                await mobileRedirectPage.goto(baseURL + '/reminders/login?__mobile_redirect_smoke=' + encodeURIComponent(smokeToken), {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 30000,
+                });
+                await expect.poll(
+                  async () => new URL(mobileRedirectPage.url()).hostname,
+                  { timeout: 15000, message: 'iPhone browser did not transition to the mobile hostname' },
+                ).toBe('mobile.darbandicommercial.ir');
+                const mobileEntry = await mobileRedirectPage.evaluate(() => ({
+                  hostname: window.location.hostname,
+                  pathname: window.location.pathname,
+                  search: window.location.search,
+                  rootText: document.querySelector('#root')?.textContent?.trim() || '',
+                  manifestHref: document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.getAttribute('href') || '',
+                }));
+                if (
+                  mobileEntry.pathname !== '/reminders/login' ||
+                  !mobileEntry.search.includes('__mobile_redirect_smoke=') ||
+                  mobileEntry.manifestHref !== '/manifest.webmanifest' ||
+                  !mobileEntry.rootText
+                ) {
+                  throw new Error(`Mobile hostname handoff lost the route or failed to render: ${JSON.stringify(mobileEntry)}`);
+                }
+                if (mobileRedirectErrors.length) throw new Error(mobileRedirectErrors.join('; '));
+                console.log('iPhone routing and mobile shell render passed:', JSON.stringify(mobileEntry));
+              } finally {
+                await mobileRedirectContext.close();
+              }
+
               const manifestHref = await remindersPage.locator('link[rel="manifest"]').getAttribute('href');
               if (manifestHref !== '/manifest.webmanifest') {
                 throw new Error(`Reminders route must use the single canonical manifest: ${manifestHref || 'missing'}`);
