@@ -9,6 +9,8 @@ describe('workspace cache persistence', () => {
     expect(cache).toContain('readOfflineQueryCache<CachedQuerySnapshot>(CACHE_NAMESPACE, user.id, profile!.organization_id)');
     expect(cache).toContain('saveOfflineQueryCache(CACHE_NAMESPACE, user.id, profile.organization_id, snapshot)');
     expect(cache).toContain('activeScope.current !== currentScope');
+    expect(cache).toContain('activeScope.current && activeScope.current !== scope');
+    expect(cache).not.toContain('if (scope && readyScope !== scope)');
     expect(cache).toContain('queryClient.clear()');
   });
   it('excludes session material, chat bodies, attachments and documents from the general snapshot', () => {
