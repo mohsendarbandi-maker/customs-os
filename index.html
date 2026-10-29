@@ -72,9 +72,9 @@
           if (completed) return;
           completed = true;
           cleanup();
-          // If the bridge host is unavailable, keep an already-authenticated main
-          // origin usable instead of redirecting the user into an unexpected login.
-          if (!mainSession) window.location.replace(target.toString());
+          // A failed bridge must never strand an unauthenticated visitor on an
+          // unreachable mobile hostname. The primary origin remains usable; retry
+          // mobile routing on a later navigation once the bridge host responds.
         };
         const onMessage = (event) => {
           if (event.origin !== mobileOrigin || event.source !== frame.contentWindow ||
