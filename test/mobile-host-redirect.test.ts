@@ -10,6 +10,8 @@ describe('mobile hostname handoff', () => {
     expect(html).toContain('window.location.replace(target.toString())');
     expect(html).toContain('const target = new URL(window.location.href)');
     expect(html).toContain('navigator.maxTouchPoints');
+    expect(html).toContain("window.matchMedia('(display-mode: standalone)').matches");
+    expect(html).toContain('navigator.standalone === true');
   });
   it('transfers auth only via nonce-scoped postMessage and never via URL parameters', () => {
     const html = read('index.html');
