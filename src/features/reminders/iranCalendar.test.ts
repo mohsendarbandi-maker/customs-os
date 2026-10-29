@@ -12,12 +12,12 @@ import {
 describe('Iranian Jalali calendar and working days', () => {
   it('bundles holiday data only for a year with a published official source', () => {
     expect(IRAN_CALENDAR_DATA_YEAR).toBe(1405);
-    expect(IRAN_OFFICIAL_HOLIDAYS_1405.length).toBe(27);
+    expect(IRAN_OFFICIAL_HOLIDAYS_1405.length).toBe(26);
     expect(hasVerifiedIranHolidayData(1405)).toBe(true);
     expect(hasVerifiedIranHolidayData(1406)).toBe(false);
   });
 
-  it('recognizes Friday as the weekly non-working day without treating Thursday as a weekend', () => {
+  it('matches the official 1405 holiday date for Imam Jafar Sadiq martyrdom', () => {\n    expect(getIranCalendarDayInfo(1405, 1, 25).holiday?.title).toContain('امام جعفر صادق');\n    expect(getIranCalendarDayInfo(1405, 1, 24).holiday).toBeNull();\n    expect(getIranCalendarDayInfo(1405, 3, 3).holiday).toBeNull();\n  });\n\n  it('recognizes Friday as the weekly non-working day without treating Thursday as a weekend', () => {
     expect(getIranCalendarDayInfo(1405, 1, 7).isFriday).toBe(true);
     expect(isIranWorkingDay('1405-01-07')).toBe(false);
     expect(isIranWorkingDay('1405-01-06')).toBe(true);
