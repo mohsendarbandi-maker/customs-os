@@ -677,3 +677,30 @@ html[data-theme="light"] #root input[type="time"] { color-scheme: light; }
     font-size: 14px !important;
   }
 }
+
+/* Restore the intended card treatment as the shipment results now use semantic classes. */
+.reminders-app-standalone .reminders-shipment-search-result {
+  border: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  font-size: 14px !important;
+  cursor: pointer;
+}
+.reminders-app-standalone .reminders-shipment-search-result:hover {
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--border)) !important;
+  background: var(--surface-2) !important;
+}
+.reminders-app-standalone .reminders-shipment-selected {
+  border: 1px solid color-mix(in srgb, var(--success, #16845b) 38%, var(--border)) !important;
+  background: color-mix(in srgb, var(--success, #16845b) 6%, var(--surface)) !important;
+  color: var(--text) !important;
+}
+.reminders-app-standalone .reminders-shipment-selected-icon {
+  background: color-mix(in srgb, var(--success, #16845b) 12%, var(--surface)) !important;
+  color: var(--success, #16845b) !important;
+}
+.reminders-app-standalone .reminders-shipment-selected-remove {
+  border: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  color: var(--text-muted) !important;
+}
