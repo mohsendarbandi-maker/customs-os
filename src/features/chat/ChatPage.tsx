@@ -89,7 +89,7 @@ export const ChatPage:React.FC=()=>{
   const chatDraftBeforeEdit=useRef('');
  const[messages,setMessages]=useState<ChatMessage[]>([]);const[queueItems,setQueueItems]=useState<QueuedRpc[]>([]);
  const messagesRef=useRef<ChatMessage[]>([]);const selectedIdRef=useRef<string|null>(null);
- const[text,setText]=useState('');const[error,setError]=useState<string|null>(null);
+ const[text,setText]=useState('');const[error,setError]=useState<string|null>(null);const[success,setSuccess]=useState<string|null>(null);
  const[loading,setLoading]=useState(true);const[online,setOnline]=useState(()=>navigator.onLine);
  const[realtimeState,setRealtimeState]=useState<RealtimeState>(()=>navigator.onLine?'connecting':'offline');
  const[typingUsers,setTypingUsers]=useState<string[]>([]);const[people,setPeople]=useState<Person[]>([]);
@@ -435,7 +435,7 @@ export const ChatPage:React.FC=()=>{
  const react=async(m:ChatMessage,emoji:string)=>{try{await toggleChatReaction(m.id,emoji);if(selectedId)await loadConversation(selectedId,false);closeMessageMenu()}catch(e){setError(err(e))}};
  const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);closeMessageMenu();if(selectedId)await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
  const editCurrent=async()=>{if(!editId||!selectedId)return;const body=normalizeFaText(text);if(!body)return;try{await editChatMessage(editId,body);setEditId(null);setText(chatDraftBeforeEdit.current);chatDraftBeforeEdit.current='';await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
- const forwardCurrent=async(targetId:string)=>{if(!forwardId)return;try{await forwardChatMessage(forwardId,targetId);setForwardId(null);void refresh();setError('پیام ارسال شد.')}catch(e){setError(err(e))}};
+ const forwardCurrent=async(targetId:string)=>{if(!forwardId)return;try{await forwardChatMessage(forwardId,targetId);setForwardId(null);setError(null);setSuccess('پیام و پیوست‌ها به گفتگو ارسال شدند.');void refresh()}catch(e){setSuccess(null);setError(err(e))}};
  const publishShipmentUpdate=async()=>{const selected=conversations.find(c=>c.conversation_id===selectedId);if(!selectedId||!selected?.shipment_id)return;try{await shareShipmentUpdate(selectedId,selected.shipment_id,shipmentStatus,shipmentNote.trim()||undefined);setShipmentUpdateOpen(false);setShipmentNote('');await loadConversation(selectedId,false);void refresh()}catch(e){setError(err(e))}};
 
  const loadOlder=useCallback(async()=>{
@@ -632,7 +632,7 @@ export const ChatPage:React.FC=()=>{
    {(reply||editId)&&<div className="mx-2 md:mx-3 mb-1 rounded-xl border app-border bg-black/5 dark:bg-white/5 p-2 flex gap-2 items-center"><div className="w-1 self-stretch rounded-full bg-[var(--primary)]"/><div className="flex-1 min-w-0 text-xs truncate">{editId?'در حال ویرایش پیام':'پاسخ به: '+(reply?.body||'پیام پیوست‌دار')}</div><button type="button" className="icon-btn" onClick={()=>{setReply(null);setEditId(null);setText(chatDraftBeforeEdit.current);chatDraftBeforeEdit.current=''}} aria-label="لغو"><X size={15}/></button></div>}
 
    <div className="chat-composer shrink-0 border-t app-border px-2 py-2 md:p-3 bg-[var(--surface)]" style={{paddingBottom:'max(8px,env(safe-area-inset-bottom))'}}>
-    <input ref={fileInput} type="file" multiple className="hidden" accept="image/*,application/pdf,text/plain,.doc,.docx,.xls,.xlsx" onChange={e=>{const files=Array.from(e.currentTarget.files??[]);e.currentTarget.value='';chooseAttachments(files)}}/>
+    <input ref={fileInput} type="file" multiple className="hidden" accept="*/*" onChange={e=>{const files=Array.from(e.currentTarget.files??[]);e.currentTarget.value='';chooseAttachments(files)}}/>
     {pendingFiles.length>0&&<section className="mb-2 max-h-[34dvh] overflow-y-auto rounded-2xl border app-border bg-[var(--surface-2)] p-2.5" aria-label="فایل‌های آمادهٔ ارسال">
      <div className="flex items-center justify-between gap-2 px-1 pb-2"><b className="text-xs">فایل‌های آمادهٔ ارسال · {pendingFiles.length}</b><button type="button" className="min-h-9 px-2 rounded-lg border app-border text-xs" disabled={attachmentBusy} onClick={()=>setPendingFiles([])}>پاک‌کردن همه</button></div>
      <div className="space-y-2">{pendingFiles.map(item=><div key={item.id} className="grid grid-cols-[minmax(0,1fr)_40px] gap-2 rounded-xl border app-border bg-[var(--surface)] p-2">
@@ -703,6 +703,7 @@ export const ChatPage:React.FC=()=>{
    </div>
   </div>}
 
+  {success&&<div role="status" aria-live="polite" className="fixed bottom-4 left-3 right-3 md:left-4 md:right-auto z-[849] max-w-md rounded-2xl border border-emerald-500/30 bg-[var(--surface)] p-3 shadow-xl text-sm">{success}<button type="button" className="block text-xs mt-2 app-muted min-h-8" onClick={()=>setSuccess(null)}>بستن</button></div>}
   {error&&<div className="fixed bottom-4 left-3 right-3 md:left-4 md:right-auto z-[850] max-w-md rounded-2xl border app-border bg-[var(--surface)] p-3 shadow-xl text-sm">{error}<button type="button" className="block text-xs mt-2 app-muted min-h-8" onClick={()=>setError(null)}>بستن</button></div>}
  </div>;
 };
