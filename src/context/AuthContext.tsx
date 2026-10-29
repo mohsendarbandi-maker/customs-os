@@ -293,16 +293,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUser(initialSession?.user ?? null);
 
         if (initialSession?.user) {
-          await fetchProfile(initialSession.user.id);
+          const userId = initialSession.user.id;
+          // Warm-start the authenticated shell from the previously verified,
+          // user-scoped IndexedDB profile before waiting on the network. The
+          // server profile is still refreshed immediately in the background;
+          // all data writes remain protected by Supabase RLS.
+          const cachedProfile = await readOfflineQueryCache<UserProfile | null>(
+            'auth-profile',
+            userId,
+            userId,
+          ).catch(() => null);
+          const offlineProfile = cachedProfile?.payload;
+          if (
+            offlineProfile &&
+            offlineProfile.id === userId &&
+            offlineProfile.is_active &&
+            Boolean(offlineProfile.organization_id)
+          ) {
+            setProfile(offlineProfile);
+            setNeedsOnboarding(false);
+            setError(null);
+            initialized.current = true;
+            setLoading(false);
+            void fetchProfile(userId);
+          } else {
+            await fetchProfile(userId);
+            initialized.current = true;
+          }
         } else {
           currentFetchId.current++;
           setProfile(null);
           setNeedsOnboarding(false);
           setError(null);
           setLoading(false);
+          initialized.current = true;
         }
-
-        initialized.current = true;
       } catch (err: unknown) {
         if (!active || !isMounted.current) return;
 
