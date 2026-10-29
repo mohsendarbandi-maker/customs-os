@@ -9,6 +9,20 @@ const standalone = () =>
   window.matchMedia('(display-mode: standalone)').matches ||
   Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 
+const hasUnsavedWork = () => {
+  if (document.querySelector('[data-unsaved="true"], [data-pending-save="true"]')) return true;
+  const active = document.activeElement;
+  if (active instanceof HTMLElement &&
+      active.matches('input:not([type="button"]):not([type="submit"]), textarea, select, [contenteditable="true"]')) {
+    return true;
+  }
+  const chatDraft = document.querySelector<HTMLTextAreaElement>('.chat-composer textarea');
+  if (chatDraft?.value.trim()) return true;
+  const reminderDraft = document.querySelector<HTMLInputElement>('#reminder-quick-input');
+  if (reminderDraft?.value.trim()) return true;
+  return false;
+};
+
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
@@ -23,6 +37,8 @@ export const PwaLifecycle: React.FC = () => {
   const [newVersionAvailable, setNewVersionAvailable] = useState(false);
   const [updating, setUpdating] = useState(false);
   const updateSW = useRef<UpdateSW | null>(null);
+  const pendingUpdateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingUpdate = useRef(false);
   const location = useLocation();
 
   // The install identity is always Customs OS. Only the browser-tab title changes by route.
@@ -63,9 +79,25 @@ export const PwaLifecycle: React.FC = () => {
           updateSW.current = registerSW({
             immediate: true,
             onNeedRefresh: () => {
-              // Workbox downloads the new assets in the background. Never reload a form
-              // or active chat automatically; let the user choose when to activate it.
+              // Automatically activate a new build on a safe, idle app open so installed
+              // PWAs cannot remain stuck on old CSS/JS indefinitely. When a composer or
+              // form contains active work, keep the visible manual update notice instead.
+              pendingUpdate.current = true;
               setNewVersionAvailable(true);
+              if (pendingUpdateTimer.current) clearTimeout(pendingUpdateTimer.current);
+              pendingUpdateTimer.current = setTimeout(() => {
+                pendingUpdateTimer.current = null;
+                if (document.visibilityState !== 'visible' || !navigator.onLine || hasUnsavedWork()) return;
+                const activate = updateSW.current;
+                if (!activate || !pendingUpdate.current) return;
+                pendingUpdate.current = false;
+                setUpdating(true);
+                void activate(true).catch((error) => {
+                  console.warn('[PWA] automatic safe update failed:', error);
+                  setUpdating(false);
+                  pendingUpdate.current = true;
+                });
+              }, 1800);
             },
             onNeedReload: () => undefined,
             onOfflineReady: () => undefined,
@@ -96,6 +128,8 @@ export const PwaLifecycle: React.FC = () => {
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      if (pendingUpdateTimer.current) clearTimeout(pendingUpdateTimer.current);
+      pendingUpdateTimer.current = null;
       window.removeEventListener('beforeinstallprompt', onInstall);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
@@ -146,6 +180,8 @@ export const PwaLifecycle: React.FC = () => {
   };
 
   const activateUpdate = async () => {
+    pendingUpdate.current = false;
+    if (pendingUpdateTimer.current) clearTimeout(pendingUpdateTimer.current);
     const activate = updateSW.current;
     if (!activate) {
       window.location.reload();
