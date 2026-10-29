@@ -9,7 +9,7 @@ describe('workspace cache persistence', () => {
     expect(cache).toContain('readOfflineQueryCache<CachedQuerySnapshot>(CACHE_NAMESPACE, user.id, profile!.organization_id)');
     expect(cache).toContain('saveOfflineQueryCache(CACHE_NAMESPACE, user.id, profile.organization_id, snapshot)');
     expect(cache).toContain('activeScope.current !== currentScope');
-    expect(cache).toContain('activeScope.current && activeScope.current !== scope');
+    expect(cache).toContain('(scope && activeScope.current !== scope)');
     expect(cache).toContain('if (previousScope && previousScope !== scope) queryClient.clear()');
     expect(cache).toContain('const [scopeSwitching, setScopeSwitching] = useState(false)');
     expect(cache).toContain('scopeSwitching ||');
