@@ -6,7 +6,7 @@ import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
 import{readDraftValue,removeDraftValue,writeDraftValue}from'../../lib/draftStorage';
-import{subscribeOfflineQueue,flushOfflineQueue,isChatQueueItem,chatClientUuid,retryChatMessage,type QueuedRpc}from'../../lib/offlineQueue';
+import{subscribeOfflineQueue,flushOfflineQueue,isChatQueueItem,chatClientUuid,retryChatMessage,readOfflineQueryCache,saveOfflineQueryCache,type QueuedRpc}from'../../lib/offlineQueue';
 import{enableChatPush,hasChatPushSubscription}from'./push';
 import{addConversationMember,createConversation,createDirectConversation,deleteForAll,deleteForMe,editChatMessage,forwardChatMessage,listConversations,getMessageById,listMessageReceipts,listMessages,listMessagesAfter,listOrgConnections,markChatFocus,markDelivered,markPlayed,markRead,clearChatFocus,searchChat,sendFileMessage,sendMessage,setMessageMentions,shareShipmentUpdate,toggleChatPin,toggleChatReaction,toggleChatStar}from'./api';
 import{supabase}from'../../lib/supabase';
@@ -171,27 +171,77 @@ export const ChatPage:React.FC=()=>{
   },[chatDraftKey,text,editId]);
  useEffect(()=>{latestMessageRef.current=[...messages].filter(m=>!m.id.startsWith('local-')).pop()??latestMessageRef.current},[messages]);
 
+ const conversationCacheHydrated = useRef<string|null>(null);
  const refresh=useCallback(async()=>{
-  try{setConversations(await listConversations())}catch(e){setError(err(e))}finally{setLoading(false)}
- },[]);
+  const userId=user?.id, organizationId=profile?.organization_id;
+  const scope=userId&&organizationId?`${userId}:${organizationId}`:null;
+  let cachedConversationList:ChatConversation[]|null=null;
+  if(scope&&conversationCacheHydrated.current!==scope){
+   conversationCacheHydrated.current=scope;
+   try{
+    const cached=await readOfflineQueryCache<ChatConversation[]>('chat-conversations',userId,organizationId);
+    if(Array.isArray(cached?.payload)){
+     cachedConversationList=cached.payload;
+     setConversations(cached.payload);
+     setLoading(false);
+    }
+   }catch{}
+  }
+  try{
+   const latest=await listConversations();
+   setConversations(latest);
+   if(userId&&organizationId)void saveOfflineQueryCache('chat-conversations',userId,organizationId,latest).catch(()=>undefined);
+   setError(null);
+  }catch(e){
+   if(!cachedConversationList)setError(err(e));
+  }finally{setLoading(false)}
+ },[profile?.organization_id,user?.id]);
 
  const scrollBottom=useCallback((smooth=true)=>{
   requestAnimationFrame(()=>bottom.current?.scrollIntoView({behavior:smooth?'smooth':'auto',block:'end'}));
  },[]);
 
  const loadConversation=useCallback(async(id:string,initial=true)=>{
+  const userId=user?.id, organizationId=profile?.organization_id;
+  let restoredCache=false;
+  if(initial&&userId&&organizationId){
+   try{
+    const cached=await readOfflineQueryCache<ChatMessage[]>(`chat-messages:${id}`,userId,organizationId);
+    if(Array.isArray(cached?.payload)&&cached.payload.length){
+     const cachedMessages=cached.payload.map(message=>({
+      ...message,
+      attachments:message.attachments?.map(attachment=>({...attachment,url:null})),
+     }));
+     setMessages(previous=>mergeMessages(previous.filter(message=>message.conversation_id===id),cachedMessages,queueSyncRef.current.filter(item=>String(item.args.p_conversation_id)===id)));
+     setLoading(false);
+     restoredCache=true;
+     readIndexRef.current=-1;nearBottomRef.current=true;setNewMessageCount(0);
+     requestAnimationFrame(()=>scrollBottom(false));
+    }
+   }catch{}
+  }
   try{
    const data=await listMessages(id);
    const ordered=[...data].reverse();
    setMessages(previous=>mergeMessages(initial?[]:previous,ordered,queueSyncRef.current.filter(item=>String(item.args.p_conversation_id)===id)));
    setHasOlder(data.length>=50);
    setLoading(false);
+   if(userId&&organizationId){
+    const safeMessages=ordered.filter(message=>!message.id.startsWith('local-')).map(message=>({
+     ...message,
+     attachments:message.attachments?.map(attachment=>({...attachment,url:null})),
+    }));
+    void saveOfflineQueryCache(`chat-messages:${id}`,userId,organizationId,safeMessages).catch(()=>undefined);
+   }
    if(initial){
     readIndexRef.current=-1;nearBottomRef.current=true;setNewMessageCount(0);
     requestAnimationFrame(()=>scrollBottom(false));
    }
-  }catch(e){setError(err(e));setLoading(false)}
- },[scrollBottom]);
+  }catch(e){
+   if(!restoredCache)setError(err(e));
+   setLoading(false);
+  }
+ },[profile?.organization_id,scrollBottom,user?.id]);
 
  const syncAfter=useCallback(async(id:string)=>{
   try{
