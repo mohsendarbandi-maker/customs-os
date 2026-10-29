@@ -50,6 +50,8 @@ const MotionWidget:React.FC<MotionWidgetProps>=({id,title,editing,order,span,onM
 
 export const DesktopHomePage:React.FC=()=>{
  const{user,profile}=useAuth();
+ const statsScope=user?.id&&profile?.organization_id?`${user.id}:${profile.organization_id}`:null;
+ const[statsOwnerScope,setStatsOwnerScope]=useState<string|null>(null);
  const layoutStorageKey=`customs-os:motion-layout:v1:${profile?.organization_id||'unassigned'}:${profile?.id||'unassigned'}`;
  const[widgetOrder,setWidgetOrder]=useState<DashboardWidgetId[]>([...DASHBOARD_WIDGET_IDS]);
  const[widgetSpans,setWidgetSpans]=useState<Record<DashboardWidgetId,number>>({...DEFAULT_WIDGET_SPANS});
@@ -94,6 +96,7 @@ export const DesktopHomePage:React.FC=()=>{
  };
  const resetWidgetLayout=()=>{setWidgetOrder([...DASHBOARD_WIDGET_IDS]);setWidgetSpans({...DEFAULT_WIDGET_SPANS})};
  const[now,setNow]=useState(new Date()),[port,setPort]=useState(ports[0]),[weather,setWeather]=useState<any>(null),[marine,setMarine]=useState<any>(null),[conditionsError,setConditionsError]=useState(false),[conditionsUpdated,setConditionsUpdated]=useState(''),[stats,setStats]=useState({shipments:0,clients:0,cases:0,active:0,activeCases:0});
+  const visibleStats=statsOwnerScope===statsScope?stats:{shipments:0,clients:0,cases:0,active:0,activeCases:0};
  useEffect(()=>{const id=window.setInterval(()=>setNow(new Date()),1000);return()=>window.clearInterval(id)},[]);
  useEffect(()=>{let cancelled=false;setWeather(null);setMarine(null);setConditionsError(false);fetch(`/api/maritime/conditions?latitude=${port.lat}&longitude=${port.lon}`,{headers:{Accept:'application/json'},cache:'no-store',credentials:'same-origin'}).then(async r=>{const j=await r.json();if(!r.ok)throw new Error(j?.error||'conditions unavailable');if(cancelled)return;setWeather(j.weather?.current||null);setMarine(j.marine?.current||null);setConditionsUpdated(j.updated_at||'');setConditionsError(!j.weather?.current&&!j.marine?.current)}).catch(()=>{if(!cancelled){setWeather(null);setMarine(null);setConditionsError(true)}});return()=>{cancelled=true}},[port]);
  useEffect(()=>{
@@ -104,7 +107,7 @@ export const DesktopHomePage:React.FC=()=>{
    const cached=await readOfflineQueryCache<typeof stats>('home-dashboard-stats-v1',userId,organizationId).catch(()=>null);
    const cachedStats=cached?.payload;
    if(!cancelled&&cachedStats&&['shipments','clients','cases','active','activeCases'].every(key=>Number.isFinite(cachedStats[key as keyof typeof cachedStats]))){
-    setStats(cachedStats);
+    setStats(cachedStats);setStatsOwnerScope(userId+':'+organizationId);
    }
    try{
     const[sh,cl,cs]=await Promise.all([
@@ -118,7 +121,7 @@ export const DesktopHomePage:React.FC=()=>{
     if(cs.error)throw cs.error;
     const shipments=sh.data||[],cases=cs.data||[];
     const nextStats={shipments:shipments.length,clients:(cl.data||[]).length,cases:cases.length,active:shipments.filter((x:any)=>!['cleared','archived','closed'].includes(String(x.current_status||'').toLowerCase())).length,activeCases:cases.filter((x:any)=>!['closed','archived','completed','cancelled'].includes(String(x.status||'').toLowerCase())).length};
-    setStats(nextStats);
+    setStats(nextStats);setStatsOwnerScope(userId+':'+organizationId);
     void saveOfflineQueryCache('home-dashboard-stats-v1',userId,organizationId,nextStats).catch(()=>undefined);
    }catch{
     // Preserve the most recent user-and-organization-scoped counts during a transient network failure.
@@ -144,7 +147,7 @@ export const DesktopHomePage:React.FC=()=>{
    <div className="customs-widget-grid" data-customs-dashboard>
    <MotionWidget id="stats" title="نمای کلی سازمان" editing={editingLayout} order={widgetOrder.indexOf('stats')} span={widgetSpans.stats} onMove={moveWidget} onShift={shiftWidget} onResize={resizeWidget}>
    <section className="customs-stat-line" aria-label="نمای کلی سازمان">
-    {[{label:'کل محموله‌ها',value:stats.shipments,icon:Ship,to:'/operations'},{label:'در جریان عملیات',value:stats.active,icon:Activity,to:'/operations'},{label:'پرونده‌های صاحبان کالا',value:stats.clients,icon:Building2,to:'/clients'},{label:'پرونده‌های در جریان',value:stats.activeCases,icon:Briefcase,to:'/cases'}].map(({label,value,icon:Icon,to},i)=><React.Fragment key={label}><Link to={to} className="customs-stat" aria-label={label}><Icon size={17} className="text-[var(--primary)]"/><span className="text-xs app-muted">{label}</span><strong>{value}</strong></Link>{i<3&&<span className="customs-stat-divider"/>}</React.Fragment>)}
+    {[{label:'کل محموله‌ها',value:visibleStats.shipments,icon:Ship,to:'/operations'},{label:'در جریان عملیات',value:visibleStats.active,icon:Activity,to:'/operations'},{label:'پرونده‌های صاحبان کالا',value:visibleStats.clients,icon:Building2,to:'/clients'},{label:'پرونده‌های در جریان',value:visibleStats.activeCases,icon:Briefcase,to:'/cases'}].map(({label,value,icon:Icon,to},i)=><React.Fragment key={label}><Link to={to} className="customs-stat" aria-label={label}><Icon size={17} className="text-[var(--primary)]"/><span className="text-xs app-muted">{label}</span><strong>{value}</strong></Link>{i<3&&<span className="customs-stat-divider"/>}</React.Fragment>)}
    </section>
    </MotionWidget>
    <MotionWidget id="shipments" title="وضعیت محموله‌ها" editing={editingLayout} order={widgetOrder.indexOf('shipments')} span={widgetSpans.shipments} onMove={moveWidget} onShift={shiftWidget} onResize={resizeWidget}>
