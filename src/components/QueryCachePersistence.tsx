@@ -140,9 +140,10 @@ export const QueryCachePersistence: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [profile, queryClient, user]);
 
-  // Do not mount route queries until this account's cached snapshot is restored.
-  // The auth/profile bootstrap has already completed, so this is a short IndexedDB read.
-  if (scope && readyScope !== scope) {
+  // Render immediately on ordinary app reopens; the REST and React Query caches
+  // hydrate in the background. Only block during an in-place account/organization switch
+  // so the previous account's query data cannot flash in the new workspace.
+  if (scope && activeScope.current && activeScope.current !== scope) {
     return (
       <div dir="rtl" className="min-h-[100dvh] grid place-items-center bg-[var(--bg)] text-[var(--text)]" aria-busy="true">
         <div className="rounded-2xl border app-border bg-[var(--surface)] px-5 py-4 text-center shadow-sm">
