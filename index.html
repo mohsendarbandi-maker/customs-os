@@ -26,6 +26,9 @@
         if (window.location.protocol !== 'https:' ||
             !['darbandicommercial.ir', 'www.darbandicommercial.ir'].includes(host) ||
             window.location.pathname === '/__auth-bridge.html') return;
+        // Keep installed iOS PWAs inside the origin covered by their manifest scope.
+        // The same responsive mobile UI is available there without a cross-origin escape.
+        if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) return;
         const ua = navigator.userAgent || '';
         const appleTablet = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
         const touchSmall = window.matchMedia('(pointer: coarse)').matches &&
