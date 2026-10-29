@@ -288,6 +288,8 @@ export default {
     if (url.pathname === '/__auth-bridge.html' && ['GET', 'HEAD'].includes(request.method)) {
       const bridgeUrl = new URL(request.url);
       bridgeUrl.hostname = 'customs.mohsen-darbandi.workers.dev';
+      bridgeUrl.search = '';
+      bridgeUrl.hash = '';
       const upstream = await env.ASSETS.fetch(new Request(bridgeUrl, request));
       const headers = new Headers(upstream.headers);
       headers.set('Cache-Control', 'no-store, private');
