@@ -476,6 +476,32 @@ export async function createConversation(input: {
 
 const TUS_THRESHOLD_BYTES = 6 * 1024 * 1024;
 const TUS_CHUNK_BYTES = 6 * 1024 * 1024;
+const TUS_HANDSHAKE_TIMEOUT_MS = 30_000;
+const TUS_OFFSET_TIMEOUT_MS = 20_000;
+const TUS_CHUNK_TIMEOUT_MS = 120_000;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (timedOut) {
+      throw new Error('درخواست آپلود پس از ' + Math.round(timeoutMs / 1000) + ' ثانیه بدون پاسخ لغو شد.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function base64Utf8(value: string): string {
   const bytes = new TextEncoder().encode(value);
@@ -512,7 +538,7 @@ async function uploadChatAttachmentResumable(
     ['contentType', mime],
     ['cacheControl', '3600'],
   ].map(([key, value]) => key + ' ' + base64Utf8(value)).join(',');
-  const create = await fetch(endpoint, {
+  const create = await fetchWithTimeout(endpoint, {
     method: 'POST',
     headers: {
       authorization: 'Bearer ' + token,
@@ -522,7 +548,7 @@ async function uploadChatAttachmentResumable(
       'Upload-Metadata': metadata,
     },
     cache: 'no-store',
-  });
+  }, TUS_HANDSHAKE_TIMEOUT_MS);
   if (create.status !== 201) {
     const detail = (await create.text().catch(() => '')).slice(0, 240);
     throw new Error(('ایجاد آپلود قابل‌ادامه ناموفق بود (' + create.status + ') ' + detail).trim());
@@ -547,7 +573,7 @@ async function uploadChatAttachmentResumable(
     'Tus-Resumable': '1.0.0',
   };
   const readOffset = async (): Promise<number> => {
-    const response = await fetch(uploadUrl.toString(), { method: 'HEAD', headers: commonHeaders, cache: 'no-store' });
+    const response = await fetchWithTimeout(uploadUrl.toString(), { method: 'HEAD', headers: commonHeaders, cache: 'no-store' }, TUS_OFFSET_TIMEOUT_MS);
     if (!response.ok) throw new Error('دریافت وضعیت ادامهٔ آپلود ناموفق بود (' + response.status + ').');
     const offset = Number(response.headers.get('Upload-Offset'));
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > file.size) {
@@ -558,6 +584,7 @@ async function uploadChatAttachmentResumable(
   const patchChunk = (offset: number, chunk: Blob): Promise<number> => new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PATCH', uploadUrl.toString(), true);
+    xhr.timeout = TUS_CHUNK_TIMEOUT_MS;
     xhr.setRequestHeader('authorization', commonHeaders.authorization);
     xhr.setRequestHeader('apikey', commonHeaders.apikey);
     xhr.setRequestHeader('Tus-Resumable', commonHeaders['Tus-Resumable']);
