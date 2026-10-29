@@ -141,6 +141,7 @@ jobs:
             done
             test "$success" = 1
             grep -q '<div id="root">' /tmp/index.html
+            grep -Fqi 'Cache-Control: no-store, no-cache, must-revalidate' /tmp/index.headers
             script_src="$(sed -n 's/.*<script[^>]*type="module"[^>]*src="\([^"]*\)".*/\1/p' /tmp/index.html | head -n 1)"
             test -n "$script_src"
             case "$script_src" in /assets/*.js) ;; *) echo "Invalid deployed module path: $script_src"; exit 1;; esac
@@ -148,7 +149,7 @@ jobs:
             asset_success=0
             for attempt in 1 2 3 4 5 6 7 8 9 10; do
               : > /tmp/app.content-type
-              if curl --fail --silent --show-error --location --max-time 30 -o /tmp/app.js -w '%{content_type}' "$base$script_src" > /tmp/app.content-type; then
+              if curl --fail --silent --show-error --location --max-time 30 -D /tmp/app.headers -o /tmp/app.js -w '%{content_type}' "$base$script_src" > /tmp/app.content-type; then
                 content_type="$(cat /tmp/app.content-type)"
                 if test -s /tmp/app.js && [[ "$content_type" =~ ^(application|text)/(javascript|ecmascript) ]] && ! grep -qi '<!doctype html' /tmp/app.js; then
                   asset_success=1
@@ -159,6 +160,12 @@ jobs:
               sleep 5
             done
             test "$asset_success" = 1
+            if ! grep -Fqi 'Cache-Control: public, max-age=31536000, immutable' /tmp/app.headers; then
+              echo "Hashed JavaScript asset is missing the immutable browser-cache policy:"
+              cat /tmp/app.headers
+              exit 1
+            fi
+            echo "HTML stays revalidated; fingerprinted JavaScript is cached for one year."
 
             echo "Checking same-origin Supabase Auth proxy"
             auth_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/auth-health.json -w '%{http_code}' -H "apikey: ${VITE_SUPABASE_ANON_KEY}" "$base/auth/v1/health")"
