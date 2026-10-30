@@ -8,4 +8,18 @@ describe('PWA navigation cache', () => {
     expect(sw).toContain("cacheName:'customs-os-navigation-v2'");
     expect(sw).toContain('networkTimeoutSeconds:1');
   });
+  it('registers the custom injectManifest service worker and keeps updates user-confirmed', () => {
+    const main = read('src/main.tsx');
+    const vite = read('vite.config.ts');
+    const appShell = read('src/components/AppShell.tsx');
+    expect(vite).toContain("strategies:'injectManifest'");
+    expect(vite).toContain('injectRegister:false');
+    expect(main).toContain("import { registerSW } from 'virtual:pwa-register'");
+    expect(main).toContain('immediate: true');
+    expect(main).toContain("customs-os:pwa-update-ready");
+    expect(main).toContain("customs-os:pwa-update-request");
+    expect(appShell).toContain("customs-os:pwa-update-request");
+    expect(main).not.toContain("registerType: 'autoUpdate'");
+  });
+
 });
