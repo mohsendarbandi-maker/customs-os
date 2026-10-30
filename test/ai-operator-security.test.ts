@@ -137,7 +137,7 @@ describe('AI Operator security invariants',()=>{
    expect(workspace).toContain(String.raw`ثبت\s*`);
    expect(workspace).not.toContain(String.raw`\\b(create`);
  });
-  it('shows the B/L immediately, persists it securely, and extracts small files locally',()=>
+  it('shows the B/L immediately, persists it securely, and extracts small files locally',()=>{
     const shipment=readFileSync(new URL('../src/pages/ShipmentFirstPage.tsx',import.meta.url),'utf8');
     const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
     expect(shipment).toContain('URL.createObjectURL(file)');
