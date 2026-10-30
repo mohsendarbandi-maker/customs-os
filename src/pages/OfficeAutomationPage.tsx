@@ -497,6 +497,11 @@ export const OfficeAutomationPage: React.FC = () => {
     if (!window.confirm('پیش‌نویس حذف شود؟ این عملیات قابل بازگشت نیست.')) return;
     setBusyLetter(true);
     try {
+      const draftPaths = attachments.map((item) => item.storage_path).filter(Boolean);
+      if (draftPaths.length) {
+        const removed = await db.storage.from('office-documents').remove(draftPaths);
+        if (removed.error) throw removed.error;
+      }
       const result = await db.from('office_correspondence').delete().eq('id', active.id).eq('organization_id', profile.organization_id);
       if (result.error) throw result.error;
       setActive(null); setDraft({ ...blankDraft }); await loadLetters(company?.id || '');

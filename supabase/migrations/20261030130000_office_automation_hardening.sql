@@ -772,3 +772,26 @@ drop trigger if exists office_correspondence_attachment_guard_trigger on public.
 create trigger office_correspondence_attachment_guard_trigger
 before insert or update on public.office_correspondence_attachments
 for each row execute function public.office_correspondence_attachment_guard();
+
+
+-- Permit storage cleanup only while the associated letter is a deletable draft.
+-- Company identity assets and issued / sent / archived attachments have no delete
+-- policy and remain available to preserve historical snapshots.
+drop policy if exists office_documents_delete_draft_attachments on storage.objects;
+create policy office_documents_delete_draft_attachments
+on storage.objects for delete to authenticated
+using (
+  bucket_id = 'office-documents'
+  and (storage.foldername(name))[1] = (select public.user_org_id())::text
+  and (select public.user_role()) in ('owner'::public.user_role,'admin'::public.user_role,'broker'::public.user_role)
+  and exists (
+    select 1
+    from public.office_correspondence_attachments a
+    join public.office_correspondence c
+      on c.id = a.correspondence_id
+     and c.organization_id = a.organization_id
+    where a.storage_path = name
+      and a.organization_id = (select public.user_org_id())
+      and c.status = 'draft'
+  )
+);
