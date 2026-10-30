@@ -66,8 +66,9 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManagerClient).toContain('input.folderId');
     expect(fileManagerClient).toContain("return `customs-os-upload-v1:${keyHash}`");
     expect(fileManager).toContain('createTelegramArchiveIdempotencyKey(file');
-    expect(shipmentPage).toContain('createTelegramArchiveIdempotencyKey(document.file');
-    expect(shipmentPage).toContain('createTelegramArchiveIdempotencyKey(file');
+    expect(gateway).toContain('customs-os-shipment-document-archive-v1:');
+    expect(gateway).toContain('customs-os-legacy-archive-v1:');
+    expect(shipmentPage).not.toContain('createTelegramArchiveIdempotencyKey');
     expect(clientDocumentPage).toContain('createTelegramArchiveIdempotencyKey(f');
     expect(fileManager).not.toContain('uploadKeys.current');
     expect(shipmentPage).not.toContain('uploadKeys.current');
@@ -89,23 +90,22 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(preDeclaration).toContain("docs.filter(d=>d.storage_backend!=='telegram'&&!d.file_asset_id)");
   });
 
-  it('selects shipment files instantly in the browser and archives the source directly to Telegram', () => {
+  it('selects shipment files instantly, persists a safe web copy, and queues Telegram archive after linking', () => {
     expect(shipmentPage).toContain('URL.createObjectURL(file)');
     expect(shipmentPage).toContain('setPendingDocuments(previous=>[...previous,pending])');
-    expect(shipmentPage).toContain('void archivePendingShipmentDocument(pending)');
-    expect(shipmentPage).toContain('uploadTelegramArchivedFile(document.file');
-    expect(shipmentPage).toContain('getDefaultClientUploadFolder(document.clientId)');
-    expect(shipmentPage).toContain('createTelegramArchiveIdempotencyKey(document.file');
-    expect(shipmentPage).toContain('document_data:documentData');
-    expect(shipmentPage).toContain('telegram_file_asset_id:document.fileAssetId');
-    expect(shipmentPage).toContain("storage_path:'telegram://'+staged.fileAssetId");
-    expect(shipmentPage).toContain("storage_backend:'telegram'");
+    expect(shipmentPage).toContain("supabase.storage.from(BUCKET).upload(storagePath,file");
+    expect(shipmentPage).toContain('document_storage_path:document.storagePath');
+    expect(shipmentPage).toContain("storage_path:staged.storagePath!");
+    expect(shipmentPage).toContain("storage_backend:'supabase'");
+    expect(shipmentPage).toContain('archiveShipmentDocumentInBackground(doc.id');
     expect(shipmentPage).toContain('shipmentFileInput.current?.click()');
     expect(shipmentPage).toContain('const files=Array.from(e.currentTarget.files||[])');
-    expect(shipmentPage).toContain('تلاش دوباره برای آرشیو تلگرام');
-    expect(shipmentPage).not.toContain("supabase.storage.from(BUCKET).upload(storagePath,file");
-    expect(shipmentPage).not.toContain('archiveShipmentDocumentInBackground(item.documentId');
-    expect(gateway).toContain(String.raw`const archiveDoc=path.match(/^\/api\/messenger\/documents\/([0-9a-f-]{36})\/archive$/i);`);
+    expect(shipmentPage).toContain('تلاش دوباره برای ذخیره امن');
+    expect(shipmentPage).not.toContain('uploadTelegramArchivedFile(');
+    expect(shipmentPage).not.toContain('archivePendingShipmentDocument');
+    expect(gateway).toContain(String.raw`const archiveDoc=path.match(/^\\/api\\/messenger\\/documents\\/([0-9a-f-]{36})\\/archive$/i);`);
+    expect(gateway).toContain('sourceShipmentDocumentId');
+    expect(gateway).toContain('"customs-os-shipment-document-archive-v1:"+String(row.shipment_document_id)');
     expect(documentPage).toContain('uploadTelegramArchivedFile');
     expect(clientDocumentPage).toContain('uploadTelegramArchivedFile');
   });
