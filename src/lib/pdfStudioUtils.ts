@@ -4,7 +4,7 @@ const normalizeDigits = (value: string) => value
 
 export function parsePageSelection(expression: string, totalPages: number): number[] {
   if (!Number.isInteger(totalPages) || totalPages < 1) throw new Error('تعداد صفحات معتبر نیست.');
-  const input = normalizeDigits(expression).replace(/[–—−]/g, '-').replace(/\s+/g, '');
+  const input = normalizeDigits(expression).replace(/[–—−]/g, '-').replace(/[،؛;]/g, ',').replace(/\s+/g, '');
   if (!input) throw new Error('شماره صفحات را وارد کنید؛ نمونه: 1-2 یا 1,5.');
   const selected = new Set<number>();
   for (const part of input.split(',')) {
@@ -24,7 +24,7 @@ export function parsePageSelection(expression: string, totalPages: number): numb
 const DOCUMENT_PATTERNS: Array<[RegExp, string]> = [
   [/مانیفست|manifest|cargo manifest|e[- ]?manifest/i, 'مانیفست الکترونیک'],
   [/فرم\s*a\s*e\s*o|\baeo\b/i, 'فرم AEO'],
-  [/اظهارنامه|customs declaration|declaration|کوتاژ|کوتاژ/i, 'اظهارنامه'],
+  [/اظهارنامه|customs declaration|declaration|کوتاژ/i, 'اظهارنامه'],
   [/قبض\s*انبار.*(پشت|ظهر)|پشت.*قبض\s*انبار|warehouse receipt.*back/i, 'قبض انبار پشت'],
   [/قبض\s*انبار.*(رو|روی)|روی.*قبض\s*انبار|warehouse receipt.*front/i, 'قبض انبار رو'],
   [/قبض\s*انبار|warehouse receipt/i, 'قبض انبار'],
