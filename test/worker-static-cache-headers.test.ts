@@ -11,8 +11,10 @@ describe('static asset cache headers', () => {
     expect(worker).toContain("url.pathname.startsWith('/assets/')");
   });
 
-  it('resolves hashed assets against the incoming custom domain instead of a workers.dev host rewrite', () => {
+  it('uses the canonical asset origin only for the dedicated mobile host while preserving its browser URL', () => {
     expect(worker).toContain('const assetBase = new URL(request.url)');
+    expect(worker).toContain("url.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("assetBase.hostname = 'darbandicommercial.ir'");
     expect(worker).toContain('const assetRequest = new Request(assetBase, request)');
     expect(worker).not.toContain("assetBase.hostname = 'customs.mohsen-darbandi.workers.dev'");
   });
