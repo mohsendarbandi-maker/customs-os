@@ -13,7 +13,6 @@ import {
   buildDocumentPageFeatures, buildDocumentPageFeaturesFromText, estimateJpegBytesFromSamples,
   recognizeDocumentPage, type DocumentPageFeatures, type RecognitionSample,
 } from '../lib/pdfRecognition';
-import { zipSync } from 'fflate';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -54,10 +53,16 @@ type CompressionEstimate = {
   low: number; expected: number; high: number;
   preservedPages: number; rasterizedPages: number; sampledPages: number;
 };
-type CompressionRun = {
-  id: string; name: string; blob: Blob; size: number; originalSize: number;
-  savedPercent: number; profileName: string; settings: CompressionSettings; createdAt: string;
+type ReadyOutput = {
+  id: string;
+  name: string;
+  blob: Blob;
+  size: number;
+  description: string;
+  createdAt: string;
+  downloadedAt?: string;
 };
+type OutputTools = { merge: boolean; split: boolean; compression: boolean; stamp: boolean };
 type FileManagerFolder = { id: string; parent_id: string | null; display_name: string; folder_type: string };
 const formatSize = (bytes: number) => bytes < 1024 * 1024
   ? Math.round(bytes / 1024) + ' KB'
@@ -70,7 +75,7 @@ const downloadBlob = (blob: Blob, name: string) => {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 2500);
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 const safeName = (name: string) => name.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 100) || 'document';
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
@@ -103,7 +108,10 @@ export const PdfStudioPage: React.FC = () => {
   const [compressionProfileName, setCompressionProfileName] = useState('اسناد خوانا');
   const [compressionEstimate, setCompressionEstimate] = useState<CompressionEstimate | null>(null);
   const [compressionEstimating, setCompressionEstimating] = useState(false);
-  const [compressionRuns, setCompressionRuns] = useState<CompressionRun[]>([]);
+  const [readyOutputs, setReadyOutputs] = useState<ReadyOutput[]>([]);
+  const [outputTools, setOutputTools] = useState<OutputTools>({
+    merge: false, split: false, compression: false, stamp: false,
+  });
   const [compressionStorageReady, setCompressionStorageReady] = useState(false);
   const [recognitionSamples, setRecognitionSamples] = useState<RecognitionSample[]>([]);
   const [recognitionLoading, setRecognitionLoading] = useState(false);
@@ -126,6 +134,32 @@ export const PdfStudioPage: React.FC = () => {
   const selectedCount = selectedPages.length;
   const totalBytes = useMemo(() => documents.reduce((sum, item) => sum + item.file.size, 0), [documents]);
   const compressionItems = useMemo(() => selectedCount ? selectedPages : pages, [selectedCount, selectedPages, pages]);
+
+  const queueOutputs = (outputs: Array<{ blob: Blob; name: string; description: string }>) => {
+    if (!outputs.length) return;
+    const prepared: ReadyOutput[] = outputs.map((output) => ({
+      id: crypto.randomUUID(),
+      name: output.name,
+      blob: output.blob,
+      size: output.blob.size,
+      description: output.description,
+      createdAt: new Date().toISOString(),
+    }));
+    setReadyOutputs((previous) => [...prepared, ...previous]);
+    setStatus(
+      prepared.length === 1
+        ? 'فایل «' + prepared[0].name + '» آماده است. برای دریافت، دکمه دانلود را بزنید؛ فایل‌های ورودی و تنظیمات حفظ می‌شوند.'
+        : prepared.length + ' فایل آماده دانلود است. دکمه دانلود هر فایل را جداگانه بزنید؛ محیط کاری حفظ می‌شود.'
+    );
+  };
+
+  const downloadReadyOutput = (output: ReadyOutput) => {
+    downloadBlob(output.blob, output.name);
+    setReadyOutputs((previous) => previous.map((item) =>
+      item.id === output.id ? { ...item, downloadedAt: new Date().toISOString() } : item
+    ));
+    setStatus('دانلود «' + output.name + '» آغاز شد. فایل‌های فراخوانی‌شده، ترتیب صفحات و تنظیمات در PDF Studio باقی ماندند.');
+  };
   const currentFileManagerFolder = useMemo(
     () => fileManagerFolders.find((folder) => folder.id === fileManagerCurrentFolderId) || null,
     [fileManagerFolders, fileManagerCurrentFolderId],
@@ -360,9 +394,10 @@ export const PdfStudioPage: React.FC = () => {
     return output.save({ useObjectStreams: true });
   };
 
-  const buildPdf = async (items: PageItem[], fileName: string) => {
+  const buildPdf = async (items: PageItem[], fileName: string, description: string) => {
     const bytes = await createPdfBytes(items);
-    downloadBlob(new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), fileName.endsWith('.pdf') ? fileName : fileName + '.pdf');
+    const outputName = fileName.endsWith('.pdf') ? fileName : fileName + '.pdf';
+    queueOutputs([{ blob: new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), name: outputName, description }]);
   };
 
   const renderPdfPageJpeg = async (pdfPage: any, item: PageItem, settings: CompressionSettings) => {
@@ -564,25 +599,15 @@ export const PdfStudioPage: React.FC = () => {
       const originalTotal = originalBytes.byteLength;
       const profileName = compressionProfileName.trim() || 'تنظیمات فعلی';
       const outputName = 'PDF-Studio-' + safeName(profileName) + '-compressed.pdf';
-      const run: CompressionRun = {
-        id: crypto.randomUUID(),
-        name: outputName,
+      queueOutputs([{
         blob: outputBlob,
-        size: outputBlob.size,
-        originalSize: originalTotal,
-        savedPercent: originalTotal ? Math.max(0, Math.round((1 - outputBlob.size / originalTotal) * 100)) : 0,
-        profileName,
-        settings: { ...compressionSettings },
-        createdAt: new Date().toISOString(),
-      };
-      setCompressionRuns((previous) => [run, ...previous]);
-      downloadBlob(outputBlob, outputName);
-      setStatus(
-        'فایل PDF فشرده آماده دانلود شد: ' + formatSize(outputBlob.size) +
-        '؛ صفحات با متن/ساختار حفظشده: ' + preservedTotal +
-        '؛ صفحات تصویری بازسازی‌شده: ' + rasterizedTotal +
-        (protectedDocumentIds.size ? '؛ توجه: اعتبار امضای دیجیتال در PDF ترکیبی حفظ نمی‌شود.' : '')
-      );
+        name: outputName,
+        description: 'فشرده‌سازی با پروفایل «' + profileName + '» · ' +
+          formatSize(originalTotal) + ' ← ' + formatSize(outputBlob.size) +
+          ' · صفحات حفظشده: ' + preservedTotal +
+          ' · صفحات تصویری: ' + rasterizedTotal +
+          (protectedDocumentIds.size ? ' · اعتبار امضای دیجیتال در PDF ترکیبی حفظ نمی‌شود.' : ''),
+      }]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'فشرده‌سازی فایل‌ها ناموفق بود.');
     } finally {
@@ -607,8 +632,6 @@ export const PdfStudioPage: React.FC = () => {
     setCompressionEstimate(null);
   };
 
-  const downloadCompressionRun = (run: CompressionRun) => downloadBlob(run.blob, run.name);
-
   const compressScans = async () => {
     await compressActivePdf();
   };
@@ -620,8 +643,12 @@ export const PdfStudioPage: React.FC = () => {
     setBusy(true);
     setError('');
     try {
-      await buildPdf(items, 'pdf-studio-output.pdf');
-      setStatus(items.length + ' صفحه در یک PDF جدید ذخیره شد.');
+      await buildPdf(
+        items,
+        onlySelected ? 'PDF-Studio-Selected-Pages.pdf' : 'PDF-Studio-Merged.pdf',
+        onlySelected ? 'استخراج صفحات انتخاب‌شده در یک PDF مستقل' : 'ادغام همه صفحات در یک PDF مستقل',
+      );
+      setStatus(items.length + ' صفحه ساخته شد؛ فایل در بخش «فایل‌های آماده دانلود» قرار گرفت. فایل‌های ورودی و تنظیمات حفظ شدند.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'ساخت PDF ناموفق بود.');
     } finally {
@@ -660,33 +687,46 @@ export const PdfStudioPage: React.FC = () => {
         if (protectedIncluded && !window.confirm('بعضی صفحات امضای دیجیتال یا فرم محافظت‌شده دارند. ترکیب یا استخراج ممکن است اعتبار امضا را از بین ببرد؛ فایل‌های اصلی دست‌نخورده می‌مانند. فقط روی نسخه خروجی ادامه می‌دهید؟')) return;
         const sourceBytes = await createPdfBytes(pages);
         if (sourceBytes.byteLength <= 2 * 1024 * 1024) {
-          downloadBlob(new Blob([toArrayBuffer(sourceBytes)], { type: 'application/pdf' }), safeName(packageName) + '.pdf');
-          setStatus('خروجی استاندارد با حجم ' + formatSize(sourceBytes.byteLength) + ' آماده شد و زیر سقف ۲ مگابایت است.');
+          queueOutputs([{
+            blob: new Blob([toArrayBuffer(sourceBytes)], { type: 'application/pdf' }),
+            name: safeName(packageName) + '.pdf',
+            description: 'PDF استاندارد · ' + formatSize(sourceBytes.byteLength) + ' · زیر سقف ۲ مگابایت',
+          }]);
+          setStatus('خروجی استاندارد با حجم ' + formatSize(sourceBytes.byteLength) + ' آماده دانلود است؛ محیط کاری حفظ شد.');
           return;
         }
         if (!window.confirm('برای رساندن خروجی استاندارد به سقف ۲ مگابایت، صفحات به تصویر فشرده تبدیل می‌شوند؛ متن قابل جست‌وجو، فرم‌ها، لینک‌ها و لایه‌ها در نسخه خروجی حفظ نمی‌شوند. فایل‌های اصلی بدون تغییر می‌مانند. ادامه می‌دهید؟')) return;
         const result = await compressPagesToTarget(pages, 2 * 1024 * 1024);
-        downloadBlob(result.blob, safeName(packageName) + '.pdf');
-        setStatus('خروجی استاندارد آماده شد: ' + formatSize(result.blob.size) + '، وضوح ' + result.scale.toFixed(2) + '، کیفیت ' + Math.round(result.quality * 100) + '٪. سقف ۲ مگابایت رعایت شد.');
+        queueOutputs([{
+          blob: result.blob,
+          name: safeName(packageName) + '.pdf',
+          description: 'PDF استاندارد فشرده · ' + formatSize(result.blob.size) +
+            ' · وضوح ' + result.scale.toFixed(2) + ' · کیفیت ' + Math.round(result.quality * 100) + '٪',
+        }]);
+        setStatus('خروجی استاندارد آماده دانلود است: ' + formatSize(result.blob.size) + '؛ محیط کاری حفظ شد.');
         return;
       }
 
       if (protectedIncluded && !window.confirm('تقسیم فایل دارای امضای دیجیتال یا فرم تعاملی، اعتبار امضای اصلی را حفظ نمی‌کند. فقط روی نسخه کپی ادامه می‌دهید؟')) return;
-      const outputFiles: Record<string, Uint8Array> = {};
+      const outputFiles: Array<{ name: string; bytes: Uint8Array }> = [];
+      const outputNames = new Set<string>();
       for (let index = 0; index < splitRows.length; index += 1) {
         const row = splitRows[index];
         if (!row.name.trim()) throw new Error('نام هر خروجی را وارد کنید.');
         const pageNumbers = parsePageSelection(row.pageExpression, pages.length);
         const items = pageNumbers.map((pageNumber) => pages[pageNumber - 1]);
         const fileName = safeName(row.name.trim()) + '.pdf';
-        if (outputFiles[fileName]) throw new Error('نام خروجی تکراری است: ' + row.name);
-        outputFiles[fileName] = await createPdfBytes(items);
+        if (outputNames.has(fileName)) throw new Error('نام خروجی تکراری است: ' + row.name);
+        outputNames.add(fileName);
+        outputFiles.push({ name: fileName, bytes: await createPdfBytes(items) });
       }
-      if (!Object.keys(outputFiles).length) throw new Error('حداقل یک بخش برای خروجی تعریف کنید.');
-      const archive = zipSync(outputFiles, { level: 6 });
-      const archiveBytes = archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer;
-      downloadBlob(new Blob([archiveBytes], { type: 'application/zip' }), safeName(packageName) + '.zip');
-      setStatus(Object.keys(outputFiles).length + ' خروجی مستقل در بسته «' + packageName + '» ساخته شد. هر ردیف می‌تواند بازه یا چند صفحه پراکنده داشته باشد.');
+      if (!outputFiles.length) throw new Error('حداقل یک بخش برای خروجی تعریف کنید.');
+      queueOutputs(outputFiles.map((item) => ({
+        name: item.name,
+        blob: new Blob([toArrayBuffer(item.bytes)], { type: 'application/pdf' }),
+        description: 'بخش تفکیک‌شده از بسته «' + packageName + '»',
+      })));
+      setStatus(outputFiles.length + ' فایل PDF جداگانه آماده دانلود است؛ هرکدام دکمه دانلود مستقل دارد. هیچ ZIP ساخته نشد و فایل‌های ورودی حفظ شدند.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'ساخت خروجی‌ها ناموفق بود.');
     } finally {
@@ -733,9 +773,13 @@ export const PdfStudioPage: React.FC = () => {
         }
         const bytes = await source.save({ useObjectStreams: true });
         const fileName = documents.find((document) => document.id === documentId)?.file.name || 'document.pdf';
-        downloadBlob(new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), safeName(fileName) + '-annotated.pdf');
+        queueOutputs([{
+          blob: new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }),
+          name: safeName(fileName) + '-annotated.pdf',
+          description: 'نسخه دارای متن یا مهر تصویری؛ فایل اصلی در محیط باقی ماند.',
+        }]);
       }
-      setStatus('یادداشت تصویری روی صفحات انتخاب‌شده درج شد. برای خروجی جدید، فایل اصلی را دوباره اضافه کنید.');
+      setStatus('نسخه‌های مهرشده آماده دانلود هستند؛ فایل‌های ورودی و صفحات فعلی در محیط باقی ماندند.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'درج متن ناموفق بود.');
     } finally {
@@ -769,9 +813,13 @@ export const PdfStudioPage: React.FC = () => {
         }
         const outputBytes = await source.save({ useObjectStreams: true });
         const fileName = documents.find((document) => document.id === documentId)?.file.name || 'document.pdf';
-        downloadBlob(new Blob([toArrayBuffer(outputBytes)], { type: 'application/pdf' }), safeName(fileName) + '-signed.pdf');
+        queueOutputs([{
+          blob: new Blob([toArrayBuffer(outputBytes)], { type: 'application/pdf' }),
+          name: safeName(fileName) + '-signed.pdf',
+          description: 'نسخه دارای تصویر مهر یا امضا؛ فایل اصلی در محیط باقی ماند.',
+        }]);
       }
-      setStatus('تصویر مهر یا امضا روی صفحات انتخاب‌شده قرار گرفت.');
+      setStatus('نسخه‌های دارای مهر یا امضا آماده دانلود هستند؛ فایل‌های ورودی در محیط باقی ماندند.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'افزودن تصویر ناموفق بود.');
     } finally {
@@ -1123,8 +1171,6 @@ export const PdfStudioPage: React.FC = () => {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" onClick={() => void exportMerged(false)} disabled={busy || !pages.length} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white disabled:opacity-40"><Files size={15}/> ادغام و خروجی همه صفحات</button>
-            <button type="button" onClick={() => void exportMerged(true)} disabled={busy || !selectedCount} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs disabled:opacity-40"><Scissors size={15}/> استخراج صفحات انتخابی ({selectedCount})</button>
             <button type="button" onClick={removeSelected} disabled={busy || !selectedCount} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-red-500/30 px-3 text-xs text-red-400 disabled:opacity-40"><Minus size={15}/> حذف صفحات</button>
             <button type="button" onClick={rotateSelected} disabled={busy || !selectedCount} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs disabled:opacity-40"><RotateCw size={15}/> چرخش ۹۰ درجه</button>
             <button type="button" onClick={selectAll} disabled={busy || !pages.length} className="inline-flex min-h-10 items-center gap-1 rounded-xl border border-[var(--border)] px-3 text-xs disabled:opacity-40"><Check size={14}/> انتخاب همه</button>
@@ -1242,139 +1288,209 @@ export const PdfStudioPage: React.FC = () => {
             )}
           </div>}
 
-          {studioTab === 'outputs' && <aside className="grid gap-3 md:grid-cols-2">
-            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-              <h3 className="mb-3 font-black">قالب خروجی و جداسازی چندبخشی</h3>
-              <label className="block text-xs text-[var(--muted)]">نوع بسته خروجی</label>
-              <select value={outputPreset} onChange={(event) => applyOutputPreset(event.target.value as 'custom' | 'shipPass' | 'guarantee' | 'standard')} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
-                <option value="custom">جداسازی دلخواه</option>
-                <option value="shipPass">پاس کشتی</option>
-                <option value="guarantee">درخواست ضمانتنامه</option>
-                <option value="standard">مدارک استاندارد - حداکثر ۲ مگابایت</option>
-              </select>
-              <label className="mt-3 block text-xs text-[var(--muted)]">نام بسته یا فایل نهایی</label>
-              <input value={packageName} onChange={(event) => setPackageName(event.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
-              {outputPreset === 'standard' ? (
-                <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] leading-5 text-[var(--muted)]">
-                  تمام صفحات فعلی (از جمله اسناد، لیبل، عکس کالا، پروانه بهره‌برداری، تمدید پروانه و علامت استاندارد) در یک PDF جمع می‌شوند. سقف ۲ مگابایت اجباری است؛ در صورت نیاز، فشرده‌سازی تصویری تطبیقی اجرا می‌شود.
-                </div>
-              ) : (
-                <>
-                  <div className="mt-3 space-y-2">
-                    {splitRows.map((row, index) => (
-                      <div key={row.id} className="rounded-xl border border-[var(--border)] p-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-[var(--muted)]">{index + 1}.</span>
-                          <input value={row.name} onChange={(event) => setSplitRows((previous) => previous.map((item) => item.id === row.id ? { ...item, name: event.target.value } : item))} className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs" placeholder="نام فایل خروجی"/>
-                          <button type="button" onClick={() => setSplitRows((previous) => previous.filter((item) => item.id !== row.id))} disabled={splitRows.length <= 1} className="rounded-lg border border-red-500/30 p-2 text-red-400 disabled:opacity-30" aria-label="حذف خروجی"><Trash2 size={13}/></button>
-                        </div>
-                        <label className="mt-2 block text-[10px] text-[var(--muted)]">شماره صفحه‌ها؛ نمونه: 1-2 یا 1,5 یا 1-2,5</label>
-                        <input value={row.pageExpression} onChange={(event) => setSplitRows((previous) => previous.map((item) => item.id === row.id ? { ...item, pageExpression: event.target.value } : item))} dir="ltr" placeholder="1-2,5" className="mt-1 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-sm"/>
-                      </div>
-                    ))}
+          {studioTab === 'outputs' && (
+            <>
+              <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h2 className="font-black">ابزارهای اختیاری خروجی</h2>
+                    <p className="mt-1 text-xs leading-5 text-[var(--muted)]">فقط ابزارهایی را که لازم داری فعال کن. هیچ عملیات خروجی بدون انتخاب تو اجرا نمی‌شود.</p>
                   </div>
-                  <button type="button" onClick={() => setSplitRows((previous) => [...previous, { id: crypto.randomUUID(), name: 'سند جدید', pageExpression: '' }])} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 text-xs">افزودن بخش جداسازی</button>
-                </>
-              )}
-              <button type="button" onClick={() => void splitPdf()} disabled={busy || !pages.length || !packageName.trim()} className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40">
-                <Scissors className="ml-1 inline" size={15}/>{outputPreset === 'standard' ? 'ساخت PDF استاندارد زیر ۲ مگابایت' : 'ساخت همه خروجی‌ها و دانلود ZIP'}
-              </button>
-              <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">هر ردیف یک فایل جداست. شماره‌ها بر اساس ترتیب فعلی صفحات هستند؛ یک صفحه می‌تواند در چند خروجی استفاده شود.</p>
-            </section>
-
-            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-              <h3 className="mb-3 font-black">مهر، امضا و متن</h3>
-              <label className="block text-xs text-[var(--muted)]">متن فارسی یا انگلیسی</label>
-              <input value={selectedText} onChange={(event) => setSelectedText(event.target.value)} placeholder="مثلاً رونوشت برابر اصل است" className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
-              <button type="button" onClick={() => void addTextStamp()} disabled={busy || !pages.length} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs font-bold disabled:opacity-40"><Stamp className="ml-1 inline" size={15}/> درج متن روی صفحه</button>
-              <input ref={imageRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(event) => void addImageStamp(event.currentTarget.files?.[0])}/>
-              <button type="button" onClick={() => imageRef.current?.click()} disabled={busy || !pages.length} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs disabled:opacity-40"><FileImage className="ml-1 inline" size={15}/> افزودن تصویر مهر یا امضا</button>
-              <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">متن فارسی در این ابزار به‌شکل تصویر روی PDF قرار می‌گیرد؛ قابل جست‌وجو و ویرایش متنی نیست.</p>
-            </section>
-
-            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-black">فشرده‌سازی هوشمند پیشرفته</h3>
-                <span className="text-[10px] text-emerald-500">پیش‌فرض: حفظ خوانایی اعداد</span>
-              </div>
-              <label className="mt-3 block text-xs text-[var(--muted)]">روش فشرده‌سازی</label>
-              <select value={compressionSettings.mode} onChange={(event) => { setCompressionSettings((old) => ({ ...old, mode: event.target.value as CompressionSettings['mode'] })); setCompressionEstimate(null); }} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
-                <option value="smart">هوشمند ترکیبی؛ متن حفظ شود، اسکن‌ها فشرده شوند</option>
-                <option value="preserve">ساختاری؛ حفظ کامل متن و صفحات</option>
-                <option value="raster">فشرده‌سازی تصویری کامل همه صفحات</option>
-              </select>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs text-[var(--muted)]">کیفیت تصویر: {Math.round(compressionSettings.quality * 100)}٪</label>
-                  <input type="range" min="0.65" max="0.98" step="0.01" value={compressionSettings.quality} onChange={(event) => { setCompressionSettings((old) => ({ ...old, quality: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
+                  <span className="text-[10px] text-[var(--muted)]">{Object.values(outputTools).filter(Boolean).length} ابزار فعال</span>
                 </div>
-                <div>
-                  <label className="block text-xs text-[var(--muted)]">وضوح: {compressionSettings.dpi} DPI</label>
-                  <input type="range" min="120" max="300" step="15" value={compressionSettings.dpi} onChange={(event) => { setCompressionSettings((old) => ({ ...old, dpi: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
-                </div>
-              </div>
-              <label className="mt-3 flex items-center gap-2 text-xs text-[var(--muted)]">
-                <input type="checkbox" checked={compressionSettings.grayscale} onChange={(event) => { setCompressionSettings((old) => ({ ...old, grayscale: event.target.checked })); setCompressionEstimate(null); }} className="h-4 w-4"/>
-                تبدیل صفحات تصویری به سیاه‌وسفید (برای متن؛ عکس و لیبل رنگی را خاموش بگذارید)
-              </label>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <input value={compressionProfileName} onChange={(event) => setCompressionProfileName(event.target.value)} placeholder="نام تنظیمات؛ مثلا اسکن خوانا" className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs"/>
-                <button type="button" onClick={saveCompressionProfile} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">ذخیره تنظیمات</button>
-              </div>
-              <select defaultValue="" onChange={(event) => applyCompressionProfile(event.target.value)} className="mt-2 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs">
-                <option value="">بازیابی تنظیمات ذخیره‌شده…</option>
-                {compressionProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
-              </select>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => void estimateCompression()} disabled={busy || compressionEstimating || !compressionItems.length} className="min-h-10 rounded-xl border border-[var(--border)] px-2 py-2 text-xs font-bold disabled:opacity-40">
-                  {compressionEstimating ? 'در حال برآورد…' : 'برآورد حجم قبل از پردازش'}
-                </button>
-                <button type="button" onClick={() => void compressActivePdf()} disabled={busy || !compressionItems.length} className="min-h-10 rounded-xl bg-blue-600 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
-                  {busy ? 'در حال فشرده‌سازی…' : 'فشرده‌سازی و دانلود PDF'}
-                </button>
-              </div>
-              {compressionEstimate && (
-                <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
-                  <div className="text-xs font-bold">حجم تخمینی فایل PDF</div>
-                  <div className="mt-1 text-lg font-black tabular-nums">{formatSize(compressionEstimate.expected)}</div>
-                  <div className="mt-1 text-[11px] text-[var(--muted)]">بازه احتمالی: {formatSize(compressionEstimate.low)} تا {formatSize(compressionEstimate.high)}</div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-[var(--muted)]">
-                    <span>{compressionEstimate.preservedPages} صفحه متن‌محور حفظ‌شونده</span>
-                    <span>{compressionEstimate.rasterizedPages} صفحه تصویری</span>
-                    <span>نمونه‌گیری از {compressionEstimate.sampledPages} صفحه</span>
-                  </div>
-                  <p className="mt-2 text-[10px] leading-4 text-[var(--muted)]">این برآورد تقریبی است؛ پس از ساخت PDF، حجم واقعی در تاریخچه ثبت می‌شود.</p>
-                </div>
-              )}
-              <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">تمام صفحه‌های انتخاب‌شده، حتی از چند فایل مختلف، به ترتیب فعلی در یک فایل PDF فشرده ادغام می‌شوند؛ خروجی ZIP نیست و PDF به‌صورت خودکار باز نمی‌شود. در حالت هوشمند، صفحه‌های متن‌دار و اعداد اصلی حفظ می‌شوند و اسکن‌ها با وضوح انتخابی بازسازی می‌شوند.</p>
-            </section>
-
-            {compressionRuns.length > 0 && (
-              <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:col-span-2">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <h3 className="font-black">خروجی‌های قبلی این نشست</h3>
-                  <span className="text-[10px] text-[var(--muted)]">{compressionRuns.length} فایل PDF</span>
-                </div>
-                <div className="space-y-2">
-                  {compressionRuns.map((run) => (
-                    <div key={run.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] p-2">
-                      <FileText size={17} className="text-blue-400"/>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-bold">{run.name}</div>
-                        <div className="mt-1 text-[10px] text-[var(--muted)]">{run.profileName} · خروجی {formatSize(run.size)} · کاهش {Math.max(0, run.savedPercent)}٪</div>
-                      </div>
-                      <button type="button" onClick={() => downloadCompressionRun(run)} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">دانلود دوباره</button>
-                    </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {([
+                    { key: 'merge', label: 'ادغام و استخراج', detail: 'ساخت یک PDF از صفحات' },
+                    { key: 'split', label: 'تفکیک صفحات', detail: 'چند PDF مستقل' },
+                    { key: 'compression', label: 'فشرده‌سازی', detail: 'کاهش حجم PDF' },
+                    { key: 'stamp', label: 'مهر و امضا', detail: 'افزودن متن یا تصویر' },
+                  ] as const).map((tool) => (
+                    <label key={tool.key} className={'flex min-h-[74px] cursor-pointer items-start gap-2 rounded-xl border p-3 transition ' + (outputTools[tool.key] ? 'border-blue-500 bg-blue-500/10' : 'border-[var(--border)] bg-[var(--surface-2)]')}>
+                      <input
+                        type="checkbox"
+                        checked={outputTools[tool.key]}
+                        onChange={(event) => setOutputTools((previous) => ({ ...previous, [tool.key]: event.target.checked }))}
+                        className="mt-1 h-4 w-4 shrink-0"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-xs font-bold">{tool.label}</span>
+                        <span className="mt-1 block text-[10px] text-[var(--muted)]">{tool.detail}</span>
+                      </span>
+                    </label>
                   ))}
                 </div>
               </section>
-            )}
 
-            <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <div className="flex items-center gap-2 font-bold text-emerald-500"><ShieldCheck size={16}/> اصل فایل محفوظ می‌ماند</div>
-              <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">ویرایش و فشرده‌سازی در مرورگر انجام می‌شود. فایل‌های اصلی تغییر نمی‌کنند و خروجی هر نوبت یک PDF مستقل است؛ تنظیمات نام‌گذاری‌شده حفظ می‌شوند و هر PDF قبلی همچنان قابل دانلود دوباره خواهد بود.</p>
-            </section>
-          </aside>}
+              {readyOutputs.length > 0 && (
+                <section className="rounded-2xl border border-blue-500/30 bg-[var(--surface)] p-3 md:p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h2 className="font-black">فایل‌های آماده دانلود</h2>
+                      <p className="mt-1 text-[11px] text-[var(--muted)]">فایل‌ها خودکار باز یا دانلود نمی‌شوند. دانلود هر خروجی را جداگانه بزن؛ فایل‌های ورودی و تنظیمات باقی می‌مانند.</p>
+                    </div>
+                    <span className="text-xs font-bold text-blue-400">{readyOutputs.length} خروجی</span>
+                  </div>
+                  <div className="space-y-2">
+                    {readyOutputs.map((output) => (
+                      <div key={output.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] p-3">
+                        <FileText size={18} className="shrink-0 text-blue-400"/>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-bold">{output.name}</div>
+                          <div className="mt-1 text-[10px] leading-5 text-[var(--muted)]">{output.description} · {formatSize(output.size)}</div>
+                          <div className="mt-1 text-[10px] text-[var(--muted)]">{output.downloadedAt ? 'دانلود قبلی ثبت شد؛ امکان دانلود دوباره وجود دارد.' : 'هنوز دانلود نشده است.'}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => downloadReadyOutput(output)}
+                          className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white"
+                        >
+                          <FileText size={14}/>{output.downloadedAt ? 'دانلود دوباره' : 'دانلود فایل'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <aside className="grid gap-3 md:grid-cols-2">
+                {outputTools.merge && (
+                  <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                    <h3 className="mb-2 font-black">ادغام و استخراج صفحات</h3>
+                    <p className="text-[11px] leading-5 text-[var(--muted)]">صفحات را با ترتیب فعلی به یک PDF تبدیل کن. برای استخراج فقط صفحات انتخاب‌شده، ابتدا آن‌ها را در تب صفحات انتخاب کن.</p>
+                    <div className="mt-3 grid grid-cols-1 gap-2">
+                      <button type="button" onClick={() => void exportMerged(false)} disabled={busy || !pages.length} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white disabled:opacity-40">
+                        <Files size={15}/> ادغام همه صفحات ({pages.length})
+                      </button>
+                      <button type="button" onClick={() => void exportMerged(true)} disabled={busy || !selectedCount} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs disabled:opacity-40">
+                        <Scissors size={15}/> استخراج صفحات انتخابی ({selectedCount})
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                {outputTools.split && (
+                  <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                    <h3 className="mb-3 font-black">تفکیک صفحات به PDFهای جداگانه</h3>
+                    <label className="block text-xs text-[var(--muted)]">قالب تفکیک</label>
+                    <select value={outputPreset} onChange={(event) => applyOutputPreset(event.target.value as 'custom' | 'shipPass' | 'guarantee' | 'standard')} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
+                      <option value="custom">تفکیک دلخواه</option>
+                      <option value="shipPass">پاس کشتی</option>
+                      <option value="guarantee">درخواست ضمانتنامه</option>
+                      <option value="standard">مدارک استاندارد - حداکثر ۲ مگابایت</option>
+                    </select>
+                    <label className="mt-3 block text-xs text-[var(--muted)]">نام مجموعه خروجی</label>
+                    <input value={packageName} onChange={(event) => setPackageName(event.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+                    {outputPreset === 'standard' ? (
+                      <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] leading-5 text-[var(--muted)]">
+                        همه صفحات در یک PDF استاندارد قرار می‌گیرند. سقف ۲ مگابایت است؛ فشرده‌سازی تصویری فقط در صورت نیاز اجرا می‌شود و ممکن است متن قابل جست‌وجو، فرم‌ها و لینک‌ها را حذف کند.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mt-3 space-y-2">
+                          {splitRows.map((row, index) => (
+                            <div key={row.id} className="rounded-xl border border-[var(--border)] p-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-[var(--muted)]">{index + 1}.</span>
+                                <input value={row.name} onChange={(event) => setSplitRows((previous) => previous.map((item) => item.id === row.id ? { ...item, name: event.target.value } : item))} className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs" placeholder="نام فایل PDF"/>
+                                <button type="button" onClick={() => setSplitRows((previous) => previous.filter((item) => item.id !== row.id))} disabled={splitRows.length <= 1} className="rounded-lg border border-red-500/30 p-2 text-red-400 disabled:opacity-30" aria-label="حذف خروجی"><Trash2 size={13}/></button>
+                              </div>
+                              <label className="mt-2 block text-[10px] text-[var(--muted)]">شماره صفحه‌ها؛ نمونه: 1-2 یا 1,5 یا 1-2,5</label>
+                              <input value={row.pageExpression} onChange={(event) => setSplitRows((previous) => previous.map((item) => item.id === row.id ? { ...item, pageExpression: event.target.value } : item))} dir="ltr" placeholder="1-2,5" className="mt-1 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-sm"/>
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setSplitRows((previous) => [...previous, { id: crypto.randomUUID(), name: 'سند جدید', pageExpression: '' }])} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 text-xs">افزودن بخش تفکیک</button>
+                      </>
+                    )}
+                    <button type="button" onClick={() => void splitPdf()} disabled={busy || !pages.length || !packageName.trim()} className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40">
+                      <Scissors className="ml-1 inline" size={15}/>{outputPreset === 'standard' ? 'ساخت PDF استاندارد' : 'ساخت PDFهای جداگانه'}
+                    </button>
+                    <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">هر ردیف یک PDF مستقل خواهد بود و دکمه دانلود جداگانه می‌گیرد؛ فایل ZIP ساخته نمی‌شود.</p>
+                  </section>
+                )}
+
+                {outputTools.stamp && (
+                  <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                    <h3 className="mb-3 font-black">مهر، امضا و متن</h3>
+                    <label className="block text-xs text-[var(--muted)]">متن فارسی یا انگلیسی</label>
+                    <input value={selectedText} onChange={(event) => setSelectedText(event.target.value)} placeholder="مثلاً رونوشت برابر اصل است" className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+                    <button type="button" onClick={() => void addTextStamp()} disabled={busy || !pages.length} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs font-bold disabled:opacity-40"><Stamp className="ml-1 inline" size={15}/> درج متن روی صفحه</button>
+                    <input ref={imageRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(event) => void addImageStamp(event.currentTarget.files?.[0])}/>
+                    <button type="button" onClick={() => imageRef.current?.click()} disabled={busy || !pages.length} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs disabled:opacity-40"><FileImage className="ml-1 inline" size={15}/> افزودن تصویر مهر یا امضا</button>
+                    <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">متن فارسی در این ابزار به‌شکل تصویر روی PDF قرار می‌گیرد؛ قابل جست‌وجو و ویرایش متنی نیست.</p>
+                  </section>
+                )}
+
+                {outputTools.compression && (
+                  <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="font-black">فشرده‌سازی هوشمند پیشرفته</h3>
+                      <span className="text-[10px] text-emerald-500">پیش‌فرض: حفظ خوانایی اعداد</span>
+                    </div>
+                    <label className="mt-3 block text-xs text-[var(--muted)]">روش فشرده‌سازی</label>
+                    <select value={compressionSettings.mode} onChange={(event) => { setCompressionSettings((old) => ({ ...old, mode: event.target.value as CompressionSettings['mode'] })); setCompressionEstimate(null); }} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
+                      <option value="smart">هوشمند ترکیبی؛ متن حفظ شود، اسکن‌ها فشرده شوند</option>
+                      <option value="preserve">ساختاری؛ حفظ کامل متن و صفحات</option>
+                      <option value="raster">فشرده‌سازی تصویری کامل همه صفحات</option>
+                    </select>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-[var(--muted)]">کیفیت تصویر: {Math.round(compressionSettings.quality * 100)}٪</label>
+                        <input type="range" min="0.65" max="0.98" step="0.01" value={compressionSettings.quality} onChange={(event) => { setCompressionSettings((old) => ({ ...old, quality: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[var(--muted)]">وضوح: {compressionSettings.dpi} DPI</label>
+                        <input type="range" min="120" max="300" step="15" value={compressionSettings.dpi} onChange={(event) => { setCompressionSettings((old) => ({ ...old, dpi: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
+                      </div>
+                    </div>
+                    <label className="mt-3 flex items-center gap-2 text-xs text-[var(--muted)]">
+                      <input type="checkbox" checked={compressionSettings.grayscale} onChange={(event) => { setCompressionSettings((old) => ({ ...old, grayscale: event.target.checked })); setCompressionEstimate(null); }} className="h-4 w-4"/>
+                      تبدیل صفحات تصویری به سیاه‌وسفید (برای متن؛ عکس و لیبل رنگی را خاموش بگذارید)
+                    </label>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input value={compressionProfileName} onChange={(event) => setCompressionProfileName(event.target.value)} placeholder="نام تنظیمات؛ مثلا اسکن خوانا" className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs"/>
+                      <button type="button" onClick={saveCompressionProfile} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">ذخیره تنظیمات</button>
+                    </div>
+                    <select defaultValue="" onChange={(event) => applyCompressionProfile(event.target.value)} className="mt-2 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs">
+                      <option value="">بازیابی تنظیمات ذخیره‌شده…</option>
+                      {compressionProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                    </select>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => void estimateCompression()} disabled={busy || compressionEstimating || !compressionItems.length} className="min-h-10 rounded-xl border border-[var(--border)] px-2 py-2 text-xs font-bold disabled:opacity-40">
+                        {compressionEstimating ? 'در حال برآورد…' : 'برآورد حجم قبل از پردازش'}
+                      </button>
+                      <button type="button" onClick={() => void compressActivePdf()} disabled={busy || !compressionItems.length} className="min-h-10 rounded-xl bg-blue-600 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
+                        {busy ? 'در حال فشرده‌سازی…' : 'ساخت PDF فشرده'}
+                      </button>
+                    </div>
+                    {compressionEstimate && (
+                      <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+                        <div className="text-xs font-bold">حجم تخمینی فایل PDF</div>
+                        <div className="mt-1 text-lg font-black tabular-nums">{formatSize(compressionEstimate.expected)}</div>
+                        <div className="mt-1 text-[11px] text-[var(--muted)]">بازه احتمالی: {formatSize(compressionEstimate.low)} تا {formatSize(compressionEstimate.high)}</div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-[var(--muted)]">
+                          <span>{compressionEstimate.preservedPages} صفحه متن‌محور حفظ‌شونده</span>
+                          <span>{compressionEstimate.rasterizedPages} صفحه تصویری</span>
+                          <span>نمونه‌گیری از {compressionEstimate.sampledPages} صفحه</span>
+                        </div>
+                        <p className="mt-2 text-[10px] leading-4 text-[var(--muted)]">این برآورد تقریبی است؛ پس از ساخت PDF، حجم واقعی در فایل‌های آماده دانلود نشان داده می‌شود.</p>
+                      </div>
+                    )}
+                    <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">خروجی فشرده یک PDF مستقل است. فایل ورودی، ترتیب صفحات، انتخاب‌ها و پروفایل‌های ذخیره‌شده پس از آماده‌سازی و دانلود پاک نمی‌شوند.</p>
+                  </section>
+                )}
+
+                {!Object.values(outputTools).some(Boolean) && (
+                  <section className="grid min-h-40 place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-5 text-center md:col-span-2">
+                    <div>
+                      <div className="font-bold">هنوز ابزاری فعال نیست</div>
+                      <p className="mt-1 text-xs leading-6 text-[var(--muted)]">از گزینه‌های بالا فقط عملیات موردنیازت را فعال کن. فایل‌های ورودی و صفحات تا وقتی خودت پاک‌سازی نکنی در محیط باقی می‌مانند.</p>
+                    </div>
+                  </section>
+                )}
+              </aside>
+            </>
+          )}
         </section>
         )}
 
