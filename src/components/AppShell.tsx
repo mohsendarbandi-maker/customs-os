@@ -7,7 +7,7 @@ import {
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
   Contact, Folder, ClipboardCheck, GitBranch, Receipt, Network, FileStack, FileSignature,
-  Home, CalendarDays
+  Home, CalendarDays, RefreshCw
 } from 'lucide-react';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { useAppearance } from '../context/AppearanceContext';
@@ -90,6 +90,30 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
+  const [pwaUpdateAvailable, setPwaUpdateAvailable] = useState(false);
+  const [pwaUpdating, setPwaUpdating] = useState(false);
+
+  useEffect(() => {
+    const onUpdateReady = () => {
+      setPwaUpdateAvailable(true);
+      setPwaUpdating(false);
+    };
+    const onUpdateStarted = () => setPwaUpdating(true);
+    const onUpdateFailed = () => setPwaUpdating(false);
+    window.addEventListener('customs-os:pwa-update-ready', onUpdateReady);
+    window.addEventListener('customs-os:pwa-update-started', onUpdateStarted);
+    window.addEventListener('customs-os:pwa-update-failed', onUpdateFailed);
+    return () => {
+      window.removeEventListener('customs-os:pwa-update-ready', onUpdateReady);
+      window.removeEventListener('customs-os:pwa-update-started', onUpdateStarted);
+      window.removeEventListener('customs-os:pwa-update-failed', onUpdateFailed);
+    };
+  }, []);
+
+  const requestPwaUpdate = () => {
+    if (!pwaUpdateAvailable || pwaUpdating) return;
+    window.dispatchEvent(new Event('customs-os:pwa-update-request'));
+  };
 
   // iOS "Request Desktop Website" can report a 980px CSS viewport on a phone.
   // Use the real device screen width as a second signal so the primary domain cannot
@@ -474,6 +498,18 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               <span className="mobile-current-page__title">{currentPageLabel}</span>
             </span>
           </div>
+          {pwaUpdateAvailable && (
+            <button
+              type="button"
+              className="icon-btn app-mobile-settings"
+              aria-label="به‌روزرسانی برنامه"
+              title={pwaUpdating ? 'در حال فعال‌سازی نسخه جدید…' : 'نسخه جدید آماده است؛ برای به‌روزرسانی بزنید'}
+              onClick={requestPwaUpdate}
+              disabled={pwaUpdating}
+            >
+              <RefreshCw size={18} className={pwaUpdating ? 'animate-spin' : ''} />
+            </button>
+          )}
           <button
             type="button"
             className="icon-btn app-mobile-settings"
@@ -572,6 +608,18 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             <div className="flex-1" />
             <div className="flex items-center gap-2">
               {profile && <OperationalAlertsDropdown refreshKey={location.pathname} />}
+              {pwaUpdateAvailable && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="به‌روزرسانی برنامه"
+                  title={pwaUpdating ? 'در حال فعال‌سازی نسخه جدید…' : 'نسخه جدید آماده است؛ برای به‌روزرسانی بزنید'}
+                  onClick={requestPwaUpdate}
+                  disabled={pwaUpdating}
+                >
+                  <RefreshCw size={17} className={pwaUpdating ? 'animate-spin' : ''} />
+                </button>
+              )}
               <CloudSyncStatus online={online} enabled={Boolean(profile)} />
               <button className="theme-cycle-btn" title="تغییر حالت نمایش" onClick={cycleTheme}>
                 {comfort === 'reading' ? (
