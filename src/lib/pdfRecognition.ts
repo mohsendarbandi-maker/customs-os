@@ -92,7 +92,7 @@ export function buildDocumentPageFeaturesFromText(
       anchors.push({
         token,
         x: box ? Math.max(0, Math.min(1, ((box.x0 + box.x1) / 2) / Math.max(1, pageWidth))) : 0.5,
-        y: box ? Math.max(0, Math.min(1, ((box.y0 + box.y1) / 2) / Math.max(1, pageHeight)) : 0.5,
+        y: box ? Math.max(0, Math.min(1, ((box.y0 + box.y1) / 2) / Math.max(1, pageHeight))) : 0.5,
         weight: Math.max(0.5, Math.min(3, (word.confidence || 70) / 35)),
       });
     }
