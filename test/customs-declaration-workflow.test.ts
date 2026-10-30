@@ -235,4 +235,21 @@ describe('customs workflow stage prerequisites', () => {
       'با ثبت بارگیری کامیون آخر، دریافت یا پرداخت صورتحساب متمم را ثبت کنید.',
     );
   });
+  it('keeps SATA optional in earlier steps but requires it before customs exit is completed', () => {
+    const state = readyWorkflow();
+    state.loadingPermit.central_bank_status = 'approved';
+    state.loadingPermit.sata_code = '';
+    expect(getWorkflowStageIssues('loading_permit', state)).toEqual([]);
+    expect(getWorkflowStageIssues('exit', state)).toContain(
+      'کد ساتا را برای خروج نهایی ثبت کنید؛ در صورت عدم نیاز به ساتا، وضعیت بانک مرکزی را «نیازی نیست» انتخاب کنید.',
+    );
+
+    state.loadingPermit.sata_code = 'SATA-12345';
+    expect(getWorkflowStageIssues('exit', state)).toEqual([]);
+
+    state.loadingPermit.sata_code = '';
+    state.loadingPermit.central_bank_status = 'not_required';
+    expect(getWorkflowStageIssues('exit', state)).toEqual([]);
+  });
+
 });
