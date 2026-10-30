@@ -34,6 +34,20 @@ describe('PDF Studio prepared output workflow', () => {
     expect(source).toContain('هیچ عملیات خروجی بدون انتخاب تو اجرا نمی‌شود');
   });
 
+
+  it('never labels an unchanged PDF as a compressed output', () => {
+    expect(source).toContain('if (candidate.blob.size >= originalBytes.byteLength)');
+    expect(source).toContain('خروجی تکراری ساخته نشد');
+    expect(source).toContain('فشرده‌سازی هوشمند کاهش حجمی ایجاد نکرد');
+  });
+
+  it('offers a clearly warned raster fallback and retries at lower image settings', () => {
+    expect(source).toContain("compressionSettings.mode === 'smart'");
+    expect(source).toContain('متن آن صفحات دیگر قابل جست‌وجو یا انتخاب نخواهد بود');
+    expect(source).toContain('Math.min(compressionSettings.dpi, 120)');
+    expect(source).toContain('pagePreservationIds');
+  });
+
   it('produces individual PDF files for split outputs rather than an automatic ZIP download', () => {
     expect(source).toContain('const outputFiles: Array<{ name: string; bytes: Uint8Array }>');
     expect(source).toContain("type: 'application/pdf'");
