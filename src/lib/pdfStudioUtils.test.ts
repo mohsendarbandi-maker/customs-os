@@ -4,7 +4,7 @@ import { pageExpressionForMatches, parsePageSelection, suggestDocumentLabel } fr
 describe('PDF Studio page selection', () => {
   it('supports ranges and explicit page lists in one field', () => {
     expect(parsePageSelection('1-2,5', 8)).toEqual([1, 2, 5]);
-    expect(parsePageSelection('۱-۲،۵'.replace('،', ','), 8)).toEqual([1, 2, 5]);
+    expect(parsePageSelection('۱-۲،۵', 8)).toEqual([1, 2, 5]);
     expect(parsePageSelection('1,5,2-3', 8)).toEqual([1, 2, 3, 5]);
   });
 
