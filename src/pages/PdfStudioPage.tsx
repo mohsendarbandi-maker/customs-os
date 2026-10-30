@@ -473,8 +473,9 @@ export const PdfStudioPage: React.FC = () => {
     setError('');
     try {
       const settings = { ...compressionSettings };
+      const protectedIds = new Set(documents.filter((document) => document.hasProtectedFeatures).map((document) => document.id));
       const preserved = compressionItems.filter((item) =>
-        settings.mode === 'preserve' || (settings.mode === 'smart' && shouldPreservePageText(item))
+        protectedIds.has(item.documentId) || settings.mode === 'preserve' || (settings.mode === 'smart' && shouldPreservePageText(item))
       );
       const rasterPages = compressionItems.filter((item) => !preserved.includes(item));
       const pageAreas = rasterPages.map((item) => item.pageArea * (settings.dpi / 72) ** 2);
@@ -487,7 +488,9 @@ export const PdfStudioPage: React.FC = () => {
         const items = compressionItems.filter((item) => item.documentId === document.id);
         if (!items.length) continue;
         const kept = items.filter((item) => preserved.includes(item));
-        if (kept.length) {
+        if (document.hasProtectedFeatures) {
+          preservedBytes += document.file.size;
+        } else if (kept.length) {
           preservedBytes += document.file.size * (kept.length / Math.max(1, document.pageCount));
         }
       }
@@ -532,7 +535,7 @@ export const PdfStudioPage: React.FC = () => {
 
   const compressActivePdf = async () => {
     if (!documents.length || !compressionItems.length) return setError('ابتدا فایل یا صفحه برای فشرده‌سازی انتخاب کنید.');
-    if (compressionSettings.mode === 'raster' && !window.confirm('در حالت فشرده‌سازی کامل، همه صفحه‌ها به تصویر تبدیل می‌شوند. متن قابل جست‌وجو، فرم‌ها، لینک‌ها، لایه‌ها و امضاهای دیجیتال در نسخه خروجی حفظ نمی‌شوند؛ اعداد در وضوح/کیفیت انتخاب‌شده بازسازی می‌شوند. فایل‌های اصلی تغییر نمی‌کنند. ادامه می‌دهید؟')) return;
+    if (compressionSettings.mode === 'raster' && !window.confirm('در حالت فشرده‌سازی کامل، صفحه‌های فایل‌های عادی به تصویر تبدیل می‌شوند و متن قابل جست‌وجو، فرم‌ها، لینک‌ها و لایه‌ها حفظ نمی‌شوند. فایل‌های دارای امضای دیجیتال یا فرم محافظت‌شده بدون تغییر داخل ZIP می‌مانند. فایل‌های اصلی تغییر نمی‌کنند. ادامه می‌دهید؟')) return;
     setBusy(true);
     setError('');
     try {
