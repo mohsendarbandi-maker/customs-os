@@ -168,7 +168,7 @@ create index if not exists office_correspondence_created_by_idx
 create index if not exists office_correspondence_issued_by_idx
   on public.office_correspondence (issued_by);
 create index if not exists office_correspondence_parent_org_fk_idx
-  on public.office_correspondence (parent_id, organization_id);
+  on public.office_correspondence (parent_correspondence_id, organization_id);
 create index if not exists office_correspondence_profile_org_fk_idx
   on public.office_correspondence (company_profile_id, organization_id);
 create index if not exists office_correspondence_updated_by_idx
