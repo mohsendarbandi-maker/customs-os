@@ -84,7 +84,7 @@ describe('AI Operator security invariants',()=>{
    expect(workspace).not.toMatch(/\.submit\s*\(/);
    expect(assistant).toContain('formSchema=Array.isArray(b.form_schema)');
    expect(assistant).toContain('JSON.stringify(formSchema)');
-   expect(assistant).toContain("const option=Array.from(el.options).find(o=>normalize(o.value)===target||normalize(o.textContent||'')===target)");
+   expect(workspace).toContain("const option=Array.from(el.options).find(o=>normalize(o.value)===target||normalize(o.textContent||'')===target)");
  });
  it('keeps the assistant bootable and all provider prompts within known limits',()=>{
    const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
