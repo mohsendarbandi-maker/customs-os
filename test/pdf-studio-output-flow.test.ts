@@ -18,7 +18,7 @@ describe('PDF Studio prepared output workflow', () => {
   it('keeps prepared files available after download instead of clearing the workspace', () => {
     expect(source).toContain('setReadyOutputs((previous) => [...prepared, ...previous])');
     expect(source).toContain('setReadyOutputs((previous) => previous.map((item)');
-    expect(source).toContain('downloadAt');
+    expect(source).toContain('downloadedAt');
     expect(source).not.toContain('setReadyOutputs([])');
     expect(source).not.toContain('setDocuments([]);\n    setPages([]);\n    setReadyOutputs([])');
     expect(source).toContain("localStorage.setItem('customs-os-pdfstudio-compression:' + organizationId");
