@@ -294,12 +294,14 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
  const vesselSearch=selected?'/vessel-search?name='+encodeURIComponent(vessel?.name||form.vessel)+'&imo='+encodeURIComponent(vessel?.imo_number||form.imo)+'&bl='+encodeURIComponent(form.billOfLading):'#';
  return <main dir="rtl" className="min-h-screen p-4 md:p-6" style={{background:'var(--bg)',color:'var(--text)'}}><div className="max-w-[1500px] mx-auto space-y-4">
   <header className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs app-muted">مرحله ۱</div><h1 className="text-2xl font-black">شروع عملیات</h1><p className="text-xs app-muted mt-1">محموله، صاحب کالا، کشتی، وضعیت کشتی و اسناد محموله در یک مرحله.</p><div className="mt-2"><FormDraftIndicator status={formDraft.status} onSave={formDraft.saveDraftNow}/></div></div><div className="flex gap-2"><button onClick={()=>void load()} className="icon-btn" title="بروزرسانی"><RefreshCw size={16}/></button><button onClick={reset} className="px-4 py-2 rounded-xl border app-border"><Plus size={16} className="inline ml-1"/>محموله جدید</button></div></header>
-  {profile?.role!=='client'&&<section className="rounded-2xl border-2 border-dashed app-border bg-[var(--surface)] p-4 sm:p-5">
+  <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="grid lg:grid-cols-4 gap-3">
+   <label className="text-xs app-muted lg:col-span-2">صاحب کالا<select value={form.ownerId} onChange={e=>{const next=e.target.value;set('ownerId',next);if(pendingDocuments.some(document=>document.clientId!==next))setMessage('صاحب کالا تغییر کرد؛ فایل‌های قبلی در آرشیو صاحب کالای قبلی می‌مانند.')}} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب صاحب کالا</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.national_id?' — '+c.national_id:''}</option>)}</select></label>
+  {!selected&&profile?.role!=='client'&&<div className="lg:col-span-4"><section className="rounded-2xl border-2 border-dashed app-border bg-[var(--surface)] p-4 sm:p-5">
    <div className="flex flex-wrap items-center justify-between gap-3">
-    <div><div className="flex items-center gap-2 font-black"><FileText size={18}/> بارگذاری سند برای ثبت محموله</div><p className="mt-1 text-xs app-muted">فایل کامل PDF را یک‌بار ذخیره کن؛ سپس همان فایل را به‌عنوان بارنامه انتخاب و برای استخراج اطلاعات بفرست.</p></div>
+    <div><div className="flex items-center gap-2 font-black"><FileText size={18}/> بارگذاری سند برای ثبت محموله</div><p className="mt-1 text-xs app-muted">ابتدا صاحب کالا را انتخاب کن. فایل کامل مستقیماً در آرشیو تلگرام ذخیره می‌شود؛ سپس بارنامه را انتخاب و برای استخراج بفرست.</p></div>
     <label className="cursor-pointer rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">
-     <Upload size={16} className="inline ml-1"/>{stagingUploading?'در حال ذخیره فایل...':'انتخاب و آپلود سند'}
-     <input type="file" accept="application/pdf,image/jpeg,image/png" multiple className="hidden" disabled={stagingUploading} onChange={e=>{void uploadStagedShipmentDocuments(e.target.files);e.currentTarget.value=''}}/>
+     <Upload size={16} className="inline ml-1"/>{stagingUploading?'در حال آرشیو در تلگرام...':'آپلود به آرشیو تلگرام'}
+     <input type="file" accept="application/pdf,image/jpeg,image/png" multiple className="hidden" disabled={stagingUploading||!form.ownerId} onChange={e=>{void uploadStagedShipmentDocuments(e.target.files);e.currentTarget.value=''}}/>
     </label>
    </div>
    {pendingDocuments.length>0&&<div className="mt-4 space-y-2">
@@ -307,15 +309,15 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
      <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2">
        {selectedBillOfLadingId===document.id?<CheckCircle2 className="text-[var(--primary)]" size={18}/>:<FileText size={18} className="app-muted"/>}
-       <div className="min-w-0"><b className="block truncate text-sm">{document.name}</b><span className="text-[11px] app-muted">{(document.sizeBytes/1024/1024).toFixed(2)} MB · {document.pageCount} صفحه · ذخیره‌شده در Storage</span></div>
+       <div className="min-w-0"><b className="block truncate text-sm">{document.name}</b><span className="text-[11px] app-muted">{(document.sizeBytes/1024/1024).toFixed(2)} MB · {document.pageCount} صفحه · آرشیو تلگرام</span></div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
        <button type="button" onClick={()=>setSelectedBillOfLadingId(document.id)} className={`rounded-lg px-3 py-2 text-xs font-bold ${selectedBillOfLadingId===document.id?'bg-[var(--primary)] text-white':'border app-border'}`}>{selectedBillOfLadingId===document.id?'بارنامه انتخاب‌شده':'انتخاب به‌عنوان بارنامه'}</button>
-       <button type="button" onClick={()=>setPreviewBillOfLadingId(previous=>previous===document.id?'':document.id)} className="rounded-lg border app-border px-3 py-2 text-xs"><Eye size={14} className="inline ml-1"/>نمایش</button>
+       <button type="button" onClick={()=>void previewPendingBillOfLading(document)} className="rounded-lg border app-border px-3 py-2 text-xs"><Eye size={14} className="inline ml-1"/>نمایش</button>
       </div>
      </div>
      {document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}
-     {previewBillOfLadingId===document.id&&<iframe title={document.name} src={document.previewUrl} className="mt-3 h-[420px] w-full rounded-xl border app-border bg-white"/>}
+     {previewBillOfLadingId===document.id&&(previewBillOfLadingUrl?<iframe title={document.name} src={previewBillOfLadingUrl} className="mt-3 h-[420px] w-full rounded-xl border app-border bg-white"/>:<div className="mt-3 rounded-xl bg-[var(--surface-2)] p-4 text-xs app-muted">در حال دریافت پیش‌نمایش از آرشیو تلگرام…</div>)}
     </div>)}
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--surface-2)] p-3">
      <div className="text-xs app-muted">فقط فایل انتخاب‌شده به‌عنوان بارنامه برای استخراج ارسال می‌شود؛ همه صفحات همان PDF خوانده می‌شوند.</div>
@@ -325,9 +327,7 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
     </div>
    </div>}
    {pendingDocuments.length===0&&<div className="mt-3 text-xs app-muted">هنوز فایلی انتخاب نشده است. این مرحله اختیاری است و می‌توانی اطلاعات را دستی هم وارد کنی.</div>}
-  </section>}
-  <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="grid lg:grid-cols-4 gap-3">
-   <label className="text-xs app-muted lg:col-span-2">صاحب کالا<select value={form.ownerId} onChange={e=>{const next=e.target.value;set('ownerId',next);if(pendingDocuments.some(document=>document.clientId!==next))setMessage('صاحب کالا تغییر کرد؛ فایل‌های قبلی در آرشیو صاحب کالای قبلی می‌مانند.')}} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب صاحب کالا</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.national_id?' — '+c.national_id:''}</option>)}</select></label>
+  </section></div>}
    <label className="text-xs app-muted">کشتیرانی<select value={form.shippingLine} onChange={e=>chooseLine(e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب کشتیرانی</option>{lines.map(l=><option key={l.id} value={l.name}>{l.name_fa||l.name}</option>)}</select></label><label className="text-xs app-muted">B/L<input value={form.billOfLading} onChange={e=>set('billOfLading',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
    <label className="text-xs app-muted">سال B/L<input value={form.year} onChange={e=>set('year',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label><label className="text-xs app-muted">Voyage<input value={form.voyage} onChange={e=>set('voyage',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
    <label className="text-xs app-muted lg:col-span-2">کشتی<input list="operations-vessels" value={form.vessel} onChange={e=>chooseVessel(e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/><datalist id="operations-vessels">{vessels.map(v=><option key={v.id} value={v.name}/>)}</datalist></label><label className="text-xs app-muted">IMO<input value={form.imo} onChange={e=>set('imo',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label><label className="text-xs app-muted">پرچم ISO-2<input value={form.flag} onChange={e=>set('flag',e.target.value.toUpperCase())} maxLength={2} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
