@@ -155,6 +155,8 @@ describe('AI Operator security invariants',()=>{
     expect(shipment).not.toContain('document_storage_path:document.storagePath');
     expect(shipment).not.toContain('archiveShipmentDocumentInBackground(doc.id');
     expect(assistant).toContain("telegramFileAssetId=String(b.telegram_file_asset_id||'').trim()");
+    expect(assistant).toContain("maxOutputTokens:650,temperature:0.2");
+    expect(assistant).toContain("maxOutputTokens:900,temperature:0.2");
     expect(assistant).toContain("/api/messenger/files/'+encodeURIComponent(telegramFileAssetId)+'/download");
     expect(assistant).toContain("v1beta/interactions");
   });
