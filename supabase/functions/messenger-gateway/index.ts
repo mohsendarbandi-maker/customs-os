@@ -237,10 +237,11 @@ async function fileArchiveDestination(p:Profile,req:Request){
 async function reconcileTelegramArchiveMetadata(input:{
  p:Profile; user:string; c:Conn; chat:string; folder:any; shipment:any; job:any;
  folderId:string; name:string; displayName:string; mime:string; size:number;
- documentType:string; archiveTags:string[];
+ documentType:string; archiveTags:string[]; sourceShipmentDocumentId?:string;
 }):Promise<{assetId:string;externalMessageId:string}>{
- const {p,user,c,chat,folder,shipment,job,folderId,name,displayName,mime,size,documentType,archiveTags}=input;
+ const {p,user,c,chat,folder,shipment,job,folderId,name,displayName,mime,size,documentType,archiveTags,sourceShipmentDocumentId}=input;
  const now=new Date().toISOString();
+ let sourceStoragePath:string|null=null;
  const officeId=folder.customs_office_id||shipment?.customs_office_id||null;
     const [clientMeta,shipmentFolderMeta,officeMeta,declarationMeta]=await Promise.all([
      folder.client_id
@@ -375,34 +376,52 @@ async function reconcileTelegramArchiveMetadata(input:{
    document_type:mime==="application/pdf"?"customs_document":"other",created_by:user
   },{onConflict:"shipment_id,file_asset_id,document_type"});
   if(shipmentFileError)throw new Error("FILE_ARCHIVE_RECONCILIATION_SHIPMENT_LINK_FAILED");
-  const {data:docs,error:docLookupError}=await db.from("shipment_documents").select("id")
-   .eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).eq("file_asset_id",assetId)
-   .order("created_at",{ascending:false}).limit(1);
-  if(docLookupError)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_LOOKUP_FAILED");
-  let shipmentDoc=docs?.[0]||null;
-  if(!shipmentDoc){
-   const {data,error}=await db.from("shipment_documents").insert({
-    organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
-    document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
-    mime_type:mime,file_size_bytes:size,extraction_status:"not_requested",storage_backend:"telegram",
-    file_asset_id:assetId,folder_id:folderId,telegram_message_id:externalMessageId
-   }).select("id").single();
-   if(error||!data)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_CREATE_FAILED");
-   shipmentDoc=data;
-  }else{
+  let shipmentDoc:any=null;
+  if(sourceShipmentDocumentId){
+   const {data:sourceDoc,error:sourceDocError}=await db.from("shipment_documents").select("id,storage_path,storage_backend,file_asset_id,folder_id,is_archived")
+    .eq("id",sourceShipmentDocumentId).eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).maybeSingle();
+   if(sourceDocError||!sourceDoc)throw new Error("FILE_ARCHIVE_RECONCILIATION_SOURCE_DOCUMENT_MISSING");
+   if(sourceDoc.folder_id!==folderId||sourceDoc.is_archived||(sourceDoc.file_asset_id&&sourceDoc.file_asset_id!==assetId))
+    throw new Error("FILE_ARCHIVE_RECONCILIATION_SOURCE_DOCUMENT_CHANGED");
+   sourceStoragePath=sourceDoc.storage_path;
    const {error}=await db.from("shipment_documents").update({
-    document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
-    mime_type:mime,file_size_bytes:size,extraction_status:"not_requested",storage_backend:"telegram",
-    file_asset_id:assetId,folder_id:folderId,telegram_message_id:externalMessageId,
+    document_name:displayName,original_file_name:name,mime_type:mime,file_size_bytes:size,
+    storage_backend:"telegram",file_asset_id:assetId,folder_id:folderId,telegram_message_id:externalMessageId,
     is_archived:false,archived_at:null,archived_by:null,archive_reason:null,updated_at:now
-   }).eq("id",shipmentDoc.id).eq("organization_id",p.organization_id);
+   }).eq("id",sourceShipmentDocumentId).eq("organization_id",p.organization_id);
    if(error)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_UPDATE_FAILED");
+   shipmentDoc={id:sourceShipmentDocumentId};
+  }else{
+   const {data:docs,error:docLookupError}=await db.from("shipment_documents").select("id")
+    .eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).eq("file_asset_id",assetId)
+    .order("created_at",{ascending:false}).limit(1);
+   if(docLookupError)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_LOOKUP_FAILED");
+   shipmentDoc=docs?.[0]||null;
+   if(!shipmentDoc){
+    const {data,error}=await db.from("shipment_documents").insert({
+     organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
+     document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
+     mime_type:mime,file_size_bytes:size,extraction_status:"not_requested",storage_backend:"telegram",
+     file_asset_id:assetId,folder_id:folderId,telegram_message_id:externalMessageId
+    }).select("id").single();
+    if(error||!data)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_CREATE_FAILED");
+    shipmentDoc=data;
+   }else{
+    const {error}=await db.from("shipment_documents").update({
+     document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
+     mime_type:mime,file_size_bytes:size,extraction_status:"not_requested",storage_backend:"telegram",
+     file_asset_id:assetId,folder_id:folderId,telegram_message_id:externalMessageId,
+     is_archived:false,archived_at:null,archived_by:null,archive_reason:null,updated_at:now
+    }).eq("id",shipmentDoc.id).eq("organization_id",p.organization_id);
+    if(error)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_UPDATE_FAILED");
+   }
   }
-  const {error:mirrorError}=await db.from("customs_documents").update({
-   tags:archiveTags,storage_path:"telegram://"+assetId,mime_type:mime,size_bytes:size,
+  const mirrorPatch:any={tags:archiveTags,mime_type:mime,size_bytes:size,
    storage_backend:"telegram",file_asset_id:assetId,folder_id:folderId,telegram_message_id:externalMessageId,
-   is_archived:false,archived_at:null,archived_by:null,archive_reason:null,updated_at:now
-  }).eq("id",shipmentDoc.id).eq("organization_id",p.organization_id);
+   is_archived:false,archived_at:null,archived_by:null,archive_reason:null,updated_at:now};
+  if(!sourceShipmentDocumentId)mirrorPatch.storage_path="telegram://"+assetId;
+  const {error:mirrorError}=await db.from("customs_documents").update(mirrorPatch)
+   .eq("id",shipmentDoc.id).eq("organization_id",p.organization_id);
   if(mirrorError)throw new Error("FILE_ARCHIVE_RECONCILIATION_CUSTOMS_MIRROR_FAILED");
  }else{
   const {data:docs,error:docLookupError}=await db.from("customs_documents").select("id")
@@ -433,8 +452,8 @@ async function reconcileTelegramArchiveMetadata(input:{
  const {data:fileRow,error:fileError}=await db.from("file_manager_files").update({
   folder_id:folderId,shipment_id:shipment?.id??null,client_id:folder.client_id||null,
   original_name:name,mime_type:mime,size_bytes:size,external_message_id:externalMessageId||null,
-  document_type:documentType,tags:archiveTags,metadata:{transferMode:"stream",source:"file_manager",...finalMetadata},
-  storage_path:"telegram://"+assetId,created_by:user,is_archived:false,updated_at:now
+  document_type:documentType,tags:archiveTags,metadata:{transferMode:"stream",source:"file_manager",...(sourceShipmentDocumentId?{sourceStoragePath}:{}),...finalMetadata},
+  ...(sourceShipmentDocumentId?{}:{storage_path:"telegram://"+assetId}),created_by:user,is_archived:false,updated_at:now
  }).eq("organization_id",p.organization_id).eq("file_asset_id",assetId).select("id").maybeSingle();
  if(fileError||!fileRow)throw new Error("FILE_ARCHIVE_RECONCILIATION_FILE_MANAGER_ROW_MISSING");
  return {assetId,externalMessageId};
@@ -446,6 +465,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
  const c=await ownedConn(cid,p.organization_id),u=new URL(req.url);
  const chat=u.searchParams.get("chatId")||"",folderId=u.searchParams.get("folderId")||"",
   requestedShipmentId=u.searchParams.get("shipmentId")||"",
+  sourceShipmentDocumentId=u.searchParams.get("sourceShipmentDocumentId")||"",
   documentType=cleanName(u.searchParams.get("documentType")||"other"),
    archiveTags=parseArchiveTags(u),
   rawName=cleanName(decodeURIComponent(req.headers.get("X-File-Name")||u.searchParams.get("filename")||"document.bin")),
@@ -458,7 +478,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
   max=archive&&c.platform==="telegram"?TG_DOWNLOAD_LIMIT:(c.platform==="whatsapp"?WA_DOCUMENT_LIMIT:TG_UPLOAD_LIMIT),
   idempotencyKey=(req.headers.get("Idempotency-Key")||"").trim();
  if(!chat||size===0||(size!==null&&size>max)||!req.body)return bad(size!==null&&size>max?"FILE_TOO_LARGE_FOR_DESTINATION":"INVALID_FILE_SIZE_CHAT_OR_BODY",413,req);
- if(archive&&(!folderId||!validId(folderId)||(requestedShipmentId&&!validId(requestedShipmentId))||size===null||!idempotencyKey||idempotencyKey.length>180))
+ if(archive&&(!folderId||!validId(folderId)||(requestedShipmentId&&!validId(requestedShipmentId))||(sourceShipmentDocumentId&&(!validId(sourceShipmentDocumentId)||!requestedShipmentId))||size===null||!idempotencyKey||idempotencyKey.length>180))
   return bad("INVALID_FILE_ARCHIVE_INPUT",400,req);
  const {data:mapped,error:mappedError}=await db.from("messenger_chats")
   .select("enabled,shipment_id,purpose")
@@ -504,12 +524,27 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
    if(!validOwnedFolder&&!validUnassignedLegacy)return bad("FILE_ARCHIVE_FOLDER_INVALID",403,req);
   }
   if(p.role==="client"&&folder.client_id!==p.client_id)return bad("FILE_ACCESS_DENIED",403,req);
+  let sourceShipmentDocument:any=null;
+  if(sourceShipmentDocumentId){
+   const {data:sourceDoc,error:sourceDocError}=await db.from("shipment_documents")
+    .select("id,organization_id,shipment_id,folder_id,storage_path,storage_backend,file_asset_id,is_archived")
+    .eq("id",sourceShipmentDocumentId).eq("organization_id",p.organization_id).eq("shipment_id",shipment?.id||"").maybeSingle();
+   if(sourceDocError||!sourceDoc)return bad("SOURCE_SHIPMENT_DOCUMENT_NOT_FOUND",404,req);
+   if(sourceDoc.folder_id!==folder.id||sourceDoc.is_archived||
+      (sourceDoc.storage_backend!=="supabase"&&!(sourceDoc.storage_backend==="telegram"&&sourceDoc.file_asset_id)))
+    return bad("SOURCE_SHIPMENT_DOCUMENT_NOT_ARCHIVABLE",409,req);
+   if(sourceDoc.file_asset_id)return out({ok:true,fileAssetId:sourceDoc.file_asset_id,externalMessageId:null,folderId,alreadyStored:true},200,req);
+   const storagePath=String(sourceDoc.storage_path||"");
+   if(!storagePath||storagePath.startsWith("telegram://")||storagePath.startsWith("/")||storagePath.includes("..")||storagePath.split("/")[0]!==p.organization_id)
+    return bad("SOURCE_SHIPMENT_DOCUMENT_STORAGE_PATH_INVALID",400,req);
+   sourceShipmentDocument=sourceDoc;
+  }
   let job:any=null;
   const {data:existing,error:existingError}=await db.from("file_manager_upload_jobs")
-   .select("id,status,file_asset_id,external_message_id,size_bytes,attempt_count,folder_id,shipment_id,original_name,mime_type,connection_id,external_chat_id,document_name,document_type,telegram_file_id,telegram_file_unique_id,archive_tags,updated_at")
+   .select("id,status,file_asset_id,external_message_id,size_bytes,attempt_count,folder_id,shipment_id,shipment_document_id,original_name,mime_type,connection_id,external_chat_id,document_name,document_type,telegram_file_id,telegram_file_unique_id,archive_tags,updated_at")
    .eq("organization_id",p.organization_id).eq("idempotency_key",idempotencyKey).maybeSingle();
   if(existingError)return bad("FILE_UPLOAD_JOB_LOOKUP_FAILED",500,req);
-  if(existing&&(existing.folder_id!==folderId||existing.shipment_id!==(shipment?.id??null)||existing.original_name!==name||existing.mime_type!==mime||Number(existing.size_bytes)!==Number(size)||(existing.connection_id&&existing.connection_id!==c.id)||(existing.external_chat_id&&existing.external_chat_id!==chat)||(existing.document_name&&existing.document_name!==displayName)||(existing.document_type&&existing.document_type!==documentType)))
+  if(existing&&(existing.folder_id!==folderId||existing.shipment_id!==(shipment?.id??null)||(existing.shipment_document_id||null)!==(sourceShipmentDocumentId||null)||existing.original_name!==name||existing.mime_type!==mime||Number(existing.size_bytes)!==Number(size)||(existing.connection_id&&existing.connection_id!==c.id)||(existing.external_chat_id&&existing.external_chat_id!==chat)||(existing.document_name&&existing.document_name!==displayName)||(existing.document_type&&existing.document_type!==documentType)))
    return bad("IDEMPOTENCY_KEY_REUSE_MISMATCH",409,req);
   if(existing?.status==="stored"&&existing.file_asset_id)
    return out({ok:true,fileAssetId:existing.file_asset_id,externalMessageId:existing.external_message_id,sizeBytes:existing.size_bytes,folderId,uploadJobId:existing.id,alreadyStored:true},200,req);
@@ -527,7 +562,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
    try{
     const repaired=await reconcileTelegramArchiveMetadata({
      p,user,c,chat,folder,shipment,job:{...existing,...claimed,status:"uploading"},
-     folderId,name,displayName,mime,size,documentType,archiveTags
+     folderId,name,displayName,mime,size,documentType,archiveTags,sourceShipmentDocumentId:existing.shipment_document_id||sourceShipmentDocumentId||undefined
     });
     const {error:completeError}=await db.from("file_manager_upload_jobs").update({
      status:"stored",file_asset_id:repaired.assetId,external_message_id:repaired.externalMessageId||null,
@@ -553,7 +588,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
    job=retry;
   }else{
    const {data:created,error:createError}=await db.from("file_manager_upload_jobs")
-    .insert({organization_id:p.organization_id,idempotency_key:idempotencyKey,folder_id:folderId,shipment_id:shipment?.id??null,
+    .insert({organization_id:p.organization_id,idempotency_key:idempotencyKey,folder_id:folderId,shipment_id:shipment?.id??null,shipment_document_id:sourceShipmentDocumentId||null,
       created_by:user,original_name:name,mime_type:mime,size_bytes:size,status:"uploading",connection_id:c.id,
       external_chat_id:chat,document_name:displayName,document_type:documentType,archive_tags:archiveTags})
     .select("id").single();
@@ -632,14 +667,33 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
     .eq("id",job.id).eq("organization_id",p.organization_id);
    if(assetLinkError)throw new Error("FILE_UPLOAD_JOB_ASSET_LINK_FAILED");
    if(shipment){
-    const {data:shipmentDocument,error:documentError}=await db.from("shipment_documents").insert({
-     organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
-     document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
-     mime_type:mime,file_size_bytes:size,extraction_status:"not_requested",
-     storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,
-     telegram_message_id:String(result.messageId||"")
-    }).select("id").single();
-    if(documentError||!shipmentDocument)throw new Error("SHIPMENT_DOCUMENT_METADATA_SAVE_FAILED");
+    let shipmentDocument:any=null;
+    if(sourceShipmentDocumentId){
+     const {data:sourceDoc,error:sourceDocError}=await db.from("shipment_documents")
+      .select("id,storage_path,storage_backend,file_asset_id,folder_id,is_archived")
+      .eq("id",sourceShipmentDocumentId).eq("organization_id",p.organization_id).eq("shipment_id",shipment.id).maybeSingle();
+     if(sourceDocError||!sourceDoc||sourceDoc.folder_id!==folder.id||sourceDoc.is_archived||
+        (sourceDoc.file_asset_id&&sourceDoc.file_asset_id!==assetId))
+      throw new Error("SOURCE_SHIPMENT_DOCUMENT_CHANGED");
+     const {error:documentError}=await db.from("shipment_documents").update({
+      document_name:displayName,original_file_name:name,mime_type:mime,file_size_bytes:size,
+      storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,
+      telegram_message_id:String(result.messageId||""),is_archived:false,archived_at:null,archived_by:null,archive_reason:null,
+      updated_at:new Date().toISOString()
+     }).eq("id",sourceShipmentDocumentId).eq("organization_id",p.organization_id);
+     if(documentError)throw new Error("SHIPMENT_DOCUMENT_ARCHIVE_UPDATE_FAILED");
+     shipmentDocument={id:sourceShipmentDocumentId};
+    }else{
+     const {data,error:documentError}=await db.from("shipment_documents").insert({
+      organization_id:p.organization_id,shipment_id:shipment.id,uploaded_by:user,
+      document_name:displayName,original_file_name:name,storage_path:"telegram://"+assetId,
+      mime_type:mime,file_size_bytes:size,extraction_status:"not_requested",
+      storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,
+      telegram_message_id:String(result.messageId||"")
+     }).select("id").single();
+     if(documentError||!data)throw new Error("SHIPMENT_DOCUMENT_METADATA_SAVE_FAILED");
+     shipmentDocument=data;
+    }
     const {error:tagError}=await db.from("customs_documents").update({tags:archiveTags})
      .eq("id",shipmentDocument.id).eq("organization_id",p.organization_id);
     if(tagError)throw new Error("FILE_ARCHIVE_TAG_METADATA_SAVE_FAILED");
@@ -656,8 +710,8 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
    // The canonical document trigger creates the logical file row; do not insert a duplicate.
    const {data:fileRow,error:fileError}=await db.from("file_manager_files").update({
     original_name:name,mime_type:mime,size_bytes:size,external_message_id:String(result.messageId||""),
-    document_type:documentType,tags:archiveTags,metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId,...assetMetadata},
-    storage_path:"telegram://"+assetId,created_by:user,is_archived:false,updated_at:new Date().toISOString()
+    document_type:documentType,tags:archiveTags,metadata:{transferMode:"stream",source:"file_manager",telegramMessageId:result.messageId,...(sourceShipmentDocument?{sourceStoragePath:sourceShipmentDocument.storage_path}:{}),...assetMetadata},
+    ...(sourceShipmentDocument?{}:{storage_path:"telegram://"+assetId}),created_by:user,is_archived:false,updated_at:new Date().toISOString()
    }).eq("organization_id",p.organization_id).eq("file_asset_id",assetId).select("id").maybeSingle();
    if(fileError||!fileRow)throw new Error("FILE_ARCHIVE_METADATA_SAVE_FAILED");
    const {error:completeError}=await db.from("file_manager_upload_jobs").update({
@@ -913,7 +967,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
   .eq("purpose","file_archive").eq("enabled",true).order("created_at",{ascending:false}).limit(1).maybeSingle();
  if(destinationError||!destination)return bad("FILE_ARCHIVE_DESTINATION_NOT_FOUND",409,req);
  const {data:rows,error:rowsError}=await db.from("file_manager_files")
-  .select("id,organization_id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,document_type,tags,metadata,storage_path,is_archived,created_at")
+  .select("id,organization_id,folder_id,shipment_id,client_id,shipment_document_id,file_asset_id,original_name,mime_type,size_bytes,document_type,tags,metadata,storage_path,is_archived,created_at")
   .eq("organization_id",organizationId).eq("is_archived",false).is("file_asset_id",null)
   .not("storage_path","is",null).order("created_at",{ascending:true}).limit(200);
  if(rowsError)return bad("LEGACY_ARCHIVE_SOURCE_LOOKUP_FAILED",500,req);
@@ -971,6 +1025,7 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
    url.searchParams.set("chatId",String(destination.external_chat_id));
    url.searchParams.set("folderId",folderId);
    if(row.shipment_id)url.searchParams.set("shipmentId",String(row.shipment_id));
+   if(row.shipment_document_id)url.searchParams.set("sourceShipmentDocumentId",String(row.shipment_document_id));
    url.searchParams.set("documentType",cleanName(String(row.document_type||"other")));
    url.searchParams.set("documentName",cleanName(String(row.original_name||"document.bin")));
    url.searchParams.set("tags",JSON.stringify(tags));
