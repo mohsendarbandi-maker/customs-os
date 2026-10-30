@@ -70,6 +70,13 @@ describe('AI Operator security invariants',()=>{
    expect(workspace).toContain('collectCurrentFormSchema()');
    expect(workspace).toContain("setAttribute('data-ai-form-field',key)");
    expect(workspace).toContain('form_schema:currentFormSchema');
+   expect(workspace).toContain("form_fill:true");
+   expect(workspace).toContain("current_form_values:currentValues");
+   expect(workspace).toContain("setDocResults([{name:'پیشنهاد تکمیل فرم فعلی'");
+   expect(assistant).toContain('const formFill=!!b.form_fill');
+   expect(assistant).toContain('loadOperationalContext(sb,profile.organization_id,selectedShipmentId)');
+   expect(assistant).toContain('shipmentQuery.eq(\'id\',selectedShipmentId)');
+
    expect(workspace).toContain('مقادیر قبلی فرم را هم جایگزین کن');
    expect(workspace).toContain('هیچ فرمی خودکار ثبت یا ارسال نشد');
    expect(workspace).not.toMatch(/\.submit\s*\(/);
