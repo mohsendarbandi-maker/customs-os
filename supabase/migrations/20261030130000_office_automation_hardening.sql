@@ -572,7 +572,7 @@ begin
   end if;
 
   if new.status = 'approved' and old.status is distinct from 'approved' then
-    if public.user_role() not in ('owner'::public.user_role,'admin'::public.user_role,'broker'::public.user_role) then
+    if coalesce(public.user_role()::text, '') not in ('owner'::public.user_role,'admin'::public.user_role,'broker'::public.user_role) then
       raise exception 'Only an authorized manager can approve correspondence.';
     end if;
     new.approved_by := auth.uid();
@@ -589,7 +589,7 @@ begin
     if old.status <> 'approved' or new.approved_by is null or new.approved_at is null then
       raise exception 'Correspondence needs recorded approval before issue.';
     end if;
-    if public.user_role() not in ('owner'::public.user_role,'admin'::public.user_role,'broker'::public.user_role) then
+    if coalesce(public.user_role()::text, '') not in ('owner'::public.user_role,'admin'::public.user_role,'broker'::public.user_role) then
       raise exception 'Only an authorized manager can issue correspondence.';
     end if;
 
