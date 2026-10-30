@@ -60,7 +60,7 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(gateway).toContain('uploadStream(c,chat,name,mime,size,req.body,"file",TG_DOWNLOAD_LIMIT,archiveCaption,ownerTopicId)');
   });
 
-  it('uses content-bound deterministic upload keys across all browser upload flows', () => {
+  it('uses content-bound upload keys for direct Telegram flows and durable queue keys for shipment documents', () => {
     expect(fileManagerClient).toContain("crypto.subtle.digest('SHA-256'");
     expect(fileManagerClient).toContain('input.destination.connectionId');
     expect(fileManagerClient).toContain('input.folderId');
@@ -68,7 +68,7 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('createTelegramArchiveIdempotencyKey(file');
     expect(gateway).toContain('customs-os-shipment-document-archive-v1:');
     expect(gateway).toContain('customs-os-legacy-archive-v1:');
-    expect(shipmentPage).toContain('createTelegramArchiveIdempotencyKey(document.file');
+    expect(shipmentPage).not.toContain('createTelegramArchiveIdempotencyKey(document.file');
     expect(clientDocumentPage).toContain('createTelegramArchiveIdempotencyKey(f');
     expect(fileManager).not.toContain('uploadKeys.current');
     expect(shipmentPage).not.toContain('uploadKeys.current');
