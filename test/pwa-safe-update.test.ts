@@ -1,21 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-const lifecycle = fs.readFileSync(path.resolve(__dirname, '../src/features/reminders/PwaLifecycle.tsx'), 'utf8');
+
+const root = path.resolve(__dirname, '..');
+const lifecycle = fs.readFileSync(path.join(root, 'src/features/reminders/PwaLifecycle.tsx'), 'utf8');
+const shell = fs.readFileSync(path.join(root, 'src/components/AppShell.tsx'), 'utf8');
+
 describe('safe PWA version updates', () => {
-  it('auto-activates new static assets on an idle visible app open', () => {
+  it('does not auto-activate or reload a waiting update while the app is in use', () => {
     expect(lifecycle).toContain('onNeedRefresh: () => {');
-    expect(lifecycle).toContain('document.visibilityState !== \'visible\'');
-    expect(lifecycle).toContain('!navigator.onLine');
-    expect(lifecycle).toContain('void activate(true).catch');
+    expect(lifecycle).toContain("customs-os:pwa-update-ready");
+    expect(lifecycle).toContain("customs-os:pwa-update-request");
+    expect(lifecycle).toContain('await activate(false)');
+    expect(lifecycle).not.toContain('document.visibilityState !== \'visible\'');
+    expect(lifecycle).not.toContain('hasUnsavedWork()');
+    expect(lifecycle).not.toContain('void activate(true).catch');
+    expect(lifecycle).not.toContain('pwa-version-notice');
   });
-  it('keeps the manual update path when a form or chat contains a draft', () => {
-    expect(lifecycle).toContain('hasUnsavedWork()');
-    expect(lifecycle).toContain('[data-unsaved="true"]');
-    const chat = fs.readFileSync(path.resolve(__dirname, '../src/features/chat/ChatPage.tsx'), 'utf8');
-    expect(chat).toContain('data-unsaved={pendingFiles.length > 0 ? \'true\' : undefined}');
-    expect(lifecycle).toContain('.chat-composer textarea');
-    expect(lifecycle).toContain('#reminder-quick-input');
-    expect(lifecycle).toContain('await activate(true)');
+
+  it('keeps manual activation available through a small toolbar icon', () => {
+    expect(shell).toContain('pwaUpdateAvailable');
+    expect(shell).toContain('RefreshCw');
+    expect(shell).toContain("customs-os:pwa-update-request");
+    expect(shell).toContain('animate-spin');
+    expect(lifecycle).toContain("customs-os:pwa-update-failed");
+    expect(lifecycle).toContain('}, 12000)');
   });
 });

@@ -9,20 +9,6 @@ const standalone = () =>
   window.matchMedia('(display-mode: standalone)').matches ||
   Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 
-const hasUnsavedWork = () => {
-  if (document.querySelector('[data-unsaved="true"], [data-pending-save="true"]')) return true;
-  const active = document.activeElement;
-  if (active instanceof HTMLElement &&
-      active.matches('input:not([type="button"]):not([type="submit"]), textarea, select, [contenteditable="true"]')) {
-    return true;
-  }
-  const chatDraft = document.querySelector<HTMLTextAreaElement>('.chat-composer textarea');
-  if (chatDraft?.value.trim()) return true;
-  const reminderDraft = document.querySelector<HTMLInputElement>('#reminder-quick-input');
-  if (reminderDraft?.value.trim()) return true;
-  return false;
-};
-
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
@@ -34,11 +20,11 @@ export const PwaLifecycle: React.FC = () => {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [iosGuide, setIosGuide] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
-  const [newVersionAvailable, setNewVersionAvailable] = useState(false);
-  const [updating, setUpdating] = useState(false);
   const updateSW = useRef<UpdateSW | null>(null);
-  const pendingUpdateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingUpdate = useRef(false);
+  const updateAvailable = useRef(false);
+  const updateInProgress = useRef(false);
+  const updateTimeout = useRef<number | null>(null);
+  const activateUpdateRef = useRef<() => Promise<void>>(async () => undefined);
   const location = useLocation();
 
   // The install identity is always Customs OS. Only the browser-tab title changes by route.
@@ -78,26 +64,11 @@ export const PwaLifecycle: React.FC = () => {
         try {
           updateSW.current = registerSW({
             immediate: true,
+            // Keep the update waiting until the user taps the small toolbar sync icon.
+            // Never reload automatically: an open customs form or chat draft may be active.
             onNeedRefresh: () => {
-              // Automatically activate a new build on a safe, idle app open so installed
-              // PWAs cannot remain stuck on old CSS/JS indefinitely. When a composer or
-              // form contains active work, keep the visible manual update notice instead.
-              pendingUpdate.current = true;
-              setNewVersionAvailable(true);
-              if (pendingUpdateTimer.current) clearTimeout(pendingUpdateTimer.current);
-              pendingUpdateTimer.current = setTimeout(() => {
-                pendingUpdateTimer.current = null;
-                if (document.visibilityState !== 'visible' || !navigator.onLine || hasUnsavedWork()) return;
-                const activate = updateSW.current;
-                if (!activate || !pendingUpdate.current) return;
-                pendingUpdate.current = false;
-                setUpdating(true);
-                void activate(true).catch((error) => {
-                  console.warn('[PWA] automatic safe update failed:', error);
-                  setUpdating(false);
-                  pendingUpdate.current = true;
-                });
-              }, 1800);
+              updateAvailable.current = true;
+              window.dispatchEvent(new Event('customs-os:pwa-update-ready'));
             },
             onNeedReload: () => undefined,
             onOfflineReady: () => undefined,
@@ -109,11 +80,9 @@ export const PwaLifecycle: React.FC = () => {
       }, 1500);
     };
 
-    // Start independently of the load event: this component can mount after
-    // window.load has already fired, in which case waiting for that event hangs
-    // registration forever. A delayed registration still keeps startup lightweight.
-    start();
-
+    const onUpdateRequest = () => {
+      void activateUpdateRef.current();
+    };
     const onInstall = (event: Event) => {
       event.preventDefault();
       setInstallEvent(event as BeforeInstallPromptEvent);
@@ -121,6 +90,8 @@ export const PwaLifecycle: React.FC = () => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
 
+    start();
+    window.addEventListener('customs-os:pwa-update-request', onUpdateRequest);
     window.addEventListener('beforeinstallprompt', onInstall);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
@@ -128,14 +99,13 @@ export const PwaLifecycle: React.FC = () => {
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
-      if (pendingUpdateTimer.current) clearTimeout(pendingUpdateTimer.current);
-      pendingUpdateTimer.current = null;
+      if (updateTimeout.current) clearTimeout(updateTimeout.current);
+      window.removeEventListener('customs-os:pwa-update-request', onUpdateRequest);
       window.removeEventListener('beforeinstallprompt', onInstall);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
   }, []);
-
   useEffect(() => {
     const visualViewport = window.visualViewport;
     if (!visualViewport) return;
@@ -180,21 +150,46 @@ export const PwaLifecycle: React.FC = () => {
   };
 
   const activateUpdate = async () => {
-    pendingUpdate.current = false;
-    if (pendingUpdateTimer.current) clearTimeout(pendingUpdateTimer.current);
+    if (!updateAvailable.current || updateInProgress.current) return;
     const activate = updateSW.current;
-    if (!activate) {
-      window.location.reload();
+    if (!activate || !('serviceWorker' in navigator)) {
+      window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
       return;
     }
-    setUpdating(true);
+
+    updateInProgress.current = true;
+    window.dispatchEvent(new Event('customs-os:pwa-update-started'));
+    let reloading = false;
+    const onControllerChange = () => {
+      if (reloading) return;
+      reloading = true;
+      if (updateTimeout.current) clearTimeout(updateTimeout.current);
+      updateTimeout.current = null;
+      window.location.reload();
+    };
+
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    // A failed or unsupported activation must not leave the toolbar icon spinning forever.
+    updateTimeout.current = window.setTimeout(() => {
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      updateTimeout.current = null;
+      updateInProgress.current = false;
+      window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
+    }, 12000);
+
     try {
-      await activate(true);
+      // Ask the waiting worker to activate; reload only after it controls this tab.
+      await activate(false);
     } catch (error) {
       console.warn('[PWA] activating the new version failed:', error);
-      setUpdating(false);
+      if (updateTimeout.current) clearTimeout(updateTimeout.current);
+      updateTimeout.current = null;
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      updateInProgress.current = false;
+      window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
     }
   };
+  activateUpdateRef.current = activateUpdate;
 
   return (
     <>
@@ -224,21 +219,7 @@ export const PwaLifecycle: React.FC = () => {
         </div>
       )}
 
-      {newVersionAvailable && (
-        <div dir="rtl" className="pwa-version-notice fixed inset-x-3 bottom-3 z-[510] rounded-2xl border app-border bg-[var(--surface)] p-3 shadow-2xl">
-          <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]">↻</span>
-            <div className="min-w-0 flex-1">
-              <b className="block text-sm">نسخهٔ جدید آماده است</b>
-              <span className="block text-xs app-muted mt-1">برای جلوگیری از بسته‌شدن فرم یا گفت‌وگوی باز، زمان به‌روزرسانی با شماست.</span>
-            </div>
-            <button disabled={updating} onClick={() => void activateUpdate()} className="min-h-10 shrink-0 rounded-xl bg-[var(--primary)] px-3 text-xs font-bold text-white disabled:opacity-60">
-              {updating ? 'در حال به‌روزرسانی…' : 'به‌روزرسانی'}
-            </button>
-            <button onClick={() => setNewVersionAvailable(false)} aria-label="بعداً به‌روزرسانی می‌کنم" className="min-h-10 min-w-10 rounded-xl border app-border">×</button>
-          </div>
-        </div>
-      )}
+
 
       {!online && (
         <div dir="rtl" className="fixed top-[calc(66px+env(safe-area-inset-top))] inset-x-3 z-[300] rounded-xl bg-[var(--surface)] border app-border px-3 py-2 text-xs shadow-lg">
