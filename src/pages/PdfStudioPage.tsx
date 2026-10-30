@@ -75,7 +75,7 @@ const downloadBlob = (blob: Blob, name: string) => {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 2500);
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 const safeName = (name: string) => name.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 100) || 'document';
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
