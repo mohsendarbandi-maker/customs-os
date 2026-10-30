@@ -9,9 +9,9 @@ describe('PWA navigation cache', () => {
     expect(sw).toContain('networkTimeoutSeconds:1');
   });
   it('registers the custom injectManifest service worker and keeps updates user-confirmed', () => {
-    const main = read('src/main.tsx');
-    const vite = read('vite.config.ts');
-    const appShell = read('src/components/AppShell.tsx');
+    const main = fs.readFileSync(path.resolve(__dirname, '../src/main.tsx'), 'utf8');
+    const vite = fs.readFileSync(path.resolve(__dirname, '../vite.config.ts'), 'utf8');
+    const appShell = fs.readFileSync(path.resolve(__dirname, '../src/components/AppShell.tsx'), 'utf8');
     expect(vite).toContain("strategies:'injectManifest'");
     expect(vite).toContain('injectRegister:false');
     expect(main).toContain("import { registerSW } from 'virtual:pwa-register'");
