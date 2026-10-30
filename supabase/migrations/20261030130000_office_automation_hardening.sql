@@ -208,11 +208,14 @@ begin
     if not found then
       raise exception 'Company document profile was not found.';
     end if;
-    if v_client_id is not null and (
+    if new.direction = 'incoming' and (new.apply_stamp or new.apply_signature) then
+      raise exception 'Incoming correspondence must be registered without applying the company stamp or signature.';
+    end if;
+    if v_client_id is not null and new.direction in ('outgoing','internal') and (
       v_authority_status <> 'approved'
       or (v_authority_valid_until is not null and v_authority_valid_until < current_date)
     ) then
-      raise exception 'Current legal representation authorization is required before issuing a client-company letter.';
+      raise exception 'Current legal representation authorization is required before issuing outgoing or internal client-company correspondence.';
     end if;
     if v_client_id is not null and new.apply_signature and (
       v_signer is null or btrim(coalesce(new.sender_name,'')) is distinct from btrim(v_signer)

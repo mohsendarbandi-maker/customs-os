@@ -486,7 +486,7 @@ export const OfficeAutomationPage: React.FC = () => {
 
   const changeStatus = async (next: 'approved' | 'issued' | 'sent' | 'archived') => {
     if (!active || !profile?.organization_id) return;
-    if (next === 'issued' && !validAuthority) return setLetterError('مجوز نمایندگی معتبر برای این شرکت هنوز تأیید نشده است.');
+    if (next === 'issued' && active.direction !== 'incoming' && !validAuthority) return setLetterError('مجوز نمایندگی معتبر برای صدور یا ثبت مکاتبه داخلی این شرکت هنوز تأیید نشده است.');
     setBusyLetter(true); setLetterError(''); setLetterNotice('');
     try {
       const patch: Record<string, unknown> = { status: next };
@@ -642,7 +642,10 @@ export const OfficeAutomationPage: React.FC = () => {
             {isClient ? <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-xs leading-7 text-[var(--muted)]"><div className="flex items-center gap-2 font-bold text-[var(--text)]"><Inbox size={18}/> کارتابل شرکت</div>نامه‌هایی که کارگزاری برای نمایش به شرکت شما ثبت کرده است، در دفتر بالا قابل مشاهده‌اند. ثبت، تأیید و صدور مکاتبه از طرف شرکت نماینده، در اختیار کاربران مجاز کارگزاری است.</section> : <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
               <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-black">{active ? 'جزئیات و گردش نامه' : 'تنظیم نامه'}</h2><p className="mt-1 text-xs text-[var(--muted)]">{active ? (active.registry_no || 'بدون شماره ثبت') + ' · ' + (statusName[active.status] || active.status) : 'پیش‌نویس جدید برای ' + (company?.company_name || '')}</p></div>{active && <button type="button" onClick={newLetter} className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs"><Plus className="ml-1 inline" size={14}/> نامه جدید</button>}</div>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <label className="text-xs text-[var(--muted)]">نوع مکاتبه<select disabled={Boolean(active && !isEditing)} value={draft.direction} onChange={(e) => setDraft((p) => ({ ...p, direction: e.target.value as Draft['direction'] }))} className={inputClass}><option value="outgoing">صادره</option><option value="incoming">وارده</option><option value="internal">داخلی</option></select></label>
+                <label className="text-xs text-[var(--muted)]">نوع مکاتبه<select disabled={Boolean(active && !isEditing)} value={draft.direction} onChange={(e) => setDraft((p) => {
+                      const direction = e.target.value as Draft['direction'];
+                      return { ...p, direction, ...(direction === 'incoming' ? { apply_stamp: false, apply_signature: false } : {}) };
+                    })} className={inputClass}><option value="outgoing">صادره</option><option value="incoming">وارده</option><option value="internal">داخلی</option></select></label>
                 <label className="text-xs text-[var(--muted)]">تاریخ نامه<input type="date" disabled={Boolean(active && !isEditing)} value={draft.letter_date} onChange={(e) => setDraft((p) => ({ ...p, letter_date: e.target.value }))} className={inputClass}/></label>
                 <label className="text-xs text-[var(--muted)]">گیرنده<input disabled={Boolean(active && !isEditing)} value={draft.recipient_name} onChange={(e) => setDraft((p) => ({ ...p, recipient_name: e.target.value }))} className={inputClass}/></label>
                 <label className="text-xs text-[var(--muted)]">سازمان گیرنده<input disabled={Boolean(active && !isEditing)} value={draft.recipient_organization} onChange={(e) => setDraft((p) => ({ ...p, recipient_organization: e.target.value }))} className={inputClass}/></label>
@@ -655,7 +658,7 @@ export const OfficeAutomationPage: React.FC = () => {
                 <label className="md:col-span-2 text-xs text-[var(--muted)]">یادداشت داخلی<textarea rows={2} disabled={Boolean(active && !isEditing)} value={draft.notes} onChange={(e) => setDraft((p) => ({ ...p, notes: e.target.value }))} className={inputClass + ' py-2'}/></label>
               </div>
 
-              {isEditing && <div className="mt-3 flex flex-wrap gap-4 rounded-xl bg-[var(--surface-2)] p-3 text-xs">
+              {isEditing && draft.direction !== 'incoming' && <div className="mt-3 flex flex-wrap gap-4 rounded-xl bg-[var(--surface-2)] p-3 text-xs">
                 <label className="flex items-center gap-2"><input type="checkbox" checked={draft.apply_signature} onChange={(e) => setDraft((p) => ({ ...p, apply_signature: e.target.checked }))}/> درج امضای ثبت‌شده</label>
                 <label className="flex items-center gap-2"><input type="checkbox" checked={draft.apply_stamp} onChange={(e) => setDraft((p) => ({ ...p, apply_stamp: e.target.checked }))}/> درج مهر شرکت</label>
                 <label className="flex items-center gap-2"><input type="checkbox" checked={draft.visible_to_client} onChange={(e) => setDraft((p) => ({ ...p, visible_to_client: e.target.checked }))}/> نمایش برای صاحب کالا</label>
@@ -676,7 +679,7 @@ export const OfficeAutomationPage: React.FC = () => {
                   {active?.status === 'draft' && <button type="button" onClick={() => void deleteDraft()} disabled={busyLetter} className="min-h-10 rounded-xl border border-red-500/30 px-3 text-xs text-red-500"><Archive className="ml-1 inline" size={14}/> حذف پیش‌نویس</button>}
                 </>}
                 {active?.status === 'in_review' && isManager && <button type="button" onClick={() => void changeStatus('approved')} disabled={busyLetter} className="min-h-10 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white"><CheckCircle2 className="ml-1 inline" size={14}/> تأیید نامه</button>}
-                {active?.status === 'approved' && isManager && <button type="button" onClick={() => void changeStatus('issued')} disabled={busyLetter || (Boolean(clientId) && !validAuthority)} className="min-h-10 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white disabled:opacity-40"><FileCheck2 className="ml-1 inline" size={14}/> صدور و ثبت اندیکاتور</button>}
+                {active?.status === 'approved' && isManager && <button type="button" onClick={() => void changeStatus('issued')} disabled={busyLetter || (active.direction !== 'incoming' && Boolean(clientId) && !validAuthority)} className="min-h-10 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white disabled:opacity-40"><FileCheck2 className="ml-1 inline" size={14}/>{active.direction === 'incoming' ? 'ثبت قطعی و شماره اندیکاتور' : 'صدور و ثبت اندیکاتور'}</button>}
                 {active?.status === 'issued' && <button type="button" onClick={() => void changeStatus('sent')} disabled={busyLetter} className="min-h-10 rounded-xl border border-[var(--border)] px-4 text-xs"><Mail className="ml-1 inline" size={14}/> ثبت ارسال</button>}
                 {['issued','sent'].includes(active?.status || '') && <button type="button" onClick={() => void changeStatus('archived')} disabled={busyLetter} className="min-h-10 rounded-xl border border-[var(--border)] px-4 text-xs"><Archive className="ml-1 inline" size={14}/> بایگانی</button>}
                 {active && <button type="button" onClick={() => window.print()} className="min-h-10 rounded-xl border border-[var(--border)] px-4 text-xs font-bold"><Printer className="ml-1 inline" size={14}/> چاپ / ذخیره PDF</button>}
@@ -691,20 +694,43 @@ export const OfficeAutomationPage: React.FC = () => {
       </div>
 
       {active && <section className="office-print-sheet" dir="rtl">
-        <div className="letter-header border-b border-slate-300 pb-3">{letterheadPreview ? <img src={letterheadPreview} alt="سربرگ شرکت"/> : <div className="text-center text-lg font-bold">{active.issued_company_name || company?.company_name}</div>}</div>
-        <div className="mt-5 flex justify-between gap-4 text-xs">
-          <div><div><b>شماره:</b> {active.registry_no || 'پیش‌نویس'}</div><div className="mt-2"><b>تاریخ:</b> {dateLabel(active.issued_at || active.letter_date || active.created_at)}</div><div className="mt-2"><b>پیوست:</b> {new Intl.NumberFormat('fa-IR').format(attachments.length)} مورد</div></div>
-          <div><b>نوع:</b> {directionName[active.direction]}</div>
-        </div>
-        <div className="mt-6 text-sm"><b>گیرنده:</b> {active.recipient_name || '—'} {active.recipient_organization ? ' ـ ' + active.recipient_organization : ''}</div>
-        <div className="mt-4 text-sm"><b>موضوع:</b> {active.subject}</div>
-        <div className="letter-body mt-6 min-h-[125mm]">{active.body}</div>
-        <div className="signature-assets mt-10 flex items-end justify-between gap-6">
-          <div className="text-center">{active.apply_signature && activeAssetUrls.signature && <img src={activeAssetUrls.signature} alt="امضا"/>}<div className="mt-2 text-xs font-bold">{active.issued_signer_name || active.sender_name || companyForm.authorized_signer_name}</div><div className="text-[10px]">{active.issued_company_name || company?.company_name}</div></div>
-          <div className="text-center">{active.apply_stamp && activeAssetUrls.stamp && <img src={activeAssetUrls.stamp} alt="مهر شرکت"/>}</div>
-        </div>
-        {attachments.length > 0 && <div className="letter-attachments mt-8 border-t border-slate-300 pt-3 text-xs"><b>پیوست‌ها:</b><ul className="mt-2 list-disc pr-5">{attachments.map((item) => <li key={item.id}>{item.original_name}</li>)}</ul></div>}
-        <footer className="mt-10 border-t border-slate-300 pt-3 text-center text-[10px] text-slate-600">{active.issued_company_address || company?.address || ''} {active.issued_company_phone || company?.phone ? ' · ' + (active.issued_company_phone || company?.phone) : ''} {active.issued_company_email || company?.email ? ' · ' + (active.issued_company_email || company?.email) : ''}</footer>
+        {active.direction === 'incoming' ? <>
+          <header className="border-b border-slate-300 pb-4 text-center">
+            <h1 className="text-xl font-bold">رسید ثبت نامه وارده</h1>
+            <div className="mt-2 text-sm">{active.issued_company_name || company?.company_name}</div>
+          </header>
+          <div className="mt-6 grid grid-cols-2 gap-4 text-xs">
+            <div><b>شماره اندیکاتور:</b> {active.registry_no || 'پیش‌نویس'}</div>
+            <div><b>تاریخ ثبت:</b> {dateLabel(active.issued_at || active.created_at)}</div>
+            <div><b>شماره نامه فرستنده:</b> {active.external_reference || '—'}</div>
+            <div><b>تاریخ نامه:</b> {dateLabel(active.letter_date)}</div>
+            <div><b>فرستنده:</b> {active.sender_name || '—'}</div>
+            <div><b>سازمان فرستنده:</b> {active.sender_organization || '—'}</div>
+            <div><b>گیرنده:</b> {active.recipient_name || '—'}</div>
+            <div><b>سازمان گیرنده:</b> {active.recipient_organization || '—'}</div>
+          </div>
+          <div className="mt-6 border-t border-slate-300 pt-4 text-sm"><b>موضوع:</b> {active.subject}</div>
+          {active.body && <div className="letter-body mt-4 min-h-[80mm]">{active.body}</div>}
+          {attachments.length > 0 && <div className="letter-attachments mt-8 border-t border-slate-300 pt-3 text-xs"><b>اصل نامه و پیوست‌های اسکن‌شده:</b><ul className="mt-2 list-disc pr-5">{attachments.map((item) => <li key={item.id}>{item.original_name}</li>)}</ul></div>}
+          <footer className="mt-10 border-t border-slate-300 pt-3 text-center text-[10px] text-slate-600">این برگه رسید ثبت مکاتبه است و جایگزین اصل نامه وارده نیست.</footer>
+        </> : <>
+          <div className="letter-header border-b border-slate-300 pb-3">
+            {letterheadPreview ? <img src={letterheadPreview} alt="سربرگ شرکت"/> : <div className="text-center text-lg font-bold">{active.issued_company_name || company?.company_name}</div>}
+          </div>
+          <div className="mt-5 flex justify-between gap-4 text-xs">
+            <div><div><b>شماره:</b> {active.registry_no || 'پیش‌نویس'}</div><div className="mt-2"><b>تاریخ:</b> {dateLabel(active.issued_at || active.letter_date || active.created_at)}</div><div className="mt-2"><b>پیوست:</b> {new Intl.NumberFormat('fa-IR').format(attachments.length)} مورد</div></div>
+            <div><b>نوع:</b> {directionName[active.direction]}</div>
+          </div>
+          <div className="mt-6 text-sm"><b>گیرنده:</b> {active.recipient_name || '—'} {active.recipient_organization ? ' ـ ' + active.recipient_organization : ''}</div>
+          <div className="mt-4 text-sm"><b>موضوع:</b> {active.subject}</div>
+          <div className="letter-body mt-6 min-h-[125mm]">{active.body}</div>
+          <div className="signature-assets mt-10 flex items-end justify-between gap-6">
+            <div className="text-center">{active.apply_signature && activeAssetUrls.signature && <img src={activeAssetUrls.signature} alt="امضا"/>}<div className="mt-2 text-xs font-bold">{active.issued_signer_name || active.sender_name || companyForm.authorized_signer_name}</div><div className="text-[10px]">{active.issued_company_name || company?.company_name}</div></div>
+            <div className="text-center">{active.apply_stamp && activeAssetUrls.stamp && <img src={activeAssetUrls.stamp} alt="مهر شرکت"/>}</div>
+          </div>
+          {attachments.length > 0 && <div className="letter-attachments mt-8 border-t border-slate-300 pt-3 text-xs"><b>پیوست‌ها:</b><ul className="mt-2 list-disc pr-5">{attachments.map((item) => <li key={item.id}>{item.original_name}</li>)}</ul></div>}
+          <footer className="mt-10 border-t border-slate-300 pt-3 text-center text-[10px] text-slate-600">{active.issued_company_address || company?.address || ''} {active.issued_company_phone || company?.phone ? ' · ' + (active.issued_company_phone || company?.phone) : ''} {active.issued_company_email || company?.email ? ' · ' + (active.issued_company_email || company?.email) : ''}</footer>
+        </>}
       </section>}
     </main>
   );
