@@ -233,52 +233,41 @@ export const ShipmentFirstPage:React.FC=()=>{
   }catch(e:any){setMessage(e?.message||'ذخیره محموله ناموفق بود')}finally{setBusy(false)}
  };
  const upload=async(files:FileList|null)=>{
-  if(!files?.length||!selected)return setMessage('ابتدا محموله را ذخیره و انتخاب کنید.');
-  setUploading(true);setMessage('');
-  let completed=0;
+  const selectedFiles=Array.from(files||[]);if(!selectedFiles.length||!selected)return setMessage('ابتدا محموله را ذخیره و انتخاب کنید.');
+  setUploading(true);setMessage('');let completed=0;
   try{
-   const folder=await getDefaultShipmentUploadFolder(selected);
-   const {data:{user},error:userError}=await supabase.auth.getUser();
-   if(userError||!user||!profile?.organization_id)throw new Error('نشست یا سازمان کاربر معتبر نیست.');
-   for(const file of Array.from(files)){
-    const mime=(file.type||(/\\.pdf$/i.test(file.name)?'application/pdf':/\\.png$/i.test(file.name)?'image/png':/\\.jpe?g$/i.test(file.name)?'image/jpeg':'application/octet-stream')).toLowerCase();
-    if(file.size<=0||file.size>50*1024*1024)throw new Error('حجم هر فایل باید بین ۱ بایت تا ۵۰ مگابایت باشد.');
-    const safeName=file.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,160)||'document.bin';
-    const path=profile.organization_id+'/'+selected+'/'+crypto.randomUUID()+'-'+safeName;
-    const {error:storageError}=await supabase.storage.from(BUCKET).upload(path,file,{contentType:mime,cacheControl:'3600',upsert:false});
-    if(storageError)throw new Error('آپلود امن فایل ناموفق بود: '+storageError.message);
-    const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
-     organization_id:profile.organization_id,shipment_id:selected,uploaded_by:user.id,
-     document_name:file.name,original_file_name:file.name,storage_path:path,
-     storage_backend:'supabase',folder_id:folder.id,mime_type:mime,file_size_bytes:file.size,
-     extraction_status:'not_requested'
-    }).select('id').single();
-    if(docError||!doc)throw docError||new Error('ثبت مشخصات سند ناموفق بود.');
+   const folder=await getDefaultShipmentUploadFolder(selected),destination=await getFileArchiveDestination();
+   for(const file of selectedFiles){
+    if(file.size<=0||file.size>FILE_ARCHIVE_MAX_BYTES)throw new Error('حجم هر فایل برای آرشیو تلگرام حداکثر ۲۰ مگابایت است.');
+    const mime=(file.type||(/\.pdf$/i.test(file.name)?'application/pdf':/\.png$/i.test(file.name)?'image/png':/\.jpe?g$/i.test(file.name)?'image/jpeg':'application/octet-stream')).toLowerCase();
+    const idempotencyKey=await createTelegramArchiveIdempotencyKey(file,{folderId:folder.id,shipmentId:selected,documentType:'other',documentName:file.name,destination});
+    await uploadTelegramArchivedFile(file,{folderId:folder.id,shipmentId:selected,documentType:'other',documentName:file.name,tags:uploadTags,destination,idempotencyKey});
     completed++;
-    void archiveShipmentDocumentInBackground(doc.id,uploadTags)
-     .then(()=>loadDocs(selected))
-     .catch(error=>console.warn('[ShipmentFirstPage] background Telegram archive will be retried by the server:',error));
    }
-   await loadDocs(selected);
-   setMessage(`${completed} سند فوراً در نسخه امن وب‌سایت ذخیره شد؛ ارسال آرشیوی به تلگرام در پس‌زمینه انجام می‌شود و صفحه منتظر آن نمی‌ماند.`);
-  }catch(error:any){
-   await loadDocs(selected);
-   setMessage(completed?`${completed} سند در وب‌سایت ذخیره شد؛ فایل بعدی ناموفق بود. ${error?.message||''}`:error?.message||'ذخیره فایل ناموفق بود.');
-  }finally{setUploading(false)}
+   await loadDocs(selected);setMessage(completed+' سند مستقیماً در تلگرام آرشیو و به محموله متصل شد.');
+  }catch(error:any){await loadDocs(selected);setMessage(completed?completed+' سند آرشیو شد؛ فایل بعدی ناموفق بود: '+(error?.message||''):error?.message||'آرشیو سند ناموفق بود.');}
+  finally{setUploading(false)}
  };
-const retryArchiveDocument=async(d:Doc)=>{
+ const retryArchiveDocument=async(d:Doc)=>{
   if(d.storage_backend==='telegram'&&d.file_asset_id)return;
-  setMessage('درخواست آرشیو تلگرام ارسال شد؛ فایل وب‌سایت تا دریافت رسید تلگرام حفظ می‌شود.');
+  setUploading(true);setMessage('نسخه قدیمی فایل در حال انتقال به آرشیو تلگرام است...');
   try{
-   await archiveShipmentDocumentInBackground(d.id,uploadTags);
-   await loadDocs(selected);
-   setMessage('آرشیو تلگرام انجام شد.');
-  }catch(error:any){
-   await loadDocs(selected);
-   setMessage(error?.message||'آرشیو تلگرام فعلاً انجام نشد؛ نسخه امن وب‌سایت دست‌نخورده باقی ماند. دوباره تلاش کن.');
-  }
+   if(!d.storage_path||d.storage_path.startsWith('telegram://'))throw new Error('مسیر نسخه اصلی فایل معتبر نیست.');
+   const {data:blob,error:downloadError}=await supabase.storage.from(BUCKET).download(d.storage_path);
+   if(downloadError||!blob)throw new Error(downloadError?.message||'دریافت نسخه قدیمی فایل ناموفق بود.');
+   const file=new File([blob],d.original_file_name||d.document_name,{type:d.mime_type||blob.type||'application/octet-stream'});
+   if(file.size>FILE_ARCHIVE_MAX_BYTES)throw new Error('این فایل از سقف ۲۰ مگابایت Bot API تلگرام بیشتر است؛ نسخه وب‌سایت حذف نمی‌شود.');
+   const folder=await getDefaultShipmentUploadFolder(selected),destination=await getFileArchiveDestination();
+   const idempotencyKey=await createTelegramArchiveIdempotencyKey(file,{folderId:folder.id,shipmentId:selected,documentType:'other',documentName:file.name,destination});
+   const archived=await uploadTelegramArchivedFile(file,{folderId:folder.id,shipmentId:selected,documentType:'other',documentName:file.name,tags:uploadTags,destination,idempotencyKey});
+   const {error:updateError}=await supabase.from('shipment_documents').update({storage_path:'telegram://'+archived.fileAssetId,storage_backend:'telegram',file_asset_id:archived.fileAssetId,folder_id:folder.id,telegram_message_id:archived.externalMessageId}).eq('id',d.id).eq('shipment_id',selected);
+   if(updateError)throw new Error('فایل در تلگرام ذخیره شد، اما به‌روزرسانی پیوند سند در وب‌سایت ناموفق بود؛ نسخه قدیمی حذف نشده است. '+updateError.message);
+   await supabase.storage.from(BUCKET).remove([d.storage_path]);
+   await loadDocs(selected);setMessage('سند قدیمی به تلگرام منتقل و به محموله متصل شد.');
+  }catch(error:any){await loadDocs(selected);setMessage(error?.message||'انتقال سند قدیمی به تلگرام انجام نشد. نسخه وب‌سایت حفظ شده است.');}
+  finally{setUploading(false)}
  };
- const download=async(d:Doc)=>{
+const download=async(d:Doc)=>{
  if(d.storage_backend==='telegram'&&d.file_asset_id){
   try{
    const blob=await downloadTelegramArchivedFile(d.file_asset_id);
