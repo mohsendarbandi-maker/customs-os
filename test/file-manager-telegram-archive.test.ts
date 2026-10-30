@@ -113,8 +113,23 @@ describe('Telegram-backed Customs OS file manager', () => {
     const pickerCode = shipmentPage.slice(pickerStart,pickerEnd);
     expect(pickerCode).not.toContain('supabase.storage');
     expect(pickerCode).not.toContain('archiveShipmentDocumentInBackground');
-    expect(documentPage).toContain('uploadTelegramArchivedFile');
+    expect(documentPage).toContain("supabase.storage.from(BUCKET).upload");
+    expect(documentPage).toContain("telegram_archive_requested: true");
+    expect(documentPage).toContain("void upload(files)");
+    expect(documentPage).toContain("در صف ارسال پس‌زمینه به تلگرام");
+    expect(documentPage).not.toContain('uploadTelegramArchivedFile');
     expect(clientDocumentPage).toContain('uploadTelegramArchivedFile');
+  });
+
+  it('uploads shipment documents to secure browser Storage first and queues Telegram archival independently', () => {
+    expect(documentPage).toContain("supabase.storage.from(BUCKET).upload");
+    expect(documentPage).toContain("storage_backend: 'supabase'");
+    expect(documentPage).toContain("telegram_archive_requested: true");
+    expect(documentPage).toContain("getDefaultShipmentUploadFolder(current.id)");
+    expect(documentPage).toContain("void upload(files)");
+    expect(documentPage).toContain("آرشیو تلگرام به‌صورت مستقل در پس‌زمینه ادامه پیدا می‌کند");
+    expect(documentPage).not.toContain("getFileArchiveDestination");
+    expect(documentPage).not.toContain("uploadTelegramArchivedFile");
   });
 
   it('keeps retryable Telegram archival tied to the original shipment document and schedules a server backstop', () => {
