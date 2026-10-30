@@ -110,7 +110,7 @@ export const ShipmentFirstPage:React.FC=()=>{
      pageCount=pdf.numPages;await pdf.destroy();
     }
     const id=crypto.randomUUID();
-    const safe=file.name.normalize('NFKC').replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,140)||'bill-of-lading.pdf';
+    const safe=file.name.normalize('NFKC').replace(/[^a-zA-Z0-9_.\-\u0600-\u06ff]+/g,'_').slice(0,140)||'bill-of-lading.pdf';
     const path=`${profile.organization_id}/staging/${user.id}/${id}-${safe}`;
     const {error:uploadError}=await supabase.storage.from(BUCKET).upload(path,file,{upsert:false,contentType:mime,cacheControl:'3600'});
     if(uploadError)throw new Error(`آپلود «${file.name}» ناموفق بود: ${uploadError.message}`);
@@ -195,7 +195,6 @@ export const ShipmentFirstPage:React.FC=()=>{
       extraction_status:staged.extractedFields?'completed':'pending'
      }).select('id').single();
      if(docError||!doc)throw docError||new Error('ثبت مشخصات سند ناموفق بود.');
-     linkedDocumentIds.push(staged.id);
      if(staged.extractedFields){
       const rows=Object.entries(staged.extractedFields).filter(([,v])=>String(v||'').trim()).map(([key,value])=>({
        organization_id:profile.organization_id,shipment_id:shipmentId,document_id:doc.id,
@@ -203,6 +202,7 @@ export const ShipmentFirstPage:React.FC=()=>{
       }));
       if(rows.length){const {error:extractionError}=await supabase.from('shipment_document_extractions').upsert(rows,{onConflict:'shipment_id,document_id,field_key'});if(extractionError)throw extractionError;}
      }
+     linkedDocumentIds.push(staged.id);
     }catch(documentError){documentLinkWarnings++;console.error('[ShipmentFirstPage] pending document link failed:',documentError);}
    }
    if(linkedDocumentIds.length)setPendingDocuments(previous=>previous.filter(item=>!linkedDocumentIds.includes(item.id)));
