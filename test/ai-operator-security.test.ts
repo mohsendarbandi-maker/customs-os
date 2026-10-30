@@ -100,4 +100,21 @@ describe('AI Operator security invariants',()=>{
    expect(workspace).toContain("invokeEdgeFunction('ai-core'");
  });
 
+ it('requires an uploaded bill of lading and successful extraction on the active form before B/L fill',()=>{
+   const workspace=readFileSync(new URL('../src/components/AIWorkspace.tsx',import.meta.url),'utf8');
+   expect(workspace).toContain('billOfLadingIntent');
+   expect(workspace).toContain('hasExtractedForCurrentForm');
+   expect(workspace).toContain("bill-of-lading-document-required");
+   expect(workspace).toContain("bill-of-lading-extraction-review");
+   expect(workspace).toContain('formPageContext===pageContext');
+   expect(workspace).toContain('file.size>30*1024*1024');
+ });
+ it('guards ai-assistant against the duplicate vessels binding that previously prevented boot',()=>{
+   const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
+   expect(assistant).toContain('vesselResult]=await Promise.all([');
+   expect(assistant).toContain('vesselRows=vesselResult.data||[]');
+   expect(assistant).toContain('new Map(vesselRows.map((x:any)=>[x.id,x]))');
+   expect(assistant).not.toContain('vessels=vessels.data||[]');
+ });
+
 });
