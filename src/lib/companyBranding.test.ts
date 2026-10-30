@@ -14,9 +14,9 @@ describe('company branding generator', () => {
   });
 
   it('builds a safe vector logo without injecting untrusted markup', () => {
-    const svg = buildCompanyLogoSvg({ companyName: '<script>alert(1)</script>', mark: '<svg>', color: '#123456', style: 'shield' });
+    const svg = buildCompanyLogoSvg({ companyName: '<script>alert(1)</script>', mark: '<s>', color: '#123456', style: 'shield' });
     expect(svg).toContain('&lt;script&gt;');
-    expect(svg).toContain('&lt;svg&gt;');
+    expect(svg).toContain('&lt;s&gt;');
     expect(svg).not.toContain('<script>');
     expect(svg).toContain('M120 24');
   });
