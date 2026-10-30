@@ -293,29 +293,29 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
   {!selected&&profile?.role!=='client'&&<div className="lg:col-span-4"><section className="rounded-2xl border-2 border-dashed app-border bg-[var(--surface)] p-4 sm:p-5">
    <div className="flex flex-wrap items-center justify-between gap-3">
     <div><div className="flex items-center gap-2 font-black"><FileText size={18}/> بارگذاری سند برای ثبت محموله</div><p className="mt-1 text-xs app-muted">فایل مثل PDF Studio فوراً در همین مرورگر نمایش داده می‌شود. نسخه امن وب‌سایت ذخیره می‌شود و آرشیو تلگرام بعد از ثبت محموله در پس‌زمینه انجام می‌شود.</p></div>
-    <label className="cursor-pointer rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">
-     <Upload size={16} className="inline ml-1"/>{hasPendingUploads?'در حال ذخیره امن...':'انتخاب فایل از دستگاه'}
-     <input type="file" accept="application/pdf,image/jpeg,image/png" multiple className="hidden" disabled={!form.ownerId} onChange={e=>{void uploadStagedShipmentDocuments(e.target.files);e.currentTarget.value=''}}/>
-    </label>
+    <div className="flex items-center gap-2">
+     <button type="button" onClick={()=>shipmentFileInput.current?.click()} disabled={!form.ownerId} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"><Upload size={16}/> انتخاب فایل بارنامه</button>
+     <input ref={shipmentFileInput} type="file" accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png" multiple className="hidden" disabled={!form.ownerId} onChange={e=>{const files=Array.from(e.currentTarget.files||[]);e.currentTarget.value='';uploadStagedShipmentDocuments(files);}}/>
+    </div>bel>
    </div>
    {pendingDocuments.length>0&&<div className="mt-4 space-y-2">
     {pendingDocuments.map(document=><div key={document.id} className={`rounded-xl border p-3 ${selectedBillOfLadingId===document.id?'border-[var(--primary)] bg-[var(--surface-2)]':'app-border'}`}>
      <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2">
        {selectedBillOfLadingId===document.id?<CheckCircle2 className="text-[var(--primary)]" size={18}/>:<FileText size={18} className="app-muted"/>}
-       <div className="min-w-0"><b className="block truncate text-sm">{document.name}</b><span className="text-[11px] app-muted">{(document.sizeBytes/1024/1024).toFixed(2)} MB · {document.pageCount} صفحه · {document.uploadStatus==='ready'?'نسخه امن آماده است':document.uploadStatus==='failed'?'ذخیره ناموفق':'در حال ذخیره نسخه امن'}</span></div>
+       <div className="min-w-0"><b className="block truncate text-sm">{document.name}</b><span className="text-[11px] app-muted">{(document.sizeBytes/1024/1024).toFixed(2)} MB · {document.pageCount} صفحه · {document.uploadStatus==='ready'?'آرشیو شد در تلگرام':document.uploadStatus==='failed'?'آرشیو ناموفق':'در حال ارسال پس‌زمینه به تلگرام'}</span></div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
        <button type="button" onClick={()=>setSelectedBillOfLadingId(document.id)} className={`rounded-lg px-3 py-2 text-xs font-bold ${selectedBillOfLadingId===document.id?'bg-[var(--primary)] text-white':'border app-border'}`}>{selectedBillOfLadingId===document.id?'بارنامه انتخاب‌شده':'انتخاب به‌عنوان بارنامه'}</button>
        <button type="button" onClick={()=>void previewPendingBillOfLading(document)} className="rounded-lg border app-border px-3 py-2 text-xs"><Eye size={14} className="inline ml-1"/>نمایش</button>
       </div>
      </div>
-     {document.uploadStatus==='failed'&&<div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-600"><span>{document.uploadError||'ذخیره فایل ناموفق بود.'}</span><button type="button" onClick={()=>retryStagedShipmentDocument(document)} className="rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">تلاش دوباره برای ذخیره</button></div>}{document.uploadStatus==='ready'&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">فایل در وب‌سایت ذخیره شد؛ بعد از اتصال به محموله به تلگرام منتقل می‌شود.</div>}{document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}
+     {document.uploadStatus==='failed'&&<div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-600"><span>{document.uploadError||'ذخیره فایل ناموفق بود.'}</span><button type="button" onClick={()=>retryStagedShipmentDocument(document)} className="rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">تلاش دوباره برای آرشیو تلگرام</button></div>}{document.uploadStatus==='ready'&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">فایل در تلگرام ذخیره شده است؛ پس از ثبت محموله فقط پیوند آن به این محموله اضافه می‌شود.</div>}{document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}
      {previewBillOfLadingId===document.id&&(previewBillOfLadingUrl?<iframe title={document.name} src={previewBillOfLadingUrl} className="mt-3 h-[420px] w-full rounded-xl border app-border bg-white"/>:<div className="mt-3 rounded-xl bg-[var(--surface-2)] p-4 text-xs app-muted">در حال آماده‌سازی پیش‌نمایش مرورگر…</div>)}
     </div>)}
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--surface-2)] p-3">
-     <div className="text-xs app-muted">فقط فایل انتخاب‌شده برای استخراج فرستاده می‌شود. فایل ابتدا از نسخه امن وب‌سایت خوانده می‌شود؛ منتظر تلگرام نمی‌مانیم.</div>
-     <button type="button" disabled={!selectedBillOfLadingId||!!extractingBillOfLadingId||pendingDocuments.find(item=>item.id===selectedBillOfLadingId)?.uploadStatus!=='ready'} onClick={()=>void extractSelectedBillOfLading()} className="rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white disabled:opacity-50">
+     <div className="text-xs app-muted">فایل بلافاصله در مرورگر قابل انتخاب و پیش‌نمایش است؛ نسخه اصلی بدون مصرف فضای Storage سوپابیس در پس‌زمینه به تلگرام می‌رود.</div>
+     <button type="button" disabled={!selectedBillOfLadingId||!!extractingBillOfLadingId||((pendingDocuments.find(item=>item.id===selectedBillOfLadingId)?.sizeBytes||0)>4*1024*1024&&pendingDocuments.find(item=>item.id===selectedBillOfLadingId)?.uploadStatus!=='ready')} onClick={()=>void extractSelectedBillOfLading()} className="rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white disabled:opacity-50">
       {extractingBillOfLadingId?<><Loader2 className="inline ml-1 animate-spin" size={16}/>در حال تحلیل سند...</>:<><Sparkles className="inline ml-1" size={16}/>استخراج اطلاعات محموله با AI</>}
      </button>
     </div>
