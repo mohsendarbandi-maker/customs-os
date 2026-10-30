@@ -23,6 +23,14 @@ const empty:Form={ownerId:'',shippingLine:'',billOfLading:'',year:String(new Dat
 const digits=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const num=(v:string)=>{const n=Number(digits(v).replace(/[٬,]/g,''));return Number.isFinite(n)?n:null};
 const same=(a:string,b:string)=>String(a||'').trim().localeCompare(String(b||'').trim(),'fa',{sensitivity:'base'})===0;
+const sameShipmentUniqueKey=(row:Pick<Row,'id'|'shipping_line'|'bill_of_lading_no'|'bill_of_lading_year'>,form:Form,selectedId:string)=>{
+ const billOfLading=form.billOfLading.trim(),shippingLine=form.shippingLine.trim(),year=num(form.year);
+ return !!billOfLading&&!!shippingLine&&year!==null&&row.id!==selectedId&&
+  String(row.shipping_line||'').trim().toLowerCase()===shippingLine.toLowerCase()&&
+  String(row.bill_of_lading_no||'').trim().toLowerCase()===billOfLading.toLowerCase()&&
+  row.bill_of_lading_year===year;
+};
+const SHIPMENT_ROW_SELECT='id,client_id,vessel_id,shipping_line,bill_of_lading_no,bill_of_lading_year,voyage_no,origin_port,destination_port,cargo_count,cargo_count_unit,net_weight_kg,gross_weight_kg,current_status,current_location,display_name,case_id,customs_office_id,transport_documents_status,release_invoice_payment_status,ship_passed,ship_passed_at,ship_passed_by';
 const statuses=[['draft','پیش‌نویس'],['booking_confirmed','تأیید رزرو'],['loading','در حال بارگیری'],['loaded','بارگیری کامل'],['departed','حرکت'],['in_transit','در مسیر'],['approaching_destination','نزدیک مقصد'],['anchorage','لنگرگاه'],['berthing','پهلوگیری'],['discharging','در حال تخلیه'],['discharged','تخلیه کامل'],['completed','تکمیل'],['delayed','تأخیر'],['cancelled','لغو']];
 const LOCAL_AI_DOCUMENT_LIMIT=4*1024*1024;
 const fileToBase64=async(file:File)=>{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(binary)};
@@ -32,6 +40,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
  const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const[uploadTagInput,setUploadTagInput]=useState('');const uploadTags=[...new Set(uploadTagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
+  const[duplicateShipment,setDuplicateShipment]=useState<Row|null>(null);
  const[pendingDocuments,setPendingDocuments]=useState<PendingShipmentDocument[]>([]),[selectedBillOfLadingId,setSelectedBillOfLadingId]=useState(''),[extractingBillOfLadingId,setExtractingBillOfLadingId]=useState(''),[previewBillOfLadingId,setPreviewBillOfLadingId]=useState(''),[previewBillOfLadingUrl,setPreviewBillOfLadingUrl]=useState('');
  const hasPendingUploads=pendingDocuments.some(document=>document.uploadStatus==='uploading');
  const shipmentFileInput=React.useRef<HTMLInputElement|null>(null);
@@ -43,7 +52,7 @@ export const ShipmentFirstPage:React.FC=()=>{
    setForm({...empty,...(draft.form||{})});
   },
  );
- const set=(k:keyof Form,v:string)=>setForm(p=>({...p,[k]:v}));
+const set=(k:keyof Form,v:string)=>{setForm(p=>({...p,[k]:v}));if(k==='shippingLine'||k==='billOfLading'||k==='year')setDuplicateShipment(null)};
  const ensureFreshSession=async()=>{
   const{data:{session},error:sessionError}=await supabase.auth.getSession();
   if(sessionError){
@@ -74,7 +83,7 @@ export const ShipmentFirstPage:React.FC=()=>{
   try{
    const[{data:c,error:ce},{data:s,error:se},{data:v,error:ve},{data:l,error:le}]=await Promise.all([
     supabase.from('clients').select('id,name,national_id').eq('organization_id',profile.organization_id).order('name'),
-    supabase.from('shipments').select('id,client_id,vessel_id,shipping_line,bill_of_lading_no,bill_of_lading_year,voyage_no,origin_port,destination_port,cargo_count,cargo_count_unit,net_weight_kg,gross_weight_kg,current_status,current_location,display_name,case_id,customs_office_id,transport_documents_status,release_invoice_payment_status,ship_passed,ship_passed_at,ship_passed_by').eq('organization_id',profile.organization_id).order('created_at',{ascending:false}),
+.from('shipments').select(SHIPMENT_ROW_SELECT).eq('organization_id',profile.organization_id)
     supabase.from('vessels').select('id,name,imo_number,flag_code,shipping_line_id').eq('organization_id',profile.organization_id).order('name'),supabase.from('shipping_lines').select('id,name,name_fa').order('name')
    ]);
    if(ce||se||ve)throw ce||se||ve;
@@ -85,8 +94,8 @@ export const ShipmentFirstPage:React.FC=()=>{
  useEffect(()=>{void loadDocs(selected)},[selected]);
  const chooseLine=(name:string)=>{set('shippingLine',name);const line=lines.find(x=>same(x.name,name)||same(x.name_fa||'',name));if(line&&!form.vessel){const v=vessels.find(x=>x.shipping_line_id===line.id);if(v){set('vessel',v.name);set('imo',v.imo_number||'');set('flag',v.flag_code||'')}}};
  const chooseVessel=(name:string)=>{set('vessel',name);const v=vessels.find(x=>same(x.name,name));if(v){set('imo',v.imo_number||'');set('flag',v.flag_code||'')}};
- const reset=()=>{formDraft.clearDraft(true,{selected:'',form:empty});setSelected('');setForm(empty);setDocs([]);setMessage(pendingDocuments.length?'فرم محموله جدید آماده شد؛ فایل‌های بارگذاری‌شده برای اتصال به محموله بعدی حفظ شدند.':'محموله جدید آماده ثبت است.')};
- const edit=(r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_id);setSelected(r.id);setForm({ownerId:r.client_id||'',shippingLine:r.shipping_line||'',billOfLading:r.bill_of_lading_no||'',year:String(r.bill_of_lading_year||new Date().getFullYear()),voyage:r.voyage_no||'',vessel:v?.name||'',imo:v?.imo_number||'',flag:v?.flag_code||'',originPort:r.origin_port||'',destinationPort:r.destination_port||'',count:r.cargo_count==null?'':String(r.cargo_count),unit:r.cargo_count_unit||'رول',net:r.net_weight_kg==null?'':String(r.net_weight_kg),gross:r.gross_weight_kg==null?'':String(r.gross_weight_kg),status:r.current_status||'draft',location:r.current_location||'',transportDocumentsStatus:r.transport_documents_status||'not_ready',releaseInvoicePaymentStatus:r.release_invoice_payment_status||'unpaid'});setMessage('محموله برای مدیریت انتخاب شد.')};
+const reset=()=>{formDraft.clearDraft(true,{selected:'',form:empty});setSelected('');setForm(empty);setDuplicateShipment(null);setDocs([]);setMessage(pendingDocuments.length?'فرم محموله جدید آماده شد؛ فایل‌های بارگذاری‌شده برای اتصال به محموله بعدی حفظ شدند.':'محموله جدید آماده ثبت است.')};
+const edit=(r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_id);setDuplicateShipment(null);setSelected(r.id);setForm({ownerId:r.client_id||'',shippingLine:r.shipping_line||'',billOfLading:r.bill_of_lading_no||'',year:String(r.bill_of_lading_year||new Date().getFullYear()),voyage:r.voyage_no||'',vessel:v?.name||'',imo:v?.imo_number||'',flag:v?.flag_code||'',originPort:r.origin_port||'',destinationPort:r.destination_port||'',count:r.cargo_count==null?'':String(r.cargo_count),unit:r.cargo_count_unit||'رول',net:r.net_weight_kg==null?'':String(r.net_weight_kg),gross:r.gross_weight_kg==null?'':String(r.gross_weight_kg),status:r.current_status||'draft',location:r.current_location||'',transportDocumentsStatus:r.transport_documents_status||'not_ready',releaseInvoicePaymentStatus:r.release_invoice_payment_status||'unpaid'});setMessage('محموله برای مدیریت انتخاب شد.')};
  const ensureVessel=async()=>{
   const name=form.vessel.trim();if(!name)throw new Error('نام کشتی الزامی است.');
   const found=vessels.find(v=>same(v.name,name));if(found)return found;
@@ -198,6 +207,9 @@ export const ShipmentFirstPage:React.FC=()=>{
     if(pendingDocuments.some(document=>document.uploadStatus!=='ready'||!document.storagePath))return setMessage('ذخیره امن بعضی فایل‌ها هنوز تکمیل نشده است؛ تا نمایش وضعیت آماده صبر کن یا تلاش دوباره را بزن.');
   if(!form.vessel.trim())return setMessage('نام کشتی را وارد یا انتخاب کنید.');
   if(!form.count.trim()||!form.net.trim()||!form.gross.trim())return setMessage('تعداد، وزن خالص و وزن ناخالص را تکمیل کنید.');
+   const existingDuplicate=rows.find(row=>sameShipmentUniqueKey(row,form,selected));
+   if(existingDuplicate){setDuplicateShipment(existingDuplicate);setMessage('این ترکیب شماره بارنامه، کشتیرانی و سال قبلاً ثبت شده است. برای جلوگیری از ساخت پرونده تکراری، محموله موجود را باز کنید.');return;}
+   setDuplicateShipment(null);
   setBusy(true);setMessage('در حال ذخیره شروع عملیات...');
   try{
    await ensureFreshSession();
@@ -245,7 +257,23 @@ export const ShipmentFirstPage:React.FC=()=>{
     setSelected(shipmentId);
     setMessage(`محموله ذخیره شد؛ ${linkedDocumentIds.length} سند به محموله متصل و برای آرشیو خودکار تلگرام در صف پس‌زمینه قرار گرفت.${documentLinkWarnings?' اتصال '+documentLinkWarnings+' سند نیازمند بررسی است.':''}`);
     await load();
-  }catch(e:any){setMessage(e?.message||'ذخیره محموله ناموفق بود')}finally{setBusy(false)}
+}catch(e:any){
+   if(e?.code==='23505'&&String(e?.message||'').includes('uq_shipments_bl_line_year')){
+    let duplicate=rows.find(row=>sameShipmentUniqueKey(row,form,selected))||null;
+    const year=num(form.year);
+    if(!duplicate&&profile?.organization_id&&form.billOfLading.trim()&&form.shippingLine.trim()&&year!==null){
+     try{
+      const {data:conflicts,error:lookupError}=await supabase.from('shipments').select(SHIPMENT_ROW_SELECT)
+       .eq('organization_id',profile.organization_id).eq('bill_of_lading_year',year);
+      if(!lookupError)duplicate=((conflicts||[]) as Row[]).find(row=>sameShipmentUniqueKey(row,form,selected))||null;
+     }catch(lookupError){console.warn('[ShipmentFirstPage] duplicate B/L lookup failed:',lookupError)}
+    }
+    setDuplicateShipment(duplicate);
+    setMessage(duplicate
+     ?'این بارنامه قبلاً با همین کشتیرانی و سال ثبت شده است. محموله موجود را باز کنید و اطلاعات یا اسناد را روی همان پرونده تکمیل کنید.'
+     :'این شماره بارنامه با همین کشتیرانی و سال قبلاً ثبت شده است. فهرست محموله‌ها را بروزرسانی کنید و رکورد موجود را باز کنید.');
+   }else setMessage(e?.message||'ذخیره محموله ناموفق بود');
+  }finally{setBusy(false)}
  };
  const upload=async(files:FileList|null)=>{
   const selectedFiles=Array.from(files||[]);
@@ -404,6 +432,12 @@ export const ShipmentFirstPage:React.FC=()=>{
     {docs.length===0?<div className="py-8 text-center app-muted">هنوز سندی برای این محموله ثبت نشده است.</div>:<div className="grid md:grid-cols-2 gap-2 mt-4">{docs.map(d=><div key={d.id} className="rounded-xl border app-border p-3 flex items-center justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{d.document_name}</b><span className="text-[10px] app-muted">{Math.round(d.file_size_bytes/1024)} KB · {d.storage_backend==='telegram'&&d.file_asset_id?'آرشیو تلگرام آماده است':d.telegram_archive_requested?'نسخه امن سایت · در صف آرشیو تلگرام':'نسخه امن سایت'}</span></div><div className="flex shrink-0 items-center gap-2">{(d.storage_backend!=='telegram'||!d.file_asset_id)&&<button type="button" onClick={()=>void retryArchiveDocument(d)} className="rounded-lg border app-border px-2.5 py-2 text-[11px] font-bold">ارسال به تلگرام</button>}<button onClick={()=>void download(d)} className="icon-btn" title="باز کردن"><Download size={16}/></button></div></div>)}</div>}
    </section>}
   {message&&<div className="rounded-xl border app-border bg-[var(--surface)] p-3 text-sm">{message}</div>}
+   {duplicateShipment&&<section className="rounded-2xl border border-amber-500/40 bg-amber-500/5 p-4 space-y-3">
+    <div className="font-bold text-sm">محموله تکراری پیدا شد</div>
+    <div className="text-sm">{duplicateShipment.display_name||'محموله موجود'} · {duplicateShipment.shipping_line||'بدون نام کشتیرانی'} · B/L <b dir="ltr">{duplicateShipment.bill_of_lading_no}</b> · سال {duplicateShipment.bill_of_lading_year||'—'}</div>
+    <div className="text-xs app-muted">هر بارنامه برای هر کشتیرانی و سال فقط یک‌بار ثبت می‌شود. فایل‌های انتخاب‌شده در این فرم تا زمان بازماندن صفحه حفظ می‌شوند.</div>
+    <div className="flex flex-wrap gap-2"><button type="button" onClick={()=>{edit(duplicateShipment);setMessage('محموله موجود باز شد. می‌توانید اطلاعات آن را اصلاح و اسناد انتخاب‌شده را به همین پرونده متصل کنید.')}} className="rounded-xl bg-[var(--primary)] px-4 py-2.5 text-white text-sm font-bold">باز کردن محموله موجود</button><button type="button" onClick={()=>setDuplicateShipment(null)} className="rounded-xl border app-border px-4 py-2.5 text-sm">بستن پیام</button></div>
+   </section>}
   {selected&&vessel&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Ship size={19}/><b>بررسی وضعیت کشتی</b></div><Link to={vesselSearch} className="px-4 py-2 rounded-xl border app-border font-bold text-sm"><ExternalLink size={15} className="inline ml-1"/>جستجوی اطلاعات کشتی</Link></div><div className="grid md:grid-cols-6 gap-3 mt-3 text-sm"><div><span className="app-muted text-xs">کشتی</span><b className="block mt-1">{vessel.name}</b></div><div><span className="app-muted text-xs">IMO</span><b className="block mt-1" dir="ltr">{vessel.imo_number||'—'}</b></div><div><span className="app-muted text-xs">پرچم</span><b className="block mt-1">{vessel.flag_code||'—'}</b></div><div><span className="app-muted text-xs">وضعیت</span><b className="block mt-1">{statuses.find(x=>x[0]===selectedRow?.current_status)?.[1]||selectedRow?.current_status||'—'}</b></div><div><span className="app-muted text-xs">موقعیت</span><b className="block mt-1">{selectedRow?.current_location||'—'}</b></div><div><span className="app-muted text-xs">B/L</span><b className="block mt-1" dir="ltr">{selectedRow?.bill_of_lading_no||form.billOfLading||'—'}</b></div>{selectedRow?.current_status==='completed'&&<><div><span className="app-muted text-xs">اسناد حمل و قبض انبار</span><b className="block mt-1">{selectedRow.transport_documents_status==='ready'?'آماده است':'آماده نیست'}</b></div><div><span className="app-muted text-xs">صورتحساب ترخیصیه</span><b className="block mt-1">{selectedRow.release_invoice_payment_status==='paid'?'پرداخت شده':'پرداخت نشده'}</b></div></>}</div></section>}
   {selected&&selectedRow&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><ShieldCheck size={19}/><div><b>پاس کشتی</b><div className="text-xs app-muted mt-1">{selectedRow.ship_passed?'پاس کشتی ثبت شده است.':'پس از تحویل کامل اسناد کشتیرانی، پاس کشتی را ثبت کنید.'}</div></div></div><div className="flex items-center gap-2"><span className={`rounded-full px-3 py-1.5 text-xs font-bold ${selectedRow.ship_passed?'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300':'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>{selectedRow.ship_passed?'پاس شده':'پاس نشده'}</span><button type="button" disabled={busy||(!selectedRow.ship_passed&&selectedRow.transport_documents_status!=='ready')} onClick={()=>void passShip(!selectedRow.ship_passed)} className="px-4 py-2 rounded-xl bg-[var(--primary)] text-white text-sm font-bold disabled:opacity-40">{selectedRow.ship_passed?'لغو پاس کشتی':'ثبت پاس کشتی'}</button></div></div>{!selectedRow.ship_passed&&selectedRow.transport_documents_status!=='ready'&&<div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs">برای ثبت پاس کشتی ابتدا اسناد حمل و کشتیرانی را تحویل گرفته و وضعیت «آماده است» را ثبت کنید.</div>}</section>}
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex items-center justify-between mb-3"><b>محموله‌های ثبت‌شده</b><span className="text-xs app-muted">{rows.length} محموله</span></div>{rows.length===0?<div className="py-10 text-center app-muted">هنوز محموله‌ای ثبت نشده است.</div>:<div className="space-y-2">{rows.map(r=><button key={r.id} onClick={()=>edit(r)} className={'w-full text-right rounded-xl border p-3 '+(selected===r.id?'border-[var(--primary)] bg-[var(--surface-2)]':'app-border bg-[var(--surface)]')}><div className="flex justify-between gap-3"><div><b>{r.display_name||'محموله'}</b><div className="text-xs app-muted mt-1">{r.shipping_line||'—'} · B/L {r.bill_of_lading_no||'—'} · گمرک: {customsOffices.find(o=>o.id===r.customs_office_id)?.name||'تعیین نشده'}</div></div><span className="text-xs app-muted">{statuses.find(x=>x[0]===r.current_status)?.[1]||r.current_status}</span></div></button>)}</div>}</section>
