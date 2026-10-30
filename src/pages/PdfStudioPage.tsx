@@ -1116,6 +1116,14 @@ export const PdfStudioPage: React.FC = () => {
           </div>
         </header>
 
+        <nav className="sticky top-0 z-20 grid grid-cols-3 gap-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-sm" aria-label="بخش‌های PDF Studio">
+          <button type="button" onClick={() => setStudioTab('pages')} className={'min-h-10 rounded-xl px-2 text-xs font-bold ' + (studioTab === 'pages' ? 'bg-blue-600 text-white' : 'text-[var(--muted)]')}>صفحات ({pages.length})</button>
+          <button type="button" onClick={() => setStudioTab('outputs')} className={'min-h-10 rounded-xl px-2 text-xs font-bold ' + (studioTab === 'outputs' ? 'bg-blue-600 text-white' : 'text-[var(--muted)]')}>خروجی و فشرده‌سازی</button>
+          {['owner', 'admin', 'broker', 'accountant', 'warehouse'].includes(String(profile?.role || '')) && (
+            <button type="button" onClick={() => setStudioTab('recognition')} className={'min-h-10 rounded-xl px-2 text-xs font-bold ' + (studioTab === 'recognition' ? 'bg-blue-600 text-white' : 'text-[var(--muted)]')}>آزمایشگاه تشخیص</button>
+          )}
+        </nav>
+
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white disabled:opacity-50">
@@ -1208,8 +1216,9 @@ export const PdfStudioPage: React.FC = () => {
           </section>
         )}
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+        {(studioTab === 'pages' || studioTab === 'outputs') && (
+        <section className="grid gap-4">
+          {studioTab === 'pages' && <div className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div><h2 className="font-black">ترتیب صفحات</h2><p className="mt-1 text-xs text-[var(--muted)]">برای تغییر ترتیب، صفحه را بکشید یا از فلش‌های بالا و پایین استفاده کنید.</p></div>
               {busy && <span className="inline-flex items-center gap-2 text-xs text-blue-400"><Loader2 className="animate-spin" size={16}/> در حال پردازش…</span>}
@@ -1251,9 +1260,9 @@ export const PdfStudioPage: React.FC = () => {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
-          <aside className="space-y-3">
+          {studioTab === 'outputs' && <aside className="grid gap-3 md:grid-cols-2">
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
               <h3 className="mb-3 font-black">قالب خروجی و جداسازی چندبخشی</h3>
               <label className="block text-xs text-[var(--muted)]">نوع بسته خروجی</label>
@@ -1318,8 +1327,9 @@ export const PdfStudioPage: React.FC = () => {
               <div className="flex items-center gap-2 font-bold text-emerald-500"><ShieldCheck size={16}/> پردازش محلی</div>
               <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">فایل‌ها هنگام ویرایش محلی می‌مانند. پیشنهاد نام صفحه فقط از لایه متن قابل انتخاب PDF ساخته می‌شود و برای اسکن‌های تصویری OCR فعال نمی‌شود تا سرعت و حریم خصوصی حفظ شود.</p>
             </section>
-          </aside>
+          </aside>}
         </section>
+        )}
 
         {(status || error) && <div className={'rounded-xl border p-3 text-sm ' + (error ? 'border-red-500/30 bg-red-500/5 text-red-400' : 'border-emerald-500/20 bg-emerald-500/5 text-emerald-500')}>
           {error || status}
