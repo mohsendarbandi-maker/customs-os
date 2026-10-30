@@ -64,4 +64,31 @@ describe('AI Operator security invariants',()=>{
    expect(advanced).toContain("سوابق / Logs ← فقط خواندنی");
    expect(advanced).not.toContain("from('audit_logs').delete");
  });
+ it('supports dynamic, reviewed AI extraction into the active customs form without auto-submitting it',()=>{
+   const workspace=readFileSync(new URL('../src/components/AIWorkspace.tsx',import.meta.url),'utf8');
+   const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
+   expect(workspace).toContain('collectCurrentFormSchema()');
+   expect(workspace).toContain("setAttribute('data-ai-form-field',key)");
+   expect(workspace).toContain('form_schema:currentFormSchema');
+   expect(workspace).toContain('مقادیر قبلی فرم را هم جایگزین کن');
+   expect(workspace).toContain('هیچ فرمی خودکار ثبت یا ارسال نشد');
+   expect(workspace).not.toMatch(/\\.submit\\s*\\(/);
+   expect(assistant).toContain('formSchema=Array.isArray(b.form_schema)');
+   expect(assistant).toContain('JSON.stringify(formSchema)');
+   expect(assistant).toContain("const option=Array.from(el.options).find(o=>normalize(o.value)===target||normalize(o.textContent||'')===target)");
+ });
+ it('keeps the assistant bootable and all provider prompts within known limits',()=>{
+   const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
+   expect(assistant).toContain('checklistRows=checks.data||[]');
+   expect(assistant).toContain('const providerKeys=');
+   expect(assistant).toContain('models/gemini-3.8-flash:generateContent');
+   expect(assistant).not.toContain('models/gemini-3.5-flash-lite:generateContent');
+   expect(operator).toContain('models/gemini-3.8-flash:generateContent');
+   expect(operator).toContain('}).slice(0,16000)');
+   expect(operator).toContain('cleanText(liveContext,8000)');
+   expect(operator).toContain('cleanText(JSON.stringify(catalog()),5000)');
+   const workspace=readFileSync(new URL('../src/components/AIWorkspace.tsx',import.meta.url),'utf8');
+   expect(workspace).toContain("invokeEdgeFunction('ai-core'");
+ });
+
 });
