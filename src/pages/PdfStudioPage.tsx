@@ -395,6 +395,7 @@ export const PdfStudioPage: React.FC = () => {
   const compressDocumentPages = async (
     items: PageItem[],
     settings: CompressionSettings,
+    preserveDocumentIds: Set<string> = new Set(),
   ): Promise<{ blob: Blob; preservedPages: number; rasterizedPages: number }> => {
     if (!items.length) throw new Error('صفحه‌ای برای فشرده‌سازی انتخاب نشده است.');
     const output = await PDFDocument.create();
@@ -405,7 +406,7 @@ export const PdfStudioPage: React.FC = () => {
       for (const item of items) {
         const source = sourcePdfs.current.get(item.documentId);
         if (!source) throw new Error('منبع یکی از صفحات در حافظه پیدا نشد.');
-        const keepText = settings.mode === 'preserve' || (settings.mode === 'smart' && shouldPreservePageText(item));
+        const keepText = preserveDocumentIds.has(item.documentId) || settings.mode === 'preserve' || (settings.mode === 'smart' && shouldPreservePageText(item));
         if (keepText) {
           const [copied] = await output.copyPages(source, [item.pageIndex]);
           if (item.rotation) copied.setRotation(degrees((copied.getRotation().angle + item.rotation) % 360));
@@ -489,7 +490,7 @@ export const PdfStudioPage: React.FC = () => {
         if (!items.length) continue;
         const kept = items.filter((item) => preserved.includes(item));
         if (document.hasProtectedFeatures) {
-          preservedBytes += document.file.size;
+          preservedBytes += document.file.size * (items.length / Math.max(1, document.pageCount));
         } else if (kept.length) {
           preservedBytes += document.file.size * (kept.length / Math.max(1, document.pageCount));
         }
@@ -535,60 +536,41 @@ export const PdfStudioPage: React.FC = () => {
 
   const compressActivePdf = async () => {
     if (!documents.length || !compressionItems.length) return setError('ابتدا فایل یا صفحه برای فشرده‌سازی انتخاب کنید.');
-    if (compressionSettings.mode === 'raster' && !window.confirm('در حالت فشرده‌سازی کامل، صفحه‌های فایل‌های عادی به تصویر تبدیل می‌شوند و متن قابل جست‌وجو، فرم‌ها، لینک‌ها و لایه‌ها حفظ نمی‌شوند. فایل‌های دارای امضای دیجیتال یا فرم محافظت‌شده بدون تغییر داخل ZIP می‌مانند. فایل‌های اصلی تغییر نمی‌کنند. ادامه می‌دهید؟')) return;
+
+    const protectedDocumentIds = new Set(
+      documents.filter((document) => document.hasProtectedFeatures && compressionItems.some((item) => item.documentId === document.id))
+        .map((document) => document.id),
+    );
+    const warnings: string[] = [];
+    if (compressionSettings.mode === 'raster') {
+      warnings.push('در حالت فشرده‌سازی تصویری کامل، متن قابل جست‌وجو، فرم‌ها، لینک‌ها و لایه‌ها حفظ نمی‌شوند.');
+    }
+    if (protectedDocumentIds.size) {
+      warnings.push('یکی از فایل‌ها امضای دیجیتال یا فرم محافظت‌شده دارد. برای ساخت یک PDF واحد، صفحات در سند جدید ادغام می‌شوند؛ اعتبار امضای دیجیتال حفظ نمی‌شود و اجزای تعاملی ممکن است منتقل نشوند. صفحات این فایل‌ها تا حد امکان تصویری نمی‌شوند.');
+    }
+    if (warnings.length && !window.confirm(warnings.join('\n\n') + '\n\nفایل‌های اصلی بدون تغییر باقی می‌مانند. ادامه می‌دهید؟')) return;
+
     setBusy(true);
     setError('');
     try {
-      const outputFiles: Record<string, Uint8Array> = {};
-      let originalTotal = 0;
-      let outputTotal = 0;
-      let preservedTotal = 0;
-      let rasterizedTotal = 0;
-      for (const document of documents) {
-        const items = compressionItems.filter((item) => item.documentId === document.id);
-        if (!items.length) continue;
-        const sourceOriginal = await document.file.arrayBuffer();
-        const originalPages = document.hasProtectedFeatures ? sourceOriginal : await createPdfBytes(items);
-        originalTotal += originalPages.byteLength;
-        let outputBlob: Blob;
-        if (document.hasProtectedFeatures) {
-          outputBlob = new Blob([sourceOriginal], { type: 'application/pdf' });
-        } else if (compressionSettings.mode === 'preserve') {
-          const candidate = await compressDocumentPages(items, compressionSettings);
-          outputBlob = candidate.blob;
-          preservedTotal += candidate.preservedPages;
-        } else {
-          const candidate = await compressDocumentPages(items, compressionSettings);
-          const originalPages = await createPdfBytes(items);
-          outputBlob = candidate.blob.size < originalPages.byteLength
-            ? candidate.blob
-            : new Blob([toArrayBuffer(originalPages)], { type: 'application/pdf' });
-          preservedTotal += candidate.preservedPages;
-          rasterizedTotal += candidate.rasterizedPages;
-        }
-        const baseName = safeName(document.file.name);
-        let outputName = baseName + '-compressed.pdf';
-        let duplicateIndex = 2;
-        while (outputFiles[outputName]) {
-          outputName = baseName + '-' + duplicateIndex + '-compressed.pdf';
-          duplicateIndex += 1;
-        }
-        outputFiles[outputName] = new Uint8Array(await outputBlob.arrayBuffer());
-        outputTotal += outputBlob.size;
-      }
-      if (!Object.keys(outputFiles).length) throw new Error('هیچ فایل خروجی ساخته نشد.');
-      const archive = zipSync(outputFiles, { level: 0 });
-      const archiveBytes = archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer;
-      const outputBlob = new Blob([archiveBytes], { type: 'application/zip' });
+      const originalBytes = await createPdfBytes(compressionItems);
+      const candidate = await compressDocumentPages(compressionItems, compressionSettings, protectedDocumentIds);
+      const useCandidate = compressionSettings.mode === 'preserve' || candidate.blob.size < originalBytes.byteLength;
+      const outputBlob = useCandidate
+        ? candidate.blob
+        : new Blob([toArrayBuffer(originalBytes)], { type: 'application/pdf' });
+      const preservedTotal = useCandidate ? candidate.preservedPages : compressionItems.length;
+      const rasterizedTotal = useCandidate ? candidate.rasterizedPages : 0;
+      const originalTotal = originalBytes.byteLength;
       const profileName = compressionProfileName.trim() || 'تنظیمات فعلی';
-      const outputName = 'PDF-Studio-' + safeName(profileName) + '-compressed.zip';
+      const outputName = 'PDF-Studio-' + safeName(profileName) + '-compressed.pdf';
       const run: CompressionRun = {
         id: crypto.randomUUID(),
         name: outputName,
         blob: outputBlob,
         size: outputBlob.size,
         originalSize: originalTotal,
-        savedPercent: originalTotal ? Math.max(0, Math.round((1 - outputTotal / originalTotal) * 100)) : 0,
+        savedPercent: originalTotal ? Math.max(0, Math.round((1 - outputBlob.size / originalTotal) * 100)) : 0,
         profileName,
         settings: { ...compressionSettings },
         createdAt: new Date().toISOString(),
@@ -596,10 +578,10 @@ export const PdfStudioPage: React.FC = () => {
       setCompressionRuns((previous) => [run, ...previous]);
       downloadBlob(outputBlob, outputName);
       setStatus(
-        'بسته فشرده‌سازی آماده دانلود شد: ' + formatSize(outputBlob.size) +
-        '؛ صفحات با متن حفظشده: ' + preservedTotal +
+        'فایل PDF فشرده آماده دانلود شد: ' + formatSize(outputBlob.size) +
+        '؛ صفحات با متن/ساختار حفظشده: ' + preservedTotal +
         '؛ صفحات تصویری بازسازی‌شده: ' + rasterizedTotal +
-        '؛ فایل‌های دارای امضای دیجیتال/فرم محافظت‌شده بدون تغییر داخل بسته قرار گرفتند.'
+        (protectedDocumentIds.size ? '؛ توجه: اعتبار امضای دیجیتال در PDF ترکیبی حفظ نمی‌شود.' : '')
       );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'فشرده‌سازی فایل‌ها ناموفق بود.');
@@ -607,7 +589,6 @@ export const PdfStudioPage: React.FC = () => {
       setBusy(false);
     }
   };
-
   const saveCompressionProfile = () => {
     const name = compressionProfileName.trim();
     if (!name) return setError('برای تنظیمات فشرده‌سازی نام وارد کنید.');
@@ -1349,12 +1330,12 @@ export const PdfStudioPage: React.FC = () => {
                   {compressionEstimating ? 'در حال برآورد…' : 'برآورد حجم قبل از پردازش'}
                 </button>
                 <button type="button" onClick={() => void compressActivePdf()} disabled={busy || !compressionItems.length} className="min-h-10 rounded-xl bg-blue-600 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
-                  {busy ? 'در حال فشرده‌سازی…' : 'فشرده‌سازی و دانلود ZIP'}
+                  {busy ? 'در حال فشرده‌سازی…' : 'فشرده‌سازی و دانلود PDF'}
                 </button>
               </div>
               {compressionEstimate && (
                 <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
-                  <div className="text-xs font-bold">حجم تخمینی بسته خروجی</div>
+                  <div className="text-xs font-bold">حجم تخمینی فایل PDF</div>
                   <div className="mt-1 text-lg font-black tabular-nums">{formatSize(compressionEstimate.expected)}</div>
                   <div className="mt-1 text-[11px] text-[var(--muted)]">بازه احتمالی: {formatSize(compressionEstimate.low)} تا {formatSize(compressionEstimate.high)}</div>
                   <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-[var(--muted)]">
@@ -1365,14 +1346,14 @@ export const PdfStudioPage: React.FC = () => {
                   <p className="mt-2 text-[10px] leading-4 text-[var(--muted)]">این برآورد تقریبی است؛ پس از ساخت PDF، حجم واقعی در تاریخچه ثبت می‌شود.</p>
                 </div>
               )}
-              <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">در حالت هوشمند، صفحه‌هایی که متن قابل استخراج دارند با اعداد و حروف اصلی حفظ می‌شوند. صفحه‌های اسکن‌شده با DPI و کیفیت بالاتر بازسازی می‌شوند. خروجی فقط یک ZIP دانلودی است و PDFها خودکار باز نمی‌شوند.</p>
+              <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">تمام صفحه‌های انتخاب‌شده، حتی از چند فایل مختلف، به ترتیب فعلی در یک فایل PDF فشرده ادغام می‌شوند؛ خروجی ZIP نیست و PDF به‌صورت خودکار باز نمی‌شود. در حالت هوشمند، صفحه‌های متن‌دار و اعداد اصلی حفظ می‌شوند و اسکن‌ها با وضوح انتخابی بازسازی می‌شوند.</p>
             </section>
 
             {compressionRuns.length > 0 && (
               <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:col-span-2">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h3 className="font-black">خروجی‌های قبلی این نشست</h3>
-                  <span className="text-[10px] text-[var(--muted)]">{compressionRuns.length} بسته</span>
+                  <span className="text-[10px] text-[var(--muted)]">{compressionRuns.length} فایل PDF</span>
                 </div>
                 <div className="space-y-2">
                   {compressionRuns.map((run) => (
@@ -1391,7 +1372,7 @@ export const PdfStudioPage: React.FC = () => {
 
             <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
               <div className="flex items-center gap-2 font-bold text-emerald-500"><ShieldCheck size={16}/> اصل فایل محفوظ می‌ماند</div>
-              <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">ویرایش و فشرده‌سازی در مرورگر انجام می‌شود. تنظیمات نام‌گذاری‌شده در همین سازمان حفظ می‌شوند؛ هر بار خروجی تازه ساخته شود، بسته قبلی قابل دانلود دوباره خواهد بود.</p>
+              <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">ویرایش و فشرده‌سازی در مرورگر انجام می‌شود. فایل‌های اصلی تغییر نمی‌کنند و خروجی هر نوبت یک PDF مستقل است؛ تنظیمات نام‌گذاری‌شده حفظ می‌شوند و هر PDF قبلی همچنان قابل دانلود دوباره خواهد بود.</p>
             </section>
           </aside>}
         </section>
