@@ -111,7 +111,7 @@ export const ShipmentFirstPage:React.FC=()=>{
      if(userError||!user)throw new Error('نشست کاربر معتبر نیست؛ دوباره وارد شوید.');
      if(!profile?.organization_id)throw new Error('سازمان کاربر مشخص نیست.');
      const safeName=file.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,160)||'document.pdf';
-     const storagePath=profile.organization_id+'/staged/'+user.id+'/'+id+'-'+safeName;
+     const storagePath=profile.organization_id+'/clients/'+document.clientId+'/staged/'+user.id+'/'+id+'-'+safeName;
      const {error:storageError}=await supabase.storage.from(BUCKET).upload(storagePath,file,{contentType:mime,cacheControl:'3600',upsert:true});
      if(storageError)throw new Error(storageError.message||'ذخیره امن فایل در وب‌سایت ناموفق بود.');
      setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,storagePath,uploadStatus:'ready',uploadedBy:user.id,uploadError:undefined}:item));
@@ -140,7 +140,7 @@ const retryStagedShipmentDocument=(document:PendingShipmentDocument)=>{
    const {data:{user},error:userError}=await supabase.auth.getUser();
    if(userError||!user||!profile?.organization_id)throw new Error('نشست یا سازمان کاربر معتبر نیست.');
    const safeName=document.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,160)||'document.pdf';
-   const storagePath=profile.organization_id+'/staged/'+user.id+'/'+document.id+'-'+safeName;
+   const storagePath=profile.organization_id+'/clients/'+document.clientId+'/staged/'+user.id+'/'+document.id+'-'+safeName;
    if(document.storagePath){
     const {error:removeError}=await supabase.storage.from(BUCKET).remove([document.storagePath]);
     if(removeError)console.warn('[ShipmentFirstPage] stale staged object cleanup failed:',removeError);
