@@ -46,7 +46,7 @@ describe('offline and background-update safety', () => {
     expect(lifecycle).not.toContain('pwa-version-notice');
     expect(lifecycle).not.toContain('setNewVersionAvailable(true)');
     expect(serviceWorker).toContain("event.data.type === 'SKIP_WAITING'");
-    expect(serviceWorker).not.toContain('self.skipWaiting();\\nclientsClaim();');
+    expect(serviceWorker).not.toContain('self.skipWaiting();\nclientsClaim();');
   });
 
   it('stores query snapshots in a bounded, user-and-organization-scoped IndexedDB store', () => {
