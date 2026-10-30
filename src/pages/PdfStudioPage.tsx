@@ -139,8 +139,13 @@ export const PdfStudioPage: React.FC = () => {
           const context = canvas.getContext('2d');
           if (!context) throw new Error('امکان ساخت پیش‌نمایش صفحه وجود ندارد.');
           await page.render({ canvasContext: context, viewport }).promise;
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items.map((item: any) => typeof item.str === 'string' ? item.str : '').join(' ');
+          let pageText = '';
+          try {
+            const textContent = await page.getTextContent();
+            pageText = textContent.items.map((item: any) => typeof item.str === 'string' ? item.str : '').join(' ');
+          } catch {
+            // Image-only or unusual pages fall back to the source filename; do not block import.
+          }
           nextPages.push({
             id: id + '-page-' + pageNumber,
             documentId: id,
@@ -327,13 +332,14 @@ export const PdfStudioPage: React.FC = () => {
     setError('');
     try {
       if (outputPreset === 'standard') {
+        if (protectedIncluded && !window.confirm('بعضی صفحات امضای دیجیتال یا فرم محافظت‌شده دارند. ترکیب یا استخراج ممکن است اعتبار امضا را از بین ببرد؛ فایل‌های اصلی دست‌نخورده می‌مانند. فقط روی نسخه خروجی ادامه می‌دهید؟')) return;
         const sourceBytes = await createPdfBytes(pages);
         if (sourceBytes.byteLength <= 2 * 1024 * 1024) {
           downloadBlob(new Blob([toArrayBuffer(sourceBytes)], { type: 'application/pdf' }), safeName(packageName) + '.pdf');
           setStatus('خروجی استاندارد با حجم ' + formatSize(sourceBytes.byteLength) + ' آماده شد و زیر سقف ۲ مگابایت است.');
           return;
         }
-        if (!window.confirm('برای رساندن خروجی استاندارد به سقف ۲ مگابایت، صفحات به تصویر فشرده تبدیل می‌شوند؛ متن قابل جست‌وجو، فرم‌ها، لینک‌ها، لایه‌ها و امضاهای دیجیتال در نسخه خروجی حفظ نمی‌شوند. فایل‌های اصلی بدون تغییر می‌مانند. ادامه می‌دهید؟')) return;
+        if (!window.confirm('برای رساندن خروجی استاندارد به سقف ۲ مگابایت، صفحات به تصویر فشرده تبدیل می‌شوند؛ متن قابل جست‌وجو، فرم‌ها، لینک‌ها و لایه‌ها در نسخه خروجی حفظ نمی‌شوند. فایل‌های اصلی بدون تغییر می‌مانند. ادامه می‌دهید؟')) return;
         const result = await compressPagesToTarget(pages, 2 * 1024 * 1024);
         downloadBlob(result.blob, safeName(packageName) + '.pdf');
         setStatus('خروجی استاندارد آماده شد: ' + formatSize(result.blob.size) + '، وضوح ' + result.scale.toFixed(2) + '، کیفیت ' + Math.round(result.quality * 100) + '٪. سقف ۲ مگابایت رعایت شد.');
@@ -363,27 +369,30 @@ export const PdfStudioPage: React.FC = () => {
     }
   };
   const compressActivePdf = async () => {
-    if (!documents.length) return setError('ابتدا فایل PDF اضافه کنید.');
+    if (!documents.length) return setError('ابتدا فایل PDF یا تصویر اضافه کنید.');
     setBusy(true);
     setError('');
     try {
-      let totalSaved = 0;
+      let totalBefore = 0;
+      let totalAfter = 0;
+      let skippedProtected = 0;
       for (const source of documents) {
-        if (source.hasProtectedFeatures) { totalSaved += 0; continue; }
-        const pdf = sourcePdfs.current.get(source.id);
-        if (!pdf) continue;
-        const bytes = await pdf.save({ useObjectStreams: true });
-        const blob = new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' });
-        const saved = Math.max(0, source.file.size - blob.size);
-        totalSaved += saved;
-        downloadBlob(blob.size < source.file.size
-          ? blob
-          : new Blob([await source.file.arrayBuffer()], { type: 'application/pdf' }),
-        safeName(source.file.name) + '-optimized.pdf');
+        if (source.hasProtectedFeatures) { skippedProtected += 1; continue; }
+        const items = pages.filter((page) => page.documentId === source.id);
+        const originalBytes = await createPdfBytes(items);
+        const optimized = await sourcePdfs.current.get(source.id)?.save({ useObjectStreams: true });
+        if (!optimized) continue;
+        const optimizedBlob = new Blob([toArrayBuffer(optimized)], { type: 'application/pdf' });
+        const beforeBlob = new Blob([toArrayBuffer(originalBytes)], { type: 'application/pdf' });
+        const output = optimizedBlob.size < beforeBlob.size ? optimizedBlob : beforeBlob;
+        downloadBlob(output, safeName(source.file.name) + '-optimized.pdf');
+        totalBefore += beforeBlob.size;
+        totalAfter += output.size;
       }
-      setStatus(totalSaved > 0
-        ? 'بهینه‌سازی ساختاری انجام شد؛ مجموعاً ' + formatSize(totalSaved) + ' کاهش حجم داشت. فایل‌های دارای امضای دیجیتال یا فرم محافظت‌شده بدون تغییر باقی ماندند.'
-        : 'کاهش حجم قابل‌توجهی به دست نیامد؛ نسخه اصلی حفظ شد. فایل‌های دارای امضای دیجیتال یا فرم محافظت‌شده نیز تغییر نکردند.');
+      const saved = Math.max(0, totalBefore - totalAfter);
+      setStatus(saved > 0
+        ? 'بهینه‌سازی ساختاری انجام شد؛ مجموعاً ' + formatSize(saved) + ' کاهش حجم داشت. ' + (skippedProtected ? skippedProtected + ' فایل محافظت‌شده بدون تغییر کنار گذاشته شد.' : 'ساختار و متن PDF حفظ شد.')
+        : 'کاهش حجم ساختاری به‌دست نیامد؛ نسخه PDF بدون تغییر به‌عنوان خروجی داده شد. فایل‌های محافظت‌شده: ' + skippedProtected + ' مورد.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'بهینه‌سازی PDF ناموفق بود.');
     } finally {
