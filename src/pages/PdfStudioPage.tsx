@@ -380,18 +380,18 @@ export const PdfStudioPage: React.FC = () => {
         if (source.hasProtectedFeatures) { skippedProtected += 1; continue; }
         const items = pages.filter((page) => page.documentId === source.id);
         const originalBytes = await createPdfBytes(items);
-        const optimized = await sourcePdfs.current.get(source.id)?.save({ useObjectStreams: true });
-        if (!optimized) continue;
-        const optimizedBlob = new Blob([toArrayBuffer(optimized)], { type: 'application/pdf' });
-        const beforeBlob = new Blob([toArrayBuffer(originalBytes)], { type: 'application/pdf' });
-        const output = optimizedBlob.size < beforeBlob.size ? optimizedBlob : beforeBlob;
+        const candidateDocument = await PDFDocument.load(originalBytes);
+        const candidateBytes = await candidateDocument.save({ useObjectStreams: true });
+        const optimizedBlob = new Blob([toArrayBuffer(candidateBytes)], { type: 'application/pdf' });
+        const originalBlob = new Blob([toArrayBuffer(originalBytes)], { type: 'application/pdf' });
+        const output = optimizedBlob.size < originalBlob.size ? optimizedBlob : originalBlob;
         downloadBlob(output, safeName(source.file.name) + '-optimized.pdf');
-        totalBefore += beforeBlob.size;
+        totalBefore += originalBlob.size;
         totalAfter += output.size;
       }
       const saved = Math.max(0, totalBefore - totalAfter);
       setStatus(saved > 0
-        ? 'بهینه‌سازی ساختاری انجام شد؛ مجموعاً ' + formatSize(saved) + ' کاهش حجم داشت. ' + (skippedProtected ? skippedProtected + ' فایل محافظت‌شده بدون تغییر کنار گذاشته شد.' : 'ساختار و متن PDF حفظ شد.')
+        ? 'بهینه‌سازی ساختاری انجام شد؛ مجموعاً ' + formatSize(saved) + ' کاهش حجم داشت. ' + (skippedProtected ? skippedProtected + ' فایل محافظت‌شده بدون تغییر کنار گذاشته شد.' : 'صفحات و چرخش‌های انتخاب‌شده حفظ شدند.')
         : 'کاهش حجم ساختاری به‌دست نیامد؛ نسخه PDF بدون تغییر به‌عنوان خروجی داده شد. فایل‌های محافظت‌شده: ' + skippedProtected + ' مورد.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'بهینه‌سازی PDF ناموفق بود.');
@@ -399,7 +399,6 @@ export const PdfStudioPage: React.FC = () => {
       setBusy(false);
     }
   };
-
   const compressScans = async () => {
     if (!documents.length) return setError('ابتدا فایل PDF یا تصویر اضافه کنید.');
     const accepted = window.confirm(
