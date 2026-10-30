@@ -1,13 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowDown, ArrowUp, Check, FileImage, FilePlus2, FileText, Files, Loader2, Minus, RotateCw, Scissors, ShieldCheck, Stamp, Trash2, Upload, Sparkles, X,
+  ArrowDown, ArrowUp, Check, ChevronLeft, FileImage, FilePlus2, FileText, Files, Folder, Loader2, Minus, RotateCw, Scissors, ShieldCheck, Stamp, Trash2, Upload, Sparkles, X,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { PDFDocument, degrees } from 'pdf-lib';
+import { createWorker } from 'tesseract.js';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { downloadTelegramArchivedFile } from '../lib/fileManager';
 import { PDF_STUDIO_PRESETS, pageExpressionForMatches, parsePageSelection, suggestDocumentLabel } from '../lib/pdfStudioUtils';
+import {
+  buildDocumentPageFeatures, buildDocumentPageFeaturesFromText, estimateJpegBytesFromSamples,
+  recognizeDocumentPage, type DocumentPageFeatures, type RecognitionSample,
+} from '../lib/pdfRecognition';
 import { zipSync } from 'fflate';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -35,7 +40,25 @@ type PageItem = {
   rotation: number;
   selected: boolean;
   label: string;
+  features: DocumentPageFeatures;
+  pageArea: number;
 };
+type CompressionSettings = {
+  mode: 'smart' | 'preserve' | 'raster';
+  quality: number;
+  dpi: number;
+  grayscale: boolean;
+};
+type CompressionProfile = { id: string; name: string; settings: CompressionSettings };
+type CompressionEstimate = {
+  low: number; expected: number; high: number;
+  preservedPages: number; rasterizedPages: number; sampledPages: number;
+};
+type CompressionRun = {
+  id: string; name: string; blob: Blob; size: number; originalSize: number;
+  savedPercent: number; profileName: string; settings: CompressionSettings; createdAt: string;
+};
+type FileManagerFolder = { id: string; parent_id: string | null; display_name: string; folder_type: string };
 const formatSize = (bytes: number) => bytes < 1024 * 1024
   ? Math.round(bytes / 1024) + ' KB'
   : (bytes / 1024 / 1024).toFixed(1) + ' MB';
@@ -61,6 +84,7 @@ export const PdfStudioPage: React.FC = () => {
   const organizationId = profile?.organization_id || '';
   const inputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
+  const sampleInputRef = useRef<HTMLInputElement>(null);
   const sourcePdfs = useRef(new Map<string, PDFDocument>());
   const [documents, setDocuments] = useState<SourceDocument[]>([]);
   const [pages, setPages] = useState<PageItem[]>([]);
@@ -71,18 +95,117 @@ export const PdfStudioPage: React.FC = () => {
   const [splitRows, setSplitRows] = useState<SplitRow[]>([{ id: crypto.randomUUID(), name: 'سند خروجی', pageExpression: '' }]);
   const [packageName, setPackageName] = useState('اسناد خروجی');
   const [outputPreset, setOutputPreset] = useState<'custom' | 'shipPass' | 'guarantee' | 'standard'>('custom');
-  const [compressionQuality, setCompressionQuality] = useState(0.72);
-  const [compressionScale, setCompressionScale] = useState(1.2);
+  const [studioTab, setStudioTab] = useState<'pages' | 'outputs' | 'recognition'>('pages');
+  const [compressionSettings, setCompressionSettings] = useState<CompressionSettings>({
+    mode: 'smart', quality: 0.9, dpi: 240, grayscale: false,
+  });
+  const [compressionProfiles, setCompressionProfiles] = useState<CompressionProfile[]>([]);
+  const [compressionProfileName, setCompressionProfileName] = useState('اسناد خوانا');
+  const [compressionEstimate, setCompressionEstimate] = useState<CompressionEstimate | null>(null);
+  const [compressionEstimating, setCompressionEstimating] = useState(false);
+  const [compressionRuns, setCompressionRuns] = useState<CompressionRun[]>([]);
+  const [compressionStorageReady, setCompressionStorageReady] = useState(false);
+  const [recognitionSamples, setRecognitionSamples] = useState<RecognitionSample[]>([]);
+  const [recognitionLoading, setRecognitionLoading] = useState(false);
+  const [sampleFile, setSampleFile] = useState<File | null>(null);
+  const [sampleDocumentType, setSampleDocumentType] = useState('اظهارنامه');
+  const [sampleDisplayName, setSampleDisplayName] = useState('');
+  const [trainingBusy, setTrainingBusy] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState('');
+  const [recognitionProgress, setRecognitionProgress] = useState('');
   const [fileManagerOpen, setFileManagerOpen] = useState(false);
   const [fileManagerLoading, setFileManagerLoading] = useState(false);
   const [fileManagerRows, setFileManagerRows] = useState<FileManagerRow[]>([]);
-  const [fileManagerFolders, setFileManagerFolders] = useState<Array<{ id: string; display_name: string }>>([]);
+  const [fileManagerFolders, setFileManagerFolders] = useState<FileManagerFolder[]>([]);
+  const [fileManagerCurrentFolderId, setFileManagerCurrentFolderId] = useState<string | null>(null);
   const [fileManagerSearch, setFileManagerSearch] = useState('');
+  const [fileManagerSearchAll, setFileManagerSearchAll] = useState(false);
   const [selectedFileManagerIds, setSelectedFileManagerIds] = useState<Set<string>>(() => new Set());
 
   const selectedPages = useMemo(() => pages.filter((page) => page.selected), [pages]);
   const selectedCount = selectedPages.length;
   const totalBytes = useMemo(() => documents.reduce((sum, item) => sum + item.file.size, 0), [documents]);
+  const compressionItems = useMemo(() => selectedCount ? selectedPages : pages, [selectedCount, selectedPages, pages]);
+  const currentFileManagerFolder = useMemo(
+    () => fileManagerFolders.find((folder) => folder.id === fileManagerCurrentFolderId) || null,
+    [fileManagerFolders, fileManagerCurrentFolderId],
+  );
+  const fileManagerFolderPath = useMemo(() => {
+    const path: FileManagerFolder[] = [];
+    let current = currentFileManagerFolder;
+    let hops = 0;
+    while (current && hops < 30) {
+      path.unshift(current);
+      current = current.parent_id ? fileManagerFolders.find((folder) => folder.id === current!.parent_id) || null : null;
+      hops += 1;
+    }
+    return path;
+  }, [currentFileManagerFolder, fileManagerFolders]);
+  const visibleFileManagerFolders = useMemo(
+    () => fileManagerFolders.filter((folder) => folder.parent_id === fileManagerCurrentFolderId),
+    [fileManagerFolders, fileManagerCurrentFolderId],
+  );
+  const visibleFileManagerRows = useMemo(() => {
+    const query = fileManagerSearch.trim().toLocaleLowerCase();
+    return fileManagerRows.filter((row) => {
+      const folder = fileManagerFolders.find((item) => item.id === row.folder_id);
+      const folderPath = folder ? folder.display_name.toLocaleLowerCase() : '';
+      const inScope = fileManagerSearchAll || row.folder_id === fileManagerCurrentFolderId;
+      const matches = !query || row.original_name.toLocaleLowerCase().includes(query) || folderPath.includes(query);
+      return inScope && matches;
+    });
+  }, [fileManagerRows, fileManagerFolders, fileManagerCurrentFolderId, fileManagerSearch, fileManagerSearchAll]);
+
+  useEffect(() => {
+    if (!organizationId) return;
+    try {
+      const stored = localStorage.getItem('customs-os-pdfstudio-compression:' + organizationId);
+      if (stored) {
+        const parsed = JSON.parse(stored) as { settings?: CompressionSettings; profiles?: CompressionProfile[] };
+        if (parsed.settings) setCompressionSettings(parsed.settings);
+        if (Array.isArray(parsed.profiles)) setCompressionProfiles(parsed.profiles);
+      }
+    } catch {
+      // Local settings are an enhancement; blocked storage must not stop PDF Studio.
+    } finally {
+      setCompressionStorageReady(true);
+    }
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (!organizationId || !compressionStorageReady) return;
+    try {
+      localStorage.setItem('customs-os-pdfstudio-compression:' + organizationId, JSON.stringify({
+        settings: compressionSettings,
+        profiles: compressionProfiles,
+      }));
+    } catch {
+      // Settings remain active in the current session when browser storage is full or blocked.
+    }
+  }, [organizationId, compressionStorageReady, compressionSettings, compressionProfiles]);
+
+  const loadRecognitionSamples = useCallback(async () => {
+    if (!organizationId) return;
+    if (!['owner', 'admin', 'broker', 'accountant', 'warehouse'].includes(String(profile?.role || ''))) {
+      setRecognitionSamples([]);
+      return;
+    }
+    setRecognitionLoading(true);
+    try {
+      const { data, error: samplesError } = await (supabase as any).from('pdf_document_recognition_samples')
+        .select('id,document_type,sample_name,source_filename,page_count,features,created_at')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false });
+      if (samplesError) throw samplesError;
+      setRecognitionSamples((data || []) as RecognitionSample[]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'دریافت الگوهای تشخیص ناموفق بود.');
+    } finally {
+      setRecognitionLoading(false);
+    }
+  }, [organizationId, profile?.role]);
+
+  useEffect(() => { void loadRecognitionSamples(); }, [loadRecognitionSamples]);
 
   const loadFiles = useCallback(async (files: File[]) => {
     const acceptedFiles = files.filter((file) => {
@@ -140,12 +263,17 @@ export const PdfStudioPage: React.FC = () => {
           if (!context) throw new Error('امکان ساخت پیش‌نمایش صفحه وجود ندارد.');
           await page.render({ canvasContext: context, viewport }).promise;
           let pageText = '';
+          let pageFeatures: DocumentPageFeatures = { tokens: [], anchors: [], numericShapes: [], textLength: 0 };
+          const unitViewport = page.getViewport({ scale: 1 });
+          const pageArea = unitViewport.width * unitViewport.height;
           try {
             const textContent = await page.getTextContent();
             pageText = textContent.items.map((item: any) => typeof item.str === 'string' ? item.str : '').join(' ');
+            pageFeatures = buildDocumentPageFeatures(textContent.items as any[], unitViewport.width, unitViewport.height);
           } catch {
             // Image-only or unusual pages fall back to the source filename; do not block import.
           }
+          const recognized = pageFeatures.tokens.length ? recognizeDocumentPage(pageFeatures, recognitionSamples) : null;
           nextPages.push({
             id: id + '-page-' + pageNumber,
             documentId: id,
@@ -153,7 +281,11 @@ export const PdfStudioPage: React.FC = () => {
             thumbnail: canvas.toDataURL('image/jpeg', 0.72),
             rotation: 0,
             selected: false,
-            label: suggestDocumentLabel(pageText, file.name, pageNumber),
+            label: recognized && recognized.confidence >= 0.2
+              ? recognized.documentType
+              : suggestDocumentLabel(pageText, file.name, pageNumber),
+            features: pageFeatures,
+            pageArea,
           });
           canvas.width = 1;
           canvas.height = 1;
@@ -168,7 +300,7 @@ export const PdfStudioPage: React.FC = () => {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [recognitionSamples]);
 
   useEffect(() => () => { sourcePdfs.current.clear(); }, []);
 
@@ -233,59 +365,271 @@ export const PdfStudioPage: React.FC = () => {
     downloadBlob(new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), fileName.endsWith('.pdf') ? fileName : fileName + '.pdf');
   };
 
-  const rasterizePages = async (items: PageItem[], scale: number, quality: number): Promise<Blob> => {
-    if (!items.length) throw new Error('برای فشرده‌سازی هیچ صفحه‌ای انتخاب نشده است.');
-    const previewDocuments = new Map<string, any>();
+  const renderPdfPageJpeg = async (pdfPage: any, item: PageItem, settings: CompressionSettings) => {
+    const scale = settings.dpi / 72;
+    const rotation = (pdfPage.rotate + item.rotation) % 360;
+    const viewport = pdfPage.getViewport({ scale, rotation });
+    const baseViewport = pdfPage.getViewport({ scale: 1, rotation });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.ceil(viewport.width));
+    canvas.height = Math.max(1, Math.ceil(viewport.height));
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) throw new Error('امکان بازسازی صفحه وجود ندارد.');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.filter = settings.grayscale ? 'grayscale(1)' : 'none';
+    await pdfPage.render({ canvasContext: context, viewport }).promise;
+    context.filter = 'none';
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('ساخت تصویر فشرده صفحه ناموفق بود.')), 'image/jpeg', settings.quality)
+    );
+    const area = viewport.width * viewport.height;
+    canvas.width = 1;
+    canvas.height = 1;
+    return { blob, width: baseViewport.width, height: baseViewport.height, area };
+  };
+
+  const shouldPreservePageText = (page: PageItem) =>
+    page.features.textLength >= 18 || page.features.tokens.length >= 5;
+
+  const compressDocumentPages = async (
+    items: PageItem[],
+    settings: CompressionSettings,
+  ): Promise<{ blob: Blob; preservedPages: number; rasterizedPages: number }> => {
+    if (!items.length) throw new Error('صفحه‌ای برای فشرده‌سازی انتخاب نشده است.');
     const output = await PDFDocument.create();
+    const previewDocuments = new Map<string, any>();
+    let preservedPages = 0;
+    let rasterizedPages = 0;
     try {
       for (const item of items) {
         const source = sourcePdfs.current.get(item.documentId);
         if (!source) throw new Error('منبع یکی از صفحات در حافظه پیدا نشد.');
+        const keepText = settings.mode === 'preserve' || (settings.mode === 'smart' && shouldPreservePageText(item));
+        if (keepText) {
+          const [copied] = await output.copyPages(source, [item.pageIndex]);
+          if (item.rotation) copied.setRotation(degrees((copied.getRotation().angle + item.rotation) % 360));
+          output.addPage(copied);
+          preservedPages += 1;
+          continue;
+        }
+
         let preview = previewDocuments.get(item.documentId);
         if (!preview) {
-          const bytes = await source.save();
-          preview = await getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
+          const sourceBytes = await source.save();
+          preview = await getDocument({ data: new Uint8Array(sourceBytes.slice(0)) }).promise;
           previewDocuments.set(item.documentId, preview);
         }
         const sourcePage = await preview.getPage(item.pageIndex + 1);
-        const rotation = (sourcePage.rotate + item.rotation) % 360;
-        const viewport = sourcePage.getViewport({ scale, rotation });
-        const baseViewport = sourcePage.getViewport({ scale: 1, rotation });
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.ceil(viewport.width));
-        canvas.height = Math.max(1, Math.ceil(viewport.height));
-        const context = canvas.getContext('2d');
-        if (!context) throw new Error('امکان فشرده‌سازی صفحه وجود ندارد.');
-        await sourcePage.render({ canvasContext: context, viewport }).promise;
-        const imageBlob = await new Promise<Blob>((resolve, reject) =>
-          canvas.toBlob((value) => value ? resolve(value) : reject(new Error('ساخت تصویر فشرده صفحه ناموفق بود.')), 'image/jpeg', quality)
-        );
-        const image = await output.embedJpg(await imageBlob.arrayBuffer());
-        const targetPage = output.addPage([baseViewport.width, baseViewport.height]);
-        targetPage.drawImage(image, { x: 0, y: 0, width: baseViewport.width, height: baseViewport.height });
-        canvas.width = 1;
-        canvas.height = 1;
+        const rendered = await renderPdfPageJpeg(sourcePage, item, settings);
+        const embedded = await output.embedJpg(await rendered.blob.arrayBuffer());
+        const targetPage = output.addPage([rendered.width, rendered.height]);
+        targetPage.drawImage(embedded, { x: 0, y: 0, width: rendered.width, height: rendered.height });
+        rasterizedPages += 1;
       }
       const bytes = await output.save({ useObjectStreams: true });
-      return new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' });
+      return {
+        blob: new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }),
+        preservedPages,
+        rasterizedPages,
+      };
     } finally {
       await Promise.all([...previewDocuments.values()].map((preview) => preview.destroy().catch(() => undefined)));
     }
   };
 
   const compressPagesToTarget = async (items: PageItem[], targetBytes: number) => {
-    let bestSize = Number.POSITIVE_INFINITY;
-    const initialScale = Math.max(0.7, Math.min(1.8, compressionScale));
-    const initialQuality = Math.max(0.35, Math.min(0.9, compressionQuality));
-    for (let scale = initialScale; scale >= 0.69; scale = Math.round((scale - 0.15) * 100) / 100) {
-      for (let quality = initialQuality; quality >= 0.34; quality = Math.round((quality - 0.1) * 100) / 100) {
-        setStatus('فشرده‌سازی تطبیقی: وضوح ' + scale.toFixed(2) + ' و کیفیت ' + Math.round(quality * 100) + '٪…');
-        const blob = await rasterizePages(items, scale, quality);
-        bestSize = Math.min(bestSize, blob.size);
-        if (blob.size <= targetBytes) return { blob, scale, quality };
+    const attempts = [
+      { dpi: 240, quality: 0.9 },
+      { dpi: 210, quality: 0.86 },
+      { dpi: 180, quality: 0.82 },
+      { dpi: 150, quality: 0.78 },
+      { dpi: 120, quality: 0.72 },
+    ];
+    let smallest: Blob | null = null;
+    let used = attempts[attempts.length - 1];
+    for (const attempt of attempts) {
+      setStatus('فشرده‌سازی برای سقف ۲ مگابایت: ' + attempt.dpi + ' DPI و کیفیت ' + Math.round(attempt.quality * 100) + '٪…');
+      const result = await compressDocumentPages(items, {
+        mode: 'raster',
+        dpi: attempt.dpi,
+        quality: attempt.quality,
+        grayscale: compressionSettings.grayscale,
+      });
+      if (!smallest || result.blob.size < smallest.size) {
+        smallest = result.blob;
+        used = attempt;
       }
+      if (result.blob.size <= targetBytes) return { blob: result.blob, scale: attempt.dpi / 72, quality: attempt.quality };
     }
-    throw new Error('با تنظیمات فعلی رسیدن به سقف ۲ مگابایت ممکن نشد. کمترین حجم تولیدشده ' + formatSize(bestSize) + ' بود؛ وضوح یا کیفیت ورودی را کاهش دهید یا اسناد را به چند بخش تقسیم کنید.');
+    if (smallest && smallest.size <= targetBytes) return { blob: smallest, scale: used.dpi / 72, quality: used.quality };
+    throw new Error('با کمترین تنظیمات قابل‌قبول هم خروجی زیر ۲ مگابایت نشد. کمترین حجم به‌دست‌آمده: ' + formatSize(smallest?.size || 0) + '؛ برای حفظ خوانایی اعداد، اسناد را به چند خروجی تقسیم کنید.');
+  };
+
+  const estimateCompression = async () => {
+    if (!compressionItems.length) return setError('ابتدا فایل‌ها یا صفحه‌های موردنظر را انتخاب کنید.');
+    setCompressionEstimating(true);
+    setCompressionEstimate(null);
+    setError('');
+    try {
+      const settings = { ...compressionSettings };
+      const protectedIds = new Set(documents.filter((document) => document.hasProtectedFeatures).map((document) => document.id));
+      const preserved = compressionItems.filter((item) =>
+        protectedIds.has(item.documentId) || settings.mode === 'preserve' || (settings.mode === 'smart' && shouldPreservePageText(item))
+      );
+      const rasterPages = compressionItems.filter((item) => !preserved.includes(item));
+      const pageAreas = rasterPages.map((item) => item.pageArea * (settings.dpi / 72) ** 2);
+      const samples: Array<{ bytes: number; area: number }> = [];
+      const grouped = new Map<string, PageItem[]>();
+      for (const item of rasterPages) grouped.set(item.documentId, [...(grouped.get(item.documentId) || []), item]);
+      const previewDocuments = new Map<string, any>();
+      let preservedBytes = 0;
+      for (const document of documents) {
+        const items = compressionItems.filter((item) => item.documentId === document.id);
+        if (!items.length) continue;
+        const kept = items.filter((item) => preserved.includes(item));
+        if (document.hasProtectedFeatures) {
+          preservedBytes += document.file.size;
+        } else if (kept.length) {
+          preservedBytes += document.file.size * (kept.length / Math.max(1, document.pageCount));
+        }
+      }
+      try {
+        for (const [documentId, items] of grouped) {
+          const source = sourcePdfs.current.get(documentId);
+          if (!source) continue;
+          const sourceBytes = await source.save();
+          const preview = await getDocument({ data: new Uint8Array(sourceBytes.slice(0)) }).promise;
+          previewDocuments.set(documentId, preview);
+          const sampleIndices = [...new Set([0, Math.floor((items.length - 1) / 2), items.length - 1])];
+          for (const index of sampleIndices) {
+            const item = items[index];
+            const page = await preview.getPage(item.pageIndex + 1);
+            const rendered = await renderPdfPageJpeg(page, item, settings);
+            samples.push({ bytes: rendered.blob.size, area: rendered.area });
+          }
+        }
+      } finally {
+        await Promise.all([...previewDocuments.values()].map((preview) => preview.destroy().catch(() => undefined)));
+      }
+      const imageEstimate = estimateJpegBytesFromSamples(samples, pageAreas, rasterPages.length * 18_000);
+      const overhead = compressionItems.length * 14_000;
+      const expected = Math.round(imageEstimate.expected + preservedBytes + overhead);
+      const low = Math.round(imageEstimate.low + preservedBytes + overhead * 0.75);
+      const high = Math.round(imageEstimate.high + preservedBytes + overhead * 1.35);
+      setCompressionEstimate({
+        low: Math.max(0, low),
+        expected: Math.max(0, expected),
+        high: Math.max(0, high),
+        preservedPages: preserved.length,
+        rasterizedPages: rasterPages.length,
+        sampledPages: samples.length,
+      });
+      setStatus('برآورد حجم با نمونه‌گیری از ' + samples.length + ' صفحه انجام شد؛ این عدد تخمینی است و حجم نهایی پس از ساخت PDF دقیق مشخص می‌شود.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'برآورد حجم خروجی ناموفق بود.');
+    } finally {
+      setCompressionEstimating(false);
+    }
+  };
+
+  const compressActivePdf = async () => {
+    if (!documents.length || !compressionItems.length) return setError('ابتدا فایل یا صفحه برای فشرده‌سازی انتخاب کنید.');
+    if (compressionSettings.mode === 'raster' && !window.confirm('در حالت فشرده‌سازی کامل، صفحه‌های فایل‌های عادی به تصویر تبدیل می‌شوند و متن قابل جست‌وجو، فرم‌ها، لینک‌ها و لایه‌ها حفظ نمی‌شوند. فایل‌های دارای امضای دیجیتال یا فرم محافظت‌شده بدون تغییر داخل ZIP می‌مانند. فایل‌های اصلی تغییر نمی‌کنند. ادامه می‌دهید؟')) return;
+    setBusy(true);
+    setError('');
+    try {
+      const outputFiles: Record<string, Uint8Array> = {};
+      let originalTotal = 0;
+      let outputTotal = 0;
+      let preservedTotal = 0;
+      let rasterizedTotal = 0;
+      for (const document of documents) {
+        const items = compressionItems.filter((item) => item.documentId === document.id);
+        if (!items.length) continue;
+        const sourceOriginal = await document.file.arrayBuffer();
+        const originalPages = document.hasProtectedFeatures ? sourceOriginal : await createPdfBytes(items);
+        originalTotal += originalPages.byteLength;
+        let outputBlob: Blob;
+        if (document.hasProtectedFeatures) {
+          outputBlob = new Blob([sourceOriginal], { type: 'application/pdf' });
+        } else if (compressionSettings.mode === 'preserve') {
+          const candidate = await compressDocumentPages(items, compressionSettings);
+          outputBlob = candidate.blob;
+          preservedTotal += candidate.preservedPages;
+        } else {
+          const candidate = await compressDocumentPages(items, compressionSettings);
+          const originalPages = await createPdfBytes(items);
+          outputBlob = candidate.blob.size < originalPages.byteLength
+            ? candidate.blob
+            : new Blob([toArrayBuffer(originalPages)], { type: 'application/pdf' });
+          preservedTotal += candidate.preservedPages;
+          rasterizedTotal += candidate.rasterizedPages;
+        }
+        const baseName = safeName(document.file.name);
+        let outputName = baseName + '-compressed.pdf';
+        let duplicateIndex = 2;
+        while (outputFiles[outputName]) {
+          outputName = baseName + '-' + duplicateIndex + '-compressed.pdf';
+          duplicateIndex += 1;
+        }
+        outputFiles[outputName] = new Uint8Array(await outputBlob.arrayBuffer());
+        outputTotal += outputBlob.size;
+      }
+      if (!Object.keys(outputFiles).length) throw new Error('هیچ فایل خروجی ساخته نشد.');
+      const archive = zipSync(outputFiles, { level: 0 });
+      const archiveBytes = archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer;
+      const outputBlob = new Blob([archiveBytes], { type: 'application/zip' });
+      const profileName = compressionProfileName.trim() || 'تنظیمات فعلی';
+      const outputName = 'PDF-Studio-' + safeName(profileName) + '-compressed.zip';
+      const run: CompressionRun = {
+        id: crypto.randomUUID(),
+        name: outputName,
+        blob: outputBlob,
+        size: outputBlob.size,
+        originalSize: originalTotal,
+        savedPercent: originalTotal ? Math.max(0, Math.round((1 - outputTotal / originalTotal) * 100)) : 0,
+        profileName,
+        settings: { ...compressionSettings },
+        createdAt: new Date().toISOString(),
+      };
+      setCompressionRuns((previous) => [run, ...previous]);
+      downloadBlob(outputBlob, outputName);
+      setStatus(
+        'بسته فشرده‌سازی آماده دانلود شد: ' + formatSize(outputBlob.size) +
+        '؛ صفحات با متن حفظشده: ' + preservedTotal +
+        '؛ صفحات تصویری بازسازی‌شده: ' + rasterizedTotal +
+        '؛ فایل‌های دارای امضای دیجیتال/فرم محافظت‌شده بدون تغییر داخل بسته قرار گرفتند.'
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'فشرده‌سازی فایل‌ها ناموفق بود.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveCompressionProfile = () => {
+    const name = compressionProfileName.trim();
+    if (!name) return setError('برای تنظیمات فشرده‌سازی نام وارد کنید.');
+    setCompressionProfiles((previous) => [
+      { id: crypto.randomUUID(), name, settings: { ...compressionSettings } },
+      ...previous.filter((profile) => profile.name !== name),
+    ]);
+    setStatus('تنظیمات «' + name + '» ذخیره شد و با ساخت خروجی‌های بعدی از بین نمی‌رود.');
+  };
+
+  const applyCompressionProfile = (id: string) => {
+    const profile = compressionProfiles.find((item) => item.id === id);
+    if (!profile) return;
+    setCompressionSettings({ ...profile.settings });
+    setCompressionProfileName(profile.name);
+    setCompressionEstimate(null);
+  };
+
+  const downloadCompressionRun = (run: CompressionRun) => downloadBlob(run.blob, run.name);
+
+  const compressScans = async () => {
+    await compressActivePdf();
   };
 
   const exportMerged = async (onlySelected = false) => {
@@ -364,65 +708,6 @@ export const PdfStudioPage: React.FC = () => {
       setStatus(Object.keys(outputFiles).length + ' خروجی مستقل در بسته «' + packageName + '» ساخته شد. هر ردیف می‌تواند بازه یا چند صفحه پراکنده داشته باشد.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'ساخت خروجی‌ها ناموفق بود.');
-    } finally {
-      setBusy(false);
-    }
-  };
-  const compressActivePdf = async () => {
-    if (!documents.length) return setError('ابتدا فایل PDF یا تصویر اضافه کنید.');
-    setBusy(true);
-    setError('');
-    try {
-      let totalBefore = 0;
-      let totalAfter = 0;
-      let skippedProtected = 0;
-      for (const source of documents) {
-        if (source.hasProtectedFeatures) { skippedProtected += 1; continue; }
-        const items = pages.filter((page) => page.documentId === source.id);
-        const originalBytes = await createPdfBytes(items);
-        const candidateDocument = await PDFDocument.load(originalBytes);
-        const candidateBytes = await candidateDocument.save({ useObjectStreams: true });
-        const optimizedBlob = new Blob([toArrayBuffer(candidateBytes)], { type: 'application/pdf' });
-        const originalBlob = new Blob([toArrayBuffer(originalBytes)], { type: 'application/pdf' });
-        const output = optimizedBlob.size < originalBlob.size ? optimizedBlob : originalBlob;
-        downloadBlob(output, safeName(source.file.name) + '-optimized.pdf');
-        totalBefore += originalBlob.size;
-        totalAfter += output.size;
-      }
-      const saved = Math.max(0, totalBefore - totalAfter);
-      setStatus(saved > 0
-        ? 'بهینه‌سازی ساختاری انجام شد؛ مجموعاً ' + formatSize(saved) + ' کاهش حجم داشت. ' + (skippedProtected ? skippedProtected + ' فایل محافظت‌شده بدون تغییر کنار گذاشته شد.' : 'صفحات و چرخش‌های انتخاب‌شده حفظ شدند.')
-        : 'کاهش حجم ساختاری به‌دست نیامد؛ نسخه PDF بدون تغییر به‌عنوان خروجی داده شد. فایل‌های محافظت‌شده: ' + skippedProtected + ' مورد.');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'بهینه‌سازی PDF ناموفق بود.');
-    } finally {
-      setBusy(false);
-    }
-  };
-  const compressScans = async () => {
-    if (!documents.length) return setError('ابتدا فایل PDF یا تصویر اضافه کنید.');
-    const accepted = window.confirm(
-      'این روش صفحات را به تصویر تبدیل می‌کند. کیفیت و وضوح با تنظیمات زیر کنترل می‌شوند؛ متن، فرم‌ها، لینک‌ها، لایه‌ها و امضاهای دیجیتال در نسخه خروجی حفظ نمی‌شوند. فایل اصلی تغییر نمی‌کند. ادامه می‌دهید؟'
-    );
-    if (!accepted) return;
-    setBusy(true);
-    setError('');
-    try {
-      let totalBefore = 0;
-      let totalAfter = 0;
-      for (const source of documents) {
-        const items = pages.filter((page) => page.documentId === source.id);
-        const originalPdf = await createPdfBytes(items);
-        const resultBlob = await rasterizePages(items, compressionScale, compressionQuality);
-        const smaller = resultBlob.size < originalPdf.byteLength;
-        const output = smaller ? resultBlob : new Blob([toArrayBuffer(originalPdf)], { type: 'application/pdf' });
-        downloadBlob(output, safeName(source.file.name) + (smaller ? '-compressed.pdf' : '-optimized.pdf'));
-        totalBefore += originalPdf.byteLength;
-        totalAfter += output.size;
-      }
-      setStatus('فشرده‌سازی با وضوح ' + compressionScale.toFixed(2) + ' و کیفیت ' + Math.round(compressionQuality * 100) + '٪ انجام شد؛ حجم مجموعه از ' + formatSize(totalBefore) + ' به ' + formatSize(totalAfter) + ' رسید. فایل‌های اصلی حفظ شدند.');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'فشرده‌سازی تصویری ناموفق بود.');
     } finally {
       setBusy(false);
     }
@@ -519,11 +804,11 @@ export const PdfStudioPage: React.FC = () => {
     setFileManagerLoading(true);
     try {
       const { data: folderData, error: folderError } = await supabase.from('file_manager_folders')
-        .select('id,display_name')
+        .select('id,parent_id,display_name,folder_type')
         .eq('organization_id', organizationId)
         .order('display_name', { ascending: true });
       if (folderError) throw folderError;
-      const folderRows = (folderData || []) as Array<{ id: string; display_name: string }>;
+      const folderRows = (folderData || []) as FileManagerFolder[];
       setFileManagerFolders(folderRows);
       const allRows: FileManagerRow[] = [];
       for (let offset = 0; ; offset += 500) {
@@ -549,6 +834,9 @@ export const PdfStudioPage: React.FC = () => {
 
   const openFileManager = async () => {
     setFileManagerOpen(true);
+    setFileManagerCurrentFolderId(null);
+    setFileManagerSearch('');
+    setFileManagerSearchAll(false);
     setError('');
     try {
       await loadFileManagerRows();
@@ -596,6 +884,210 @@ export const PdfStudioPage: React.FC = () => {
     });
   };
 
+  const analyzeAndSaveSample = async () => {
+    if (!sampleFile) return setError('ابتدا یک PDF نمونه انتخاب کنید.');
+    if (sampleDocumentType.trim().length < 2) return setError('نوع سند نمونه را مشخص کنید.');
+    setTrainingBusy(true);
+    setTrainingProgress('آماده‌سازی نمونه در همین دستگاه…');
+    setError('');
+    try {
+      const sourceBytes = await sampleFile.arrayBuffer();
+      const isImage = /^image\//i.test(sampleFile.type) || /\.(png|jpe?g)$/i.test(sampleFile.name);
+      let pdfBytes: Uint8Array = new Uint8Array(sourceBytes.slice(0));
+      if (isImage) {
+        const imagePdf = await PDFDocument.create();
+        const image = sampleFile.type === 'image/png' || /\.png$/i.test(sampleFile.name)
+          ? await imagePdf.embedPng(sourceBytes)
+          : await imagePdf.embedJpg(sourceBytes);
+        const scale = Math.min(1, 1440 / Math.max(image.width, image.height));
+        const width = image.width * scale;
+        const height = image.height * scale;
+        const page = imagePdf.addPage([width, height]);
+        page.drawImage(image, { x: 0, y: 0, width, height });
+        pdfBytes = await imagePdf.save();
+      }
+      const pdf = await getDocument({ data: new Uint8Array(pdfBytes.slice(0)) }).promise;
+      const samplePageCount = pdf.numPages;
+      const pageFeatures: DocumentPageFeatures[] = [];
+      let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
+      try {
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          setTrainingProgress('تحلیل صفحه ' + pageNumber + ' از ' + pdf.numPages + '…');
+          const page = await pdf.getPage(pageNumber);
+          const unitViewport = page.getViewport({ scale: 1 });
+          const textContent = await page.getTextContent();
+          let features = buildDocumentPageFeatures(textContent.items as any[], unitViewport.width, unitViewport.height);
+          if (features.tokens.length < 4) {
+            if (!worker) {
+              setTrainingProgress('بارگذاری موتور OCR فارسی و انگلیسی…');
+              worker = await createWorker('fas+eng');
+            }
+            const viewport = page.getViewport({ scale: Math.min(2.4, 1800 / Math.max(unitViewport.width, unitViewport.height)) });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.ceil(viewport.width));
+            canvas.height = Math.max(1, Math.ceil(viewport.height));
+            const context = canvas.getContext('2d', { alpha: false });
+            if (!context) throw new Error('امکان آماده‌سازی تصویر نمونه برای OCR وجود ندارد.');
+            context.fillStyle = '#fff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            await page.render({ canvasContext: context, viewport }).promise;
+            const result = await worker.recognize(canvas);
+            const ocrData = result.data as any;
+            const ocrWords = (ocrData.words || []).map((word: any) => ({
+              text: word.text,
+              bbox: word.bbox,
+              confidence: word.confidence,
+            }));
+            features = buildDocumentPageFeaturesFromText(ocrData.text || '', ocrWords, canvas.width, canvas.height);
+            canvas.width = 1;
+            canvas.height = 1;
+          }
+          pageFeatures.push(features);
+        }
+      } finally {
+        await worker?.terminate();
+        await pdf.destroy();
+      }
+      const digest = await crypto.subtle.digest('SHA-256', sourceBytes);
+      const sampleHash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error('نشست معتبر نیست؛ دوباره وارد سامانه شوید.');
+      const sampleName = sampleDisplayName.trim() || sampleFile.name;
+      const sampleRecord = {
+        organization_id: organizationId,
+        document_type: sampleDocumentType.trim(),
+        sample_name: sampleName,
+        source_filename: sampleFile.name,
+        source_mime_type: sampleFile.type || 'application/pdf',
+        sample_hash: sampleHash,
+        page_count: samplePageCount,
+        features: { version: 1, featureSource: 'local-text-and-ocr', pages: pageFeatures },
+        created_by: authData.user.id,
+      };
+      const { data, error: saveError } = await (supabase as any).from('pdf_document_recognition_samples')
+        .insert(sampleRecord)
+        .select('id,document_type,sample_name,source_filename,page_count,features,created_at')
+        .single();
+      if (saveError && saveError.code !== '23505') throw saveError;
+      let resultSample = data as RecognitionSample | null;
+      if (saveError?.code === '23505') {
+        const { data: existing, error: existingError } = await (supabase as any).from('pdf_document_recognition_samples')
+          .select('id,document_type,sample_name,source_filename,page_count,features,created_at')
+          .eq('organization_id', organizationId)
+          .eq('document_type', sampleDocumentType.trim())
+          .eq('sample_hash', sampleHash)
+          .single();
+        if (existingError) throw existingError;
+        resultSample = existing as RecognitionSample;
+      }
+      if (!resultSample) throw new Error('نمونه ذخیره نشد.');
+      const savedSample = resultSample;
+      setRecognitionSamples((previous) => [savedSample!, ...previous.filter((item) => item.id !== savedSample!.id)]);
+      setPages((previous) => previous.map((page) => {
+        const match = recognizeDocumentPage(page.features, [savedSample]);
+        return match && match.confidence >= 0.2
+          ? { ...page, label: match.documentType }
+          : page;
+      }));
+      setStatus('نمونه «' + sampleName + '» به الگوی «' + sampleDocumentType.trim() + '» اضافه شد. فقط ویژگی‌های متن و چیدمان ذخیره شدند؛ فایل نمونه روی سرور بارگذاری نشد.');
+      setSampleDisplayName('');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'تحلیل یا ذخیره نمونه ناموفق بود.');
+    } finally {
+      setTrainingBusy(false);
+      setTrainingProgress('');
+      if (sampleInputRef.current) sampleInputRef.current.value = '';
+    }
+  };
+
+  const runWorkspaceRecognition = async (withOcr: boolean) => {
+    if (!pages.length) return setError('ابتدا فایل‌های موردنظر را اضافه کنید.');
+    if (!recognitionSamples.length) return setError('ابتدا چند نمونه برچسب‌گذاری‌شده در آزمایشگاه تشخیص ذخیره کنید.');
+    setBusy(true);
+    setRecognitionProgress('مقایسه با الگوهای ذخیره‌شده…');
+    setError('');
+    let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
+    const previewDocuments = new Map<string, any>();
+    let matched = 0;
+    try {
+      const nextPages: PageItem[] = [];
+      for (let index = 0; index < pages.length; index += 1) {
+        const pageItem = pages[index];
+        let features = pageItem.features;
+        if (withOcr && features.tokens.length < 4) {
+          if (!worker) {
+            setRecognitionProgress('راه‌اندازی OCR فارسی/انگلیسی…');
+            worker = await createWorker('fas+eng');
+          }
+          const source = sourcePdfs.current.get(pageItem.documentId);
+          if (source) {
+            let preview = previewDocuments.get(pageItem.documentId);
+            if (!preview) {
+              const bytes = await source.save();
+              preview = await getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
+              previewDocuments.set(pageItem.documentId, preview);
+            }
+            setRecognitionProgress('خواندن متن اسکن صفحه ' + (index + 1) + ' از ' + pages.length + '…');
+            const sourcePage = await preview.getPage(pageItem.pageIndex + 1);
+            const unitViewport = sourcePage.getViewport({ scale: 1 });
+            const scale = Math.min(2.4, 1800 / Math.max(unitViewport.width, unitViewport.height));
+            const viewport = sourcePage.getViewport({ scale });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.ceil(viewport.width));
+            canvas.height = Math.max(1, Math.ceil(viewport.height));
+            const context = canvas.getContext('2d', { alpha: false });
+            if (!context) throw new Error('امکان آماده‌سازی اسکن برای OCR وجود ندارد.');
+            context.fillStyle = '#fff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            await sourcePage.render({ canvasContext: context, viewport }).promise;
+            const result = await worker.recognize(canvas);
+            const ocrData = result.data as any;
+            const words = (ocrData.words || []).map((word: any) => ({
+              text: word.text,
+              bbox: word.bbox,
+              confidence: word.confidence,
+            }));
+            features = buildDocumentPageFeaturesFromText(ocrData.text || '', words, canvas.width, canvas.height);
+            canvas.width = 1;
+            canvas.height = 1;
+          }
+        }
+        const match = recognizeDocumentPage(features, recognitionSamples);
+        if (match && match.confidence >= 0.2) matched += 1;
+        nextPages.push({
+          ...pageItem,
+          features,
+          ...(match && match.confidence >= 0.2 ? { label: match.documentType } : {}),
+        });
+      }
+      setPages(nextPages);
+      setStatus(matched + ' صفحه با الگوهای ذخیره‌شده تطبیق داده شد؛ ' + (withOcr ? 'OCR برای صفحات تصویری هم اجرا شد.' : 'صفحات اسکن‌شده OCR نشدند.'));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'تشخیص اسناد ناموفق بود.');
+    } finally {
+      await worker?.terminate();
+      await Promise.all([...previewDocuments.values()].map((preview) => preview.destroy().catch(() => undefined)));
+      setBusy(false);
+      setRecognitionProgress('');
+    }
+  };
+
+  const deleteRecognitionSample = async (sample: RecognitionSample) => {
+    if (!window.confirm('الگوی «' + sample.document_type + '» حذف شود؟ فایل اصلی نمونه در هیچ‌جا ذخیره نشده است.')) return;
+    setRecognitionLoading(true);
+    try {
+      const { error: deleteError } = await (supabase as any).from('pdf_document_recognition_samples')
+        .delete().eq('id', sample.id).eq('organization_id', organizationId);
+      if (deleteError) throw deleteError;
+      setRecognitionSamples((previous) => previous.filter((item) => item.id !== sample.id));
+      setStatus('الگوی تشخیص حذف شد.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'حذف الگو ناموفق بود.');
+    } finally {
+      setRecognitionLoading(false);
+    }
+  };
+
   const resetWorkspace = () => {
     sourcePdfs.current.clear();
     setDocuments([]);
@@ -622,6 +1114,14 @@ export const PdfStudioPage: React.FC = () => {
             <Link to="/office" className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold">دبیرخانه</Link>
           </div>
         </header>
+
+        <nav className="sticky top-0 z-20 grid grid-cols-3 gap-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-sm" aria-label="بخش‌های PDF Studio">
+          <button type="button" onClick={() => setStudioTab('pages')} className={'min-h-10 rounded-xl px-2 text-xs font-bold ' + (studioTab === 'pages' ? 'bg-blue-600 text-white' : 'text-[var(--muted)]')}>صفحات ({pages.length})</button>
+          <button type="button" onClick={() => setStudioTab('outputs')} className={'min-h-10 rounded-xl px-2 text-xs font-bold ' + (studioTab === 'outputs' ? 'bg-blue-600 text-white' : 'text-[var(--muted)]')}>خروجی و فشرده‌سازی</button>
+          {['owner', 'admin', 'broker', 'accountant', 'warehouse'].includes(String(profile?.role || '')) && (
+            <button type="button" onClick={() => setStudioTab('recognition')} className={'min-h-10 rounded-xl px-2 text-xs font-bold ' + (studioTab === 'recognition' ? 'bg-blue-600 text-white' : 'text-[var(--muted)]')}>آزمایشگاه تشخیص</button>
+          )}
+        </nav>
 
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -654,19 +1154,46 @@ export const PdfStudioPage: React.FC = () => {
         {fileManagerOpen && (
           <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div><h2 className="font-black">فراخوانی چندفایلی از فایل‌منیجر</h2><p className="mt-1 text-xs text-[var(--muted)]">فایل‌های PDF و تصویر را از پوشه‌های مجاز سازمان انتخاب کنید. می‌توانید این کار را هر چند بار تکرار کنید.</p></div>
+              <div><h2 className="font-black">انتخاب از پوشه‌های فایل‌منیجر</h2><p className="mt-1 text-xs text-[var(--muted)]">پوشه‌ها را باز کنید و از چند پوشه فایل انتخاب کنید؛ انتخاب‌ها هنگام جابه‌جایی بین پوشه‌ها حفظ می‌شوند.</p></div>
               <button type="button" onClick={() => setFileManagerOpen(false)} className="rounded-lg border border-[var(--border)] p-2" aria-label="بستن"><X size={16}/></button>
             </div>
-            <input value={fileManagerSearch} onChange={(event) => setFileManagerSearch(event.target.value)} placeholder="جست‌وجو بر اساس نام فایل یا پوشه…" className="mt-3 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => setFileManagerCurrentFolderId(null)} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">ریشه فایل‌منیجر</button>
+              {fileManagerFolderPath.map((folder) => (
+                <button key={folder.id} type="button" onClick={() => setFileManagerCurrentFolderId(folder.id)} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs">{folder.display_name}</button>
+              ))}
+              {currentFileManagerFolder?.parent_id && (
+                <button type="button" onClick={() => setFileManagerCurrentFolderId(currentFileManagerFolder.parent_id)} className="mr-auto rounded-lg border border-[var(--border)] px-3 py-2 text-xs">بازگشت به پوشه بالاتر</button>
+              )}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              {visibleFileManagerFolders.map((folder) => {
+                const count = fileManagerRows.filter((row) => row.folder_id === folder.id).length;
+                const nested = fileManagerFolders.some((item) => item.parent_id === folder.id);
+                return (
+                  <button key={folder.id} type="button" onClick={() => setFileManagerCurrentFolderId(folder.id)} className="flex min-h-16 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-2 text-right">
+                    <Folder size={20} className="shrink-0 text-blue-400"/>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-bold">{folder.display_name}</span>
+                      <span className="mt-1 block text-[10px] text-[var(--muted)]">{count} فایل {nested ? '· زیرپوشه دارد' : ''}</span>
+                    </span>
+                    <ChevronLeft size={15} className="shrink-0 text-[var(--muted)]"/>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input value={fileManagerSearch} onChange={(event) => setFileManagerSearch(event.target.value)} placeholder="جست‌وجوی اختیاری در فایل‌های این پوشه…" className="min-h-10 min-w-[12rem] flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+              <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                <input type="checkbox" checked={fileManagerSearchAll} onChange={(event) => setFileManagerSearchAll(event.target.checked)} className="h-4 w-4"/>
+                جست‌وجو در همه پوشه‌ها
+              </label>
+            </div>
             {fileManagerLoading ? (
-              <div className="flex items-center gap-2 py-6 text-sm text-[var(--muted)]"><Loader2 className="animate-spin" size={17}/> در حال دریافت فهرست…</div>
+              <div className="flex items-center gap-2 py-6 text-sm text-[var(--muted)]"><Loader2 className="animate-spin" size={17}/> در حال دریافت فایل‌ها…</div>
             ) : (
-              <div className="mt-3 max-h-72 space-y-1 overflow-y-auto">
-                {fileManagerRows.filter((row) => {
-                  const folderName = fileManagerFolders.find((folder) => folder.id === row.folder_id)?.display_name || '';
-                  const query = fileManagerSearch.trim().toLocaleLowerCase();
-                  return !query || row.original_name.toLocaleLowerCase().includes(query) || folderName.toLocaleLowerCase().includes(query);
-                }).map((row) => (
+              <div className="mt-3 max-h-[38dvh] space-y-1 overflow-y-auto overscroll-contain">
+                {visibleFileManagerRows.map((row) => (
                   <label key={row.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[var(--border)] p-2 text-xs">
                     <input type="checkbox" checked={selectedFileManagerIds.has(row.id)} onChange={() => toggleFileManagerSelection(row.id)} className="h-4 w-4"/>
                     <FileText size={16} className="shrink-0 text-blue-400"/>
@@ -677,18 +1204,20 @@ export const PdfStudioPage: React.FC = () => {
                     <span className="text-[10px] text-[var(--muted)]">{row.mime_type}</span>
                   </label>
                 ))}
-                {!fileManagerRows.length && <p className="py-5 text-center text-xs text-[var(--muted)]">فایل PDF یا تصویر قابل فراخوانی پیدا نشد.</p>}
+                {!visibleFileManagerFolders.length && !visibleFileManagerRows.length && <p className="py-5 text-center text-xs text-[var(--muted)]">در این پوشه فایل یا زیرپوشه‌ای نیست.</p>}
+                {fileManagerSearchAll && fileManagerSearch && visibleFileManagerRows.length > 0 && <p className="px-2 py-1 text-[10px] text-[var(--muted)]">نمایش نتیجه از پوشه‌های مختلف؛ پوشه مبدأ کنار هر فایل آمده است.</p>}
               </div>
             )}
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs text-[var(--muted)]">{selectedFileManagerIds.size} فایل انتخاب شده</span>
-              <button type="button" onClick={() => void loadSelectedFromFileManager()} disabled={busy || fileManagerLoading || !selectedFileManagerIds.size} className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40">افزودن فایل‌های انتخاب‌شده به محیط کار</button>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
+              <span className="text-xs text-[var(--muted)]">{selectedFileManagerIds.size} فایل از پوشه‌های مختلف انتخاب شده</span>
+              <button type="button" onClick={() => void loadSelectedFromFileManager()} disabled={busy || fileManagerLoading || !selectedFileManagerIds.size} className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40">افزودن فایل‌های انتخاب‌شده</button>
             </div>
           </section>
         )}
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+        {(studioTab === 'pages' || studioTab === 'outputs') && (
+        <section className="grid gap-4">
+          {studioTab === 'pages' && <div className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div><h2 className="font-black">ترتیب صفحات</h2><p className="mt-1 text-xs text-[var(--muted)]">برای تغییر ترتیب، صفحه را بکشید یا از فلش‌های بالا و پایین استفاده کنید.</p></div>
               {busy && <span className="inline-flex items-center gap-2 text-xs text-blue-400"><Loader2 className="animate-spin" size={16}/> در حال پردازش…</span>}
@@ -707,8 +1236,8 @@ export const PdfStudioPage: React.FC = () => {
                           {page.selected && <span className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-blue-600 text-white"><Check size={14}/></span>}
                         </div>
                         <div className="mt-2 truncate text-xs font-bold">{source?.file.name || 'PDF'}</div>
-                        <input value={page.label} onClick={(event) => event.stopPropagation()} onChange={(event) => updatePage(page.id, { label: event.target.value })} aria-label="نام پیشنهادی صفحه" className="mt-2 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-[11px]" placeholder="نام سند این صفحه"/>
                       </button>
+                      <input value={page.label} onChange={(event) => updatePage(page.id, { label: event.target.value })} aria-label="نام پیشنهادی صفحه" className="mt-2 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-[11px]" placeholder="نام سند این صفحه"/>
                       <div className="mt-2 flex items-center justify-between gap-1">
                         <span className="text-[10px] text-[var(--muted)]">ترتیب خروجی: {index + 1}</span>
                         <div className="flex gap-1">
@@ -730,9 +1259,9 @@ export const PdfStudioPage: React.FC = () => {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
-          <aside className="space-y-3">
+          {studioTab === 'outputs' && <aside className="grid gap-3 md:grid-cols-2">
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
               <h3 className="mb-3 font-black">قالب خروجی و جداسازی چندبخشی</h3>
               <label className="block text-xs text-[var(--muted)]">نوع بسته خروجی</label>
@@ -783,22 +1312,171 @@ export const PdfStudioPage: React.FC = () => {
             </section>
 
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-              <h3 className="mb-2 font-black">فشرده‌سازی قابل تنظیم</h3>
-              <label className="block text-xs text-[var(--muted)]">کیفیت تصویر: {Math.round(compressionQuality * 100)}٪</label>
-              <input type="range" min="0.35" max="0.9" step="0.05" value={compressionQuality} onChange={(event) => setCompressionQuality(Number(event.target.value))} className="mt-2 w-full"/>
-              <label className="mt-3 block text-xs text-[var(--muted)]">وضوح بازسازی: {compressionScale.toFixed(1)}×</label>
-              <input type="range" min="0.7" max="1.8" step="0.1" value={compressionScale} onChange={(event) => setCompressionScale(Number(event.target.value))} className="mt-2 w-full"/>
-              <button type="button" onClick={() => void compressActivePdf()} disabled={busy || !documents.length} className="mt-3 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs font-bold disabled:opacity-40"><ShieldCheck className="ml-1 inline" size={15}/> بهینه‌سازی ساختاری و حفظ متن</button>
-              <button type="button" onClick={() => void compressScans()} disabled={busy || !documents.length} className="mt-2 w-full rounded-xl border border-amber-500/30 px-3 py-2.5 text-xs font-bold text-amber-600 disabled:opacity-40"><Sparkles className="ml-1 inline" size={15}/> فشرده‌سازی تصویری با تنظیمات بالا</button>
-              <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">کاهش وضوح یا کیفیت، حجم را کمتر و کیفیت چاپ را پایین‌تر می‌آورد. فایل اصلی همیشه حفظ می‌شود؛ نسخه تصویری متن قابل جست‌وجو و امضای دیجیتال را نگه نمی‌دارد.</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-black">فشرده‌سازی هوشمند پیشرفته</h3>
+                <span className="text-[10px] text-emerald-500">پیش‌فرض: حفظ خوانایی اعداد</span>
+              </div>
+              <label className="mt-3 block text-xs text-[var(--muted)]">روش فشرده‌سازی</label>
+              <select value={compressionSettings.mode} onChange={(event) => { setCompressionSettings((old) => ({ ...old, mode: event.target.value as CompressionSettings['mode'] })); setCompressionEstimate(null); }} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
+                <option value="smart">هوشمند ترکیبی؛ متن حفظ شود، اسکن‌ها فشرده شوند</option>
+                <option value="preserve">ساختاری؛ حفظ کامل متن و صفحات</option>
+                <option value="raster">فشرده‌سازی تصویری کامل همه صفحات</option>
+              </select>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-[var(--muted)]">کیفیت تصویر: {Math.round(compressionSettings.quality * 100)}٪</label>
+                  <input type="range" min="0.65" max="0.98" step="0.01" value={compressionSettings.quality} onChange={(event) => { setCompressionSettings((old) => ({ ...old, quality: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--muted)]">وضوح: {compressionSettings.dpi} DPI</label>
+                  <input type="range" min="120" max="300" step="15" value={compressionSettings.dpi} onChange={(event) => { setCompressionSettings((old) => ({ ...old, dpi: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
+                </div>
+              </div>
+              <label className="mt-3 flex items-center gap-2 text-xs text-[var(--muted)]">
+                <input type="checkbox" checked={compressionSettings.grayscale} onChange={(event) => { setCompressionSettings((old) => ({ ...old, grayscale: event.target.checked })); setCompressionEstimate(null); }} className="h-4 w-4"/>
+                تبدیل صفحات تصویری به سیاه‌وسفید (برای متن؛ عکس و لیبل رنگی را خاموش بگذارید)
+              </label>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input value={compressionProfileName} onChange={(event) => setCompressionProfileName(event.target.value)} placeholder="نام تنظیمات؛ مثلا اسکن خوانا" className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs"/>
+                <button type="button" onClick={saveCompressionProfile} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">ذخیره تنظیمات</button>
+              </div>
+              <select defaultValue="" onChange={(event) => applyCompressionProfile(event.target.value)} className="mt-2 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs">
+                <option value="">بازیابی تنظیمات ذخیره‌شده…</option>
+                {compressionProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+              </select>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => void estimateCompression()} disabled={busy || compressionEstimating || !compressionItems.length} className="min-h-10 rounded-xl border border-[var(--border)] px-2 py-2 text-xs font-bold disabled:opacity-40">
+                  {compressionEstimating ? 'در حال برآورد…' : 'برآورد حجم قبل از پردازش'}
+                </button>
+                <button type="button" onClick={() => void compressActivePdf()} disabled={busy || !compressionItems.length} className="min-h-10 rounded-xl bg-blue-600 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
+                  {busy ? 'در حال فشرده‌سازی…' : 'فشرده‌سازی و دانلود ZIP'}
+                </button>
+              </div>
+              {compressionEstimate && (
+                <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+                  <div className="text-xs font-bold">حجم تخمینی بسته خروجی</div>
+                  <div className="mt-1 text-lg font-black tabular-nums">{formatSize(compressionEstimate.expected)}</div>
+                  <div className="mt-1 text-[11px] text-[var(--muted)]">بازه احتمالی: {formatSize(compressionEstimate.low)} تا {formatSize(compressionEstimate.high)}</div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-[var(--muted)]">
+                    <span>{compressionEstimate.preservedPages} صفحه متن‌محور حفظ‌شونده</span>
+                    <span>{compressionEstimate.rasterizedPages} صفحه تصویری</span>
+                    <span>نمونه‌گیری از {compressionEstimate.sampledPages} صفحه</span>
+                  </div>
+                  <p className="mt-2 text-[10px] leading-4 text-[var(--muted)]">این برآورد تقریبی است؛ پس از ساخت PDF، حجم واقعی در تاریخچه ثبت می‌شود.</p>
+                </div>
+              )}
+              <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">در حالت هوشمند، صفحه‌هایی که متن قابل استخراج دارند با اعداد و حروف اصلی حفظ می‌شوند. صفحه‌های اسکن‌شده با DPI و کیفیت بالاتر بازسازی می‌شوند. خروجی فقط یک ZIP دانلودی است و PDFها خودکار باز نمی‌شوند.</p>
             </section>
 
+            {compressionRuns.length > 0 && (
+              <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:col-span-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="font-black">خروجی‌های قبلی این نشست</h3>
+                  <span className="text-[10px] text-[var(--muted)]">{compressionRuns.length} بسته</span>
+                </div>
+                <div className="space-y-2">
+                  {compressionRuns.map((run) => (
+                    <div key={run.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] p-2">
+                      <FileText size={17} className="text-blue-400"/>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-bold">{run.name}</div>
+                        <div className="mt-1 text-[10px] text-[var(--muted)]">{run.profileName} · خروجی {formatSize(run.size)} · کاهش {Math.max(0, run.savedPercent)}٪</div>
+                      </div>
+                      <button type="button" onClick={() => downloadCompressionRun(run)} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">دانلود دوباره</button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <div className="flex items-center gap-2 font-bold text-emerald-500"><ShieldCheck size={16}/> پردازش محلی</div>
-              <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">فایل‌ها هنگام ویرایش محلی می‌مانند. پیشنهاد نام صفحه فقط از لایه متن قابل انتخاب PDF ساخته می‌شود و برای اسکن‌های تصویری OCR فعال نمی‌شود تا سرعت و حریم خصوصی حفظ شود.</p>
+              <div className="flex items-center gap-2 font-bold text-emerald-500"><ShieldCheck size={16}/> اصل فایل محفوظ می‌ماند</div>
+              <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">ویرایش و فشرده‌سازی در مرورگر انجام می‌شود. تنظیمات نام‌گذاری‌شده در همین سازمان حفظ می‌شوند؛ هر بار خروجی تازه ساخته شود، بسته قبلی قابل دانلود دوباره خواهد بود.</p>
             </section>
-          </aside>
+          </aside>}
         </section>
+        )}
+
+        {studioTab === 'recognition' && (
+          <section className="space-y-3">
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-black">آزمایشگاه تشخیص اسناد</h2>
+                  <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--muted)]">یک نمونه واقعی از نوع سند بده، نوع آن را مشخص کن و تحلیل را اجرا کن. سیستم متن، واژه‌های شاخص، الگوی اعداد و محل قرارگیری عبارت‌ها را یاد می‌گیرد تا نمونه‌های بعدی را بهتر بشناسد.</p>
+                </div>
+                <span className="rounded-lg border border-emerald-500/30 px-2 py-1 text-[10px] text-emerald-500">ویژه الگوهای سازمان</span>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold">فایل نمونه PDF یا تصویر</label>
+                  <input ref={sampleInputRef} type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg" onChange={(event) => setSampleFile(event.currentTarget.files?.[0] || null)} className="block min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-2 text-xs file:ml-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-white"/>
+                  <div className="text-[11px] text-[var(--muted)]">{sampleFile ? sampleFile.name + ' · ' + formatSize(sampleFile.size) : 'نمونه را فقط برای تحلیل انتخاب کن؛ فایل اصلی به سرور ارسال نمی‌شود.'}</div>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold">نوع سندی که این نمونه نشان می‌دهد</label>
+                  <input value={sampleDocumentType} onChange={(event) => setSampleDocumentType(event.target.value)} placeholder="مثلاً قبض انبار پشت" className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+                  <label className="block text-xs font-bold">نام قابل نمایش نمونه (اختیاری)</label>
+                  <input value={sampleDisplayName} onChange={(event) => setSampleDisplayName(event.target.value)} placeholder="مثلاً قبض انبار شرکت الف" className="min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => void analyzeAndSaveSample()} disabled={!sampleFile || trainingBusy || busy} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-bold text-white disabled:opacity-40">
+                  {trainingBusy ? <Loader2 className="animate-spin" size={15}/> : <Sparkles size={15}/>}
+                  تحلیل و ذخیره الگوی تشخیص
+                </button>
+                {trainingProgress && <span className="text-xs text-[var(--muted)]">{trainingProgress}</span>}
+              </div>
+              <p className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-[11px] leading-5 text-[var(--muted)]">
+                فایل نمونه روی دستگاه پردازش می‌شود. اگر PDF اسکن‌شده باشد، OCR فارسی و انگلیسی در مرورگر اجرا می‌شود؛ فقط ویژگی‌های استخراج‌شده و مختصات نسبی کلمات در فضای خصوصی سازمان ذخیره می‌شوند، نه خود PDF و نه تصویر صفحات.
+              </p>
+            </section>
+
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-black">الگوهای ثبت‌شده</h3>
+                  <p className="mt-1 text-xs text-[var(--muted)]">{recognitionSamples.length} نمونه در کتابخانه تشخیص این سازمان</p>
+                </div>
+                <button type="button" onClick={() => void loadRecognitionSamples()} disabled={recognitionLoading} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs">به‌روزرسانی</button>
+              </div>
+              {recognitionLoading ? (
+                <div className="py-5 text-center text-xs text-[var(--muted)]"><Loader2 className="ml-2 inline animate-spin" size={15}/> در حال دریافت الگوها…</div>
+              ) : recognitionSamples.length ? (
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  {recognitionSamples.map((sample) => (
+                    <div key={sample.id} className="flex items-center gap-2 rounded-xl border border-[var(--border)] p-3">
+                      <FileText size={18} className="shrink-0 text-blue-400"/>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-bold">{sample.document_type}</div>
+                        <div className="mt-1 truncate text-[10px] text-[var(--muted)]">{sample.sample_name} · {sample.page_count} صفحه · {sample.source_filename}</div>
+                      </div>
+                      <button type="button" onClick={() => void deleteRecognitionSample(sample)} disabled={recognitionLoading || trainingBusy} className="rounded-lg border border-red-500/30 px-2 py-2 text-[10px] text-red-400">حذف</button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-6 text-center text-xs text-[var(--muted)]">هنوز نمونه‌ای ذخیره نشده است. با یک نمونه از قبض انبار، اظهارنامه یا مانیفست شروع کن.</p>
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-black">تشخیص فایل‌های فعلی</h3>
+                  <p className="mt-1 text-xs text-[var(--muted)]">برچسب‌های صفحات فعلی را با نمونه‌های ذخیره‌شده تطبیق بده.</p>
+                </div>
+                <span className="text-xs text-[var(--muted)]">{pages.length} صفحه در محیط کار</span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <button type="button" onClick={() => void runWorkspaceRecognition(false)} disabled={busy || !pages.length || !recognitionSamples.length} className="min-h-11 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold disabled:opacity-40">تشخیص بر اساس متن PDF</button>
+                <button type="button" onClick={() => void runWorkspaceRecognition(true)} disabled={busy || !pages.length || !recognitionSamples.length} className="min-h-11 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">تشخیص اسکن‌ها با OCR</button>
+              </div>
+              {recognitionProgress && <p className="mt-2 text-xs text-[var(--muted)]">{recognitionProgress}</p>}
+              <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">تشخیص متن PDF سریع‌تر است. OCR برای صفحات اسکن‌شده زمان بیشتری می‌گیرد و فقط با زدن دکمه جداگانه اجرا می‌شود تا روی سرعت کار روزمره اثر نگذارد.</p>
+            </section>
+          </section>
+        )}
 
         {(status || error) && <div className={'rounded-xl border p-3 text-sm ' + (error ? 'border-red-500/30 bg-red-500/5 text-red-400' : 'border-emerald-500/20 bg-emerald-500/5 text-emerald-500')}>
           {error || status}
