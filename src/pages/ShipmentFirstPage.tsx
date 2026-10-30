@@ -266,34 +266,30 @@ const extractSelectedBillOfLading=async()=>{
   setUploading(true);setMessage('');
   let completed=0;
   try{
-   const folder=await getDefaultShipmentUploadFolder(selected);
-   const {data:{user},error:userError}=await supabase.auth.getUser();
-   if(userError||!user||!profile?.organization_id)throw new Error('نشست یا سازمان کاربر معتبر نیست.');
+   const [folder,destination]=await Promise.all([
+    getDefaultShipmentUploadFolder(selected),
+    getFileArchiveDestination()
+   ]);
    for(const file of selectedFiles){
-    if(file.size<=0||file.size>FILE_ARCHIVE_MAX_BYTES)throw new Error('حجم فایل باید حداکثر ۲۰ مگابایت باشد.');
+    if(file.size<=0||file.size>FILE_ARCHIVE_MAX_BYTES)
+     throw new Error('برای اینکه فایل در تلگرام قابل بازیابی و تحلیل هوش مصنوعی باشد، حجم هر سند باید حداکثر ۲۰ مگابایت باشد.');
     const lowerName=file.name.toLowerCase();
     const mime=(file.type||(lowerName.endsWith('.pdf')?'application/pdf':lowerName.endsWith('.png')?'image/png':(lowerName.endsWith('.jpg')||lowerName.endsWith('.jpeg'))?'image/jpeg':'application/octet-stream')).toLowerCase();
-    const safeName=file.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,160)||'document.bin';
-    const storagePath=profile.organization_id+'/'+selected+'/'+crypto.randomUUID()+'-'+safeName;
-    const {error:storageError}=await supabase.storage.from(BUCKET).upload(storagePath,file,{contentType:mime,cacheControl:'3600',upsert:false});
-    if(storageError)throw new Error('ذخیره امن سند ناموفق بود: '+storageError.message);
-    const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
-     organization_id:profile.organization_id,shipment_id:selected,uploaded_by:user.id,
-     document_name:file.name,original_file_name:file.name,storage_path:storagePath,
-     storage_backend:'supabase',telegram_archive_requested:true,folder_id:folder.id,mime_type:mime,file_size_bytes:file.size,
-     extraction_status:'not_requested'
-    }).select('id').single();
-    if(docError||!doc)throw docError||new Error('ثبت مشخصات سند ناموفق بود.');
+    const documentType=mime==='application/pdf'?'customs_document':'other';
+    const idempotencyKey=await createTelegramArchiveIdempotencyKey(file,{
+     folderId:folder.id,shipmentId:selected,documentType,documentName:file.name,destination
+    });
+    await uploadTelegramArchivedFile(file,{
+     folderId:folder.id,shipmentId:selected,documentType,documentName:file.name,
+     tags:uploadTags,destination,idempotencyKey
+    });
     completed++;
-    void archiveShipmentDocumentInBackground(doc.id,uploadTags)
-     .then(()=>loadDocs(selected))
-     .catch(error=>console.warn('[ShipmentFirstPage] Telegram archive will be retried by the server:',error));
    }
    await loadDocs(selected);
-   setMessage(`${completed} سند فوراً در نسخه امن وب‌سایت ذخیره شد؛ ارسال تلگرام در پس‌زمینه ادامه دارد و مانع کار با فرم نیست.`);
+   setMessage(`${completed} سند مستقیماً در تلگرام آرشیو و به محموله متصل شد؛ هیچ نسخه‌ای در Storage سوپابیس ساخته نشد.`);
   }catch(error:any){
    await loadDocs(selected);
-   setMessage(completed?`${completed} سند در وب‌سایت ذخیره شد؛ فایل بعدی ناموفق بود. ${error?.message||''}`:error?.message||'ذخیره سند ناموفق بود.');
+   setMessage(completed?`${completed} سند در تلگرام ثبت شد؛ فایل بعدی ناموفق بود. ${error?.message||''}`:error?.message||'آرشیو سند در تلگرام ناموفق بود.');
   }finally{setUploading(false)}
  };
 const retryArchiveDocument=async(d:Doc)=>{
