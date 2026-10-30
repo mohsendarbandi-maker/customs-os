@@ -95,7 +95,7 @@ describe('Telegram-backed Customs OS file manager', () => {
     const shipmentArchiveUploadEnd = shipmentPage.indexOf('const download=async', shipmentArchiveUploadStart);
     const shipmentArchiveUpload = shipmentPage.slice(shipmentArchiveUploadStart, shipmentArchiveUploadEnd);
     expect(shipmentArchiveUpload).toContain('uploadTelegramArchivedFile');
-    expect(shipmentArchiveUpload).not.toMatch(/storage\\.from\\(BUCKET\\)\\.upload\\(/);
+    expect(shipmentArchiveUpload).not.toContain('storage.from(BUCKET).upload(');
     expect(documentPage).toContain('uploadTelegramArchivedFile');
     expect(documentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
     expect(clientDocumentPage).toContain('uploadTelegramArchivedFile');
