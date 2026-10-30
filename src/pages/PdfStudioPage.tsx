@@ -438,6 +438,36 @@ export const PdfStudioPage: React.FC = () => {
     }
   };
 
+  const compressPagesToTarget = async (items: PageItem[], targetBytes: number) => {
+    const attempts = [
+      { dpi: 240, quality: 0.9 },
+      { dpi: 210, quality: 0.86 },
+      { dpi: 180, quality: 0.82 },
+      { dpi: 150, quality: 0.78 },
+      { dpi: 120, quality: 0.72 },
+      { dpi: 96, quality: 0.66 },
+      { dpi: 80, quality: 0.58 },
+    ];
+    let smallest: Blob | null = null;
+    let used = attempts[attempts.length - 1];
+    for (const attempt of attempts) {
+      setStatus('فشرده‌سازی برای سقف ۲ مگابایت: ' + attempt.dpi + ' DPI و کیفیت ' + Math.round(attempt.quality * 100) + '٪…');
+      const result = await compressDocumentPages(items, {
+        mode: 'raster',
+        dpi: attempt.dpi,
+        quality: attempt.quality,
+        grayscale: compressionSettings.grayscale,
+      });
+      if (!smallest || result.blob.size < smallest.size) {
+        smallest = result.blob;
+        used = attempt;
+      }
+      if (result.blob.size <= targetBytes) return { blob: result.blob, scale: attempt.dpi / 72, quality: attempt.quality };
+    }
+    if (smallest && smallest.size <= targetBytes) return { blob: smallest, scale: used.dpi / 72, quality: used.quality };
+    throw new Error('با کمترین تنظیمات قابل‌قبول هم خروجی زیر ۲ مگابایت نشد. کمترین حجم به‌دست‌آمده: ' + formatSize(smallest?.size || 0) + '؛ برای حفظ خوانایی اعداد، اسناد را به چند خروجی تقسیم کنید.');
+  };
+
   const estimateCompression = async () => {
     if (!compressionItems.length) return setError('ابتدا فایل‌ها یا صفحه‌های موردنظر را انتخاب کنید.');
     setCompressionEstimating(true);
@@ -829,7 +859,7 @@ export const PdfStudioPage: React.FC = () => {
         .eq('organization_id', organizationId)
         .order('display_name', { ascending: true });
       if (folderError) throw folderError;
-      const folderRows = (folderData || []) as Array<{ id: string; display_name: string }>;
+      const folderRows = (folderData || []) as FileManagerFolder[];
       setFileManagerFolders(folderRows);
       const allRows: FileManagerRow[] = [];
       for (let offset = 0; ; offset += 500) {
@@ -1242,8 +1272,8 @@ export const PdfStudioPage: React.FC = () => {
                           {page.selected && <span className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-blue-600 text-white"><Check size={14}/></span>}
                         </div>
                         <div className="mt-2 truncate text-xs font-bold">{source?.file.name || 'PDF'}</div>
-                        <input value={page.label} onClick={(event) => event.stopPropagation()} onChange={(event) => updatePage(page.id, { label: event.target.value })} aria-label="نام پیشنهادی صفحه" className="mt-2 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-[11px]" placeholder="نام سند این صفحه"/>
                       </button>
+                      <input value={page.label} onChange={(event) => updatePage(page.id, { label: event.target.value })} aria-label="نام پیشنهادی صفحه" className="mt-2 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-[11px]" placeholder="نام سند این صفحه"/>
                       <div className="mt-2 flex items-center justify-between gap-1">
                         <span className="text-[10px] text-[var(--muted)]">ترتیب خروجی: {index + 1}</span>
                         <div className="flex gap-1">
