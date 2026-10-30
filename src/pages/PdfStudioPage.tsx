@@ -1288,139 +1288,209 @@ export const PdfStudioPage: React.FC = () => {
             )}
           </div>}
 
-          {studioTab === 'outputs' && <aside className="grid gap-3 md:grid-cols-2">
-            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-              <h3 className="mb-3 font-black">قالب خروجی و جداسازی چندبخشی</h3>
-              <label className="block text-xs text-[var(--muted)]">نوع بسته خروجی</label>
-              <select value={outputPreset} onChange={(event) => applyOutputPreset(event.target.value as 'custom' | 'shipPass' | 'guarantee' | 'standard')} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
-                <option value="custom">جداسازی دلخواه</option>
-                <option value="shipPass">پاس کشتی</option>
-                <option value="guarantee">درخواست ضمانتنامه</option>
-                <option value="standard">مدارک استاندارد - حداکثر ۲ مگابایت</option>
-              </select>
-              <label className="mt-3 block text-xs text-[var(--muted)]">نام بسته یا فایل نهایی</label>
-              <input value={packageName} onChange={(event) => setPackageName(event.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
-              {outputPreset === 'standard' ? (
-                <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] leading-5 text-[var(--muted)]">
-                  تمام صفحات فعلی (از جمله اسناد، لیبل، عکس کالا، پروانه بهره‌برداری، تمدید پروانه و علامت استاندارد) در یک PDF جمع می‌شوند. سقف ۲ مگابایت اجباری است؛ در صورت نیاز، فشرده‌سازی تصویری تطبیقی اجرا می‌شود.
-                </div>
-              ) : (
-                <>
-                  <div className="mt-3 space-y-2">
-                    {splitRows.map((row, index) => (
-                      <div key={row.id} className="rounded-xl border border-[var(--border)] p-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-[var(--muted)]">{index + 1}.</span>
-                          <input value={row.name} onChange={(event) => setSplitRows((previous) => previous.map((item) => item.id === row.id ? { ...item, name: event.target.value } : item))} className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs" placeholder="نام فایل خروجی"/>
-                          <button type="button" onClick={() => setSplitRows((previous) => previous.filter((item) => item.id !== row.id))} disabled={splitRows.length <= 1} className="rounded-lg border border-red-500/30 p-2 text-red-400 disabled:opacity-30" aria-label="حذف خروجی"><Trash2 size={13}/></button>
-                        </div>
-                        <label className="mt-2 block text-[10px] text-[var(--muted)]">شماره صفحه‌ها؛ نمونه: 1-2 یا 1,5 یا 1-2,5</label>
-                        <input value={row.pageExpression} onChange={(event) => setSplitRows((previous) => previous.map((item) => item.id === row.id ? { ...item, pageExpression: event.target.value } : item))} dir="ltr" placeholder="1-2,5" className="mt-1 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-sm"/>
-                      </div>
-                    ))}
+          {studioTab === 'outputs' && (
+            <>
+              <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h2 className="font-black">ابزارهای اختیاری خروجی</h2>
+                    <p className="mt-1 text-xs leading-5 text-[var(--muted)]">فقط ابزارهایی را که لازم داری فعال کن. هیچ عملیات خروجی بدون انتخاب تو اجرا نمی‌شود.</p>
                   </div>
-                  <button type="button" onClick={() => setSplitRows((previous) => [...previous, { id: crypto.randomUUID(), name: 'سند جدید', pageExpression: '' }])} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 text-xs">افزودن بخش جداسازی</button>
-                </>
-              )}
-              <button type="button" onClick={() => void splitPdf()} disabled={busy || !pages.length || !packageName.trim()} className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40">
-                <Scissors className="ml-1 inline" size={15}/>{outputPreset === 'standard' ? 'ساخت PDF استاندارد زیر ۲ مگابایت' : 'ساخت همه خروجی‌ها و دانلود ZIP'}
-              </button>
-              <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">هر ردیف یک فایل جداست. شماره‌ها بر اساس ترتیب فعلی صفحات هستند؛ یک صفحه می‌تواند در چند خروجی استفاده شود.</p>
-            </section>
-
-            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-              <h3 className="mb-3 font-black">مهر، امضا و متن</h3>
-              <label className="block text-xs text-[var(--muted)]">متن فارسی یا انگلیسی</label>
-              <input value={selectedText} onChange={(event) => setSelectedText(event.target.value)} placeholder="مثلاً رونوشت برابر اصل است" className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
-              <button type="button" onClick={() => void addTextStamp()} disabled={busy || !pages.length} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs font-bold disabled:opacity-40"><Stamp className="ml-1 inline" size={15}/> درج متن روی صفحه</button>
-              <input ref={imageRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(event) => void addImageStamp(event.currentTarget.files?.[0])}/>
-              <button type="button" onClick={() => imageRef.current?.click()} disabled={busy || !pages.length} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs disabled:opacity-40"><FileImage className="ml-1 inline" size={15}/> افزودن تصویر مهر یا امضا</button>
-              <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">متن فارسی در این ابزار به‌شکل تصویر روی PDF قرار می‌گیرد؛ قابل جست‌وجو و ویرایش متنی نیست.</p>
-            </section>
-
-            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-black">فشرده‌سازی هوشمند پیشرفته</h3>
-                <span className="text-[10px] text-emerald-500">پیش‌فرض: حفظ خوانایی اعداد</span>
-              </div>
-              <label className="mt-3 block text-xs text-[var(--muted)]">روش فشرده‌سازی</label>
-              <select value={compressionSettings.mode} onChange={(event) => { setCompressionSettings((old) => ({ ...old, mode: event.target.value as CompressionSettings['mode'] })); setCompressionEstimate(null); }} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
-                <option value="smart">هوشمند ترکیبی؛ متن حفظ شود، اسکن‌ها فشرده شوند</option>
-                <option value="preserve">ساختاری؛ حفظ کامل متن و صفحات</option>
-                <option value="raster">فشرده‌سازی تصویری کامل همه صفحات</option>
-              </select>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs text-[var(--muted)]">کیفیت تصویر: {Math.round(compressionSettings.quality * 100)}٪</label>
-                  <input type="range" min="0.65" max="0.98" step="0.01" value={compressionSettings.quality} onChange={(event) => { setCompressionSettings((old) => ({ ...old, quality: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
+                  <span className="text-[10px] text-[var(--muted)]">{Object.values(outputTools).filter(Boolean).length} ابزار فعال</span>
                 </div>
-                <div>
-                  <label className="block text-xs text-[var(--muted)]">وضوح: {compressionSettings.dpi} DPI</label>
-                  <input type="range" min="120" max="300" step="15" value={compressionSettings.dpi} onChange={(event) => { setCompressionSettings((old) => ({ ...old, dpi: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
-                </div>
-              </div>
-              <label className="mt-3 flex items-center gap-2 text-xs text-[var(--muted)]">
-                <input type="checkbox" checked={compressionSettings.grayscale} onChange={(event) => { setCompressionSettings((old) => ({ ...old, grayscale: event.target.checked })); setCompressionEstimate(null); }} className="h-4 w-4"/>
-                تبدیل صفحات تصویری به سیاه‌وسفید (برای متن؛ عکس و لیبل رنگی را خاموش بگذارید)
-              </label>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <input value={compressionProfileName} onChange={(event) => setCompressionProfileName(event.target.value)} placeholder="نام تنظیمات؛ مثلا اسکن خوانا" className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs"/>
-                <button type="button" onClick={saveCompressionProfile} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">ذخیره تنظیمات</button>
-              </div>
-              <select defaultValue="" onChange={(event) => applyCompressionProfile(event.target.value)} className="mt-2 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs">
-                <option value="">بازیابی تنظیمات ذخیره‌شده…</option>
-                {compressionProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
-              </select>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => void estimateCompression()} disabled={busy || compressionEstimating || !compressionItems.length} className="min-h-10 rounded-xl border border-[var(--border)] px-2 py-2 text-xs font-bold disabled:opacity-40">
-                  {compressionEstimating ? 'در حال برآورد…' : 'برآورد حجم قبل از پردازش'}
-                </button>
-                <button type="button" onClick={() => void compressActivePdf()} disabled={busy || !compressionItems.length} className="min-h-10 rounded-xl bg-blue-600 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
-                  {busy ? 'در حال فشرده‌سازی…' : 'فشرده‌سازی و دانلود PDF'}
-                </button>
-              </div>
-              {compressionEstimate && (
-                <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
-                  <div className="text-xs font-bold">حجم تخمینی فایل PDF</div>
-                  <div className="mt-1 text-lg font-black tabular-nums">{formatSize(compressionEstimate.expected)}</div>
-                  <div className="mt-1 text-[11px] text-[var(--muted)]">بازه احتمالی: {formatSize(compressionEstimate.low)} تا {formatSize(compressionEstimate.high)}</div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-[var(--muted)]">
-                    <span>{compressionEstimate.preservedPages} صفحه متن‌محور حفظ‌شونده</span>
-                    <span>{compressionEstimate.rasterizedPages} صفحه تصویری</span>
-                    <span>نمونه‌گیری از {compressionEstimate.sampledPages} صفحه</span>
-                  </div>
-                  <p className="mt-2 text-[10px] leading-4 text-[var(--muted)]">این برآورد تقریبی است؛ پس از ساخت PDF، حجم واقعی در تاریخچه ثبت می‌شود.</p>
-                </div>
-              )}
-              <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">تمام صفحه‌های انتخاب‌شده، حتی از چند فایل مختلف، به ترتیب فعلی در یک فایل PDF فشرده ادغام می‌شوند؛ خروجی ZIP نیست و PDF به‌صورت خودکار باز نمی‌شود. در حالت هوشمند، صفحه‌های متن‌دار و اعداد اصلی حفظ می‌شوند و اسکن‌ها با وضوح انتخابی بازسازی می‌شوند.</p>
-            </section>
-
-            {compressionRuns.length > 0 && (
-              <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:col-span-2">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <h3 className="font-black">خروجی‌های قبلی این نشست</h3>
-                  <span className="text-[10px] text-[var(--muted)]">{compressionRuns.length} فایل PDF</span>
-                </div>
-                <div className="space-y-2">
-                  {compressionRuns.map((run) => (
-                    <div key={run.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] p-2">
-                      <FileText size={17} className="text-blue-400"/>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-bold">{run.name}</div>
-                        <div className="mt-1 text-[10px] text-[var(--muted)]">{run.profileName} · خروجی {formatSize(run.size)} · کاهش {Math.max(0, run.savedPercent)}٪</div>
-                      </div>
-                      <button type="button" onClick={() => downloadCompressionRun(run)} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">دانلود دوباره</button>
-                    </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {([
+                    { key: 'merge', label: 'ادغام و استخراج', detail: 'ساخت یک PDF از صفحات' },
+                    { key: 'split', label: 'تفکیک صفحات', detail: 'چند PDF مستقل' },
+                    { key: 'compression', label: 'فشرده‌سازی', detail: 'کاهش حجم PDF' },
+                    { key: 'stamp', label: 'مهر و امضا', detail: 'افزودن متن یا تصویر' },
+                  ] as const).map((tool) => (
+                    <label key={tool.key} className={'flex min-h-[74px] cursor-pointer items-start gap-2 rounded-xl border p-3 transition ' + (outputTools[tool.key] ? 'border-blue-500 bg-blue-500/10' : 'border-[var(--border)] bg-[var(--surface-2)]')}>
+                      <input
+                        type="checkbox"
+                        checked={outputTools[tool.key]}
+                        onChange={(event) => setOutputTools((previous) => ({ ...previous, [tool.key]: event.target.checked }))}
+                        className="mt-1 h-4 w-4 shrink-0"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-xs font-bold">{tool.label}</span>
+                        <span className="mt-1 block text-[10px] text-[var(--muted)]">{tool.detail}</span>
+                      </span>
+                    </label>
                   ))}
                 </div>
               </section>
-            )}
 
-            <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <div className="flex items-center gap-2 font-bold text-emerald-500"><ShieldCheck size={16}/> اصل فایل محفوظ می‌ماند</div>
-              <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">ویرایش و فشرده‌سازی در مرورگر انجام می‌شود. فایل‌های اصلی تغییر نمی‌کنند و خروجی هر نوبت یک PDF مستقل است؛ تنظیمات نام‌گذاری‌شده حفظ می‌شوند و هر PDF قبلی همچنان قابل دانلود دوباره خواهد بود.</p>
-            </section>
-          </aside>}
+              {readyOutputs.length > 0 && (
+                <section className="rounded-2xl border border-blue-500/30 bg-[var(--surface)] p-3 md:p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h2 className="font-black">فایل‌های آماده دانلود</h2>
+                      <p className="mt-1 text-[11px] text-[var(--muted)]">فایل‌ها خودکار باز یا دانلود نمی‌شوند. دانلود هر خروجی را جداگانه بزن؛ فایل‌های ورودی و تنظیمات باقی می‌مانند.</p>
+                    </div>
+                    <span className="text-xs font-bold text-blue-400">{readyOutputs.length} خروجی</span>
+                  </div>
+                  <div className="space-y-2">
+                    {readyOutputs.map((output) => (
+                      <div key={output.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] p-3">
+                        <FileText size={18} className="shrink-0 text-blue-400"/>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-bold">{output.name}</div>
+                          <div className="mt-1 text-[10px] leading-5 text-[var(--muted)]">{output.description} · {formatSize(output.size)}</div>
+                          <div className="mt-1 text-[10px] text-[var(--muted)]">{output.downloadedAt ? 'دانلود قبلی ثبت شد؛ امکان دانلود دوباره وجود دارد.' : 'هنوز دانلود نشده است.'}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => downloadReadyOutput(output)}
+                          className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white"
+                        >
+                          <FileText size={14}/>{output.downloadedAt ? 'دانلود دوباره' : 'دانلود فایل'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <aside className="grid gap-3 md:grid-cols-2">
+                {outputTools.merge && (
+                  <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                    <h3 className="mb-2 font-black">ادغام و استخراج صفحات</h3>
+                    <p className="text-[11px] leading-5 text-[var(--muted)]">صفحات را با ترتیب فعلی به یک PDF تبدیل کن. برای استخراج فقط صفحات انتخاب‌شده، ابتدا آن‌ها را در تب صفحات انتخاب کن.</p>
+                    <div className="mt-3 grid grid-cols-1 gap-2">
+                      <button type="button" onClick={() => void exportMerged(false)} disabled={busy || !pages.length} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white disabled:opacity-40">
+                        <Files size={15}/> ادغام همه صفحات ({pages.length})
+                      </button>
+                      <button type="button" onClick={() => void exportMerged(true)} disabled={busy || !selectedCount} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs disabled:opacity-40">
+                        <Scissors size={15}/> استخراج صفحات انتخابی ({selectedCount})
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                {outputTools.split && (
+                  <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                    <h3 className="mb-3 font-black">تفکیک صفحات به PDFهای جداگانه</h3>
+                    <label className="block text-xs text-[var(--muted)]">قالب تفکیک</label>
+                    <select value={outputPreset} onChange={(event) => applyOutputPreset(event.target.value as 'custom' | 'shipPass' | 'guarantee' | 'standard')} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
+                      <option value="custom">تفکیک دلخواه</option>
+                      <option value="shipPass">پاس کشتی</option>
+                      <option value="guarantee">درخواست ضمانتنامه</option>
+                      <option value="standard">مدارک استاندارد - حداکثر ۲ مگابایت</option>
+                    </select>
+                    <label className="mt-3 block text-xs text-[var(--muted)]">نام مجموعه خروجی</label>
+                    <input value={packageName} onChange={(event) => setPackageName(event.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+                    {outputPreset === 'standard' ? (
+                      <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] leading-5 text-[var(--muted)]">
+                        همه صفحات در یک PDF استاندارد قرار می‌گیرند. سقف ۲ مگابایت است؛ فشرده‌سازی تصویری فقط در صورت نیاز اجرا می‌شود و ممکن است متن قابل جست‌وجو، فرم‌ها و لینک‌ها را حذف کند.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mt-3 space-y-2">
+                          {splitRows.map((row, index) => (
+                            <div key={row.id} className="rounded-xl border border-[var(--border)] p-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-[var(--muted)]">{index + 1}.</span>
+                                <input value={row.name} onChange={(event) => setSplitRows((previous) => previous.map((item) => item.id === row.id ? { ...item, name: event.target.value } : item))} className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs" placeholder="نام فایل PDF"/>
+                                <button type="button" onClick={() => setSplitRows((previous) => previous.filter((item) => item.id !== row.id))} disabled={splitRows.length <= 1} className="rounded-lg border border-red-500/30 p-2 text-red-400 disabled:opacity-30" aria-label="حذف خروجی"><Trash2 size={13}/></button>
+                              </div>
+                              <label className="mt-2 block text-[10px] text-[var(--muted)]">شماره صفحه‌ها؛ نمونه: 1-2 یا 1,5 یا 1-2,5</label>
+                              <input value={row.pageExpression} onChange={(event) => setSplitRows((previous) => previous.map((item) => item.id === row.id ? { ...item, pageExpression: event.target.value } : item))} dir="ltr" placeholder="1-2,5" className="mt-1 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-sm"/>
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setSplitRows((previous) => [...previous, { id: crypto.randomUUID(), name: 'سند جدید', pageExpression: '' }])} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 text-xs">افزودن بخش تفکیک</button>
+                      </>
+                    )}
+                    <button type="button" onClick={() => void splitPdf()} disabled={busy || !pages.length || !packageName.trim()} className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40">
+                      <Scissors className="ml-1 inline" size={15}/>{outputPreset === 'standard' ? 'ساخت PDF استاندارد' : 'ساخت PDFهای جداگانه'}
+                    </button>
+                    <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">هر ردیف یک PDF مستقل خواهد بود و دکمه دانلود جداگانه می‌گیرد؛ فایل ZIP ساخته نمی‌شود.</p>
+                  </section>
+                )}
+
+                {outputTools.stamp && (
+                  <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                    <h3 className="mb-3 font-black">مهر، امضا و متن</h3>
+                    <label className="block text-xs text-[var(--muted)]">متن فارسی یا انگلیسی</label>
+                    <input value={selectedText} onChange={(event) => setSelectedText(event.target.value)} placeholder="مثلاً رونوشت برابر اصل است" className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+                    <button type="button" onClick={() => void addTextStamp()} disabled={busy || !pages.length} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs font-bold disabled:opacity-40"><Stamp className="ml-1 inline" size={15}/> درج متن روی صفحه</button>
+                    <input ref={imageRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(event) => void addImageStamp(event.currentTarget.files?.[0])}/>
+                    <button type="button" onClick={() => imageRef.current?.click()} disabled={busy || !pages.length} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs disabled:opacity-40"><FileImage className="ml-1 inline" size={15}/> افزودن تصویر مهر یا امضا</button>
+                    <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">متن فارسی در این ابزار به‌شکل تصویر روی PDF قرار می‌گیرد؛ قابل جست‌وجو و ویرایش متنی نیست.</p>
+                  </section>
+                )}
+
+                {outputTools.compression && (
+                  <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="font-black">فشرده‌سازی هوشمند پیشرفته</h3>
+                      <span className="text-[10px] text-emerald-500">پیش‌فرض: حفظ خوانایی اعداد</span>
+                    </div>
+                    <label className="mt-3 block text-xs text-[var(--muted)]">روش فشرده‌سازی</label>
+                    <select value={compressionSettings.mode} onChange={(event) => { setCompressionSettings((old) => ({ ...old, mode: event.target.value as CompressionSettings['mode'] })); setCompressionEstimate(null); }} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
+                      <option value="smart">هوشمند ترکیبی؛ متن حفظ شود، اسکن‌ها فشرده شوند</option>
+                      <option value="preserve">ساختاری؛ حفظ کامل متن و صفحات</option>
+                      <option value="raster">فشرده‌سازی تصویری کامل همه صفحات</option>
+                    </select>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-[var(--muted)]">کیفیت تصویر: {Math.round(compressionSettings.quality * 100)}٪</label>
+                        <input type="range" min="0.65" max="0.98" step="0.01" value={compressionSettings.quality} onChange={(event) => { setCompressionSettings((old) => ({ ...old, quality: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[var(--muted)]">وضوح: {compressionSettings.dpi} DPI</label>
+                        <input type="range" min="120" max="300" step="15" value={compressionSettings.dpi} onChange={(event) => { setCompressionSettings((old) => ({ ...old, dpi: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
+                      </div>
+                    </div>
+                    <label className="mt-3 flex items-center gap-2 text-xs text-[var(--muted)]">
+                      <input type="checkbox" checked={compressionSettings.grayscale} onChange={(event) => { setCompressionSettings((old) => ({ ...old, grayscale: event.target.checked })); setCompressionEstimate(null); }} className="h-4 w-4"/>
+                      تبدیل صفحات تصویری به سیاه‌وسفید (برای متن؛ عکس و لیبل رنگی را خاموش بگذارید)
+                    </label>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input value={compressionProfileName} onChange={(event) => setCompressionProfileName(event.target.value)} placeholder="نام تنظیمات؛ مثلا اسکن خوانا" className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs"/>
+                      <button type="button" onClick={saveCompressionProfile} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">ذخیره تنظیمات</button>
+                    </div>
+                    <select defaultValue="" onChange={(event) => applyCompressionProfile(event.target.value)} className="mt-2 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs">
+                      <option value="">بازیابی تنظیمات ذخیره‌شده…</option>
+                      {compressionProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                    </select>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => void estimateCompression()} disabled={busy || compressionEstimating || !compressionItems.length} className="min-h-10 rounded-xl border border-[var(--border)] px-2 py-2 text-xs font-bold disabled:opacity-40">
+                        {compressionEstimating ? 'در حال برآورد…' : 'برآورد حجم قبل از پردازش'}
+                      </button>
+                      <button type="button" onClick={() => void compressActivePdf()} disabled={busy || !compressionItems.length} className="min-h-10 rounded-xl bg-blue-600 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
+                        {busy ? 'در حال فشرده‌سازی…' : 'ساخت PDF فشرده'}
+                      </button>
+                    </div>
+                    {compressionEstimate && (
+                      <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+                        <div className="text-xs font-bold">حجم تخمینی فایل PDF</div>
+                        <div className="mt-1 text-lg font-black tabular-nums">{formatSize(compressionEstimate.expected)}</div>
+                        <div className="mt-1 text-[11px] text-[var(--muted)]">بازه احتمالی: {formatSize(compressionEstimate.low)} تا {formatSize(compressionEstimate.high)}</div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-[var(--muted)]">
+                          <span>{compressionEstimate.preservedPages} صفحه متن‌محور حفظ‌شونده</span>
+                          <span>{compressionEstimate.rasterizedPages} صفحه تصویری</span>
+                          <span>نمونه‌گیری از {compressionEstimate.sampledPages} صفحه</span>
+                        </div>
+                        <p className="mt-2 text-[10px] leading-4 text-[var(--muted)]">این برآورد تقریبی است؛ پس از ساخت PDF، حجم واقعی در فایل‌های آماده دانلود نشان داده می‌شود.</p>
+                      </div>
+                    )}
+                    <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">خروجی فشرده یک PDF مستقل است. فایل ورودی، ترتیب صفحات، انتخاب‌ها و پروفایل‌های ذخیره‌شده پس از آماده‌سازی و دانلود پاک نمی‌شوند.</p>
+                  </section>
+                )}
+
+                {!Object.values(outputTools).some(Boolean) && (
+                  <section className="grid min-h-40 place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-5 text-center md:col-span-2">
+                    <div>
+                      <div className="font-bold">هنوز ابزاری فعال نیست</div>
+                      <p className="mt-1 text-xs leading-6 text-[var(--muted)]">از گزینه‌های بالا فقط عملیات موردنیازت را فعال کن. فایل‌های ورودی و صفحات تا وقتی خودت پاک‌سازی نکنی در محیط باقی می‌مانند.</p>
+                    </div>
+                  </section>
+                )}
+              </aside>
+            </>
+          )}
         </section>
         )}
 
