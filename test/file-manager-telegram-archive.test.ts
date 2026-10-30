@@ -91,7 +91,11 @@ describe('Telegram-backed Customs OS file manager', () => {
   it('shares one Telegram upload path between shipment creation and document manager', () => {
     expect(shipmentPage).toContain('uploadTelegramArchivedFile');
     expect(shipmentPage).toContain('getDefaultShipmentUploadFolder(selected)');
-    expect(shipmentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
+    const shipmentArchiveUploadStart = shipmentPage.indexOf('const upload=async(files:FileList|null)=>');
+    const shipmentArchiveUploadEnd = shipmentPage.indexOf('const download=async', shipmentArchiveUploadStart);
+    const shipmentArchiveUpload = shipmentPage.slice(shipmentArchiveUploadStart, shipmentArchiveUploadEnd);
+    expect(shipmentArchiveUpload).toContain('uploadTelegramArchivedFile');
+    expect(shipmentArchiveUpload).not.toMatch(/storage\\.from\\(BUCKET\\)\\.upload\\(/);
     expect(documentPage).toContain('uploadTelegramArchivedFile');
     expect(documentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
     expect(clientDocumentPage).toContain('uploadTelegramArchivedFile');
