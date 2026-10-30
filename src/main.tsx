@@ -11,6 +11,7 @@ import './styles/ai-workspace.css';
 import './styles/mobile-workspace-cohesion.css';
 import './styles/mobile-chat-calendar-fix.css';
 import { startOfflineQueue } from './lib/offlineQueue';
+import { registerSW } from 'virtual:pwa-register';
 
 type BoundaryState = { hasError: boolean; message: string };
 
@@ -135,6 +136,35 @@ try {
 } catch (error) {
   console.error('[Customs OS] Offline queue initialization failed:', error);
 }
+
+// vite.config.ts intentionally disables injected registration so we can keep
+// the update prompt under the application's control. Register the custom
+// injectManifest worker explicitly; do not auto-activate a waiting update while
+// a customs form or chat composer may contain unsaved work.
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  const updateServiceWorker = registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      window.dispatchEvent(new Event('customs-os:pwa-update-ready'));
+    },
+    onOfflineReady() {
+      console.info('[Customs OS] Offline app shell is ready.');
+    },
+    onRegisterError(error) {
+      console.error('[Customs OS] Service worker registration failed:', error);
+      window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
+    },
+  });
+
+  window.addEventListener('customs-os:pwa-update-request', () => {
+    window.dispatchEvent(new Event('customs-os:pwa-update-started'));
+    void updateServiceWorker().catch((error) => {
+      console.error('[Customs OS] Service worker update failed:', error);
+      window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
+    });
+  });
+}
+
 
 const rootElement = document.getElementById('root');
 
