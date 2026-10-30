@@ -128,6 +128,13 @@ describe('AI Operator security invariants',()=>{
    expect(assistant).not.toContain('vessels=vessels.data||[]');
  });
 
+ it('routes ordinary chat to the fast assistant but keeps action commands in the operator path',()=>{
+   const workspace=readFileSync(new URL('../src/components/AIWorkspace.tsx',import.meta.url),'utf8');
+   expect(workspace).toContain('if(!extractFields&&text&&operatorIntent)');
+   expect(workspace).toContain(String.raw`\b(create`);
+   expect(workspace).toContain(String.raw`ثبت\s*`);
+   expect(workspace).not.toContain(String.raw`\\b(create`);
+ });
  it('pre-archives complete shipment documents in Telegram and sends only the Telegram asset ID to AI',()=>{
    const shipment=readFileSync(new URL('../src/pages/ShipmentFirstPage.tsx',import.meta.url),'utf8');
    const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
