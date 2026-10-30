@@ -79,6 +79,8 @@ describe('AI Operator security invariants',()=>{
 
    expect(workspace).toContain('مقادیر قبلی فرم را هم جایگزین کن');
    expect(workspace).toContain('هیچ فرمی خودکار ثبت یا ارسال نشد');
+   expect(workspace).toContain('formPageContext!==pageContext');
+   expect(workspace).toContain('current.some((item,index)=>item.key!==formSchema[index]?.key)');
    expect(workspace).not.toMatch(/\.submit\s*\(/);
    expect(assistant).toContain('formSchema=Array.isArray(b.form_schema)');
    expect(assistant).toContain('JSON.stringify(formSchema)');
