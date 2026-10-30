@@ -278,7 +278,7 @@ export const PdfStudioPage: React.FC = () => {
           previewBytes = await pdfSource.save();
         } else {
           const pdfMarkers = new TextDecoder('latin1').decode(new Uint8Array(fileBytes));
-          hasProtectedFeatures = /\/ByteRange\s*\[|\/Type\s*\/Sig\b|\/FT\s*\/Sig\b|\/AcroForm\b|\/XFA\b|\/EmbeddedFiles\b|\/Filespec\b|\/Outlines\b|\/StructTreeRoot\b|\/OutputIntents\b|\/AF\s*\[|\/Annots\b|\/Metadata\b|\/PageLabels\b|\/OCProperties\b|\/OpenAction\b|\/JavaScript\b|\/Perms\b|\/Collection\b|\/Threads\b/i.test(pdfMarkers);
+          hasProtectedFeatures = /\/ByteRange\s*\[|\/Type\s*\/Sig\b|\/FT\s*\/Sig\b|\/AcroForm\b|\/XFA\b|\/EmbeddedFiles\b|\/Filespec\b|\/Outlines\b|\/StructTreeRoot\b|\/OutputIntents\b|\/AF\s*\[|\/Annots\b|\/PageLabels\b|\/OCProperties\b|\/OpenAction\b|\/JavaScript\b|\/Perms\b|\/Collection\b|\/Threads\b/i.test(pdfMarkers);
           pdfSource = await PDFDocument.load(fileBytes);
           previewBytes = new Uint8Array(fileBytes.slice(0));
         }
@@ -576,12 +576,15 @@ export const PdfStudioPage: React.FC = () => {
       documents.filter((document) => document.hasProtectedFeatures && compressionItems.some((item) => item.documentId === document.id))
         .map((document) => document.id),
     );
+    // Explicit raster mode means the user has accepted losing page-level PDF features.
+    // Smart/preserve modes keep complex source documents vector-based where possible.
+    const pagePreservationIds = compressionSettings.mode === 'raster' ? new Set<string>() : protectedDocumentIds;
     const warnings: string[] = [];
     if (compressionSettings.mode === 'raster') {
       warnings.push('در حالت فشرده‌سازی تصویری کامل، متن قابل جست‌وجو، فرم‌ها، لینک‌ها و لایه‌ها حفظ نمی‌شوند.');
     }
     if (protectedDocumentIds.size) {
-      warnings.push('یکی از فایل‌ها امضای دیجیتال یا فرم محافظت‌شده دارد. برای ساخت یک PDF واحد، صفحات در سند جدید ادغام می‌شوند؛ اعتبار امضای دیجیتال حفظ نمی‌شود و اجزای تعاملی ممکن است منتقل نشوند. صفحات این فایل‌ها تا حد امکان تصویری نمی‌شوند.');
+      warnings.push('یکی از فایل‌ها ساختار محافظت‌شده‌ای مانند امضا، فرم، پیوند یا لایه دارد. ساخت PDF جدید ممکن است اعتبار امضای دیجیتال یا اجزای تعاملی را حفظ نکند؛ در حالت هوشمند این صفحات تا حد امکان برداری باقی می‌مانند.');
     }
     if (warnings.length && !window.confirm(warnings.join('\n\n') + '\n\nفایل‌های اصلی بدون تغییر باقی می‌مانند. ادامه می‌دهید؟')) return;
 
@@ -589,7 +592,7 @@ export const PdfStudioPage: React.FC = () => {
     setError('');
     try {
       const originalBytes = await createPdfBytes(compressionItems);
-      let candidate = await compressDocumentPages(compressionItems, compressionSettings, protectedDocumentIds);
+      let candidate = await compressDocumentPages(compressionItems, compressionSettings, pagePreservationIds);
       let compressionMode = compressionSettings.mode;
 
       if (candidate.blob.size >= originalBytes.byteLength && compressionSettings.mode === 'smart') {
@@ -622,7 +625,7 @@ export const PdfStudioPage: React.FC = () => {
             ...compressionSettings,
             mode: 'raster',
             ...attempt,
-          }, protectedDocumentIds);
+          }, pagePreservationIds);
           if (next.blob.size < candidate.blob.size) candidate = next;
           if (candidate.blob.size < originalBytes.byteLength) break;
         }
@@ -649,7 +652,7 @@ export const PdfStudioPage: React.FC = () => {
           formatSize(originalBytes.byteLength) + ' به ' + formatSize(candidate.blob.size) +
           ' (کاهش ' + savedPercent + '٪) · صفحات حفظشده: ' + candidate.preservedPages +
           ' · صفحات تصویری: ' + candidate.rasterizedPages +
-          (protectedDocumentIds.size ? ' · صفحات دارای امضا یا فرم محافظت‌شده تصویری نشدند.' : '') +
+          (pagePreservationIds.size ? ' · صفحات دارای ساختار محافظت‌شده برداری نگه داشته شدند.' : '') +
           (compressionMode === 'raster' && compressionSettings.mode === 'smart' ? ' · روش تصویری جایگزین اجرا شد.' : ''),
       }]);
     } catch (reason) {
