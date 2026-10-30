@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Archive, BadgeCheck, Building2, CheckCircle2, CircleAlert, ClipboardList, Download,
+  Archive, BadgeCheck, Building2, CheckCircle2, AlertCircle, ClipboardList, Download,
   Eye, FileCheck2, FileSignature, FileText, Inbox, Loader2, Mail, Paperclip, PenLine,
   Plus, Printer, Save, Send, ShieldCheck, Stamp, Upload, X,
 } from 'lucide-react';
@@ -572,7 +572,7 @@ export const OfficeAutomationPage: React.FC = () => {
               ))}
               {clientId && <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
                 <div className="flex items-center gap-2 text-xs font-bold">
-                  {validAuthority ? <CheckCircle2 className="text-emerald-500" size={16}/> : <CircleAlert className="text-amber-500" size={16}/>}
+                  {validAuthority ? <CheckCircle2 className="text-emerald-500" size={16}/> : <AlertCircle className="text-amber-500" size={16}/>}
                   {authorityName[company?.authority_status || 'not_provided']}
                 </div>
                 <label className="mt-3 block text-xs text-[var(--muted)]">نام امضاکننده مجاز<input className={inputClass} disabled={!canConfigure} value={companyForm.authorized_signer_name} onChange={(e) => setCompanyForm((p) => ({ ...p, authorized_signer_name: e.target.value }))}/></label>

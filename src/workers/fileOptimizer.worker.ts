@@ -1,6 +1,11 @@
 import { PDFDocument } from 'pdf-lib';
 
 type WorkerRequest = { id: string; file: File };
+const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+};
 const context = self as unknown as {
   onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null;
   postMessage: (message: unknown) => void;
@@ -35,7 +40,7 @@ context.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       const optimized = await pdf.save({ useObjectStreams: true });
       context.postMessage({
         id,
-        blob: new Blob([optimized], { type: 'application/pdf' }),
+        blob: new Blob([toArrayBuffer(optimized)], { type: 'application/pdf' }),
         method: 'pdf-structure',
       });
       return;

@@ -36,6 +36,11 @@ const downloadBlob = (blob: Blob, name: string) => {
   window.setTimeout(() => URL.revokeObjectURL(url), 2500);
 };
 const safeName = (name: string) => name.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 100) || 'document';
+const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+};
 
 export const PdfStudioPage: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -173,7 +178,7 @@ export const PdfStudioPage: React.FC = () => {
 
   const buildPdf = async (items: PageItem[], fileName: string) => {
     const bytes = await createPdfBytes(items);
-    downloadBlob(new Blob([bytes], { type: 'application/pdf' }), fileName.endsWith('.pdf') ? fileName : fileName + '.pdf');
+    downloadBlob(new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), fileName.endsWith('.pdf') ? fileName : fileName + '.pdf');
   };
 
   const exportMerged = async (onlySelected = false) => {
@@ -229,7 +234,7 @@ export const PdfStudioPage: React.FC = () => {
         const pdf = sourcePdfs.current.get(source.id);
         if (!pdf) continue;
         const bytes = await pdf.save({ useObjectStreams: true });
-        const blob = new Blob([bytes], { type: 'application/pdf' });
+        const blob = new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' });
         const saved = Math.max(0, source.file.size - blob.size);
         totalSaved += saved;
         downloadBlob(blob.size < source.file.size
@@ -280,7 +285,7 @@ export const PdfStudioPage: React.FC = () => {
           canvas.height = 1;
         }
         const bytes = await output.save({ useObjectStreams: true });
-        const resultBlob = new Blob([bytes], { type: 'application/pdf' });
+        const resultBlob = new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' });
         const smaller = resultBlob.size < source.file.size;
         downloadBlob(smaller ? resultBlob : source.file, safeName(source.file.name) + (smaller ? '-scan-compressed.pdf' : '-original.pdf'));
         await pdf.destroy();
@@ -333,7 +338,7 @@ export const PdfStudioPage: React.FC = () => {
         }
         const bytes = await source.save({ useObjectStreams: true });
         const fileName = documents.find((document) => document.id === documentId)?.file.name || 'document.pdf';
-        downloadBlob(new Blob([bytes], { type: 'application/pdf' }), safeName(fileName) + '-annotated.pdf');
+        downloadBlob(new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), safeName(fileName) + '-annotated.pdf');
       }
       setStatus('یادداشت تصویری روی صفحات انتخاب‌شده درج شد. برای خروجی جدید، فایل اصلی را دوباره اضافه کنید.');
     } catch (reason) {
@@ -369,7 +374,7 @@ export const PdfStudioPage: React.FC = () => {
         }
         const outputBytes = await source.save({ useObjectStreams: true });
         const fileName = documents.find((document) => document.id === documentId)?.file.name || 'document.pdf';
-        downloadBlob(new Blob([outputBytes], { type: 'application/pdf' }), safeName(fileName) + '-signed.pdf');
+        downloadBlob(new Blob([toArrayBuffer(outputBytes)], { type: 'application/pdf' }), safeName(fileName) + '-signed.pdf');
       }
       setStatus('تصویر مهر یا امضا روی صفحات انتخاب‌شده قرار گرفت.');
     } catch (reason) {
