@@ -78,7 +78,7 @@ export const PdfStudioPage: React.FC = () => {
         if (plannedBytes > MAX_TOTAL_PDF_BYTES) throw new Error('مجموع حجم فایل‌های این نوبت حداکثر ۱۸۰ مگابایت است تا مرورگر روی موبایل پایدار بماند.');
         const bytes = await file.arrayBuffer();
         const pdfMarkers = new TextDecoder('latin1').decode(new Uint8Array(bytes));
-        const hasProtectedFeatures = /\/ByteRange\s*\[|\/Type\s*\/Sig\b|\/FT\s*\/Sig\b|\/AcroForm\b|\/XFA\b|\/EmbeddedFiles\b|\/Filespec\b|\/Outlines\b|\/StructTreeRoot\b|\/OutputIntents\b|\/AF\s*\[/i.test(pdfMarkers);
+        const hasProtectedFeatures = /\/ByteRange\s*\[|\/Type\s*\/Sig\b|\/FT\s*\/Sig\b|\/AcroForm\b|\/XFA\b|\/EmbeddedFiles\b|\/Filespec\b|\/Outlines\b|\/StructTreeRoot\b|\/OutputIntents\b|\/AF\s*\[|\/Annots\b|\/Metadata\b|\/PageLabels\b|\/OCProperties\b|\/OpenAction\b|\/JavaScript\b|\/Perms\b|\/Collection\b|\/Threads\b/i.test(pdfMarkers);
         const pdfSource = await PDFDocument.load(bytes);
         plannedPages += pdfSource.getPageCount();
         if (plannedPages > MAX_TOTAL_PAGES) throw new Error('حداکثر ۳۰۰ صفحه در هر نوبت کاری قابل بارگذاری است. فایل‌های دیگر را در نوبت جداگانه اضافه کنید.');

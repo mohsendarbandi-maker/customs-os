@@ -946,6 +946,7 @@ export const OfficeAutomationPage: React.FC = () => {
                     active.apply_stamp && generatedStamp ? <div className="generated-stamp" style={{ color: printBrandColor, borderColor: printBrandColor }}>
                       <div className="company">{printCompanyName}</div>
                       <div className="number">شماره ثبت: {printRegistration || '—'}</div>
+                      <div className="mt-1 text-[8px]">مهر گرافیکی تولیدی</div>
                     </div> : null}
                 </div>
               </div>
@@ -957,7 +958,7 @@ export const OfficeAutomationPage: React.FC = () => {
             </>}
           </section>
         );
-      })()}>}
+      })()}
     </main>
   );
 };

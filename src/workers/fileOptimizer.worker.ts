@@ -32,7 +32,7 @@ context.onmessage = async (event: MessageEvent<WorkerRequest>) => {
     if (file.type === 'application/pdf') {
       const source = await file.arrayBuffer();
       const raw = new TextDecoder('latin1').decode(new Uint8Array(source));
-      if (/\/ByteRange\s*\[|\/Type\s*\/Sig\b|\/FT\s*\/Sig\b|\/AcroForm\b|\/XFA\b|\/EmbeddedFiles\b|\/Filespec\b|\/Outlines\b|\/StructTreeRoot\b|\/OutputIntents\b|\/AF\s*\[/i.test(raw)) {
+      if (/\/ByteRange\s*\[|\/Type\s*\/Sig\b|\/FT\s*\/Sig\b|\/AcroForm\b|\/XFA\b|\/EmbeddedFiles\b|\/Filespec\b|\/Outlines\b|\/StructTreeRoot\b|\/OutputIntents\b|\/AF\s*\[|\/Annots\b|\/Metadata\b|\/PageLabels\b|\/OCProperties\b|\/OpenAction\b|\/JavaScript\b|\/Perms\b|\/Collection\b|\/Threads\b/i.test(raw)) {
         context.postMessage({ id, reason: 'protected-pdf' });
         return;
       }
