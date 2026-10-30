@@ -58,8 +58,11 @@ describe('one canonical Customs OS PWA', () => {
     expect(worker).toContain('status: 301');
     expect(worker).toContain("'chat.darbandicommercial.ir'");
     expect(worker).toContain("'reminders.darbandicommercial.ir'");
-    // The dedicated mobile hostname must stay on its own origin, not join legacy redirects.
-    expect(worker).not.toContain("'mobile.darbandicommercial.ir'");
+    // Mobile keeps its browser URL but fetches the shared app shell/assets from the canonical origin.
+    expect(worker).toContain("url.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("assetBase.hostname = 'darbandicommercial.ir'");
+    const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
+    expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
     expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
     expect(worker).toContain("canonical.pathname = '/chat'");
     expect(worker).toContain("canonical.pathname = '/reminders'");
