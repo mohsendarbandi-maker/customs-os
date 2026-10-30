@@ -86,6 +86,12 @@ function collectCurrentFormSchema():FormFieldSchema[]{
  }
  return result;
 }
+function readCurrentFormValues(schema:FormFieldSchema[]){
+ const controls=Array.from(document.querySelectorAll('[data-ai-form-field]')) as Array<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>;
+ const values:Record<string,string>={};
+ for(const field of schema){const el=controls.find(control=>control.getAttribute('data-ai-form-field')===field.key);const value=String(el?.value||'').trim();if(value)values[field.key]=value;}
+ return values;
+}
 function applyToCurrentForm(fields:Extracted,schema:FormFieldSchema[]=[],replaceExisting=false){
  const applied:string[]=[];const missing:string[]=[];const skipped:string[]=[];
  if(schema.length){
@@ -168,6 +174,19 @@ export const AIWorkspace:React.FC<{pageContext?:string}>=({pageContext=''})=>{
  const[open,setOpen]=useState(false),[tab,setTab]=useState<'chat'|'doc'>('chat'),[input,setInput]=useState(''),[messages,setMessages]=useState<Msg[]>([]),[busy,setBusy]=useState(false),[fields,setFields]=useState<Extracted>({}),[status,setStatus]=useState(''),[applied,setApplied]=useState(0),[docResults,setDocResults]=useState<DocResult[]>([]),[formSchema,setFormSchema]=useState<FormFieldSchema[]>([]),[replaceExisting,setReplaceExisting]=useState(false),[sessionId]=useState(()=>{try{const k='customs_ai_session_id';const old=localStorage.getItem(k);if(old)return old;const id=makeClientId();localStorage.setItem(k,id);return id}catch{return ''}}),[listening,setListening]=useState(false),[pendingOperator,setPendingOperator]=useState<PendingOperator|null>(null),[operatorFinal,setOperatorFinal]=useState('');const fileRef=useRef<HTMLInputElement|null>(null);const recognitionRef=useRef<any>(null);const mediaRecorderRef=useRef<MediaRecorder|null>(null);const mediaStreamRef=useRef<MediaStream|null>(null);const voiceChunksRef=useRef<Blob[]>([]);
  const ask=async(text=input.trim(),documentText='',extractFields=false,documentData='',documentMimeType='',commandMode=false,documentStoragePath='',currentFormSchema:FormFieldSchema[]=[])=>{if(!text&&!documentText&&!documentData)return null;setBusy(true);setStatus('');if(text)setMessages(m=>[...m,{role:'user',text}]);setInput('');
   try{
+   const fillIntent=/\\b(fill|populate|complete)\\b|پر\\s*کن|پُر\\s*کن|تکمیل\\s*(?:کن|کنید|نمای|نمایید)/i.test(text)&&/(فرم|فیلد|اظهارنامه|بارنامه|محموله|کشتی|گمرک)/i.test(text);
+   if(!extractFields&&text&&fillIntent){
+    const schema=collectCurrentFormSchema();
+    if(!schema.length){const answer='در صفحه فعلی فرم قابل‌پرکردنی پیدا نکردم. ابتدا صفحه و فرم موردنظر را باز کن، سپس دوباره درخواست بده.';setMessages(m=>[...m,{role:'assistant',text:answer,status:'form-not-found'}]);return answer;}
+    const currentValues=readCurrentFormValues(schema);
+    const{data:fillData,error:fillError}=await invokeEdgeFunction('ai-assistant',{body:{query:text,form_fill:true,form_schema:schema,current_form_values:currentValues,shipment_id:shipmentId||undefined,page_context:pageContext}});
+    if(fillError)throw fillError;
+    const proposed=parseFields(String(fillData?.answer||''));
+    if(!Object.keys(proposed).length)throw new Error('هوش مصنوعی برای فرم فعلی مقدار قابل‌اعمالی پیدا نکرد. اسناد را بارگذاری کن یا درخواست را دقیق‌تر بنویس.');
+    setFormSchema(schema);setReplaceExisting(false);setFields(proposed);setDocResults([{name:'پیشنهاد تکمیل فرم فعلی',fields:proposed}]);setTab('doc');
+    const answer=Object.keys(proposed).length+' فیلد به‌صورت پیش‌نویس برای فرم فعلی آماده شد. مقادیر را بررسی کن و سپس دکمه اعمال را بزن؛ هیچ داده‌ای هنوز ثبت نهایی نشده است.';
+    setMessages(m=>[...m,{role:'assistant',text:answer,status:'form-draft-ready'}]);return answer;
+   }
    if(!extractFields&&text){
     try{
      const{data,error}=await invokeEdgeFunction('ai-operator',{body:{op:'plan',query:text,page_context:pageContext,session_id:sessionId,attachment_meta:null}});
