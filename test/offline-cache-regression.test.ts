@@ -38,13 +38,15 @@ describe('offline and background-update safety', () => {
     expect(runtime).toContain('تازه‌سازی صفحه');
   });
 
-  it('waits for user consent before activating an updated service worker', () => {
+  it('keeps service-worker updates behind the compact manual toolbar action', () => {
     expect(lifecycle).toContain('onNeedRefresh: () => {');
-    expect(lifecycle).toContain('setNewVersionAvailable(true)');
-    expect(lifecycle).toContain('نسخهٔ جدید آماده است');
-    expect(lifecycle).toContain('await activate(true)');
+    expect(lifecycle).toContain("customs-os:pwa-update-ready");
+    expect(lifecycle).toContain("customs-os:pwa-update-request");
+    expect(lifecycle).toContain('await activate(false)');
+    expect(lifecycle).not.toContain('pwa-version-notice');
+    expect(lifecycle).not.toContain('setNewVersionAvailable(true)');
     expect(serviceWorker).toContain("event.data.type === 'SKIP_WAITING'");
-    expect(serviceWorker).not.toContain('self.skipWaiting();\nclientsClaim();');
+    expect(serviceWorker).not.toContain('self.skipWaiting();\\nclientsClaim();');
   });
 
   it('stores query snapshots in a bounded, user-and-organization-scoped IndexedDB store', () => {
