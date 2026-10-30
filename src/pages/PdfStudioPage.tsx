@@ -547,7 +547,8 @@ export const PdfStudioPage: React.FC = () => {
         const items = compressionItems.filter((item) => item.documentId === document.id);
         if (!items.length) continue;
         const sourceOriginal = await document.file.arrayBuffer();
-        originalTotal += sourceOriginal.byteLength;
+        const originalPages = document.hasProtectedFeatures ? sourceOriginal : await createPdfBytes(items);
+        originalTotal += originalPages.byteLength;
         let outputBlob: Blob;
         if (document.hasProtectedFeatures) {
           outputBlob = new Blob([sourceOriginal], { type: 'application/pdf' });
@@ -565,7 +566,13 @@ export const PdfStudioPage: React.FC = () => {
           rasterizedTotal += candidate.rasterizedPages;
         }
         const baseName = safeName(document.file.name);
-        outputFiles[baseName + '-compressed.pdf'] = new Uint8Array(await outputBlob.arrayBuffer());
+        let outputName = baseName + '-compressed.pdf';
+        let duplicateIndex = 2;
+        while (outputFiles[outputName]) {
+          outputName = baseName + '-' + duplicateIndex + '-compressed.pdf';
+          duplicateIndex += 1;
+        }
+        outputFiles[outputName] = new Uint8Array(await outputBlob.arrayBuffer());
         outputTotal += outputBlob.size;
       }
       if (!Object.keys(outputFiles).length) throw new Error('هیچ فایل خروجی ساخته نشد.');
@@ -1003,23 +1010,36 @@ export const PdfStudioPage: React.FC = () => {
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError || !authData.user) throw new Error('نشست معتبر نیست؛ دوباره وارد سامانه شوید.');
       const sampleName = sampleDisplayName.trim() || sampleFile.name;
+      const sampleRecord = {
+        organization_id: organizationId,
+        document_type: sampleDocumentType.trim(),
+        sample_name: sampleName,
+        source_filename: sampleFile.name,
+        source_mime_type: sampleFile.type || 'application/pdf',
+        sample_hash: sampleHash,
+        page_count: samplePageCount,
+        features: { version: 1, featureSource: 'local-text-and-ocr', pages: pageFeatures },
+        created_by: authData.user.id,
+      };
       const { data, error: saveError } = await (supabase as any).from('pdf_document_recognition_samples')
-        .upsert({
-          organization_id: organizationId,
-          document_type: sampleDocumentType.trim(),
-          sample_name: sampleName,
-          source_filename: sampleFile.name,
-          source_mime_type: sampleFile.type || 'application/pdf',
-          sample_hash: sampleHash,
-          page_count: samplePageCount,
-          features: { version: 1, featureSource: 'local-text-and-ocr', pages: pageFeatures },
-          created_by: authData.user.id,
-        }, { onConflict: 'organization_id,sample_hash,document_type' })
+        .insert(sampleRecord)
         .select('id,document_type,sample_name,source_filename,page_count,features,created_at')
         .single();
-      if (saveError) throw saveError;
-      const savedSample = data as RecognitionSample;
-      setRecognitionSamples((previous) => [savedSample, ...previous.filter((item) => item.id !== savedSample.id)]);
+      if (saveError && saveError.code !== '23505') throw saveError;
+      let resultSample = data as RecognitionSample | null;
+      if (saveError?.code === '23505') {
+        const { data: existing, error: existingError } = await (supabase as any).from('pdf_document_recognition_samples')
+          .select('id,document_type,sample_name,source_filename,page_count,features,created_at')
+          .eq('organization_id', organizationId)
+          .eq('document_type', sampleDocumentType.trim())
+          .eq('sample_hash', sampleHash)
+          .single();
+        if (existingError) throw existingError;
+        resultSample = existing as RecognitionSample;
+      }
+      if (!resultSample) throw new Error('نمونه ذخیره نشد.');
+      const savedSample = resultSample;
+      setRecognitionSamples((previous) => [savedSample!, ...previous.filter((item) => item.id !== savedSample!.id)]);
       setPages((previous) => previous.map((page) => {
         const match = recognizeDocumentPage(page.features, [savedSample]);
         return match && match.confidence >= 0.2
