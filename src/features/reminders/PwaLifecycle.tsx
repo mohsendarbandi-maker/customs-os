@@ -23,7 +23,7 @@ export const PwaLifecycle: React.FC = () => {
   const updateSW = useRef<UpdateSW | null>(null);
   const updateAvailable = useRef(false);
   const updateInProgress = useRef(false);
-  const updateTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const updateTimeout = useRef<number | null>(null);
   const activateUpdateRef = useRef<() => Promise<void>>(async () => undefined);
   const location = useLocation();
 
