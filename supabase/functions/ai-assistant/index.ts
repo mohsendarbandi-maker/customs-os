@@ -8,7 +8,7 @@ const strip=(s:string)=>s.replace(/^data:[^;]+;base64,/,'');
 const clip=(s:string,n:number)=>{const x=String(s||'');return x.length<=n?x:x.slice(0,n)+'\\n[context clipped]';};
 const geminiSchema=(keys:string[],formSchema:any[]=[])=>({type:'object',properties:Object.fromEntries(keys.map(k=>{const f=formSchema.find((x:any)=>x.key===k),values=Array.isArray(f?.options)?[...new Set(f.options.map((x:any)=>String(x.value||'')).filter(Boolean))]:[];return[k,{type:'string',description:String(f?.label||k),...(values.length?{enum:values}:{})}];})),required:keys});
 const openaiSchema=(keys:string[],formSchema:any[]=[])=>({type:'object',properties:Object.fromEntries(keys.map(k=>{const f=formSchema.find((x:any)=>x.key===k),values=Array.isArray(f?.options)?[...new Set(f.options.map((x:any)=>String(x.value||'')).filter(Boolean))]:[];return[k,{type:'string',description:String(f?.label||k),...(values.length?{enum:values}:{})}];})),required:keys,additionalProperties:false});
-const text=(d:any)=>d?.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||'').filter(Boolean).join('\n').trim()||d?.output_text||d?.outputs?.filter((x:any)=>x?.type==='text').map((x:any)=>x.text||'').filter(Boolean).join('\n').trim()||'';
+const text=(d:any)=>d?.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||'').filter(Boolean).join('\n').trim()||d?.output_text||d?.outputs?.filter((x:any)=>x?.type==='text').map((x:any)=>x.text||'').filter(Boolean).join('\n').trim()||d?.steps?.filter((s:any)=>s?.type==='model_output').flatMap((s:any)=>s?.content||[]).filter((x:any)=>x?.type==='text').map((x:any)=>x.text||'').filter(Boolean).join('\n').trim()||'';
 const limited=(s:number,m:string)=>s===429||/rate.?limit|quota|too many|resource.?exhausted|limit exceeded/i.test(m);
 const providerKeys=(name:string,primary:string|undefined)=>{const values:string[]=[];if(primary)values.push(primary);const prefix=name==='Gemini'?'GEMINI_API_KEY':name==='Groq'?'GROQ_API_KEY':'';if(prefix){const count=name==='Gemini'?10:5;for(let i=1;i<=count;i++){const value=Deno.env.get(prefix+'_'+i);if(value&&!values.includes(value))values.push(value);}}if(name==='Cloudflare'){for(const key of ['CLOUDFLARE_API_TOKEN','CLOUDFLARE_AI_TOKEN']){const value=Deno.env.get(key);if(value&&!values.includes(value))values.push(value);}}return values;};
 const loadOperationalContext=async(sb:any,organizationId:string,selectedShipmentId='')=>{
@@ -69,7 +69,7 @@ Deno.serve(async(req)=>{const o=req.headers.get('Origin')||'';if(req.method==='O
     let payload:any;
     if(dm==='application/pdf'&&dd){
      endpoint='https://generativelanguage.googleapis.com/v1beta/interactions';
-     payload={model,input:[{type:'text',text:input},{type:'document',data:dd,mime_type:dm}],response_format:{type:'text',mime_type:'application/json',schema:openaiSchema(keys,formSchema)},generation_config:{max_output_tokens:1800},store:false};
+     payload={model,input:[{type:'text',text:input},{type:'document',data:dd,mime_type:dm}],response_format:{type:'text',mime_type:'application/json',schema:geminiSchema(keys,formSchema)},generation_config:{max_output_tokens:1800},store:false};
     }else{
      const pp:any=[{text:input}];if(dd)pp.push({inlineData:{mimeType:dm,data:dd}});
      payload={contents:[{role:'user',parts:pp}],generationConfig:keys.length?{responseMimeType:'application/json',responseSchema:geminiSchema(keys,formSchema)}:undefined};
