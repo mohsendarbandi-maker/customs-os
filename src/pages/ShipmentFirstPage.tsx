@@ -1,7 +1,11 @@
 import React,{useEffect,useState}from'react';
-import{Download,ExternalLink,Plus,RefreshCw,Save,ShieldCheck,Ship,Upload}from'lucide-react';
+import{CheckCircle2,Download,ExternalLink,Eye,FileText,Loader2,Plus,RefreshCw,Save,ShieldCheck,Ship,Sparkles,Upload}from'lucide-react';
 import{Link}from'react-router-dom';
 import{supabase}from'../lib/supabase';
+import{invokeEdgeFunction}from'../lib/edgeFunction';
+import * as pdfjsLib from 'pdfjs-dist';
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+pdfjsLib.GlobalWorkerOptions.workerSrc=workerUrl;
 import{useAuth}from'../context/AuthContext';
 import { useAutosavedDraft, formDraftKey } from '../hooks/useAutosavedDraft';
 import { FormDraftIndicator } from '../components/FormDraftIndicator';
@@ -13,7 +17,7 @@ import { createTelegramArchiveIdempotencyKey, downloadTelegramArchivedFile, FILE
 type Vessel={id:string;name:string;imo_number?:string|null;flag_code?:string|null;shipping_line_id?:string|null};type ShippingLine={id:string;name:string;name_fa?:string|null};
 type Office={id:string;code:string;name:string;city:string;is_active:boolean};type Row={id:string;client_id:string|null;vessel_id:string|null;customs_office_id:string|null;shipping_line:string|null;bill_of_lading_no:string|null;bill_of_lading_year:number|null;voyage_no:string|null;origin_port:string|null;destination_port:string|null;cargo_count:number|null;cargo_count_unit:string|null;net_weight_kg:number|null;gross_weight_kg:number|null;current_status:string;current_location:string|null;display_name:string|null;case_id:string|null;transport_documents_status:'not_ready'|'ready';release_invoice_payment_status:'unpaid'|'paid';ship_passed:boolean;ship_passed_at:string|null;ship_passed_by:string|null};
 type Form={ownerId:string;shippingLine:string;billOfLading:string;year:string;voyage:string;vessel:string;imo:string;flag:string;originPort:string;destinationPort:string;count:string;unit:string;net:string;gross:string;status:string;location:string;transportDocumentsStatus:'not_ready'|'ready';releaseInvoicePaymentStatus:'unpaid'|'paid'};
-type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;created_at:string};
+type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;created_at:string};type PendingShipmentDocument={id:string;name:string;storagePath:string;mimeType:string;sizeBytes:number;pageCount:number;previewUrl:string;uploadedBy:string;extractedFields?:Record<string,string>};
 const BUCKET='customs_documents';
 const empty:Form={ownerId:'',shippingLine:'',billOfLading:'',year:String(new Date().getFullYear()),voyage:'',vessel:'',imo:'',flag:'',originPort:'',destinationPort:'',count:'',unit:'رول',net:'',gross:'',status:'draft',location:'',transportDocumentsStatus:'not_ready',releaseInvoicePaymentStatus:'unpaid'};
 const digits=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
@@ -25,6 +29,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
  const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const[uploadTagInput,setUploadTagInput]=useState('');const uploadTags=[...new Set(uploadTagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
+ const[pendingDocuments,setPendingDocuments]=useState<PendingShipmentDocument[]>([]),[selectedBillOfLadingId,setSelectedBillOfLadingId]=useState(''),[stagingUploading,setStagingUploading]=useState(false),[extractingBillOfLadingId,setExtractingBillOfLadingId]=useState(''),[previewBillOfLadingId,setPreviewBillOfLadingId]=useState('');
  const formDraft=useAutosavedDraft(
   formDraftKey(profile?.id,`shipment-first:${profile?.organization_id||''}`,profile?.organization_id),
   {selected,form},
@@ -75,7 +80,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  useEffect(()=>{void loadDocs(selected)},[selected]);
  const chooseLine=(name:string)=>{set('shippingLine',name);const line=lines.find(x=>same(x.name,name)||same(x.name_fa||'',name));if(line&&!form.vessel){const v=vessels.find(x=>x.shipping_line_id===line.id);if(v){set('vessel',v.name);set('imo',v.imo_number||'');set('flag',v.flag_code||'')}}};
  const chooseVessel=(name:string)=>{set('vessel',name);const v=vessels.find(x=>same(x.name,name));if(v){set('imo',v.imo_number||'');set('flag',v.flag_code||'')}};
- const reset=()=>{formDraft.clearDraft(true,{selected:'',form:empty});setSelected('');setForm(empty);setDocs([]);setMessage('محموله جدید آماده ثبت است.')};
+ const reset=()=>{formDraft.clearDraft(true,{selected:'',form:empty});setSelected('');setForm(empty);setDocs([]);setMessage(pendingDocuments.length?'فرم محموله جدید آماده شد؛ فایل‌های بارگذاری‌شده برای اتصال به محموله بعدی حفظ شدند.':'محموله جدید آماده ثبت است.')};
  const edit=(r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_id);setSelected(r.id);setForm({ownerId:r.client_id||'',shippingLine:r.shipping_line||'',billOfLading:r.bill_of_lading_no||'',year:String(r.bill_of_lading_year||new Date().getFullYear()),voyage:r.voyage_no||'',vessel:v?.name||'',imo:v?.imo_number||'',flag:v?.flag_code||'',originPort:r.origin_port||'',destinationPort:r.destination_port||'',count:r.cargo_count==null?'':String(r.cargo_count),unit:r.cargo_count_unit||'رول',net:r.net_weight_kg==null?'':String(r.net_weight_kg),gross:r.gross_weight_kg==null?'':String(r.gross_weight_kg),status:r.current_status||'draft',location:r.current_location||'',transportDocumentsStatus:r.transport_documents_status||'not_ready',releaseInvoicePaymentStatus:r.release_invoice_payment_status||'unpaid'});setMessage('محموله برای مدیریت انتخاب شد.')};
  const ensureVessel=async()=>{
   const name=form.vessel.trim();if(!name)throw new Error('نام کشتی الزامی است.');
@@ -84,6 +89,80 @@ export const ShipmentFirstPage:React.FC=()=>{
   const imo=digits(form.imo).replace(/\D/g,'');if(imo&&!/^\d{7}$/.test(imo))throw new Error('IMO باید ۷ رقم باشد.');
   const{data,error}=await supabase.from('vessels').insert({organization_id:profile?.organization_id,name,imo_number:imo||null,flag_code:form.flag.toUpperCase()||null,shipping_line_id:line?.id||null}).select('id,name,imo_number,flag_code,shipping_line_id').single();
   if(error)throw error;setVessels(p=>[...p,data as Vessel]);return data as Vessel;
+ };
+ const uploadStagedShipmentDocuments=async(files:FileList|null)=>{
+  if(!files?.length)return;
+  if(!profile?.organization_id){setMessage('سازمان کاربر مشخص نیست.');return;}
+  setStagingUploading(true);setMessage('');
+  try{
+   const {data:{user},error:userError}=await supabase.auth.getUser();
+   if(userError||!user)throw new Error('نشست کاربر معتبر نیست؛ دوباره وارد شوید.');
+   let added=0;
+   for(const file of Array.from(files)){
+    if(file.size<=0)throw new Error('فایل خالی است: '+file.name);
+    if(file.size>30*1024*1024)throw new Error('حجم هر سند برای ثبت محموله حداکثر ۳۰ مگابایت است.');
+    const mime=(file.type||(/\.pdf$/i.test(file.name)?'application/pdf':'')).toLowerCase();
+    if(mime!=='application/pdf'&&!mime.startsWith('image/'))throw new Error('فقط PDF یا تصویر JPG/PNG قابل بارگذاری است: '+file.name);
+    let pageCount=1;
+    if(mime==='application/pdf'){
+     const bytes=await file.arrayBuffer();
+     const pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes)}).promise;
+     pageCount=pdf.numPages;await pdf.destroy();
+    }
+    const id=crypto.randomUUID();
+    const safe=file.name.normalize('NFKC').replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,140)||'bill-of-lading.pdf';
+    const path=`${profile.organization_id}/staging/${user.id}/${id}-${safe}`;
+    const {error:uploadError}=await supabase.storage.from(BUCKET).upload(path,file,{upsert:false,contentType:mime,cacheControl:'3600'});
+    if(uploadError)throw new Error(`آپلود «${file.name}» ناموفق بود: ${uploadError.message}`);
+    const {data:signed,error:signedError}=await supabase.storage.from(BUCKET).createSignedUrl(path,900);
+    if(signedError||!signed?.signedUrl){await supabase.storage.from(BUCKET).remove([path]);throw new Error(signedError?.message||'ساخت لینک امن پیش‌نمایش فایل ناموفق بود.');}
+    const pending:PendingShipmentDocument={id,name:file.name,storagePath:path,mimeType:mime,sizeBytes:file.size,pageCount,previewUrl:signed.signedUrl,uploadedBy:user.id};
+    setPendingDocuments(previous=>[...previous,pending]);
+    setSelectedBillOfLadingId(previous=>previous||id);
+    added++;
+   }
+   setMessage(`${added} فایل در فضای امن ذخیره شد. برای استخراج، یکی را به‌عنوان بارنامه انتخاب کن؛ برای ارسال به AI نیازی به آپلود دوباره نیست.`);
+  }catch(error:any){setMessage(error?.message||'آپلود سند محموله ناموفق بود.');}
+  finally{setStagingUploading(false);}
+ };
+ const extractSelectedBillOfLading=async()=>{
+  const document=pendingDocuments.find(item=>item.id===selectedBillOfLadingId);
+  if(!document){setMessage('ابتدا فایل بارنامه را انتخاب کن.');return;}
+  setExtractingBillOfLadingId(document.id);setMessage('فایل ذخیره‌شده در حال تحلیل است؛ فایل دوباره از دستگاه آپلود نمی‌شود...');
+  try{
+   const {data,error}=await invokeEdgeFunction('ai-assistant',{body:{
+    query:'از تمام صفحات فایل بارنامه انتخاب‌شده اطلاعات واقعی موردنیاز برای ثبت محموله دریایی را استخراج کن. هیچ داده‌ای را حدس نزن. اگر فیلدی در سند وجود ندارد، مقدار آن را خالی برگردان. اعداد و شناسه‌ها را دقیقاً مطابق سند حفظ کن.',
+    extract_fields:true,shipment_extract:true,document_storage_path:document.storagePath,
+    document_mime_type:document.mimeType,document_size_bytes:document.sizeBytes,
+    page_context:'ثبت محموله جدید - استخراج از بارنامه کامل'
+   }});
+   if(error)throw error;
+   const raw=String(data?.answer||'').replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+   const parsed=JSON.parse(raw) as Record<string,unknown>;
+   const val=(key:string)=>{const value=String(parsed[key]??'').trim();return value&&!/^x{2,}$/i.test(value)&&value!=='—'&&value!=='-'?value:''};
+   const ownerName=val('ownerName');
+   const owner=ownerName?clients.find(client=>same(client.name,ownerName)):null;
+   setForm(previous=>({
+    ...previous,
+    ownerId:owner?.id||previous.ownerId,
+    shippingLine:val('shippingLine')||previous.shippingLine,
+    billOfLading:val('billOfLading')||previous.billOfLading,
+    year:val('billOfLadingYear')||previous.year,
+    voyage:val('voyageNo')||previous.voyage,
+    vessel:val('vesselName')||previous.vessel,
+    imo:val('imo')||previous.imo,
+    originPort:val('originPort')||previous.originPort,
+    destinationPort:val('destinationPort')||previous.destinationPort,
+    count:val('count')||previous.count,
+    unit:val('unit')||previous.unit,
+    net:val('net')||previous.net,
+    gross:val('gross')||previous.gross,
+   }));
+   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,extractedFields:Object.fromEntries(Object.entries(parsed).filter(([,v])=>typeof v==='string'&&String(v).trim()).map(([k,v])=>[k,String(v)]))}:item));
+   const missingOwner=ownerName&&!owner;
+   setMessage(`استخراج انجام شد؛ اطلاعات قابل تشخیص به‌صورت پیش‌نویس در فرم قرار گرفت. ${missingOwner?'نام صاحب کالا در فهرست مشتریان دقیقاً پیدا نشد؛ لطفاً آن را دستی انتخاب کن. ':''}قبل از ذخیره، تمام مقادیر را با خود بارنامه تطبیق بده.`);
+  }catch(error:any){setMessage(error?.message||'استخراج بارنامه ناموفق بود. فایل در Storage باقی مانده و برای تلاش مجدد نیازی به آپلود دوباره نیست.');}
+  finally{setExtractingBillOfLadingId('');}
  };
  const save=async()=>{
   if(!profile?.organization_id)return setMessage('سازمان کاربر مشخص نیست.');
@@ -106,7 +185,30 @@ export const ShipmentFirstPage:React.FC=()=>{
     const{error:ca}=await supabase.from('cases').update({display_name:display}).eq('id',caseId);if(ca)throw ca;
    }
    const{error:te}=await supabase.rpc('set_shipment_tracking_status',{p_shipment_id:shipmentId,p_status:form.status||'draft',p_location:form.location||null,p_event_time:new Date().toISOString(),p_time_type:'actual',p_notes:'شروع عملیات / مدیریت محموله',p_source:'Customs OS'});if(te)throw te;
-   setSelected(shipmentId);setMessage('محموله، صاحب کالا، کشتی و وضعیت عملیاتی ذخیره شد.');await load();
+   const linkedDocumentIds:string[]=[];let documentLinkWarnings=0;
+   for(const staged of pendingDocuments){
+    try{
+     const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
+      organization_id:profile.organization_id,shipment_id:shipmentId,uploaded_by:staged.uploadedBy,
+      document_name:staged.name,original_file_name:staged.name,storage_path:staged.storagePath,
+      mime_type:staged.mimeType,file_size_bytes:staged.sizeBytes,
+      extraction_status:staged.extractedFields?'completed':'pending'
+     }).select('id').single();
+     if(docError||!doc)throw docError||new Error('ثبت مشخصات سند ناموفق بود.');
+     linkedDocumentIds.push(staged.id);
+     if(staged.extractedFields){
+      const rows=Object.entries(staged.extractedFields).filter(([,v])=>String(v||'').trim()).map(([key,value])=>({
+       organization_id:profile.organization_id,shipment_id:shipmentId,document_id:doc.id,
+       field_key:key,field_label:key,extracted_value:value,extraction_method:'ai-assistant',confidence:null
+      }));
+      if(rows.length){const {error:extractionError}=await supabase.from('shipment_document_extractions').upsert(rows,{onConflict:'shipment_id,document_id,field_key'});if(extractionError)throw extractionError;}
+     }
+    }catch(documentError){documentLinkWarnings++;console.error('[ShipmentFirstPage] pending document link failed:',documentError);}
+   }
+   if(linkedDocumentIds.length)setPendingDocuments(previous=>previous.filter(item=>!linkedDocumentIds.includes(item.id)));
+   setSelected(shipmentId);
+   setMessage(`محموله و اطلاعات عملیاتی ذخیره شد. ${linkedDocumentIds.length} سند به محموله متصل شد.${documentLinkWarnings?' اتصال '+documentLinkWarnings+' سند نیازمند تلاش مجدد است.':''}`);
+   await load();
   }catch(e:any){setMessage(e?.message||'ذخیره محموله ناموفق بود')}finally{setBusy(false)}
  };
  const upload=async(files:FileList|null)=>{
@@ -165,6 +267,38 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
  const vesselSearch=selected?'/vessel-search?name='+encodeURIComponent(vessel?.name||form.vessel)+'&imo='+encodeURIComponent(vessel?.imo_number||form.imo)+'&bl='+encodeURIComponent(form.billOfLading):'#';
  return <main dir="rtl" className="min-h-screen p-4 md:p-6" style={{background:'var(--bg)',color:'var(--text)'}}><div className="max-w-[1500px] mx-auto space-y-4">
   <header className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs app-muted">مرحله ۱</div><h1 className="text-2xl font-black">شروع عملیات</h1><p className="text-xs app-muted mt-1">محموله، صاحب کالا، کشتی، وضعیت کشتی و اسناد محموله در یک مرحله.</p><div className="mt-2"><FormDraftIndicator status={formDraft.status} onSave={formDraft.saveDraftNow}/></div></div><div className="flex gap-2"><button onClick={()=>void load()} className="icon-btn" title="بروزرسانی"><RefreshCw size={16}/></button><button onClick={reset} className="px-4 py-2 rounded-xl border app-border"><Plus size={16} className="inline ml-1"/>محموله جدید</button></div></header>
+  <section className="rounded-2xl border-2 border-dashed app-border bg-[var(--surface)] p-4 sm:p-5">
+   <div className="flex flex-wrap items-center justify-between gap-3">
+    <div><div className="flex items-center gap-2 font-black"><FileText size={18}/> بارگذاری سند برای ثبت محموله</div><p className="mt-1 text-xs app-muted">فایل کامل PDF را یک‌بار ذخیره کن؛ سپس همان فایل را به‌عنوان بارنامه انتخاب و برای استخراج اطلاعات بفرست.</p></div>
+    <label className="cursor-pointer rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">
+     <Upload size={16} className="inline ml-1"/>{stagingUploading?'در حال ذخیره فایل...':'انتخاب و آپلود سند'}
+     <input type="file" accept="application/pdf,image/jpeg,image/png" multiple className="hidden" disabled={stagingUploading} onChange={e=>{void uploadStagedShipmentDocuments(e.target.files);e.currentTarget.value=''}}/>
+    </label>
+   </div>
+   {pendingDocuments.length>0&&<div className="mt-4 space-y-2">
+    {pendingDocuments.map(document=><div key={document.id} className={`rounded-xl border p-3 ${selectedBillOfLadingId===document.id?'border-[var(--primary)] bg-[var(--surface-2)]':'app-border'}`}>
+     <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+       {selectedBillOfLadingId===document.id?<CheckCircle2 className="text-[var(--primary)]" size={18}/>:<FileText size={18} className="app-muted"/>}
+       <div className="min-w-0"><b className="block truncate text-sm">{document.name}</b><span className="text-[11px] app-muted">{(document.sizeBytes/1024/1024).toFixed(2)} MB · {document.pageCount} صفحه · ذخیره‌شده در Storage</span></div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+       <button type="button" onClick={()=>setSelectedBillOfLadingId(document.id)} className={`rounded-lg px-3 py-2 text-xs font-bold ${selectedBillOfLadingId===document.id?'bg-[var(--primary)] text-white':'border app-border'}`}>{selectedBillOfLadingId===document.id?'بارنامه انتخاب‌شده':'انتخاب به‌عنوان بارنامه'}</button>
+       <button type="button" onClick={()=>setPreviewBillOfLadingId(previous=>previous===document.id?'':document.id)} className="rounded-lg border app-border px-3 py-2 text-xs"><Eye size={14} className="inline ml-1"/>نمایش</button>
+      </div>
+     </div>
+     {document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}
+     {previewBillOfLadingId===document.id&&<iframe title={document.name} src={document.previewUrl} className="mt-3 h-[420px] w-full rounded-xl border app-border bg-white"/>}
+    </div>)}
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--surface-2)] p-3">
+     <div className="text-xs app-muted">فقط فایل انتخاب‌شده به‌عنوان بارنامه برای استخراج ارسال می‌شود؛ همه صفحات همان PDF خوانده می‌شوند.</div>
+     <button type="button" disabled={!selectedBillOfLadingId||!!extractingBillOfLadingId} onClick={()=>void extractSelectedBillOfLading()} className="rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white disabled:opacity-50">
+      {extractingBillOfLadingId?<><Loader2 className="inline ml-1 animate-spin" size={16}/>در حال تحلیل سند...</>:<><Sparkles className="inline ml-1" size={16}/>استخراج اطلاعات محموله با AI</>}
+     </button>
+    </div>
+   </div>}
+   {pendingDocuments.length===0&&<div className="mt-3 text-xs app-muted">هنوز فایلی انتخاب نشده است. این مرحله اختیاری است و می‌توانی اطلاعات را دستی هم وارد کنی.</div>}
+  </section>
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="grid lg:grid-cols-4 gap-3">
    <label className="text-xs app-muted lg:col-span-2">صاحب کالا<select value={form.ownerId} onChange={e=>set('ownerId',e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب صاحب کالا</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.national_id?' — '+c.national_id:''}</option>)}</select></label>
    <label className="text-xs app-muted">کشتیرانی<select value={form.shippingLine} onChange={e=>chooseLine(e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب کشتیرانی</option>{lines.map(l=><option key={l.id} value={l.name}>{l.name_fa||l.name}</option>)}</select></label><label className="text-xs app-muted">B/L<input value={form.billOfLading} onChange={e=>set('billOfLading',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
