@@ -97,6 +97,7 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(shipmentPage).toContain('document_storage_path:document.storagePath');
     expect(shipmentPage).toContain("storage_path:staged.storagePath!");
     expect(shipmentPage).toContain("storage_backend:'supabase'");
+    expect(shipmentPage).toContain("'/clients/'+document.clientId+'/staged/'+user.id");
     expect(shipmentPage).toContain('archiveShipmentDocumentInBackground(doc.id');
     expect(shipmentPage).toContain('shipmentFileInput.current?.click()');
     expect(shipmentPage).toContain('const files=Array.from(e.currentTarget.files||[])');
