@@ -386,7 +386,7 @@ async function reconcileTelegramArchiveMetadata(input:{
    sourceStoragePath=sourceDoc.storage_path;
    const {error}=await db.from("shipment_documents").update({
     document_name:displayName,original_file_name:name,mime_type:mime,file_size_bytes:size,
-    storage_backend:"telegram",file_asset_id:assetId,folder_id:folderId,telegram_message_id:externalMessageId,
+    storage_backend:"telegram",file_asset_id:assetId,folder_id:folderId,telegram_archive_requested:false,telegram_message_id:externalMessageId,
     is_archived:false,archived_at:null,archived_by:null,archive_reason:null,updated_at:now
    }).eq("id",sourceShipmentDocumentId).eq("organization_id",p.organization_id);
    if(error)throw new Error("FILE_ARCHIVE_RECONCILIATION_DOCUMENT_UPDATE_FAILED");
@@ -677,7 +677,7 @@ async function upload(req:Request,p:Profile,user:string,cid:string,allowUnassign
       throw new Error("SOURCE_SHIPMENT_DOCUMENT_CHANGED");
      const {error:documentError}=await db.from("shipment_documents").update({
       document_name:displayName,original_file_name:name,mime_type:mime,file_size_bytes:size,
-      storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,
+      storage_backend:"telegram",file_asset_id:assetId,folder_id:folder.id,telegram_archive_requested:false,
       telegram_message_id:String(result.messageId||""),is_archived:false,archived_at:null,archived_by:null,archive_reason:null,
       updated_at:new Date().toISOString()
      }).eq("id",sourceShipmentDocumentId).eq("organization_id",p.organization_id);
@@ -966,10 +966,19 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
   .eq("organization_id",organizationId).eq("connection_id",connection.id)
   .eq("purpose","file_archive").eq("enabled",true).order("created_at",{ascending:false}).limit(1).maybeSingle();
  if(destinationError||!destination)return bad("FILE_ARCHIVE_DESTINATION_NOT_FOUND",409,req);
- const {data:rows,error:rowsError}=await db.from("file_manager_files")
-  .select("id,organization_id,folder_id,shipment_id,client_id,shipment_document_id,file_asset_id,original_name,mime_type,size_bytes,document_type,tags,metadata,storage_path,is_archived,created_at")
-  .eq("organization_id",organizationId).eq("is_archived",false).is("file_asset_id",null)
-  .not("storage_path","is",null).order("created_at",{ascending:true}).limit(200);
+ const {data:queuedDocuments,error:queuedError}=await db.from("shipment_documents")
+  .select("id").eq("organization_id",organizationId).eq("telegram_archive_requested",true)
+  .eq("storage_backend","supabase").is("file_asset_id",null).eq("is_archived",false)
+  .order("created_at",{ascending:true}).limit(200);
+ if(queuedError)return bad("LEGACY_ARCHIVE_QUEUE_LOOKUP_FAILED",500,req);
+ const queuedDocumentIds=(queuedDocuments||[]).map((row:any)=>String(row.id)).filter(validId);
+ const {data:rows,error:rowsError}=queuedDocumentIds.length
+  ?await db.from("file_manager_files")
+   .select("id,organization_id,folder_id,shipment_id,client_id,shipment_document_id,file_asset_id,original_name,mime_type,size_bytes,document_type,tags,metadata,storage_path,is_archived,created_at")
+   .eq("organization_id",organizationId).eq("is_archived",false).is("file_asset_id",null)
+   .in("shipment_document_id",queuedDocumentIds).not("storage_path","is",null)
+   .order("created_at",{ascending:true}).limit(200)
+  :{data:[],error:null};
  if(rowsError)return bad("LEGACY_ARCHIVE_SOURCE_LOOKUP_FAILED",500,req);
  const candidates=(rows||[]).filter((row:any)=>{
   const meta=row.metadata&&typeof row.metadata==="object"?row.metadata:{};
