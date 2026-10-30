@@ -6,7 +6,7 @@ import {
   FileText, FileSearch, History, LayoutDashboard, Palette, Printer,
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
-  Contact, Folder, ClipboardCheck, GitBranch, Receipt, Network,
+  Contact, Folder, ClipboardCheck, GitBranch, Receipt, Network, FileStack, FileSignature,
   Home, CalendarDays
 } from 'lucide-react';
 import { useAuth, UserRole } from '../context/AuthContext';
@@ -54,6 +54,8 @@ const nav: NavItem[] = [
   { label: 'گمرک', en: 'Customs Offices', to: '/customs-offices', icon: Landmark, group: 'حمل و اسناد', roles: management },
 { label: 'صاحب کالا', en: 'Clients', to: '/clients', icon: Contact, group: 'حمل و اسناد', roles: management },
   { label: 'فایل‌منیجر', en: 'File Manager', to: '/file-manager', icon: Folder, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
+  { label: 'PDF Studio', en: 'PDF Studio', to: '/pdf-studio', icon: FileStack, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
+  { label: 'دبیرخانه و مکاتبات', en: 'Office Automation', to: '/office', icon: FileSignature, group: 'سیستم', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'اسناد و مجوزها', en: 'Documents & Permits', to: '/documents', icon: FileText, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'استخراج هوشمند اسناد', en: 'Document Intelligence', to: '/documents/extract', icon: FileSearch, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'قواعد مجوز', en: 'Permit Rules', to: '/permit-rules', icon: ShieldCheck, group: 'ترخیص', roles: management },

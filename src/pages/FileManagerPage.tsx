@@ -16,6 +16,7 @@ import {
   uploadTelegramArchivedFile,
 } from '../lib/fileManager';
 import { folderToneClass, getFolderSubtreeCounts, isCopyableFolder } from '../lib/fileManagerExplorer';
+import { optimizeFileForUpload } from '../lib/clientFileOptimizer';
 
 type FolderRow = {
   id: string;
@@ -331,24 +332,30 @@ export const FileManagerPage: React.FC = () => {
       setProgress('مقصد «' + destination.displayName + '» آماده است؛ فایل‌ها آماده‌سازی می‌شوند.');
       for (const file of pendingFiles) {
         attemptingFile = file.name;
-        setProgress('آماده‌سازی فایل: ' + file.name);
-        if (file.size > FILE_ARCHIVE_MAX_BYTES) {
-          throw new Error(`فایل «${file.name}» بیشتر از ۲۰ مگابایت است؛ برای قابلیت بازیابی Bot API معمولی تلگرام، فعلاً فایل‌های بزرگ‌تر پذیرفته نمی‌شوند.`);
+        setProgress('در حال بهینه‌سازی فایل در همین دستگاه: ' + file.name);
+        const optimized = await optimizeFileForUpload(file);
+        const fileToUpload = optimized.file;
+        if (fileToUpload.size > FILE_ARCHIVE_MAX_BYTES) {
+          throw new Error(`فایل «${file.name}» پس از بهینه‌سازی هنوز بیشتر از ۲۰ مگابایت است؛ مقصد فعلی آرشیو تلگرام این محدودیت را دارد.`);
         }
         const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || '';
         const segments = relativePath.split('/').filter(Boolean).slice(0, -1);
         let parent = target;
         for (const segment of segments) parent = await getOrCreateSubfolder(parent, segment);
         const documentType = parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG';
-        const idempotencyKey = await createTelegramArchiveIdempotencyKey(file, {
+        const idempotencyKey = await createTelegramArchiveIdempotencyKey(fileToUpload, {
           folderId: parent.id,
           ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
           documentType,
-          documentName: file.name,
+          documentName: fileToUpload.name,
           destination,
         });
-        setProgress('در حال ارسال به تلگرام: ' + file.name);
-        await uploadTelegramArchivedFile(file, {
+        setProgress(
+          optimized.optimized
+            ? `حجم فایل ${optimized.savedPercent}٪ کاهش یافت؛ در حال ارسال: ${fileToUpload.name}`
+            : 'در حال ارسال به تلگرام: ' + file.name
+        );
+        await uploadTelegramArchivedFile(fileToUpload, {
           folderId: parent.id,
           ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
           documentType,

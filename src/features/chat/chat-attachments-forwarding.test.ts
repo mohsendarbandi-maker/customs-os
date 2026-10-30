@@ -6,7 +6,8 @@ const api = fs.readFileSync(path.resolve(__dirname, 'api.ts'), 'utf8');
 describe('chat attachments and forwarding', () => {
   it('allows selecting multiple files of any type and captions per file', () => {
     expect(page).toContain('type="file" multiple className="hidden" accept="*/*"');
-    expect(page).toContain('هر بار حداکثر ۱۰ فایل را انتخاب کنید');
+    expect(page).not.toContain('هر بار حداکثر ۱۰ فایل را انتخاب کنید');
+    expect(page).not.toContain('حجم هر فایل باید کمتر از ۵۰MB باشد');
     expect(page).toContain('item.caption.trim()||undefined');
     expect(page).toContain("ارسال '+pendingFiles.length+' فایل");
   });
