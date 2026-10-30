@@ -106,7 +106,7 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(shipmentPage).not.toContain("supabase.storage.from(BUCKET).upload(storagePath,file");
     expect(shipmentPage).not.toContain('archiveShipmentDocumentInBackground(item.documentId');
     expect(shipmentPage).toContain('archiveShipmentDocumentInBackground(d.id');
-    expect(gateway).toContain(String.raw`const archiveDoc=path.match(/^/api/messenger/documents/([0-9a-f-]{36})/archive$/i);`);
+    expect(gateway).toContain(String.raw`const archiveDoc=path.match(/^\/api\/messenger\/documents\/([0-9a-f-]{36})\/archive$/i);`);
     expect(documentPage).toContain('uploadTelegramArchivedFile');
     expect(clientDocumentPage).toContain('uploadTelegramArchivedFile');
   });
