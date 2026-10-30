@@ -1313,19 +1313,86 @@ export const PdfStudioPage: React.FC = () => {
             </section>
 
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-              <h3 className="mb-2 font-black">فشرده‌سازی قابل تنظیم</h3>
-              <label className="block text-xs text-[var(--muted)]">کیفیت تصویر: {Math.round(compressionQuality * 100)}٪</label>
-              <input type="range" min="0.35" max="0.9" step="0.05" value={compressionQuality} onChange={(event) => setCompressionQuality(Number(event.target.value))} className="mt-2 w-full"/>
-              <label className="mt-3 block text-xs text-[var(--muted)]">وضوح بازسازی: {compressionScale.toFixed(1)}×</label>
-              <input type="range" min="0.7" max="1.8" step="0.1" value={compressionScale} onChange={(event) => setCompressionScale(Number(event.target.value))} className="mt-2 w-full"/>
-              <button type="button" onClick={() => void compressActivePdf()} disabled={busy || !documents.length} className="mt-3 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs font-bold disabled:opacity-40"><ShieldCheck className="ml-1 inline" size={15}/> بهینه‌سازی ساختاری و حفظ متن</button>
-              <button type="button" onClick={() => void compressScans()} disabled={busy || !documents.length} className="mt-2 w-full rounded-xl border border-amber-500/30 px-3 py-2.5 text-xs font-bold text-amber-600 disabled:opacity-40"><Sparkles className="ml-1 inline" size={15}/> فشرده‌سازی تصویری با تنظیمات بالا</button>
-              <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">کاهش وضوح یا کیفیت، حجم را کمتر و کیفیت چاپ را پایین‌تر می‌آورد. فایل اصلی همیشه حفظ می‌شود؛ نسخه تصویری متن قابل جست‌وجو و امضای دیجیتال را نگه نمی‌دارد.</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-black">فشرده‌سازی هوشمند پیشرفته</h3>
+                <span className="text-[10px] text-emerald-500">پیش‌فرض: حفظ خوانایی اعداد</span>
+              </div>
+              <label className="mt-3 block text-xs text-[var(--muted)]">روش فشرده‌سازی</label>
+              <select value={compressionSettings.mode} onChange={(event) => { setCompressionSettings((old) => ({ ...old, mode: event.target.value as CompressionSettings['mode'] })); setCompressionEstimate(null); }} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
+                <option value="smart">هوشمند ترکیبی؛ متن حفظ شود، اسکن‌ها فشرده شوند</option>
+                <option value="preserve">ساختاری؛ حفظ کامل متن و صفحات</option>
+                <option value="raster">فشرده‌سازی تصویری کامل همه صفحات</option>
+              </select>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-[var(--muted)]">کیفیت تصویر: {Math.round(compressionSettings.quality * 100)}٪</label>
+                  <input type="range" min="0.65" max="0.98" step="0.01" value={compressionSettings.quality} onChange={(event) => { setCompressionSettings((old) => ({ ...old, quality: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--muted)]">وضوح: {compressionSettings.dpi} DPI</label>
+                  <input type="range" min="120" max="300" step="15" value={compressionSettings.dpi} onChange={(event) => { setCompressionSettings((old) => ({ ...old, dpi: Number(event.target.value) })); setCompressionEstimate(null); }} className="mt-2 w-full"/>
+                </div>
+              </div>
+              <label className="mt-3 flex items-center gap-2 text-xs text-[var(--muted)]">
+                <input type="checkbox" checked={compressionSettings.grayscale} onChange={(event) => { setCompressionSettings((old) => ({ ...old, grayscale: event.target.checked })); setCompressionEstimate(null); }} className="h-4 w-4"/>
+                تبدیل صفحات تصویری به سیاه‌وسفید (برای متن؛ عکس و لیبل رنگی را خاموش بگذارید)
+              </label>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input value={compressionProfileName} onChange={(event) => setCompressionProfileName(event.target.value)} placeholder="نام تنظیمات؛ مثلا اسکن خوانا" className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs"/>
+                <button type="button" onClick={saveCompressionProfile} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">ذخیره تنظیمات</button>
+              </div>
+              <select defaultValue="" onChange={(event) => applyCompressionProfile(event.target.value)} className="mt-2 min-h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs">
+                <option value="">بازیابی تنظیمات ذخیره‌شده…</option>
+                {compressionProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+              </select>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => void estimateCompression()} disabled={busy || compressionEstimating || !compressionItems.length} className="min-h-10 rounded-xl border border-[var(--border)] px-2 py-2 text-xs font-bold disabled:opacity-40">
+                  {compressionEstimating ? 'در حال برآورد…' : 'برآورد حجم قبل از پردازش'}
+                </button>
+                <button type="button" onClick={() => void compressActivePdf()} disabled={busy || !compressionItems.length} className="min-h-10 rounded-xl bg-blue-600 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">
+                  {busy ? 'در حال فشرده‌سازی…' : 'فشرده‌سازی و دانلود ZIP'}
+                </button>
+              </div>
+              {compressionEstimate && (
+                <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+                  <div className="text-xs font-bold">حجم تخمینی بسته خروجی</div>
+                  <div className="mt-1 text-lg font-black tabular-nums">{formatSize(compressionEstimate.expected)}</div>
+                  <div className="mt-1 text-[11px] text-[var(--muted)]">بازه احتمالی: {formatSize(compressionEstimate.low)} تا {formatSize(compressionEstimate.high)}</div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-[var(--muted)]">
+                    <span>{compressionEstimate.preservedPages} صفحه متن‌محور حفظ‌شونده</span>
+                    <span>{compressionEstimate.rasterizedPages} صفحه تصویری</span>
+                    <span>نمونه‌گیری از {compressionEstimate.sampledPages} صفحه</span>
+                  </div>
+                  <p className="mt-2 text-[10px] leading-4 text-[var(--muted)]">این برآورد تقریبی است؛ پس از ساخت PDF، حجم واقعی در تاریخچه ثبت می‌شود.</p>
+                </div>
+              )}
+              <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">در حالت هوشمند، صفحه‌هایی که متن قابل استخراج دارند با اعداد و حروف اصلی حفظ می‌شوند. صفحه‌های اسکن‌شده با DPI و کیفیت بالاتر بازسازی می‌شوند. خروجی فقط یک ZIP دانلودی است و PDFها خودکار باز نمی‌شوند.</p>
             </section>
 
+            {compressionRuns.length > 0 && (
+              <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:col-span-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="font-black">خروجی‌های قبلی این نشست</h3>
+                  <span className="text-[10px] text-[var(--muted)]">{compressionRuns.length} بسته</span>
+                </div>
+                <div className="space-y-2">
+                  {compressionRuns.map((run) => (
+                    <div key={run.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] p-2">
+                      <FileText size={17} className="text-blue-400"/>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-bold">{run.name}</div>
+                        <div className="mt-1 text-[10px] text-[var(--muted)]">{run.profileName} · خروجی {formatSize(run.size)} · کاهش {Math.max(0, run.savedPercent)}٪</div>
+                      </div>
+                      <button type="button" onClick={() => downloadCompressionRun(run)} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">دانلود دوباره</button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <div className="flex items-center gap-2 font-bold text-emerald-500"><ShieldCheck size={16}/> پردازش محلی</div>
-              <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">فایل‌ها هنگام ویرایش محلی می‌مانند. پیشنهاد نام صفحه فقط از لایه متن قابل انتخاب PDF ساخته می‌شود و برای اسکن‌های تصویری OCR فعال نمی‌شود تا سرعت و حریم خصوصی حفظ شود.</p>
+              <div className="flex items-center gap-2 font-bold text-emerald-500"><ShieldCheck size={16}/> اصل فایل محفوظ می‌ماند</div>
+              <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">ویرایش و فشرده‌سازی در مرورگر انجام می‌شود. تنظیمات نام‌گذاری‌شده در همین سازمان حفظ می‌شوند؛ هر بار خروجی تازه ساخته شود، بسته قبلی قابل دانلود دوباره خواهد بود.</p>
             </section>
           </aside>}
         </section>
