@@ -12,12 +12,12 @@ import { FormDraftIndicator } from '../components/FormDraftIndicator';
 import{buildShipmentDisplayName}from'../lib/displayNames';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import {AddReminderButton} from '../features/reminders/AddReminderButton';
-import { createTelegramArchiveIdempotencyKey, downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultClientUploadFolder, getDefaultShipmentUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
+import { archiveShipmentDocumentInBackground, downloadTelegramArchivedFile, getDefaultShipmentUploadFolder } from '../lib/fileManager';
 
 type Vessel={id:string;name:string;imo_number?:string|null;flag_code?:string|null;shipping_line_id?:string|null};type ShippingLine={id:string;name:string;name_fa?:string|null};
 type Office={id:string;code:string;name:string;city:string;is_active:boolean};type Row={id:string;client_id:string|null;vessel_id:string|null;customs_office_id:string|null;shipping_line:string|null;bill_of_lading_no:string|null;bill_of_lading_year:number|null;voyage_no:string|null;origin_port:string|null;destination_port:string|null;cargo_count:number|null;cargo_count_unit:string|null;net_weight_kg:number|null;gross_weight_kg:number|null;current_status:string;current_location:string|null;display_name:string|null;case_id:string|null;transport_documents_status:'not_ready'|'ready';release_invoice_payment_status:'unpaid'|'paid';ship_passed:boolean;ship_passed_at:string|null;ship_passed_by:string|null};
 type Form={ownerId:string;shippingLine:string;billOfLading:string;year:string;voyage:string;vessel:string;imo:string;flag:string;originPort:string;destinationPort:string;count:string;unit:string;net:string;gross:string;status:string;location:string;transportDocumentsStatus:'not_ready'|'ready';releaseInvoicePaymentStatus:'unpaid'|'paid'};
-type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;created_at:string};type PendingShipmentDocument={id:string;name:string;mimeType:string;sizeBytes:number;pageCount:number;file:File;previewUrl:string;fileAssetId?:string;externalMessageId?:string;folderId?:string;uploadStatus:'uploading'|'ready'|'failed';uploadError?:string;clientId:string;uploadedBy:string;extractedFields?:Record<string,string>};
+type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;created_at:string};type PendingShipmentDocument={id:string;name:string;mimeType:string;sizeBytes:number;pageCount:number;file:File;previewUrl:string;storagePath?:string;uploadStatus:'uploading'|'ready'|'failed';uploadError?:string;clientId:string;uploadedBy:string;extractedFields?:Record<string,string>};
 const empty:Form={ownerId:'',shippingLine:'',billOfLading:'',year:String(new Date().getFullYear()),voyage:'',vessel:'',imo:'',flag:'',originPort:'',destinationPort:'',count:'',unit:'رول',net:'',gross:'',status:'draft',location:'',transportDocumentsStatus:'not_ready',releaseInvoicePaymentStatus:'unpaid'};
 const digits=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const num=(v:string)=>{const n=Number(digits(v).replace(/[٬,]/g,''));return Number.isFinite(n)?n:null};
@@ -92,47 +92,71 @@ export const ShipmentFirstPage:React.FC=()=>{
   const{data,error}=await supabase.from('vessels').insert({organization_id:profile?.organization_id,name,imo_number:imo||null,flag_code:form.flag.toUpperCase()||null,shipping_line_id:line?.id||null}).select('id,name,imo_number,flag_code,shipping_line_id').single();
   if(error)throw error;setVessels(p=>[...p,data as Vessel]);return data as Vessel;
  };
- const archivePendingShipmentDocument=async(document:PendingShipmentDocument)=>{
-  setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'uploading',uploadError:undefined}:item));
-  try{
-   if(document.sizeBytes<=0||document.sizeBytes>FILE_ARCHIVE_MAX_BYTES)throw new Error('حجم فایل برای آرشیو قابل بازیابی تلگرام باید حداکثر ۲۰ مگابایت باشد.');
-   if(!document.clientId)throw new Error('ابتدا صاحب کالا را انتخاب کنید.');
-   const {data:{user},error:userError}=await supabase.auth.getUser();
-   if(userError||!user)throw new Error('نشست کاربر معتبر نیست؛ دوباره وارد شوید.');
-   const [ownerFolder,destination]=await Promise.all([getDefaultClientUploadFolder(document.clientId),getFileArchiveDestination()]);
-   const idempotencyKey=await createTelegramArchiveIdempotencyKey(document.file,{folderId:ownerFolder.id,documentType:'other',documentName:document.name,destination});
-   const archived=await uploadTelegramArchivedFile(document.file,{folderId:ownerFolder.id,documentType:'other',documentName:document.name,tags:['ثبت_محموله_جدید','بارنامه_و_اسناد'],destination,idempotencyKey});
-   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'ready',uploadError:undefined,fileAssetId:archived.fileAssetId,externalMessageId:archived.externalMessageId,folderId:ownerFolder.id,uploadedBy:user.id}:item));
-   setMessage('فایل در تلگرام آرشیو شد و برای مراحل بعدی محموله آماده است: '+document.name);
-  }catch(error:any){
-   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'failed',uploadError:error?.message||'ارسال فایل به آرشیو تلگرام ناموفق بود.'}:item));
-   setMessage('فایل همچنان در مرورگر انتخاب‌شده باقی مانده است؛ آرشیو تلگرام ناموفق بود: '+(error?.message||'خطای نامشخص'));
-  }
- };
  const uploadStagedShipmentDocuments=(files:File[])=>{
   if(!files.length)return;
   if(!form.ownerId){setMessage('ابتدا صاحب کالا را انتخاب کن.');return;}
   let rejected=0;
   for(const file of files){
-   const mime=(file.type||(/\.pdf$/i.test(file.name)?'application/pdf':/\.png$/i.test(file.name)?'image/png':/\.jpe?g$/i.test(file.name)?'image/jpeg':'')).toLowerCase();
-   if(file.size<=0||file.size>FILE_ARCHIVE_MAX_BYTES||(mime!=='application/pdf'&&!['image/png','image/jpeg'].includes(mime))){rejected++;continue;}
+   const mime=(file.type||(/\\.pdf$/i.test(file.name)?'application/pdf':/\\.png$/i.test(file.name)?'image/png':/\\.jpe?g$/i.test(file.name)?'image/jpeg':'')).toLowerCase();
+   if(file.size<=0||file.size>50*1024*1024||(mime!=='application/pdf'&&!['image/png','image/jpeg'].includes(mime))){rejected++;continue;}
    const id=crypto.randomUUID(),previewUrl=URL.createObjectURL(file);
    const pending:PendingShipmentDocument={id,name:file.name,mimeType:mime,sizeBytes:file.size,pageCount:1,file,previewUrl,uploadStatus:'uploading',clientId:form.ownerId,uploadedBy:profile?.id||''};
+   // Keep the file visible and selectable before any network operation begins.
    setPendingDocuments(previous=>[...previous,pending]);
    setSelectedBillOfLadingId(previous=>previous||id);
-   setMessage('فایل در مرورگر آماده و قابل انتخاب شد؛ ارسال به تلگرام بدون متوقف‌کردن فرم در پس‌زمینه انجام می‌شود.');
-   void archivePendingShipmentDocument(pending);
-   if(mime==='application/pdf'){void (async()=>{try{const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;const pageCount=pdf.numPages;await pdf.destroy();setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,pageCount}:item));}catch{/* Page count is informational; keep local selection usable. */}})();}
+   void (async()=>{
+    try{
+     const {data:{user},error:userError}=await supabase.auth.getUser();
+     if(userError||!user)throw new Error('نشست کاربر معتبر نیست؛ دوباره وارد شوید.');
+     if(!profile?.organization_id)throw new Error('سازمان کاربر مشخص نیست.');
+     const safeName=file.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,160)||'document.pdf';
+     const storagePath=profile.organization_id+'/staged/'+user.id+'/'+id+'-'+safeName;
+     const {error:storageError}=await supabase.storage.from(BUCKET).upload(storagePath,file,{contentType:mime,cacheControl:'3600',upsert:false});
+     if(storageError)throw new Error(storageError.message||'ذخیره امن فایل ناموفق بود.');
+     setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,storagePath,uploadStatus:'ready',uploadedBy:user.id,uploadError:undefined}:item));
+     setMessage('فایل فوراً در فهرست قرار گرفت و نسخه امن وب‌سایت ذخیره شد؛ آرشیو تلگرام پس از ثبت محموله در پس‌زمینه انجام می‌شود.');
+    }catch(error:any){
+     setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,uploadStatus:'failed',uploadError:error?.message||'ذخیره امن فایل ناموفق بود.'}:item));
+     setMessage('فایل در مرورگر باقی ماند، اما ذخیره امن آن کامل نشد. برای ثبت و استخراج، ارسال دوباره را بزن.');
+    }
+   })();
+   if(mime==='application/pdf'){
+    void (async()=>{
+     try{
+      const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+      const pageCount=pdf.numPages;await pdf.destroy();
+      setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,pageCount}:item));
+     }catch{/* Page count is informational; keep the browser selection usable. */}
+    })();
+   }
   }
-  if(rejected)setMessage(rejected+' فایل به‌دلیل فرمت پشتیبانی‌نشده یا حجم بیش از ۲۰ مگابایت اضافه نشد.');
- };
- const retryStagedShipmentDocument=(document:PendingShipmentDocument)=>{void archivePendingShipmentDocument(document);};
- const previewPendingBillOfLading=(document:PendingShipmentDocument)=>{
-  if(previewBillOfLadingId===document.id){setPreviewBillOfLadingId('');setPreviewBillOfLadingUrl('');return;}
-  setPreviewBillOfLadingId(document.id);
-  setPreviewBillOfLadingUrl(document.previewUrl);
- };
- const extractSelectedBillOfLading=async()=>{
+  if(rejected)setMessage(rejected+' فایل پشتیبانی‌نشده یا بزرگ‌تر از ۵۰ مگابایت بود و اضافه نشد. فایل‌های معتبر فوراً به فهرست اضافه شدند.');
+};
+const retryStagedShipmentDocument=(document:PendingShipmentDocument)=>{
+ setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'uploading',uploadError:undefined}:item));
+ void (async()=>{
+  try{
+   const {data:{user},error:userError}=await supabase.auth.getUser();
+   if(userError||!user||!profile?.organization_id)throw new Error('نشست یا سازمان کاربر معتبر نیست.');
+   const safeName=document.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,160)||'document.pdf';
+   const storagePath=profile.organization_id+'/staged/'+user.id+'/'+document.id+'-'+safeName;
+   if(document.storagePath)await supabase.storage.from(BUCKET).remove([document.storagePath]);
+   const {error}=await supabase.storage.from(BUCKET).upload(storagePath,document.file,{contentType:document.mimeType,cacheControl:'3600',upsert:false});
+   if(error)throw error;
+   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,storagePath,uploadStatus:'ready',uploadError:undefined,uploadedBy:user.id}:item));
+   setMessage('ذخیره امن فایل انجام شد. اکنون می‌توانی بارنامه را استخراج و محموله را ثبت کنی.');
+  }catch(error:any){
+   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'failed',uploadError:error?.message||'آپلود ناموفق بود.'}:item));
+   setMessage(error?.message||'ذخیره امن فایل ناموفق بود.');
+  }
+ })();
+};
+const previewPendingBillOfLading=(document:PendingShipmentDocument)=>{
+ if(previewBillOfLadingId===document.id){setPreviewBillOfLadingId('');setPreviewBillOfLadingUrl('');return;}
+ setPreviewBillOfLadingId(document.id);
+ setPreviewBillOfLadingUrl(document.previewUrl);
+};
+const extractSelectedBillOfLading=async()=>{
   const document=pendingDocuments.find(item=>item.id===selectedBillOfLadingId);
   if(!document){setMessage('ابتدا فایل بارنامه را انتخاب کن.');return;}
   if(document.sizeBytes>4*1024*1024&&(!document.fileAssetId||document.uploadStatus!=='ready')){setMessage('برای این فایل ابتدا باید آرشیو تلگرام کامل شود؛ فایل‌های کوچک‌تر مستقیماً از مرورگر تحلیل می‌شوند.');return;}
