@@ -301,7 +301,7 @@ export const ShipmentFirstPage:React.FC=()=>{
     .eq('shipment_document_id',d.id).maybeSingle();
    if(mirrorLookupError)throw mirrorLookupError;
    if(mirror){
-    const metadata=mirror.metadata&&typeof mirror.metadata==='object'?{...mirror.metadata}:{};
+    const metadata:Record<string,unknown>=mirror.metadata&&typeof mirror.metadata==='object'&&!Array.isArray(mirror.metadata)?{...(mirror.metadata as Record<string,unknown>)}:{};
     delete metadata.legacyArchiveStatus;
     delete metadata.legacyArchiveError;
     delete metadata.legacyArchiveAttemptedAt;
