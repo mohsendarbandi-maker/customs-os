@@ -300,14 +300,17 @@ const download=async(d:Doc)=>{
    const url=URL.createObjectURL(blob),a=document.createElement('a');
    a.href=url;a.download=d.original_file_name||d.document_name||'document.bin';
    document.body.appendChild(a);a.click();a.remove();window.setTimeout(()=>URL.revokeObjectURL(url),2000);
-  }catch(e:any){setMessage(e?.message||'دریافت فایل تلگرام ناموفق بود')}
-  return;
+   return;
+  }catch(error){
+   console.warn('[ShipmentFirstPage] Telegram download failed; falling back to retained Storage copy:',error);
+  }
  }
+ if(!d.storage_path||d.storage_path.startsWith('telegram://'))return setMessage('نسخه امن قابل دریافت نیست؛ آرشیو تلگرام نیز پاسخ نداد.');
  const{data,error}=await supabase.storage.from(BUCKET).createSignedUrl(d.storage_path,600);
- if(error)return setMessage(error.message);
+ if(error)return setMessage(error.message||'دریافت نسخه امن فایل ناموفق بود.');
  window.open(data.signedUrl,'_blank','noopener,noreferrer');
 };
-const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMessage('');try{const{error:e}=await supabase.rpc('set_shipment_ship_pass',{p_shipment_id:selected,p_passed:passed});if(e)throw e;setMessage(passed?'پاس کشتی ثبت شد.':'پاس کشتی لغو شد.');await load()}catch(e:any){setMessage(e?.message||'ثبت پاس کشتی انجام نشد')}finally{setBusy(false)}};
+ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMessage('');try{const{error:e}=await supabase.rpc('set_shipment_ship_pass',{p_shipment_id:selected,p_passed:passed});if(e)throw e;setMessage(passed?'پاس کشتی ثبت شد.':'پاس کشتی لغو شد.');await load()}catch(e:any){setMessage(e?.message||'ثبت پاس کشتی انجام نشد')}finally{setBusy(false)}};
  const selectedRow=rows.find(r=>r.id===selected);
  const vessel=selectedRow?vessels.find(v=>v.id===selectedRow.vessel_id):vessels.find(v=>same(v.name,form.vessel));
  const openPre=selected?'/operations?tab=pre-declaration&shipmentId='+encodeURIComponent(selected):'/operations';
