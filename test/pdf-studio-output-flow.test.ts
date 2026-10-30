@@ -12,7 +12,7 @@ describe('PDF Studio prepared output workflow', () => {
     expect(source).toContain('anchor.download = name');
     expect(source).not.toContain('window.open(');
     expect(source).not.toContain('compressionRuns');
-    expect(source.match(/downloadBlob\(/g)?.length).toBe(2);
+    expect(source.match(/downloadBlob\(/g)?.length).toBe(1);
   });
 
   it('keeps prepared files available after download instead of clearing the workspace', () => {
