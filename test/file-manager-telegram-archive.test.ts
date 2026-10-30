@@ -88,18 +88,32 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(preDeclaration).toContain("docs.filter(d=>d.storage_backend!=='telegram'&&!d.file_asset_id)");
   });
 
-  it('shares one Telegram upload path between shipment creation and document manager', () => {
-    expect(shipmentPage).toContain('uploadTelegramArchivedFile');
-    expect(shipmentPage).toContain('getDefaultShipmentUploadFolder(selected)');
-    const shipmentArchiveUploadStart = shipmentPage.indexOf('const upload=async(files:FileList|null)=>');
-    const shipmentArchiveUploadEnd = shipmentPage.indexOf('const download=async', shipmentArchiveUploadStart);
-    const shipmentArchiveUpload = shipmentPage.slice(shipmentArchiveUploadStart, shipmentArchiveUploadEnd);
-    expect(shipmentArchiveUpload).toContain('uploadTelegramArchivedFile');
-    expect(shipmentArchiveUpload).not.toContain('storage.from(BUCKET).upload(');
+  it('keeps shipment file selection local and uploads the safe web copy before background Telegram archive', () => {
+    expect(shipmentPage).toContain('URL.createObjectURL(file)');
+    expect(shipmentPage).toContain('setPendingDocuments(previous=>[...previous,pending])');
+    expect(shipmentPage).toContain("supabase.storage.from(BUCKET).upload(storagePath,file");
+    expect(shipmentPage).toContain('document_storage_path:document.storagePath');
+    expect(shipmentPage).toContain("storage_backend:'supabase'");
+    expect(shipmentPage).toContain('archiveShipmentDocumentInBackground');
+    const pickerUploadStart = shipmentPage.indexOf('const uploadStagedShipmentDocuments=');
+    const pickerUploadEnd = shipmentPage.indexOf('const extractSelectedBillOfLading=', pickerUploadStart);
+    const pickerUpload = shipmentPage.slice(pickerUploadStart, pickerUploadEnd);
+    expect(pickerUpload).not.toContain('uploadTelegramArchivedFile');
+    expect(shipmentPage).not.toContain('createTelegramArchiveIdempotencyKey');
     expect(documentPage).toContain('uploadTelegramArchivedFile');
-    expect(documentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
     expect(clientDocumentPage).toContain('uploadTelegramArchivedFile');
-    expect(clientDocumentPage).not.toMatch(/storage\.from\(BUCKET\)\.upload\(/);
+  });
+
+  it('keeps retryable Telegram archival tied to the original shipment document and schedules a server backstop', () => {
+    const backgroundMigration = read('supabase/migrations/20261030190000_shipment_document_background_telegram_archive.sql');
+    expect(backgroundMigration).toContain('shipment_document_id uuid');
+    expect(backgroundMigration).toContain("customs-os-shipment-document-telegram-archive-every-minute");
+    expect(backgroundMigration).toContain("x-messenger-path', '/api/messenger/archive/legacy/process'");
+    expect(gateway).toContain('async function archiveShipmentDocument(');
+    expect(gateway).toContain('sourceShipmentDocumentId');
+    expect(gateway).toContain('FILE_ARCHIVE_RECONCILIATION_SOURCE_DOCUMENT_MISSING');
+    expect(gateway).toContain('SHIPMENT_DOCUMENT_ARCHIVE_UPDATE_FAILED');
+    expect(gateway).toContain('shipment_document_id:sourceShipmentDocumentId||null');
   });
 
   it('provides global business/document search, and preserves organization scoping in the RPC', () => {
