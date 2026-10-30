@@ -128,23 +128,29 @@ describe('AI Operator security invariants',()=>{
    expect(assistant).not.toContain('vessels=vessels.data||[]');
  });
 
- it('supports pre-uploading a complete bill of lading for a new shipment and sends only its stored path to AI',()=>{
+ it('pre-archives complete shipment documents in Telegram and sends only the Telegram asset ID to AI',()=>{
    const shipment=readFileSync(new URL('../src/pages/ShipmentFirstPage.tsx',import.meta.url),'utf8');
    const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
-   expect(shipment).toContain("supabase.storage.from(BUCKET).upload(path,file");
-   expect(shipment).toContain("${profile.organization_id}/staging/${user.id}/");
-   expect(shipment).toContain("document_storage_path:document.storagePath");
-   expect(shipment).toContain("document_size_bytes:document.sizeBytes");
-   expect(shipment).toContain("shipment_extract:true");
+   expect(shipment).toContain("uploadTelegramArchivedFile(file");
+   expect(shipment).toContain("getDefaultClientUploadFolder(form.ownerId)");
+   expect(shipment).toContain("createTelegramArchiveIdempotencyKey(file");
+   expect(shipment).toContain("telegram_file_asset_id:document.fileAssetId");
    expect(shipment).toContain("shipment_documents').insert");
+   expect(shipment).toContain("storage_backend:'telegram'");
+   expect(shipment).toContain("file_asset_id:staged.fileAssetId");
+   expect(shipment).toContain("getDefaultShipmentUploadFolder(shipmentId)");
    expect(shipment).toContain("pdfjsLib.getDocument");
    expect(shipment).toContain("انتخاب به‌عنوان بارنامه");
-   expect(shipment).toContain("profile?.role!=='client'&&<section");
+   expect(shipment).toContain("profile?.role!=='client'");
    expect(shipment).toContain("همه صفحات همان PDF خوانده می‌شوند");
-   expect(assistant).toContain("createSignedUrl(documentStoragePath,600)");
-   expect(assistant).toContain("documentStoragePath.startsWith(String(profile.organization_id)+'/')");
+   expect(shipment).not.toContain("supabase.storage.from(BUCKET).upload(path,file");
+   expect(assistant).toContain("telegramFileAssetId=String(b.telegram_file_asset_id||'').trim()");
+   expect(assistant).toContain("/api/messenger/files/'+encodeURIComponent(telegramFileAssetId)+'/download");
+   expect(assistant).toContain("Authorization:`Bearer ${token}`,apikey:anon");
+   expect(assistant).toContain("buffer.byteLength>20*1024*1024");
    expect(assistant).toContain("v1beta/interactions");
  });
+
  it('passes the uploaded document size from AIWorkspace so the Edge Function can avoid Base64 re-upload',()=>{
    const workspace=readFileSync(new URL('../src/components/AIWorkspace.tsx',import.meta.url),'utf8');
    expect(workspace).toContain("document_size_bytes:documentSizeBytes||undefined");
