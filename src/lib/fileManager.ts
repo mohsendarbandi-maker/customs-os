@@ -228,6 +228,30 @@ export async function uploadTelegramArchivedFile(
   return response as TelegramArchiveUpload;
 }
 
+/**
+ * Requests Telegram archival for an already-uploaded shipment document.
+ * The browser keeps the Supabase Storage copy usable while this request runs;
+ * the caller may fire-and-forget and retry safely because the gateway uses a
+ * content-bound, durable upload idempotency ledger.
+ */
+export async function archiveShipmentDocumentInBackground(
+  documentId: string,
+  tags: string[] = [],
+): Promise<TelegramArchiveUpload> {
+  if (!documentId) throw new Error('شناسه سند معتبر نیست.');
+  const body = await authorizedRequest(
+    `/api/messenger/documents/${encodeURIComponent(documentId)}/archive`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ tags: tags.slice(0, 20) }),
+    },
+  );
+  if (!body?.fileAssetId) {
+    throw new Error('تلگرام رسید آرشیو سند را برنگرداند؛ نسخه امن سند در Storage حفظ شده است.');
+  }
+  return body as TelegramArchiveUpload;
+}
+
 export async function downloadTelegramArchivedFile(fileAssetId: string): Promise<Blob> {
   if (!fileAssetId) throw new Error('شناسه فایل معتبر نیست.');
   const { data, error } = await supabase.auth.getSession();
