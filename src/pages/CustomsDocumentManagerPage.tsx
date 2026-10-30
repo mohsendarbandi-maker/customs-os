@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 
-import { downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
+import { downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder } from '../lib/fileManager';
+import { safeStorageFilename } from '../lib/safeStorageFilename';
 import {
   Download,
   Eye,
@@ -74,6 +75,7 @@ type Doc = {
   file_asset_id?: string | null;
   folder_id?: string | null;
   telegram_message_id?: string | null;
+  telegram_archive_requested?: boolean;
 };
 
 const BUCKET = 'customs_documents';
@@ -147,8 +149,6 @@ export const CustomsDocumentManagerPage: React.FC = () => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const uploadKeys = useRef(new Map<string, string>());
-  const [documentName, setDocumentName] = useState('');
   const [tagInput, setTagInput] = useState('');
   const uploadTags = useMemo(() => [...new Set(tagInput.split(',').map((tag) => tag.trim()).filter(Boolean))].slice(0, 20), [tagInput]);
   const [selected, setSelected] = useState<Doc | null>(null);
@@ -250,7 +250,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           supabase
             .from('shipment_documents')
             .select(
-              'id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,telegram_message_id,created_at,updated_at',
+              'id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,telegram_message_id,telegram_archive_requested,created_at,updated_at',
             )
             .eq('shipment_id', id)
             .eq('is_archived', false)
@@ -282,6 +282,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
         file_asset_id: d.file_asset_id || null,
         folder_id: d.folder_id || null,
         telegram_message_id: d.telegram_message_id || null,
+        telegram_archive_requested: d.telegram_archive_requested === true,
         source: 'shipment_documents',
       }));
 
@@ -337,47 +338,99 @@ export const CustomsDocumentManagerPage: React.FC = () => {
   );
   const missing = REQUIRED.filter((t) => !docs.some((d) => (d.document_type || inferType(fileName(d))) === t));
 
-  const upload = async (files: File[], customName = '') => {
+  const upload = async (files: File[]) => {
     if (!files.length || !current) return;
-    setBusy(true);
-    setError('');
-    setMessage('');
-    let completed = 0;
-    try {
-      const folder = await getDefaultShipmentUploadFolder(current.id);
-      const destination = await getFileArchiveDestination();
-      for (const f of Array.from(files)) {
-        if (f.size > FILE_ARCHIVE_MAX_BYTES) {
-          throw new Error(`حجم «${f.name}» از سقف ۲۰ مگابایت Bot API معمولی تلگرام بیشتر است.`);
-        }
-        const keySource = `${current.id}:${f.name}:${f.size}:${f.lastModified}`;
-        let idempotencyKey = uploadKeys.current.get(keySource);
-        if (!idempotencyKey) {
-          idempotencyKey = crypto.randomUUID();
-          uploadKeys.current.set(keySource, idempotencyKey);
-        }
-        await uploadTelegramArchivedFile(f, {
-          folderId: folder.id,
-          shipmentId: current.id,
-          documentType: inferType(f.name) || 'other',
-          documentName: files.length === 1 && customName ? customName : f.name,
-          tags: uploadTags,
-          destination,
-          idempotencyKey,
-        });
-        uploadKeys.current.delete(keySource);
-        completed += 1;
-        setPendingFiles((previous) => previous.filter((candidate) => candidate !== f));
+    const acceptedFiles: File[] = [];
+    const rejectedFiles: string[] = [];
+    for (const file of files) {
+      const name = file.name.toLowerCase();
+      const mime = (file.type || (name.endsWith('.pdf') ? 'application/pdf' : name.endsWith('.png') ? 'image/png' : /\\.jpe?g$/.test(name) ? 'image/jpeg' : '')).toLowerCase();
+      if (!['application/pdf', 'image/jpeg', 'image/png'].includes(mime)) {
+        rejectedFiles.push(`«${file.name}»: فرمت پشتیبانی نمی‌شود.`);
+      } else if (file.size <= 0 || file.size > FILE_ARCHIVE_MAX_BYTES) {
+        rejectedFiles.push(`«${file.name}»: حجم باید حداکثر ۲۰ مگابایت باشد تا آرشیو تلگرام نیز قابل بازیابی باشد.`);
+      } else {
+        acceptedFiles.push(file);
       }
-      await loadDocs(current.id);
-      setPendingFiles([]);
-      setDocumentName('');
-      setTagInput('');
-      setMessage(`${completed} سند مستقیماً در آرشیو تلگرام ذخیره شد؛ نسخه باینری جدیدی در Storage وب‌سایت ساخته نشد.`);
-    } catch (e: any) {
-      await loadDocs(current.id);
-      setError(e?.message || 'بارگذاری در آرشیو تلگرام ناموفق بود');
-      if (completed) setMessage(`${completed} فایل ذخیره شد؛ فایل‌های باقی‌مانده در صف هستند.`);
+    }
+    setPendingFiles(acceptedFiles);
+    setBusy(true);
+    setError(rejectedFiles.join('\n'));
+    setMessage(acceptedFiles.length ? 'در حال ذخیره فایل در فضای امن سایت…' : '');
+    let completed = 0;
+    const failedFiles: File[] = [];
+    try {
+      if (!acceptedFiles.length) return;
+      const [{ user, org }, folder] = await Promise.all([
+        profile(),
+        getDefaultShipmentUploadFolder(current.id),
+      ]);
+      for (const file of acceptedFiles) {
+        let storagePath = '';
+        let documentCreated = false;
+        try {
+          setMessage(`در حال بارگذاری «${file.name}» در فضای امن سایت…`);
+          const lowerName = file.name.toLowerCase();
+          const mime = (file.type || (lowerName.endsWith('.pdf') ? 'application/pdf' : lowerName.endsWith('.png') ? 'image/png' : 'image/jpeg')).toLowerCase();
+          storagePath = `${org}/${current.id}/${crypto.randomUUID()}-${safeStorageFilename(file.name)}`;
+          const { error: storageError } = await supabase.storage.from(BUCKET).upload(storagePath, file, {
+            contentType: mime,
+            cacheControl: '3600',
+            upsert: false,
+          });
+          if (storageError) throw new Error(`ذخیره فایل در سایت ناموفق بود: ${storageError.message}`);
+
+          const { data: document, error: documentError } = await supabase
+            .from('shipment_documents')
+            .insert({
+              organization_id: org,
+              shipment_id: current.id,
+              uploaded_by: user.id,
+              document_name: file.name,
+              original_file_name: file.name,
+              storage_path: storagePath,
+              mime_type: mime,
+              file_size_bytes: file.size,
+              folder_id: folder.id,
+              storage_backend: 'supabase',
+              telegram_archive_requested: true,
+              extraction_status: 'pending',
+            })
+            .select('id')
+            .single();
+          if (documentError || !document) {
+            throw new Error(documentError?.message || 'ثبت سند محموله ناموفق بود.');
+          }
+          documentCreated = true;
+
+          if (uploadTags.length) {
+            const { error: tagsError } = await supabase
+              .from('file_manager_files')
+              .update({ tags: uploadTags, document_type: inferType(file.name) || 'other' })
+              .eq('organization_id', org)
+              .eq('shipment_document_id', document.id);
+            if (tagsError) console.warn('[CustomsDocumentManagerPage] file tags were not saved:', tagsError);
+          }
+          completed += 1;
+          setPendingFiles((previous) => previous.filter((candidate) => candidate !== file));
+        } catch (fileError: any) {
+          if (storagePath && !documentCreated) {
+            await supabase.storage.from(BUCKET).remove([storagePath]);
+          }
+          failedFiles.push(file);
+          rejectedFiles.push(`«${file.name}»: ${fileError?.message || 'آپلود ناموفق بود.'}`);
+        }
+      }
+      if (completed) {
+        await loadDocs(current.id);
+        setMessage(`${completed} سند فوراً در سایت ذخیره شد و در صف آرشیو پس‌زمینه تلگرام قرار گرفت. می‌توانید هم‌زمان مراحل دیگر را ادامه دهید.`);
+      }
+      setError(rejectedFiles.join('\n'));
+      setPendingFiles(failedFiles);
+      if (!completed && !failedFiles.length) setMessage('');
+    } catch (fileError: any) {
+      setError(fileError?.message || 'آماده‌سازی آپلود ناموفق بود.');
+      setPendingFiles(acceptedFiles);
     } finally {
       setBusy(false);
     }
@@ -621,40 +674,31 @@ export const CustomsDocumentManagerPage: React.FC = () => {
               multiple
               accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png"
               onChange={(e) => {
-                const files = Array.from(e.target.files || []);
-                setPendingFiles(files);
-                setDocumentName('');
+                const files = Array.from(e.currentTarget.files || []);
                 e.currentTarget.value = '';
+                if (files.length) void upload(files);
               }}
             />
           </div>
+          <label className="mt-3 block">
+            <span className="mb-1 block text-xs font-bold app-muted">برچسب‌های اسناد (اختیاری، با ویرگول جدا کنید)</span>
+            <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} disabled={busy}
+              placeholder="مثلاً: بارنامه، فاکتور، قبض انبار، گواهی مبدأ"
+              className="w-full rounded-xl border app-border bg-[var(--surface)] px-3 py-2 text-sm" />
+          </label>
           {pendingFiles.length > 0 && (
             <div className="mt-3 rounded-2xl border app-border bg-[var(--surface-2)] p-3">
-              <div className="flex flex-col md:flex-row md:items-end gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold">فایل انتخاب‌شده: {pendingFiles.length} مورد</div>
-                  <div className="text-[11px] app-muted mt-1 truncate">{pendingFiles.map(f=>f.name).join('، ')}</div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-xs font-bold">{pendingFiles.length} فایل هنوز ذخیره نشده است</div>
+                  <div className="text-[11px] app-muted mt-1 break-all">{pendingFiles.map((file) => file.name).join('، ')}</div>
+                  <div className="text-[11px] app-muted mt-1">فایل‌ها در مرورگر انتخاب می‌شوند؛ پس از ذخیره امن، آرشیو تلگرام به‌صورت مستقل در پس‌زمینه ادامه پیدا می‌کند.</div>
                 </div>
-                {pendingFiles.length === 1 && (
-                  <label className="flex-1 min-w-0">
-                    <span className="text-xs font-bold">نام سند (اختیاری)</span>
-                    <input value={documentName} onChange={e=>setDocumentName(e.target.value)} placeholder="مثلاً: پروفرما فولاد آیریک" className="mt-1 w-full rounded-xl border app-border bg-[var(--surface)] p-3"/>
-                    <span className="text-[10px] app-muted mt-1 block">خالی بگذارید تا نام اصلی فایل استفاده شود.</span>
-                  </label>
-                )}
                 <div className="flex gap-2">
-                  <button type="button" disabled={busy} onClick={()=>void upload(pendingFiles,documentName.trim())} className="rounded-xl px-4 py-3 bg-[var(--primary)] text-white font-bold disabled:opacity-50">آپلود و ثبت</button>
-                  <button type="button" disabled={busy} onClick={()=>{setPendingFiles([]);setDocumentName('')}} className="rounded-xl px-4 py-3 border app-border">لغو</button>
+                  <button type="button" disabled={busy} onClick={() => void upload(pendingFiles)} className="rounded-xl px-3 py-2 bg-[var(--primary)] text-white text-xs font-bold disabled:opacity-50">تلاش دوباره</button>
+                  <button type="button" disabled={busy} onClick={() => setPendingFiles([])} className="rounded-xl px-3 py-2 border app-border text-xs">لغو</button>
                 </div>
               </div>
-              <label className="mt-3 block">
-                <span className="mb-1 block text-xs font-bold app-muted">برچسب‌های اسناد (با ویرگول جدا کنید)</span>
-                <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} disabled={busy}
-                  placeholder="مثلاً: فاکتور، قبض انبار، بیمه، گواهی مبدأ"
-                  className="w-full rounded-xl border app-border bg-[var(--surface)] px-3 py-2 text-sm" />
-                <span className="mt-1 block text-[10px] app-muted">حداکثر ۲۰ برچسب برای هر فایل؛ در جست‌وجوی فایل‌منیجر هم قابل یافتن است.</span>
-              </label>
-              {pendingFiles.length > 1 && <div className="text-[10px] app-muted mt-2">در آپلود چند فایل، نام هر فایل از نام اصلی خودش ثبت می‌شود.</div>}
             </div>
           )}
           {current && (
@@ -743,6 +787,13 @@ export const CustomsDocumentManagerPage: React.FC = () => {
                   <div className="mt-3 font-bold text-sm break-all">{fileName(d)}</div>
                   <div className="text-xs app-muted mt-1">
                     {label(d.document_type || inferType(fileName(d)))} · {sizeText(d.size_bytes) || '—'}
+                  </div>
+                  <div className="text-[11px] app-muted mt-1">
+                    {d.storage_backend === 'telegram' && d.file_asset_id
+                      ? 'آرشیو تلگرام آماده است'
+                      : d.telegram_archive_requested
+                        ? 'ذخیره امن انجام شد · در صف ارسال پس‌زمینه به تلگرام'
+                        : 'ذخیره امن در سایت'}
                   </div>
                 </button>
                 <div className="flex gap-1 mt-2">
