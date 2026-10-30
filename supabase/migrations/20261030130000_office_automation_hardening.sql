@@ -386,15 +386,9 @@ begin
         or new.national_id is distinct from old.national_id
         or new.economic_code is distinct from old.economic_code
         or new.registration_number is distinct from old.registration_number
-        or new.address is distinct from old.address
-        or new.phone is distinct from old.phone
-        or new.email is distinct from old.email
         or new.authorized_signer_name is distinct from old.authorized_signer_name
         or new.authority_reference is distinct from old.authority_reference
         or new.authority_valid_until is distinct from old.authority_valid_until
-        or new.letterhead_storage_path is distinct from old.letterhead_storage_path
-        or new.stamp_storage_path is distinct from old.stamp_storage_path
-        or new.signature_storage_path is distinct from old.signature_storage_path
         or new.authorization_storage_path is distinct from old.authorization_storage_path;
 
       if v_authority_changed then
@@ -486,7 +480,6 @@ declare
   v_letterhead text;
   v_authority_path text;
   v_authority_reference text;
-  v_authority_valid_until date;
   v_authority_approved_by uuid;
   v_authority_approved_at timestamptz;
 begin

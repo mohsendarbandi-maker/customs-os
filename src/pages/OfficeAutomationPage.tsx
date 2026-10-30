@@ -9,13 +9,15 @@ import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { buildCompanyLogoSvg, buildCompanyStampSvg, deriveCompanyLogoMark, normalizeBrandColor } from '../lib/companyBranding';
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 const db = supabase as unknown as { from: (table: string) => any; storage: typeof supabase.storage };
 type CompanyProfile = {
-  id: string; organization_id: string; client_id: string | null; company_name: string;
+  id: string; organization_id: string; client_id: string | null; company_name: string; company_name_fa: string | null;
   national_id: string | null; economic_code: string | null; registration_number: string | null;
-  address: string | null; phone: string | null; email: string | null;
+  address: string | null; phone: string | null; email: string | null; postal_code: string | null; fax: string | null; website: string | null;
+  brand_logo_mark: string | null; brand_color: string; brand_style: string; auto_generate_stamp: boolean;
   letterhead_storage_path: string | null; stamp_storage_path: string | null;
   signature_storage_path: string | null; authorization_storage_path: string | null;
   authorized_signer_name: string | null; authority_reference: string | null;
@@ -33,6 +35,14 @@ type Letter = {
   approved_at: string | null; issued_at: string | null; sent_at: string | null; archived_at: string | null;
   created_at: string;
   issued_company_name: string | null;
+  issued_company_name_fa: string | null;
+  issued_company_postal_code: string | null;
+  issued_company_fax: string | null;
+  issued_company_website: string | null;
+  issued_brand_logo_mark: string | null;
+  issued_brand_color: string | null;
+  issued_brand_style: string | null;
+  issued_generated_stamp: boolean;
   issued_company_address: string | null;
   issued_company_phone: string | null;
   issued_company_email: string | null;
@@ -77,6 +87,23 @@ const sizeName = (size: number) => size < 1024 * 1024
   ? Math.max(1, Math.round(size / 1024)) + ' KB'
   : (size / 1024 / 1024).toFixed(1) + ' MB';
 
+const CompanyLogoMark: React.FC<{ mark: string; color: string; style: string; size?: number }> = ({
+  mark, color, style, size = 64,
+}) => (
+  <svg width={size} height={size} viewBox="0 0 240 240" role="img" aria-label={'نشان ' + mark}>
+    {style === 'shield' ? (
+      <path d="M120 24 L204 56 V118 C204 176 166 214 120 236 C74 214 36 176 36 118 V56 Z" fill={normalizeBrandColor(color)}/>
+    ) : style === 'minimal' ? (
+      <circle cx="120" cy="120" r="90" fill="none" stroke={normalizeBrandColor(color)} strokeWidth="16"/>
+    ) : (
+      <rect x="30" y="30" width="180" height="180" rx="34" fill={normalizeBrandColor(color)}/>
+    )}
+    <text x="120" y="137" textAnchor="middle" dominantBaseline="middle"
+      fill={style === 'minimal' ? normalizeBrandColor(color) : '#FFFFFF'}
+      fontFamily="Tahoma,Arial,sans-serif" fontSize="76" fontWeight="700">{mark}</text>
+  </svg>
+);
+
 export const OfficeAutomationPage: React.FC = () => {
   const { profile, user } = useAuth();
   const [params, setParams] = useSearchParams();
@@ -88,9 +115,10 @@ export const OfficeAutomationPage: React.FC = () => {
   const [clientId, setClientId] = useState(params.get('clientId') || '');
   const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [companyForm, setCompanyForm] = useState({
-    company_name: '', national_id: '', economic_code: '', registration_number: '',
-    address: '', phone: '', email: '', authorized_signer_name: '', authority_reference: '',
-    authority_valid_until: '',
+    company_name: '', company_name_fa: '', national_id: '', economic_code: '', registration_number: '',
+    address: '', phone: '', email: '', postal_code: '', fax: '', website: '',
+    brand_logo_mark: '', brand_color: '#173B57', brand_style: 'monogram', auto_generate_stamp: true,
+    authorized_signer_name: '', authority_reference: '', authority_valid_until: '',
   });
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
   const [activeAssetUrls, setActiveAssetUrls] = useState<Record<string, string>>({});
@@ -117,6 +145,41 @@ export const OfficeAutomationPage: React.FC = () => {
   const signatureInput = useRef<HTMLInputElement>(null);
   const authorityInput = useRef<HTMLInputElement>(null);
   const attachmentInput = useRef<HTMLInputElement>(null);
+
+  const displayedCompanyName = companyForm.company_name_fa.trim() || companyForm.company_name.trim() || company?.company_name || '';
+  const displayedLogoMark = companyForm.brand_logo_mark.trim() || deriveCompanyLogoMark(displayedCompanyName);
+  const displayedBrandColor = normalizeBrandColor(companyForm.brand_color || company?.brand_color);
+  const downloadLogo = () => {
+    const svg = buildCompanyLogoSvg({
+      companyName: displayedCompanyName,
+      mark: displayedLogoMark,
+      color: displayedBrandColor,
+      style: companyForm.brand_style,
+    });
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'company-logo.svg';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+  const downloadGeneratedStamp = () => {
+    const svg = buildCompanyStampSvg({
+      companyName: displayedCompanyName,
+      registrationNumber: companyForm.registration_number,
+      color: displayedBrandColor,
+    });
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'company-rectangular-stamp.svg';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
 
   const validAuthority = Boolean(company &&
     (company.client_id ? company.authority_status === 'approved' : ['approved', 'not_required'].includes(company.authority_status)) &&
@@ -152,6 +215,7 @@ export const OfficeAutomationPage: React.FC = () => {
         const inserted = await db.from('office_company_profiles').insert({
           organization_id: profile.organization_id, client_id: selectedClientId || null,
           company_name: defaultName || 'شرکت',
+          company_name_fa: defaultName || 'شرکت',
           authority_status: selectedClientId ? 'not_provided' : 'approved',
           created_by: user.id,
         }).select('*').single();
@@ -160,9 +224,16 @@ export const OfficeAutomationPage: React.FC = () => {
       }
       setCompany(row);
       setCompanyForm({
-        company_name: row.company_name || defaultName, national_id: row.national_id || '',
-        economic_code: row.economic_code || '', registration_number: row.registration_number || '',
-        address: row.address || '', phone: row.phone || '', email: row.email || '',
+        company_name: row.company_name || defaultName,
+        company_name_fa: row.company_name_fa || row.company_name || defaultName,
+        national_id: row.national_id || '', economic_code: row.economic_code || '',
+        registration_number: row.registration_number || '', address: row.address || '',
+        phone: row.phone || '', email: row.email || '', postal_code: row.postal_code || '',
+        fax: row.fax || '', website: row.website || '',
+        brand_logo_mark: row.brand_logo_mark || deriveCompanyLogoMark(row.company_name_fa || row.company_name || defaultName),
+        brand_color: normalizeBrandColor(row.brand_color),
+        brand_style: row.brand_style || 'monogram',
+        auto_generate_stamp: row.auto_generate_stamp !== false,
         authorized_signer_name: row.authorized_signer_name || '',
         authority_reference: row.authority_reference || '',
         authority_valid_until: row.authority_valid_until || '',
@@ -244,22 +315,28 @@ export const OfficeAutomationPage: React.FC = () => {
 
   const saveCompany = async () => {
     if (!company || !companyForm.company_name.trim()) return setProfileError('نام رسمی شرکت الزامی است.');
-    setBusyProfile(true); setProfileError(''); setProfileNotice('');
-    const patch: Record<string, unknown> = {
-      ...companyForm, company_name: companyForm.company_name.trim(),
+    const displayName = companyForm.company_name_fa.trim() || companyForm.company_name.trim();
+    const savedForm = {
+      ...companyForm,
+      company_name: companyForm.company_name.trim(),
+      company_name_fa: displayName,
+      brand_logo_mark: companyForm.brand_logo_mark.trim() || deriveCompanyLogoMark(displayName),
+      brand_color: normalizeBrandColor(companyForm.brand_color),
+      brand_style: ['monogram','shield','minimal'].includes(companyForm.brand_style) ? companyForm.brand_style : 'monogram',
+      auto_generate_stamp: Boolean(companyForm.auto_generate_stamp),
       authority_valid_until: companyForm.authority_valid_until || null,
     };
+    setBusyProfile(true); setProfileError(''); setProfileNotice('');
+    const patch: Record<string, unknown> = { ...savedForm };
     const representationDetailsChanged = Boolean(company.client_id && (
-      companyForm.company_name.trim() !== (company.company_name || '').trim()
-      || companyForm.national_id.trim() !== (company.national_id || '').trim()
-      || companyForm.economic_code.trim() !== (company.economic_code || '').trim()
-      || companyForm.registration_number.trim() !== (company.registration_number || '').trim()
-      || companyForm.address.trim() !== (company.address || '').trim()
-      || companyForm.phone.trim() !== (company.phone || '').trim()
-      || companyForm.email.trim() !== (company.email || '').trim()
-      || companyForm.authorized_signer_name.trim() !== (company.authorized_signer_name || '').trim()
-      || companyForm.authority_reference.trim() !== (company.authority_reference || '').trim()
-      || (companyForm.authority_valid_until || '') !== (company.authority_valid_until || '')
+      savedForm.company_name !== (company.company_name || '').trim()
+      || savedForm.company_name_fa !== (company.company_name_fa || company.company_name || '').trim()
+      || savedForm.national_id.trim() !== (company.national_id || '').trim()
+      || savedForm.economic_code.trim() !== (company.economic_code || '').trim()
+      || savedForm.registration_number.trim() !== (company.registration_number || '').trim()
+      || savedForm.authorized_signer_name.trim() !== (company.authorized_signer_name || '').trim()
+      || savedForm.authority_reference.trim() !== (company.authority_reference || '').trim()
+      || (savedForm.authority_valid_until || '') !== (company.authority_valid_until || '')
     ));
     if (representationDetailsChanged) {
       patch.authority_status = 'pending';
@@ -270,7 +347,8 @@ export const OfficeAutomationPage: React.FC = () => {
       const result = await db.from('office_company_profiles').update(patch).eq('id', company.id).select('*').single();
       if (result.error) throw result.error;
       setCompany(result.data as CompanyProfile);
-      setProfileNotice('اطلاعات هویتی شرکت ذخیره شد.');
+      setCompanyForm((previous) => ({ ...previous, ...savedForm, authority_valid_until: savedForm.authority_valid_until || '' }));
+      setProfileNotice('اطلاعات شرکت، نشان تجاری و تنظیمات سربرگ ذخیره شد.');
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : 'ذخیره اطلاعات ناموفق بود.');
     } finally { setBusyProfile(false); }
@@ -294,7 +372,7 @@ export const OfficeAutomationPage: React.FC = () => {
         signature: 'signature_storage_path', authorization: 'authorization_storage_path',
       } as const)[kind];
       const patch: Record<string, unknown> = { [column]: path };
-      if (clientId) {
+      if (clientId && kind === 'authorization') {
         patch.authority_status = 'pending';
         patch.authority_approved_by = null;
         patch.authority_approved_at = null;
@@ -321,7 +399,7 @@ export const OfficeAutomationPage: React.FC = () => {
           await pdf.destroy();
         } else setLetterheadPreview(url);
       }
-      setProfileNotice('فایل به پروفایل همین شرکت متصل شد.' + (clientId ? ' تأیید مجوز برای بررسی مجدد به حالت انتظار رفت.' : ''));
+      setProfileNotice('فایل به پروفایل همین شرکت متصل شد.' + (clientId && kind === 'authorization' ? ' وضعیت مجوز برای بررسی مجدد به حالت انتظار رفت.' : ''));
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : 'بارگذاری فایل ناموفق بود.');
     } finally { setBusyProfile(false); }
@@ -360,8 +438,8 @@ export const OfficeAutomationPage: React.FC = () => {
   const newLetter = () => {
     setActive(null); setActiveAssetUrls(assetUrls); setDraft({
       ...blankDraft, sender_name: companyForm.authorized_signer_name,
-      sender_organization: company?.company_name || '',
-      apply_stamp: Boolean(company?.stamp_storage_path),
+      sender_organization: displayedCompanyName || company?.company_name || '',
+      apply_stamp: Boolean(company?.stamp_storage_path || company?.auto_generate_stamp),
       apply_signature: Boolean(company?.signature_storage_path),
     });
     setAttachments([]); setAttachmentUrls({}); setPendingAttachments([]); setEvents([]);
@@ -450,7 +528,7 @@ export const OfficeAutomationPage: React.FC = () => {
   const saveLetter = async (nextStatus: 'draft' | 'in_review') => {
     if (!company || !profile?.organization_id || !user?.id) return;
     if (!draft.subject.trim() || !draft.body.trim()) return setLetterError('موضوع و متن نامه الزامی است.');
-    if (draft.apply_stamp && !company.stamp_storage_path) return setLetterError('مهر این شرکت هنوز بارگذاری نشده است.');
+    if (draft.apply_stamp && !company.stamp_storage_path && !company.auto_generate_stamp) return setLetterError('برای این شرکت نه مهر بارگذاری شده و نه مهر دیجیتال تولیدی فعال است.');
     if (draft.apply_signature && !company.signature_storage_path) return setLetterError('امضای مجاز این شرکت هنوز بارگذاری نشده است.');
     setBusyLetter(true); setLetterError(''); setLetterNotice('');
     const payload = {
@@ -538,7 +616,7 @@ export const OfficeAutomationPage: React.FC = () => {
   const inputClass = 'mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm disabled:opacity-60';
   return (
     <main className="office-app min-h-[calc(100dvh-64px)] bg-[var(--bg)] p-3 text-[var(--text)] md:p-6" dir="rtl">
-      <style>{'.office-print-sheet{display:none}@media print{@page{size:A4;margin:14mm 16mm}body{background:#fff!important}body *{visibility:hidden!important}.office-print-sheet,.office-print-sheet *{visibility:visible!important}.office-print-sheet{display:block!important;position:absolute;inset:0;width:100%;padding:0;color:#111!important;background:#fff!important;font-family:Tahoma,Arial,sans-serif;direction:rtl}.office-print-sheet .letter-body{white-space:pre-wrap;line-height:2.1;font-size:13px;text-align:justify}.office-print-sheet .letter-header img{max-height:35mm;max-width:100%;object-fit:contain}.office-print-sheet .signature-assets img{max-height:28mm;max-width:45mm;object-fit:contain}.office-print-sheet .letter-attachments{page-break-inside:avoid}}'}</style>
+      <style>{'.office-print-sheet{display:none}@media print{@page{size:A4;margin:14mm 16mm}body{background:#fff!important}body *{visibility:hidden!important}.office-print-sheet,.office-print-sheet *{visibility:visible!important}.office-print-sheet{display:block!important;position:absolute;inset:0;width:100%;padding:0;color:#111!important;background:#fff!important;font-family:Tahoma,Arial,sans-serif;direction:rtl}.office-print-sheet .letter-body{white-space:pre-wrap;line-height:2.1;font-size:13px;text-align:justify}.office-print-sheet .letter-header img{max-height:35mm;max-width:100%;object-fit:contain}.office-print-sheet .generated-letterhead{display:flex;align-items:center;gap:14px;border-bottom:2px solid #173B57;padding:0 0 10mm;margin-bottom:2mm}.office-print-sheet .generated-letterhead h1{font-size:21px;font-weight:800;margin:0 0 5px}.office-print-sheet .generated-letterhead .subline{font-size:10px;line-height:1.8;color:#444}.office-print-sheet .generated-footer{border-top:1px solid #aaa;padding-top:8px;margin-top:22px;font-size:9px;line-height:2;text-align:center}.office-print-sheet .generated-stamp{border:3px double currentColor;padding:8px 14px;min-width:48mm;max-width:70mm;text-align:center}.office-print-sheet .generated-stamp .company{font-weight:800;font-size:11px;margin-bottom:5px}.office-print-sheet .generated-stamp .number{border-top:1px solid currentColor;padding-top:5px;font-size:10px}.office-print-sheet .signature-assets img{max-height:28mm;max-width:45mm;object-fit:contain}.office-print-sheet .letter-attachments{page-break-inside:avoid}}'}</style>
       <div className="mx-auto max-w-7xl space-y-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -554,8 +632,12 @@ export const OfficeAutomationPage: React.FC = () => {
 
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
           <div className="flex flex-wrap items-center gap-3">
-            <Building2 size={20} className="text-blue-400"/>
-            <div className="min-w-0 flex-1"><div className="text-xs text-[var(--muted)]">دفتر مکاتبات متعلق به</div><div className="truncate font-black">{company?.company_name || 'در حال بارگذاری…'}</div></div>
+            <CompanyLogoMark mark={displayedLogoMark} color={displayedBrandColor} style={companyForm.brand_style} size={48}/>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-[var(--muted)]">دفتر مکاتبات متعلق به</div>
+              <div className="truncate font-black">{displayedCompanyName || 'در حال بارگذاری…'}</div>
+              <div className="mt-1 text-[11px] text-[var(--muted)]">شماره ثبت: {companyForm.registration_number || '—'}</div>
+            </div>
             {!isClient && <select value={clientId} onChange={(event) => void switchCompany(event.target.value)} className="min-h-10 min-w-[190px] rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
               <option value="">کارگزاری / شرکت نماینده</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>}
@@ -567,23 +649,93 @@ export const OfficeAutomationPage: React.FC = () => {
         <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
           <aside className="space-y-4">
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
-              <h2 className="mb-3 font-black">اطلاعات رسمی شرکت</h2>
-              <label className="block text-xs text-[var(--muted)]">نام رسمی شرکت<input className={inputClass} disabled={!canConfigure} value={companyForm.company_name} onChange={(e) => setCompanyForm((p) => ({ ...p, company_name: e.target.value }))}/></label>
+              <h2 className="mb-3 font-black">اطلاعات رسمی و تماس شرکت</h2>
+              <label className="block text-xs text-[var(--muted)]">نام فارسی شرکت / نام درج‌شونده در سربرگ
+                <input className={inputClass} disabled={!canConfigure} value={companyForm.company_name_fa} onChange={(e) => setCompanyForm((p) => ({ ...p, company_name_fa: e.target.value }))}/>
+              </label>
+              <label className="mt-2 block text-xs text-[var(--muted)]">نام ثبتی / نام انگلیسی شرکت
+                <input className={inputClass} disabled={!canConfigure} value={companyForm.company_name} onChange={(e) => setCompanyForm((p) => ({ ...p, company_name: e.target.value }))}/>
+              </label>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                <label className="text-xs text-[var(--muted)]">شناسه ملی<input className={inputClass} disabled={!canConfigure} value={companyForm.national_id} onChange={(e) => setCompanyForm((p) => ({ ...p, national_id: e.target.value }))}/></label>
-                <label className="text-xs text-[var(--muted)]">کد اقتصادی<input className={inputClass} disabled={!canConfigure} value={companyForm.economic_code} onChange={(e) => setCompanyForm((p) => ({ ...p, economic_code: e.target.value }))}/></label>
-                <label className="text-xs text-[var(--muted)]">شماره ثبت<input className={inputClass} disabled={!canConfigure} value={companyForm.registration_number} onChange={(e) => setCompanyForm((p) => ({ ...p, registration_number: e.target.value }))}/></label>
-                <label className="text-xs text-[var(--muted)]">تلفن<input className={inputClass} disabled={!canConfigure} value={companyForm.phone} onChange={(e) => setCompanyForm((p) => ({ ...p, phone: e.target.value }))}/></label>
+                <label className="text-xs text-[var(--muted)]">شماره ثبت
+                  <input className={inputClass} disabled={!canConfigure} value={companyForm.registration_number} onChange={(e) => setCompanyForm((p) => ({ ...p, registration_number: e.target.value }))}/>
+                </label>
+                <label className="text-xs text-[var(--muted)]">شناسه ملی
+                  <input className={inputClass} disabled={!canConfigure} value={companyForm.national_id} onChange={(e) => setCompanyForm((p) => ({ ...p, national_id: e.target.value }))}/>
+                </label>
+                <label className="text-xs text-[var(--muted)]">کد اقتصادی
+                  <input className={inputClass} disabled={!canConfigure} value={companyForm.economic_code} onChange={(e) => setCompanyForm((p) => ({ ...p, economic_code: e.target.value }))}/>
+                </label>
+                <label className="text-xs text-[var(--muted)]">کد پستی
+                  <input className={inputClass} disabled={!canConfigure} value={companyForm.postal_code} onChange={(e) => setCompanyForm((p) => ({ ...p, postal_code: e.target.value }))}/>
+                </label>
+                <label className="text-xs text-[var(--muted)]">تلفن
+                  <input className={inputClass} disabled={!canConfigure} value={companyForm.phone} onChange={(e) => setCompanyForm((p) => ({ ...p, phone: e.target.value }))}/>
+                </label>
+                <label className="text-xs text-[var(--muted)]">فکس
+                  <input className={inputClass} disabled={!canConfigure} value={companyForm.fax} onChange={(e) => setCompanyForm((p) => ({ ...p, fax: e.target.value }))}/>
+                </label>
               </div>
-              <label className="mt-2 block text-xs text-[var(--muted)]">آدرس<textarea className={inputClass + ' py-2'} rows={2} disabled={!canConfigure} value={companyForm.address} onChange={(e) => setCompanyForm((p) => ({ ...p, address: e.target.value }))}/></label>
-              <label className="mt-2 block text-xs text-[var(--muted)]">ایمیل<input className={inputClass} disabled={!canConfigure} value={companyForm.email} onChange={(e) => setCompanyForm((p) => ({ ...p, email: e.target.value }))}/></label>
-              {canConfigure && <button type="button" onClick={() => void saveCompany()} disabled={busyProfile || !company} className="mt-3 min-h-10 w-full rounded-xl bg-blue-600 text-sm font-bold text-white disabled:opacity-40"><Save className="ml-1 inline" size={15}/> ذخیره مشخصات</button>}
+              <label className="mt-2 block text-xs text-[var(--muted)]">آدرس کامل
+                <textarea className={inputClass + ' py-2'} rows={2} disabled={!canConfigure} value={companyForm.address} onChange={(e) => setCompanyForm((p) => ({ ...p, address: e.target.value }))}/>
+              </label>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="text-xs text-[var(--muted)]">ایمیل
+                  <input className={inputClass} disabled={!canConfigure} value={companyForm.email} onChange={(e) => setCompanyForm((p) => ({ ...p, email: e.target.value }))}/>
+                </label>
+                <label className="text-xs text-[var(--muted)]">وب‌سایت
+                  <input className={inputClass} disabled={!canConfigure} value={companyForm.website} onChange={(e) => setCompanyForm((p) => ({ ...p, website: e.target.value }))}/>
+                </label>
+              </div>
+              {canConfigure && <button type="button" onClick={() => void saveCompany()} disabled={busyProfile || !company} className="mt-3 min-h-10 w-full rounded-xl bg-blue-600 text-sm font-bold text-white disabled:opacity-40"><Save className="ml-1 inline" size={15}/> ذخیره اطلاعات شرکت</button>}
               {profileNotice && <p className="mt-2 rounded-xl bg-emerald-500/10 p-2 text-xs text-emerald-500">{profileNotice}</p>}
               {profileError && <p className="mt-2 rounded-xl bg-red-500/10 p-2 text-xs text-red-400">{profileError}</p>}
             </section>
 
             <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
-              <h2 className="mb-2 font-black">هویت بصری و مجوزها</h2>
+              <h2 className="mb-3 font-black">سربرگ دیجیتال و ساخت لوگو</h2>
+              <p className="mb-3 text-[11px] leading-5 text-[var(--muted)]">برای شرکت‌های تازه‌تأسیس که سربرگ آماده ندارند، سیستم از نام فارسی، شماره ثبت و نشان ساده، سربرگ قابل چاپ می‌سازد.</p>
+              <label className="block text-xs text-[var(--muted)]">حروف یا نماد لوگو (حداکثر ۳ نویسه)
+                <input maxLength={3} className={inputClass} disabled={!canConfigure} value={companyForm.brand_logo_mark} onChange={(e) => setCompanyForm((p) => ({ ...p, brand_logo_mark: e.target.value.slice(0, 3) }))} placeholder={deriveCompanyLogoMark(displayedCompanyName)}/>
+              </label>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="text-xs text-[var(--muted)]">رنگ برند
+                  <input type="color" disabled={!canConfigure} value={displayedBrandColor} onChange={(e) => setCompanyForm((p) => ({ ...p, brand_color: e.target.value }))} className="mt-1 h-10 w-full cursor-pointer rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-1"/>
+                </label>
+                <label className="text-xs text-[var(--muted)]">سبک لوگو
+                  <select disabled={!canConfigure} value={companyForm.brand_style} onChange={(e) => setCompanyForm((p) => ({ ...p, brand_style: e.target.value }))} className={inputClass}>
+                    <option value="monogram">نشان هندسی</option><option value="shield">سپر شرکتی</option><option value="minimal">دایره مینیمال</option>
+                  </select>
+                </label>
+              </div>
+              <div className="mt-3 flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                <CompanyLogoMark mark={displayedLogoMark} color={displayedBrandColor} style={companyForm.brand_style} size={76}/>
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold">{displayedCompanyName || 'نام شرکت'}</div>
+                  <div className="mt-1 text-[11px] text-[var(--muted)]">شماره ثبت: {companyForm.registration_number || '—'}</div>
+                  <div className="mt-1 text-[10px] text-[var(--muted)]">نشان بر اساس نام شرکت تولید شده است.</div>
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" disabled={!canConfigure} onClick={() => setCompanyForm((p) => ({ ...p, brand_logo_mark: deriveCompanyLogoMark(p.company_name_fa || p.company_name) }))} className="min-h-10 flex-1 rounded-xl border border-[var(--border)] px-3 text-xs font-bold">ساخت لوگوی ساده</button>
+                <button type="button" onClick={downloadLogo} className="min-h-10 rounded-xl border border-[var(--border)] px-3 text-xs"><Download className="ml-1 inline" size={14}/> دریافت SVG</button>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+              <h2 className="mb-2 font-black">هویت بصری و مجوزها</h2><section className="mb-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-xs font-bold">مهر مستطیلی دیجیتال</div>
+                  <label className="flex items-center gap-2 text-[11px]"><input type="checkbox" disabled={!canConfigure} checked={companyForm.auto_generate_stamp} onChange={(e) => setCompanyForm((p) => ({ ...p, auto_generate_stamp: e.target.checked }))}/> فعال</label>
+                </div>
+                <div className="mx-auto max-w-[230px] border-[3px] border-double px-3 py-3 text-center" style={{ borderColor: displayedBrandColor, color: displayedBrandColor }}>
+                  <div className="truncate text-xs font-black">{displayedCompanyName || 'نام شرکت'}</div>
+                  <div className="my-2 border-t" style={{ borderColor: displayedBrandColor }}/>
+                  <div className="text-[11px] font-bold">شماره ثبت: {companyForm.registration_number || 'ثبت نشده'}</div>
+                </div>
+                <button type="button" onClick={downloadGeneratedStamp} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2 text-xs"><Download className="ml-1 inline" size={14}/> دریافت فایل مهر SVG</button>
+                <p className="mt-2 text-[10px] leading-5 text-[var(--muted)]">این تصویر مهر گرافیکیِ جایگزین برای پیش‌نویس و چاپ است و به‌تنهایی مهر فیزیکی یا امضای دیجیتال معتبر محسوب نمی‌شود.</p>
+              </section>
               {([
                 ['letterhead','سربرگ شرکت',FileText,letterheadInput,'PDF یا تصویر'],
                 ['stamp','مهر شرکت',Stamp,stampInput,'PNG/JPG'],
@@ -612,9 +764,20 @@ export const OfficeAutomationPage: React.FC = () => {
                 {canApproveAuthority && <button type="button" onClick={() => void approveAuthority()} disabled={authorityBusy || busyProfile || !company?.authorization_storage_path} className="mt-2 w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40">
                   {authorityBusy ? <Loader2 className="ml-1 inline animate-spin" size={14}/> : <BadgeCheck className="ml-1 inline" size={14}/>} تأیید مجوز نمایندگی
                 </button>}
-                <p className="mt-2 text-[10px] leading-5 text-[var(--muted)]">بارگذاری مهر و امضا به‌تنهایی اجازه استفاده نیست. ابتدا مدرک نمایندگی باید بررسی و توسط مدیر مجاز تأیید شود. جایگزینی فایل‌های هویتی، تأیید قبلی را باطل می‌کند.</p>
+                <p className="mt-2 text-[10px] leading-5 text-[var(--muted)]">بارگذاری مهر و امضا به‌تنهایی اجازه استفاده نیست. مدرک نمایندگی باید توسط مدیر مجاز بررسی شود. فقط تغییر نام/شناسه ثبتی، امضاکننده یا مدرک نمایندگی، تأیید را به بررسی مجدد می‌برد.</p>
               </div>}
-              {letterheadPreview && <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)] bg-white p-2"><img src={letterheadPreview} alt="پیش‌نمایش سربرگ" className="max-h-36 w-full object-contain"/></div>}
+              {letterheadPreview ? <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)] bg-white p-2"><img src={letterheadPreview} alt="پیش‌نمایش سربرگ" className="max-h-36 w-full object-contain"/></div> : (
+                <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3 text-slate-900" dir="rtl">
+                  <div className="flex items-center gap-3 border-b-2 pb-2" style={{ borderColor: displayedBrandColor }}>
+                    <CompanyLogoMark mark={displayedLogoMark} color={displayedBrandColor} style={companyForm.brand_style} size={42}/>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-black">{displayedCompanyName || 'نام شرکت'}</div>
+                      <div className="text-[10px]">شماره ثبت: {companyForm.registration_number || '—'}</div>
+                    </div>
+                  </div>
+                  <div className="pt-2 text-center text-[9px] text-slate-600">{companyForm.address || 'آدرس شرکت'} · {companyForm.phone || 'تلفن'} · کد پستی: {companyForm.postal_code || '—'}</div>
+                </div>
+              )}
             </section>
           </aside>
 
@@ -705,45 +868,96 @@ export const OfficeAutomationPage: React.FC = () => {
         </div>
       </div>
 
-      {active && <section className="office-print-sheet" dir="rtl">
-        {active.direction === 'incoming' ? <>
-          <header className="border-b border-slate-300 pb-4 text-center">
-            <h1 className="text-xl font-bold">رسید ثبت نامه وارده</h1>
-            <div className="mt-2 text-sm">{active.issued_company_name || company?.company_name}</div>
-          </header>
-          <div className="mt-6 grid grid-cols-2 gap-4 text-xs">
-            <div><b>شماره اندیکاتور:</b> {active.registry_no || 'پیش‌نویس'}</div>
-            <div><b>تاریخ ثبت:</b> {dateLabel(active.issued_at || active.created_at)}</div>
-            <div><b>شماره نامه فرستنده:</b> {active.external_reference || '—'}</div>
-            <div><b>تاریخ نامه:</b> {dateLabel(active.letter_date)}</div>
-            <div><b>فرستنده:</b> {active.sender_name || '—'}</div>
-            <div><b>سازمان فرستنده:</b> {active.sender_organization || '—'}</div>
-            <div><b>گیرنده:</b> {active.recipient_name || '—'}</div>
-            <div><b>سازمان گیرنده:</b> {active.recipient_organization || '—'}</div>
-          </div>
-          <div className="mt-6 border-t border-slate-300 pt-4 text-sm"><b>موضوع:</b> {active.subject}</div>
-          {active.body && <div className="letter-body mt-4 min-h-[80mm]">{active.body}</div>}
-          {attachments.length > 0 && <div className="letter-attachments mt-8 border-t border-slate-300 pt-3 text-xs"><b>اصل نامه و پیوست‌های اسکن‌شده:</b><ul className="mt-2 list-disc pr-5">{attachments.map((item) => <li key={item.id}>{item.original_name}</li>)}</ul></div>}
-          <footer className="mt-10 border-t border-slate-300 pt-3 text-center text-[10px] text-slate-600">این برگه رسید ثبت مکاتبه است و جایگزین اصل نامه وارده نیست.</footer>
-        </> : <>
-          <div className="letter-header border-b border-slate-300 pb-3">
-            {letterheadPreview ? <img src={letterheadPreview} alt="سربرگ شرکت"/> : <div className="text-center text-lg font-bold">{active.issued_company_name || company?.company_name}</div>}
-          </div>
-          <div className="mt-5 flex justify-between gap-4 text-xs">
-            <div><div><b>شماره:</b> {active.registry_no || 'پیش‌نویس'}</div><div className="mt-2"><b>تاریخ:</b> {dateLabel(active.issued_at || active.letter_date || active.created_at)}</div><div className="mt-2"><b>پیوست:</b> {new Intl.NumberFormat('fa-IR').format(attachments.length)} مورد</div></div>
-            <div><b>نوع:</b> {directionName[active.direction]}</div>
-          </div>
-          <div className="mt-6 text-sm"><b>گیرنده:</b> {active.recipient_name || '—'} {active.recipient_organization ? ' ـ ' + active.recipient_organization : ''}</div>
-          <div className="mt-4 text-sm"><b>موضوع:</b> {active.subject}</div>
-          <div className="letter-body mt-6 min-h-[125mm]">{active.body}</div>
-          <div className="signature-assets mt-10 flex items-end justify-between gap-6">
-            <div className="text-center">{active.apply_signature && activeAssetUrls.signature && <img src={activeAssetUrls.signature} alt="امضا"/>}<div className="mt-2 text-xs font-bold">{active.issued_signer_name || active.sender_name || companyForm.authorized_signer_name}</div><div className="text-[10px]">{active.issued_company_name || company?.company_name}</div></div>
-            <div className="text-center">{active.apply_stamp && activeAssetUrls.stamp && <img src={activeAssetUrls.stamp} alt="مهر شرکت"/>}</div>
-          </div>
-          {attachments.length > 0 && <div className="letter-attachments mt-8 border-t border-slate-300 pt-3 text-xs"><b>پیوست‌ها:</b><ul className="mt-2 list-disc pr-5">{attachments.map((item) => <li key={item.id}>{item.original_name}</li>)}</ul></div>}
-          <footer className="mt-10 border-t border-slate-300 pt-3 text-center text-[10px] text-slate-600">{active.issued_company_address || company?.address || ''} {active.issued_company_phone || company?.phone ? ' · ' + (active.issued_company_phone || company?.phone) : ''} {active.issued_company_email || company?.email ? ' · ' + (active.issued_company_email || company?.email) : ''}</footer>
-        </>}
-      </section>}
+            {active && (() => {
+        const isIssuedSnapshot = ['issued','sent','archived'].includes(active.status);
+        const printCompanyName = isIssuedSnapshot
+          ? (active.issued_company_name_fa || active.issued_company_name || 'نام شرکت')
+          : (companyForm.company_name_fa || company?.company_name || 'نام شرکت');
+        const printRegistration = isIssuedSnapshot ? active.issued_company_registration_number : (companyForm.registration_number || company?.registration_number);
+        const printNationalId = isIssuedSnapshot ? active.issued_company_national_id : (companyForm.national_id || company?.national_id);
+        const printEconomicCode = isIssuedSnapshot ? active.issued_company_economic_code : (companyForm.economic_code || company?.economic_code);
+        const printAddress = isIssuedSnapshot ? active.issued_company_address : (companyForm.address || company?.address);
+        const printPhone = isIssuedSnapshot ? active.issued_company_phone : (companyForm.phone || company?.phone);
+        const printPostalCode = isIssuedSnapshot ? active.issued_company_postal_code : (companyForm.postal_code || company?.postal_code);
+        const printFax = isIssuedSnapshot ? active.issued_company_fax : (companyForm.fax || company?.fax);
+        const printWebsite = isIssuedSnapshot ? active.issued_company_website : (companyForm.website || company?.website);
+        const printEmail = isIssuedSnapshot ? active.issued_company_email : (companyForm.email || company?.email);
+        const printLogoMark = isIssuedSnapshot
+          ? (active.issued_brand_logo_mark || deriveCompanyLogoMark(printCompanyName))
+          : (companyForm.brand_logo_mark || deriveCompanyLogoMark(printCompanyName));
+        const printBrandColor = normalizeBrandColor(isIssuedSnapshot ? active.issued_brand_color : companyForm.brand_color || company?.brand_color);
+        const printBrandStyle = isIssuedSnapshot ? (active.issued_brand_style || 'monogram') : (companyForm.brand_style || company?.brand_style || 'monogram');
+        const generatedStamp = isIssuedSnapshot ? active.issued_generated_stamp : Boolean(company?.auto_generate_stamp);
+        return (
+          <section className="office-print-sheet" dir="rtl">
+            {active.direction === 'incoming' ? <>
+              <header className="border-b border-slate-300 pb-4">
+                <div className="flex items-center justify-center gap-3">
+                  <CompanyLogoMark mark={printLogoMark} color={printBrandColor} style={printBrandStyle} size={56}/>
+                  <div className="text-center">
+                    <h1 className="text-lg font-black">{printCompanyName}</h1>
+                    <div className="mt-1 text-[10px]">شماره ثبت: {printRegistration || '—'} · شناسه ملی: {printNationalId || '—'}</div>
+                  </div>
+                </div>
+                <h2 className="mt-4 text-center text-sm font-bold">رسید ثبت نامه وارده</h2>
+              </header>
+              <div className="mt-6 grid grid-cols-2 gap-4 text-xs">
+                <div><b>شماره اندیکاتور:</b> {active.registry_no || 'پیش‌نویس'}</div>
+                <div><b>تاریخ ثبت:</b> {dateLabel(active.issued_at || active.created_at)}</div>
+                <div><b>شماره نامه فرستنده:</b> {active.external_reference || '—'}</div>
+                <div><b>تاریخ نامه:</b> {dateLabel(active.letter_date)}</div>
+                <div><b>فرستنده:</b> {active.sender_name || '—'}</div>
+                <div><b>سازمان فرستنده:</b> {active.sender_organization || '—'}</div>
+                <div><b>گیرنده:</b> {active.recipient_name || '—'}</div>
+                <div><b>سازمان گیرنده:</b> {active.recipient_organization || '—'}</div>
+              </div>
+              <div className="mt-6 border-t border-slate-300 pt-4 text-sm"><b>موضوع:</b> {active.subject}</div>
+              {active.body && <div className="letter-body mt-4 min-h-[80mm]">{active.body}</div>}
+              {attachments.length > 0 && <div className="letter-attachments mt-8 border-t border-slate-300 pt-3 text-xs"><b>اصل نامه و پیوست‌های اسکن‌شده:</b><ul className="mt-2 list-disc pr-5">{attachments.map((item) => <li key={item.id}>{item.original_name}</li>)}</ul></div>}
+              <footer className="generated-footer">{printAddress || ''} {printPhone ? ' · تلفن: ' + printPhone : ''} {printPostalCode ? ' · کد پستی: ' + printPostalCode : ''}</footer>
+              <div className="mt-3 text-center text-[9px]">این برگه رسید ثبت مکاتبه است و جایگزین اصل نامه وارده نیست.</div>
+            </> : <>
+              <div className="letter-header border-b border-slate-300 pb-3">
+                {letterheadPreview ? <img src={letterheadPreview} alt="سربرگ شرکت"/> : (
+                  <div className="generated-letterhead" style={{ borderColor: printBrandColor }}>
+                    <CompanyLogoMark mark={printLogoMark} color={printBrandColor} style={printBrandStyle} size={76}/>
+                    <div className="min-w-0 flex-1">
+                      <h1>{printCompanyName}</h1>
+                      <div className="subline">شماره ثبت: {printRegistration || '—'} · شناسه ملی: {printNationalId || '—'} · کد اقتصادی: {printEconomicCode || '—'}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="mt-5 flex justify-between gap-4 text-xs">
+                <div><div><b>شماره:</b> {active.registry_no || 'پیش‌نویس'}</div><div className="mt-2"><b>تاریخ:</b> {dateLabel(active.issued_at || active.letter_date || active.created_at)}</div><div className="mt-2"><b>پیوست:</b> {new Intl.NumberFormat('fa-IR').format(attachments.length)} مورد</div></div>
+                <div><b>نوع:</b> {directionName[active.direction]}</div>
+              </div>
+              <div className="mt-6 text-sm"><b>گیرنده:</b> {active.recipient_name || '—'} {active.recipient_organization ? ' ـ ' + active.recipient_organization : ''}</div>
+              <div className="mt-4 text-sm"><b>موضوع:</b> {active.subject}</div>
+              <div className="letter-body mt-6 min-h-[125mm]">{active.body}</div>
+              <div className="signature-assets mt-10 flex items-end justify-between gap-6">
+                <div className="text-center">
+                  {active.apply_signature && activeAssetUrls.signature && <img src={activeAssetUrls.signature} alt="امضا"/>}
+                  <div className="mt-2 text-xs font-bold">{active.issued_signer_name || active.sender_name || companyForm.authorized_signer_name}</div>
+                  <div className="text-[10px]">{printCompanyName}</div>
+                </div>
+                <div className="text-center">
+                  {active.apply_stamp && activeAssetUrls.stamp ? <img src={activeAssetUrls.stamp} alt="مهر شرکت"/> :
+                    active.apply_stamp && generatedStamp ? <div className="generated-stamp" style={{ color: printBrandColor, borderColor: printBrandColor }}>
+                      <div className="company">{printCompanyName}</div>
+                      <div className="number">شماره ثبت: {printRegistration || '—'}</div>
+                    </div> : null}
+                </div>
+              </div>
+              {attachments.length > 0 && <div className="letter-attachments mt-8 border-t border-slate-300 pt-3 text-xs"><b>پیوست‌ها:</b><ul className="mt-2 list-disc pr-5">{attachments.map((item) => <li key={item.id}>{item.original_name}</li>)}</ul></div>}
+              <footer className="generated-footer">
+                {printAddress || ''} {printPhone ? ' · تلفن: ' + printPhone : ''} {printFax ? ' · فکس: ' + printFax : ''} {printPostalCode ? ' · کد پستی: ' + printPostalCode : ''}
+                {printEmail ? ' · ایمیل: ' + printEmail : ''} {printWebsite ? ' · وب‌سایت: ' + printWebsite : ''}
+              </footer>
+            </>}
+          </section>
+        );
+      })()}>}
     </main>
   );
 };
