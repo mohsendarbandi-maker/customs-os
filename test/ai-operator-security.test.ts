@@ -136,7 +136,7 @@ describe('AI Operator security invariants',()=>{
    expect(shipment).toContain("shipment_documents').insert");
    expect(shipment).toContain("pdfjsLib.getDocument");
    expect(shipment).toContain("انتخاب به‌عنوان بارنامه");
-   expect(shipment).toContain("تمام صفحات همان PDF خوانده می‌شوند");
+   expect(shipment).toContain("همه صفحات همان PDF خوانده می‌شوند");
    expect(assistant).toContain("createSignedUrl(documentStoragePath,600)");
    expect(assistant).toContain("documentStoragePath.startsWith(String(profile.organization_id)+'/')");
    expect(assistant).toContain("v1beta/interactions");
