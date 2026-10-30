@@ -168,7 +168,6 @@ export const ShipmentFirstPage:React.FC=()=>{
    const owner=ownerName?clients.find(client=>same(client.name,ownerName)):null;
    setForm(previous=>({
     ...previous,
-    ownerId:owner?.id||previous.ownerId,
     shippingLine:val('shippingLine')||previous.shippingLine,
     billOfLading:val('billOfLading')||previous.billOfLading,
     year:val('billOfLadingYear')||previous.year,
@@ -184,7 +183,8 @@ export const ShipmentFirstPage:React.FC=()=>{
    }));
    setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,extractedFields:Object.fromEntries(Object.entries(parsed).filter(([,v])=>typeof v==='string'&&String(v).trim()).map(([k,v])=>[k,String(v)]))}:item));
    const missingOwner=ownerName&&!owner;
-   setMessage('استخراج انجام شد؛ اطلاعات قابل تشخیص از فایل تلگرام به‌صورت پیش‌نویس در فرم قرار گرفت. '+(missingOwner?'نام صاحب کالا در فهرست مشتریان دقیقاً پیدا نشد؛ لطفاً آن را دستی انتخاب کن. ':'')+'قبل از ذخیره، تمام مقادیر را با خود بارنامه تطبیق بده.');
+   const ownerConflict=!!owner&&owner.id!==document.clientId;
+   setMessage('استخراج انجام شد؛ اطلاعات قابل تشخیص از فایل تلگرام به‌صورت پیش‌نویس در فرم قرار گرفت. '+(ownerConflict?'نام صاحب کالا روی بارنامه با صاحب کالای پوشه آرشیو متفاوت است؛ صاحب کالا را دستی بررسی کن و فایل را در پوشه درست آرشیو کن. ':missingOwner?'نام صاحب کالا در فهرست مشتریان دقیقاً پیدا نشد؛ لطفاً آن را دستی بررسی کن. ':'')+'قبل از ذخیره، تمام مقادیر را با خود بارنامه تطبیق بده.');
   }catch(error:any){setMessage(error?.message||'استخراج بارنامه ناموفق بود. فایل در آرشیو تلگرام باقی مانده و برای تلاش مجدد نیازی به آپلود دوباره نیست.');}
   finally{setExtractingBillOfLadingId('');}
  };
