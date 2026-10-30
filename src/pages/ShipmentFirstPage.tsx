@@ -12,7 +12,7 @@ import { FormDraftIndicator } from '../components/FormDraftIndicator';
 import{buildShipmentDisplayName}from'../lib/displayNames';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import {AddReminderButton} from '../features/reminders/AddReminderButton';
-import { archiveShipmentDocumentInBackground, createTelegramArchiveIdempotencyKey, downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultClientUploadFolder, getDefaultShipmentUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
+import { archiveShipmentDocumentInBackground, downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder } from '../lib/fileManager';
 
 type Vessel={id:string;name:string;imo_number?:string|null;flag_code?:string|null;shipping_line_id?:string|null};type ShippingLine={id:string;name:string;name_fa?:string|null};
 type Office={id:string;code:string;name:string;city:string;is_active:boolean};type Row={id:string;client_id:string|null;vessel_id:string|null;customs_office_id:string|null;shipping_line:string|null;bill_of_lading_no:string|null;bill_of_lading_year:number|null;voyage_no:string|null;origin_port:string|null;destination_port:string|null;cargo_count:number|null;cargo_count_unit:string|null;net_weight_kg:number|null;gross_weight_kg:number|null;current_status:string;current_location:string|null;display_name:string|null;case_id:string|null;transport_documents_status:'not_ready'|'ready';release_invoice_payment_status:'unpaid'|'paid';ship_passed:boolean;ship_passed_at:string|null;ship_passed_by:string|null};
@@ -92,44 +92,70 @@ export const ShipmentFirstPage:React.FC=()=>{
   const{data,error}=await supabase.from('vessels').insert({organization_id:profile?.organization_id,name,imo_number:imo||null,flag_code:form.flag.toUpperCase()||null,shipping_line_id:line?.id||null}).select('id,name,imo_number,flag_code,shipping_line_id').single();
   if(error)throw error;setVessels(p=>[...p,data as Vessel]);return data as Vessel;
  };
- const archivePendingShipmentDocument=async(document:PendingShipmentDocument)=>{
+ const uploadStagedShipmentDocuments=(files:File[])=>{
+  if(!files.length)return;
+  if(!form.ownerId){setMessage('ابتدا صاحب کالا را انتخاب کن.');return;}
+  let rejected=0;
+  for(const file of files){
+   const lowerName=file.name.toLowerCase();
+   const mime=(file.type||(lowerName.endsWith('.pdf')?'application/pdf':lowerName.endsWith('.png')?'image/png':(lowerName.endsWith('.jpg')||lowerName.endsWith('.jpeg'))?'image/jpeg':'')).toLowerCase();
+   if(file.size<=0||file.size>FILE_ARCHIVE_MAX_BYTES||(mime!=='application/pdf'&&!['image/png','image/jpeg'].includes(mime))){rejected++;continue;}
+   const id=crypto.randomUUID(),previewUrl=URL.createObjectURL(file);
+   const pending:PendingShipmentDocument={id,name:file.name,mimeType:mime,sizeBytes:file.size,pageCount:1,file,previewUrl,uploadStatus:'uploading',clientId:form.ownerId,uploadedBy:profile?.id||''};
+   // Show and select locally before any network call begins.
+   setPendingDocuments(previous=>[...previous,pending]);
+   setSelectedBillOfLadingId(previous=>previous||id);
+   void (async()=>{
+    try{
+     const {data:{user},error:userError}=await supabase.auth.getUser();
+     if(userError||!user)throw new Error('نشست کاربر معتبر نیست؛ دوباره وارد شوید.');
+     if(!profile?.organization_id)throw new Error('سازمان کاربر مشخص نیست.');
+     const safeName=file.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,160)||'document.pdf';
+     const storagePath=profile.organization_id+'/staged/'+user.id+'/'+id+'-'+safeName;
+     const {error:storageError}=await supabase.storage.from(BUCKET).upload(storagePath,file,{contentType:mime,cacheControl:'3600',upsert:false});
+     if(storageError)throw new Error(storageError.message||'ذخیره امن فایل در وب‌سایت ناموفق بود.');
+     setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,storagePath,uploadStatus:'ready',uploadedBy:user.id,uploadError:undefined}:item));
+     setMessage('فایل در مرورگر انتخاب و پیش‌نمایش شد؛ نسخه امن سایت آماده است. انتقال تلگرام پس از ثبت محموله در پس‌زمینه انجام می‌شود.');
+    }catch(error:any){
+     setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,uploadStatus:'failed',uploadError:error?.message||'ذخیره امن فایل ناموفق بود.'}:item));
+     setMessage('فایل در مرورگر باقی مانده است؛ ذخیره امن سایت کامل نشد. از «تلاش دوباره» استفاده کن.');
+    }
+   })();
+   if(mime==='application/pdf'){
+    void (async()=>{
+     try{
+      const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+      const pageCount=pdf.numPages;await pdf.destroy();
+      setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,pageCount}:item));
+     }catch{/* Page count is informational; keep the local file selectable. */}
+    })();
+   }
+  }
+  if(rejected)setMessage(rejected+' فایل به‌دلیل فرمت پشتیبانی‌نشده یا حجم بیش از ۲۰ مگابایت اضافه نشد. فایل‌های معتبر فوراً به فهرست اضافه شدند.');
+};
+const retryStagedShipmentDocument=(document:PendingShipmentDocument)=>{
  setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'uploading',uploadError:undefined}:item));
- try{
-  if(document.sizeBytes<=0||document.sizeBytes>FILE_ARCHIVE_MAX_BYTES)throw new Error('حجم فایل برای آرشیو قابل بازیابی تلگرام باید حداکثر ۲۰ مگابایت باشد.');
-  if(!document.clientId)throw new Error('ابتدا صاحب کالا را انتخاب کنید.');
-  const {data:{user},error:userError}=await supabase.auth.getUser();
-  if(userError||!user)throw new Error('نشست کاربر معتبر نیست؛ دوباره وارد شوید.');
-  const [ownerFolder,destination]=await Promise.all([getDefaultClientUploadFolder(document.clientId),getFileArchiveDestination()]);
-  const idempotencyKey=await createTelegramArchiveIdempotencyKey(document.file,{folderId:ownerFolder.id,documentType:'other',documentName:document.name,destination});
-  const archived=await uploadTelegramArchivedFile(document.file,{folderId:ownerFolder.id,documentType:'other',documentName:document.name,tags:['ثبت_محموله_جدید','بارنامه_و_اسناد'],destination,idempotencyKey});
-  setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'ready',uploadError:undefined,fileAssetId:archived.fileAssetId,externalMessageId:archived.externalMessageId,folderId:ownerFolder.id,uploadedBy:user.id}:item));
-  setMessage('فایل در تلگرام آرشیو شد و برای مراحل بعدی محموله آماده است: '+document.name);
- }catch(error:any){
-  setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'failed',uploadError:error?.message||'ارسال فایل به آرشیو تلگرام ناموفق بود.'}:item));
-  setMessage('فایل همچنان در مرورگر انتخاب‌شده باقی مانده است؛ آرشیو تلگرام ناموفق بود: '+(error?.message||'خطای نامشخص'));
- }
+ void (async()=>{
+  try{
+   const {data:{user},error:userError}=await supabase.auth.getUser();
+   if(userError||!user||!profile?.organization_id)throw new Error('نشست یا سازمان کاربر معتبر نیست.');
+   const safeName=document.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,160)||'document.pdf';
+   const storagePath=profile.organization_id+'/staged/'+user.id+'/'+document.id+'-'+safeName;
+   if(document.storagePath){
+    const {error:removeError}=await supabase.storage.from(BUCKET).remove([document.storagePath]);
+    if(removeError)console.warn('[ShipmentFirstPage] stale staged object cleanup failed:',removeError);
+   }
+   const {error}=await supabase.storage.from(BUCKET).upload(storagePath,document.file,{contentType:document.mimeType,cacheControl:'3600',upsert:false});
+   if(error)throw error;
+   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,storagePath,uploadStatus:'ready',uploadError:undefined,uploadedBy:user.id}:item));
+   setMessage('نسخه امن فایل در وب‌سایت ذخیره شد. اکنون می‌توانی بارنامه را استخراج و محموله را ثبت کنی.');
+  }catch(error:any){
+   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'failed',uploadError:error?.message||'ذخیره امن فایل ناموفق بود.'}:item));
+   setMessage(error?.message||'ذخیره امن فایل ناموفق بود.');
+  }
+ })();
 };
-const uploadStagedShipmentDocuments=(files:File[])=>{
- if(!files.length)return;
- if(!form.ownerId){setMessage('ابتدا صاحب کالا را انتخاب کن.');return;}
- let rejected=0;
- for(const file of files){
-  const lowerName=file.name.toLowerCase();
-  const mime=(file.type|| (lowerName.endsWith('.pdf')?'application/pdf':lowerName.endsWith('.png')?'image/png':(lowerName.endsWith('.jpg')||lowerName.endsWith('.jpeg'))?'image/jpeg':'')).toLowerCase();
-  if(file.size<=0||file.size>FILE_ARCHIVE_MAX_BYTES||(mime!=='application/pdf'&&!['image/png','image/jpeg'].includes(mime))){rejected++;continue;}
-  const id=crypto.randomUUID(),previewUrl=URL.createObjectURL(file);
-  const pending:PendingShipmentDocument={id,name:file.name,mimeType:mime,sizeBytes:file.size,pageCount:1,file,previewUrl,uploadStatus:'uploading',clientId:form.ownerId,uploadedBy:profile?.id||''};
-  // Make the PDF visible and selectable before any Telegram network request.
-  setPendingDocuments(previous=>[...previous,pending]);
-  setSelectedBillOfLadingId(previous=>previous||id);
-  setMessage('فایل فوراً در مرورگر آماده و قابل انتخاب شد؛ آرشیو تلگرام در پس‌زمینه انجام می‌شود.');
-  void archivePendingShipmentDocument(pending);
-  if(mime==='application/pdf'){void (async()=>{try{const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;const pageCount=pdf.numPages;await pdf.destroy();setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,pageCount}:item));}catch{/* Page count is informational; preserve the local file. */}})();}
- }
- if(rejected)setMessage(rejected+' فایل به‌دلیل فرمت پشتیبانی‌نشده یا حجم بیش از ۲۰ مگابایت اضافه نشد.');
-};
-const retryStagedShipmentDocument=(document:PendingShipmentDocument)=>{void archivePendingShipmentDocument(document);};
-const previewPendingBillOfLading=(document:PendingShipmentDocument)=>{
+const previewPendingBillOfLading=async(document:PendingShipmentDocument)=>{
  if(previewBillOfLadingId===document.id){setPreviewBillOfLadingId('');setPreviewBillOfLadingUrl('');return;}
  setPreviewBillOfLadingId(document.id);
  setPreviewBillOfLadingUrl(document.previewUrl);
@@ -137,22 +163,16 @@ const previewPendingBillOfLading=(document:PendingShipmentDocument)=>{
 const extractSelectedBillOfLading=async()=>{
    const document=pendingDocuments.find(item=>item.id===selectedBillOfLadingId);
    if(!document){setMessage('ابتدا فایل بارنامه را انتخاب کن.');return;}
-   if(document.sizeBytes>4*1024*1024&&(!document.fileAssetId||document.uploadStatus!=='ready')){setMessage('برای فایل‌های بالاتر از ۴ مگابایت ابتدا باید آرشیو تلگرام کامل شود؛ فایل‌های کوچک‌تر مستقیماً از مرورگر تحلیل می‌شوند.');return;}
+   if(document.uploadStatus!=='ready'||!document.storagePath){setMessage('ابتدا ذخیره امن فایل در وب‌سایت کامل شود؛ لازم نیست منتظر تلگرام بمانی.');return;}
    if(document.clientId!==form.ownerId){setMessage('صاحب کالا پس از آپلود تغییر کرده است. صاحب کالای اولیه را دوباره انتخاب کن.');return;}
    setExtractingBillOfLadingId(document.id);
-   setMessage('فایل انتخاب‌شده مستقیماً از مرورگر برای تحلیل ارسال می‌شود؛ آرشیو تلگرام هم‌زمان در پس‌زمینه ادامه دارد...');
+   setMessage('بارنامه از نسخه امن وب‌سایت برای تحلیل خوانده می‌شود؛ انتقال تلگرام مستقل و پس‌زمینه است...');
    try{
-    let documentData='';
-    if(document.sizeBytes<=4*1024*1024){
-     const bytes=new Uint8Array(await document.file.arrayBuffer());let binary='';
-     for(let offset=0;offset<bytes.length;offset+=0x8000)binary+=String.fromCharCode(...bytes.subarray(offset,offset+0x8000));
-     documentData=btoa(binary);
-    }
     const {data,error}=await invokeEdgeFunction('ai-assistant',{body:{
      query:'از تمام صفحات فایل بارنامه انتخاب‌شده اطلاعات واقعی موردنیاز برای ثبت محموله دریایی را استخراج کن. هیچ داده‌ای را حدس نزن. اگر فیلدی در سند وجود ندارد، مقدار آن را خالی برگردان. اعداد و شناسه‌ها را دقیقاً مطابق سند حفظ کن.',
-     extract_fields:true,shipment_extract:true,...(documentData?{document_data:documentData}:{telegram_file_asset_id:document.fileAssetId}),
+     extract_fields:true,shipment_extract:true,document_storage_path:document.storagePath,
      document_mime_type:document.mimeType,document_size_bytes:document.sizeBytes,
-     page_context:'ثبت محموله جدید - فایل انتخاب‌شده در مرورگر'
+     page_context:'ثبت محموله جدید - استخراج از نسخه امن فایل در وب‌سایت'
     }});
     if(error)throw error;
     const raw=String(data?.answer||'').replace(/^\`\`\`(?:json)?/i,'').replace(/\`\`\`$/,'').trim();
@@ -178,12 +198,12 @@ const extractSelectedBillOfLading=async()=>{
     setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,extractedFields:Object.fromEntries(Object.entries(parsed).filter(([,v])=>typeof v==='string'&&String(v).trim()).map(([k,v])=>[k,String(v)]))}:item));
     const missingOwner=ownerName&&!owner;
     const ownerConflict=!!owner&&owner.id!==document.clientId;
-    setMessage('استخراج انجام شد؛ اطلاعات قابل تشخیص از نسخه امن فایل به‌صورت پیش‌نویس در فرم قرار گرفت. '+(ownerConflict?'نام صاحب کالا روی بارنامه با صاحب کالای انتخاب‌شده متفاوت است؛ بررسی دستی لازم است. ':missingOwner?'نام صاحب کالا دقیقاً در فهرست مشتریان پیدا نشد؛ لطفاً دستی بررسی کن. ':'')+'قبل از ذخیره، تمام مقادیر را با خود بارنامه تطبیق بده.');
+    setMessage('استخراج انجام شد؛ اطلاعات قابل تشخیص از نسخه امن وب‌سایت به‌صورت پیش‌نویس در فرم قرار گرفت. '+(ownerConflict?'نام صاحب کالا روی بارنامه با صاحب کالای انتخاب‌شده متفاوت است؛ بررسی دستی لازم است. ':missingOwner?'نام صاحب کالا دقیقاً در فهرست مشتریان پیدا نشد؛ لطفاً دستی بررسی کن. ':'')+'قبل از ذخیره، تمام مقادیر را با خود بارنامه تطبیق بده.');
    }catch(error:any){
     setMessage(error?.message||'استخراج بارنامه ناموفق بود. نسخه امن فایل در وب‌سایت باقی مانده است؛ دوباره تلاش کن.');
    }finally{setExtractingBillOfLadingId('');}
   };
-  const save=async()=>{
+ const save=async()=>{
   if(!profile?.organization_id)return setMessage('سازمان کاربر مشخص نیست.');
   if(!form.ownerId)return setMessage('صاحب کالا را انتخاب کنید.');
   if(!clients.some(c=>c.id===form.ownerId))return setMessage('صاحب کالا برای این سازمان معتبر نیست.');
