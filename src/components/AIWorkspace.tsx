@@ -175,7 +175,7 @@ export const AIWorkspace:React.FC<{pageContext?:string}>=({pageContext=''})=>{
  const ask=async(text=input.trim(),documentText='',extractFields=false,documentData='',documentMimeType='',commandMode=false,documentStoragePath='',currentFormSchema:FormFieldSchema[]=[])=>{if(!text&&!documentText&&!documentData)return null;setBusy(true);setStatus('');if(text)setMessages(m=>[...m,{role:'user',text}]);setInput('');
   try{
    const fillIntent=/\b(fill|populate|complete)\b|پر\s*کن|پُر\s*کن|پر\s*کردن|پُر\s*کردن|تکمیل\s*(?:کن|کنید|نمای|نمایید)/i.test(text)&&/(فرم|فیلد|اظهارنامه|بارنامه|محموله|کشتی|گمرک|\bform\b|\bfield\b|declaration|bill of lading|cargo|vessel|customs)/i.test(text);
-   const billOfLadingIntent=/(بارنامه|bill\\s*of\\s*lading|\\bb\\s*\\/\\s*l\\b|\\bbol\\b)/i.test(text);
+   const lowerRequest=text.toLowerCase();const billOfLadingIntent=text.includes('بارنامه')||lowerRequest.includes('bill of lading')||lowerRequest.includes('bill-of-lading')||lowerRequest.includes('bol')||lowerRequest.includes('b/l');
    if(!extractFields&&text&&fillIntent&&billOfLadingIntent){
     const hasExtractedForCurrentForm=formPageContext===pageContext&&formSchema.length>0&&Object.keys(fields).length>0&&docResults.some(d=>!d.error&&Object.keys(d.fields||{}).length>0);
     setTab('doc');
