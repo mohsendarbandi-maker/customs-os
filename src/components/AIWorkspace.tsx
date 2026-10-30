@@ -69,7 +69,7 @@ function collectCurrentFormSchema():FormFieldSchema[]{
  const controls=Array.from(document.querySelectorAll('input,select,textarea')) as Array<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>;
  const result:FormFieldSchema[]=[];
  for(const el of controls){
-  if(el.disabled||el.readOnly||el.type==='hidden'||el.type==='file'||['button','submit','reset','password','checkbox','radio'].includes(String((el as HTMLInputElement).type||'')))continue;
+  if(el.disabled||('readOnly' in el&&el.readOnly)||el.type==='hidden'||el.type==='file'||['button','submit','reset','password','checkbox','radio'].includes(String((el as HTMLInputElement).type||'')))continue;
   if(el.closest('.ai-chat-panel,.ai-doc-toast,.ai-backdrop,[aria-hidden="true"]')||!el.getClientRects().length)continue;
   const labelNode=(el as HTMLInputElement).labels?.[0]||el.closest('label');
   const label=String(labelNode?.textContent||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.getAttribute('data-label')||el.getAttribute('name')||el.getAttribute('id')||'').replace(/\\s+/g,' ').trim();
@@ -179,7 +179,16 @@ export const AIWorkspace:React.FC<{pageContext?:string}>=({pageContext=''})=>{
      if(data?.answer){const answer=String(data.answer);setMessages(m=>[...m,{role:'assistant',text:answer,status:data.status||'executed',plan:data.plan}]);return answer;}
      throw new Error('پاسخ AI Operator قابل استفاده نبود.');
     }catch(operatorError){
-     console.warn('[Customs OS AI] Operator fallback to chat:',operatorError);
+     console.warn('[Customs OS AI] Operator fallback to AI Core:',operatorError);
+      try{
+       const{data:coreData,error:coreError}=await invokeEdgeFunction('ai-core',{body:{query:text,mode:'chat',shipment_id:shipmentId||undefined,session_id:sessionId||undefined}});
+       if(coreError)throw coreError;
+       const coreAnswer=String(coreData?.answer||'').trim();
+       if(coreAnswer){setMessages(m=>[...m,{role:'assistant',text:coreAnswer,status:'ai-core-fallback'}]);return coreAnswer;}
+       throw new Error('AI Core پاسخ متنی نداد.');
+      }catch(coreError){
+       console.warn('[Customs OS AI] AI Core fallback failed; trying assistant:',coreError);
+      }
     }
    }
    const contextPrefix=sharedContext?'زمینه زنده محموله و اسناد:\\n'+sharedContext+'\\n\\n':'';const prompt=extractFields?'استخراج کامل سند گمرکی/تجاری برای ورود اطلاعات به Customs OS. همه صفحات، جدول‌ها، سربرگ‌ها و پاورقی‌ها را بررسی کن. فقط اطلاعات واقعی را استخراج کن و حدس نزن.':contextPrefix+(text||'این سند را برای عملیات گمرکی و لجستیکی تحلیل کن.');const functionName='ai-assistant';const body=extractFields?{query:prompt,document_text:documentText,document_data:documentData||undefined,document_mime_type:documentMimeType||undefined,document_storage_path:documentStoragePath||undefined,extract_fields:true,page_context:pageContext,form_schema:currentFormSchema}:{query:text||prompt,document_text:documentText,document_data:documentData||undefined,document_mime_type:documentMimeType||undefined,document_storage_path:documentStoragePath||undefined,mode:commandMode?'agent':'chat',shipment_id:shipmentId||undefined,session_id:sessionId||undefined};const{data,error}=await invokeEdgeFunction(functionName,{body});if(error)throw error;const answer=typeof data?.answer==='string'?data.answer:(data?.answer?JSON.stringify(data.answer):data?.message||'پاسخ دریافت نشد.');if(!extractFields){setMessages(m=>[...m,{role:'assistant',text:answer}]);}return answer;
