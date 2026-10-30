@@ -13,7 +13,6 @@ import {
   buildDocumentPageFeatures, buildDocumentPageFeaturesFromText, estimateJpegBytesFromSamples,
   recognizeDocumentPage, type DocumentPageFeatures, type RecognitionSample,
 } from '../lib/pdfRecognition';
-import { zipSync } from 'fflate';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -54,10 +53,16 @@ type CompressionEstimate = {
   low: number; expected: number; high: number;
   preservedPages: number; rasterizedPages: number; sampledPages: number;
 };
-type CompressionRun = {
-  id: string; name: string; blob: Blob; size: number; originalSize: number;
-  savedPercent: number; profileName: string; settings: CompressionSettings; createdAt: string;
+type ReadyOutput = {
+  id: string;
+  name: string;
+  blob: Blob;
+  size: number;
+  description: string;
+  createdAt: string;
+  downloadedAt?: string;
 };
+type OutputTools = { merge: boolean; split: boolean; compression: boolean; stamp: boolean };
 type FileManagerFolder = { id: string; parent_id: string | null; display_name: string; folder_type: string };
 const formatSize = (bytes: number) => bytes < 1024 * 1024
   ? Math.round(bytes / 1024) + ' KB'
@@ -103,7 +108,10 @@ export const PdfStudioPage: React.FC = () => {
   const [compressionProfileName, setCompressionProfileName] = useState('اسناد خوانا');
   const [compressionEstimate, setCompressionEstimate] = useState<CompressionEstimate | null>(null);
   const [compressionEstimating, setCompressionEstimating] = useState(false);
-  const [compressionRuns, setCompressionRuns] = useState<CompressionRun[]>([]);
+  const [readyOutputs, setReadyOutputs] = useState<ReadyOutput[]>([]);
+  const [outputTools, setOutputTools] = useState<OutputTools>({
+    merge: false, split: false, compression: false, stamp: false,
+  });
   const [compressionStorageReady, setCompressionStorageReady] = useState(false);
   const [recognitionSamples, setRecognitionSamples] = useState<RecognitionSample[]>([]);
   const [recognitionLoading, setRecognitionLoading] = useState(false);
@@ -126,6 +134,32 @@ export const PdfStudioPage: React.FC = () => {
   const selectedCount = selectedPages.length;
   const totalBytes = useMemo(() => documents.reduce((sum, item) => sum + item.file.size, 0), [documents]);
   const compressionItems = useMemo(() => selectedCount ? selectedPages : pages, [selectedCount, selectedPages, pages]);
+
+  const queueOutputs = (outputs: Array<{ blob: Blob; name: string; description: string }>) => {
+    if (!outputs.length) return;
+    const prepared: ReadyOutput[] = outputs.map((output) => ({
+      id: crypto.randomUUID(),
+      name: output.name,
+      blob: output.blob,
+      size: output.blob.size,
+      description: output.description,
+      createdAt: new Date().toISOString(),
+    }));
+    setReadyOutputs((previous) => [...prepared, ...previous]);
+    setStatus(
+      prepared.length === 1
+        ? 'فایل «' + prepared[0].name + '» آماده است. برای دریافت، دکمه دانلود را بزنید؛ فایل‌های ورودی و تنظیمات حفظ می‌شوند.'
+        : prepared.length + ' فایل آماده دانلود است. دکمه دانلود هر فایل را جداگانه بزنید؛ محیط کاری حفظ می‌شود.'
+    );
+  };
+
+  const downloadReadyOutput = (output: ReadyOutput) => {
+    downloadBlob(output.blob, output.name);
+    setReadyOutputs((previous) => previous.map((item) =>
+      item.id === output.id ? { ...item, downloadedAt: new Date().toISOString() } : item
+    ));
+    setStatus('دانلود «' + output.name + '» آغاز شد. فایل‌های فراخوانی‌شده، ترتیب صفحات و تنظیمات در PDF Studio باقی ماندند.');
+  };
   const currentFileManagerFolder = useMemo(
     () => fileManagerFolders.find((folder) => folder.id === fileManagerCurrentFolderId) || null,
     [fileManagerFolders, fileManagerCurrentFolderId],
@@ -360,9 +394,10 @@ export const PdfStudioPage: React.FC = () => {
     return output.save({ useObjectStreams: true });
   };
 
-  const buildPdf = async (items: PageItem[], fileName: string) => {
+  const buildPdf = async (items: PageItem[], fileName: string, description: string) => {
     const bytes = await createPdfBytes(items);
-    downloadBlob(new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), fileName.endsWith('.pdf') ? fileName : fileName + '.pdf');
+    const outputName = fileName.endsWith('.pdf') ? fileName : fileName + '.pdf';
+    queueOutputs([{ blob: new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), name: outputName, description }]);
   };
 
   const renderPdfPageJpeg = async (pdfPage: any, item: PageItem, settings: CompressionSettings) => {
@@ -564,25 +599,15 @@ export const PdfStudioPage: React.FC = () => {
       const originalTotal = originalBytes.byteLength;
       const profileName = compressionProfileName.trim() || 'تنظیمات فعلی';
       const outputName = 'PDF-Studio-' + safeName(profileName) + '-compressed.pdf';
-      const run: CompressionRun = {
-        id: crypto.randomUUID(),
-        name: outputName,
+      queueOutputs([{
         blob: outputBlob,
-        size: outputBlob.size,
-        originalSize: originalTotal,
-        savedPercent: originalTotal ? Math.max(0, Math.round((1 - outputBlob.size / originalTotal) * 100)) : 0,
-        profileName,
-        settings: { ...compressionSettings },
-        createdAt: new Date().toISOString(),
-      };
-      setCompressionRuns((previous) => [run, ...previous]);
-      downloadBlob(outputBlob, outputName);
-      setStatus(
-        'فایل PDF فشرده آماده دانلود شد: ' + formatSize(outputBlob.size) +
-        '؛ صفحات با متن/ساختار حفظشده: ' + preservedTotal +
-        '؛ صفحات تصویری بازسازی‌شده: ' + rasterizedTotal +
-        (protectedDocumentIds.size ? '؛ توجه: اعتبار امضای دیجیتال در PDF ترکیبی حفظ نمی‌شود.' : '')
-      );
+        name: outputName,
+        description: 'فشرده‌سازی با پروفایل «' + profileName + '» · ' +
+          formatSize(originalTotal) + ' ← ' + formatSize(outputBlob.size) +
+          ' · صفحات حفظشده: ' + preservedTotal +
+          ' · صفحات تصویری: ' + rasterizedTotal +
+          (protectedDocumentIds.size ? ' · اعتبار امضای دیجیتال در PDF ترکیبی حفظ نمی‌شود.' : ''),
+      }]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'فشرده‌سازی فایل‌ها ناموفق بود.');
     } finally {
@@ -607,8 +632,6 @@ export const PdfStudioPage: React.FC = () => {
     setCompressionEstimate(null);
   };
 
-  const downloadCompressionRun = (run: CompressionRun) => downloadBlob(run.blob, run.name);
-
   const compressScans = async () => {
     await compressActivePdf();
   };
@@ -620,8 +643,12 @@ export const PdfStudioPage: React.FC = () => {
     setBusy(true);
     setError('');
     try {
-      await buildPdf(items, 'pdf-studio-output.pdf');
-      setStatus(items.length + ' صفحه در یک PDF جدید ذخیره شد.');
+      await buildPdf(
+        items,
+        onlySelected ? 'PDF-Studio-Selected-Pages.pdf' : 'PDF-Studio-Merged.pdf',
+        onlySelected ? 'استخراج صفحات انتخاب‌شده در یک PDF مستقل' : 'ادغام همه صفحات در یک PDF مستقل',
+      );
+      setStatus(items.length + ' صفحه ساخته شد؛ فایل در بخش «فایل‌های آماده دانلود» قرار گرفت. فایل‌های ورودی و تنظیمات حفظ شدند.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'ساخت PDF ناموفق بود.');
     } finally {
@@ -660,33 +687,46 @@ export const PdfStudioPage: React.FC = () => {
         if (protectedIncluded && !window.confirm('بعضی صفحات امضای دیجیتال یا فرم محافظت‌شده دارند. ترکیب یا استخراج ممکن است اعتبار امضا را از بین ببرد؛ فایل‌های اصلی دست‌نخورده می‌مانند. فقط روی نسخه خروجی ادامه می‌دهید؟')) return;
         const sourceBytes = await createPdfBytes(pages);
         if (sourceBytes.byteLength <= 2 * 1024 * 1024) {
-          downloadBlob(new Blob([toArrayBuffer(sourceBytes)], { type: 'application/pdf' }), safeName(packageName) + '.pdf');
-          setStatus('خروجی استاندارد با حجم ' + formatSize(sourceBytes.byteLength) + ' آماده شد و زیر سقف ۲ مگابایت است.');
+          queueOutputs([{
+            blob: new Blob([toArrayBuffer(sourceBytes)], { type: 'application/pdf' }),
+            name: safeName(packageName) + '.pdf',
+            description: 'PDF استاندارد · ' + formatSize(sourceBytes.byteLength) + ' · زیر سقف ۲ مگابایت',
+          }]);
+          setStatus('خروجی استاندارد با حجم ' + formatSize(sourceBytes.byteLength) + ' آماده دانلود است؛ محیط کاری حفظ شد.');
           return;
         }
         if (!window.confirm('برای رساندن خروجی استاندارد به سقف ۲ مگابایت، صفحات به تصویر فشرده تبدیل می‌شوند؛ متن قابل جست‌وجو، فرم‌ها، لینک‌ها و لایه‌ها در نسخه خروجی حفظ نمی‌شوند. فایل‌های اصلی بدون تغییر می‌مانند. ادامه می‌دهید؟')) return;
         const result = await compressPagesToTarget(pages, 2 * 1024 * 1024);
-        downloadBlob(result.blob, safeName(packageName) + '.pdf');
-        setStatus('خروجی استاندارد آماده شد: ' + formatSize(result.blob.size) + '، وضوح ' + result.scale.toFixed(2) + '، کیفیت ' + Math.round(result.quality * 100) + '٪. سقف ۲ مگابایت رعایت شد.');
+        queueOutputs([{
+          blob: result.blob,
+          name: safeName(packageName) + '.pdf',
+          description: 'PDF استاندارد فشرده · ' + formatSize(result.blob.size) +
+            ' · وضوح ' + result.scale.toFixed(2) + ' · کیفیت ' + Math.round(result.quality * 100) + '٪',
+        }]);
+        setStatus('خروجی استاندارد آماده دانلود است: ' + formatSize(result.blob.size) + '؛ محیط کاری حفظ شد.');
         return;
       }
 
       if (protectedIncluded && !window.confirm('تقسیم فایل دارای امضای دیجیتال یا فرم تعاملی، اعتبار امضای اصلی را حفظ نمی‌کند. فقط روی نسخه کپی ادامه می‌دهید؟')) return;
-      const outputFiles: Record<string, Uint8Array> = {};
+      const outputFiles: Array<{ name: string; bytes: Uint8Array }> = [];
+      const outputNames = new Set<string>();
       for (let index = 0; index < splitRows.length; index += 1) {
         const row = splitRows[index];
         if (!row.name.trim()) throw new Error('نام هر خروجی را وارد کنید.');
         const pageNumbers = parsePageSelection(row.pageExpression, pages.length);
         const items = pageNumbers.map((pageNumber) => pages[pageNumber - 1]);
         const fileName = safeName(row.name.trim()) + '.pdf';
-        if (outputFiles[fileName]) throw new Error('نام خروجی تکراری است: ' + row.name);
-        outputFiles[fileName] = await createPdfBytes(items);
+        if (outputNames.has(fileName)) throw new Error('نام خروجی تکراری است: ' + row.name);
+        outputNames.add(fileName);
+        outputFiles.push({ name: fileName, bytes: await createPdfBytes(items) });
       }
-      if (!Object.keys(outputFiles).length) throw new Error('حداقل یک بخش برای خروجی تعریف کنید.');
-      const archive = zipSync(outputFiles, { level: 6 });
-      const archiveBytes = archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer;
-      downloadBlob(new Blob([archiveBytes], { type: 'application/zip' }), safeName(packageName) + '.zip');
-      setStatus(Object.keys(outputFiles).length + ' خروجی مستقل در بسته «' + packageName + '» ساخته شد. هر ردیف می‌تواند بازه یا چند صفحه پراکنده داشته باشد.');
+      if (!outputFiles.length) throw new Error('حداقل یک بخش برای خروجی تعریف کنید.');
+      queueOutputs(outputFiles.map((item) => ({
+        name: item.name,
+        blob: new Blob([toArrayBuffer(item.bytes)], { type: 'application/pdf' }),
+        description: 'بخش تفکیک‌شده از بسته «' + packageName + '»',
+      })));
+      setStatus(outputFiles.length + ' فایل PDF جداگانه آماده دانلود است؛ هرکدام دکمه دانلود مستقل دارد. هیچ ZIP ساخته نشد و فایل‌های ورودی حفظ شدند.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'ساخت خروجی‌ها ناموفق بود.');
     } finally {
@@ -733,9 +773,13 @@ export const PdfStudioPage: React.FC = () => {
         }
         const bytes = await source.save({ useObjectStreams: true });
         const fileName = documents.find((document) => document.id === documentId)?.file.name || 'document.pdf';
-        downloadBlob(new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), safeName(fileName) + '-annotated.pdf');
+        queueOutputs([{
+          blob: new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }),
+          name: safeName(fileName) + '-annotated.pdf',
+          description: 'نسخه دارای متن یا مهر تصویری؛ فایل اصلی در محیط باقی ماند.',
+        }]);
       }
-      setStatus('یادداشت تصویری روی صفحات انتخاب‌شده درج شد. برای خروجی جدید، فایل اصلی را دوباره اضافه کنید.');
+      setStatus('نسخه‌های مهرشده آماده دانلود هستند؛ فایل‌های ورودی و صفحات فعلی در محیط باقی ماندند.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'درج متن ناموفق بود.');
     } finally {
@@ -769,9 +813,13 @@ export const PdfStudioPage: React.FC = () => {
         }
         const outputBytes = await source.save({ useObjectStreams: true });
         const fileName = documents.find((document) => document.id === documentId)?.file.name || 'document.pdf';
-        downloadBlob(new Blob([toArrayBuffer(outputBytes)], { type: 'application/pdf' }), safeName(fileName) + '-signed.pdf');
+        queueOutputs([{
+          blob: new Blob([toArrayBuffer(outputBytes)], { type: 'application/pdf' }),
+          name: safeName(fileName) + '-signed.pdf',
+          description: 'نسخه دارای تصویر مهر یا امضا؛ فایل اصلی در محیط باقی ماند.',
+        }]);
       }
-      setStatus('تصویر مهر یا امضا روی صفحات انتخاب‌شده قرار گرفت.');
+      setStatus('نسخه‌های دارای مهر یا امضا آماده دانلود هستند؛ فایل‌های ورودی در محیط باقی ماندند.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'افزودن تصویر ناموفق بود.');
     } finally {
@@ -1123,8 +1171,6 @@ export const PdfStudioPage: React.FC = () => {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" onClick={() => void exportMerged(false)} disabled={busy || !pages.length} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white disabled:opacity-40"><Files size={15}/> ادغام و خروجی همه صفحات</button>
-            <button type="button" onClick={() => void exportMerged(true)} disabled={busy || !selectedCount} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs disabled:opacity-40"><Scissors size={15}/> استخراج صفحات انتخابی ({selectedCount})</button>
             <button type="button" onClick={removeSelected} disabled={busy || !selectedCount} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-red-500/30 px-3 text-xs text-red-400 disabled:opacity-40"><Minus size={15}/> حذف صفحات</button>
             <button type="button" onClick={rotateSelected} disabled={busy || !selectedCount} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--border)] px-3 text-xs disabled:opacity-40"><RotateCw size={15}/> چرخش ۹۰ درجه</button>
             <button type="button" onClick={selectAll} disabled={busy || !pages.length} className="inline-flex min-h-10 items-center gap-1 rounded-xl border border-[var(--border)] px-3 text-xs disabled:opacity-40"><Check size={14}/> انتخاب همه</button>
