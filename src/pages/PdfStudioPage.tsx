@@ -445,8 +445,6 @@ export const PdfStudioPage: React.FC = () => {
       { dpi: 180, quality: 0.82 },
       { dpi: 150, quality: 0.78 },
       { dpi: 120, quality: 0.72 },
-      { dpi: 96, quality: 0.66 },
-      { dpi: 80, quality: 0.58 },
     ];
     let smallest: Blob | null = null;
     let used = attempts[attempts.length - 1];
