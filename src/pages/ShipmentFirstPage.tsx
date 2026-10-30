@@ -12,13 +12,12 @@ import { FormDraftIndicator } from '../components/FormDraftIndicator';
 import{buildShipmentDisplayName}from'../lib/displayNames';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import {AddReminderButton} from '../features/reminders/AddReminderButton';
-import { createTelegramArchiveIdempotencyKey, downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
+import { createTelegramArchiveIdempotencyKey, downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder, getDefaultClientUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
 
 type Vessel={id:string;name:string;imo_number?:string|null;flag_code?:string|null;shipping_line_id?:string|null};type ShippingLine={id:string;name:string;name_fa?:string|null};
 type Office={id:string;code:string;name:string;city:string;is_active:boolean};type Row={id:string;client_id:string|null;vessel_id:string|null;customs_office_id:string|null;shipping_line:string|null;bill_of_lading_no:string|null;bill_of_lading_year:number|null;voyage_no:string|null;origin_port:string|null;destination_port:string|null;cargo_count:number|null;cargo_count_unit:string|null;net_weight_kg:number|null;gross_weight_kg:number|null;current_status:string;current_location:string|null;display_name:string|null;case_id:string|null;transport_documents_status:'not_ready'|'ready';release_invoice_payment_status:'unpaid'|'paid';ship_passed:boolean;ship_passed_at:string|null;ship_passed_by:string|null};
 type Form={ownerId:string;shippingLine:string;billOfLading:string;year:string;voyage:string;vessel:string;imo:string;flag:string;originPort:string;destinationPort:string;count:string;unit:string;net:string;gross:string;status:string;location:string;transportDocumentsStatus:'not_ready'|'ready';releaseInvoicePaymentStatus:'unpaid'|'paid'};
-type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;created_at:string};type PendingShipmentDocument={id:string;name:string;storagePath:string;mimeType:string;sizeBytes:number;pageCount:number;previewUrl:string;uploadedBy:string;extractedFields?:Record<string,string>};
-const BUCKET='customs_documents';
+type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;created_at:string};type PendingShipmentDocument={id:string;name:string;mimeType:string;sizeBytes:number;pageCount:number;fileAssetId:string;externalMessageId:string;folderId:string;clientId:string;uploadedBy:string;extractedFields?:Record<string,string>};
 const empty:Form={ownerId:'',shippingLine:'',billOfLading:'',year:String(new Date().getFullYear()),voyage:'',vessel:'',imo:'',flag:'',originPort:'',destinationPort:'',count:'',unit:'رول',net:'',gross:'',status:'draft',location:'',transportDocumentsStatus:'not_ready',releaseInvoicePaymentStatus:'unpaid'};
 const digits=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const num=(v:string)=>{const n=Number(digits(v).replace(/[٬,]/g,''));return Number.isFinite(n)?n:null};
@@ -29,7 +28,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
  const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const[uploadTagInput,setUploadTagInput]=useState('');const uploadTags=[...new Set(uploadTagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
- const[pendingDocuments,setPendingDocuments]=useState<PendingShipmentDocument[]>([]),[selectedBillOfLadingId,setSelectedBillOfLadingId]=useState(''),[stagingUploading,setStagingUploading]=useState(false),[extractingBillOfLadingId,setExtractingBillOfLadingId]=useState(''),[previewBillOfLadingId,setPreviewBillOfLadingId]=useState('');
+ const[pendingDocuments,setPendingDocuments]=useState<PendingShipmentDocument[]>([]),[selectedBillOfLadingId,setSelectedBillOfLadingId]=useState(''),[stagingUploading,setStagingUploading]=useState(false),[extractingBillOfLadingId,setExtractingBillOfLadingId]=useState(''),[previewBillOfLadingId,setPreviewBillOfLadingId]=useState(''),[previewBillOfLadingUrl,setPreviewBillOfLadingUrl]=useState('');
  const formDraft=useAutosavedDraft(
   formDraftKey(profile?.id,`shipment-first:${profile?.organization_id||''}`,profile?.organization_id),
   {selected,form},
@@ -92,52 +91,76 @@ export const ShipmentFirstPage:React.FC=()=>{
  };
  const uploadStagedShipmentDocuments=async(files:FileList|null)=>{
   if(!files?.length)return;
-  if(!profile?.organization_id){setMessage('سازمان کاربر مشخص نیست.');return;}
+  if(!form.ownerId){setMessage('ابتدا صاحب کالا را انتخاب کن تا بارنامه در پوشه آرشیو همان صاحب کالا ذخیره شود.');return;}
   setStagingUploading(true);setMessage('');
   try{
    const {data:{user},error:userError}=await supabase.auth.getUser();
    if(userError||!user)throw new Error('نشست کاربر معتبر نیست؛ دوباره وارد شوید.');
+   const ownerFolder=await getDefaultClientUploadFolder(form.ownerId);
+   const destination=await getFileArchiveDestination();
    let added=0;
    for(const file of Array.from(files)){
     if(file.size<=0)throw new Error('فایل خالی است: '+file.name);
-    if(file.size>30*1024*1024)throw new Error('حجم هر سند برای ثبت محموله حداکثر ۳۰ مگابایت است.');
+    if(file.size>FILE_ARCHIVE_MAX_BYTES)throw new Error('حجم هر فایل برای آرشیو تلگرام حداکثر ۲۰ مگابایت است.');
     const mime=(file.type||(/\.pdf$/i.test(file.name)?'application/pdf':'')).toLowerCase();
-    if(mime!=='application/pdf'&&!mime.startsWith('image/'))throw new Error('فقط PDF یا تصویر JPG/PNG قابل بارگذاری است: '+file.name);
+    if(mime!=='application/pdf'&&!mime.startsWith('image/'))throw new Error('فقط PDF یا تصویر JPG/PNG قابل آرشیو است: '+file.name);
     let pageCount=1;
     if(mime==='application/pdf'){
      const bytes=await file.arrayBuffer();
      const pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes)}).promise;
      pageCount=pdf.numPages;await pdf.destroy();
     }
-    const id=crypto.randomUUID();
-    const safe=file.name.normalize('NFKC').replace(/[^a-zA-Z0-9_.\-\u0600-\u06ff]+/g,'_').slice(0,140)||'bill-of-lading.pdf';
-    const path=`${profile.organization_id}/staging/${user.id}/${id}-${safe}`;
-    const {error:uploadError}=await supabase.storage.from(BUCKET).upload(path,file,{upsert:false,contentType:mime,cacheControl:'3600'});
-    if(uploadError)throw new Error(`آپلود «${file.name}» ناموفق بود: ${uploadError.message}`);
-    const {data:signed,error:signedError}=await supabase.storage.from(BUCKET).createSignedUrl(path,900);
-    if(signedError||!signed?.signedUrl){await supabase.storage.from(BUCKET).remove([path]);throw new Error(signedError?.message||'ساخت لینک امن پیش‌نمایش فایل ناموفق بود.');}
-    const pending:PendingShipmentDocument={id,name:file.name,storagePath:path,mimeType:mime,sizeBytes:file.size,pageCount,previewUrl:signed.signedUrl,uploadedBy:user.id};
+    const idempotencyKey=await createTelegramArchiveIdempotencyKey(file,{
+     folderId:ownerFolder.id,documentType:'other',documentName:file.name,destination
+    });
+    const archived=await uploadTelegramArchivedFile(file,{
+     folderId:ownerFolder.id,documentType:'other',documentName:file.name,
+     tags:['ثبت_محموله_جدید','بارنامه_و_اسناد'],destination,idempotencyKey
+    });
+    const pending:PendingShipmentDocument={
+     id:archived.fileAssetId,name:file.name,mimeType:mime,sizeBytes:file.size,pageCount,
+     fileAssetId:archived.fileAssetId,externalMessageId:archived.externalMessageId,
+     folderId:ownerFolder.id,clientId:form.ownerId,uploadedBy:user.id
+    };
     setPendingDocuments(previous=>[...previous,pending]);
-    setSelectedBillOfLadingId(previous=>previous||id);
+    setSelectedBillOfLadingId(previous=>previous||archived.fileAssetId);
     added++;
    }
-   setMessage(`${added} فایل در فضای امن ذخیره شد. برای استخراج، یکی را به‌عنوان بارنامه انتخاب کن؛ برای ارسال به AI نیازی به آپلود دوباره نیست.`);
-  }catch(error:any){setMessage(error?.message||'آپلود سند محموله ناموفق بود.');}
+   setMessage(added+' فایل در آرشیو تلگرام ذخیره شد. نسخه اصلی در تلگرام است و برای استخراج یا ثبت محموله نیازی به آپلود دوباره نیست.');
+  }catch(error:any){setMessage(error?.message||'آرشیو سند محموله ناموفق بود.');}
   finally{setStagingUploading(false);}
  };
+ const previewPendingBillOfLading=async(document:PendingShipmentDocument)=>{
+  if(previewBillOfLadingId===document.id){
+   setPreviewBillOfLadingId('');
+   setPreviewBillOfLadingUrl('');
+   return;
+  }
+  setPreviewBillOfLadingId(document.id);setPreviewBillOfLadingUrl('');
+  try{
+   const blob=await downloadTelegramArchivedFile(document.fileAssetId);
+   const url=URL.createObjectURL(blob);
+   setPreviewBillOfLadingUrl(url);
+  }catch(error:any){
+   setPreviewBillOfLadingId('');
+   setMessage(error?.message||'نمایش فایل از آرشیو تلگرام ناموفق بود.');
+  }
+ };
+ useEffect(()=>()=>{if(previewBillOfLadingUrl)URL.revokeObjectURL(previewBillOfLadingUrl)},[previewBillOfLadingUrl]);
  const extractSelectedBillOfLading=async()=>{
   const document=pendingDocuments.find(item=>item.id===selectedBillOfLadingId);
   if(!document){setMessage('ابتدا فایل بارنامه را انتخاب کن.');return;}
-  setExtractingBillOfLadingId(document.id);setMessage('فایل ذخیره‌شده در حال تحلیل است؛ فایل دوباره از دستگاه آپلود نمی‌شود...');
+  if(document.clientId!==form.ownerId){setMessage('صاحب کالا پس از آپلود تغییر کرده است. صاحب کالای اولیه را دوباره انتخاب کن.');return;}
+  setExtractingBillOfLadingId(document.id);setMessage('فایل از آرشیو تلگرام در حال دریافت امن و تحلیل است؛ فایلی از دستگاه دوباره ارسال نمی‌شود...');
   try{
    const {data,error}=await invokeEdgeFunction('ai-assistant',{body:{
     query:'از تمام صفحات فایل بارنامه انتخاب‌شده اطلاعات واقعی موردنیاز برای ثبت محموله دریایی را استخراج کن. هیچ داده‌ای را حدس نزن. اگر فیلدی در سند وجود ندارد، مقدار آن را خالی برگردان. اعداد و شناسه‌ها را دقیقاً مطابق سند حفظ کن.',
-    extract_fields:true,shipment_extract:true,document_storage_path:document.storagePath,
+    extract_fields:true,shipment_extract:true,telegram_file_asset_id:document.fileAssetId,
     document_mime_type:document.mimeType,document_size_bytes:document.sizeBytes,
-    page_context:'ثبت محموله جدید - استخراج از بارنامه کامل'
+    page_context:'ثبت محموله جدید - استخراج از بارنامه آرشیوشده در تلگرام'
    }});
    if(error)throw error;
-   const raw=String(data?.answer||'').replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+   const raw=String(data?.answer||'').replace(/^\`\`\`(?:json)?/i,'').replace(/\`\`\`$/,'').trim();
    const parsed=JSON.parse(raw) as Record<string,unknown>;
    const val=(key:string)=>{const value=String(parsed[key]??'').trim();return value&&!/^x{2,}$/i.test(value)&&value!=='—'&&value!=='-'?value:''};
    const ownerName=val('ownerName');
@@ -160,14 +183,15 @@ export const ShipmentFirstPage:React.FC=()=>{
    }));
    setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,extractedFields:Object.fromEntries(Object.entries(parsed).filter(([,v])=>typeof v==='string'&&String(v).trim()).map(([k,v])=>[k,String(v)]))}:item));
    const missingOwner=ownerName&&!owner;
-   setMessage(`استخراج انجام شد؛ اطلاعات قابل تشخیص به‌صورت پیش‌نویس در فرم قرار گرفت. ${missingOwner?'نام صاحب کالا در فهرست مشتریان دقیقاً پیدا نشد؛ لطفاً آن را دستی انتخاب کن. ':''}قبل از ذخیره، تمام مقادیر را با خود بارنامه تطبیق بده.`);
-  }catch(error:any){setMessage(error?.message||'استخراج بارنامه ناموفق بود. فایل در Storage باقی مانده و برای تلاش مجدد نیازی به آپلود دوباره نیست.');}
+   setMessage('استخراج انجام شد؛ اطلاعات قابل تشخیص از فایل تلگرام به‌صورت پیش‌نویس در فرم قرار گرفت. '+(missingOwner?'نام صاحب کالا در فهرست مشتریان دقیقاً پیدا نشد؛ لطفاً آن را دستی انتخاب کن. ':'')+'قبل از ذخیره، تمام مقادیر را با خود بارنامه تطبیق بده.');
+  }catch(error:any){setMessage(error?.message||'استخراج بارنامه ناموفق بود. فایل در آرشیو تلگرام باقی مانده و برای تلاش مجدد نیازی به آپلود دوباره نیست.');}
   finally{setExtractingBillOfLadingId('');}
  };
  const save=async()=>{
   if(!profile?.organization_id)return setMessage('سازمان کاربر مشخص نیست.');
   if(!form.ownerId)return setMessage('صاحب کالا را انتخاب کنید.');
   if(!clients.some(c=>c.id===form.ownerId))return setMessage('صاحب کالا برای این سازمان معتبر نیست.');
+  if(pendingDocuments.some(document=>document.clientId!==form.ownerId))return setMessage('فایل‌های آپلودشده متعلق به صاحب کالای دیگری هستند؛ صاحب کالا را مطابق آرشیو انتخاب کن.');
   if(!form.vessel.trim())return setMessage('نام کشتی را وارد یا انتخاب کنید.');
   if(!form.count.trim()||!form.net.trim()||!form.gross.trim())return setMessage('تعداد، وزن خالص و وزن ناخالص را تکمیل کنید.');
   setBusy(true);setMessage('در حال ذخیره شروع عملیات...');
@@ -188,9 +212,12 @@ export const ShipmentFirstPage:React.FC=()=>{
    const linkedDocumentIds:string[]=[];let documentLinkWarnings=0;
    for(const staged of pendingDocuments){
     try{
+     const shipmentFolder=await getDefaultShipmentUploadFolder(shipmentId);
      const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
       organization_id:profile.organization_id,shipment_id:shipmentId,uploaded_by:staged.uploadedBy,
-      document_name:staged.name,original_file_name:staged.name,storage_path:staged.storagePath,
+      document_name:staged.name,original_file_name:staged.name,
+      storage_path:'telegram://'+staged.fileAssetId,storage_backend:'telegram',
+      file_asset_id:staged.fileAssetId,folder_id:shipmentFolder.id,telegram_message_id:staged.externalMessageId,
       mime_type:staged.mimeType,file_size_bytes:staged.sizeBytes,
       extraction_status:staged.extractedFields?'completed':'pending'
      }).select('id').single();
@@ -300,7 +327,7 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
    {pendingDocuments.length===0&&<div className="mt-3 text-xs app-muted">هنوز فایلی انتخاب نشده است. این مرحله اختیاری است و می‌توانی اطلاعات را دستی هم وارد کنی.</div>}
   </section>}
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="grid lg:grid-cols-4 gap-3">
-   <label className="text-xs app-muted lg:col-span-2">صاحب کالا<select value={form.ownerId} onChange={e=>set('ownerId',e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب صاحب کالا</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.national_id?' — '+c.national_id:''}</option>)}</select></label>
+   <label className="text-xs app-muted lg:col-span-2">صاحب کالا<select value={form.ownerId} onChange={e=>{const next=e.target.value;set('ownerId',next);if(pendingDocuments.some(document=>document.clientId!==next))setMessage('صاحب کالا تغییر کرد؛ فایل‌های قبلی در آرشیو صاحب کالای قبلی می‌مانند.')}} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب صاحب کالا</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.national_id?' — '+c.national_id:''}</option>)}</select></label>
    <label className="text-xs app-muted">کشتیرانی<select value={form.shippingLine} onChange={e=>chooseLine(e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب کشتیرانی</option>{lines.map(l=><option key={l.id} value={l.name}>{l.name_fa||l.name}</option>)}</select></label><label className="text-xs app-muted">B/L<input value={form.billOfLading} onChange={e=>set('billOfLading',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
    <label className="text-xs app-muted">سال B/L<input value={form.year} onChange={e=>set('year',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label><label className="text-xs app-muted">Voyage<input value={form.voyage} onChange={e=>set('voyage',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
    <label className="text-xs app-muted lg:col-span-2">کشتی<input list="operations-vessels" value={form.vessel} onChange={e=>chooseVessel(e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/><datalist id="operations-vessels">{vessels.map(v=><option key={v.id} value={v.name}/>)}</datalist></label><label className="text-xs app-muted">IMO<input value={form.imo} onChange={e=>set('imo',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label><label className="text-xs app-muted">پرچم ISO-2<input value={form.flag} onChange={e=>set('flag',e.target.value.toUpperCase())} maxLength={2} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
