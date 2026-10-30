@@ -23,6 +23,7 @@ const digits=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.i
 const num=(v:string)=>{const n=Number(digits(v).replace(/[٬,]/g,''));return Number.isFinite(n)?n:null};
 const same=(a:string,b:string)=>String(a||'').trim().localeCompare(String(b||'').trim(),'fa',{sensitivity:'base'})===0;
 const statuses=[['draft','پیش‌نویس'],['booking_confirmed','تأیید رزرو'],['loading','در حال بارگیری'],['loaded','بارگیری کامل'],['departed','حرکت'],['in_transit','در مسیر'],['approaching_destination','نزدیک مقصد'],['anchorage','لنگرگاه'],['berthing','پهلوگیری'],['discharging','در حال تخلیه'],['discharged','تخلیه کامل'],['completed','تکمیل'],['delayed','تأخیر'],['cancelled','لغو']];
+const BUCKET='customs_documents';
 
 export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
