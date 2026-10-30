@@ -12,12 +12,12 @@ import { FormDraftIndicator } from '../components/FormDraftIndicator';
 import{buildShipmentDisplayName}from'../lib/displayNames';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import {AddReminderButton} from '../features/reminders/AddReminderButton';
-import { createTelegramArchiveIdempotencyKey, downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder, getDefaultClientUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
+import { archiveShipmentDocumentInBackground, downloadTelegramArchivedFile, getDefaultShipmentUploadFolder } from '../lib/fileManager';
 
 type Vessel={id:string;name:string;imo_number?:string|null;flag_code?:string|null;shipping_line_id?:string|null};type ShippingLine={id:string;name:string;name_fa?:string|null};
 type Office={id:string;code:string;name:string;city:string;is_active:boolean};type Row={id:string;client_id:string|null;vessel_id:string|null;customs_office_id:string|null;shipping_line:string|null;bill_of_lading_no:string|null;bill_of_lading_year:number|null;voyage_no:string|null;origin_port:string|null;destination_port:string|null;cargo_count:number|null;cargo_count_unit:string|null;net_weight_kg:number|null;gross_weight_kg:number|null;current_status:string;current_location:string|null;display_name:string|null;case_id:string|null;transport_documents_status:'not_ready'|'ready';release_invoice_payment_status:'unpaid'|'paid';ship_passed:boolean;ship_passed_at:string|null;ship_passed_by:string|null};
 type Form={ownerId:string;shippingLine:string;billOfLading:string;year:string;voyage:string;vessel:string;imo:string;flag:string;originPort:string;destinationPort:string;count:string;unit:string;net:string;gross:string;status:string;location:string;transportDocumentsStatus:'not_ready'|'ready';releaseInvoicePaymentStatus:'unpaid'|'paid'};
-type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;created_at:string};type PendingShipmentDocument={id:string;name:string;mimeType:string;sizeBytes:number;pageCount:number;fileAssetId:string;externalMessageId:string;folderId:string;clientId:string;uploadedBy:string;extractedFields?:Record<string,string>};
+type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;created_at:string};type PendingShipmentDocument={id:string;name:string;mimeType:string;sizeBytes:number;pageCount:number;file:File;previewUrl:string;storagePath?:string;uploadStatus:'uploading'|'ready'|'failed';uploadError?:string;clientId:string;uploadedBy:string;shipmentDocumentId?:string;extractedFields?:Record<string,string>};
 const empty:Form={ownerId:'',shippingLine:'',billOfLading:'',year:String(new Date().getFullYear()),voyage:'',vessel:'',imo:'',flag:'',originPort:'',destinationPort:'',count:'',unit:'رول',net:'',gross:'',status:'draft',location:'',transportDocumentsStatus:'not_ready',releaseInvoicePaymentStatus:'unpaid'};
 const digits=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const num=(v:string)=>{const n=Number(digits(v).replace(/[٬,]/g,''));return Number.isFinite(n)?n:null};
@@ -29,8 +29,9 @@ export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
  const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const[uploadTagInput,setUploadTagInput]=useState('');const uploadTags=[...new Set(uploadTagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
- const[pendingDocuments,setPendingDocuments]=useState<PendingShipmentDocument[]>([]),[selectedBillOfLadingId,setSelectedBillOfLadingId]=useState(''),[stagingUploading,setStagingUploading]=useState(false),[extractingBillOfLadingId,setExtractingBillOfLadingId]=useState(''),[previewBillOfLadingId,setPreviewBillOfLadingId]=useState(''),[previewBillOfLadingUrl,setPreviewBillOfLadingUrl]=useState('');
- const formDraft=useAutosavedDraft(
+ const[pendingDocuments,setPendingDocuments]=useState<PendingShipmentDocument[]>([]),[selectedBillOfLadingId,setSelectedBillOfLadingId]=useState(''),[extractingBillOfLadingId,setExtractingBillOfLadingId]=useState(''),[previewBillOfLadingId,setPreviewBillOfLadingId]=useState(''),[previewBillOfLadingUrl,setPreviewBillOfLadingUrl]=useState('');
+ const hasPendingUploads=pendingDocuments.some(document=>document.uploadStatus==='uploading');
+  const formDraft=useAutosavedDraft(
   formDraftKey(profile?.id,`shipment-first:${profile?.organization_id||''}`,profile?.organization_id),
   {selected,form},
   (draft:{selected?:string;form?:Form})=>{
@@ -90,73 +91,80 @@ export const ShipmentFirstPage:React.FC=()=>{
   const{data,error}=await supabase.from('vessels').insert({organization_id:profile?.organization_id,name,imo_number:imo||null,flag_code:form.flag.toUpperCase()||null,shipping_line_id:line?.id||null}).select('id,name,imo_number,flag_code,shipping_line_id').single();
   if(error)throw error;setVessels(p=>[...p,data as Vessel]);return data as Vessel;
  };
- const uploadStagedShipmentDocuments=async(files:FileList|null)=>{
+ const uploadStagedShipmentDocuments=(files:FileList|null)=>{
   if(!files?.length)return;
-  if(!form.ownerId){setMessage('ابتدا صاحب کالا را انتخاب کن تا بارنامه در پوشه آرشیو همان صاحب کالا ذخیره شود.');return;}
-  setStagingUploading(true);setMessage('');
-  try{
-   const {data:{user},error:userError}=await supabase.auth.getUser();
-   if(userError||!user)throw new Error('نشست کاربر معتبر نیست؛ دوباره وارد شوید.');
-   const ownerFolder=await getDefaultClientUploadFolder(form.ownerId);
-   const destination=await getFileArchiveDestination();
-   let added=0;
-   for(const file of Array.from(files)){
-    if(file.size<=0)throw new Error('فایل خالی است: '+file.name);
-    if(file.size>FILE_ARCHIVE_MAX_BYTES)throw new Error('حجم هر فایل برای آرشیو تلگرام حداکثر ۲۰ مگابایت است.');
-    const mime=(file.type||(/\.pdf$/i.test(file.name)?'application/pdf':'')).toLowerCase();
-    if(mime!=='application/pdf'&&!mime.startsWith('image/'))throw new Error('فقط PDF یا تصویر JPG/PNG قابل آرشیو است: '+file.name);
-    let pageCount=1;
-    if(mime==='application/pdf'){
-     const bytes=await file.arrayBuffer();
-     const pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes)}).promise;
-     pageCount=pdf.numPages;await pdf.destroy();
+  if(!form.ownerId){setMessage('ابتدا صاحب کالا را انتخاب کن.');return;}
+  let rejected=0;
+  for(const file of Array.from(files)){
+   const mime=(file.type||(/\\.pdf$/i.test(file.name)?'application/pdf':/\\.png$/i.test(file.name)?'image/png':/\\.jpe?g$/i.test(file.name)?'image/jpeg':'')).toLowerCase();
+   if(file.size<=0||file.size>50*1024*1024||(mime!=='application/pdf'&&!['image/png','image/jpeg'].includes(mime))){rejected++;continue;}
+   const id=crypto.randomUUID();
+   const previewUrl=URL.createObjectURL(file);
+   const pending:PendingShipmentDocument={id,name:file.name,mimeType:mime,sizeBytes:file.size,pageCount:1,file,previewUrl,uploadStatus:'uploading',clientId:form.ownerId,uploadedBy:profile?.id||''};
+   setPendingDocuments(previous=>[...previous,pending]);
+   setSelectedBillOfLadingId(previous=>previous||id);
+   void (async()=>{
+    try{
+     const {data:{user},error:userError}=await supabase.auth.getUser();
+     if(userError||!user)throw new Error('نشست کاربر معتبر نیست؛ دوباره وارد شوید.');
+     if(!profile?.organization_id)throw new Error('سازمان کاربر مشخص نیست.');
+     const safeName=file.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,160)||'document.pdf';
+     const storagePath=profile.organization_id+'/staged/'+user.id+'/'+id+'-'+safeName;
+     const {error:storageError}=await supabase.storage.from(BUCKET).upload(storagePath,file,{contentType:mime,cacheControl:'3600',upsert:false});
+     if(storageError)throw new Error(storageError.message||'ذخیره امن فایل ناموفق بود.');
+     setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,storagePath,uploadStatus:'ready',uploadedBy:user.id,uploadError:undefined}:item));
+     setMessage('فایل فوراً در فهرست قرار گرفت و نسخه امن آن ذخیره شد؛ آرشیو تلگرام پس از ثبت محموله در پس‌زمینه انجام می‌شود.');
+    }catch(error:any){
+     setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,uploadStatus:'failed',uploadError:error?.message||'ذخیره امن فایل ناموفق بود.'}:item));
+     setMessage('فایل در مرورگر باقی ماند، اما ذخیره امن آن کامل نشد. برای ثبت و استخراج، ارسال دوباره را بزن.');
     }
-    const idempotencyKey=await createTelegramArchiveIdempotencyKey(file,{
-     folderId:ownerFolder.id,documentType:'other',documentName:file.name,destination
-    });
-    const archived=await uploadTelegramArchivedFile(file,{
-     folderId:ownerFolder.id,documentType:'other',documentName:file.name,
-     tags:['ثبت_محموله_جدید','بارنامه_و_اسناد'],destination,idempotencyKey
-    });
-    const pending:PendingShipmentDocument={
-     id:archived.fileAssetId,name:file.name,mimeType:mime,sizeBytes:file.size,pageCount,
-     fileAssetId:archived.fileAssetId,externalMessageId:archived.externalMessageId,
-     folderId:ownerFolder.id,clientId:form.ownerId,uploadedBy:user.id
-    };
-    setPendingDocuments(previous=>[...previous,pending]);
-    setSelectedBillOfLadingId(previous=>previous||archived.fileAssetId);
-    added++;
+   })();
+   if(mime==='application/pdf'){
+    void (async()=>{
+     try{
+      const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+      const pageCount=pdf.numPages;await pdf.destroy();
+      setPendingDocuments(previous=>previous.map(item=>item.id===id?{...item,pageCount}:item));
+     }catch{/* Keep the browser selection usable if page counting is unavailable. */}
+    })();
    }
-   setMessage(added+' فایل در آرشیو تلگرام ذخیره شد. نسخه اصلی در تلگرام است و برای استخراج یا ثبت محموله نیازی به آپلود دوباره نیست.');
-  }catch(error:any){setMessage(error?.message||'آرشیو سند محموله ناموفق بود.');}
-  finally{setStagingUploading(false);}
- };
- const previewPendingBillOfLading=async(document:PendingShipmentDocument)=>{
-  if(previewBillOfLadingId===document.id){
-   setPreviewBillOfLadingId('');
-   setPreviewBillOfLadingUrl('');
-   return;
   }
-  setPreviewBillOfLadingId(document.id);setPreviewBillOfLadingUrl('');
-  try{
-   const blob=await downloadTelegramArchivedFile(document.fileAssetId);
-   const url=URL.createObjectURL(blob);
-   setPreviewBillOfLadingUrl(url);
-  }catch(error:any){
-   setPreviewBillOfLadingId('');
-   setMessage(error?.message||'نمایش فایل از آرشیو تلگرام ناموفق بود.');
-  }
+  if(rejected)setMessage(rejected+' فایل پشتیبانی‌نشده یا بزرگ‌تر از ۵۰ مگابایت بود و اضافه نشد. فایل‌های معتبر فوراً به فهرست اضافه شدند.');
  };
- useEffect(()=>()=>{if(previewBillOfLadingUrl)URL.revokeObjectURL(previewBillOfLadingUrl)},[previewBillOfLadingUrl]);
+ const retryStagedShipmentDocument=(document:PendingShipmentDocument)=>{
+  setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'uploading',uploadError:undefined}:item));
+  void (async()=>{
+   try{
+    const {data:{user},error:userError}=await supabase.auth.getUser();
+    if(userError||!user||!profile?.organization_id)throw new Error('نشست یا سازمان کاربر معتبر نیست.');
+    const safeName=document.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_').slice(0,160)||'document.pdf';
+    const storagePath=profile.organization_id+'/staged/'+user.id+'/'+document.id+'-'+safeName;
+    if(document.storagePath)await supabase.storage.from(BUCKET).remove([document.storagePath]);
+    const {error}=await supabase.storage.from(BUCKET).upload(storagePath,document.file,{contentType:document.mimeType,cacheControl:'3600',upsert:false});
+    if(error)throw error;
+    setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,storagePath,uploadStatus:'ready',uploadError:undefined,uploadedBy:user.id}:item));
+    setMessage('ذخیره امن فایل انجام شد. اکنون می‌توانی بارنامه را استخراج و محموله را ثبت کنی.');
+   }catch(error:any){
+    setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'failed',uploadError:error?.message||'آپلود ناموفق بود.'}:item));
+    setMessage(error?.message||'ذخیره امن فایل ناموفق بود.');
+   }
+  })();
+ };
+ const previewPendingBillOfLading=(document:PendingShipmentDocument)=>{
+  if(previewBillOfLadingId===document.id){setPreviewBillOfLadingId('');setPreviewBillOfLadingUrl('');return;}
+  setPreviewBillOfLadingId(document.id);
+  setPreviewBillOfLadingUrl(document.previewUrl);
+ };
  const extractSelectedBillOfLading=async()=>{
   const document=pendingDocuments.find(item=>item.id===selectedBillOfLadingId);
   if(!document){setMessage('ابتدا فایل بارنامه را انتخاب کن.');return;}
+  if(document.uploadStatus!=='ready'||!document.storagePath){setMessage('ابتدا صبر کن نسخه امن فایل در Storage ثبت شود؛ ارسال به تلگرام لازم نیست.');return;}
   if(document.clientId!==form.ownerId){setMessage('صاحب کالا پس از آپلود تغییر کرده است. صاحب کالای اولیه را دوباره انتخاب کن.');return;}
-  setExtractingBillOfLadingId(document.id);setMessage('فایل از آرشیو تلگرام در حال دریافت امن و تحلیل است؛ فایلی از دستگاه دوباره ارسال نمی‌شود...');
+  setExtractingBillOfLadingId(document.id);setMessage('بارنامه از نسخه امن ذخیره‌شده تحلیل می‌شود؛ آرشیو تلگرام در این مرحله دخالتی ندارد...');
   try{
    const {data,error}=await invokeEdgeFunction('ai-assistant',{body:{
     query:'از تمام صفحات فایل بارنامه انتخاب‌شده اطلاعات واقعی موردنیاز برای ثبت محموله دریایی را استخراج کن. هیچ داده‌ای را حدس نزن. اگر فیلدی در سند وجود ندارد، مقدار آن را خالی برگردان. اعداد و شناسه‌ها را دقیقاً مطابق سند حفظ کن.',
-    extract_fields:true,shipment_extract:true,telegram_file_asset_id:document.fileAssetId,
+    extract_fields:true,shipment_extract:true,document_storage_path:document.storagePath,
     document_mime_type:document.mimeType,document_size_bytes:document.sizeBytes,
     page_context:'ثبت محموله جدید - استخراج از بارنامه آرشیوشده در تلگرام'
    }});
@@ -184,8 +192,8 @@ export const ShipmentFirstPage:React.FC=()=>{
    setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,extractedFields:Object.fromEntries(Object.entries(parsed).filter(([,v])=>typeof v==='string'&&String(v).trim()).map(([k,v])=>[k,String(v)]))}:item));
    const missingOwner=ownerName&&!owner;
    const ownerConflict=!!owner&&owner.id!==document.clientId;
-   setMessage('استخراج انجام شد؛ اطلاعات قابل تشخیص از فایل تلگرام به‌صورت پیش‌نویس در فرم قرار گرفت. '+(ownerConflict?'نام صاحب کالا روی بارنامه با صاحب کالای پوشه آرشیو متفاوت است؛ صاحب کالا را دستی بررسی کن و فایل را در پوشه درست آرشیو کن. ':missingOwner?'نام صاحب کالا در فهرست مشتریان دقیقاً پیدا نشد؛ لطفاً آن را دستی بررسی کن. ':'')+'قبل از ذخیره، تمام مقادیر را با خود بارنامه تطبیق بده.');
-  }catch(error:any){setMessage(error?.message||'استخراج بارنامه ناموفق بود. فایل در آرشیو تلگرام باقی مانده و برای تلاش مجدد نیازی به آپلود دوباره نیست.');}
+   setMessage('استخراج انجام شد؛ اطلاعات قابل تشخیص از فایل بارگذاری‌شده در مرورگر به‌صورت پیش‌نویس در فرم قرار گرفت. '+(ownerConflict?'نام صاحب کالا روی بارنامه با صاحب کالای پوشه آرشیو متفاوت است؛ صاحب کالا را دستی بررسی کن و فایل را در پوشه درست آرشیو کن. ':missingOwner?'نام صاحب کالا در فهرست مشتریان دقیقاً پیدا نشد؛ لطفاً آن را دستی بررسی کن. ':'')+'قبل از ذخیره، تمام مقادیر را با خود بارنامه تطبیق بده.');
+  }catch(error:any){setMessage(error?.message||'استخراج بارنامه ناموفق بود. نسخه امن فایل در وب‌سایت باقی مانده است؛ دوباره تلاش کن.');}
   finally{setExtractingBillOfLadingId('');}
  };
  const save=async()=>{
