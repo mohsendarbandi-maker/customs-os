@@ -1003,7 +1003,9 @@ async function inbound(c:Conn,chatId:string,msgId:string,media:any,messageText:s
     throw new Error(size>TG_DOWNLOAD_LIMIT?"FILE_TOO_LARGE_FOR_DESTINATION":"LEGACY_SOURCE_SIZE_MISMATCH");
    const digest=await crypto.subtle.digest("SHA-256",await file.arrayBuffer());
    const hash=[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("");
-   const idempotencyKey="customs-os-legacy-archive-v1:"+String(row.id)+":"+hash;
+   const idempotencyKey=row.shipment_document_id
+    ?"customs-os-shipment-document-archive-v1:"+String(row.shipment_document_id)+":"+hash
+    :"customs-os-legacy-archive-v1:"+String(row.id)+":"+hash;
    const folderId=String(row.folder_id||"");
    if(!validId(folderId))throw new Error("FILE_ARCHIVE_FOLDER_INVALID");
    const isUnassignedLegacy=!row.shipment_id&&!row.client_id;
