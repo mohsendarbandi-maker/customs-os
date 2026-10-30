@@ -136,7 +136,7 @@ describe('AI Operator security invariants',()=>{
    expect(shipment).toContain("انتخاب به‌عنوان بارنامه");
    expect(shipment).toContain("تمام صفحات همان PDF خوانده می‌شوند");
    expect(assistant).toContain("createSignedUrl(documentStoragePath,600)");
-   expect(assistant).toContain("profile.organization_id+'/')");
+   expect(assistant).toContain("documentStoragePath.startsWith(String(profile.organization_id)+'/')");
    expect(assistant).toContain("v1beta/interactions");
  });
  it('passes the uploaded document size from AIWorkspace so the Edge Function can avoid Base64 re-upload',()=>{
