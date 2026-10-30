@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowDown, ArrowUp, Check, FileImage, FilePlus2, FileText, Files, Loader2, Minus, RotateCw, Scissors, ShieldCheck, Stamp, Trash2, Upload, Sparkles, X,
+  ArrowDown, ArrowUp, Check, ChevronLeft, FileImage, FilePlus2, FileText, Files, Folder, Loader2, Minus, RotateCw, Scissors, ShieldCheck, Stamp, Trash2, Upload, Sparkles, X,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { PDFDocument, degrees } from 'pdf-lib';
@@ -712,65 +712,6 @@ export const PdfStudioPage: React.FC = () => {
       setBusy(false);
     }
   };
-  const compressActivePdf = async () => {
-    if (!documents.length) return setError('ابتدا فایل PDF یا تصویر اضافه کنید.');
-    setBusy(true);
-    setError('');
-    try {
-      let totalBefore = 0;
-      let totalAfter = 0;
-      let skippedProtected = 0;
-      for (const source of documents) {
-        if (source.hasProtectedFeatures) { skippedProtected += 1; continue; }
-        const items = pages.filter((page) => page.documentId === source.id);
-        const originalBytes = await createPdfBytes(items);
-        const candidateDocument = await PDFDocument.load(originalBytes);
-        const candidateBytes = await candidateDocument.save({ useObjectStreams: true });
-        const optimizedBlob = new Blob([toArrayBuffer(candidateBytes)], { type: 'application/pdf' });
-        const originalBlob = new Blob([toArrayBuffer(originalBytes)], { type: 'application/pdf' });
-        const output = optimizedBlob.size < originalBlob.size ? optimizedBlob : originalBlob;
-        downloadBlob(output, safeName(source.file.name) + '-optimized.pdf');
-        totalBefore += originalBlob.size;
-        totalAfter += output.size;
-      }
-      const saved = Math.max(0, totalBefore - totalAfter);
-      setStatus(saved > 0
-        ? 'بهینه‌سازی ساختاری انجام شد؛ مجموعاً ' + formatSize(saved) + ' کاهش حجم داشت. ' + (skippedProtected ? skippedProtected + ' فایل محافظت‌شده بدون تغییر کنار گذاشته شد.' : 'صفحات و چرخش‌های انتخاب‌شده حفظ شدند.')
-        : 'کاهش حجم ساختاری به‌دست نیامد؛ نسخه PDF بدون تغییر به‌عنوان خروجی داده شد. فایل‌های محافظت‌شده: ' + skippedProtected + ' مورد.');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'بهینه‌سازی PDF ناموفق بود.');
-    } finally {
-      setBusy(false);
-    }
-  };
-  const compressScans = async () => {
-    if (!documents.length) return setError('ابتدا فایل PDF یا تصویر اضافه کنید.');
-    const accepted = window.confirm(
-      'این روش صفحات را به تصویر تبدیل می‌کند. کیفیت و وضوح با تنظیمات زیر کنترل می‌شوند؛ متن، فرم‌ها، لینک‌ها، لایه‌ها و امضاهای دیجیتال در نسخه خروجی حفظ نمی‌شوند. فایل اصلی تغییر نمی‌کند. ادامه می‌دهید؟'
-    );
-    if (!accepted) return;
-    setBusy(true);
-    setError('');
-    try {
-      let totalBefore = 0;
-      let totalAfter = 0;
-      for (const source of documents) {
-        const items = pages.filter((page) => page.documentId === source.id);
-        const originalPdf = await createPdfBytes(items);
-        const resultBlob = await rasterizePages(items, compressionScale, compressionQuality);
-        const smaller = resultBlob.size < originalPdf.byteLength;
-        const output = smaller ? resultBlob : new Blob([toArrayBuffer(originalPdf)], { type: 'application/pdf' });
-        downloadBlob(output, safeName(source.file.name) + (smaller ? '-compressed.pdf' : '-optimized.pdf'));
-        totalBefore += originalPdf.byteLength;
-        totalAfter += output.size;
-      }
-      setStatus('فشرده‌سازی با وضوح ' + compressionScale.toFixed(2) + ' و کیفیت ' + Math.round(compressionQuality * 100) + '٪ انجام شد؛ حجم مجموعه از ' + formatSize(totalBefore) + ' به ' + formatSize(totalAfter) + ' رسید. فایل‌های اصلی حفظ شدند.');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'فشرده‌سازی تصویری ناموفق بود.');
-    } finally {
-      setBusy(false);
-    }
-  };
   const addTextStamp = async () => {
     const text = selectedText.trim();
     if (!text) return setError('متن مهر یا یادداشت را وارد کنید.');
@@ -952,7 +893,7 @@ export const PdfStudioPage: React.FC = () => {
     try {
       const sourceBytes = await sampleFile.arrayBuffer();
       const isImage = /^image\//i.test(sampleFile.type) || /\.(png|jpe?g)$/i.test(sampleFile.name);
-      let pdfBytes = new Uint8Array(sourceBytes.slice(0));
+      let pdfBytes: Uint8Array = new Uint8Array(sourceBytes.slice(0));
       if (isImage) {
         const imagePdf = await PDFDocument.create();
         const image = sampleFile.type === 'image/png' || /\.png$/i.test(sampleFile.name)
@@ -991,12 +932,13 @@ export const PdfStudioPage: React.FC = () => {
             context.fillRect(0, 0, canvas.width, canvas.height);
             await page.render({ canvasContext: context, viewport }).promise;
             const result = await worker.recognize(canvas);
-            const ocrWords = (result.data.words || []).map((word: any) => ({
+            const ocrData = result.data as any;
+            const ocrWords = (ocrData.words || []).map((word: any) => ({
               text: word.text,
               bbox: word.bbox,
               confidence: word.confidence,
             }));
-            features = buildDocumentPageFeaturesFromText(result.data.text || '', ocrWords, canvas.width, canvas.height);
+            features = buildDocumentPageFeaturesFromText(ocrData.text || '', ocrWords, canvas.width, canvas.height);
             canvas.width = 1;
             canvas.height = 1;
           }
@@ -1099,12 +1041,13 @@ export const PdfStudioPage: React.FC = () => {
             context.fillRect(0, 0, canvas.width, canvas.height);
             await sourcePage.render({ canvasContext: context, viewport }).promise;
             const result = await worker.recognize(canvas);
-            const words = (result.data.words || []).map((word: any) => ({
+            const ocrData = result.data as any;
+            const words = (ocrData.words || []).map((word: any) => ({
               text: word.text,
               bbox: word.bbox,
               confidence: word.confidence,
             }));
-            features = buildDocumentPageFeaturesFromText(result.data.text || '', words, canvas.width, canvas.height);
+            features = buildDocumentPageFeaturesFromText(ocrData.text || '', words, canvas.width, canvas.height);
             canvas.width = 1;
             canvas.height = 1;
           }
