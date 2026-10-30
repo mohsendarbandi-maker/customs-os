@@ -92,7 +92,11 @@ describe('AI Operator security invariants',()=>{
    expect(assistant).toContain('const providerKeys=');
    expect(assistant).toContain('const binaryDocumentExtraction=ex&&!!dd');
    expect(assistant).toContain("binaryDocumentExtraction&&p.name!=='Gemini'");
-   expect(assistant).toContain('models/gemini-3.8-flash:generateContent');
+   expect(assistant).toContain("'gemini-3.8-flash','gemini-3.5-flash-lite'");
+   expect(assistant).toContain("v1beta/interactions");
+   expect(assistant).toContain("type:'document',uri:signedDocumentUrl");
+   expect(assistant).toContain("createSignedUrl(documentStoragePath,600)");
+   expect(assistant).toContain("documentSizeBytes<=15*1024*1024");
    expect(assistant).not.toContain('models/gemini-3.5-flash-lite:generateContent');
    expect(operator).toContain('models/gemini-3.8-flash:generateContent');
    expect(operator).toContain('}).slice(0,16000)');
@@ -117,6 +121,28 @@ describe('AI Operator security invariants',()=>{
    expect(assistant).toContain('vesselRows=vesselResult.data||[]');
    expect(assistant).toContain('new Map(vesselRows.map((x:any)=>[x.id,x]))');
    expect(assistant).not.toContain('vessels=vessels.data||[]');
+ });
+
+ it('supports pre-uploading a complete bill of lading for a new shipment and sends only its stored path to AI',()=>{
+   const shipment=readFileSync(new URL('../src/pages/ShipmentFirstPage.tsx',import.meta.url),'utf8');
+   const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
+   expect(shipment).toContain("supabase.storage.from(BUCKET).upload(path,file");
+   expect(shipment).toContain("${profile.organization_id}/staging/${user.id}/");
+   expect(shipment).toContain("document_storage_path:document.storagePath");
+   expect(shipment).toContain("document_size_bytes:document.sizeBytes");
+   expect(shipment).toContain("shipment_extract:true");
+   expect(shipment).toContain("shipment_documents').insert");
+   expect(shipment).toContain("pdfjsLib.getDocument");
+   expect(shipment).toContain("انتخاب به‌عنوان بارنامه");
+   expect(shipment).toContain("تمام صفحات همان PDF خوانده می‌شوند");
+   expect(assistant).toContain("createSignedUrl(documentStoragePath,600)");
+   expect(assistant).toContain("profile.organization_id+'/')");
+   expect(assistant).toContain("v1beta/interactions");
+ });
+ it('passes the uploaded document size from AIWorkspace so the Edge Function can avoid Base64 re-upload',()=>{
+   const workspace=readFileSync(new URL('../src/components/AIWorkspace.tsx',import.meta.url),'utf8');
+   expect(workspace).toContain("document_size_bytes:documentSizeBytes||undefined");
+   expect(workspace).toContain("currentFormSchema, file.size");
  });
 
 });
