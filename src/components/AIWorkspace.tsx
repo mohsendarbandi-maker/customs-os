@@ -197,7 +197,8 @@ export const AIWorkspace:React.FC<{pageContext?:string}>=({pageContext=''})=>{
     const answer=Object.keys(proposed).length+' فیلد به‌صورت پیش‌نویس برای فرم فعلی آماده شد. مقادیر را بررسی کن و سپس دکمه اعمال را بزن؛ هیچ داده‌ای هنوز ثبت نهایی نشده است.';
     setMessages(m=>[...m,{role:'assistant',text:answer,status:'form-draft-ready'}]);return answer;
    }
-   if(!extractFields&&text){
+   const operatorIntent=/(\\b(create|register|update|edit|delete|move|transfer|send|forward|upload|download|archive|search|find|list|show|open|mark|set|complete|approve|assign|link|close)\\b|ثبت\\s*(?:کن|شود)|ایجاد\\s*(?:کن|شود)|ویرایش|حذف\\s*(?:کن|شود)|انتقال\\s*(?:بده|ده)|ارسال\\s*(?:کن|شود)|فوروارد|آپلود|دانلود|بایگانی|جستجو\\s*(?:کن|کنید)|پیدا\\s*کن|نمایش\\s*بده|نشان\\s*بده|باز\\s*کن|تأیید\\s*(?:کن|شود)|ثبت\\s*محموله|لیست\\s*(?:کن|نمایش)|فهرست\\s*(?:کن|نمایش)|وضعیت\\s*(?:را|محموله))/i.test(text);
+   if(!extractFields&&text&&operatorIntent){
     try{
      const{data,error}=await invokeEdgeFunction('ai-operator',{body:{op:'plan',query:text,page_context:pageContext,session_id:sessionId,attachment_meta:null}});
      if(error)throw error;
