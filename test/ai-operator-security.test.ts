@@ -94,7 +94,7 @@ describe('AI Operator security invariants',()=>{
    expect(assistant).toContain('fetch(signed.signedUrl');
    expect(assistant).toContain("d?.outputs?.filter((x:any)=>x?.type==='text')");
    expect(assistant).toContain("binaryDocumentExtraction&&p.name!=='Gemini'");
-   expect(assistant).toContain("'gemini-3.8-flash','gemini-3.5-flash-lite'");
+   expect(assistant).toContain("'gemini-3.5-flash-lite','gemini-3.8-flash'");
    expect(assistant).toContain("v1beta/interactions");
    expect(assistant).toContain("type:'document',data:dd,mime_type:dm");
    expect(assistant).toContain("createSignedUrl(documentStoragePath,600)");
@@ -136,6 +136,7 @@ describe('AI Operator security invariants',()=>{
    expect(shipment).toContain("shipment_documents').insert");
    expect(shipment).toContain("pdfjsLib.getDocument");
    expect(shipment).toContain("انتخاب به‌عنوان بارنامه");
+   expect(shipment).toContain("profile?.role!=='client'&&<section");
    expect(shipment).toContain("همه صفحات همان PDF خوانده می‌شوند");
    expect(assistant).toContain("createSignedUrl(documentStoragePath,600)");
    expect(assistant).toContain("documentStoragePath.startsWith(String(profile.organization_id)+'/')");
