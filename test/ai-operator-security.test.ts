@@ -92,7 +92,7 @@ describe('AI Operator security invariants',()=>{
    expect(assistant).toContain('const providerKeys=');
    expect(assistant).toContain('const binaryDocumentExtraction=ex&&!!dd');
    expect(assistant).toContain('fetch(signed.signedUrl');
-   expect(assistant).toContain("d?.steps?.filter((s:any)=>s?.type==='model_output')");
+   expect(assistant).toContain("d?.steps?.filter((s:any)=>Array.isArray(s?.content))");
    expect(assistant).toContain("response_format:{type:'text',mime_type:'application/json',schema:geminiSchema(keys,formSchema)}");
    expect(assistant).toContain('const extractionDeadline=Date.now()+50000');
    expect(assistant).toContain("d?.outputs?.filter((x:any)=>x?.type==='text')");
