@@ -557,10 +557,14 @@ export default {
       !url.pathname.startsWith('/api/') &&
       !isStaticAsset &&
       (url.pathname === '/' || url.pathname.startsWith('/chat') || accept.includes('text/html'));
-    // Resolve assets against the incoming hostname. The ASSETS binding is attached
-    // to this Worker and serves the same manifest on each custom domain; rewriting
-    // the host to workers.dev can miss freshly uploaded hashed files on custom hosts.
+    // Resolve normal custom domains against their incoming host. The dedicated
+    // mobile custom domain can be served by a Worker Domain before the static-assets
+    // binding has a host-specific asset route, so read its shell/assets from the
+    // canonical primary origin while keeping the browser URL on the mobile hostname.
     const assetBase = new URL(request.url);
+    if (url.hostname.toLowerCase() === 'mobile.darbandicommercial.ir') {
+      assetBase.hostname = 'darbandicommercial.ir';
+    }
     const assetRequest = new Request(assetBase, request);
     const htmlAssetUrl = new URL('/__builds/' + encodeURIComponent(BUILD_SIGNATURE) + '/index.html', assetBase);
     let response = isHtmlNavigation
