@@ -361,59 +361,233 @@ export const PdfStudioPage: React.FC = () => {
     downloadBlob(new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), fileName.endsWith('.pdf') ? fileName : fileName + '.pdf');
   };
 
-  const rasterizePages = async (items: PageItem[], scale: number, quality: number): Promise<Blob> => {
-    if (!items.length) throw new Error('برای فشرده‌سازی هیچ صفحه‌ای انتخاب نشده است.');
-    const previewDocuments = new Map<string, any>();
+  const renderPdfPageJpeg = async (pdfPage: any, item: PageItem, settings: CompressionSettings) => {
+    const scale = settings.dpi / 72;
+    const rotation = (pdfPage.rotate + item.rotation) % 360;
+    const viewport = pdfPage.getViewport({ scale, rotation });
+    const baseViewport = pdfPage.getViewport({ scale: 1, rotation });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.ceil(viewport.width));
+    canvas.height = Math.max(1, Math.ceil(viewport.height));
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) throw new Error('امکان بازسازی صفحه وجود ندارد.');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.filter = settings.grayscale ? 'grayscale(1)' : 'none';
+    await pdfPage.render({ canvasContext: context, viewport }).promise;
+    context.filter = 'none';
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('ساخت تصویر فشرده صفحه ناموفق بود.')), 'image/jpeg', settings.quality)
+    );
+    const area = viewport.width * viewport.height;
+    canvas.width = 1;
+    canvas.height = 1;
+    return { blob, width: baseViewport.width, height: baseViewport.height, area };
+  };
+
+  const shouldPreservePageText = (page: PageItem) =>
+    page.features.textLength >= 18 || page.features.tokens.length >= 5;
+
+  const compressDocumentPages = async (
+    items: PageItem[],
+    settings: CompressionSettings,
+  ): Promise<{ blob: Blob; preservedPages: number; rasterizedPages: number }> => {
+    if (!items.length) throw new Error('صفحه‌ای برای فشرده‌سازی انتخاب نشده است.');
     const output = await PDFDocument.create();
+    const previewDocuments = new Map<string, any>();
+    let preservedPages = 0;
+    let rasterizedPages = 0;
     try {
       for (const item of items) {
         const source = sourcePdfs.current.get(item.documentId);
         if (!source) throw new Error('منبع یکی از صفحات در حافظه پیدا نشد.');
+        const keepText = settings.mode === 'preserve' || (settings.mode === 'smart' && shouldPreservePageText(item));
+        if (keepText) {
+          const [copied] = await output.copyPages(source, [item.pageIndex]);
+          if (item.rotation) copied.setRotation(degrees((copied.getRotation().angle + item.rotation) % 360));
+          output.addPage(copied);
+          preservedPages += 1;
+          continue;
+        }
+
         let preview = previewDocuments.get(item.documentId);
         if (!preview) {
-          const bytes = await source.save();
-          preview = await getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
+          const sourceBytes = await source.save();
+          preview = await getDocument({ data: new Uint8Array(sourceBytes.slice(0)) }).promise;
           previewDocuments.set(item.documentId, preview);
         }
         const sourcePage = await preview.getPage(item.pageIndex + 1);
-        const rotation = (sourcePage.rotate + item.rotation) % 360;
-        const viewport = sourcePage.getViewport({ scale, rotation });
-        const baseViewport = sourcePage.getViewport({ scale: 1, rotation });
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.ceil(viewport.width));
-        canvas.height = Math.max(1, Math.ceil(viewport.height));
-        const context = canvas.getContext('2d');
-        if (!context) throw new Error('امکان فشرده‌سازی صفحه وجود ندارد.');
-        await sourcePage.render({ canvasContext: context, viewport }).promise;
-        const imageBlob = await new Promise<Blob>((resolve, reject) =>
-          canvas.toBlob((value) => value ? resolve(value) : reject(new Error('ساخت تصویر فشرده صفحه ناموفق بود.')), 'image/jpeg', quality)
-        );
-        const image = await output.embedJpg(await imageBlob.arrayBuffer());
-        const targetPage = output.addPage([baseViewport.width, baseViewport.height]);
-        targetPage.drawImage(image, { x: 0, y: 0, width: baseViewport.width, height: baseViewport.height });
-        canvas.width = 1;
-        canvas.height = 1;
+        const rendered = await renderPdfPageJpeg(sourcePage, item, settings);
+        const embedded = await output.embedJpg(await rendered.blob.arrayBuffer());
+        const targetPage = output.addPage([rendered.width, rendered.height]);
+        targetPage.drawImage(embedded, { x: 0, y: 0, width: rendered.width, height: rendered.height });
+        rasterizedPages += 1;
       }
       const bytes = await output.save({ useObjectStreams: true });
-      return new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' });
+      return {
+        blob: new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }),
+        preservedPages,
+        rasterizedPages,
+      };
     } finally {
       await Promise.all([...previewDocuments.values()].map((preview) => preview.destroy().catch(() => undefined)));
     }
   };
 
-  const compressPagesToTarget = async (items: PageItem[], targetBytes: number) => {
-    let bestSize = Number.POSITIVE_INFINITY;
-    const initialScale = Math.max(0.7, Math.min(1.8, compressionScale));
-    const initialQuality = Math.max(0.35, Math.min(0.9, compressionQuality));
-    for (let scale = initialScale; scale >= 0.69; scale = Math.round((scale - 0.15) * 100) / 100) {
-      for (let quality = initialQuality; quality >= 0.34; quality = Math.round((quality - 0.1) * 100) / 100) {
-        setStatus('فشرده‌سازی تطبیقی: وضوح ' + scale.toFixed(2) + ' و کیفیت ' + Math.round(quality * 100) + '٪…');
-        const blob = await rasterizePages(items, scale, quality);
-        bestSize = Math.min(bestSize, blob.size);
-        if (blob.size <= targetBytes) return { blob, scale, quality };
+  const estimateCompression = async () => {
+    if (!compressionItems.length) return setError('ابتدا فایل‌ها یا صفحه‌های موردنظر را انتخاب کنید.');
+    setCompressionEstimating(true);
+    setCompressionEstimate(null);
+    setError('');
+    try {
+      const settings = { ...compressionSettings };
+      const preserved = compressionItems.filter((item) =>
+        settings.mode === 'preserve' || (settings.mode === 'smart' && shouldPreservePageText(item))
+      );
+      const rasterPages = compressionItems.filter((item) => !preserved.includes(item));
+      const pageAreas = rasterPages.map((item) => item.pageArea * (settings.dpi / 72) ** 2);
+      const samples: Array<{ bytes: number; area: number }> = [];
+      const grouped = new Map<string, PageItem[]>();
+      for (const item of rasterPages) grouped.set(item.documentId, [...(grouped.get(item.documentId) || []), item]);
+      const previewDocuments = new Map<string, any>();
+      let preservedBytes = 0;
+      for (const document of documents) {
+        const items = compressionItems.filter((item) => item.documentId === document.id);
+        if (!items.length) continue;
+        const kept = items.filter((item) => preserved.includes(item));
+        if (kept.length) {
+          preservedBytes += document.file.size * (kept.length / Math.max(1, document.pageCount));
+        }
       }
+      try {
+        for (const [documentId, items] of grouped) {
+          const source = sourcePdfs.current.get(documentId);
+          if (!source) continue;
+          const sourceBytes = await source.save();
+          const preview = await getDocument({ data: new Uint8Array(sourceBytes.slice(0)) }).promise;
+          previewDocuments.set(documentId, preview);
+          const sampleIndices = [...new Set([0, Math.floor((items.length - 1) / 2), items.length - 1])];
+          for (const index of sampleIndices) {
+            const item = items[index];
+            const page = await preview.getPage(item.pageIndex + 1);
+            const rendered = await renderPdfPageJpeg(page, item, settings);
+            samples.push({ bytes: rendered.blob.size, area: rendered.area });
+          }
+        }
+      } finally {
+        await Promise.all([...previewDocuments.values()].map((preview) => preview.destroy().catch(() => undefined)));
+      }
+      const imageEstimate = estimateJpegBytesFromSamples(samples, pageAreas, rasterPages.length * 18_000);
+      const overhead = compressionItems.length * 14_000;
+      const expected = Math.round(imageEstimate.expected + preservedBytes + overhead);
+      const low = Math.round(imageEstimate.low + preservedBytes + overhead * 0.75);
+      const high = Math.round(imageEstimate.high + preservedBytes + overhead * 1.35);
+      setCompressionEstimate({
+        low: Math.max(0, low),
+        expected: Math.max(0, expected),
+        high: Math.max(0, high),
+        preservedPages: preserved.length,
+        rasterizedPages: rasterPages.length,
+        sampledPages: samples.length,
+      });
+      setStatus('برآورد حجم با نمونه‌گیری از ' + samples.length + ' صفحه انجام شد؛ این عدد تخمینی است و حجم نهایی پس از ساخت PDF دقیق مشخص می‌شود.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'برآورد حجم خروجی ناموفق بود.');
+    } finally {
+      setCompressionEstimating(false);
     }
-    throw new Error('با تنظیمات فعلی رسیدن به سقف ۲ مگابایت ممکن نشد. کمترین حجم تولیدشده ' + formatSize(bestSize) + ' بود؛ وضوح یا کیفیت ورودی را کاهش دهید یا اسناد را به چند بخش تقسیم کنید.');
+  };
+
+  const compressActivePdf = async () => {
+    if (!documents.length || !compressionItems.length) return setError('ابتدا فایل یا صفحه برای فشرده‌سازی انتخاب کنید.');
+    if (compressionSettings.mode === 'raster' && !window.confirm('در حالت فشرده‌سازی کامل، همه صفحه‌ها به تصویر تبدیل می‌شوند. متن قابل جست‌وجو، فرم‌ها، لینک‌ها، لایه‌ها و امضاهای دیجیتال در نسخه خروجی حفظ نمی‌شوند؛ اعداد در وضوح/کیفیت انتخاب‌شده بازسازی می‌شوند. فایل‌های اصلی تغییر نمی‌کنند. ادامه می‌دهید؟')) return;
+    setBusy(true);
+    setError('');
+    try {
+      const outputFiles: Record<string, Uint8Array> = {};
+      let originalTotal = 0;
+      let outputTotal = 0;
+      let preservedTotal = 0;
+      let rasterizedTotal = 0;
+      for (const document of documents) {
+        const items = compressionItems.filter((item) => item.documentId === document.id);
+        if (!items.length) continue;
+        const sourceOriginal = await document.file.arrayBuffer();
+        originalTotal += sourceOriginal.byteLength;
+        let outputBlob: Blob;
+        if (document.hasProtectedFeatures) {
+          outputBlob = new Blob([sourceOriginal], { type: 'application/pdf' });
+        } else if (compressionSettings.mode === 'preserve') {
+          const candidate = await compressDocumentPages(items, compressionSettings);
+          outputBlob = candidate.blob;
+          preservedTotal += candidate.preservedPages;
+        } else {
+          const candidate = await compressDocumentPages(items, compressionSettings);
+          const originalPages = await createPdfBytes(items);
+          outputBlob = candidate.blob.size < originalPages.byteLength
+            ? candidate.blob
+            : new Blob([toArrayBuffer(originalPages)], { type: 'application/pdf' });
+          preservedTotal += candidate.preservedPages;
+          rasterizedTotal += candidate.rasterizedPages;
+        }
+        const baseName = safeName(document.file.name);
+        outputFiles[baseName + '-compressed.pdf'] = new Uint8Array(await outputBlob.arrayBuffer());
+        outputTotal += outputBlob.size;
+      }
+      if (!Object.keys(outputFiles).length) throw new Error('هیچ فایل خروجی ساخته نشد.');
+      const archive = zipSync(outputFiles, { level: 0 });
+      const archiveBytes = archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer;
+      const outputBlob = new Blob([archiveBytes], { type: 'application/zip' });
+      const profileName = compressionProfileName.trim() || 'تنظیمات فعلی';
+      const outputName = 'PDF-Studio-' + safeName(profileName) + '-compressed.zip';
+      const run: CompressionRun = {
+        id: crypto.randomUUID(),
+        name: outputName,
+        blob: outputBlob,
+        size: outputBlob.size,
+        originalSize: originalTotal,
+        savedPercent: originalTotal ? Math.max(0, Math.round((1 - outputTotal / originalTotal) * 100)) : 0,
+        profileName,
+        settings: { ...compressionSettings },
+        createdAt: new Date().toISOString(),
+      };
+      setCompressionRuns((previous) => [run, ...previous]);
+      downloadBlob(outputBlob, outputName);
+      setStatus(
+        'بسته فشرده‌سازی آماده دانلود شد: ' + formatSize(outputBlob.size) +
+        '؛ صفحات با متن حفظشده: ' + preservedTotal +
+        '؛ صفحات تصویری بازسازی‌شده: ' + rasterizedTotal +
+        '؛ فایل‌های دارای امضای دیجیتال/فرم محافظت‌شده بدون تغییر داخل بسته قرار گرفتند.'
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'فشرده‌سازی فایل‌ها ناموفق بود.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveCompressionProfile = () => {
+    const name = compressionProfileName.trim();
+    if (!name) return setError('برای تنظیمات فشرده‌سازی نام وارد کنید.');
+    setCompressionProfiles((previous) => [
+      { id: crypto.randomUUID(), name, settings: { ...compressionSettings } },
+      ...previous.filter((profile) => profile.name !== name),
+    ]);
+    setStatus('تنظیمات «' + name + '» ذخیره شد و با ساخت خروجی‌های بعدی از بین نمی‌رود.');
+  };
+
+  const applyCompressionProfile = (id: string) => {
+    const profile = compressionProfiles.find((item) => item.id === id);
+    if (!profile) return;
+    setCompressionSettings({ ...profile.settings });
+    setCompressionProfileName(profile.name);
+    setCompressionEstimate(null);
+  };
+
+  const downloadCompressionRun = (run: CompressionRun) => downloadBlob(run.blob, run.name);
+
+  const compressScans = async () => {
+    await compressActivePdf();
   };
 
   const exportMerged = async (onlySelected = false) => {
