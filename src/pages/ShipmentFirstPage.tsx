@@ -291,7 +291,19 @@ export const ShipmentFirstPage:React.FC=()=>{
    setMessage(completed?`${completed} سند در وب‌سایت ذخیره شد؛ فایل بعدی ناموفق بود. ${error?.message||''}`:error?.message||'ذخیره فایل ناموفق بود.');
   }finally{setUploading(false)}
  };
-const download=async(d:Doc)=>{
+const retryArchiveDocument=async(d:Doc)=>{
+  if(d.storage_backend==='telegram'&&d.file_asset_id)return;
+  setMessage('درخواست آرشیو تلگرام ارسال شد؛ فایل وب‌سایت تا دریافت رسید تلگرام حفظ می‌شود.');
+  try{
+   await archiveShipmentDocumentInBackground(d.id,uploadTags);
+   await loadDocs(selected);
+   setMessage('آرشیو تلگرام انجام شد.');
+  }catch(error:any){
+   await loadDocs(selected);
+   setMessage(error?.message||'آرشیو تلگرام فعلاً انجام نشد؛ نسخه امن وب‌سایت دست‌نخورده باقی ماند. دوباره تلاش کن.');
+  }
+ };
+ const download=async(d:Doc)=>{
  if(d.storage_backend==='telegram'&&d.file_asset_id){
   try{
    const blob=await downloadTelegramArchivedFile(d.file_asset_id);
@@ -316,10 +328,10 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
    <label className="text-xs app-muted lg:col-span-2">صاحب کالا<select value={form.ownerId} onChange={e=>{const next=e.target.value;set('ownerId',next);if(pendingDocuments.some(document=>document.clientId!==next))setMessage('صاحب کالا تغییر کرد؛ فایل‌های قبلی در آرشیو صاحب کالای قبلی می‌مانند.')}} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب صاحب کالا</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.national_id?' — '+c.national_id:''}</option>)}</select></label>
   {!selected&&profile?.role!=='client'&&<div className="lg:col-span-4"><section className="rounded-2xl border-2 border-dashed app-border bg-[var(--surface)] p-4 sm:p-5">
    <div className="flex flex-wrap items-center justify-between gap-3">
-    <div><div className="flex items-center gap-2 font-black"><FileText size={18}/> بارگذاری سند برای ثبت محموله</div><p className="mt-1 text-xs app-muted">ابتدا صاحب کالا را انتخاب کن. فایل کامل مستقیماً در آرشیو تلگرام ذخیره می‌شود؛ سپس بارنامه را انتخاب و برای استخراج بفرست.</p></div>
+    <div><div className="flex items-center gap-2 font-black"><FileText size={18}/> بارگذاری سند برای ثبت محموله</div><p className="mt-1 text-xs app-muted">فایل مثل PDF Studio فوراً در همین مرورگر نمایش داده می‌شود. نسخه امن وب‌سایت ذخیره می‌شود و آرشیو تلگرام بعد از ثبت محموله در پس‌زمینه انجام می‌شود.</p></div>
     <label className="cursor-pointer rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">
-     <Upload size={16} className="inline ml-1"/>{stagingUploading?'در حال آرشیو در تلگرام...':'آپلود به آرشیو تلگرام'}
-     <input type="file" accept="application/pdf,image/jpeg,image/png" multiple className="hidden" disabled={stagingUploading||!form.ownerId} onChange={e=>{void uploadStagedShipmentDocuments(e.target.files);e.currentTarget.value=''}}/>
+     <Upload size={16} className="inline ml-1"/>{hasPendingUploads?'در حال ذخیره امن...':'انتخاب فایل از دستگاه'}
+     <input type="file" accept="application/pdf,image/jpeg,image/png" multiple className="hidden" disabled={!form.ownerId} onChange={e=>{void uploadStagedShipmentDocuments(e.target.files);e.currentTarget.value=''}}/>
     </label>
    </div>
    {pendingDocuments.length>0&&<div className="mt-4 space-y-2">
@@ -327,19 +339,19 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
      <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2">
        {selectedBillOfLadingId===document.id?<CheckCircle2 className="text-[var(--primary)]" size={18}/>:<FileText size={18} className="app-muted"/>}
-       <div className="min-w-0"><b className="block truncate text-sm">{document.name}</b><span className="text-[11px] app-muted">{(document.sizeBytes/1024/1024).toFixed(2)} MB · {document.pageCount} صفحه · آرشیو تلگرام</span></div>
+       <div className="min-w-0"><b className="block truncate text-sm">{document.name}</b><span className="text-[11px] app-muted">{(document.sizeBytes/1024/1024).toFixed(2)} MB · {document.pageCount} صفحه · {document.uploadStatus==='ready'?'نسخه امن آماده است':document.uploadStatus==='failed'?'ذخیره ناموفق':'در حال ذخیره نسخه امن'}</span></div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
        <button type="button" onClick={()=>setSelectedBillOfLadingId(document.id)} className={`rounded-lg px-3 py-2 text-xs font-bold ${selectedBillOfLadingId===document.id?'bg-[var(--primary)] text-white':'border app-border'}`}>{selectedBillOfLadingId===document.id?'بارنامه انتخاب‌شده':'انتخاب به‌عنوان بارنامه'}</button>
        <button type="button" onClick={()=>void previewPendingBillOfLading(document)} className="rounded-lg border app-border px-3 py-2 text-xs"><Eye size={14} className="inline ml-1"/>نمایش</button>
       </div>
      </div>
-     {document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}
-     {previewBillOfLadingId===document.id&&(previewBillOfLadingUrl?<iframe title={document.name} src={previewBillOfLadingUrl} className="mt-3 h-[420px] w-full rounded-xl border app-border bg-white"/>:<div className="mt-3 rounded-xl bg-[var(--surface-2)] p-4 text-xs app-muted">در حال دریافت پیش‌نمایش از آرشیو تلگرام…</div>)}
+     {document.uploadStatus==='failed'&&<div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-600"><span>{document.uploadError||'ذخیره فایل ناموفق بود.'}</span><button type="button" onClick={()=>retryStagedShipmentDocument(document)} className="rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">تلاش دوباره برای ذخیره</button></div>}{document.uploadStatus==='ready'&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">فایل در وب‌سایت ذخیره شد؛ بعد از اتصال به محموله به تلگرام منتقل می‌شود.</div>}{document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}
+     {previewBillOfLadingId===document.id&&(previewBillOfLadingUrl?<iframe title={document.name} src={previewBillOfLadingUrl} className="mt-3 h-[420px] w-full rounded-xl border app-border bg-white"/>:<div className="mt-3 rounded-xl bg-[var(--surface-2)] p-4 text-xs app-muted">در حال آماده‌سازی پیش‌نمایش مرورگر…</div>)}
     </div>)}
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--surface-2)] p-3">
-     <div className="text-xs app-muted">فقط فایل انتخاب‌شده به‌عنوان بارنامه برای استخراج ارسال می‌شود؛ همه صفحات همان PDF خوانده می‌شوند.</div>
-     <button type="button" disabled={!selectedBillOfLadingId||!!extractingBillOfLadingId} onClick={()=>void extractSelectedBillOfLading()} className="rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white disabled:opacity-50">
+     <div className="text-xs app-muted">فقط فایل انتخاب‌شده برای استخراج فرستاده می‌شود. فایل ابتدا از نسخه امن وب‌سایت خوانده می‌شود؛ منتظر تلگرام نمی‌مانیم.</div>
+     <button type="button" disabled={!selectedBillOfLadingId||!!extractingBillOfLadingId||pendingDocuments.find(item=>item.id===selectedBillOfLadingId)?.uploadStatus!=='ready'} onClick={()=>void extractSelectedBillOfLading()} className="rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white disabled:opacity-50">
       {extractingBillOfLadingId?<><Loader2 className="inline ml-1 animate-spin" size={16}/>در حال تحلیل سند...</>:<><Sparkles className="inline ml-1" size={16}/>استخراج اطلاعات محموله با AI</>}
      </button>
     </div>
@@ -365,12 +377,12 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
       <Link to={'/file-manager?shipmentId='+selected} className="px-4 py-2.5 rounded-xl border app-border font-bold text-sm">بازکردن پوشه فایل‌منیجر</Link>
       <input value={uploadTagInput} onChange={e=>setUploadTagInput(e.target.value)} disabled={uploading} placeholder="برچسب سندها (با ویرگول)" className="max-w-48 px-3 py-2 rounded-xl border app-border bg-[var(--surface)] text-xs"/>
       <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-blue-600 text-white font-bold">
-       <Upload size={16} className="inline ml-1"/>{uploading?'در حال آپلود...':'آپلود فایل'}
+       <Upload size={16} className="inline ml-1"/>{uploading?'در حال ذخیره امن...':'انتخاب و ذخیره فایل'}
        <input type="file" multiple className="hidden" disabled={uploading} onChange={e=>{void upload(e.target.files);e.currentTarget.value=''}}/>
       </label>
      </div>
     </div>
-    {docs.length===0?<div className="py-8 text-center app-muted">هنوز سندی برای این محموله ثبت نشده است.</div>:<div className="grid md:grid-cols-2 gap-2 mt-4">{docs.map(d=><div key={d.id} className="rounded-xl border app-border p-3 flex items-center justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{d.document_name}</b><span className="text-[10px] app-muted">{Math.round(d.file_size_bytes/1024)} KB</span></div><button onClick={()=>void download(d)} className="icon-btn" title="باز کردن"><Download size={16}/></button></div>)}</div>}
+    {docs.length===0?<div className="py-8 text-center app-muted">هنوز سندی برای این محموله ثبت نشده است.</div>:<div className="grid md:grid-cols-2 gap-2 mt-4">{docs.map(d=><div key={d.id} className="rounded-xl border app-border p-3 flex items-center justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{d.document_name}</b><span className="text-[10px] app-muted">{Math.round(d.file_size_bytes/1024)} KB · {d.storage_backend==='telegram'&&d.file_asset_id?'آرشیو تلگرام آماده است':'نسخه امن وب‌سایت · در انتظار آرشیو تلگرام'}</span></div><div className="flex shrink-0 items-center gap-2">{(d.storage_backend!=='telegram'||!d.file_asset_id)&&<button type="button" onClick={()=>void retryArchiveDocument(d)} className="rounded-lg border app-border px-2.5 py-2 text-[11px] font-bold">ارسال به تلگرام</button>}<button onClick={()=>void download(d)} className="icon-btn" title="باز کردن"><Download size={16}/></button></div></div>)}</div>}
    </section>}
   {message&&<div className="rounded-xl border app-border bg-[var(--surface)] p-3 text-sm">{message}</div>}
   {selected&&vessel&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Ship size={19}/><b>بررسی وضعیت کشتی</b></div><Link to={vesselSearch} className="px-4 py-2 rounded-xl border app-border font-bold text-sm"><ExternalLink size={15} className="inline ml-1"/>جستجوی اطلاعات کشتی</Link></div><div className="grid md:grid-cols-6 gap-3 mt-3 text-sm"><div><span className="app-muted text-xs">کشتی</span><b className="block mt-1">{vessel.name}</b></div><div><span className="app-muted text-xs">IMO</span><b className="block mt-1" dir="ltr">{vessel.imo_number||'—'}</b></div><div><span className="app-muted text-xs">پرچم</span><b className="block mt-1">{vessel.flag_code||'—'}</b></div><div><span className="app-muted text-xs">وضعیت</span><b className="block mt-1">{statuses.find(x=>x[0]===selectedRow?.current_status)?.[1]||selectedRow?.current_status||'—'}</b></div><div><span className="app-muted text-xs">موقعیت</span><b className="block mt-1">{selectedRow?.current_location||'—'}</b></div><div><span className="app-muted text-xs">B/L</span><b className="block mt-1" dir="ltr">{selectedRow?.bill_of_lading_no||form.billOfLading||'—'}</b></div>{selectedRow?.current_status==='completed'&&<><div><span className="app-muted text-xs">اسناد حمل و قبض انبار</span><b className="block mt-1">{selectedRow.transport_documents_status==='ready'?'آماده است':'آماده نیست'}</b></div><div><span className="app-muted text-xs">صورتحساب ترخیصیه</span><b className="block mt-1">{selectedRow.release_invoice_payment_status==='paid'?'پرداخت شده':'پرداخت نشده'}</b></div></>}</div></section>}
