@@ -61,7 +61,8 @@ Deno.serve(async(req)=>{const o=req.headers.get('Origin')||'';if(req.method==='O
  const providers=[
  {name:'Gemini',key:Deno.env.get('GEMINI_API_KEY'),run:async(k:string)=>{
   let last:any=null;
-  for(const model of ['gemini-3.5-flash-lite','gemini-3.8-flash']){
+  const modelOrder=binaryDocumentExtraction?['gemini-3.5-flash-lite','gemini-3.8-flash']:['gemini-3.8-flash','gemini-3.5-flash-lite'];
+  for(const model of modelOrder){
    const remaining=extractionDeadline-Date.now();if(remaining<2000)break;
    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),Math.min(15000,remaining-1000));
    try{
