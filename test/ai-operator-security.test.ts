@@ -90,6 +90,8 @@ describe('AI Operator security invariants',()=>{
    const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
    expect(assistant).toContain('checklistRows=checks.data||[]');
    expect(assistant).toContain('const providerKeys=');
+   expect(assistant).toContain('const binaryDocumentExtraction=ex&&!!dd');
+   expect(assistant).toContain("binaryDocumentExtraction&&p.name!=='Gemini'");
    expect(assistant).toContain('models/gemini-3.8-flash:generateContent');
    expect(assistant).not.toContain('models/gemini-3.5-flash-lite:generateContent');
    expect(operator).toContain('models/gemini-3.8-flash:generateContent');
