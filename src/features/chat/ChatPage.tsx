@@ -418,9 +418,6 @@ export const ChatPage:React.FC=()=>{
 
  const chooseAttachments=(files:File[])=>{
   if(!selectedId||!profile?.organization_id||!files.length||attachmentBusy)return;
-  if(pendingFiles.length+files.length>10){setError('هر بار حداکثر ۱۰ فایل را انتخاب کنید.');return}
-  const oversized=files.find(file=>file.size>50*1024*1024);
-  if(oversized){setError('حجم هر فایل باید کمتر از ۵۰MB باشد: '+oversized.name);return}
   setPendingFiles(current=>[...current,...files.map(file=>({id:makeClientId(),file,caption:''}))]);
  };
  const updatePendingFile=(id:string,patch:Partial<{caption:string}>)=>{

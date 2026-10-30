@@ -363,7 +363,6 @@ export const OfficeAutomationPage: React.FC = () => {
       ? ['application/pdf','image/png','image/jpeg','image/webp']
       : ['application/pdf','image/png','image/jpeg'];
     if (!allowed.includes(file.type)) return setProfileError('نوع فایل انتخاب‌شده پشتیبانی نمی‌شود.');
-    if (file.size > 20 * 1024 * 1024) return setProfileError('حجم فایل هویتی حداکثر ۲۰ مگابایت است.');
     setBusyProfile(true); setProfileError(''); setProfileNotice('');
     const folder = clientId || 'organization';
     const path = profile.organization_id + '/' + folder + '/assets/' + kind + '-' + crypto.randomUUID() + '-' + safeName(file.name);

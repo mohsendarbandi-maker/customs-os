@@ -19,9 +19,6 @@ type PageItem = {
   rotation: number;
   selected: boolean;
 };
-const MAX_PDF_BYTES = 100 * 1024 * 1024;
-const MAX_TOTAL_PDF_BYTES = 180 * 1024 * 1024;
-const MAX_TOTAL_PAGES = 300;
 const formatSize = (bytes: number) => bytes < 1024 * 1024
   ? Math.round(bytes / 1024) + ' KB'
   : (bytes / 1024 / 1024).toFixed(1) + ' MB';
@@ -68,20 +65,12 @@ export const PdfStudioPage: React.FC = () => {
     setError('');
     setStatus('در حال خواندن فایل‌ها در مرورگر…');
     try {
-      let plannedBytes = documents.reduce((total, item) => total + item.file.size, 0);
-      let plannedPages = pages.length;
       for (const file of pdfFiles) {
-        if (file.size <= 0 || file.size > MAX_PDF_BYTES) {
-          throw new Error('حجم هر PDF باید بین ۱ بایت تا ۱۰۰ مگابایت باشد: ' + file.name);
-        }
-        plannedBytes += file.size;
-        if (plannedBytes > MAX_TOTAL_PDF_BYTES) throw new Error('مجموع حجم فایل‌های این نوبت حداکثر ۱۸۰ مگابایت است تا مرورگر روی موبایل پایدار بماند.');
+        if (file.size <= 0) throw new Error('فایل PDF خالی است: ' + file.name);
         const bytes = await file.arrayBuffer();
         const pdfMarkers = new TextDecoder('latin1').decode(new Uint8Array(bytes));
         const hasProtectedFeatures = /\/ByteRange\s*\[|\/Type\s*\/Sig\b|\/FT\s*\/Sig\b|\/AcroForm\b|\/XFA\b|\/EmbeddedFiles\b|\/Filespec\b|\/Outlines\b|\/StructTreeRoot\b|\/OutputIntents\b|\/AF\s*\[|\/Annots\b|\/Metadata\b|\/PageLabels\b|\/OCProperties\b|\/OpenAction\b|\/JavaScript\b|\/Perms\b|\/Collection\b|\/Threads\b/i.test(pdfMarkers);
         const pdfSource = await PDFDocument.load(bytes);
-        plannedPages += pdfSource.getPageCount();
-        if (plannedPages > MAX_TOTAL_PAGES) throw new Error('حداکثر ۳۰۰ صفحه در هر نوبت کاری قابل بارگذاری است. فایل‌های دیگر را در نوبت جداگانه اضافه کنید.');
         const previewDocument = await getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
         const id = 'pdf-' + crypto.randomUUID();
         sourcePdfs.current.set(id, pdfSource);
