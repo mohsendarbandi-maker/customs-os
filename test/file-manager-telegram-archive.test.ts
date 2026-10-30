@@ -112,14 +112,21 @@ describe('Telegram-backed Customs OS file manager', () => {
 
   it('keeps retryable Telegram archival tied to the original shipment document and schedules a server backstop', () => {
     const backgroundMigration = read('supabase/migrations/20261030190000_shipment_document_background_telegram_archive.sql');
+    const scopedArchiveMigration = read('supabase/migrations/20261030193000_scope_telegram_archive_to_requested_shipment_documents.sql');
     expect(backgroundMigration).toContain('shipment_document_id uuid');
     expect(backgroundMigration).toContain("customs-os-shipment-document-telegram-archive-every-minute");
     expect(backgroundMigration).toContain("x-messenger-path', '/api/messenger/archive/legacy/process'");
+    expect(scopedArchiveMigration).toContain('telegram_archive_requested boolean not null default false');
+    expect(scopedArchiveMigration).toContain('sd.telegram_archive_requested = true');
+    expect(scopedArchiveMigration).toContain('join public.file_manager_files f');
     expect(gateway).toContain('async function archiveShipmentDocument(');
     expect(gateway).toContain('sourceShipmentDocumentId');
     expect(gateway).toContain('FILE_ARCHIVE_RECONCILIATION_SOURCE_DOCUMENT_MISSING');
     expect(gateway).toContain('SHIPMENT_DOCUMENT_ARCHIVE_UPDATE_FAILED');
     expect(gateway).toContain('shipment_document_id:sourceShipmentDocumentId||null');
+    expect(gateway).toContain('eq("telegram_archive_requested",true)');
+    expect(gateway).toContain('.in("shipment_document_id",queuedDocumentIds)');
+    expect(shipmentPage).toContain("telegram_archive_requested:true");
   });
 
   it('provides global business/document search, and preserves organization scoping in the RPC', () => {
