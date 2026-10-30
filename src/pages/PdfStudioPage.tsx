@@ -4,10 +4,15 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { PDFDocument, degrees } from 'pdf-lib';
+import { createWorker } from 'tesseract.js';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { downloadTelegramArchivedFile } from '../lib/fileManager';
 import { PDF_STUDIO_PRESETS, pageExpressionForMatches, parsePageSelection, suggestDocumentLabel } from '../lib/pdfStudioUtils';
+import {
+  buildDocumentPageFeatures, buildDocumentPageFeaturesFromText, estimateJpegBytesFromSamples,
+  recognizeDocumentPage, type DocumentPageFeatures, type RecognitionSample,
+} from '../lib/pdfRecognition';
 import { zipSync } from 'fflate';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -35,7 +40,25 @@ type PageItem = {
   rotation: number;
   selected: boolean;
   label: string;
+  features: DocumentPageFeatures;
+  pageArea: number;
 };
+type CompressionSettings = {
+  mode: 'smart' | 'preserve' | 'raster';
+  quality: number;
+  dpi: number;
+  grayscale: boolean;
+};
+type CompressionProfile = { id: string; name: string; settings: CompressionSettings };
+type CompressionEstimate = {
+  low: number; expected: number; high: number;
+  preservedPages: number; rasterizedPages: number; sampledPages: number;
+};
+type CompressionRun = {
+  id: string; name: string; blob: Blob; size: number; originalSize: number;
+  savedPercent: number; profileName: string; settings: CompressionSettings; createdAt: string;
+};
+type FileManagerFolder = { id: string; parent_id: string | null; display_name: string; folder_type: string };
 const formatSize = (bytes: number) => bytes < 1024 * 1024
   ? Math.round(bytes / 1024) + ' KB'
   : (bytes / 1024 / 1024).toFixed(1) + ' MB';
@@ -61,6 +84,7 @@ export const PdfStudioPage: React.FC = () => {
   const organizationId = profile?.organization_id || '';
   const inputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
+  const sampleInputRef = useRef<HTMLInputElement>(null);
   const sourcePdfs = useRef(new Map<string, PDFDocument>());
   const [documents, setDocuments] = useState<SourceDocument[]>([]);
   const [pages, setPages] = useState<PageItem[]>([]);
@@ -71,18 +95,113 @@ export const PdfStudioPage: React.FC = () => {
   const [splitRows, setSplitRows] = useState<SplitRow[]>([{ id: crypto.randomUUID(), name: 'سند خروجی', pageExpression: '' }]);
   const [packageName, setPackageName] = useState('اسناد خروجی');
   const [outputPreset, setOutputPreset] = useState<'custom' | 'shipPass' | 'guarantee' | 'standard'>('custom');
-  const [compressionQuality, setCompressionQuality] = useState(0.72);
-  const [compressionScale, setCompressionScale] = useState(1.2);
+  const [studioTab, setStudioTab] = useState<'pages' | 'outputs' | 'recognition'>('pages');
+  const [compressionSettings, setCompressionSettings] = useState<CompressionSettings>({
+    mode: 'smart', quality: 0.9, dpi: 240, grayscale: false,
+  });
+  const [compressionProfiles, setCompressionProfiles] = useState<CompressionProfile[]>([]);
+  const [compressionProfileName, setCompressionProfileName] = useState('اسناد خوانا');
+  const [compressionEstimate, setCompressionEstimate] = useState<CompressionEstimate | null>(null);
+  const [compressionEstimating, setCompressionEstimating] = useState(false);
+  const [compressionRuns, setCompressionRuns] = useState<CompressionRun[]>([]);
+  const [compressionStorageReady, setCompressionStorageReady] = useState(false);
+  const [recognitionSamples, setRecognitionSamples] = useState<RecognitionSample[]>([]);
+  const [recognitionLoading, setRecognitionLoading] = useState(false);
+  const [sampleFile, setSampleFile] = useState<File | null>(null);
+  const [sampleDocumentType, setSampleDocumentType] = useState('اظهارنامه');
+  const [sampleDisplayName, setSampleDisplayName] = useState('');
+  const [trainingBusy, setTrainingBusy] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState('');
+  const [recognitionProgress, setRecognitionProgress] = useState('');
   const [fileManagerOpen, setFileManagerOpen] = useState(false);
   const [fileManagerLoading, setFileManagerLoading] = useState(false);
   const [fileManagerRows, setFileManagerRows] = useState<FileManagerRow[]>([]);
-  const [fileManagerFolders, setFileManagerFolders] = useState<Array<{ id: string; display_name: string }>>([]);
+  const [fileManagerFolders, setFileManagerFolders] = useState<FileManagerFolder[]>([]);
+  const [fileManagerCurrentFolderId, setFileManagerCurrentFolderId] = useState<string | null>(null);
   const [fileManagerSearch, setFileManagerSearch] = useState('');
+  const [fileManagerSearchAll, setFileManagerSearchAll] = useState(false);
   const [selectedFileManagerIds, setSelectedFileManagerIds] = useState<Set<string>>(() => new Set());
 
   const selectedPages = useMemo(() => pages.filter((page) => page.selected), [pages]);
   const selectedCount = selectedPages.length;
   const totalBytes = useMemo(() => documents.reduce((sum, item) => sum + item.file.size, 0), [documents]);
+  const compressionItems = useMemo(() => selectedCount ? selectedPages : pages, [selectedCount, selectedPages, pages]);
+  const currentFileManagerFolder = useMemo(
+    () => fileManagerFolders.find((folder) => folder.id === fileManagerCurrentFolderId) || null,
+    [fileManagerFolders, fileManagerCurrentFolderId],
+  );
+  const fileManagerFolderPath = useMemo(() => {
+    const path: FileManagerFolder[] = [];
+    let current = currentFileManagerFolder;
+    let hops = 0;
+    while (current && hops < 30) {
+      path.unshift(current);
+      current = current.parent_id ? fileManagerFolders.find((folder) => folder.id === current!.parent_id) || null : null;
+      hops += 1;
+    }
+    return path;
+  }, [currentFileManagerFolder, fileManagerFolders]);
+  const visibleFileManagerFolders = useMemo(
+    () => fileManagerFolders.filter((folder) => folder.parent_id === fileManagerCurrentFolderId),
+    [fileManagerFolders, fileManagerCurrentFolderId],
+  );
+  const visibleFileManagerRows = useMemo(() => {
+    const query = fileManagerSearch.trim().toLocaleLowerCase();
+    return fileManagerRows.filter((row) => {
+      const folder = fileManagerFolders.find((item) => item.id === row.folder_id);
+      const folderPath = folder ? folder.display_name.toLocaleLowerCase() : '';
+      const inScope = fileManagerSearchAll || row.folder_id === fileManagerCurrentFolderId;
+      const matches = !query || row.original_name.toLocaleLowerCase().includes(query) || folderPath.includes(query);
+      return inScope && matches;
+    });
+  }, [fileManagerRows, fileManagerFolders, fileManagerCurrentFolderId, fileManagerSearch, fileManagerSearchAll]);
+
+  useEffect(() => {
+    if (!organizationId) return;
+    try {
+      const stored = localStorage.getItem('customs-os-pdfstudio-compression:' + organizationId);
+      if (stored) {
+        const parsed = JSON.parse(stored) as { settings?: CompressionSettings; profiles?: CompressionProfile[] };
+        if (parsed.settings) setCompressionSettings(parsed.settings);
+        if (Array.isArray(parsed.profiles)) setCompressionProfiles(parsed.profiles);
+      }
+    } catch {
+      // Local settings are an enhancement; blocked storage must not stop PDF Studio.
+    } finally {
+      setCompressionStorageReady(true);
+    }
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (!organizationId || !compressionStorageReady) return;
+    try {
+      localStorage.setItem('customs-os-pdfstudio-compression:' + organizationId, JSON.stringify({
+        settings: compressionSettings,
+        profiles: compressionProfiles,
+      }));
+    } catch {
+      // Settings remain active in the current session when browser storage is full or blocked.
+    }
+  }, [organizationId, compressionStorageReady, compressionSettings, compressionProfiles]);
+
+  const loadRecognitionSamples = useCallback(async () => {
+    if (!organizationId) return;
+    setRecognitionLoading(true);
+    try {
+      const { data, error: samplesError } = await (supabase as any).from('pdf_document_recognition_samples')
+        .select('id,document_type,sample_name,source_filename,page_count,features,created_at')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false });
+      if (samplesError) throw samplesError;
+      setRecognitionSamples((data || []) as RecognitionSample[]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'دریافت الگوهای تشخیص ناموفق بود.');
+    } finally {
+      setRecognitionLoading(false);
+    }
+  }, [organizationId]);
+
+  useEffect(() => { void loadRecognitionSamples(); }, [loadRecognitionSamples]);
 
   const loadFiles = useCallback(async (files: File[]) => {
     const acceptedFiles = files.filter((file) => {
@@ -140,12 +259,17 @@ export const PdfStudioPage: React.FC = () => {
           if (!context) throw new Error('امکان ساخت پیش‌نمایش صفحه وجود ندارد.');
           await page.render({ canvasContext: context, viewport }).promise;
           let pageText = '';
+          let pageFeatures: DocumentPageFeatures = { tokens: [], anchors: [], numericShapes: [], textLength: 0 };
+          const unitViewport = page.getViewport({ scale: 1 });
+          const pageArea = unitViewport.width * unitViewport.height;
           try {
             const textContent = await page.getTextContent();
             pageText = textContent.items.map((item: any) => typeof item.str === 'string' ? item.str : '').join(' ');
+            pageFeatures = buildDocumentPageFeatures(textContent.items as any[], unitViewport.width, unitViewport.height);
           } catch {
             // Image-only or unusual pages fall back to the source filename; do not block import.
           }
+          const recognized = pageFeatures.tokens.length ? recognizeDocumentPage(pageFeatures, recognitionSamples) : null;
           nextPages.push({
             id: id + '-page-' + pageNumber,
             documentId: id,
@@ -153,7 +277,11 @@ export const PdfStudioPage: React.FC = () => {
             thumbnail: canvas.toDataURL('image/jpeg', 0.72),
             rotation: 0,
             selected: false,
-            label: suggestDocumentLabel(pageText, file.name, pageNumber),
+            label: recognized && recognized.confidence >= 0.2
+              ? recognized.documentType
+              : suggestDocumentLabel(pageText, file.name, pageNumber),
+            features: pageFeatures,
+            pageArea,
           });
           canvas.width = 1;
           canvas.height = 1;
@@ -168,7 +296,7 @@ export const PdfStudioPage: React.FC = () => {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [recognitionSamples]);
 
   useEffect(() => () => { sourcePdfs.current.clear(); }, []);
 
