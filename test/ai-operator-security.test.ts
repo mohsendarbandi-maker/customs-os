@@ -137,22 +137,28 @@ describe('AI Operator security invariants',()=>{
    expect(workspace).toContain(String.raw`ثبت\s*`);
    expect(workspace).not.toContain(String.raw`\\b(create`);
  });
- it('shows the B/L immediately, archives directly to Telegram in the background, and extracts from the Telegram asset',()=>{
+ it('shows the B/L immediately, archives to Telegram after owner selection, and extracts small files locally',()=>{
     const shipment=readFileSync(new URL('../src/pages/ShipmentFirstPage.tsx',import.meta.url),'utf8');
     const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
     expect(shipment).toContain('URL.createObjectURL(file)');
     expect(shipment).toContain('setPendingDocuments(previous=>[...previous,pending])');
-    expect(shipment).toContain('void archivePendingShipmentDocument(pending)');
+    expect(shipment).toContain("uploadStatus:form.ownerId?'uploading':'waiting-owner'");
+    expect(shipment).toContain('void archivePendingShipmentDocument(pending,form.ownerId)');
+    expect(shipment).toContain('waiting.forEach(document=>void archivePendingShipmentDocument');
     expect(shipment).toContain('uploadTelegramArchivedFile(document.file');
     expect(shipment).toContain('createTelegramArchiveIdempotencyKey(document.file');
-    expect(shipment).toContain("getDefaultClientUploadFolder(document.clientId)");
+    expect(shipment).toContain('getDefaultClientUploadFolder(ownerId)');
+    expect(shipment).toContain('fileToBase64(document.file)');
+    expect(shipment).toContain('document_data:localDocumentData');
+    expect(shipment).toContain('LOCAL_AI_DOCUMENT_LIMIT=4*1024*1024');
     expect(shipment).toContain('telegram_file_asset_id:document.fileAssetId');
     expect(shipment).toContain("storage_path:'telegram://'+staged.fileAssetId,storage_backend:'telegram'");
     expect(shipment).toContain('file_asset_id:staged.fileAssetId,folder_id:shipmentFolder.id');
-    expect(shipment).toContain("انتخاب به‌عنوان بارنامه");
-    expect(shipment).toContain("profile?.role!=='client'");
-    expect(shipment).not.toContain("supabase.storage.from(BUCKET).upload(storagePath,file");
-    expect(shipment).not.toContain('document_storage_path:document.storagePath');
+    expect(shipment).toContain('انتخاب فایل بارنامه');
+    expect(shipment).toContain('در انتظار انتخاب صاحب کالا');
+    expect(shipment).not.toContain('disabled={!form.ownerId}');
+    expect(shipment).not.toContain("!selected&&profile?.role!=='client'");
+    expect(shipment).not.toContain('supabase.storage.from(BUCKET).upload(storagePath,file');
     expect(shipment).not.toContain('archiveShipmentDocumentInBackground(doc.id');
     expect(assistant).toContain("telegramFileAssetId=String(b.telegram_file_asset_id||'').trim()");
     expect(assistant).toContain("maxOutputTokens:650,temperature:0.2");
