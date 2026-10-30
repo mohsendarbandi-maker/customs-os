@@ -36,6 +36,9 @@ type Letter = {
   created_at: string;
   issued_company_name: string | null;
   issued_company_name_fa: string | null;
+  issued_company_national_id: string | null;
+  issued_company_economic_code: string | null;
+  issued_company_registration_number: string | null;
   issued_company_postal_code: string | null;
   issued_company_fax: string | null;
   issued_company_website: string | null;
