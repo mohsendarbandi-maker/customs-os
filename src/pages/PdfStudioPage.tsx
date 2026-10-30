@@ -901,6 +901,194 @@ export const PdfStudioPage: React.FC = () => {
     });
   };
 
+  const analyzeAndSaveSample = async () => {
+    if (!sampleFile) return setError('ابتدا یک PDF نمونه انتخاب کنید.');
+    if (sampleDocumentType.trim().length < 2) return setError('نوع سند نمونه را مشخص کنید.');
+    setTrainingBusy(true);
+    setTrainingProgress('آماده‌سازی نمونه در همین دستگاه…');
+    setError('');
+    try {
+      const sourceBytes = await sampleFile.arrayBuffer();
+      const isImage = /^image\//i.test(sampleFile.type) || /\.(png|jpe?g)$/i.test(sampleFile.name);
+      let pdfBytes = new Uint8Array(sourceBytes.slice(0));
+      if (isImage) {
+        const imagePdf = await PDFDocument.create();
+        const image = sampleFile.type === 'image/png' || /\.png$/i.test(sampleFile.name)
+          ? await imagePdf.embedPng(sourceBytes)
+          : await imagePdf.embedJpg(sourceBytes);
+        const scale = Math.min(1, 1440 / Math.max(image.width, image.height));
+        const width = image.width * scale;
+        const height = image.height * scale;
+        const page = imagePdf.addPage([width, height]);
+        page.drawImage(image, { x: 0, y: 0, width, height });
+        pdfBytes = await imagePdf.save();
+      }
+      const pdf = await getDocument({ data: new Uint8Array(pdfBytes.slice(0)) }).promise;
+      const pageFeatures: DocumentPageFeatures[] = [];
+      let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
+      try {
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          setTrainingProgress('تحلیل صفحه ' + pageNumber + ' از ' + pdf.numPages + '…');
+          const page = await pdf.getPage(pageNumber);
+          const unitViewport = page.getViewport({ scale: 1 });
+          const textContent = await page.getTextContent();
+          let features = buildDocumentPageFeatures(textContent.items as any[], unitViewport.width, unitViewport.height);
+          if (features.tokens.length < 4) {
+            if (!worker) {
+              setTrainingProgress('بارگذاری موتور OCR فارسی و انگلیسی…');
+              worker = await createWorker('fas+eng');
+            }
+            const viewport = page.getViewport({ scale: Math.min(2.4, 1800 / Math.max(unitViewport.width, unitViewport.height)) });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.ceil(viewport.width));
+            canvas.height = Math.max(1, Math.ceil(viewport.height));
+            const context = canvas.getContext('2d', { alpha: false });
+            if (!context) throw new Error('امکان آماده‌سازی تصویر نمونه برای OCR وجود ندارد.');
+            context.fillStyle = '#fff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            await page.render({ canvasContext: context, viewport }).promise;
+            const result = await worker.recognize(canvas);
+            const ocrWords = (result.data.words || []).map((word: any) => ({
+              text: word.text,
+              bbox: word.bbox,
+              confidence: word.confidence,
+            }));
+            features = buildDocumentPageFeaturesFromText(result.data.text || '', ocrWords, canvas.width, canvas.height);
+            canvas.width = 1;
+            canvas.height = 1;
+          }
+          pageFeatures.push(features);
+        }
+      } finally {
+        await worker?.terminate();
+        await pdf.destroy();
+      }
+      const digest = await crypto.subtle.digest('SHA-256', sourceBytes);
+      const sampleHash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error('نشست معتبر نیست؛ دوباره وارد سامانه شوید.');
+      const sampleName = sampleDisplayName.trim() || sampleFile.name;
+      const { data, error: saveError } = await (supabase as any).from('pdf_document_recognition_samples')
+        .upsert({
+          organization_id: organizationId,
+          document_type: sampleDocumentType.trim(),
+          sample_name: sampleName,
+          source_filename: sampleFile.name,
+          source_mime_type: sampleFile.type || 'application/pdf',
+          sample_hash: sampleHash,
+          page_count: pdf.numPages,
+          features: { version: 1, featureSource: 'local-text-and-ocr', pages: pageFeatures },
+          created_by: authData.user.id,
+        }, { onConflict: 'organization_id,sample_hash,document_type' })
+        .select('id,document_type,sample_name,source_filename,page_count,features,created_at')
+        .single();
+      if (saveError) throw saveError;
+      const savedSample = data as RecognitionSample;
+      setRecognitionSamples((previous) => [savedSample, ...previous.filter((item) => item.id !== savedSample.id)]);
+      setPages((previous) => previous.map((page) => {
+        const match = recognizeDocumentPage(page.features, [savedSample]);
+        return match && match.confidence >= 0.2
+          ? { ...page, label: match.documentType }
+          : page;
+      }));
+      setStatus('نمونه «' + sampleName + '» به الگوی «' + sampleDocumentType.trim() + '» اضافه شد. فقط ویژگی‌های متن و چیدمان ذخیره شدند؛ فایل نمونه روی سرور بارگذاری نشد.');
+      setSampleDisplayName('');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'تحلیل یا ذخیره نمونه ناموفق بود.');
+    } finally {
+      setTrainingBusy(false);
+      setTrainingProgress('');
+      if (sampleInputRef.current) sampleInputRef.current.value = '';
+    }
+  };
+
+  const runWorkspaceRecognition = async (withOcr: boolean) => {
+    if (!pages.length) return setError('ابتدا فایل‌های موردنظر را اضافه کنید.');
+    if (!recognitionSamples.length) return setError('ابتدا چند نمونه برچسب‌گذاری‌شده در آزمایشگاه تشخیص ذخیره کنید.');
+    setBusy(true);
+    setRecognitionProgress('مقایسه با الگوهای ذخیره‌شده…');
+    setError('');
+    let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
+    const previewDocuments = new Map<string, any>();
+    let matched = 0;
+    try {
+      const nextPages: PageItem[] = [];
+      for (let index = 0; index < pages.length; index += 1) {
+        const pageItem = pages[index];
+        let features = pageItem.features;
+        if (withOcr && features.tokens.length < 4) {
+          if (!worker) {
+            setRecognitionProgress('راه‌اندازی OCR فارسی/انگلیسی…');
+            worker = await createWorker('fas+eng');
+          }
+          const source = sourcePdfs.current.get(pageItem.documentId);
+          if (source) {
+            let preview = previewDocuments.get(pageItem.documentId);
+            if (!preview) {
+              const bytes = await source.save();
+              preview = await getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
+              previewDocuments.set(pageItem.documentId, preview);
+            }
+            setRecognitionProgress('خواندن متن اسکن صفحه ' + (index + 1) + ' از ' + pages.length + '…');
+            const sourcePage = await preview.getPage(pageItem.pageIndex + 1);
+            const unitViewport = sourcePage.getViewport({ scale: 1 });
+            const scale = Math.min(2.4, 1800 / Math.max(unitViewport.width, unitViewport.height));
+            const viewport = sourcePage.getViewport({ scale });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.ceil(viewport.width));
+            canvas.height = Math.max(1, Math.ceil(viewport.height));
+            const context = canvas.getContext('2d', { alpha: false });
+            if (!context) throw new Error('امکان آماده‌سازی اسکن برای OCR وجود ندارد.');
+            context.fillStyle = '#fff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            await sourcePage.render({ canvasContext: context, viewport }).promise;
+            const result = await worker.recognize(canvas);
+            const words = (result.data.words || []).map((word: any) => ({
+              text: word.text,
+              bbox: word.bbox,
+              confidence: word.confidence,
+            }));
+            features = buildDocumentPageFeaturesFromText(result.data.text || '', words, canvas.width, canvas.height);
+            canvas.width = 1;
+            canvas.height = 1;
+          }
+        }
+        const match = recognizeDocumentPage(features, recognitionSamples);
+        if (match && match.confidence >= 0.2) matched += 1;
+        nextPages.push({
+          ...pageItem,
+          features,
+          ...(match && match.confidence >= 0.2 ? { label: match.documentType } : {}),
+        });
+      }
+      setPages(nextPages);
+      setStatus(matched + ' صفحه با الگوهای ذخیره‌شده تطبیق داده شد؛ ' + (withOcr ? 'OCR برای صفحات تصویری هم اجرا شد.' : 'صفحات اسکن‌شده OCR نشدند.'));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'تشخیص اسناد ناموفق بود.');
+    } finally {
+      await worker?.terminate();
+      await Promise.all([...previewDocuments.values()].map((preview) => preview.destroy().catch(() => undefined)));
+      setBusy(false);
+      setRecognitionProgress('');
+    }
+  };
+
+  const deleteRecognitionSample = async (sample: RecognitionSample) => {
+    if (!window.confirm('الگوی «' + sample.document_type + '» حذف شود؟ فایل اصلی نمونه در هیچ‌جا ذخیره نشده است.')) return;
+    setRecognitionLoading(true);
+    try {
+      const { error: deleteError } = await (supabase as any).from('pdf_document_recognition_samples')
+        .delete().eq('id', sample.id).eq('organization_id', organizationId);
+      if (deleteError) throw deleteError;
+      setRecognitionSamples((previous) => previous.filter((item) => item.id !== sample.id));
+      setStatus('الگوی تشخیص حذف شد.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'حذف الگو ناموفق بود.');
+    } finally {
+      setRecognitionLoading(false);
+    }
+  };
+
   const resetWorkspace = () => {
     sourcePdfs.current.clear();
     setDocuments([]);
