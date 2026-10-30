@@ -449,25 +449,38 @@ export const OfficeAutomationPage: React.FC = () => {
       sender_organization: draft.sender_organization || null, subject: draft.subject.trim(), body: draft.body,
       notes: draft.notes || null, response_due_date: draft.response_due_date || null,
       response_status: draft.response_status, visible_to_client: draft.visible_to_client,
-      apply_stamp: draft.apply_stamp, apply_signature: draft.apply_signature, status: nextStatus, updated_by: user.id,
+      apply_stamp: draft.apply_stamp, apply_signature: draft.apply_signature, updated_by: user.id,
     };
     try {
-      let result;
+      let row: Letter;
       if (active && ['draft','in_review'].includes(active.status)) {
-        result = await db.from('office_correspondence').update(payload).eq('id', active.id)
-          .eq('organization_id', profile.organization_id).select('*').single();
+        const updated = await db.from('office_correspondence').update({ ...payload, status: nextStatus })
+          .eq('id', active.id).eq('organization_id', profile.organization_id).select('*').single();
+        if (updated.error) throw updated.error;
+        row = updated.data as Letter;
       } else {
-        result = await db.from('office_correspondence').insert({ ...payload, created_by: user.id }).select('*').single();
+        const inserted = await db.from('office_correspondence').insert({
+          ...payload, status: 'draft', created_by: user.id,
+        }).select('*').single();
+        if (inserted.error) throw inserted.error;
+        row = inserted.data as Letter;
+        setActive(row);
+        if (nextStatus === 'in_review') {
+          const submitted = await db.from('office_correspondence').update({ status: 'in_review' })
+            .eq('id', row.id).eq('organization_id', profile.organization_id).select('*').single();
+          if (submitted.error) throw submitted.error;
+          row = submitted.data as Letter;
+        }
       }
-      if (result.error) throw result.error;
-      const row = result.data as Letter;
+      setActive(row);
+      await loadLetters(company.id);
       if (pendingAttachments.length) await uploadAttachments(row.id, pendingAttachments);
       setPendingAttachments([]);
-      await loadLetters(company.id);
       setLetterNotice(nextStatus === 'in_review' ? 'نامه برای بررسی و تأیید ارسال شد.' : 'پیش‌نویس ذخیره شد.');
       await selectLetter(row);
     } catch (error) {
       setLetterError(error instanceof Error ? error.message : 'ذخیره نامه ناموفق بود.');
+      if (company?.id) await loadLetters(company.id);
     } finally { setBusyLetter(false); }
   };
 
