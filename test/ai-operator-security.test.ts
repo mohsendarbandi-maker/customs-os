@@ -94,7 +94,7 @@ describe('AI Operator security invariants',()=>{
    expect(assistant).toContain('fetch(signed.signedUrl');
    expect(assistant).toContain("d?.steps?.filter((s:any)=>Array.isArray(s?.content))");
    expect(assistant).toContain("response_format:{type:'text',mime_type:'application/json',schema:geminiSchema(keys,formSchema)}");
-   expect(assistant).toContain('const extractionDeadline=Date.now()+38000');
+   expect(assistant).toContain('const extractionDeadline=Date.now()+(binaryDocumentExtraction?38000:12000)');
    expect(assistant).toContain("d?.outputs?.filter((x:any)=>x?.type==='text')");
    expect(assistant).toContain("binaryDocumentExtraction&&p.name!=='Gemini'");
    expect(assistant).toContain("const modelOrder=binaryDocumentExtraction?['gemini-3.5-flash-lite','gemini-3.8-flash']:['gemini-3.8-flash','gemini-3.5-flash-lite']");
