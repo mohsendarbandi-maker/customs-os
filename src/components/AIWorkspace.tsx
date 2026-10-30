@@ -72,7 +72,7 @@ function collectCurrentFormSchema():FormFieldSchema[]{
   if(el.disabled||('readOnly' in el&&el.readOnly)||el.type==='hidden'||el.type==='file'||['button','submit','reset','password','checkbox','radio'].includes(String((el as HTMLInputElement).type||'')))continue;
   if(el.closest('.ai-chat-panel,.ai-doc-toast,.ai-backdrop,[aria-hidden="true"]')||!el.getClientRects().length)continue;
   const labelNode=(el as HTMLInputElement).labels?.[0]||el.closest('label');
-  const label=String(labelNode?.textContent||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.getAttribute('data-label')||el.getAttribute('name')||el.getAttribute('id')||'').replace(/\\s+/g,' ').trim();
+  const label=String(labelNode?.textContent||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.getAttribute('data-label')||el.getAttribute('name')||el.getAttribute('id')||'').replace(/\s+/g,' ').trim();
   if(!label)continue;
   const index=result.length;
   const slug=normalize(label).replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,36)||'field';
@@ -174,7 +174,7 @@ export const AIWorkspace:React.FC<{pageContext?:string}>=({pageContext=''})=>{
  const[open,setOpen]=useState(false),[tab,setTab]=useState<'chat'|'doc'>('chat'),[input,setInput]=useState(''),[messages,setMessages]=useState<Msg[]>([]),[busy,setBusy]=useState(false),[fields,setFields]=useState<Extracted>({}),[status,setStatus]=useState(''),[applied,setApplied]=useState(0),[docResults,setDocResults]=useState<DocResult[]>([]),[formSchema,setFormSchema]=useState<FormFieldSchema[]>([]),[replaceExisting,setReplaceExisting]=useState(false),[sessionId]=useState(()=>{try{const k='customs_ai_session_id';const old=localStorage.getItem(k);if(old)return old;const id=makeClientId();localStorage.setItem(k,id);return id}catch{return ''}}),[listening,setListening]=useState(false),[pendingOperator,setPendingOperator]=useState<PendingOperator|null>(null),[operatorFinal,setOperatorFinal]=useState('');const fileRef=useRef<HTMLInputElement|null>(null);const recognitionRef=useRef<any>(null);const mediaRecorderRef=useRef<MediaRecorder|null>(null);const mediaStreamRef=useRef<MediaStream|null>(null);const voiceChunksRef=useRef<Blob[]>([]);
  const ask=async(text=input.trim(),documentText='',extractFields=false,documentData='',documentMimeType='',commandMode=false,documentStoragePath='',currentFormSchema:FormFieldSchema[]=[])=>{if(!text&&!documentText&&!documentData)return null;setBusy(true);setStatus('');if(text)setMessages(m=>[...m,{role:'user',text}]);setInput('');
   try{
-   const fillIntent=/\\b(fill|populate|complete)\\b|پر\\s*کن|پُر\\s*کن|تکمیل\\s*(?:کن|کنید|نمای|نمایید)/i.test(text)&&/(فرم|فیلد|اظهارنامه|بارنامه|محموله|کشتی|گمرک)/i.test(text);
+   const fillIntent=/\b(fill|populate|complete)\b|پر\s*کن|پُر\s*کن|تکمیل\s*(?:کن|کنید|نمای|نمایید)/i.test(text)&&/(فرم|فیلد|اظهارنامه|بارنامه|محموله|کشتی|گمرک)/i.test(text);
    if(!extractFields&&text&&fillIntent){
     const schema=collectCurrentFormSchema();
     if(!schema.length){const answer='در صفحه فعلی فرم قابل‌پرکردنی پیدا نکردم. ابتدا صفحه و فرم موردنظر را باز کن، سپس دوباره درخواست بده.';setMessages(m=>[...m,{role:'assistant',text:answer,status:'form-not-found'}]);return answer;}
