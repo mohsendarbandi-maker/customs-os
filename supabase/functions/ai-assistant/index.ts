@@ -88,7 +88,7 @@ Deno.serve(async(req)=>{const o=req.headers.get('Origin')||'';if(req.method==='O
      payload={model,input:[{type:'text',text:input},{type:'document',data:dd,mime_type:dm}],response_format:{type:'text',mime_type:'application/json',schema:geminiSchema(keys,formSchema)},generation_config:{max_output_tokens:1800},store:false};
     }else{
      const pp:any=[{text:input}];if(dd)pp.push({inlineData:{mimeType:dm,data:dd}});
-     payload={contents:[{role:'user',parts:pp}],generationConfig:keys.length?{responseMimeType:'application/json',responseSchema:geminiSchema(keys,formSchema)}:undefined};
+     payload={contents:[{role:'user',parts:pp}],generationConfig:keys.length?{responseMimeType:'application/json',responseSchema:geminiSchema(keys,formSchema),maxOutputTokens:900,temperature:0.2}:{maxOutputTokens:650,temperature:0.2}};
     }
     const r=await fetch(endpoint,{method:'POST',headers:{'x-goog-api-key':k,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal});
     const raw=await r.text();let d:any={};try{d=JSON.parse(raw)}catch{};const t=text(d);
