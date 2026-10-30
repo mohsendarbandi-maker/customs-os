@@ -249,7 +249,19 @@ export const OfficeAutomationPage: React.FC = () => {
       ...companyForm, company_name: companyForm.company_name.trim(),
       authority_valid_until: companyForm.authority_valid_until || null,
     };
-    if (company.client_id) {
+    const representationDetailsChanged = Boolean(company.client_id && (
+      companyForm.company_name.trim() !== (company.company_name || '').trim()
+      || companyForm.national_id.trim() !== (company.national_id || '').trim()
+      || companyForm.economic_code.trim() !== (company.economic_code || '').trim()
+      || companyForm.registration_number.trim() !== (company.registration_number || '').trim()
+      || companyForm.address.trim() !== (company.address || '').trim()
+      || companyForm.phone.trim() !== (company.phone || '').trim()
+      || companyForm.email.trim() !== (company.email || '').trim()
+      || companyForm.authorized_signer_name.trim() !== (company.authorized_signer_name || '').trim()
+      || companyForm.authority_reference.trim() !== (company.authority_reference || '').trim()
+      || (companyForm.authority_valid_until || '') !== (company.authority_valid_until || '')
+    ));
+    if (representationDetailsChanged) {
       patch.authority_status = 'pending';
       patch.authority_approved_by = null;
       patch.authority_approved_at = null;
