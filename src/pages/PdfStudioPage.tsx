@@ -186,6 +186,10 @@ export const PdfStudioPage: React.FC = () => {
 
   const loadRecognitionSamples = useCallback(async () => {
     if (!organizationId) return;
+    if (!['owner', 'admin', 'broker', 'accountant', 'warehouse'].includes(String(profile?.role || ''))) {
+      setRecognitionSamples([]);
+      return;
+    }
     setRecognitionLoading(true);
     try {
       const { data, error: samplesError } = await (supabase as any).from('pdf_document_recognition_samples')
@@ -199,7 +203,7 @@ export const PdfStudioPage: React.FC = () => {
     } finally {
       setRecognitionLoading(false);
     }
-  }, [organizationId]);
+  }, [organizationId, profile?.role]);
 
   useEffect(() => { void loadRecognitionSamples(); }, [loadRecognitionSamples]);
 
@@ -924,6 +928,7 @@ export const PdfStudioPage: React.FC = () => {
         pdfBytes = await imagePdf.save();
       }
       const pdf = await getDocument({ data: new Uint8Array(pdfBytes.slice(0)) }).promise;
+      const samplePageCount = pdf.numPages;
       const pageFeatures: DocumentPageFeatures[] = [];
       let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
       try {
@@ -976,7 +981,7 @@ export const PdfStudioPage: React.FC = () => {
           source_filename: sampleFile.name,
           source_mime_type: sampleFile.type || 'application/pdf',
           sample_hash: sampleHash,
-          page_count: pdf.numPages,
+          page_count: samplePageCount,
           features: { version: 1, featureSource: 'local-text-and-ocr', pages: pageFeatures },
           created_by: authData.user.id,
         }, { onConflict: 'organization_id,sample_hash,document_type' })
@@ -1396,6 +1401,87 @@ export const PdfStudioPage: React.FC = () => {
             </section>
           </aside>}
         </section>
+        )}
+
+        {studioTab === 'recognition' && (
+          <section className="space-y-3">
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-black">آزمایشگاه تشخیص اسناد</h2>
+                  <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--muted)]">یک نمونه واقعی از نوع سند بده، نوع آن را مشخص کن و تحلیل را اجرا کن. سیستم متن، واژه‌های شاخص، الگوی اعداد و محل قرارگیری عبارت‌ها را یاد می‌گیرد تا نمونه‌های بعدی را بهتر بشناسد.</p>
+                </div>
+                <span className="rounded-lg border border-emerald-500/30 px-2 py-1 text-[10px] text-emerald-500">ویژه الگوهای سازمان</span>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold">فایل نمونه PDF یا تصویر</label>
+                  <input ref={sampleInputRef} type="file" accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg" onChange={(event) => setSampleFile(event.currentTarget.files?.[0] || null)} className="block min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-2 text-xs file:ml-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-white"/>
+                  <div className="text-[11px] text-[var(--muted)]">{sampleFile ? sampleFile.name + ' · ' + formatSize(sampleFile.size) : 'نمونه را فقط برای تحلیل انتخاب کن؛ فایل اصلی به سرور ارسال نمی‌شود.'}</div>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold">نوع سندی که این نمونه نشان می‌دهد</label>
+                  <input value={sampleDocumentType} onChange={(event) => setSampleDocumentType(event.target.value)} placeholder="مثلاً قبض انبار پشت" className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+                  <label className="block text-xs font-bold">نام قابل نمایش نمونه (اختیاری)</label>
+                  <input value={sampleDisplayName} onChange={(event) => setSampleDisplayName(event.target.value)} placeholder="مثلاً قبض انبار شرکت الف" className="min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => void analyzeAndSaveSample()} disabled={!sampleFile || trainingBusy || busy} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-bold text-white disabled:opacity-40">
+                  {trainingBusy ? <Loader2 className="animate-spin" size={15}/> : <Sparkles size={15}/>}
+                  تحلیل و ذخیره الگوی تشخیص
+                </button>
+                {trainingProgress && <span className="text-xs text-[var(--muted)]">{trainingProgress}</span>}
+              </div>
+              <p className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-[11px] leading-5 text-[var(--muted)]">
+                فایل نمونه روی دستگاه پردازش می‌شود. اگر PDF اسکن‌شده باشد، OCR فارسی و انگلیسی در مرورگر اجرا می‌شود؛ فقط ویژگی‌های استخراج‌شده و مختصات نسبی کلمات در فضای خصوصی سازمان ذخیره می‌شوند، نه خود PDF و نه تصویر صفحات.
+              </p>
+            </section>
+
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-black">الگوهای ثبت‌شده</h3>
+                  <p className="mt-1 text-xs text-[var(--muted)]">{recognitionSamples.length} نمونه در کتابخانه تشخیص این سازمان</p>
+                </div>
+                <button type="button" onClick={() => void loadRecognitionSamples()} disabled={recognitionLoading} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs">به‌روزرسانی</button>
+              </div>
+              {recognitionLoading ? (
+                <div className="py-5 text-center text-xs text-[var(--muted)]"><Loader2 className="ml-2 inline animate-spin" size={15}/> در حال دریافت الگوها…</div>
+              ) : recognitionSamples.length ? (
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  {recognitionSamples.map((sample) => (
+                    <div key={sample.id} className="flex items-center gap-2 rounded-xl border border-[var(--border)] p-3">
+                      <FileText size={18} className="shrink-0 text-blue-400"/>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-bold">{sample.document_type}</div>
+                        <div className="mt-1 truncate text-[10px] text-[var(--muted)]">{sample.sample_name} · {sample.page_count} صفحه · {sample.source_filename}</div>
+                      </div>
+                      <button type="button" onClick={() => void deleteRecognitionSample(sample)} disabled={recognitionLoading || trainingBusy} className="rounded-lg border border-red-500/30 px-2 py-2 text-[10px] text-red-400">حذف</button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-6 text-center text-xs text-[var(--muted)]">هنوز نمونه‌ای ذخیره نشده است. با یک نمونه از قبض انبار، اظهارنامه یا مانیفست شروع کن.</p>
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-black">تشخیص فایل‌های فعلی</h3>
+                  <p className="mt-1 text-xs text-[var(--muted)]">برچسب‌های صفحات فعلی را با نمونه‌های ذخیره‌شده تطبیق بده.</p>
+                </div>
+                <span className="text-xs text-[var(--muted)]">{pages.length} صفحه در محیط کار</span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <button type="button" onClick={() => void runWorkspaceRecognition(false)} disabled={busy || !pages.length || !recognitionSamples.length} className="min-h-11 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold disabled:opacity-40">تشخیص بر اساس متن PDF</button>
+                <button type="button" onClick={() => void runWorkspaceRecognition(true)} disabled={busy || !pages.length || !recognitionSamples.length} className="min-h-11 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">تشخیص اسکن‌ها با OCR</button>
+              </div>
+              {recognitionProgress && <p className="mt-2 text-xs text-[var(--muted)]">{recognitionProgress}</p>}
+              <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">تشخیص متن PDF سریع‌تر است. OCR برای صفحات اسکن‌شده زمان بیشتری می‌گیرد و فقط با زدن دکمه جداگانه اجرا می‌شود تا روی سرعت کار روزمره اثر نگذارد.</p>
+            </section>
+          </section>
         )}
 
         {(status || error) && <div className={'rounded-xl border p-3 text-sm ' + (error ? 'border-red-500/30 bg-red-500/5 text-red-400' : 'border-emerald-500/20 bg-emerald-500/5 text-emerald-500')}>
