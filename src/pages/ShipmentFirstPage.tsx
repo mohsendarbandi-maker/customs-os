@@ -250,45 +250,73 @@ export const ShipmentFirstPage:React.FC=()=>{
  const upload=async(files:FileList|null)=>{
   const selectedFiles=Array.from(files||[]);
   if(!selectedFiles.length||!selected)return setMessage('ابتدا محموله را ذخیره و انتخاب کنید.');
-  setUploading(true);setMessage('');
-  let completed=0;
+  if(!profile?.organization_id||!profile.id)return setMessage('اطلاعات کاربر برای ذخیره فایل آماده نیست.');
+  setUploading(true);setMessage('در حال ذخیره امن اسناد در سایت...');
+  let completed=0;const failed:string[]=[];
   try{
-   const [folder,destination]=await Promise.all([
-    getDefaultShipmentUploadFolder(selected),
-    getFileArchiveDestination()
-   ]);
+   const folder=await getDefaultShipmentUploadFolder(selected);
    for(const file of selectedFiles){
-    if(file.size<=0||file.size>FILE_ARCHIVE_MAX_BYTES)
-     throw new Error('برای اینکه فایل در تلگرام قابل بازیابی و تحلیل هوش مصنوعی باشد، حجم هر سند باید حداکثر ۲۰ مگابایت باشد.');
-    const lowerName=file.name.toLowerCase();
-    const mime=(file.type||(lowerName.endsWith('.pdf')?'application/pdf':lowerName.endsWith('.png')?'image/png':(lowerName.endsWith('.jpg')||lowerName.endsWith('.jpeg'))?'image/jpeg':'application/octet-stream')).toLowerCase();
-    const documentType=mime==='application/pdf'?'customs_document':'other';
-    const idempotencyKey=await createTelegramArchiveIdempotencyKey(file,{
-     folderId:folder.id,shipmentId:selected,documentType,documentName:file.name,destination
-    });
-    await uploadTelegramArchivedFile(file,{
-     folderId:folder.id,shipmentId:selected,documentType,documentName:file.name,
-     tags:uploadTags,destination,idempotencyKey
-    });
-    completed++;
+    let storagePath='';let documentCreated=false;
+    try{
+     if(file.size<=0||file.size>FILE_ARCHIVE_MAX_BYTES)throw new Error('حجم هر فایل باید حداکثر ۲۰ مگابایت باشد تا در تلگرام نیز قابل بازیابی باشد.');
+     const lowerName=file.name.toLowerCase();
+     const mime=(file.type||(lowerName.endsWith('.pdf')?'application/pdf':lowerName.endsWith('.png')?'image/png':(lowerName.endsWith('.jpg')||lowerName.endsWith('.jpeg'))?'image/jpeg':'application/octet-stream')).toLowerCase();
+     if(!['application/pdf','image/jpeg','image/png'].includes(mime))throw new Error('فقط PDF و تصویرهای JPG یا PNG پشتیبانی می‌شوند.');
+     storagePath=`${profile.organization_id}/${selected}/${crypto.randomUUID()}-${safeStorageFilename(file.name)}`;
+     const {error:storageError}=await supabase.storage.from(BUCKET).upload(storagePath,file,{contentType:mime,cacheControl:'3600',upsert:false});
+     if(storageError)throw new Error(`ذخیره امن فایل ناموفق بود: ${storageError.message}`);
+     const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
+      organization_id:profile.organization_id,shipment_id:selected,uploaded_by:profile.id,
+      document_name:file.name,original_file_name:file.name,storage_path:storagePath,mime_type:mime,
+      file_size_bytes:file.size,folder_id:folder.id,storage_backend:'supabase',
+      telegram_archive_requested:true,extraction_status:'pending'
+     }).select('id').single();
+     if(docError||!doc)throw docError||new Error('ثبت سند محموله ناموفق بود.');
+     documentCreated=true;
+     if(uploadTags.length){
+      const {error:tagError}=await supabase.from('file_manager_files')
+       .update({tags:uploadTags,document_type:mime==='application/pdf'?'customs_document':'other'})
+       .eq('organization_id',profile.organization_id).eq('shipment_document_id',doc.id);
+      if(tagError)console.warn('[ShipmentFirstPage] document tags were not saved:',tagError);
+     }
+     completed++;
+    }catch(error:any){
+     if(storagePath&&!documentCreated)await supabase.storage.from(BUCKET).remove([storagePath]);
+     failed.push(`${file.name}: ${error?.message||'خطا در ذخیره فایل'}`);
+    }
    }
    await loadDocs(selected);
-   setMessage(`${completed} سند مستقیماً در تلگرام آرشیو و به محموله متصل شد؛ هیچ نسخه‌ای در Storage سوپابیس ساخته نشد.`);
-  }catch(error:any){
-   await loadDocs(selected);
-   setMessage(completed?`${completed} سند در تلگرام ثبت شد؛ فایل بعدی ناموفق بود. ${error?.message||''}`:error?.message||'آرشیو سند در تلگرام ناموفق بود.');
-  }finally{setUploading(false)}
+   setMessage(`${completed} سند در سایت ذخیره شد و برای آرشیو خودکار تلگرام در صف پس‌زمینه قرار گرفت.${failed.length?' خطا: '+failed.join(' · '):''}`);
+  }catch(error:any){setMessage(error?.message||'ذخیره اسناد محموله ناموفق بود.')}
+  finally{setUploading(false)}
  };
-const retryArchiveDocument=async(d:Doc)=>{
+ const retryArchiveDocument=async(d:Doc)=>{
   if(d.storage_backend==='telegram'&&d.file_asset_id)return;
-  setUploading(true);setMessage('درخواست انتقال نسخه امن سند به آرشیو تلگرام ارسال شد...');
+  if(!profile?.organization_id)return setMessage('سازمان کاربر مشخص نیست.');
+  if(!d.storage_path||d.storage_path.startsWith('telegram://'))return setMessage('نسخه امن سایت برای این سند موجود نیست.');
+  setUploading(true);setMessage('در حال بازگرداندن سند به صف آرشیو تلگرام...');
   try{
-   await archiveShipmentDocumentInBackground(d.id,uploadTags);
+   const {data:mirror,error:mirrorLookupError}=await supabase.from('file_manager_files')
+    .select('id,metadata').eq('organization_id',profile.organization_id)
+    .eq('shipment_document_id',d.id).maybeSingle();
+   if(mirrorLookupError)throw mirrorLookupError;
+   if(mirror){
+    const metadata=mirror.metadata&&typeof mirror.metadata==='object'?{...mirror.metadata}:{};
+    delete metadata.legacyArchiveStatus;
+    delete metadata.legacyArchiveError;
+    delete metadata.legacyArchiveAttemptedAt;
+    delete metadata.legacyArchiveAttempts;
+    const {error:mirrorUpdateError}=await supabase.from('file_manager_files')
+     .update({metadata}).eq('id',mirror.id).eq('organization_id',profile.organization_id);
+    if(mirrorUpdateError)throw mirrorUpdateError;
+   }
+   const {error}=await supabase.from('shipment_documents').update({telegram_archive_requested:true})
+    .eq('id',d.id).eq('organization_id',profile.organization_id);
+   if(error)throw error;
    await loadDocs(selected);
-   setMessage('سند به آرشیو تلگرام منتقل شد؛ نسخه امن اصلی تا تأیید آرشیو حفظ شده است.');
+   setMessage('سند به صف آرشیو خودکار تلگرام برگشت؛ نسخه امن سایت تا تأیید تلگرام حفظ می‌شود.');
   }catch(error:any){
-   await loadDocs(selected);
-   setMessage(error?.message||'آرشیو تلگرام فعلاً انجام نشد؛ نسخه امن وب‌سایت حفظ شده است. دوباره تلاش کن.');
+   await loadDocs(selected);setMessage(error?.message||'ثبت مجدد درخواست آرشیو تلگرام ناموفق بود.');
   }finally{setUploading(false)}
  };
  const download=async(d:Doc)=>{
@@ -369,11 +397,11 @@ const retryArchiveDocument=async(d:Doc)=>{
       <input value={uploadTagInput} onChange={e=>setUploadTagInput(e.target.value)} disabled={uploading} placeholder="برچسب سندها (با ویرگول)" className="max-w-48 px-3 py-2 rounded-xl border app-border bg-[var(--surface)] text-xs"/>
       <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-blue-600 text-white font-bold">
        <Upload size={16} className="inline ml-1"/>{uploading?'در حال ذخیره امن...':'انتخاب و ذخیره فایل'}
-       <input type="file" multiple className="hidden" disabled={uploading} onChange={e=>{void upload(e.target.files);e.currentTarget.value=''}}/>
+       <input type="file" accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png" multiple className="hidden" disabled={uploading} onChange={e=>{void upload(e.target.files);e.currentTarget.value=''}}/>
       </label>
      </div>
     </div>
-    {docs.length===0?<div className="py-8 text-center app-muted">هنوز سندی برای این محموله ثبت نشده است.</div>:<div className="grid md:grid-cols-2 gap-2 mt-4">{docs.map(d=><div key={d.id} className="rounded-xl border app-border p-3 flex items-center justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{d.document_name}</b><span className="text-[10px] app-muted">{Math.round(d.file_size_bytes/1024)} KB · {d.storage_backend==='telegram'&&d.file_asset_id?'آرشیو تلگرام آماده است':'نسخه امن وب‌سایت · در انتظار آرشیو تلگرام'}</span></div><div className="flex shrink-0 items-center gap-2">{(d.storage_backend!=='telegram'||!d.file_asset_id)&&<button type="button" onClick={()=>void retryArchiveDocument(d)} className="rounded-lg border app-border px-2.5 py-2 text-[11px] font-bold">ارسال به تلگرام</button>}<button onClick={()=>void download(d)} className="icon-btn" title="باز کردن"><Download size={16}/></button></div></div>)}</div>}
+    {docs.length===0?<div className="py-8 text-center app-muted">هنوز سندی برای این محموله ثبت نشده است.</div>:<div className="grid md:grid-cols-2 gap-2 mt-4">{docs.map(d=><div key={d.id} className="rounded-xl border app-border p-3 flex items-center justify-between gap-3"><div className="min-w-0"><b className="block truncate text-sm">{d.document_name}</b><span className="text-[10px] app-muted">{Math.round(d.file_size_bytes/1024)} KB · {d.storage_backend==='telegram'&&d.file_asset_id?'آرشیو تلگرام آماده است':d.telegram_archive_requested?'نسخه امن سایت · در صف آرشیو تلگرام':'نسخه امن سایت'}</span></div><div className="flex shrink-0 items-center gap-2">{(d.storage_backend!=='telegram'||!d.file_asset_id)&&<button type="button" onClick={()=>void retryArchiveDocument(d)} className="rounded-lg border app-border px-2.5 py-2 text-[11px] font-bold">ارسال به تلگرام</button>}<button onClick={()=>void download(d)} className="icon-btn" title="باز کردن"><Download size={16}/></button></div></div>)}</div>}
    </section>}
   {message&&<div className="rounded-xl border app-border bg-[var(--surface)] p-3 text-sm">{message}</div>}
   {selected&&vessel&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Ship size={19}/><b>بررسی وضعیت کشتی</b></div><Link to={vesselSearch} className="px-4 py-2 rounded-xl border app-border font-bold text-sm"><ExternalLink size={15} className="inline ml-1"/>جستجوی اطلاعات کشتی</Link></div><div className="grid md:grid-cols-6 gap-3 mt-3 text-sm"><div><span className="app-muted text-xs">کشتی</span><b className="block mt-1">{vessel.name}</b></div><div><span className="app-muted text-xs">IMO</span><b className="block mt-1" dir="ltr">{vessel.imo_number||'—'}</b></div><div><span className="app-muted text-xs">پرچم</span><b className="block mt-1">{vessel.flag_code||'—'}</b></div><div><span className="app-muted text-xs">وضعیت</span><b className="block mt-1">{statuses.find(x=>x[0]===selectedRow?.current_status)?.[1]||selectedRow?.current_status||'—'}</b></div><div><span className="app-muted text-xs">موقعیت</span><b className="block mt-1">{selectedRow?.current_location||'—'}</b></div><div><span className="app-muted text-xs">B/L</span><b className="block mt-1" dir="ltr">{selectedRow?.bill_of_lading_no||form.billOfLading||'—'}</b></div>{selectedRow?.current_status==='completed'&&<><div><span className="app-muted text-xs">اسناد حمل و قبض انبار</span><b className="block mt-1">{selectedRow.transport_documents_status==='ready'?'آماده است':'آماده نیست'}</b></div><div><span className="app-muted text-xs">صورتحساب ترخیصیه</span><b className="block mt-1">{selectedRow.release_invoice_payment_status==='paid'?'پرداخت شده':'پرداخت نشده'}</b></div></>}</div></section>}
