@@ -267,7 +267,7 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
  const vesselSearch=selected?'/vessel-search?name='+encodeURIComponent(vessel?.name||form.vessel)+'&imo='+encodeURIComponent(vessel?.imo_number||form.imo)+'&bl='+encodeURIComponent(form.billOfLading):'#';
  return <main dir="rtl" className="min-h-screen p-4 md:p-6" style={{background:'var(--bg)',color:'var(--text)'}}><div className="max-w-[1500px] mx-auto space-y-4">
   <header className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs app-muted">مرحله ۱</div><h1 className="text-2xl font-black">شروع عملیات</h1><p className="text-xs app-muted mt-1">محموله، صاحب کالا، کشتی، وضعیت کشتی و اسناد محموله در یک مرحله.</p><div className="mt-2"><FormDraftIndicator status={formDraft.status} onSave={formDraft.saveDraftNow}/></div></div><div className="flex gap-2"><button onClick={()=>void load()} className="icon-btn" title="بروزرسانی"><RefreshCw size={16}/></button><button onClick={reset} className="px-4 py-2 rounded-xl border app-border"><Plus size={16} className="inline ml-1"/>محموله جدید</button></div></header>
-  <section className="rounded-2xl border-2 border-dashed app-border bg-[var(--surface)] p-4 sm:p-5">
+  {profile?.role!=='client'&&<section className="rounded-2xl border-2 border-dashed app-border bg-[var(--surface)] p-4 sm:p-5">
    <div className="flex flex-wrap items-center justify-between gap-3">
     <div><div className="flex items-center gap-2 font-black"><FileText size={18}/> بارگذاری سند برای ثبت محموله</div><p className="mt-1 text-xs app-muted">فایل کامل PDF را یک‌بار ذخیره کن؛ سپس همان فایل را به‌عنوان بارنامه انتخاب و برای استخراج اطلاعات بفرست.</p></div>
     <label className="cursor-pointer rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white">
@@ -298,7 +298,7 @@ const passShip=async(passed:boolean)=>{if(!selected)return;setBusy(true);setMess
     </div>
    </div>}
    {pendingDocuments.length===0&&<div className="mt-3 text-xs app-muted">هنوز فایلی انتخاب نشده است. این مرحله اختیاری است و می‌توانی اطلاعات را دستی هم وارد کنی.</div>}
-  </section>
+  </section>}
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="grid lg:grid-cols-4 gap-3">
    <label className="text-xs app-muted lg:col-span-2">صاحب کالا<select value={form.ownerId} onChange={e=>set('ownerId',e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب صاحب کالا</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.national_id?' — '+c.national_id:''}</option>)}</select></label>
    <label className="text-xs app-muted">کشتیرانی<select value={form.shippingLine} onChange={e=>chooseLine(e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب کشتیرانی</option>{lines.map(l=><option key={l.id} value={l.name}>{l.name_fa||l.name}</option>)}</select></label><label className="text-xs app-muted">B/L<input value={form.billOfLading} onChange={e=>set('billOfLading',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
