@@ -540,7 +540,7 @@ export const PdfStudioPage: React.FC = () => {
       }
       setFileManagerRows(allRows.filter((row) => {
         const type = (row.mime_type || '').toLowerCase();
-        return type === 'application/pdf' || type.startsWith('image/') || /\.(pdf|png|jpe?g)$/i.test(row.original_name);
+        return type === 'application/pdf' || type === 'image/png' || type === 'image/jpeg' || /\.(pdf|png|jpe?g)$/i.test(row.original_name);
       }));
     } finally {
       setFileManagerLoading(false);
