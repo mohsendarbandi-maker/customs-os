@@ -46,7 +46,7 @@ export function suggestDocumentLabel(text: string, fileName: string, pageNumber:
   return `${fileName.replace(/\.[^.]+$/, '') || 'سند'} - صفحه ${pageNumber}`.slice(0, 100);
 }
 
-export function pageExpressionForMatches(pageLabels: Array<{ label: string }>, patterns: RegExp[]): string {
+export function pageExpressionForMatches(pageLabels: Array<{ label: string }>, patterns: readonly RegExp[]): string {
   const matches = pageLabels
     .map((page, index) => patterns.some((pattern) => pattern.test(page.label)) ? index + 1 : 0)
     .filter(Boolean);
