@@ -234,7 +234,7 @@ const extractSelectedBillOfLading=async()=>{
       const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
        organization_id:profile.organization_id,shipment_id:shipmentId,uploaded_by:staged.uploadedBy,
        document_name:staged.name,original_file_name:staged.name,storage_path:staged.storagePath!,
-       storage_backend:'supabase',folder_id:shipmentFolder.id,mime_type:staged.mimeType,
+       storage_backend:'supabase',telegram_archive_requested:true,folder_id:shipmentFolder.id,mime_type:staged.mimeType,
        file_size_bytes:staged.sizeBytes,extraction_status:staged.extractedFields?'completed':'pending'
       }).select('id').single();
       if(docError||!doc)throw docError||new Error('ثبت مشخصات سند ناموفق بود.');
@@ -285,7 +285,7 @@ const extractSelectedBillOfLading=async()=>{
     const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
      organization_id:profile.organization_id,shipment_id:selected,uploaded_by:user.id,
      document_name:file.name,original_file_name:file.name,storage_path:storagePath,
-     storage_backend:'supabase',folder_id:folder.id,mime_type:mime,file_size_bytes:file.size,
+     storage_backend:'supabase',telegram_archive_requested:true,folder_id:folder.id,mime_type:mime,file_size_bytes:file.size,
      extraction_status:'not_requested'
     }).select('id').single();
     if(docError||!doc)throw docError||new Error('ثبت مشخصات سند ناموفق بود.');
