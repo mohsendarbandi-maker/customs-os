@@ -821,7 +821,7 @@ export const PdfStudioPage: React.FC = () => {
     setFileManagerLoading(true);
     try {
       const { data: folderData, error: folderError } = await supabase.from('file_manager_folders')
-        .select('id,display_name')
+        .select('id,parent_id,display_name,folder_type')
         .eq('organization_id', organizationId)
         .order('display_name', { ascending: true });
       if (folderError) throw folderError;
@@ -851,6 +851,9 @@ export const PdfStudioPage: React.FC = () => {
 
   const openFileManager = async () => {
     setFileManagerOpen(true);
+    setFileManagerCurrentFolderId(null);
+    setFileManagerSearch('');
+    setFileManagerSearchAll(false);
     setError('');
     try {
       await loadFileManagerRows();
@@ -956,19 +959,46 @@ export const PdfStudioPage: React.FC = () => {
         {fileManagerOpen && (
           <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 md:p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div><h2 className="font-black">فراخوانی چندفایلی از فایل‌منیجر</h2><p className="mt-1 text-xs text-[var(--muted)]">فایل‌های PDF و تصویر را از پوشه‌های مجاز سازمان انتخاب کنید. می‌توانید این کار را هر چند بار تکرار کنید.</p></div>
+              <div><h2 className="font-black">انتخاب از پوشه‌های فایل‌منیجر</h2><p className="mt-1 text-xs text-[var(--muted)]">پوشه‌ها را باز کنید و از چند پوشه فایل انتخاب کنید؛ انتخاب‌ها هنگام جابه‌جایی بین پوشه‌ها حفظ می‌شوند.</p></div>
               <button type="button" onClick={() => setFileManagerOpen(false)} className="rounded-lg border border-[var(--border)] p-2" aria-label="بستن"><X size={16}/></button>
             </div>
-            <input value={fileManagerSearch} onChange={(event) => setFileManagerSearch(event.target.value)} placeholder="جست‌وجو بر اساس نام فایل یا پوشه…" className="mt-3 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => setFileManagerCurrentFolderId(null)} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-bold">ریشه فایل‌منیجر</button>
+              {fileManagerFolderPath.map((folder) => (
+                <button key={folder.id} type="button" onClick={() => setFileManagerCurrentFolderId(folder.id)} className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs">{folder.display_name}</button>
+              ))}
+              {currentFileManagerFolder?.parent_id && (
+                <button type="button" onClick={() => setFileManagerCurrentFolderId(currentFileManagerFolder.parent_id)} className="mr-auto rounded-lg border border-[var(--border)] px-3 py-2 text-xs">بازگشت به پوشه بالاتر</button>
+              )}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              {visibleFileManagerFolders.map((folder) => {
+                const count = fileManagerRows.filter((row) => row.folder_id === folder.id).length;
+                const nested = fileManagerFolders.some((item) => item.parent_id === folder.id);
+                return (
+                  <button key={folder.id} type="button" onClick={() => setFileManagerCurrentFolderId(folder.id)} className="flex min-h-16 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-2 text-right">
+                    <Folder size={20} className="shrink-0 text-blue-400"/>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-bold">{folder.display_name}</span>
+                      <span className="mt-1 block text-[10px] text-[var(--muted)]">{count} فایل {nested ? '· زیرپوشه دارد' : ''}</span>
+                    </span>
+                    <ChevronLeft size={15} className="shrink-0 text-[var(--muted)]"/>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input value={fileManagerSearch} onChange={(event) => setFileManagerSearch(event.target.value)} placeholder="جست‌وجوی اختیاری در فایل‌های این پوشه…" className="min-h-10 min-w-[12rem] flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm"/>
+              <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                <input type="checkbox" checked={fileManagerSearchAll} onChange={(event) => setFileManagerSearchAll(event.target.checked)} className="h-4 w-4"/>
+                جست‌وجو در همه پوشه‌ها
+              </label>
+            </div>
             {fileManagerLoading ? (
-              <div className="flex items-center gap-2 py-6 text-sm text-[var(--muted)]"><Loader2 className="animate-spin" size={17}/> در حال دریافت فهرست…</div>
+              <div className="flex items-center gap-2 py-6 text-sm text-[var(--muted)]"><Loader2 className="animate-spin" size={17}/> در حال دریافت فایل‌ها…</div>
             ) : (
-              <div className="mt-3 max-h-72 space-y-1 overflow-y-auto">
-                {fileManagerRows.filter((row) => {
-                  const folderName = fileManagerFolders.find((folder) => folder.id === row.folder_id)?.display_name || '';
-                  const query = fileManagerSearch.trim().toLocaleLowerCase();
-                  return !query || row.original_name.toLocaleLowerCase().includes(query) || folderName.toLocaleLowerCase().includes(query);
-                }).map((row) => (
+              <div className="mt-3 max-h-[38dvh] space-y-1 overflow-y-auto overscroll-contain">
+                {visibleFileManagerRows.map((row) => (
                   <label key={row.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[var(--border)] p-2 text-xs">
                     <input type="checkbox" checked={selectedFileManagerIds.has(row.id)} onChange={() => toggleFileManagerSelection(row.id)} className="h-4 w-4"/>
                     <FileText size={16} className="shrink-0 text-blue-400"/>
@@ -979,12 +1009,13 @@ export const PdfStudioPage: React.FC = () => {
                     <span className="text-[10px] text-[var(--muted)]">{row.mime_type}</span>
                   </label>
                 ))}
-                {!fileManagerRows.length && <p className="py-5 text-center text-xs text-[var(--muted)]">فایل PDF یا تصویر قابل فراخوانی پیدا نشد.</p>}
+                {!visibleFileManagerFolders.length && !visibleFileManagerRows.length && <p className="py-5 text-center text-xs text-[var(--muted)]">در این پوشه فایل یا زیرپوشه‌ای نیست.</p>}
+                {fileManagerSearchAll && fileManagerSearch && visibleFileManagerRows.length > 0 && <p className="px-2 py-1 text-[10px] text-[var(--muted)]">نمایش نتیجه از پوشه‌های مختلف؛ پوشه مبدأ کنار هر فایل آمده است.</p>}
               </div>
             )}
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs text-[var(--muted)]">{selectedFileManagerIds.size} فایل انتخاب شده</span>
-              <button type="button" onClick={() => void loadSelectedFromFileManager()} disabled={busy || fileManagerLoading || !selectedFileManagerIds.size} className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40">افزودن فایل‌های انتخاب‌شده به محیط کار</button>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
+              <span className="text-xs text-[var(--muted)]">{selectedFileManagerIds.size} فایل از پوشه‌های مختلف انتخاب شده</span>
+              <button type="button" onClick={() => void loadSelectedFromFileManager()} disabled={busy || fileManagerLoading || !selectedFileManagerIds.size} className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40">افزودن فایل‌های انتخاب‌شده</button>
             </div>
           </section>
         )}
