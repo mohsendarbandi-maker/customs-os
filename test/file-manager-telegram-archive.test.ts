@@ -90,6 +90,16 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(preDeclaration).toContain("docs.filter(d=>d.storage_backend!=='telegram'&&!d.file_asset_id)");
   });
 
+  it('prevents duplicate bill-of-lading shipments and directs the user to the existing shipment', () => {
+    expect(shipmentPage).toContain('const sameShipmentUniqueKey=');
+    expect(shipmentPage).toContain('rows.find(row=>sameShipmentUniqueKey(row,form,selected))');
+    expect(shipmentPage).toContain("e?.code==='23505'");
+    expect(shipmentPage).toContain("uq_shipments_bl_line_year");
+    expect(shipmentPage).toContain("باز کردن محموله موجود");
+    expect(shipmentPage).toContain('select(SHIPMENT_ROW_SELECT)');
+    expect(shipmentPage).not.toContain('drop index uq_shipments_bl_line_year');
+  });
+
   it('selects bill of lading files immediately, saves them securely, and queues Telegram after shipment creation', () => {
     expect(shipmentPage).toContain('URL.createObjectURL(file)');
     expect(shipmentPage).toContain('setPendingDocuments(previous=>[...previous,pending])');
