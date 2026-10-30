@@ -12,12 +12,13 @@ import { FormDraftIndicator } from '../components/FormDraftIndicator';
 import{buildShipmentDisplayName}from'../lib/displayNames';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import {AddReminderButton} from '../features/reminders/AddReminderButton';
-import { archiveShipmentDocumentInBackground, createTelegramArchiveIdempotencyKey, downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultClientUploadFolder, getDefaultShipmentUploadFolder, getFileArchiveDestination, uploadTelegramArchivedFile } from '../lib/fileManager';
+import { downloadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES, getDefaultShipmentUploadFolder } from '../lib/fileManager';
+import { safeStorageFilename } from '../lib/safeStorageFilename';
 
 type Vessel={id:string;name:string;imo_number?:string|null;flag_code?:string|null;shipping_line_id?:string|null};type ShippingLine={id:string;name:string;name_fa?:string|null};
 type Office={id:string;code:string;name:string;city:string;is_active:boolean};type Row={id:string;client_id:string|null;vessel_id:string|null;customs_office_id:string|null;shipping_line:string|null;bill_of_lading_no:string|null;bill_of_lading_year:number|null;voyage_no:string|null;origin_port:string|null;destination_port:string|null;cargo_count:number|null;cargo_count_unit:string|null;net_weight_kg:number|null;gross_weight_kg:number|null;current_status:string;current_location:string|null;display_name:string|null;case_id:string|null;transport_documents_status:'not_ready'|'ready';release_invoice_payment_status:'unpaid'|'paid';ship_passed:boolean;ship_passed_at:string|null;ship_passed_by:string|null};
 type Form={ownerId:string;shippingLine:string;billOfLading:string;year:string;voyage:string;vessel:string;imo:string;flag:string;originPort:string;destinationPort:string;count:string;unit:string;net:string;gross:string;status:string;location:string;transportDocumentsStatus:'not_ready'|'ready';releaseInvoicePaymentStatus:'unpaid'|'paid'};
-type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;created_at:string};type PendingShipmentDocument={id:string;name:string;mimeType:string;sizeBytes:number;pageCount:number;file:File;previewUrl:string;fileAssetId?:string;externalMessageId?:string;folderId?:string;uploadStatus:'waiting-owner'|'uploading'|'ready'|'failed';uploadError?:string;clientId:string;uploadedBy:string;extractedFields?:Record<string,string>};
+type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;telegram_archive_requested?:boolean;created_at:string};type PendingShipmentDocument={id:string;name:string;mimeType:string;sizeBytes:number;pageCount:number;file:File;previewUrl:string;storagePath?:string;uploadStatus:'uploading'|'ready'|'failed';uploadError?:string;uploadedBy:string;extractedFields?:Record<string,string>};
 const empty:Form={ownerId:'',shippingLine:'',billOfLading:'',year:String(new Date().getFullYear()),voyage:'',vessel:'',imo:'',flag:'',originPort:'',destinationPort:'',count:'',unit:'رول',net:'',gross:'',status:'draft',location:'',transportDocumentsStatus:'not_ready',releaseInvoicePaymentStatus:'unpaid'};
 const digits=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const num=(v:string)=>{const n=Number(digits(v).replace(/[٬,]/g,''));return Number.isFinite(n)?n:null};
@@ -32,7 +33,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const[uploadTagInput,setUploadTagInput]=useState('');const uploadTags=[...new Set(uploadTagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
  const[pendingDocuments,setPendingDocuments]=useState<PendingShipmentDocument[]>([]),[selectedBillOfLadingId,setSelectedBillOfLadingId]=useState(''),[extractingBillOfLadingId,setExtractingBillOfLadingId]=useState(''),[previewBillOfLadingId,setPreviewBillOfLadingId]=useState(''),[previewBillOfLadingUrl,setPreviewBillOfLadingUrl]=useState('');
- const hasPendingUploads=pendingDocuments.some(document=>document.uploadStatus==='uploading'||document.uploadStatus==='waiting-owner');
+ const hasPendingUploads=pendingDocuments.some(document=>document.uploadStatus==='uploading');
  const shipmentFileInput=React.useRef<HTMLInputElement|null>(null);
   const formDraft=useAutosavedDraft(
   formDraftKey(profile?.id,`shipment-first:${profile?.organization_id||''}`,profile?.organization_id),
@@ -64,7 +65,7 @@ export const ShipmentFirstPage:React.FC=()=>{
  };
  const loadDocs=async(id:string)=>{
   if(!id){setDocs([]);return}
-  const{data,error}=await supabase.from('shipment_documents').select('id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,created_at').eq('shipment_id',id).order('created_at',{ascending:false});
+  const{data,error}=await supabase.from('shipment_documents').select('id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,telegram_archive_requested,created_at').eq('shipment_id',id).order('created_at',{ascending:false});
   if(error){setMessage(error.message);return} setDocs((data||[]) as Doc[]);
  };
  const load=async()=>{
@@ -94,39 +95,21 @@ export const ShipmentFirstPage:React.FC=()=>{
   const{data,error}=await supabase.from('vessels').insert({organization_id:profile?.organization_id,name,imo_number:imo||null,flag_code:form.flag.toUpperCase()||null,shipping_line_id:line?.id||null}).select('id,name,imo_number,flag_code,shipping_line_id').single();
   if(error)throw error;setVessels(p=>[...p,data as Vessel]);return data as Vessel;
  };
- const archivePendingShipmentDocument=async(document:PendingShipmentDocument,ownerIdOverride?:string)=>{
-  const ownerId=ownerIdOverride||document.clientId||form.ownerId;
-  if(!ownerId){
-   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,clientId:'',uploadStatus:'waiting-owner',uploadError:undefined}:item));
-   setMessage('فایل در مرورگر انتخاب شد. صاحب کالا را انتخاب کن تا آرشیو تلگرام در پس‌زمینه شروع شود.');
-   return;
-  }
-  setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,clientId:ownerId,uploadStatus:'uploading',uploadError:undefined}:item));
+ const storePendingShipmentDocument=async(document:PendingShipmentDocument)=>{
+  setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'uploading',uploadError:undefined}:item));
   try{
+   if(!profile?.organization_id||!profile.id)throw new Error('اطلاعات کاربر برای ذخیره فایل آماده نیست؛ دوباره وارد شوید.');
    if(document.sizeBytes<=0||document.sizeBytes>FILE_ARCHIVE_MAX_BYTES)
-    throw new Error('برای آرشیو قابل بازیابی در تلگرام، حجم هر فایل باید حداکثر ۲۰ مگابایت باشد.');
-   const [ownerFolder,destination]=await Promise.all([
-    getDefaultClientUploadFolder(ownerId),
-    getFileArchiveDestination()
-   ]);
-   const idempotencyKey=await createTelegramArchiveIdempotencyKey(document.file,{
-    folderId:ownerFolder.id,documentType:'other',documentName:document.name,destination
-   });
-   const archived=await uploadTelegramArchivedFile(document.file,{
-    folderId:ownerFolder.id,documentType:'other',documentName:document.name,
-    tags:['ثبت_محموله_جدید','بارنامه_و_اسناد'],destination,idempotencyKey
-   });
-   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{
-    ...item,clientId:ownerId,uploadStatus:'ready',uploadError:undefined,fileAssetId:archived.fileAssetId,
-    externalMessageId:archived.externalMessageId,folderId:ownerFolder.id,uploadedBy:profile?.id||item.uploadedBy
-   }:item));
-   setMessage('فایل در آرشیو تلگرام ذخیره شد و برای مراحل بعدی گمرکی آماده است: '+document.name);
+    throw new Error('برای اینکه فایل بعداً در تلگرام قابل بازیابی باشد، حجم هر سند باید حداکثر ۲۰ مگابایت باشد.');
+   const storagePath=`${profile.organization_id}/staging/${crypto.randomUUID()}-${safeStorageFilename(document.name)}`;
+   const {error}=await supabase.storage.from(BUCKET).upload(storagePath,document.file,{contentType:document.mimeType,cacheControl:'3600',upsert:false});
+   if(error)throw new Error(`ذخیره امن فایل ناموفق بود: ${error.message}`);
+   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,storagePath,uploadStatus:'ready',uploadError:undefined,uploadedBy:profile.id}:item));
+   setMessage('فایل در فضای امن سایت ذخیره شد؛ بعد از ثبت محموله، آرشیو تلگرام به‌صورت خودکار در پس‌زمینه انجام می‌شود: '+document.name);
   }catch(error:any){
-   const message=error?.message||'ارسال به آرشیو تلگرام ناموفق بود.';
-   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{
-    ...item,clientId:ownerId,uploadStatus:'failed',uploadError:message
-   }:item));
-   setMessage('فایل در مرورگر باقی است؛ آرشیو تلگرام کامل نشد: '+message);
+   const message=error?.message||'ذخیره فایل ناموفق بود.';
+   setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,uploadStatus:'failed',uploadError:message}:item));
+   setMessage('فایل هنوز در مرورگر موجود است؛ ذخیره سایت کامل نشد: '+message);
   }
  };
  const uploadStagedShipmentDocuments=(files:File[])=>{
@@ -137,19 +120,13 @@ export const ShipmentFirstPage:React.FC=()=>{
    const mime=(file.type||(lowerName.endsWith('.pdf')?'application/pdf':lowerName.endsWith('.png')?'image/png':(lowerName.endsWith('.jpg')||lowerName.endsWith('.jpeg'))?'image/jpeg':'')).toLowerCase();
    if(file.size<=0||file.size>FILE_ARCHIVE_MAX_BYTES||(mime!=='application/pdf'&&!['image/png','image/jpeg'].includes(mime))){rejected++;continue;}
    const id=crypto.randomUUID(),previewUrl=URL.createObjectURL(file);
-   const pending:PendingShipmentDocument={id,name:file.name,mimeType:mime,sizeBytes:file.size,pageCount:1,file,previewUrl,uploadStatus:form.ownerId?'uploading':'waiting-owner',clientId:form.ownerId||'',uploadedBy:profile?.id||''};
-   // PDF Studio-style behavior: select and preview the local file first.
-   // The Telegram transfer is independent and runs without blocking the page.
+   const pending:PendingShipmentDocument={id,name:file.name,mimeType:mime,sizeBytes:file.size,pageCount:1,file,previewUrl,uploadStatus:'uploading',uploadedBy:profile?.id||''};
    setPendingDocuments(previous=>[...previous,pending]);
    setSelectedBillOfLadingId(previous=>previous||id);
    setPreviewBillOfLadingId(id);
    setPreviewBillOfLadingUrl(previewUrl);
-   if(form.ownerId){
-    setMessage('بارنامه فوراً در مرورگر نمایش داده شد؛ ارسال به آرشیو تلگرام در پس‌زمینه شروع شد.');
-    void archivePendingShipmentDocument(pending,form.ownerId);
-   }else{
-    setMessage('بارنامه فوراً در مرورگر نمایش داده شد؛ برای شروع آرشیو تلگرام، صاحب کالا را انتخاب کن.');
-   }
+   setMessage('بارنامه فوراً در مرورگر انتخاب شد؛ ذخیره در فضای امن سایت در پس‌زمینه آغاز شده است.');
+   void storePendingShipmentDocument(pending);
    if(mime==='application/pdf'){
     void (async()=>{
      try{
@@ -163,7 +140,7 @@ export const ShipmentFirstPage:React.FC=()=>{
   if(rejected)setMessage(rejected+' فایل به‌دلیل فرمت پشتیبانی‌نشده یا حجم بیش از ۲۰ مگابایت اضافه نشد. فایل‌های معتبر فوراً در مرورگر نمایش داده شدند.');
  };
  const retryStagedShipmentDocument=(document:PendingShipmentDocument)=>{
-  void archivePendingShipmentDocument(document,form.ownerId||document.clientId);
+  void storePendingShipmentDocument(document);
  };
  const previewPendingBillOfLading=(document:PendingShipmentDocument)=>{
   if(previewBillOfLadingId===document.id){setPreviewBillOfLadingId('');setPreviewBillOfLadingUrl('');return;}
@@ -173,18 +150,17 @@ export const ShipmentFirstPage:React.FC=()=>{
  const extractSelectedBillOfLading=async()=>{
    const document=pendingDocuments.find(item=>item.id===selectedBillOfLadingId);
    if(!document){setMessage('ابتدا فایل بارنامه را انتخاب کن.');return;}
-   if(document.clientId&&document.clientId!==form.ownerId){setMessage('صاحب کالا با فایل انتخاب‌شده مطابقت ندارد؛ صاحب کالا را بررسی کن.');return;}
    setExtractingBillOfLadingId(document.id);
-   setMessage(document.sizeBytes<=LOCAL_AI_DOCUMENT_LIMIT?'بارنامه مستقیماً از فایل انتخاب‌شده در مرورگر برای استخراج فرستاده می‌شود؛ منتظر تلگرام نمی‌مانیم...':'فایل بزرگ است؛ پس از تکمیل آرشیو تلگرام، استخراج شروع می‌شود...');
+   setMessage(document.sizeBytes<=LOCAL_AI_DOCUMENT_LIMIT?'بارنامه مستقیماً از فایل انتخاب‌شده در مرورگر برای استخراج فرستاده می‌شود؛ ذخیره سایت هم مستقل ادامه دارد...':'فایل بزرگ است؛ پس از تکمیل ذخیره امن سایت، استخراج از نسخه ذخیره‌شده انجام می‌شود...');
    try{
     const localDocumentData=document.sizeBytes<=LOCAL_AI_DOCUMENT_LIMIT?await fileToBase64(document.file):'';
-    if(!localDocumentData&&(document.uploadStatus!=='ready'||!document.fileAssetId))throw new Error('فایل بیش از ۴ مگابایت است؛ برای حفظ محدودیت حجم درخواست، ابتدا صبر کن آرشیو تلگرام کامل شود.');
+    if(!localDocumentData&&(document.uploadStatus!=='ready'||!document.storagePath))throw new Error('فایل بیش از ۴ مگابایت است؛ ابتدا صبر کن ذخیره امن سایت کامل شود.');
     const {data,error}=await invokeEdgeFunction('ai-assistant',{body:{
      query:'از تمام صفحات فایل بارنامه انتخاب‌شده اطلاعات واقعی موردنیاز برای ثبت محموله دریایی را استخراج کن. هیچ داده‌ای را حدس نزن. اگر فیلدی در سند وجود ندارد، مقدار آن را خالی برگردان. اعداد و شناسه‌ها را دقیقاً مطابق سند حفظ کن.',
      extract_fields:true,shipment_extract:true,
-     ...(localDocumentData?{document_data:localDocumentData}:{telegram_file_asset_id:document.fileAssetId}),
+      ...(localDocumentData?{document_data:localDocumentData}:{document_storage_path:document.storagePath}),
      document_mime_type:document.mimeType,document_size_bytes:document.sizeBytes,
-     page_context:'ثبت محموله جدید - استخراج از فایل انتخاب‌شده در مرورگر و آرشیو تلگرام'
+     page_context:'ثبت محموله جدید - استخراج از فایل انتخاب‌شده در مرورگر و نسخه امن Storage'
     }});
     if(error)throw error;
     const raw=String(data?.answer||'').replace(/^\`\`\`(?:json)?/i,'').replace(/\`\`\`$/,'').trim();
@@ -209,7 +185,7 @@ export const ShipmentFirstPage:React.FC=()=>{
     }));
     setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,extractedFields:Object.fromEntries(Object.entries(parsed).filter(([,v])=>typeof v==='string'&&String(v).trim()).map(([k,v])=>[k,String(v)]))}:item));
     const missingOwner=ownerName&&!owner;
-    const ownerConflict=!!owner&&owner.id!==document.clientId;
+     const ownerConflict=!!owner&&owner.id!==form.ownerId;
     setMessage('استخراج انجام شد؛ اطلاعات قابل تشخیص از بارنامه به‌صورت پیش‌نویس در فرم قرار گرفت. '+(ownerConflict?'نام صاحب کالا روی بارنامه با صاحب کالای انتخاب‌شده متفاوت است؛ بررسی دستی لازم است. ':missingOwner?'نام صاحب کالا دقیقاً در فهرست مشتریان پیدا نشد؛ لطفاً دستی بررسی کن. ':'')+'قبل از ذخیره، تمام مقادیر را با خود بارنامه تطبیق بده.');
    }catch(error:any){
     setMessage(error?.message||'استخراج بارنامه ناموفق بود. فایل در مرورگر و آرشیو تلگرام باقی مانده است؛ دوباره تلاش کن.');
@@ -219,8 +195,7 @@ export const ShipmentFirstPage:React.FC=()=>{
   if(!profile?.organization_id)return setMessage('سازمان کاربر مشخص نیست.');
   if(!form.ownerId)return setMessage('صاحب کالا را انتخاب کنید.');
   if(!clients.some(c=>c.id===form.ownerId))return setMessage('صاحب کالا برای این سازمان معتبر نیست.');
-  if(pendingDocuments.some(document=>document.clientId!==form.ownerId))return setMessage('فایل‌های آپلودشده متعلق به صاحب کالای دیگری هستند؛ صاحب کالا را مطابق آرشیو انتخاب کن.');
-   if(pendingDocuments.some(document=>document.uploadStatus!=='ready'||!document.fileAssetId||!document.folderId))return setMessage('آرشیو تلگرام بعضی فایل‌ها هنوز تکمیل نشده است؛ تا نمایش وضعیت آماده صبر کن یا تلاش دوباره را بزن.');
+    if(pendingDocuments.some(document=>document.uploadStatus!=='ready'||!document.storagePath))return setMessage('ذخیره امن بعضی فایل‌ها هنوز تکمیل نشده است؛ تا نمایش وضعیت آماده صبر کن یا تلاش دوباره را بزن.');
   if(!form.vessel.trim())return setMessage('نام کشتی را وارد یا انتخاب کنید.');
   if(!form.count.trim()||!form.net.trim()||!form.gross.trim())return setMessage('تعداد، وزن خالص و وزن ناخالص را تکمیل کنید.');
   setBusy(true);setMessage('در حال ذخیره شروع عملیات...');
@@ -245,9 +220,8 @@ export const ShipmentFirstPage:React.FC=()=>{
       const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
        organization_id:profile.organization_id,shipment_id:shipmentId,uploaded_by:staged.uploadedBy,
        document_name:staged.name,original_file_name:staged.name,
-       storage_path:'telegram://'+staged.fileAssetId,storage_backend:'telegram',
-       file_asset_id:staged.fileAssetId,folder_id:shipmentFolder.id,
-       telegram_message_id:staged.externalMessageId||null,telegram_archive_requested:false,
+        storage_path:staged.storagePath!,storage_backend:'supabase',
+        folder_id:shipmentFolder.id,telegram_archive_requested:true,
        mime_type:staged.mimeType,file_size_bytes:staged.sizeBytes,
        extraction_status:staged.extractedFields?'completed':'pending'
       }).select('id').single();
@@ -269,7 +243,7 @@ export const ShipmentFirstPage:React.FC=()=>{
      if(linked.some(item=>item.id===selectedBillOfLadingId)){setSelectedBillOfLadingId('');setPreviewBillOfLadingId('');setPreviewBillOfLadingUrl('');}
     }
     setSelected(shipmentId);
-    setMessage(`محموله ذخیره شد؛ ${linkedDocumentIds.length} سند از آرشیو تلگرام به محموله متصل شد.${documentLinkWarnings?' اتصال '+documentLinkWarnings+' سند نیازمند بررسی است.':''}`);
+    setMessage(`محموله ذخیره شد؛ ${linkedDocumentIds.length} سند به محموله متصل و برای آرشیو خودکار تلگرام در صف پس‌زمینه قرار گرفت.${documentLinkWarnings?' اتصال '+documentLinkWarnings+' سند نیازمند بررسی است.':''}`);
     await load();
   }catch(e:any){setMessage(e?.message||'ذخیره محموله ناموفق بود')}finally{setBusy(false)}
  };
@@ -342,10 +316,10 @@ const retryArchiveDocument=async(d:Doc)=>{
  return <main dir="rtl" className="min-h-screen p-4 md:p-6" style={{background:'var(--bg)',color:'var(--text)'}}><div className="max-w-[1500px] mx-auto space-y-4">
   <header className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs app-muted">مرحله ۱</div><h1 className="text-2xl font-black">شروع عملیات</h1><p className="text-xs app-muted mt-1">محموله، صاحب کالا، کشتی، وضعیت کشتی و اسناد محموله در یک مرحله.</p><div className="mt-2"><FormDraftIndicator status={formDraft.status} onSave={formDraft.saveDraftNow}/></div></div><div className="flex gap-2"><button onClick={()=>void load()} className="icon-btn" title="بروزرسانی"><RefreshCw size={16}/></button><button onClick={reset} className="px-4 py-2 rounded-xl border app-border"><Plus size={16} className="inline ml-1"/>محموله جدید</button></div></header>
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="grid lg:grid-cols-4 gap-3">
-   <label className="text-xs app-muted lg:col-span-2">صاحب کالا<select value={form.ownerId} onChange={e=>{const next=e.target.value;set('ownerId',next);const waiting=pendingDocuments.filter(document=>document.uploadStatus==='waiting-owner');if(next&&waiting.length){waiting.forEach(document=>void archivePendingShipmentDocument({...document,clientId:next},next));setMessage('صاحب کالا انتخاب شد؛ آرشیو فایل‌های انتخاب‌شده در پس‌زمینه شروع شد.');}else if(pendingDocuments.some(document=>document.clientId&&document.clientId!==next))setMessage('صاحب کالا تغییر کرد؛ فایل‌های قبلی در پوشه صاحب کالای اولیه باقی می‌مانند.')}} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب صاحب کالا</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.national_id?' — '+c.national_id:''}</option>)}</select></label>
+   <label className="text-xs app-muted lg:col-span-2">صاحب کالا<select value={form.ownerId} onChange={e=>set('ownerId',e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="">انتخاب صاحب کالا</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.national_id?' — '+c.national_id:''}</option>)}</select></label>
   {!selected&&<div className="lg:col-span-4"><section className="rounded-2xl border-2 border-dashed app-border bg-[var(--surface)] p-4 sm:p-5">
    <div className="flex flex-wrap items-center justify-between gap-3">
-    <div><div className="flex items-center gap-2 font-black"><FileText size={18}/> بارگذاری سند برای ثبت محموله</div><p className="mt-1 text-xs app-muted">فایل مثل PDF Studio فوراً در مرورگر انتخاب و پیش‌نمایش می‌شود؛ آپلود تلگرام همان لحظه در پس‌زمینه آغاز می‌شود و نسخه‌ای در Storage سوپابیس ساخته نمی‌شود.</p></div>
+    <div><div className="flex items-center gap-2 font-black"><FileText size={18}/> بارگذاری سند برای ثبت محموله</div><p className="mt-1 text-xs app-muted">مثل PDF Studio فایل فوراً در مرورگر انتخاب و پیش‌نمایش می‌شود؛ هم‌زمان در فضای امن سایت ذخیره می‌شود و پس از ثبت محموله، آرشیو تلگرام از صف سرور و بدون معطل‌کردن صفحه انجام خواهد شد.</p></div>
     <div className="flex items-center gap-2">
      <button type="button" onClick={()=>shipmentFileInput.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white"><Upload size={16}/> انتخاب فایل بارنامه</button>
      <input ref={shipmentFileInput} type="file" accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png" multiple className="hidden" onChange={e=>{const files=Array.from(e.currentTarget.files||[]);e.currentTarget.value='';uploadStagedShipmentDocuments(files);}}/>
@@ -356,18 +330,18 @@ const retryArchiveDocument=async(d:Doc)=>{
      <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2">
        {selectedBillOfLadingId===document.id?<CheckCircle2 className="text-[var(--primary)]" size={18}/>:<FileText size={18} className="app-muted"/>}
-       <div className="min-w-0"><b className="block truncate text-sm">{document.name}</b><span className="text-[11px] app-muted">{(document.sizeBytes/1024/1024).toFixed(2)} MB · {document.pageCount} صفحه · {document.uploadStatus==='ready'?'آرشیو تلگرام آماده است':document.uploadStatus==='failed'?'آرشیو تلگرام ناموفق':document.uploadStatus==='waiting-owner'?'در انتظار انتخاب صاحب کالا':'در حال ارسال پس‌زمینه به تلگرام'}</span></div>
+       <div className="min-w-0"><b className="block truncate text-sm">{document.name}</b><span className="text-[11px] app-muted">{(document.sizeBytes/1024/1024).toFixed(2)} MB · {document.pageCount} صفحه · {document.uploadStatus==='ready'?'نسخه امن سایت آماده است':document.uploadStatus==='failed'?'ذخیره سایت ناموفق':'در حال ذخیره در سایت'}</span></div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
        <button type="button" onClick={()=>setSelectedBillOfLadingId(document.id)} className={`rounded-lg px-3 py-2 text-xs font-bold ${selectedBillOfLadingId===document.id?'bg-[var(--primary)] text-white':'border app-border'}`}>{selectedBillOfLadingId===document.id?'بارنامه انتخاب‌شده':'انتخاب به‌عنوان بارنامه'}</button>
        <button type="button" onClick={()=>void previewPendingBillOfLading(document)} className="rounded-lg border app-border px-3 py-2 text-xs"><Eye size={14} className="inline ml-1"/>نمایش</button>
       </div>
      </div>
-     {document.uploadStatus==='waiting-owner'&&<div className="mt-2 text-xs text-amber-700 dark:text-amber-300">فایل در مرورگر آماده است؛ صاحب کالا را انتخاب کن تا به تلگرام ارسال شود.</div>}{document.uploadStatus==='failed'&&<div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-600"><span>{document.uploadError||'ذخیره فایل ناموفق بود.'}</span><button type="button" onClick={()=>retryStagedShipmentDocument(document)} className="rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">تلاش دوباره برای آرشیو تلگرام</button></div>}{document.uploadStatus==='ready'&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">فایل در تلگرام آرشیو شد؛ پس از ثبت محموله، همین فایل به پوشه محموله متصل می‌شود.</div>}{document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}
+     {document.uploadStatus==='failed'&&<div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-600"><span>{document.uploadError||'ذخیره فایل ناموفق بود.'}</span><button type="button" onClick={()=>retryStagedShipmentDocument(document)} className="rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">تلاش دوباره برای ذخیره فایل</button></div>}{document.uploadStatus==='ready'&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">نسخه امن فایل ذخیره شد؛ با ثبت محموله، همین سند به محموله متصل و برای آرشیو تلگرام صف می‌شود.</div>}{document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}
      {previewBillOfLadingId===document.id&&(document.mimeType==="application/pdf"?<iframe title={document.name} src={previewBillOfLadingUrl||document.previewUrl} className="mt-3 h-[420px] w-full rounded-xl border app-border bg-white"/>:<img alt={document.name} src={previewBillOfLadingUrl||document.previewUrl} className="mt-3 max-h-[420px] w-full rounded-xl border app-border bg-white object-contain"/>)}
     </div>)}
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--surface-2)] p-3">
-     <div className="text-xs app-muted">انتخاب و پیش‌نمایش فایل فوراً در مرورگر انجام می‌شود. فایل‌های حداکثر ۴ مگابایت حتی قبل از پایان ارسال تلگرام برای AI قابل خواندن‌اند؛ آرشیو تلگرام مستقل برای مراحل بعدی ادامه پیدا می‌کند.</div>
+     <div className="text-xs app-muted">انتخاب و پیش‌نمایش فوراً انجام می‌شود. فایل‌های کوچک‌تر مستقیماً از مرورگر برای استخراج اطلاعات استفاده می‌شوند؛ آرشیو تلگرام پس از ثبت محموله در پس‌زمینه ادامه می‌یابد.</div>
      <button type="button" disabled={!selectedBillOfLadingId||!!extractingBillOfLadingId||((pendingDocuments.find(item=>item.id===selectedBillOfLadingId)?.sizeBytes||0)>LOCAL_AI_DOCUMENT_LIMIT&&pendingDocuments.find(item=>item.id===selectedBillOfLadingId)?.uploadStatus!=='ready')} onClick={()=>void extractSelectedBillOfLading()} className="rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white disabled:opacity-50">
       {extractingBillOfLadingId?<><Loader2 className="inline ml-1 animate-spin" size={16}/>در حال تحلیل سند...</>:<><Sparkles className="inline ml-1" size={16}/>استخراج اطلاعات محموله با AI</>}
      </button>
@@ -381,7 +355,7 @@ const retryArchiveDocument=async(d:Doc)=>{
    <label className="text-xs app-muted">بندر مبدأ<input value={form.originPort} onChange={e=>set('originPort',e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label><label className="text-xs app-muted">بندر مقصد<input value={form.destinationPort} onChange={e=>set('destinationPort',e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label><label className="text-xs app-muted">تعداد<input value={form.count} onChange={e=>set('count',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label><label className="text-xs app-muted">واحد<input value={form.unit} onChange={e=>set('unit',e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
    <label className="text-xs app-muted">وزن خالص kg<input value={form.net} onChange={e=>set('net',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label><label className="text-xs app-muted">وزن ناخالص kg<input value={form.gross} onChange={e=>set('gross',e.target.value)} dir="ltr" className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>
    <label className="text-xs app-muted">وضعیت کشتی<select value={form.status} onChange={e=>set('status',e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3">{statuses.map(s=><option key={s[0]} value={s[0]}>{s[1]}</option>)}</select></label><label className="text-xs app-muted">موقعیت فعلی کشتی<input value={form.location} onChange={e=>set('location',e.target.value)} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"/></label>{form.status==='completed'&&<><label className="text-xs app-muted">اسناد حمل و قبض انبار<select value={form.transportDocumentsStatus} onChange={e=>set('transportDocumentsStatus',e.target.value as 'not_ready'|'ready')} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="not_ready">آماده نیست</option><option value="ready">آماده است</option></select></label><label className="text-xs app-muted">صورتحساب ترخیصیه<select value={form.releaseInvoicePaymentStatus} onChange={e=>set('releaseInvoicePaymentStatus',e.target.value as 'unpaid'|'paid')} className="w-full mt-1 rounded-xl border app-border bg-[var(--surface-2)] p-3"><option value="unpaid">پرداخت نشده</option><option value="paid">پرداخت شده</option></select></label></>}
-   <div className="lg:col-span-4 flex flex-wrap gap-2 pt-2"><button disabled={busy||pendingDocuments.some(document=>document.uploadStatus!=='ready')} onClick={()=>void save()} className="px-6 py-3 rounded-xl bg-[var(--primary)] text-white font-black"><Save size={16} className="inline ml-2"/>{busy?'در حال ذخیره...':hasPendingUploads?'در حال آرشیو تلگرام...':'ذخیره شروع عملیات'}</button>{selected&&<Link to={openPre} className="px-6 py-3 rounded-xl bg-emerald-600 text-white font-bold">مرحله ۲ · ورود اطلاعات قبض انبار</Link>}</div>
+   <div className="lg:col-span-4 flex flex-wrap gap-2 pt-2"><button disabled={busy||pendingDocuments.some(document=>document.uploadStatus!=='ready')} onClick={()=>void save()} className="px-6 py-3 rounded-xl bg-[var(--primary)] text-white font-black"><Save size={16} className="inline ml-2"/>{busy?'در حال ذخیره...':hasPendingUploads?'در حال بارگذاری فایل...':'ذخیره شروع عملیات'}</button>{selected&&<Link to={openPre} className="px-6 py-3 rounded-xl bg-emerald-600 text-white font-bold">مرحله ۲ · ورود اطلاعات قبض انبار</Link>}</div>
   </div></section>
    {selected&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
