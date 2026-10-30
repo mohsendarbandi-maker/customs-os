@@ -68,7 +68,7 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('createTelegramArchiveIdempotencyKey(file');
     expect(gateway).toContain('customs-os-shipment-document-archive-v1:');
     expect(gateway).toContain('customs-os-legacy-archive-v1:');
-    expect(shipmentPage).not.toContain('createTelegramArchiveIdempotencyKey');
+    expect(shipmentPage).toContain('createTelegramArchiveIdempotencyKey(document.file');
     expect(clientDocumentPage).toContain('createTelegramArchiveIdempotencyKey(f');
     expect(fileManager).not.toContain('uploadKeys.current');
     expect(shipmentPage).not.toContain('uploadKeys.current');
@@ -90,31 +90,29 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(preDeclaration).toContain("docs.filter(d=>d.storage_backend!=='telegram'&&!d.file_asset_id)");
   });
 
-  it('lets the browser select and preview shipment files immediately while Telegram upload runs in the background', () => {
+  it('lets the browser select and preview shipment files immediately, then archives to Telegram after owner selection', () => {
     expect(shipmentPage).toContain('URL.createObjectURL(file)');
     expect(shipmentPage).toContain('setPendingDocuments(previous=>[...previous,pending])');
-    expect(shipmentPage).toContain('void archivePendingShipmentDocument(pending)');
+    expect(shipmentPage).toContain("uploadStatus:form.ownerId?'uploading':'waiting-owner'");
+    expect(shipmentPage).toContain('void archivePendingShipmentDocument(pending,form.ownerId)');
+    expect(shipmentPage).toContain('waiting.forEach(document=>void archivePendingShipmentDocument');
     expect(shipmentPage).toContain('uploadTelegramArchivedFile(document.file');
     expect(shipmentPage).toContain('createTelegramArchiveIdempotencyKey(document.file');
-    expect(shipmentPage).toContain('getDefaultClientUploadFolder(document.clientId)');
+    expect(shipmentPage).toContain('getDefaultClientUploadFolder(ownerId)');
     expect(shipmentPage).toContain('setPreviewBillOfLadingUrl(previewUrl)');
+    expect(shipmentPage).toContain('fileToBase64(document.file)');
+    expect(shipmentPage).toContain('document_data:localDocumentData');
     expect(shipmentPage).toContain('telegram_file_asset_id:document.fileAssetId');
     expect(shipmentPage).toContain("storage_path:'telegram://'+staged.fileAssetId,storage_backend:'telegram'");
     expect(shipmentPage).toContain('file_asset_id:staged.fileAssetId,folder_id:shipmentFolder.id');
-    const existingShipmentUploadStart = shipmentPage.indexOf('const upload=async(files:FileList|null)=>{');
-    const existingShipmentUploadEnd = shipmentPage.indexOf('const retryArchiveDocument=async(d:Doc)=>{', existingShipmentUploadStart);
-    const existingShipmentUpload = shipmentPage.slice(existingShipmentUploadStart, existingShipmentUploadEnd);
-    expect(existingShipmentUpload).toContain('uploadTelegramArchivedFile(file');
-    expect(existingShipmentUpload).toContain('createTelegramArchiveIdempotencyKey(file');
-    expect(existingShipmentUpload).toContain('shipmentId:selected');
-    expect(existingShipmentUpload).not.toContain('supabase.storage');
+    expect(shipmentPage).not.toContain('disabled={!form.ownerId}');
+    expect(shipmentPage).not.toContain("!selected&&profile?.role!=='client'");
+    expect(shipmentPage).not.toContain('supabase.storage.from(BUCKET).upload(storagePath,file');
     const pickerStart = shipmentPage.indexOf('const uploadStagedShipmentDocuments=');
     const pickerEnd = shipmentPage.indexOf('const extractSelectedBillOfLading=', pickerStart);
-    const pickerCode = shipmentPage.slice(pickerStart, pickerEnd);
+    const pickerCode = shipmentPage.slice(pickerStart,pickerEnd);
     expect(pickerCode).not.toContain('supabase.storage');
     expect(pickerCode).not.toContain('archiveShipmentDocumentInBackground');
-    expect(shipmentPage).not.toContain('document_storage_path:document.storagePath');
-    expect(shipmentPage).not.toContain('storage_path:staged.storagePath!');
     expect(documentPage).toContain('uploadTelegramArchivedFile');
     expect(clientDocumentPage).toContain('uploadTelegramArchivedFile');
   });
