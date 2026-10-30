@@ -37,7 +37,8 @@ describe('PWA manifest requests pass through the canonical Worker', () => {
 
   it('keeps phone browsers on the canonical responsive app origin', () => {
     expect(worker).toContain('same canonical app origin');
-    expect(worker).not.toContain("'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("url.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("assetBase.hostname = 'darbandicommercial.ir'");
     expect(worker).not.toContain('X-Customs-OS-Mobile-Redirect');
     const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
     expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
