@@ -589,24 +589,68 @@ export const PdfStudioPage: React.FC = () => {
     setError('');
     try {
       const originalBytes = await createPdfBytes(compressionItems);
-      const candidate = await compressDocumentPages(compressionItems, compressionSettings, protectedDocumentIds);
-      const useCandidate = compressionSettings.mode === 'preserve' || candidate.blob.size < originalBytes.byteLength;
-      const outputBlob = useCandidate
-        ? candidate.blob
-        : new Blob([toArrayBuffer(originalBytes)], { type: 'application/pdf' });
-      const preservedTotal = useCandidate ? candidate.preservedPages : compressionItems.length;
-      const rasterizedTotal = useCandidate ? candidate.rasterizedPages : 0;
-      const originalTotal = originalBytes.byteLength;
+      let candidate = await compressDocumentPages(compressionItems, compressionSettings, protectedDocumentIds);
+      let compressionMode = compressionSettings.mode;
+
+      if (candidate.blob.size >= originalBytes.byteLength && compressionSettings.mode === 'smart') {
+        const confirmed = window.confirm(
+          'حالت هوشمند حجم این PDF را کاهش نداد؛ احتمالاً صفحات اسکن‌شده دارای لایه متن هستند. برای کاهش بیشتر می‌توان صفحات غیرمحافظت‌شده را به تصویر تبدیل کرد، اما متن آن صفحات دیگر قابل جست‌وجو یا انتخاب نخواهد بود. فایل اصلی دست‌نخورده می‌ماند. ادامه می‌دهید؟',
+        );
+        if (!confirmed) {
+          setStatus('فشرده‌سازی هوشمند کاهش حجمی ایجاد نکرد؛ فایل اصلی و صفحات کاری بدون تغییر باقی ماندند.');
+          return;
+        }
+        compressionMode = 'raster';
+      }
+
+      if (compressionMode === 'raster' && candidate.blob.size >= originalBytes.byteLength) {
+        const rasterAttempts = [
+          { dpi: compressionSettings.dpi, quality: compressionSettings.quality },
+          { dpi: Math.min(compressionSettings.dpi, 180), quality: Math.min(compressionSettings.quality, 0.82) },
+          { dpi: Math.min(compressionSettings.dpi, 150), quality: Math.min(compressionSettings.quality, 0.76) },
+          { dpi: Math.min(compressionSettings.dpi, 120), quality: Math.min(compressionSettings.quality, 0.70) },
+        ].filter((attempt, index, all) =>
+          all.findIndex((item) => item.dpi === attempt.dpi && item.quality === attempt.quality) === index,
+        );
+
+        for (let index = 0; index < rasterAttempts.length; index += 1) {
+          const attempt = rasterAttempts[index];
+          if (compressionSettings.mode === 'raster' && index === 0) continue;
+          setStatus('حجم هنوز کاهش نیافته؛ تلاش ' + (index + 1) + ' از ' + rasterAttempts.length +
+            ' با ' + attempt.dpi + ' DPI و کیفیت ' + Math.round(attempt.quality * 100) + '٪…');
+          const next = await compressDocumentPages(compressionItems, {
+            ...compressionSettings,
+            mode: 'raster',
+            ...attempt,
+          }, protectedDocumentIds);
+          if (next.blob.size < candidate.blob.size) candidate = next;
+          if (candidate.blob.size < originalBytes.byteLength) break;
+        }
+      }
+
+      if (candidate.blob.size >= originalBytes.byteLength) {
+        const actualSize = formatSize(candidate.blob.size);
+        if (compressionSettings.mode === 'preserve') {
+          setStatus('حالت حفظ کامل متن، حجم فایل را کاهش نداد. برای کاهش واقعی حجم، حالت هوشمند یا تصویری را انتخاب کنید.');
+        } else {
+          setError('پس از چند سطح فشرده‌سازی، حجم فایل کمتر نشد. کمترین حجم به‌دست‌آمده: ' + actualSize +
+            '. فایل اصلی تغییر نکرد و خروجی تکراری ساخته نشد؛ وضوح پایین‌تر یا تقسیم سند را امتحان کنید.');
+        }
+        return;
+      }
+
+      const savedPercent = Math.max(0, Math.round((1 - candidate.blob.size / originalBytes.byteLength) * 100));
       const profileName = compressionProfileName.trim() || 'تنظیمات فعلی';
       const outputName = 'PDF-Studio-' + safeName(profileName) + '-compressed.pdf';
       queueOutputs([{
-        blob: outputBlob,
+        blob: candidate.blob,
         name: outputName,
-        description: 'فشرده‌سازی با پروفایل «' + profileName + '» · ' +
-          formatSize(originalTotal) + ' ← ' + formatSize(outputBlob.size) +
-          ' · صفحات حفظشده: ' + preservedTotal +
-          ' · صفحات تصویری: ' + rasterizedTotal +
-          (protectedDocumentIds.size ? ' · اعتبار امضای دیجیتال در PDF ترکیبی حفظ نمی‌شود.' : ''),
+        description: 'فشرده‌سازی با پروفایل «' + profileName + '» · از ' +
+          formatSize(originalBytes.byteLength) + ' به ' + formatSize(candidate.blob.size) +
+          ' (کاهش ' + savedPercent + '٪) · صفحات حفظشده: ' + candidate.preservedPages +
+          ' · صفحات تصویری: ' + candidate.rasterizedPages +
+          (protectedDocumentIds.size ? ' · صفحات دارای امضا یا فرم محافظت‌شده تصویری نشدند.' : '') +
+          (compressionMode === 'raster' && compressionSettings.mode === 'smart' ? ' · روش تصویری جایگزین اجرا شد.' : ''),
       }]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'فشرده‌سازی فایل‌ها ناموفق بود.');
