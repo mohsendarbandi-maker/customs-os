@@ -83,7 +83,7 @@ const set=(k:keyof Form,v:string)=>{setForm(p=>({...p,[k]:v}));if(k==='shippingL
   try{
    const[{data:c,error:ce},{data:s,error:se},{data:v,error:ve},{data:l,error:le}]=await Promise.all([
     supabase.from('clients').select('id,name,national_id').eq('organization_id',profile.organization_id).order('name'),
-.from('shipments').select(SHIPMENT_ROW_SELECT).eq('organization_id',profile.organization_id)
+     supabase.from('shipments').select(SHIPMENT_ROW_SELECT).eq('organization_id',profile.organization_id).order('created_at',{ascending:false}),
     supabase.from('vessels').select('id,name,imo_number,flag_code,shipping_line_id').eq('organization_id',profile.organization_id).order('name'),supabase.from('shipping_lines').select('id,name,name_fa').order('name')
    ]);
    if(ce||se||ve)throw ce||se||ve;
