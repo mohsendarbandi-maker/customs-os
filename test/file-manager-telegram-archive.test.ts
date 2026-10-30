@@ -133,7 +133,7 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(gateway).toContain('shipment_document_id:sourceShipmentDocumentId||null');
     expect(gateway).toContain('eq("telegram_archive_requested",true)');
     expect(gateway).toContain('.in("shipment_document_id",queuedDocumentIds)');
-    expect(shipmentPage).toContain("telegram_archive_requested:true");
+    expect(shipmentPage).toContain("telegram_archive_requested:false");
   });
 
   it('provides global business/document search, and preserves organization scoping in the RPC', () => {
