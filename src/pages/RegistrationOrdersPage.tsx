@@ -84,10 +84,10 @@ export const RegistrationOrdersPage:React.FC=()=>{
     return rows;
    };
    const[historyRows,shipmentRows,caseRows,masterRows]=await Promise.all([
-    fetchAll('shipment_customs_data','shipment_id,registration_order_no,bank_name,bank_branch,bank_branch_code,lc_number,updated_at'),
+    fetchAll('shipment_customs_data','shipment_id,registration_order_no,bank_name,bank_branch,bank_branch_code,lc_number,invoice_amount,invoice_currency,updated_at'),
     fetchAll('shipments','id,client_id,case_id'),
     fetchAll('cases','id,client_id'),
-    supabase.from('registration_orders').select('id,client_id,order_number,bank_name,bank_branch,bank_branch_code,payment_instrument_code,notes').eq('organization_id',profile.organization_id)
+    supabase.from('registration_orders').select('id,client_id,order_number,bank_name,bank_branch,bank_branch_code,payment_instrument_code,currency,notes').eq('organization_id',profile.organization_id)
    ]);
    if(masterRows.error)throw masterRows.error;
    const caseClients=new Map<string,string|null>((caseRows||[]).map((row:any)=>[row.id,row.client_id||null]));
@@ -111,6 +111,8 @@ export const RegistrationOrdersPage:React.FC=()=>{
       if(!String(existing[key]||'').trim()&&details[key])updates[key]=details[key];
      });
      if(!existing.client_id)updates.client_id=item.client_id;
+     if(!existing.currency&&item.currency)updates.currency=item.currency;
+     if(existing.currency&&item.currency&&String(existing.currency)!==item.currency){skipped++;continue;}
      if(item.conflicts.length){
       const warning='تطبیق تاریخی: اختلاف در '+item.conflicts.join('، ')+' بین محموله‌ها؛ مقدار پرتکرارتر ثبت شده و نیازمند کنترل است.';
       if(!String(existing.notes||'').includes(warning))updates.notes=[String(existing.notes||'').trim(),warning].filter(Boolean).join('\n');
@@ -131,6 +133,7 @@ export const RegistrationOrdersPage:React.FC=()=>{
       order_number:item.order_number,
       status:'received',
       ...details,
+      currency:item.currency,
       notes
      });
      if(e)throw e;
@@ -143,7 +146,7 @@ export const RegistrationOrdersPage:React.FC=()=>{
     updated.toLocaleString('fa-IR')+' رکورد تکمیل‌شده، '+
     unchanged.toLocaleString('fa-IR')+' بدون نیاز به تغییر؛ '+
     (skipped+plan.ambiguous_order_numbers.length+plan.missing_owner_order_numbers.length).toLocaleString('fa-IR')+
-    ' مورد برای جلوگیری از اتصال اشتباه رد شد. سقف وزن/ارزش و اتصال محموله‌های تاریخی تغییر نکرد.'
+    ' مورد برای جلوگیری از اتصال اشتباه رد شد. ارز فقط در صورت یکسان‌بودن همه ارزهای فاکتور از روی سابقه تکمیل شد؛ سقف ارزش/وزن و اتصال محموله‌های تاریخی تغییر نکرد.'
    );
   }catch(e:any){setBackfillStatus(e?.message||'تطبیق سوابق انجام نشد.');}
   finally{setBackfillBusy(false);}
