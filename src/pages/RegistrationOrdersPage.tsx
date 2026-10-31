@@ -86,7 +86,7 @@ export const RegistrationOrdersPage:React.FC=()=>{
   if(e){setAllocationError(e.message||'بارگذاری سهم‌های واگذارشده ناموفق بود');return}
   setExternalAllocations((data||[]) as ExternalAllocation[]);
  };
- useEffect(()=>{void loadExternalAllocations();setAllocationForm({...blankExternalAllocation,currency:current?.currency||'USD'});setAllocationEditingId('');setAllocationError('')},[selected,profile?.organization_id]);
+ useEffect(()=>{void loadExternalAllocations();const selectedCurrency=orders.find(order=>order.id===selected)?.currency||'USD';setAllocationForm({...blankExternalAllocation,currency:selectedCurrency});setAllocationEditingId('');setAllocationError('')},[selected,profile?.organization_id,orders]);
  const caseFor=(order:RegistrationOrder,allCases=cases)=>allCases.find(c=>c.id===order.case_id)||allCases.find(c=>c.registration_order_no===order.order_number);
  const selectOrder=(order:RegistrationOrder,allCases=cases)=>{
   const legacy=caseFor(order,allCases);
