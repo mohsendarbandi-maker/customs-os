@@ -241,6 +241,8 @@ describe('customs workflow stage prerequisites', () => {
 describe('customs workflow SATA requirement', () => {
   it('keeps SATA optional before exit and requires it at exit unless no-SATA is selected', () => {
     const state = readyWorkflow();
+    state.loadingPermit.clause2_request_status = 'not_required';
+    state.loadingPermit.tax_permission_status = 'not_required';
     state.loadingPermit.central_bank_status = 'approved';
     state.loadingPermit.sata_code = '';
     expect(getWorkflowStageIssues('loading_permit', state)).toEqual([]);
