@@ -51,4 +51,26 @@ describe('Supabase Auth storage adapter', () => {
     expect(values.has('customs-os-auth-v3')).toBe(false);
     expect(await storage.getItem('customs-os-auth-v3')).toBeNull();
   });
+  it('does not rewrite an existing localStorage session during reads', async () => {
+    const values = new Map<string, string>([['customs-os-auth-v3', 'new-session']]);
+    const local = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    let indexedDBOpenCount = 0;
+    const storage = createAuthStorageAdapter({
+      getLocalStorage: () => local,
+      getIndexedDB: () => ({
+        open: () => {
+          indexedDBOpenCount += 1;
+          throw new Error('IndexedDB must not be touched for a primary-store read');
+        },
+      } as unknown as IDBFactory),
+    });
+
+    expect(await storage.getItem('customs-os-auth-v3')).toBe('new-session');
+    expect(indexedDBOpenCount).toBe(0);
+  });
+
 });
