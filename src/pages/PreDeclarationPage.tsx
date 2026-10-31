@@ -144,8 +144,8 @@ const extractAll=async()=>{
   if(status==='processing')patch.extraction_started_at=new Date().toISOString();
   if(status==='completed'||status==='failed')patch.extraction_completed_at=new Date().toISOString();
   const {error}=await supabase.from('shipment_documents').update(patch).eq('id',documentId).eq('shipment_id',shipmentId).eq('organization_id',organizationId);
-  if(error)throw error;
- };
+  if(error)console.warn('[PreDeclaration] could not update extraction status:',error.message);
+ };;
  const persistDocument=async(d:Doc,parsed:any)=>{
   if(d.source==='shipment_documents'){
    const rows=fields.map(([key,label])=>({key,label,value:parsed?.[key]}))
@@ -199,9 +199,9 @@ const extractAll=async()=>{
      throw new Error('استخراج هوشمند: '+primaryMessage+' | مسیر PDF/OCR: '+fallbackMessage);
     }
    }
+   results.push({name:d.document_name,data:parsed});
    await persistDocument(d,parsed);
    if(d.source==='shipment_documents')await markShipmentDoc(d.id,'completed');
-   results.push({name:d.document_name,data:parsed});
   }catch(error){
    const message=error instanceof Error?error.message:String(error);
    failures.push(d.document_name+': '+message);
