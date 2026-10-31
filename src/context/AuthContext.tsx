@@ -14,6 +14,7 @@ import { readOfflineQueryCache, saveOfflineQueryCache } from '../lib/offlineQueu
 import {
   AUTH_SESSION_RETRY_MESSAGE,
   isAuthTokenExpiredError,
+  isRetryableAuthSessionError,
   isUnrecoverableAuthSessionError,
 } from '../lib/authSessionErrors';
 
@@ -209,9 +210,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           ? errorRecord.message
           : '';
       const retryableAuthFailure =
-        isAuthTokenExpiredError(err) ||
-        rawMessage === AUTH_SESSION_RETRY_MESSAGE ||
-        /failed to fetch|network request failed|network error|networkerror|load failed|connection (?:lost|reset|refused)|offline|timed? ?out|gateway timeout/i.test(rawMessage);
+        isRetryableAuthSessionError(err) ||
+        rawMessage === AUTH_SESSION_RETRY_MESSAGE;
 
       if (retryableAuthFailure) {
         const cachedProfile = await readOfflineQueryCache<UserProfile | null>('auth-profile', userId, userId).catch(() => null);
