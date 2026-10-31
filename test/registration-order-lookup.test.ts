@@ -4,6 +4,7 @@ import {
   registrationOrderNumberVariants,
   resolveLegacyRegistrationBankDetails,
   buildLegacyRegistrationOrderBackfillPlan,
+  normalizeLegacyInvoiceCurrency,
 } from "../src/lib/registrationOrderLookup";
 
 describe("registration order lookup", () => {
@@ -58,6 +59,25 @@ describe("registration order lookup", () => {
       source_count: 0,
       conflicts: [],
     });
+  });
+
+  it("normalizes Persian and English currency labels before applying a master currency", () => {
+    expect(normalizeLegacyInvoiceCurrency("دلار آمریکا (USD)")).toBe("USD");
+    expect(normalizeLegacyInvoiceCurrency("درهم امارات")).toBe("AED");
+    expect(normalizeLegacyInvoiceCurrency("EUR یورو")).toBe("EUR");
+    expect(normalizeLegacyInvoiceCurrency("نامشخص")).toBeNull();
+  });
+
+  it("does not guess a master currency when historical invoices disagree", () => {
+    const plan = buildLegacyRegistrationOrderBackfillPlan(
+      [
+        { shipment_id: "s1", registration_order_no: "12345678", bank_name: "ملت", invoice_amount: 100, invoice_currency: "USD" },
+        { shipment_id: "s2", registration_order_no: "12345678", bank_name: "ملت", invoice_amount: 100, invoice_currency: "AED درهم" },
+      ],
+      new Map([["s1", "client-1"], ["s2", "client-1"]]),
+    );
+    expect(plan.items[0].currency).toBeNull();
+    expect(plan.items[0].conflicts).toContain("ارز فاکتور");
   });
 
   it("builds a bank backfill plan only for one unambiguous cargo owner", () => {
