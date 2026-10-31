@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { attachSupabaseClient, rpcWithOfflineQueue, startOfflineQueue, readOfflineQueryCache, saveOfflineQueryCache } from './offlineQueue';
 import { authSessionStorage } from './authStorage';
 
@@ -23,7 +23,9 @@ type CachedRestResponse = {
 };
 
 const nativeFetch: typeof fetch = globalThis.fetch.bind(globalThis);
-let authClient: SupabaseClient | null = null;
+type CachedAuthIdentity = { userId: string; accessToken: string };
+let cachedAuthIdentity: CachedAuthIdentity | null = null;
+let authIdentityReady = false;
 const restCacheScopes = new Map<string, { organizationId: string; checkedAt: number }>();
 const MAX_CACHED_REST_BODY_CHARS = 400_000;
 const REST_RESPONSE_HEADERS = [
@@ -71,31 +73,29 @@ const hashCacheKey = async (value: string) => {
 };
 
 const getRestCacheScope = async () => {
-  if (!authClient) return null;
-  try {
-    const { data } = await authClient.auth.getSession();
-    const session = data.session;
-    const userId = session?.user.id;
-    if (!userId || !session?.access_token) return null;
-    const knownScope = restCacheScopes.get(userId);
-    if (knownScope && Date.now() - knownScope.checkedAt < 30_000) {
-      return { userId, organizationId: knownScope.organizationId, accessToken: session.access_token };
-    }
-    const cachedProfile = await readOfflineQueryCache<{ organization_id?: string | null; is_active?: boolean }>(
-      'auth-profile',
-      userId,
-      userId,
-    ).catch(() => null);
-    const organizationId = cachedProfile?.payload?.organization_id;
-    if (cachedProfile?.payload?.is_active !== true || !organizationId) {
-      restCacheScopes.delete(userId);
-      return null;
-    }
-    restCacheScopes.set(userId, { organizationId, checkedAt: Date.now() });
-    return { userId, organizationId, accessToken: session.access_token };
-  } catch {
+  // This interceptor runs for every eligible PostgREST GET. Never call
+  // auth.getSession() here: parallel reads close to token expiry can create a
+  // burst of serialized refresh attempts. Auth events keep this identity fresh.
+  if (!authIdentityReady || !cachedAuthIdentity) return null;
+
+  const { userId, accessToken } = cachedAuthIdentity;
+  const knownScope = restCacheScopes.get(userId);
+  if (knownScope && Date.now() - knownScope.checkedAt < 30_000) {
+    return { userId, organizationId: knownScope.organizationId, accessToken };
+  }
+
+  const cachedProfile = await readOfflineQueryCache<{ organization_id?: string | null; is_active?: boolean }>(
+    'auth-profile',
+    userId,
+    userId,
+  ).catch(() => null);
+  const organizationId = cachedProfile?.payload?.organization_id;
+  if (cachedProfile?.payload?.is_active !== true || !organizationId) {
+    restCacheScopes.delete(userId);
     return null;
   }
+  restCacheScopes.set(userId, { organizationId, checkedAt: Date.now() });
+  return { userId, organizationId, accessToken };
 };
 
 const cacheRestResponse = async (
@@ -192,7 +192,15 @@ const baseClient = createClient(supabaseUrl, supabaseAnonKey, {
     storage: authSessionStorage,
   },
 });
-authClient = baseClient;
+// Keep the read-cache identity synchronized from Auth events. This avoids
+// calling getSession() once per database read and reduces refresh-token races.
+baseClient.auth.onAuthStateChange((_event, currentSession) => {
+  authIdentityReady = true;
+  cachedAuthIdentity = currentSession?.user?.id && currentSession.access_token
+    ? { userId: currentSession.user.id, accessToken: currentSession.access_token }
+    : null;
+  restCacheScopes.clear();
+});
 attachSupabaseClient(baseClient);
 if (typeof window !== 'undefined') startOfflineQueue();
 
