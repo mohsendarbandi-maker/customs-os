@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState}from'react';
+import React,{useEffect,useMemo,useRef,useState}from'react';
 import{CalendarDays,Calculator,Check,Copy,FileSearch,Loader2,Printer,RotateCcw,Save,Sparkles,ClipboardPaste}from'lucide-react';
 import{Link,useSearchParams}from'react-router-dom';
 import{supabase}from'../lib/supabase';
@@ -74,7 +74,7 @@ const InsuranceCalculator:React.FC<{initialValue:string;onApply:(value:string)=>
 const line=(text:string,label:string)=>{for(const raw of text.replace(/\r/g,'').split('\n')){const x=raw.trim();if(x.toLowerCase().startsWith(label.toLowerCase()+':')||x.startsWith(label+'：'))return x.slice(x.indexOf(':')>=0?x.indexOf(':')+1:x.indexOf('：')+1).trim()}return ''};
 const parseSmartPaste=(text:string):V=>{const out:{[k:string]:string}={...blank};const first=text.replace(/\r/g,'').split('\n').find(x=>x.trim())||'';const m=first.match(/^(\d+)\s*(?:رول|roll|عدد|کیسه|تن)?/i);if(m)out.packageCount=digits(m[1]);const map:[keyof V,string][]=[['vesselType','نوع کشتی'],['regNumber','شماره ثبت سفارش'],['regDate','تاریخ ثبت سفارش'],['warehouseReceiptNo','شماره قبض انبار'],['warehouseReceiptDate','تاریخ قبض انبار'],['cargoDescription','شرح کالا'],['originCountry','کشور مبدا'],['transactionCountry','کشور طرف معامله'],['deliveryTerm','شرایط تحویل'],['invoiceAmount','مبلغ کل فاکتور'],['invoiceCurrency','ارز'],['dutyRate','ماخذ حقوق ورودی'],['tariffCode','کد تعرفه کالا'],['netWeight','وزن خالص'],['grossWeight','وزن ناخالص'],['billOfLading','شماره بارنامه'],['sataCode','کد ساتا این محموله'],['insuranceIrr','بیمه (ریال)']];map.forEach(([k,l])=>{const v=line(text,l);if(v)out[k]=v});out.vesselType=normalizeVesselType(out.vesselType);out.netWeight=weightKg(out.netWeight);out.grossWeight=weightKg(out.grossWeight);return out};
 export const PreDeclarationPage:React.FC=()=>{
-const{user,profile}=useAuth();const[params]=useSearchParams();const shipmentId=params.get('shipmentId')||'';const[shipment,setShipment]=useState<Shipment|null>(null);const[registrationOrder,setRegistrationOrder]=useState<RegistrationOrderShared|null>(null);const[clientName,setClientName]=useState('');const[offices,setOffices]=useState<CustomsOffice[]>([]);const[customsOfficeId,setCustomsOfficeId]=useState('');const[customsRegime,setCustomsRegime]=useState('');const[docs,setDocs]=useState<Doc[]>([]);const[values,setValues]=useState<V>(blank);const[extracted,setExtracted]=useState<V>(blank);const[bankResolving,setBankResolving]=useState(false);const[bankResolutionStatus,setBankResolutionStatus]=useState('');const[needed,setNeeded]=useState('');const[paste,setPaste]=useState('');const[busy,setBusy]=useState(false);const[status,setStatus]=useState('');const[copied,setCopied]=useState(false);const[registered,setRegistered]=useState(false);const[insuranceCalcOpen,setInsuranceCalcOpen]=useState(false);
+const{user,profile}=useAuth();const[params]=useSearchParams();const shipmentId=params.get('shipmentId')||'';const[shipment,setShipment]=useState<Shipment|null>(null);const[registrationOrder,setRegistrationOrder]=useState<RegistrationOrderShared|null>(null);const[clientName,setClientName]=useState('');const[offices,setOffices]=useState<CustomsOffice[]>([]);const[customsOfficeId,setCustomsOfficeId]=useState('');const[customsRegime,setCustomsRegime]=useState('');const[docs,setDocs]=useState<Doc[]>([]);const[values,setValues]=useState<V>(blank);const[extracted,setExtracted]=useState<V>(blank);const[bankResolving,setBankResolving]=useState(false);const[bankResolutionStatus,setBankResolutionStatus]=useState('');const resolutionRequestRef=useRef(0);const[needed,setNeeded]=useState('');const[paste,setPaste]=useState('');const[busy,setBusy]=useState(false);const[status,setStatus]=useState('');const[copied,setCopied]=useState(false);const[registered,setRegistered]=useState(false);const[insuranceCalcOpen,setInsuranceCalcOpen]=useState(false);
 const formDraft=useAutosavedDraft(
  formDraftKey(user?.id,`pre-declaration:${shipmentId}`,profile?.organization_id),
  {values,paste,needed,customsOfficeId,customsRegime},
@@ -92,7 +92,7 @@ const load=async()=>{if(!shipmentId){setStatus('شناسه محموله وجود
 useEffect(()=>{void load()},[shipmentId]);
 const set=(k:string,v:string)=>{setRegistered(false);setValues(p=>({...p,[k]:k==='netWeight'||k==='grossWeight'?weightKg(v):k==='vesselType'?normalizeVesselType(v):v}))};
 
-const resolveRegistrationOrderByNumber=async(rawValue:string)=>{
+const resolveRegistrationOrderByNumber=async(rawValue:string,requestId:number)=>{
  const number=normalizeRegistrationOrderNumber(rawValue);
  const organizationId=shipment?.organization_id||profile?.organization_id;
  if(!number||!organizationId)return;
@@ -107,6 +107,7 @@ const resolveRegistrationOrderByNumber=async(rawValue:string)=>{
   ]);
   if(orderError)throw orderError;
   if(historyError)throw historyError;
+  if(requestId!==resolutionRequestRef.current)return;
   const matchingHistory=(historyRows||[]).filter((row:any)=>normalizeRegistrationOrderNumber(row.registration_order_no)===number);
   const resolved=resolveLegacyRegistrationBankDetails(matchingHistory);
   let master=(orders||[]).find((row:any)=>normalizeRegistrationOrderNumber(row.order_number)===number) as any||null;
@@ -141,6 +142,7 @@ const resolveRegistrationOrderByNumber=async(rawValue:string)=>{
     else persistenceMessage=' مشخصات از اسناد قبلی خوانده شد، اما ذخیره در رکورد مادر به سطح دسترسی نیاز دارد.';
    }
   }
+  if(requestId!==resolutionRequestRef.current)return;
   const result:RegistrationOrderShared={
    id:master?.id||null,
    order_number:master?.order_number||number,
@@ -164,11 +166,12 @@ const resolveRegistrationOrderByNumber=async(rawValue:string)=>{
   }else{
    setBankResolutionStatus('ثبت سفارش مادر یا اطلاعات بانکی در اسناد قبلی با این شماره پیدا نشد.');
   }
-  if(master?.id){
+  if(master?.id&&requestId===resolutionRequestRef.current){
    const historicalIds=[...new Set([shipmentId,...matchingHistory.map((row:any)=>row.shipment_id).filter(Boolean)])];
    const{data:related,error:relatedError}=await supabase.from('shipments').select('id,client_id,registration_order_id').eq('organization_id',organizationId).in('id',historicalIds);
    if(relatedError)throw relatedError;
-   const linkable=(related||[]).filter((row:any)=>!row.registration_order_id&&(!master.client_id||row.client_id===master.client_id)).map((row:any)=>row.id);
+   const expectedClientId=master.client_id||shipment?.client_id||null;
+   const linkable=(related||[]).filter((row:any)=>!row.registration_order_id&&(!expectedClientId||row.client_id===expectedClientId)).map((row:any)=>row.id);
    if(linkable.length){
     const{error:linkError}=await supabase.from('shipments').update({registration_order_id:master.id}).eq('organization_id',organizationId).in('id',linkable).is('registration_order_id',null);
     if(linkError){
@@ -179,12 +182,13 @@ const resolveRegistrationOrderByNumber=async(rawValue:string)=>{
    }
   }
  }catch(error:any){
-  setBankResolutionStatus(error?.message||'بازیابی اطلاعات بانکی بر اساس شماره ثبت سفارش ناموفق بود.');
+  if(requestId===resolutionRequestRef.current)setBankResolutionStatus(error?.message||'بازیابی اطلاعات بانکی بر اساس شماره ثبت سفارش ناموفق بود.');
  }finally{
-  setBankResolving(false);
+  if(requestId===resolutionRequestRef.current)setBankResolving(false);
  }
 };
 useEffect(()=>{
+ const requestId=++resolutionRequestRef.current;
  const number=normalizeRegistrationOrderNumber(values.regNumber||'');
  if(!number){
   setBankResolving(false);
@@ -200,8 +204,8 @@ useEffect(()=>{
  const currentNumber=registrationOrder?.order_number?normalizeRegistrationOrderNumber(registrationOrder.order_number):'';
  if(currentNumber!==number)setRegistrationOrder(null);
  let active=true;
- const timer=window.setTimeout(()=>{if(active)void resolveRegistrationOrderByNumber(values.regNumber)},300);
- return()=>{active=false;window.clearTimeout(timer)};
+ const timer=window.setTimeout(()=>{if(active)void resolveRegistrationOrderByNumber(values.regNumber,requestId)},300);
+ return()=>{active=false;window.clearTimeout(timer);if(resolutionRequestRef.current===requestId)resolutionRequestRef.current++};
 },[values.regNumber,shipmentId,profile?.organization_id,shipment?.client_id,shipment?.registration_order_id]);
 
 const extractAll=async()=>{
