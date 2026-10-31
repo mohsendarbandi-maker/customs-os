@@ -64,7 +64,7 @@ const readyWorkflow = () => ({
     standard: { expert_review: 'not_required' },
   },
   cashier: { method: 'cash', cash_paid_irr: '0' },
-  loadingPermit: { tax_permission_status: 'not_required', central_bank_status: 'not_required' },
+  loadingPermit: { clause2_request_status: 'not_required', tax_permission_status: 'not_required', central_bank_status: 'not_required', sata_code: '' },
   exit: {
     loading_permission_status: 'approved',
     financial_registration_status: 'registered',
