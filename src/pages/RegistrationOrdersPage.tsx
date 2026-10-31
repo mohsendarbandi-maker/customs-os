@@ -27,7 +27,10 @@ type ExternalAllocation={
  allocation_reference:string|null;status:'allocated'|'dispatched'|'completed'|'cancelled';net_weight_kg:number;gross_weight_kg:number|null;
  value_amount:number;currency:string;notes:string|null;created_at:string;updated_at:string;
 };
-type ExternalAllocationForm=Record<string,string>;
+type ExternalAllocationForm={
+ recipient_company:string;destination_customs:string;allocation_reference:string;net_weight_kg:string;
+ gross_weight_kg:string;value_amount:string;currency:string;status:string;notes:string;
+};
 const blankExternalAllocation:ExternalAllocationForm={
  recipient_company:'',destination_customs:'',allocation_reference:'',net_weight_kg:'',gross_weight_kg:'',
  value_amount:'',currency:'USD',status:'allocated',notes:''
@@ -167,7 +170,7 @@ export const RegistrationOrdersPage:React.FC=()=>{
   if((currentReconciliation?.shipments_missing_invoice_value||0)>0)return setAllocationError('ابتدا مبلغ فاکتور و ارز '+fa(currentReconciliation?.shipments_missing_invoice_value)+' محموله داخلی را تکمیل کنید؛ تا آن زمان کنترل کامل سقف ارزش ممکن نیست.');
   if(current.gross_weight_kg!=null&&!allocationForm.gross_weight_kg.trim())return setAllocationError('وزن ناخالص در ثبت سفارش مادر مشخص است؛ وزن ناخالص سهم بیرونی را هم وارد کنید.');
   const validation=buildExternalRegistrationOrderAllocationPayload(allocationForm,current.currency);
-  if(!validation.ok)return setAllocationError(validation.error);
+  if(validation.ok===false)return setAllocationError(validation.error);
   setAllocationBusy(true);setAllocationError('');setError('');setMessage('');
   try{
    const payload={
