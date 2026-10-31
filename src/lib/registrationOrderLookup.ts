@@ -106,3 +106,109 @@ export const resolveLegacyRegistrationBankDetails = (
     conflicts,
   };
 };
+
+
+export type RegistrationOrderBackfillHistoryRow = RegistrationOrderHistoryRow & {
+  registration_order_no?: string | null;
+  shipment_id?: string | null;
+};
+
+export type RegistrationOrderBackfillItem = {
+  order_number: string;
+  client_id: string;
+  bank_name: string | null;
+  bank_branch: string | null;
+  bank_branch_code: string | null;
+  payment_instrument_code: string | null;
+  source_count: number;
+  conflicts: string[];
+};
+
+export type RegistrationOrderBackfillPlan = {
+  items: RegistrationOrderBackfillItem[];
+  ambiguous_order_numbers: string[];
+  missing_owner_order_numbers: string[];
+};
+
+/**
+ * Build a conservative backfill plan from historical shipment customs data.
+ * A registration-order number is only eligible when every source row can be
+ * tied to one and the same cargo owner. Historical shipments are never linked
+ * or modified by this planner.
+ */
+export const buildLegacyRegistrationOrderBackfillPlan = (
+  rows: RegistrationOrderBackfillHistoryRow[],
+  clientByShipment: ReadonlyMap<string, string | null>,
+): RegistrationOrderBackfillPlan => {
+  const grouped = new Map<
+    string,
+    {
+      originalOrderNumber: string;
+      rows: RegistrationOrderHistoryRow[];
+      clientIds: Set<string>;
+      missingOwner: boolean;
+    }
+  >();
+
+  for (const row of rows) {
+    const orderNumber = normalizeRegistrationOrderNumber(row.registration_order_no);
+    const shipmentId = String(row.shipment_id ?? "").trim();
+    if (!orderNumber || !shipmentId) continue;
+
+    let group = grouped.get(orderNumber);
+    if (!group) {
+      group = {
+        originalOrderNumber: orderNumber,
+        rows: [],
+        clientIds: new Set<string>(),
+        missingOwner: false,
+      };
+      grouped.set(orderNumber, group);
+    }
+
+    group.rows.push(row);
+    const clientId = clientByShipment.get(shipmentId) ?? null;
+    if (clientId) group.clientIds.add(clientId);
+    else group.missingOwner = true;
+  }
+
+  const plan: RegistrationOrderBackfillPlan = {
+    items: [],
+    ambiguous_order_numbers: [],
+    missing_owner_order_numbers: [],
+  };
+
+  for (const [orderNumber, group] of grouped) {
+    if (group.clientIds.size > 1) {
+      plan.ambiguous_order_numbers.push(orderNumber);
+      continue;
+    }
+    if (group.missingOwner || group.clientIds.size !== 1) {
+      plan.missing_owner_order_numbers.push(orderNumber);
+      continue;
+    }
+
+    const details = resolveLegacyRegistrationBankDetails(group.rows);
+    if (
+      !details.bank_name &&
+      !details.bank_branch &&
+      !details.bank_branch_code &&
+      !details.payment_instrument_code
+    ) {
+      continue;
+    }
+
+    plan.items.push({
+      order_number: group.originalOrderNumber,
+      client_id: [...group.clientIds][0],
+      bank_name: details.bank_name,
+      bank_branch: details.bank_branch,
+      bank_branch_code: details.bank_branch_code,
+      payment_instrument_code: details.payment_instrument_code,
+      source_count: details.source_count,
+      conflicts: details.conflicts,
+    });
+  }
+
+  return plan;
+};
