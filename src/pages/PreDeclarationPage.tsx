@@ -170,7 +170,7 @@ const extractAll=async()=>{
    const common={
     query:'این سند را برای تکمیل اطلاعات قبل از اظهار گمرکی بخوان. فقط یک شیء JSON با کلیدهای vesselType,regNumber,regDate,packageCount,warehouseReceiptNo,warehouseReceiptDate,cargoDescription,originCountry,transactionCountry,deliveryTerm,invoiceAmount,invoiceCurrency,bankBranchCode,bankName,bankBranch,lcNumber,dutyRate,tariffCode,netWeight,grossWeight,billOfLading,insuranceIrr,requiredDocuments برگردان. همه صفحات و جدول‌ها را بررسی کن. هیچ شماره، تاریخ، وزن، مبلغ یا مشخصه‌ای را حدس نزن. مقادیر ناخوانا یا ناموجود را خالی بگذار.',
     extract_fields:true,
-    document_mime_type:d.mime_type||'application/pdf',
+    document_mime_type:(()=>{const type=String(d.mime_type||'').toLowerCase();if(type&&type!=='application/octet-stream')return type;const name=String(d.original_file_name||d.document_name||'').toLowerCase();return name.endsWith('.pdf')?'application/pdf':name.endsWith('.png')?'image/png':name.endsWith('.webp')?'image/webp':name.endsWith('.jpg')||name.endsWith('.jpeg')?'image/jpeg':type||'application/pdf'})(),
     document_size_bytes:d.size_bytes||0,
     page_context:'/operations?tab=pre-declaration&shipmentId='+shipmentId,
     shipment_id:shipmentId
@@ -188,7 +188,7 @@ const extractAll=async()=>{
      const localFile=await loadFileForFallback(d);
      const documentText=await extractDocumentText(localFile,setStatus);
      parsed=await invokeExtraction({
-      query:common.query+'\\nمتن استخراج‌شده از همان سند در ادامه آمده است؛ فقط از همین متن استفاده کن و مقدار مبهم را خالی بگذار.',
+      query:common.query+'\nمتن استخراج‌شده از همان سند در ادامه آمده است؛ فقط از همین متن استفاده کن و مقدار مبهم را خالی بگذار.',
       extract_fields:true,
       document_text:documentText,
       page_context:common.page_context,
