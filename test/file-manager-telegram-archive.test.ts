@@ -82,12 +82,14 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManagerClient).toContain('FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES');
   });
 
-  it('does not OCR, inspect or send new Telegram-backed file contents to AI', () => {
+  it('keeps upload archival background-only while allowing explicit stage-2 extraction of archived documents', () => {
     expect(fileManager).not.toContain('tesseract');
     expect(fileManager).not.toContain('ai-assistant');
     expect(fileManager).toContain('uploadTelegramArchivedFile');
     expect(documentPage).toContain("d.storage_backend === 'telegram' || d.file_asset_id");
-    expect(preDeclaration).toContain("docs.filter(d=>d.storage_backend!=='telegram'&&!d.file_asset_id)");
+    expect(preDeclaration).toContain('telegram_file_asset_id');
+    expect(preDeclaration).toContain('document_storage_path');
+    expect(preDeclaration).not.toContain("docs.filter(d=>d.storage_backend!=='telegram'&&!d.file_asset_id)");
   });
 
   it('prevents duplicate bill-of-lading shipments and directs the user to the existing shipment', () => {
