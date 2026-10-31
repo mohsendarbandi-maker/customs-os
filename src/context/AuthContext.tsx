@@ -10,6 +10,7 @@ import React, {
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
 import { authSessionStorage } from '../lib/authStorage';
+import { getSessionIdFromAccessToken } from '../lib/deviceSessions';
 import { readOfflineQueryCache, saveOfflineQueryCache } from '../lib/offlineQueue';
 import {
   AUTH_SESSION_RETRY_MESSAGE,
@@ -75,6 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const activeUserId = useRef<string | null>(null);
   const activeProfileId = useRef<string | null>(null);
   const activeAuthError = useRef<string | null>(null);
+  const activeSession = useRef<Session | null>(null);
   const isMounted = useRef(false);
   const initialized = useRef(false);
 
@@ -87,6 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   useEffect(() => {
+    activeSession.current = session;
     activeUserId.current = user?.id ?? null;
     activeProfileId.current = profile?.id ?? null;
     activeAuthError.current = error;
@@ -496,7 +499,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     try {
-      const { error: signOutError } = await supabase.auth.signOut();
+      const currentSession = activeSession.current;
+      const currentSessionId = getSessionIdFromAccessToken(currentSession?.access_token);
+      if (currentSessionId && currentSession?.user.id) {
+        const { error: markError } = await supabase
+          .from('user_device_sessions')
+          .update({ revoked_at: new Date().toISOString() })
+          .eq('session_id', currentSessionId)
+          .eq('user_id', currentSession.user.id)
+          .is('revoked_at', null);
+        if (markError) {
+          console.warn('[Auth] failed to mark current device session as signed out:', markError);
+        }
+      }
+
+      // A normal logout must only revoke this browser/device. The global scope
+      // unexpectedly signs every other phone, tablet, and computer out as well.
+      const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
 
       if (signOutError) {
         console.error('[Auth] signOut failed:', signOutError);
