@@ -204,6 +204,7 @@ useEffect(()=>{
   return;
  }
  if(number.length<4){
+  setBankResolving(false);
   setRegistrationOrder(null);
   setBankResolutionStatus('برای بازیابی خودکار، شماره ثبت سفارش را کامل وارد کنید.');
   return;
