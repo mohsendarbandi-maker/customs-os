@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { describeDevice, getSessionIdFromAccessToken } from '../lib/deviceSessions';
 
 export function SessionLifecycle() {
-  const { session } = useAuth();
+  const { session, signOut } = useAuth();
   const userId = session?.user.id ?? null;
   const sessionId = getSessionIdFromAccessToken(session?.access_token);
 
@@ -18,7 +18,9 @@ export function SessionLifecycle() {
       if (signingOut) return;
       signingOut = true;
       try {
-        await supabase.auth.signOut({ scope: 'local' });
+        // Use the central AuthContext logout so local storage and UI state are
+        // cleared even if the server has already invalidated the refresh token.
+        await signOut();
       } catch (error) {
         console.warn('[Auth] local sign-out for a revoked device session failed:', error);
       }
@@ -116,7 +118,7 @@ export function SessionLifecycle() {
       window.removeEventListener('focus', handleVisibility);
       void supabase.removeChannel(channel);
     };
-  }, [sessionId, userId]);
+  }, [sessionId, userId, signOut]);
 
   return null;
 }
