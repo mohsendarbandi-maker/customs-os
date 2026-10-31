@@ -41,15 +41,37 @@ export function isAuthTokenExpiredError(error: unknown): boolean {
   const code = String(candidate.code ?? '').trim().toLowerCase();
   const message = String(candidate.message ?? '').trim().toLowerCase();
 
-  if (status === 401) return true;
-  if (['pgrst301', 'pgrst302', 'jwt_expired', 'invalid_jwt'].includes(code)) {
+  // A generic 401 is not proof of token expiry. PGRST302 specifically
+  // means the Authorization header is missing; refreshing cannot fix that.
+  if (['pgrst301', 'pgrst303', 'jwt_expired', 'invalid_jwt'].includes(code)) {
     return true;
   }
 
   return (
     /jwt.{0,30}(expired|invalid)/.test(message) ||
-    /(expired|invalid).{0,30}jwt/.test(message) ||
-    /no authorization header|authorization header required/.test(message)
+    /(expired|invalid).{0,30}jwt/.test(message)
+  );
+}
+
+/** Temporary Auth throttling/network failures must preserve the saved session. */
+export function isRetryableAuthSessionError(error: unknown): boolean {
+  if (isAuthTokenExpiredError(error)) return true;
+  if (!error || typeof error !== 'object') return false;
+
+  const candidate = error as {
+    status?: unknown;
+    code?: unknown;
+    message?: unknown;
+  };
+  const status = Number(candidate.status);
+  const code = String(candidate.code ?? '').trim().toLowerCase();
+  const message = String(candidate.message ?? '').trim().toLowerCase();
+
+  if (status === 429 || code === 'over_request_rate_limit') return true;
+
+  return (
+    /too many requests|rate[\s-]*limit|over_request_rate_limit|\b429\b/.test(message) ||
+    /failed to fetch|network request failed|network error|networkerror|load failed|connection (?:lost|reset|refused)|offline|timed? ?out|gateway timeout/i.test(message)
   );
 }
 
