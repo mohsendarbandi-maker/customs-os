@@ -499,22 +499,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     try {
-      const currentSession = activeSession.current;
-      const currentSessionId = getSessionIdFromAccessToken(currentSession?.access_token);
-      if (currentSessionId && currentSession?.user.id) {
-        const { error: markError } = await supabase
-          .from('user_device_sessions')
-          .update({ revoked_at: new Date().toISOString() })
-          .eq('session_id', currentSessionId)
-          .eq('user_id', currentSession.user.id)
-          .is('revoked_at', null);
-        if (markError) {
-          console.warn('[Auth] failed to mark current device session as signed out:', markError);
-        }
-      }
-
-      // A normal logout must only revoke this browser/device. The global scope
-      // unexpectedly signs every other phone, tablet, and computer out as well.
+      // A normal logout must only revoke this browser/device. Do not broadcast
+      // a remote-revocation marker for this same session: its own lifecycle
+      // listener would race this logout with a second signOut request.
       const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
 
       if (signOutError) {
