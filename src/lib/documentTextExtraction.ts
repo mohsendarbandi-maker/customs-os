@@ -66,9 +66,10 @@ export async function extractDocumentText(
           .join(' ')
           .trim();
 
-        if (pageText.length >= 24) {
+        if (pageText.length >= 80) {
           chunks.push('[صفحه ' + pageNumber + ']\n' + pageText);
         } else {
+          if (pageText) chunks.push('[صفحه ' + pageNumber + ' · متن محدود]\\n' + pageText);
           const viewport = page.getViewport({ scale: 1.35 });
           const canvas = document.createElement('canvas');
           canvas.width = Math.ceil(viewport.width);
