@@ -164,6 +164,7 @@ export const RegistrationOrdersPage:React.FC=()=>{
   if(!current||!profile?.organization_id)return setAllocationError('ابتدا یک ثبت سفارش را انتخاب کنید.');
   if(current.is_closed)return setAllocationError('ثبت سفارش نهایی شده است و تغییر سهم‌های آن مجاز نیست.');
   if(current.net_weight_kg==null||current.value_amount==null||!current.currency)return setAllocationError('ابتدا سقف وزن خالص، ارزش کل و ارز ثبت سفارش مادر را تکمیل کنید تا کنترل عدم تجاوز فعال باشد.');
+  if((currentReconciliation?.shipments_missing_invoice_value||0)>0)return setAllocationError('ابتدا مبلغ فاکتور و ارز '+fa(currentReconciliation?.shipments_missing_invoice_value)+' محموله داخلی را تکمیل کنید؛ تا آن زمان کنترل کامل سقف ارزش ممکن نیست.');
   if(current.gross_weight_kg!=null&&!allocationForm.gross_weight_kg.trim())return setAllocationError('وزن ناخالص در ثبت سفارش مادر مشخص است؛ وزن ناخالص سهم بیرونی را هم وارد کنید.');
   const validation=buildExternalRegistrationOrderAllocationPayload(allocationForm,current.currency);
   if(!validation.ok)return setAllocationError(validation.error);
