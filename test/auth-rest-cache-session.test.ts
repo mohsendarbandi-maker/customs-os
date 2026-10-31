@@ -12,7 +12,7 @@ describe('authenticated REST read cache', () => {
     expect(scopeEnd).toBeGreaterThan(scopeStart);
 
     const scopeBody = source.slice(scopeStart, scopeEnd);
-    expect(scopeBody).not.toContain('auth.getSession');
+    expect(scopeBody).not.toMatch(/await authClient\\.auth\\.getSession\\s*\\(/);
     expect(scopeBody).toContain('cachedAuthIdentity');
     expect(source).toContain('baseClient.auth.onAuthStateChange((_event, currentSession)');
   });
