@@ -17,7 +17,7 @@ export function applySupabaseAuthForwardedFor(
   const ip = clientIp?.trim();
   const secret = secretApiKey?.trim();
 
-  if (pathname !== '/auth/v1/token' || !ip || !secret.startsWith('sb_secret_')) return false;
+  if (pathname !== '/auth/v1/token' || !ip || !secret || !secret.startsWith('sb_secret_')) return false;
 
   // Cloudflare supplies this header on requests reaching the Worker. Reject
   // malformed values defensively rather than passing arbitrary header content.
