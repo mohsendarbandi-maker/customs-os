@@ -33,11 +33,9 @@ export function isAuthTokenExpiredError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
 
   const candidate = error as {
-    status?: unknown;
     code?: unknown;
     message?: unknown;
   };
-  const status = Number(candidate.status);
   const code = String(candidate.code ?? '').trim().toLowerCase();
   const message = String(candidate.message ?? '').trim().toLowerCase();
 
