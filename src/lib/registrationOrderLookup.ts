@@ -111,6 +111,8 @@ export const resolveLegacyRegistrationBankDetails = (
 export type RegistrationOrderBackfillHistoryRow = RegistrationOrderHistoryRow & {
   registration_order_no?: string | null;
   shipment_id?: string | null;
+  invoice_currency?: string | null;
+  invoice_amount?: number | string | null;
 };
 
 export type RegistrationOrderBackfillItem = {
@@ -120,6 +122,7 @@ export type RegistrationOrderBackfillItem = {
   bank_branch: string | null;
   bank_branch_code: string | null;
   payment_instrument_code: string | null;
+  currency: string | null;
   source_count: number;
   conflicts: string[];
 };
@@ -136,6 +139,23 @@ export type RegistrationOrderBackfillPlan = {
  * tied to one and the same cargo owner. Historical shipments are never linked
  * or modified by this planner.
  */
+
+export const normalizeLegacyInvoiceCurrency = (value: unknown): string | null => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const upper = raw.toUpperCase();
+  if (upper.includes("USD") || /دلار/.test(raw)) return "USD";
+  if (upper.includes("EUR") || /یورو/.test(raw)) return "EUR";
+  if (upper.includes("AED") || /درهم/.test(raw)) return "AED";
+  if (upper.includes("CNY") || /یوان/.test(raw)) return "CNY";
+  if (upper.includes("RUB") || /روبل/.test(raw)) return "RUB";
+  if (upper.includes("GBP") || /پوند/.test(raw)) return "GBP";
+  if (upper.includes("CHF") || /فرانک/.test(raw)) return "CHF";
+  if (upper.includes("TRY") || /لیر/.test(raw)) return "TRY";
+  if (upper.includes("IRR") || /ریال/.test(raw)) return "IRR";
+  return null;
+};
+
 export const buildLegacyRegistrationOrderBackfillPlan = (
   rows: RegistrationOrderBackfillHistoryRow[],
   clientByShipment: ReadonlyMap<string, string | null>,
@@ -198,6 +218,17 @@ export const buildLegacyRegistrationOrderBackfillPlan = (
       continue;
     }
 
+    const currencyValues = new Set(
+      group.rows
+        .map((row: any) => normalizeLegacyInvoiceCurrency(row.invoice_currency))
+        .filter((currency): currency is string => Boolean(currency)),
+    );
+    const hasUnresolvedInvoiceCurrency = group.rows.some(
+      (row: any) => row.invoice_amount !== null && row.invoice_amount !== undefined &&
+        String(row.invoice_amount).trim() !== "" && !normalizeLegacyInvoiceCurrency(row.invoice_currency),
+    );
+    const conflicts = [...details.conflicts];
+    if (currencyValues.size > 1 || hasUnresolvedInvoiceCurrency) conflicts.push("ارز فاکتور");
     plan.items.push({
       order_number: group.originalOrderNumber,
       client_id: [...group.clientIds][0],
@@ -205,8 +236,9 @@ export const buildLegacyRegistrationOrderBackfillPlan = (
       bank_branch: details.bank_branch,
       bank_branch_code: details.bank_branch_code,
       payment_instrument_code: details.payment_instrument_code,
+      currency: currencyValues.size === 1 && !hasUnresolvedInvoiceCurrency ? [...currencyValues][0] : null,
       source_count: details.source_count,
-      conflicts: details.conflicts,
+      conflicts,
     });
   }
 
