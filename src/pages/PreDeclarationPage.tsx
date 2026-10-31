@@ -173,14 +173,17 @@ const resolveRegistrationOrderByNumber=async(rawValue:string,requestId:number)=>
    const expectedClientId=master.client_id||shipment?.client_id||null;
    const linkable=(related||[]).filter((row:any)=>!row.registration_order_id&&(!expectedClientId||row.client_id===expectedClientId)).map((row:any)=>row.id);
    if(linkable.length){
-    const{error:linkError}=await supabase.from('shipments').update({registration_order_id:master.id}).eq('organization_id',organizationId).in('id',linkable).is('registration_order_id',null);
-    if(linkError){
-     if(linkable.includes(shipmentId)){
-      const{error:currentLinkError}=await supabase.from('shipments').update({registration_order_id:master.id}).eq('organization_id',organizationId).eq('id',shipmentId).is('registration_order_id',null);
-      if(!currentLinkError)setShipment((current:any)=>current?{...current,registration_order_id:master.id}:current);
+    const{data:linkedRows,error:linkError}=await supabase.from('shipments').update({registration_order_id:master.id}).eq('organization_id',organizationId).in('id',linkable).is('registration_order_id',null).select('id');
+    const linkedIds=new Set((linkedRows||[]).map((row:any)=>row.id));
+    let currentShipmentLinked=linkedIds.has(shipmentId);
+    if(linkError||linkedIds.size<linkable.length){
+     if(!currentShipmentLinked&&linkable.includes(shipmentId)){
+      const{data:currentLinkRow,error:currentLinkError}=await supabase.from('shipments').update({registration_order_id:master.id}).eq('organization_id',organizationId).eq('id',shipmentId).is('registration_order_id',null).select('id').maybeSingle();
+      currentShipmentLinked=!currentLinkError&&Boolean(currentLinkRow?.id);
      }
-     if(requestId===resolutionRequestRef.current)setBankResolutionStatus(current=>current+' اتصال خودکار محموله به ثبت سفارش مادر به علت کنترل‌های مالکیت یا تطبیق مجموع‌ها کامل نشد؛ مشخصات بانکی بازیابی شده‌اند.');
-    }else if(linkable.includes(shipmentId)){
+     if(currentShipmentLinked)setShipment((current:any)=>current?{...current,registration_order_id:master.id}:current);
+     if(requestId===resolutionRequestRef.current)setBankResolutionStatus(current=>current+' '+(currentShipmentLinked?'محموله جاری متصل شد؛ برخی سوابق قدیمی به علت کنترل‌های تطبیق یا دسترسی متصل نشدند.':'اتصال محموله به ثبت سفارش مادر کامل نشد؛ مشخصات بانکی بازیابی شده‌اند.'));
+    }else if(currentShipmentLinked){
      setShipment((current:any)=>current?{...current,registration_order_id:master.id}:current);
     }
    }
