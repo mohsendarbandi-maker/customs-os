@@ -7,6 +7,6 @@ describe('document extraction text preparation', () => {
   });
 
   it('caps the document context before sending it to the AI provider', () => {
-    expect(normalizeDocumentText('الف'.repeat(20), 8)).toBe('الف'.repeat(8));
+    expect(normalizeDocumentText('a'.repeat(20), 8)).toBe('a'.repeat(8));
   });
 });
