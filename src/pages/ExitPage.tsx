@@ -38,6 +38,7 @@ export const ExitPage: React.FC = () => {
   const declarationId = params.get('declarationId') || '';
 
   const [shipmentId, setShipmentId] = useState('');
+  const [sataCode, setSataCode] = useState('');
   const [organizationId, setOrganizationId] = useState('');
   const [shipPassed, setShipPassed] = useState<boolean | null>(null);
   const [transportDocumentsStatus, setTransportDocumentsStatus] = useState('not_ready');
@@ -93,6 +94,9 @@ export const ExitPage: React.FC = () => {
       setShipmentId(data.shipment_id || '');
 
       if (data.shipment_id) {
+        const { data: sataRow, error: sataError } = await supabase.from('shipment_customs_data').select('sata_code').eq('shipment_id', data.shipment_id).maybeSingle();
+        if (sataError) throw sataError;
+        setSataCode(String(sataRow?.sata_code || ''));
         const { data: shipmentRow, error: shipmentError } = await supabase
           .from('shipments')
           .select('ship_passed,transport_documents_status')
@@ -307,6 +311,20 @@ export const ExitPage: React.FC = () => {
     setError('');
 
     try {
+      const sataValue = String(sataCode || '').trim();
+      if (!sataValue) {
+        const { data: workflowRow, error: workflowError } = await supabase.from('customs_declaration_workflow').select('loading_permit_state').eq('declaration_id', declarationId).eq('organization_id', organizationId).maybeSingle();
+        if (workflowError) throw workflowError;
+        const permit = (workflowRow?.loading_permit_state || {}) as Record<string, unknown>;
+        const sataNotRequired = permit.central_bank_status === 'not_required' || (permit.clearance_90_percent_requested === true && String(permit.comment || '').trim() !== '');
+        if (!sataNotRequired) {
+          setError('برای تکمیل درب خروج، کد ساتای این محموله را ثبت کنید؛ در صورت عدم نیاز، وضعیت بانک مرکزی را «نیازی نیست» یا استثنای مجاز را در عملیات گمرکی ثبت کنید.');
+          return;
+        }
+      } else {
+        const { error: sataSaveError } = await supabase.from('shipment_customs_data').upsert({ shipment_id: shipmentId, organization_id: organizationId, sata_code: sataValue }, { onConflict: 'shipment_id' });
+        if (sataSaveError) throw sataSaveError;
+      }
       const now = new Date().toISOString();
 
       const { error: declarationError } = await supabase
@@ -467,7 +485,14 @@ export const ExitPage: React.FC = () => {
             )}
             {shipmentId&&<><ShipmentStageCosts stage="STAGE_5_EXIT_PREPARATION" shipmentId={shipmentId} allowStageSelection/></>}
 
-{remainingChecklist.length > 0 && (
+{shipmentId && <section className="rounded-2xl border app-border bg-[var(--surface)] p-4">
+              <label className="block text-sm font-bold">کد ساتا محموله
+                <input value={sataCode} onChange={event => setSataCode(event.target.value)} placeholder="کد ساتا را پیش از تکمیل خروج وارد کنید" className="mt-2 w-full rounded-xl border app-border bg-[var(--surface-2)] p-3 text-sm" />
+              </label>
+              <p className="mt-2 text-xs app-muted">ثبت این کد در مراحل قبلی اجباری نیست؛ اما برای تکمیل درب خروج لازم است، مگر آنکه عدم نیاز یا استثنای مجاز در عملیات گمرکی ثبت شده باشد.</p>
+            </section>}
+
+            {remainingChecklist.length > 0 && (
               <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
                 <div className="p-5 border-b border-amber-500/20">
                   <h2 className="font-black">موارد باقی‌مانده عملیات گمرکی</h2>

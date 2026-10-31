@@ -236,3 +236,25 @@ describe('customs workflow stage prerequisites', () => {
     );
   });
 });
+
+
+describe('customs workflow SATA requirement', () => {
+  it('keeps SATA optional before exit and requires it at exit unless no-SATA is selected', () => {
+    const state = readyWorkflow();
+    state.loadingPermit.central_bank_status = 'approved';
+    state.loadingPermit.sata_code = '';
+    expect(getWorkflowStageIssues('loading_permit', state)).toEqual([]);
+    expect(getWorkflowStageIssues('exit', state)).toContain(
+      'کد ساتا را برای خروج نهایی ثبت کنید؛ در صورت عدم نیاز به ساتا، وضعیت بانک مرکزی را «نیازی نیست» انتخاب کنید.',
+    );
+    state.loadingPermit.sata_code = 'SATA-12345';
+    expect(getWorkflowStageIssues('exit', state)).not.toContain(
+      'کد ساتا را برای خروج نهایی ثبت کنید؛ در صورت عدم نیاز به ساتا، وضعیت بانک مرکزی را «نیازی نیست» انتخاب کنید.',
+    );
+    state.loadingPermit.sata_code = '';
+    state.loadingPermit.central_bank_status = 'not_required';
+    expect(getWorkflowStageIssues('exit', state)).not.toContain(
+      'کد ساتا را برای خروج نهایی ثبت کنید؛ در صورت عدم نیاز به ساتا، وضعیت بانک مرکزی را «نیازی نیست» انتخاب کنید.',
+    );
+  });
+});

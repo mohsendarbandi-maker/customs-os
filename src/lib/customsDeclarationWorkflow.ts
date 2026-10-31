@@ -305,6 +305,10 @@ export const getWorkflowStageIssues = (
 
   if (stage === 'exit') {
     const exit = state.exit;
+    const permit = state.loadingPermit;
+    const sataCode = textValue(permit.sata_code);
+    const sataNotRequired = oneOf(permit.central_bank_status, ['not_required']) || (boolValue(permit.clearance_90_percent_requested) && textValue(permit.comment) !== '');
+    if (!sataCode && !sataNotRequired) issues.push('کد ساتا را برای خروج نهایی ثبت کنید؛ در صورت عدم نیاز به ساتا، وضعیت بانک مرکزی را «نیازی نیست» انتخاب کنید.');
     if (textValue(exit.loading_permission_status) !== 'approved') {
       issues.push('اجازه بارگیری در درب خروج هنوز صادر نشده است.');
     }

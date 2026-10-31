@@ -35,6 +35,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const[port,setPort]=useState<Record<string,any>>(emptyPort);
  const[notes,setNotes]=useState('');
  const[commodity,setCommodity]=useState({vesselType:'',description:'',hsCode:''});
+ const[shipmentId,setShipmentId]=useState('');
  const[loading,setLoading]=useState(true);
  const[saving,setSaving]=useState(false);
  const[error,setError]=useState('');
@@ -75,7 +76,8 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    const{data:declarationRef,error:declarationRefError}=await supabase.from('customs_declarations').select('shipment_id').eq('id',declarationId).single();
    if(declarationRefError)throw declarationRefError;
    if(!declarationRef?.shipment_id)throw new Error('اظهارنامه به محموله متصل نیست.');
-   const{data:customData,error:customError}=await supabase.from('shipment_customs_data').select('vessel_type,cargo_description,tariff_code').eq('shipment_id',declarationRef.shipment_id).maybeSingle();
+   setShipmentId(declarationRef.shipment_id);
+   const{data:customData,error:customError}=await supabase.from('shipment_customs_data').select('vessel_type,cargo_description,tariff_code,sata_code').eq('shipment_id',declarationRef.shipment_id).maybeSingle();
    if(customError)throw customError;
    const info={vesselType:String(customData?.vessel_type||''),description:String(customData?.cargo_description||''),hsCode:String(customData?.tariff_code||'')};
    setCommodity(info);
@@ -86,7 +88,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     const storedStandard=((r.expertise_state||{}).standard||{}) as Record<string,any>;const mergedStandard={...emptyExpertise.standard,...storedStandard};if(!storedStandard.inspection_invoice_status&&storedStandard.inspection_invoice_received)mergedStandard.inspection_invoice_status='received';const ex={...emptyExpertise,...(r.expertise_state||{}),standard:mergedStandard};
     setExpertise(ex);
     setCashier({...emptyCashier,...(r.cashier_state||{})});
-    setLoadingPermit({...emptyLoadingPermit,...(r.loading_permit_state||{})});
+    setLoadingPermit({...emptyLoadingPermit,...(r.loading_permit_state||{}),sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')});
     setExitState({...emptyExit,...(r.exit_state||{})});
     setPort({...emptyPort,...(r.port_charges_state||{})});
     setNotes(r.notes||'');
@@ -101,10 +103,10 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     if(createError)throw createError;
     const r=created as WorkflowRow;setRow(r);const ev={...emptyEvaluation,...r.evaluation_state};setEvaluation(ev);setStage(getInitialCustomsWorkflowStage(r.current_stage,customsPath,ev));
     setExpertise({...emptyExpertise,...r.expertise_state,standard:{...emptyExpertise.standard,...r.expertise_state?.standard}});
-    setCashier({...emptyCashier,...r.cashier_state});setLoadingPermit({...emptyLoadingPermit,...r.loading_permit_state});
+    setCashier({...emptyCashier,...r.cashier_state});setLoadingPermit({...emptyLoadingPermit,...r.loading_permit_state,sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')});
     setExitState({...emptyExit,...r.exit_state});setPort({...emptyPort,...r.port_charges_state});setNotes(r.notes||'');
    }else{
-    const initial=defaults(info);setEvaluation(initial.evaluation);setExpertise(initial.expertise);setStage(getInitialCustomsWorkflowStage('evaluation',customsPath,initial.evaluation));
+    const initial=defaults(info);setEvaluation(initial.evaluation);setExpertise(initial.expertise);setLoadingPermit({...emptyLoadingPermit,sata_code:String(customData?.sata_code||'')});setStage(getInitialCustomsWorkflowStage('evaluation',customsPath,initial.evaluation));
    }
    await refreshHistory();
   }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'دسترسی مشاهده گردش‌کار برای این کاربر مجاز نیست.':'بارگذاری گردش‌کار گمرکی انجام نشد؛ اتصال اظهارنامه و مجوز دسترسی را بررسی کنید.')}
@@ -148,6 +150,8 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    const payload={current_stage:stage,evaluation_state:nextEvaluation,expertise_state:expertise,cashier_state:cashier,loading_permit_state:loadingPermit,exit_state:exitState,port_charges_state:port,notes:notes.trim()||null,updated_by:userId||null,updated_at:new Date().toISOString()};
    const{error:e}=await supabase.from('customs_declaration_workflow').update(payload).eq('id',row.id).eq('organization_id',organizationId);
    if(e)throw e;
+   const{error:saveSataError}=await supabase.from('shipment_customs_data').upsert({shipment_id:shipmentId,organization_id:organizationId,sata_code:String(loadingPermit.sata_code||'').trim()||null},{onConflict:'shipment_id'});
+   if(saveSataError)throw saveSataError;
    setEvaluation(nextEvaluation);setRow({...row,...payload} as WorkflowRow);setMessage('مراحل عملیات گمرکی ذخیره شد.');await refreshHistory();
   }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'مجوز ذخیره عملیات گمرکی را ندارید.':'ذخیره عملیات گمرکی انجام نشد؛ اطلاعات واردشده و دسترسی را بررسی کنید.')}
   finally{setSaving(false)}
@@ -218,7 +222,8 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    {check('درخواست ترخیص ۹۰ درصدی در صورت نداشتن ساتا',loadingPermit.clearance_90_percent_requested,v=>setLoadingPermit(p=>({...p,clearance_90_percent_requested:!p.sata_code.trim()&&v})),!!String(loadingPermit.sata_code||'').trim())}
    <div className="sm:col-span-2 lg:col-span-3">{input('توضیح / کامنت درخواست',loadingPermit.comment,v=>setLoadingPermit(p=>({...p,comment:v})),'شرح درخواست، مرجع پیگیری و پاسخ دریافتی')}</div>
   </div>)}
-  {!loading&&stage==='exit'&&panel('۵. درب خروج','مجوز بارگیری، ثبت مالی و هزینه دیماند باسکول پس از اتمام بارگیری (در صورت وجود) ثبت می‌شوند.',<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  {!loading&&stage==='exit'&&panel('۵. درب خروج','مجوز بارگیری، ثبت مالی و هزینه دیماند باسکول پس از اتمام بارگیری (در صورت وجود) ثبت می‌شوند. کد ساتا تا پیش از این مرحله اختیاری است و در صورت نیاز باید پیش از تکمیل خروج ثبت شود.',<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+   {input('کد ساتا این محموله',loadingPermit.sata_code,v=>setLoadingPermit(p=>({...p,sata_code:v})),'در صورت نیاز، پیش از خروج کالا ثبت کنید')}
    {select('اجازه بارگیری',exitState.loading_permission_status,[['pending','در انتظار'],['approved','صادر شد'],['rejected','رد شد']],v=>setExitState(p=>({...p,loading_permission_status:v})))}
    {select('ثبت مالی',exitState.financial_registration_status,[['pending','ثبت نشده'],['registered','ثبت مالی انجام شد']],v=>setExitState(p=>({...p,financial_registration_status:v})))}
    {check('باسکول / دیماند لازم است',exitState.weighbridge_required,v=>setExitState(p=>({...p,weighbridge_required:v})))}
