@@ -42,6 +42,7 @@ describe('Supabase Auth proxy client-IP forwarding', () => {
     expect(applySupabaseAuthForwardedFor(headers, '/auth/v1/token', null, 'sb_secret_test')).toBe(false);
     expect(applySupabaseAuthForwardedFor(headers, '/auth/v1/token', '203.0.113.10')).toBe(false);
     expect(applySupabaseAuthForwardedFor(headers, '/auth/v1/token', 'not-an-ip', 'sb_secret_test')).toBe(false);
+    expect(applySupabaseAuthForwardedFor(headers, '/auth/v1/token', '203.0.113.10', 'service_role_legacy')).toBe(false);
     expect(headers.get('apikey')).toBe('sb_publishable_test');
     expect(headers.has('Sb-Forwarded-For')).toBe(false);
   });
