@@ -6,11 +6,12 @@ import{useAuth}from'../context/AuthContext';
 import{useAutosavedDraft,formDraftKey}from'../hooks/useAutosavedDraft';
 import{FormDraftIndicator}from'../components/FormDraftIndicator';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
+import { extractDocumentText } from '../lib/documentTextExtraction';
 type V=Record<string,string>;
 type Shipment={id:string;client_id:string|null;shipping_line:string|null;bill_of_lading_no:string|null;cargo_count:number|null;cargo_count_unit:string|null;net_weight_kg:number|null;gross_weight_kg:number|null;current_status:string;display_name:string|null;customs_office_id?:string|null;case_id?:string|null};
 type CustomsOffice={id:string;organization_id:string|null;code:string;name:string;city:string;is_active:boolean};
 const customsRegimes=[['import_definitive','واردات قطعی'],['export_definitive','صادرات قطعی'],['temporary_export','صادرات موقت'],['import_temporary','ورود موقت'],['temporary_processing','ورود موقت برای پردازش'],['re_export','مرجوعی / اعاده به خارج'],['external_transit','ترانزیت خارجی'],['internal_transit','ترانزیت داخلی'],['re_import','ورود مجدد'],['cabotage','کابوتاژ'],['customs_warehouse','ورود به انبار گمرکی'],['free_zone','رویه منطقه آزاد'],['other','سایر رویه‌ها']] as const;
-type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;source:'shipment_documents'|'customs_documents'};
+type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;size_bytes?:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;source:'shipment_documents'|'customs_documents'};
 const fields:[string,string][]=[['vesselType','نوع کشتی'],['regNumber','شماره ثبت سفارش'],['regDate','تاریخ ثبت سفارش'],['packageCount','تعداد'],['warehouseReceiptNo','شماره قبض انبار'],['warehouseReceiptDate','تاریخ قبض انبار'],['cargoDescription','شرح کالا'],['originCountry','کشور مبدا'],['transactionCountry','کشور طرف معامله'],['deliveryTerm','شرایط تحویل'],['invoiceAmount','مبلغ کل فاکتور'],['invoiceCurrency','ارز'],['bankBranchCode','کد شعبه'],['bankName','نام بانک'],['bankBranch','شعبه'],['lcNumber','شماره اعتبار اسنادی'],['dutyRate','ماخذ حقوق ورودی'],['tariffCode','کد تعرفه کالا'],['netWeight','وزن خالص'],['grossWeight','وزن ناخالص'],['billOfLading','شماره بارنامه'],['insuranceIrr','بیمه (ریال)']];
 const blank:V=Object.fromEntries(fields.map(([k])=>[k,'']));
 const normalize=(x:any)=>String(x??'').trim();
@@ -86,10 +87,157 @@ const formDraft=useAutosavedDraft(
  },
 );
 const profileOrg=async()=>{const{data:{user}}=await supabase.auth.getUser();if(!user){setStatus('کاربر وارد نشده است.');return null}const{data,error}=await supabase.from('profiles').select('organization_id').eq('id',user.id).maybeSingle();if(error||!data?.organization_id){setStatus(error?.message||'سازمان کاربر مشخص نیست.');return null}return data.organization_id};
-const load=async()=>{if(!shipmentId){setStatus('شناسه محموله وجود ندارد. این مرحله فقط از مرحله ۱ فراخوانی می‌شود.');return}setBusy(true);try{const[{data:s,error:se},{data:canonical,error:ce},{data:legacy,error:le},{data:saved,error:de}]=await Promise.all([supabase.from('shipments').select('id,client_id,shipping_line,bill_of_lading_no,cargo_count,cargo_count_unit,net_weight_kg,gross_weight_kg,current_status,display_name,customs_office_id,case_id').eq('id',shipmentId).maybeSingle(),supabase.from('shipment_documents').select('id,shipment_id,document_name,original_file_name,storage_path,mime_type,storage_backend,file_asset_id,folder_id,created_at').eq('shipment_id',shipmentId).eq('is_archived',false).order('created_at',{ascending:true}),supabase.from('customs_documents').select('id,shipment_id,original_name,display_name,storage_path,mime_type,storage_backend,file_asset_id,folder_id,created_at').eq('shipment_id',shipmentId).eq('is_archived',false).order('created_at',{ascending:true}),supabase.from('shipment_customs_data').select('*').eq('shipment_id',shipmentId).maybeSingle()]);if(se||ce||le||de)throw se||ce||le||de;if(!s)throw new Error('محموله پیدا نشد.');const{data:officeRows,error:officeError}=await supabase.from('customs_offices').select('id,organization_id,code,name,city,is_active').order('name');if(officeError)throw officeError;setOffices((officeRows||[]) as CustomsOffice[]);setShipment(s as Shipment);if(s.client_id){const{data:client,error:clientError}=await supabase.from('clients').select('name').eq('id',s.client_id).maybeSingle();if(clientError)throw clientError;setClientName(client?.name||'')}else setClientName('');const cd=(canonical||[]).map((d:any)=>({id:d.id,document_name:d.document_name||d.original_file_name||'سند',original_file_name:d.original_file_name||d.document_name||'سند',storage_path:d.storage_path,mime_type:d.mime_type||'application/octet-stream',storage_backend:d.storage_backend||'supabase',file_asset_id:d.file_asset_id||null,folder_id:d.folder_id||null,source:'shipment_documents' as const}));const ids=new Set(cd.map(x=>x.id));const ld=(legacy||[]).filter((d:any)=>!ids.has(d.id)).map((d:any)=>({id:d.id,document_name:d.display_name||d.original_name||'سند',original_file_name:d.original_name||d.display_name||'سند',storage_path:d.storage_path,mime_type:d.mime_type||'application/octet-stream',storage_backend:d.storage_backend||'supabase',file_asset_id:d.file_asset_id||null,folder_id:d.folder_id||null,source:'customs_documents' as const}));setDocs([...cd,...ld]);const preserveLocalDraft=formDraft.hasDraftRef.current||['saving','saved','restored'].includes(formDraft.statusRef.current);if(saved){const x:any=saved;if(!preserveLocalDraft){formDraft.clearDraft();setCustomsOfficeId(String(x.customs_office_id||s.customs_office_id||''));setCustomsRegime(String(x.customs_regime||''));setValues({vesselType:normalizeVesselType(x.vessel_type),regNumber:x.registration_order_no||'',regDate:x.registration_order_date_shamsi||'',packageCount:x.package_count==null?'':String(x.package_count),warehouseReceiptNo:x.warehouse_receipt_no||'',warehouseReceiptDate:x.warehouse_receipt_date_shamsi||'',cargoDescription:x.cargo_description||'',originCountry:x.origin_country||'',transactionCountry:x.transaction_country||'',deliveryTerm:x.delivery_term||'',invoiceAmount:x.invoice_amount==null?'':String(x.invoice_amount),invoiceCurrency:x.invoice_currency||'',bankBranchCode:x.bank_branch_code||'',bankName:x.bank_name||'',bankBranch:x.bank_branch||'',lcNumber:x.lc_number||'',dutyRate:x.duty_rate==null?'':String(x.duty_rate),tariffCode:x.tariff_code||'',netWeight:x.net_weight_kg==null?'':String(x.net_weight_kg),grossWeight:x.gross_weight_kg==null?'':String(x.gross_weight_kg),billOfLading:x.bill_of_lading||'',insuranceIrr:x.insurance_irr==null?'':String(x.insurance_irr)});setNeeded(x.required_documents||'')}setRegistered(!preserveLocalDraft)}else if(!preserveLocalDraft){formDraft.clearDraft();setCustomsOfficeId(String(s.customs_office_id||''));setCustomsRegime('');setValues(v=>({...v,packageCount:s.cargo_count==null?'':String(Math.round(s.cargo_count)),netWeight:s.net_weight_kg==null?'':weightKg(s.net_weight_kg),grossWeight:s.gross_weight_kg==null?'':weightKg(s.gross_weight_kg),billOfLading:s.bill_of_lading_no||''}))}}catch(e:any){setStatus(e?.message||'دریافت اطلاعات ناموفق بود')}finally{setBusy(false)}};
+const load=async()=>{if(!shipmentId){setStatus('شناسه محموله وجود ندارد. این مرحله فقط از مرحله ۱ فراخوانی می‌شود.');return}setBusy(true);try{const[{data:s,error:se},{data:canonical,error:ce},{data:legacy,error:le},{data:saved,error:de}]=await Promise.all([supabase.from('shipments').select('id,client_id,shipping_line,bill_of_lading_no,cargo_count,cargo_count_unit,net_weight_kg,gross_weight_kg,current_status,display_name,customs_office_id,case_id').eq('id',shipmentId).maybeSingle(),supabase.from('shipment_documents').select('id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,created_at').eq('shipment_id',shipmentId).eq('is_archived',false).order('created_at',{ascending:true}),supabase.from('customs_documents').select('id,shipment_id,original_name,display_name,storage_path,mime_type,size_bytes,storage_backend,file_asset_id,folder_id,created_at').eq('shipment_id',shipmentId).eq('is_archived',false).order('created_at',{ascending:true}),supabase.from('shipment_customs_data').select('*').eq('shipment_id',shipmentId).maybeSingle()]);if(se||ce||le||de)throw se||ce||le||de;if(!s)throw new Error('محموله پیدا نشد.');const{data:officeRows,error:officeError}=await supabase.from('customs_offices').select('id,organization_id,code,name,city,is_active').order('name');if(officeError)throw officeError;setOffices((officeRows||[]) as CustomsOffice[]);setShipment(s as Shipment);if(s.client_id){const{data:client,error:clientError}=await supabase.from('clients').select('name').eq('id',s.client_id).maybeSingle();if(clientError)throw clientError;setClientName(client?.name||'')}else setClientName('');const cd=(canonical||[]).map((d:any)=>({id:d.id,document_name:d.document_name||d.original_file_name||'سند',original_file_name:d.original_file_name||d.document_name||'سند',storage_path:d.storage_path,mime_type:d.mime_type||'application/octet-stream',size_bytes:Number(d.file_size_bytes||0),storage_backend:d.storage_backend||'supabase',file_asset_id:d.file_asset_id||null,folder_id:d.folder_id||null,source:'shipment_documents' as const}));const ids=new Set(cd.map(x=>x.id));const ld=(legacy||[]).filter((d:any)=>!ids.has(d.id)).map((d:any)=>({id:d.id,document_name:d.display_name||d.original_name||'سند',original_file_name:d.original_name||d.display_name||'سند',storage_path:d.storage_path,mime_type:d.mime_type||'application/octet-stream',size_bytes:Number(d.size_bytes||0),storage_backend:d.storage_backend||'supabase',file_asset_id:d.file_asset_id||null,folder_id:d.folder_id||null,source:'customs_documents' as const}));setDocs([...cd,...ld]);const preserveLocalDraft=formDraft.hasDraftRef.current||['saving','saved','restored'].includes(formDraft.statusRef.current);if(saved){const x:any=saved;if(!preserveLocalDraft){formDraft.clearDraft();setCustomsOfficeId(String(x.customs_office_id||s.customs_office_id||''));setCustomsRegime(String(x.customs_regime||''));setValues({vesselType:normalizeVesselType(x.vessel_type),regNumber:x.registration_order_no||'',regDate:x.registration_order_date_shamsi||'',packageCount:x.package_count==null?'':String(x.package_count),warehouseReceiptNo:x.warehouse_receipt_no||'',warehouseReceiptDate:x.warehouse_receipt_date_shamsi||'',cargoDescription:x.cargo_description||'',originCountry:x.origin_country||'',transactionCountry:x.transaction_country||'',deliveryTerm:x.delivery_term||'',invoiceAmount:x.invoice_amount==null?'':String(x.invoice_amount),invoiceCurrency:x.invoice_currency||'',bankBranchCode:x.bank_branch_code||'',bankName:x.bank_name||'',bankBranch:x.bank_branch||'',lcNumber:x.lc_number||'',dutyRate:x.duty_rate==null?'':String(x.duty_rate),tariffCode:x.tariff_code||'',netWeight:x.net_weight_kg==null?'':String(x.net_weight_kg),grossWeight:x.gross_weight_kg==null?'':String(x.gross_weight_kg),billOfLading:x.bill_of_lading||'',insuranceIrr:x.insurance_irr==null?'':String(x.insurance_irr)});setNeeded(x.required_documents||'')}setRegistered(!preserveLocalDraft)}else if(!preserveLocalDraft){formDraft.clearDraft();setCustomsOfficeId(String(s.customs_office_id||''));setCustomsRegime('');setValues(v=>({...v,packageCount:s.cargo_count==null?'':String(Math.round(s.cargo_count)),netWeight:s.net_weight_kg==null?'':weightKg(s.net_weight_kg),grossWeight:s.gross_weight_kg==null?'':weightKg(s.gross_weight_kg),billOfLading:s.bill_of_lading_no||''}))}}catch(e:any){setStatus(e?.message||'دریافت اطلاعات ناموفق بود')}finally{setBusy(false)}};
 useEffect(()=>{void load()},[shipmentId]);
 const set=(k:string,v:string)=>{setRegistered(false);setValues(p=>({...p,[k]:k==='netWeight'||k==='grossWeight'?weightKg(v):k==='vesselType'?normalizeVesselType(v):v}))};
-const extractAll=async()=>{if(!shipmentId)return setStatus('از مرحله ۱ یک محموله را انتخاب کنید.');if(!docs.length)return setStatus('برای این محموله سندی ثبت نشده است.');const processDocs=docs.filter(d=>d.storage_backend!=='telegram'&&!d.file_asset_id);if(!processDocs.length)return setStatus('اسناد ذخیره‌شده در آرشیو تلگرام طبق سیاست فایل‌منیجر برای OCR، استخراج یا تحلیل محتوا ارسال نمی‌شوند.');setBusy(true);setStatus('در حال استخراج همه اسناد محموله...');let activeDocumentId='';const markExtraction=async(documentId:string,status:'processing'|'completed'|'failed',errorMessage?:string)=>{if(!documentId)return;const patch:any={extraction_status:status,extraction_error:errorMessage||null};if(status==='processing')patch.extraction_started_at=new Date().toISOString();if(status==='completed'||status==='failed')patch.extraction_completed_at=new Date().toISOString();await supabase.from('shipment_documents').update(patch).eq('id',documentId)};const persistDocumentFields=async(documentId:string,parsed:any)=>{const org=await profileOrg();if(!org)return;const rows=fields.map(([k])=>({k,v:parsed?.[k]})).filter((x:any)=>{const s=String(x.v??'').trim();return !!s&&!/^x{2,}$/i.test(s)&&s!=='—'&&s!=='-'}).map((x:any)=>({organization_id:org,shipment_id:shipmentId,document_id:documentId,field_key:x.k,field_label:x.k,extracted_value:String(x.v).trim(),extraction_method:'ai-assistant',confidence:null}));if(rows.length){const{error}=await supabase.from('shipment_document_extractions').upsert(rows,{onConflict:'shipment_id,document_id,field_key'});if(error)throw error}};try{const results:any[]=[];for(let i=0;i<processDocs.length;i++){const d=processDocs[i];activeDocumentId=d.source==='shipment_documents'?d.id:'';if(activeDocumentId)await markExtraction(activeDocumentId,'processing');setStatus('در حال استخراج سند قدیمی '+(i+1)+' از '+processDocs.length+': '+d.document_name);const{data:signed,error:se}=await supabase.storage.from('customs_documents').createSignedUrl(d.storage_path,600);if(se)throw se;const res=await fetch(signed.signedUrl);if(!res.ok)throw new Error('دریافت '+d.document_name+' ناموفق بود');const blob=await res.blob();if(blob.size>15*1024*1024)throw new Error('حجم سند بیشتر از 15MB است: '+d.document_name);const{data,error}=await supabase.functions.invoke('ai-assistant',{body:{query:'این سند را برای ورود اطلاعات قبض انبار بررسی کن. فقط JSON با فیلدهای vesselType,regNumber,regDate,packageCount,warehouseReceiptNo,warehouseReceiptDate,cargoDescription,originCountry,transactionCountry,deliveryTerm,invoiceAmount,invoiceCurrency,bankBranchCode,bankName,bankBranch,lcNumber,dutyRate,tariffCode,netWeight,grossWeight,billOfLading,insuranceIrr,requiredDocuments برگردان. هیچ مقدار را حدس نزن.',documents:[{name:d.document_name,mime_type:d.mime_type,data:await new Promise<string>((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>{const s=String(fr.result||'');resolve(s.includes(',')?s.split(',')[1]:s)};fr.onerror=()=>reject(new Error('خواندن سند ناموفق بود'));fr.readAsDataURL(blob)})}],extract_fields:true,page_context:'/operations?tab=pre-declaration&shipmentId='+shipmentId,shipment_id:shipmentId}});if(error)throw new Error('استخراج '+d.document_name+': '+error.message);const raw=data?.answer||data?.message||{};let parsed:any={};if(typeof raw==='object')parsed=raw;else{try{parsed=JSON.parse(raw)}catch{const mm=String(raw).match(/\{[\s\S]*\}/);if(mm)parsed=JSON.parse(mm[0])}}results.push({name:d.document_name,data:parsed});if(activeDocumentId){await persistDocumentFields(activeDocumentId,parsed);await markExtraction(activeDocumentId,'completed');activeDocumentId=''}}const{data,error}=await supabase.functions.invoke('ai-assistant',{body:{query:'نتایج استخراج همه اسناد یک محموله در متن زیر است. آن‌ها را تطبیق بده و فقط JSON نهایی فیلدهای قبض انبار را برگردان. حدس نزن و در نبود مقدار رشته خالی بده.',document_text:JSON.stringify(results).slice(0,120000),extract_fields:true,page_context:'/operations?tab=pre-declaration&shipmentId='+shipmentId,shipment_id:shipmentId}});if(error)throw error;const raw=data?.answer||data?.message||{};let parsed:any={};if(typeof raw==='object')parsed=raw;else{try{parsed=JSON.parse(raw)}catch{const mm=String(raw).match(/\{[\s\S]*\}/);if(mm)parsed=JSON.parse(mm[0])}}const incoming:V={...blank};fields.forEach(([k])=>{incoming[k]=normalize(parsed[k])});incoming.netWeight=weightKg(parsed.netWeight);incoming.grossWeight=weightKg(parsed.grossWeight);incoming.vesselType=normalizeVesselType(incoming.vesselType);if(!incoming.packageCount&&shipment?.cargo_count!=null)incoming.packageCount=String(Math.round(shipment.cargo_count));if(!incoming.netWeight&&shipment?.net_weight_kg!=null)incoming.netWeight=weightKg(shipment.net_weight_kg);if(!incoming.grossWeight&&shipment?.gross_weight_kg!=null)incoming.grossWeight=weightKg(shipment.gross_weight_kg);if(!incoming.billOfLading&&shipment?.bill_of_lading_no)incoming.billOfLading=shipment.bill_of_lading_no;const usable=(v:any)=>{const s=String(v??'').trim();return !!s&&!/^x{2,}$/i.test(s)&&s!=='—'&&s!=='-'};const merged:V={...values};fields.forEach(([k])=>{if(usable(incoming[k]))merged[k]=incoming[k]});setValues(merged);setExtracted(incoming);setNeeded(normalize(parsed.requiredDocuments));setStatus('فقط '+processDocs.length+' سند قدیمی خارج از تلگرام استخراج شد؛ اسناد تلگرام پردازش نشدند. اکنون «ذخیره اطلاعات گمرکی» را بزنید.')}catch(e:any){const message=e?.message||'استخراج اسناد ناموفق بود';if(activeDocumentId)try{await markExtraction(activeDocumentId,'failed',message)}catch{}setStatus(message)}finally{setBusy(false)}};const applyPaste=()=>{const parsed=parseSmartPaste(paste);const next={...values};Object.entries(parsed).forEach(([k,v])=>{if(v)next[k]=v});setValues(next);setExtracted(parsed);setRegistered(false);setStatus('Smart Paste اعمال شد؛ اطلاعات را کنترل و سپس ذخیره کنید.')};
+const extractAll=async()=>{
+ if(!shipmentId)return setStatus('از مرحله ۱ یک محموله را انتخاب کنید.');
+ if(!docs.length)return setStatus('برای این محموله سندی ثبت نشده است.');
+ const processDocs=docs.filter(d=>Boolean(d.file_asset_id||d.storage_path));
+ if(!processDocs.length)return setStatus('برای این محموله فایل قابل‌خواندن در Storage یا آرشیو تلگرام پیدا نشد.');
+ setBusy(true);setRegistered(false);setStatus('در حال آماده‌سازی اسناد برای استخراج…');
+ const organizationId=profile?.organization_id||await profileOrg();
+ if(!organizationId){setBusy(false);return}
+ const usable=(value:any)=>{const s=String(value??'').trim();return !!s&&!/^x{2,}$/i.test(s)&&s!=='—'&&s!=='-'};
+ const parseAnswer=(payload:any)=>{
+  const raw=payload?.answer??payload?.message??payload;
+  if(raw&&typeof raw==='object'&&!Array.isArray(raw))return raw;
+  let text=String(raw??'').trim().replace(/^\x60{3}(?:json)?\s*/i,'').replace(/\s*\x60{3}$/,'');
+  try{return JSON.parse(text)}catch{
+   const start=text.indexOf('{'),end=text.lastIndexOf('}');
+   if(start>=0&&end>start){try{return JSON.parse(text.slice(start,end+1))}catch{}}
+  }
+  throw new Error('پاسخ استخراج ساختار JSON معتبر نداشت.');
+ };
+ const invokeExtraction=async(body:Record<string,unknown>)=>{
+  const {data,error}=await supabase.functions.invoke('ai-assistant',{body});
+  if(error)throw new Error(error.message||'سرویس استخراج سند پاسخ نداد.');
+  if(data?.error)throw new Error(String(data.error));
+  const parsed=parseAnswer(data);
+  if(!fields.some(([key])=>usable(parsed[key]))&&!usable(parsed.requiredDocuments)){
+   throw new Error('از محتوای سند اطلاعات قابل‌استفاده‌ای استخراج نشد.');
+  }
+  return parsed;
+ };
+ const loadFileForFallback=async(d:Doc)=>{
+  let response:Response;
+  if(d.file_asset_id){
+   const {data:{session},error:sessionError}=await supabase.auth.getSession();
+   if(sessionError||!session?.access_token)throw new Error('برای دریافت فایل آرشیو تلگرام نشست معتبر در دسترس نیست.');
+   const anonKey=String((import.meta as any).env?.VITE_SUPABASE_ANON_KEY||'');
+   const endpoint='/api/messenger/files/'+encodeURIComponent(d.file_asset_id)+'/download';
+   response=await fetch(endpoint,{headers:{Authorization:'Bearer '+session.access_token,...(anonKey?{apikey:anonKey}:{})},cache:'no-store'});
+  }else{
+   if(!d.storage_path||d.storage_path.startsWith('telegram://'))throw new Error('مسیر فایل ذخیره‌شده معتبر نیست.');
+   const {data:signed,error}=await supabase.storage.from('customs_documents').createSignedUrl(d.storage_path,600);
+   if(error||!signed?.signedUrl)throw new Error(error?.message||'لینک امن دریافت سند ساخته نشد.');
+   response=await fetch(signed.signedUrl,{cache:'no-store'});
+  }
+  if(!response.ok)throw new Error('دریافت فایل برای OCR ناموفق بود (HTTP '+response.status+').');
+  const blob=await response.blob();
+  if(blob.size>20*1024*1024)throw new Error('حجم سند برای مسیر جایگزین OCR بیش از ۲۰ مگابایت است.');
+  const type=blob.type||d.mime_type||'application/octet-stream';
+  return new File([blob],d.original_file_name||d.document_name,{type});
+ };
+ const markShipmentDoc=async(documentId:string,status:'processing'|'completed'|'failed',errorMessage?:string)=>{
+  const patch:any={extraction_status:status,extraction_error:errorMessage||null};
+  if(status==='processing')patch.extraction_started_at=new Date().toISOString();
+  if(status==='completed'||status==='failed')patch.extraction_completed_at=new Date().toISOString();
+  const {error}=await supabase.from('shipment_documents').update(patch).eq('id',documentId).eq('shipment_id',shipmentId).eq('organization_id',organizationId);
+  if(error)throw error;
+ };
+ const persistDocument=async(d:Doc,parsed:any)=>{
+  if(d.source==='shipment_documents'){
+   const rows=fields.map(([key,label])=>({key,label,value:parsed?.[key]}))
+    .filter((item:any)=>usable(item.value))
+    .map((item:any)=>({organization_id:organizationId,shipment_id:shipmentId,document_id:d.id,field_key:item.key,field_label:item.label,extracted_value:String(item.value).trim(),extraction_method:'ai-assistant',confidence:null}));
+   if(rows.length){
+    const {error}=await supabase.from('shipment_document_extractions').upsert(rows,{onConflict:'shipment_id,document_id,field_key'});
+    if(error)throw error;
+   }
+  }else{
+   const {error}=await supabase.from('customs_documents').update({extraction:parsed,extraction_confidence:null}).eq('id',d.id).eq('shipment_id',shipmentId).eq('organization_id',organizationId);
+   if(error)throw error;
+  }
+ };
+ const results:Array<{name:string;data:any}>=[];
+ const failures:string[]=[];
+ for(let index=0;index<processDocs.length;index++){
+  const d=processDocs[index];
+  try{
+   if(d.source==='shipment_documents')await markShipmentDoc(d.id,'processing');
+   setStatus('در حال استخراج سند '+(index+1)+' از '+processDocs.length+': '+d.document_name);
+   const common={
+    query:'این سند را برای تکمیل اطلاعات قبل از اظهار گمرکی بخوان. فقط یک شیء JSON با کلیدهای vesselType,regNumber,regDate,packageCount,warehouseReceiptNo,warehouseReceiptDate,cargoDescription,originCountry,transactionCountry,deliveryTerm,invoiceAmount,invoiceCurrency,bankBranchCode,bankName,bankBranch,lcNumber,dutyRate,tariffCode,netWeight,grossWeight,billOfLading,insuranceIrr,requiredDocuments برگردان. همه صفحات و جدول‌ها را بررسی کن. هیچ شماره، تاریخ، وزن، مبلغ یا مشخصه‌ای را حدس نزن. مقادیر ناخوانا یا ناموجود را خالی بگذار.',
+    extract_fields:true,
+    document_mime_type:d.mime_type||'application/pdf',
+    document_size_bytes:d.size_bytes||0,
+    page_context:'/operations?tab=pre-declaration&shipmentId='+shipmentId,
+    shipment_id:shipmentId
+   };
+   const documentReference=d.file_asset_id
+    ?{telegram_file_asset_id:d.file_asset_id}
+    :{document_storage_path:d.storage_path};
+   let parsed:any;
+   try{
+    parsed=await invokeExtraction({...common,...documentReference});
+   }catch(aiError){
+    const primaryMessage=aiError instanceof Error?aiError.message:String(aiError);
+    setStatus('سرویس AI برای «'+d.document_name+'» پاسخ نداد؛ مسیر PDF/OCR محلی فعال می‌شود…');
+    try{
+     const localFile=await loadFileForFallback(d);
+     const documentText=await extractDocumentText(localFile,setStatus);
+     parsed=await invokeExtraction({
+      query:common.query+'\\nمتن استخراج‌شده از همان سند در ادامه آمده است؛ فقط از همین متن استفاده کن و مقدار مبهم را خالی بگذار.',
+      extract_fields:true,
+      document_text:documentText,
+      page_context:common.page_context,
+      shipment_id:shipmentId
+     });
+    }catch(fallbackError){
+     const fallbackMessage=fallbackError instanceof Error?fallbackError.message:String(fallbackError);
+     throw new Error('استخراج هوشمند: '+primaryMessage+' | مسیر PDF/OCR: '+fallbackMessage);
+    }
+   }
+   await persistDocument(d,parsed);
+   if(d.source==='shipment_documents')await markShipmentDoc(d.id,'completed');
+   results.push({name:d.document_name,data:parsed});
+  }catch(error){
+   const message=error instanceof Error?error.message:String(error);
+   failures.push(d.document_name+': '+message);
+   if(d.source==='shipment_documents'){
+    try{await markShipmentDoc(d.id,'failed',message.slice(0,1000))}catch{}
+   }
+  }
+ }
+ if(!results.length){
+  setStatus('هیچ‌کدام از '+processDocs.length+' سند خوانده نشدند. '+failures.slice(0,3).join(' | '));
+  setBusy(false);
+  return;
+ }
+ const incoming:V={...blank};
+ for(const result of results){
+  fields.forEach(([key])=>{if(!usable(incoming[key])&&usable(result.data?.[key]))incoming[key]=String(result.data[key]).trim()});
+ }
+ incoming.netWeight=weightKg(incoming.netWeight);
+ incoming.grossWeight=weightKg(incoming.grossWeight);
+ incoming.vesselType=normalizeVesselType(incoming.vesselType);
+ if(!incoming.packageCount&&shipment?.cargo_count!=null)incoming.packageCount=String(Math.round(shipment.cargo_count));
+ if(!incoming.netWeight&&shipment?.net_weight_kg!=null)incoming.netWeight=weightKg(shipment.net_weight_kg);
+ if(!incoming.grossWeight&&shipment?.gross_weight_kg!=null)incoming.grossWeight=weightKg(shipment.gross_weight_kg);
+ if(!incoming.billOfLading&&shipment?.bill_of_lading_no)incoming.billOfLading=shipment.bill_of_lading_no;
+ const merged:V={...values};
+ fields.forEach(([key])=>{if(usable(incoming[key])&&!usable(merged[key]))merged[key]=incoming[key]});
+ setValues(merged);setExtracted(incoming);
+ const required=results.map(result=>String(result.data?.requiredDocuments||'').trim()).find(Boolean)||'';
+ if(required)setNeeded(required);
+ const conflicts=fields.filter(([key])=>new Set(results.map(result=>String(result.data?.[key]||'').trim()).filter(usable)).size>1);
+ const conflictText=conflicts.length?' · '+conflicts.length+' مورد دارای مقادیر متفاوت است؛ لطفاً قبل از ذخیره تطبیق دهید.':'';
+ const failureText=failures.length?' · '+failures.length+' سند ناموفق: '+failures.slice(0,2).join('؛ '):'';
+ setStatus(results.length+' سند از '+processDocs.length+' سند با موفقیت خوانده شد. اطلاعات استخراج‌شده فقط در فرم قرار گرفت؛ برای ثبت دائمی «ذخیره اطلاعات گمرکی» را بزنید.'+conflictText+failureText);
+ setBusy(false);
+};
+const applyPaste=()=>{const parsed=parseSmartPaste(paste);const next={...values};Object.entries(parsed).forEach(([k,v])=>{if(v)next[k]=v});setValues(next);setExtracted(parsed);setRegistered(false);setStatus('Smart Paste اعمال شد؛ اطلاعات را کنترل و سپس ذخیره کنید.')};
 const output=useMemo(()=>{const v=(k:string)=>values[k]||'—';return 'نوع کشتی: '+v('vesselType')+'\n\nشماره ثبت سفارش: '+v('regNumber')+'\nتاریخ ثبت سفارش: '+v('regDate')+'\n\nتعداد: '+v('packageCount')+'\nشماره قبض انبار: '+v('warehouseReceiptNo')+'\nتاریخ قبض انبار: '+v('warehouseReceiptDate')+'\n\nشرح کالا: '+v('cargoDescription')+'\nکشور مبدا: '+v('originCountry')+'\nکشور طرف معامله: '+v('transactionCountry')+'\nشرایط تحویل: '+v('deliveryTerm')+'\nمبلغ کل فاکتور: '+v('invoiceAmount')+'\nارز: '+v('invoiceCurrency')+'\n\nاطلاعات بانکی:\nکد شعبه: '+v('bankBranchCode')+'\nنام بانک: '+v('bankName')+'\nشعبه: '+v('bankBranch')+'\nشماره اعتبار اسنادی: '+v('lcNumber')+'\n\nماخذ حقوق ورودی: '+v('dutyRate')+'\nکد تعرفه کالا: '+v('tariffCode')+'\nوزن خالص: '+v('netWeight')+' کیلوگرم\nوزن ناخالص: '+v('grossWeight')+' کیلوگرم\nشماره بارنامه: '+v('billOfLading')+'\nبیمه (ریال): '+v('insuranceIrr')+'\n\nاطلاعات مورد نیاز: '+(needed||'—')},[values,needed]);
 const save=async()=>{if(!shipmentId)return setStatus('شناسه محموله وجود ندارد.');if(!customsOfficeId)return setStatus('گمرک محل اظهار را انتخاب کنید؛ هر محموله باید گمرک مشخص داشته باشد.');if(!customsRegime)return setStatus('رویه گمرکی را انتخاب کنید؛ اطلاعات قبل اظهار بدون رویه ذخیره نمی‌شود.');const org=await profileOrg();if(!org)return;setBusy(true);setStatus('در حال ذخیره دائمی اطلاعات گمرکی...');try{const{data:{user}}=await supabase.auth.getUser();const row:any={shipment_id:shipmentId,organization_id:org,customs_office_id:customsOfficeId||null,customs_regime:customsRegime||null,vessel_type:normalizeVesselType(values.vesselType)||null,registration_order_no:values.regNumber||null,registration_order_date_shamsi:values.regDate||null,package_count:num(values.packageCount),warehouse_receipt_no:values.warehouseReceiptNo||null,warehouse_receipt_date_shamsi:values.warehouseReceiptDate||null,cargo_description:values.cargoDescription||null,origin_country:values.originCountry||null,transaction_country:values.transactionCountry||null,delivery_term:values.deliveryTerm||null,invoice_amount:num(values.invoiceAmount),invoice_currency:values.invoiceCurrency||null,bank_branch_code:values.bankBranchCode||null,bank_name:values.bankName||null,bank_branch:values.bankBranch||null,lc_number:values.lcNumber||null,duty_rate:num(values.dutyRate),tariff_code:values.tariffCode||null,net_weight_kg:num(values.netWeight),gross_weight_kg:num(values.grossWeight),bill_of_lading:values.billOfLading||null,insurance_irr:num(values.insuranceIrr),required_documents:needed||null,source_method:paste.trim()?'smart-paste':'manual',source_text:paste.trim()||null,created_by:user?.id||null};const{error}=await supabase.from('shipment_customs_data').upsert(row,{onConflict:'shipment_id'});if(error)throw error;const{error:shipmentOfficeError}=await supabase.from('shipments').update({customs_office_id:customsOfficeId||null}).eq('id',shipmentId).eq('organization_id',org);if(shipmentOfficeError)throw shipmentOfficeError;if(shipment?.case_id){const{error:caseOfficeError}=await supabase.from('cases').update({customs_office_id:customsOfficeId||null,customs_regime:customsRegime||null}).eq('id',shipment.case_id).eq('organization_id',org);if(caseOfficeError)throw caseOfficeError;}formDraft.clearDraft();setRegistered(true);setStatus('اطلاعات گمرکی دائمی ذخیره شد و در مدیریت پرونده قابل مشاهده است.')}catch(e:any){setStatus(e?.message||'ذخیره اطلاعات گمرکی ناموفق بود')}finally{setBusy(false)}};
 const copy=async()=>{try{await navigator.clipboard.writeText(output);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch{setStatus('کپی متن در این مرورگر انجام نشد.')}};
