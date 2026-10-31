@@ -9,11 +9,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 export function normalizeDocumentText(value: string, maxChars = 26_000): string {
   return String(value || '')
     .normalize('NFKC')
-    .replace(/[\\u200e\\u200f\\u202a-\\u202e]/g, '')
-    .replace(/\\r\\n?/g, '\\n')
-    .replace(/[ \\t]+/g, ' ')
-    .replace(/\\n[ \\t]+/g, '\\n')
-    .replace(/\\n{3,}/g, '\\n\\n')
+    .replace(/[\u200e\u200f\u202a-\u202e]/g, '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, maxChars);
 }
@@ -31,7 +31,7 @@ export async function extractDocumentText(
   const mime = String(file.type || '').toLowerCase();
   const name = String(file.name || '').toLowerCase();
   const isPdf = mime === 'application/pdf' || name.endsWith('.pdf');
-  const isImage = mime.startsWith('image/') || /\\.(png|jpe?g|webp|tiff?)$/.test(name);
+  const isImage = mime.startsWith('image/') || /\.(png|jpe?g|webp|tiff?)$/.test(name);
 
   if (!isPdf && !isImage) {
     throw new Error('قالب این سند برای استخراج متن پشتیبانی نمی‌شود.');
@@ -67,7 +67,7 @@ export async function extractDocumentText(
           .trim();
 
         if (pageText.length >= 24) {
-          chunks.push('[صفحه ' + pageNumber + ']\\n' + pageText);
+          chunks.push('[صفحه ' + pageNumber + ']\n' + pageText);
         } else {
           const viewport = page.getViewport({ scale: 1.35 });
           const canvas = document.createElement('canvas');
@@ -79,12 +79,12 @@ export async function extractDocumentText(
           const ocr = await getOcrWorker();
           const result = await ocr.recognize(canvas);
           const text = String(result.data?.text || '').trim();
-          if (text) chunks.push('[صفحه ' + pageNumber + ' · OCR]\\n' + text);
+          if (text) chunks.push('[صفحه ' + pageNumber + ' · OCR]\n' + text);
           canvas.width = 0;
           canvas.height = 0;
         }
 
-        if (chunks.join('\\n').length >= 26_000) break;
+        if (chunks.join('\n').length >= 26_000) break;
       }
       if (pdf.numPages > pageLimit) {
         chunks.push('[ادامه سند: برای جلوگیری از پردازش بیش‌ازحد، فقط ' + pageLimit + ' صفحه نخست بررسی شد.]');
@@ -100,7 +100,7 @@ export async function extractDocumentText(
     if (worker) await worker.terminate();
   }
 
-  const output = normalizeDocumentText(chunks.join('\\n\\n'));
+  const output = normalizeDocumentText(chunks.join('\n\n'));
   if (output.length < 12) {
     throw new Error('از سند متن قابل‌خواندنی استخراج نشد. کیفیت تصویر یا اسکن سند را بررسی کنید.');
   }
