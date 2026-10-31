@@ -33,7 +33,7 @@ describe('multi-device authentication and session management', () => {
     expect(app).toContain('<SessionLifecycle/>');
     expect(sessionLifecycle).toContain("from('user_device_sessions')");
     expect(sessionLifecycle).toContain("table: 'user_device_sessions'");
-    expect(sessionLifecycle).toContain("supabase.auth.signOut({ scope: 'local' })");
+    expect(sessionLifecycle).toContain('await signOut()');
     expect(sessionLifecycle).toContain('setInterval');
     expect(sessionLifecycle).toContain('revoked_at');
   });
