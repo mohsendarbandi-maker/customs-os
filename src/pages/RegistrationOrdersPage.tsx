@@ -87,13 +87,19 @@ export const RegistrationOrdersPage:React.FC=()=>{
    const[historyRows,shipmentRows,caseRows,masterRows]=await Promise.all([
     fetchAll('shipment_customs_data','shipment_id,registration_order_no,bank_name,bank_branch,bank_branch_code,lc_number,invoice_amount,invoice_currency,updated_at','shipment_id'),
     fetchAll('shipments','id,client_id,case_id','id'),
-    fetchAll('cases','id,client_id','id'),
+    fetchAll('cases','id,client_id,registration_order_no','id'),
     supabase.from('registration_orders').select('id,client_id,order_number,bank_name,bank_branch,bank_branch_code,payment_instrument_code,currency,notes').eq('organization_id',profile.organization_id)
    ]);
    if(masterRows.error)throw masterRows.error;
-   const caseClients=new Map<string,string|null>((caseRows||[]).map((row:any)=>[row.id,row.client_id||null]));
-   const clientByShipment=new Map<string,string|null>((shipmentRows||[]).map((row:any)=>[row.id,row.client_id||caseClients.get(row.case_id)||null]));
-   const plan=buildLegacyRegistrationOrderBackfillPlan(historyRows,clientByShipment);
+   const caseById=new Map<string,{client_id:string|null;registration_order_no:string|null}>((caseRows||[]).map((row:any)=>[row.id,{client_id:row.client_id||null,registration_order_no:row.registration_order_no||null}]));
+   const shipmentById=new Map<string,any>((shipmentRows||[]).map((row:any)=>[row.id,row]));
+   const clientByShipment=new Map<string,string|null>((shipmentRows||[]).map((row:any)=>[row.id,row.client_id||caseById.get(row.case_id)?.client_id||null]));
+   const historyWithCaseOrderNumber=(historyRows||[]).map((row:any)=>{
+    const shipment=shipmentById.get(row.shipment_id);
+    const caseOrder=shipment?.case_id?caseById.get(shipment.case_id)?.registration_order_no:null;
+    return {...row,registration_order_no:String(row.registration_order_no||'').trim()||caseOrder||null};
+   });
+   const plan=buildLegacyRegistrationOrderBackfillPlan(historyWithCaseOrderNumber,clientByShipment);
    let created=0,updated=0,unchanged=0,skipped=0;
    for(const item of plan.items){
     const matches=(masterRows.data||[]).filter((row:any)=>normalizeRegistrationOrderNumber(row.order_number)===normalizeRegistrationOrderNumber(item.order_number));
