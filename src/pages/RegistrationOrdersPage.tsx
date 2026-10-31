@@ -3,6 +3,7 @@ import{CheckCircle2,FileText,Lock,Unlock,Plus,RefreshCw,Save}from'lucide-react';
 import{Link}from'react-router-dom';
 import{supabase}from'../lib/supabase';
 import{buildExternalRegistrationOrderAllocationPayload,calculateRegistrationOrderCapacity}from'../lib/registrationOrderAllocations';
+import{buildLegacyRegistrationOrderBackfillPlan,normalizeRegistrationOrderNumber}from'../lib/registrationOrderLookup';
 import{useAuth}from'../context/AuthContext';
 
 type Client={id:string;name:string};
@@ -62,7 +63,107 @@ export const RegistrationOrdersPage:React.FC=()=>{
  const[busy,setBusy]=useState(false);
  const[message,setMessage]=useState('');
  const[error,setError]=useState('');
+ const[backfillBusy,setBackfillBusy]=useState(false);
+ const[backfillStatus,setBackfillStatus]=useState('');
  const set=(key:string,value:string)=>setForm(prev=>({...prev,[key]:value}));
+
+ const backfillHistoricalBankDetails=async()=>{
+  if(!profile?.organization_id)return setBackfillStatus('سازمان کاربر مشخص نیست.');
+  if(!['owner','admin','broker'].includes(String(profile?.role||'')))return setBackfillStatus('برای تکمیل ثبت سفارش‌های مادر، دسترسی مدیر یا کارگزار لازم است.');
+  setBackfillBusy(true);setBackfillStatus('در حال تطبیق شماره‌های ثبت سفارش با سوابق محموله‌ها…');setError('');
+  try{
+   const pageSize=1000;
+   const fetchAll=async(table:'shipment_customs_data'|'shipments'|'cases',columns:string,orderColumn:string)=>{
+    const rows:any[]=[];
+    for(let offset=0;;offset+=pageSize){
+     const query:any=supabase.from(table as any).select(columns).eq('organization_id',profile.organization_id).order(orderColumn,{ascending:true}).range(offset,offset+pageSize-1);
+     const{data,error:e}=await query;
+     if(e)throw e;
+     rows.push(...(data||[]));
+     if((data||[]).length<pageSize)break;
+    }
+    return rows;
+   };
+   const[historyRows,shipmentRows,caseRows,masterRows]=await Promise.all([
+    fetchAll('shipment_customs_data','shipment_id,registration_order_no,bank_name,bank_branch,bank_branch_code,lc_number,invoice_amount,invoice_currency,updated_at','shipment_id'),
+    fetchAll('shipments','id,client_id,case_id','id'),
+    fetchAll('cases','id,client_id,registration_order_no','id'),
+    supabase.from('registration_orders').select('id,client_id,order_number,bank_name,bank_branch,bank_branch_code,payment_instrument_code,currency,notes').eq('organization_id',profile.organization_id)
+   ]);
+   if(masterRows.error)throw masterRows.error;
+   const caseById=new Map<string,{client_id:string|null;registration_order_no:string|null}>();
+   (caseRows||[]).forEach((row:any)=>caseById.set(row.id,{client_id:row.client_id||null,registration_order_no:row.registration_order_no||null}));
+   const shipmentById=new Map<string,any>();
+   const clientByShipment=new Map<string,string|null>();
+   (shipmentRows||[]).forEach((row:any)=>{
+    shipmentById.set(row.id,row);
+    clientByShipment.set(row.id,row.client_id||caseById.get(row.case_id)?.client_id||null);
+   });
+   const historyWithCaseOrderNumber=(historyRows||[]).map((row:any)=>{
+    const shipment=shipmentById.get(row.shipment_id);
+    const caseOrder=shipment?.case_id?caseById.get(shipment.case_id)?.registration_order_no:null;
+    return {...row,registration_order_no:String(row.registration_order_no||'').trim()||caseOrder||null};
+   });
+   const plan=buildLegacyRegistrationOrderBackfillPlan(historyWithCaseOrderNumber,clientByShipment);
+   let created=0,updated=0,unchanged=0,skipped=0;
+   for(const item of plan.items){
+    const matches=(masterRows.data||[]).filter((row:any)=>normalizeRegistrationOrderNumber(row.order_number)===normalizeRegistrationOrderNumber(item.order_number));
+    if(matches.length>1){skipped++;continue}
+    const existing=matches[0] as any||null;
+    if(existing&&existing.client_id&&existing.client_id!==item.client_id){skipped++;continue}
+    const details={
+     bank_name:item.bank_name,
+     bank_branch:item.bank_branch,
+     bank_branch_code:item.bank_branch_code,
+     payment_instrument_code:item.payment_instrument_code
+    };
+    if(existing){
+     const updates:any={};
+     (Object.keys(details) as Array<keyof typeof details>).forEach(key=>{
+      if(!String(existing[key]||'').trim()&&details[key])updates[key]=details[key];
+     });
+     if(!existing.client_id)updates.client_id=item.client_id;
+     if(!existing.currency&&item.currency)updates.currency=item.currency;
+     const conflicts=[...item.conflicts];
+     if(existing.currency&&item.currency&&String(existing.currency)!==item.currency)conflicts.push('ارز ثبت سفارش با سابقه فاکتور متفاوت است');
+     if(conflicts.length){
+      const warning='تطبیق تاریخی: '+conflicts.join('، ')+'؛ اطلاعات پرتکرار ذخیره شده و مورد اختلاف نیازمند کنترل است.';
+      if(!String(existing.notes||'').includes(warning))updates.notes=[String(existing.notes||'').trim(),warning].filter(Boolean).join('\n');
+     }
+     if(Object.keys(updates).length){
+      const{error:e}=await supabase.from('registration_orders').update(updates).eq('id',existing.id).eq('organization_id',profile.organization_id);
+      if(e)throw e;
+      updated++;
+     }else unchanged++;
+    }else{
+     const notes=[
+      'مشخصات بانکی از '+item.source_count.toLocaleString('fa-IR')+' سابقه محموله موجود بازیابی شد.',
+      ...(item.conflicts.length?['تطبیق تاریخی: اختلاف در '+item.conflicts.join('، ')+' بین محموله‌ها؛ مقدار پرتکرارتر ثبت شده و نیازمند کنترل است.']:[])
+     ].join('\n');
+     const{error:e}=await supabase.from('registration_orders').insert({
+      organization_id:profile.organization_id,
+      client_id:item.client_id,
+      order_number:item.order_number,
+      status:'received',
+      ...details,
+      currency:item.currency,
+      notes
+     });
+     if(e)throw e;
+     created++;
+    }
+   }
+   await load();
+   setBackfillStatus(
+    'تطبیق انجام شد: '+created.toLocaleString('fa-IR')+' ثبت سفارش مادر جدید، '+
+    updated.toLocaleString('fa-IR')+' رکورد تکمیل‌شده، '+
+    unchanged.toLocaleString('fa-IR')+' بدون نیاز به تغییر؛ '+
+    (skipped+plan.ambiguous_order_numbers.length+plan.missing_owner_order_numbers.length).toLocaleString('fa-IR')+
+    ' مورد برای جلوگیری از اتصال اشتباه رد شد. ارز فقط در صورت یکسان‌بودن همه ارزهای فاکتور از روی سابقه تکمیل شد؛ سقف ارزش/وزن و اتصال محموله‌های تاریخی تغییر نکرد.'
+   );
+  }catch(e:any){setBackfillStatus(e?.message||'تطبیق سوابق انجام نشد.');}
+  finally{setBackfillBusy(false);}
+ };
  const load=async()=>{
   if(!profile?.organization_id)return;
   setBusy(true);setError('');
@@ -221,9 +322,11 @@ export const RegistrationOrdersPage:React.FC=()=>{
   <div className="mx-auto max-w-7xl space-y-5">
    <header className="flex flex-wrap items-center justify-between gap-3">
     <div><div className="text-xs app-muted">مدیریت اطلاعات پایه واردات</div><h1 className="mt-1 text-2xl font-black">مدیریت ثبت سفارش‌ها</h1><p className="mt-1 text-sm app-muted">هر ثبت سفارش یک مشخصات بانکی و یک ابزار پرداخت مشترک دارد و می‌تواند چند محموله داشته باشد.</p></div>
-    <div className="flex gap-2"><button onClick={()=>void load()} disabled={busy} className="rounded-xl border app-border px-3 py-2.5"><RefreshCw size={17}/></button><button onClick={beginNew} className="rounded-xl bg-[var(--primary)] px-4 py-2.5 font-bold text-white"><Plus size={16} className="inline ml-1"/>ثبت سفارش جدید</button></div>
+    <div className="flex flex-wrap gap-2"><button type="button" onClick={()=>void backfillHistoricalBankDetails()} disabled={busy||backfillBusy} className="rounded-xl border app-border px-3 py-2.5 text-xs font-bold">{backfillBusy?'در حال تطبیق…':'تطبیق سوابق محموله‌ها'}</button><button onClick={()=>void load()} disabled={busy||backfillBusy} className="rounded-xl border app-border px-3 py-2.5"><RefreshCw size={17}/></button><button onClick={beginNew} className="rounded-xl bg-[var(--primary)] px-4 py-2.5 font-bold text-white"><Plus size={16} className="inline ml-1"/>ثبت سفارش جدید</button></div>
    </header>
    {error&&<div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">{error}</div>}
+   {backfillStatus&&<div className="rounded-xl border app-border bg-[var(--surface)] p-3 text-sm app-muted">{backfillStatus}</div>}
+   <p className="text-xs app-muted">تطبیق سوابق فقط بانک، شعبه، کد شعبه و کد ابزار پرداخت را از همان شماره ثبت سفارش و صاحب کالا بازیابی می‌کند؛ سقف‌ها و محموله‌های تاریخی را خودکار تغییر نمی‌دهد.</p>
    {message&&<div className="rounded-xl border app-border bg-[var(--surface)] p-3 text-sm">{message}</div>}
    <div className="grid gap-5 lg:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.6fr)]">
     <section className="rounded-2xl border app-border bg-[var(--surface)] p-4">
