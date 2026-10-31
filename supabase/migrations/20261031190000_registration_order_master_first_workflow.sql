@@ -204,7 +204,7 @@ begin
 end;
 $function$;
 
-create or replace view public.registration_order_reconciliation as
+create or replace view public.registration_order_reconciliation with (security_invoker=true) as
 select
   ro.id as registration_order_id,
   ro.organization_id,
