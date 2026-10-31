@@ -167,24 +167,22 @@ const resolveRegistrationOrderByNumber=async(rawValue:string,requestId:number)=>
    setBankResolutionStatus('ثبت سفارش مادر یا اطلاعات بانکی در اسناد قبلی با این شماره پیدا نشد.');
   }
   if(master?.id&&requestId===resolutionRequestRef.current){
-   const historicalIds=[...new Set([shipmentId,...matchingHistory.map((row:any)=>row.shipment_id).filter(Boolean)])];
-   const{data:related,error:relatedError}=await supabase.from('shipments').select('id,client_id,registration_order_id').eq('organization_id',organizationId).in('id',historicalIds);
-   if(relatedError)throw relatedError;
-   const expectedClientId=master.client_id||shipment?.client_id||null;
-   const linkable=(related||[]).filter((row:any)=>!row.registration_order_id&&(!expectedClientId||row.client_id===expectedClientId)).map((row:any)=>row.id);
-   if(linkable.length){
-    const{data:linkedRows,error:linkError}=await supabase.from('shipments').update({registration_order_id:master.id}).eq('organization_id',organizationId).in('id',linkable).is('registration_order_id',null).select('id');
-    const linkedIds=new Set((linkedRows||[]).map((row:any)=>row.id));
-    let currentShipmentLinked=linkedIds.has(shipmentId);
-    if(linkError||linkedIds.size<linkable.length){
-     if(!currentShipmentLinked&&linkable.includes(shipmentId)){
-      const{data:currentLinkRow,error:currentLinkError}=await supabase.from('shipments').update({registration_order_id:master.id}).eq('organization_id',organizationId).eq('id',shipmentId).is('registration_order_id',null).select('id').maybeSingle();
-      currentShipmentLinked=!currentLinkError&&Boolean(currentLinkRow?.id);
-     }
-     if(currentShipmentLinked)setShipment((current:any)=>current?{...current,registration_order_id:master.id}:current);
-     if(requestId===resolutionRequestRef.current)setBankResolutionStatus(current=>current+' '+(currentShipmentLinked?'محموله جاری متصل شد؛ برخی سوابق قدیمی به علت کنترل‌های تطبیق یا دسترسی متصل نشدند.':'اتصال محموله به ثبت سفارش مادر کامل نشد؛ مشخصات بانکی بازیابی شده‌اند.'));
-    }else if(currentShipmentLinked){
+   // Historical rows can be handled by another broker/company. Read them to
+   // recover shared bank data, but do not silently turn them into internal
+   // shipments or count them twice. Only attach the shipment open in this form.
+   if(shipment?.registration_order_id&&shipment.registration_order_id!==master.id){
+    setBankResolutionStatus(current=>current+' اطلاعات بانکی بازیابی شد؛ این محموله از قبل به ثبت سفارش دیگری متصل است و اتصال تغییر نکرد.');
+   }else if(master.client_id&&shipment?.client_id&&master.client_id!==shipment.client_id){
+    setBankResolutionStatus(current=>current+' اطلاعات بانکی بازیابی شد؛ صاحب کالای محموله با صاحب کالای ثبت سفارش مادر یکسان نیست.');
+   }else if(!shipment?.registration_order_id){
+    const{data:currentLinkRow,error:currentLinkError}=await supabase.from('shipments')
+     .update({registration_order_id:master.id})
+     .eq('organization_id',organizationId).eq('id',shipmentId)
+     .is('registration_order_id',null).select('id').maybeSingle();
+    if(!currentLinkError&&currentLinkRow?.id){
      setShipment((current:any)=>current?{...current,registration_order_id:master.id}:current);
+    }else{
+     setBankResolutionStatus(current=>current+' اطلاعات بانکی بازیابی شد، اما اتصال محموله جاری به علت کنترل سقف وزن/ارزش یا سطح دسترسی انجام نشد. سوابق قبلی به‌طور خودکار به محموله داخلی تبدیل نشدند.');
     }
    }
   }
