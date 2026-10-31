@@ -91,9 +91,14 @@ export const RegistrationOrdersPage:React.FC=()=>{
     supabase.from('registration_orders').select('id,client_id,order_number,bank_name,bank_branch,bank_branch_code,payment_instrument_code,currency,notes').eq('organization_id',profile.organization_id)
    ]);
    if(masterRows.error)throw masterRows.error;
-   const caseById=new Map<string,{client_id:string|null;registration_order_no:string|null}>((caseRows||[]).map((row:any)=>[row.id,{client_id:row.client_id||null,registration_order_no:row.registration_order_no||null}]));
-   const shipmentById=new Map<string,any>((shipmentRows||[]).map((row:any)=>[row.id,row]));
-   const clientByShipment=new Map<string,string|null>((shipmentRows||[]).map((row:any)=>[row.id,row.client_id||caseById.get(row.case_id)?.client_id||null]));
+   const caseById=new Map<string,{client_id:string|null;registration_order_no:string|null}>();
+   (caseRows||[]).forEach((row:any)=>caseById.set(row.id,{client_id:row.client_id||null,registration_order_no:row.registration_order_no||null}));
+   const shipmentById=new Map<string,any>();
+   const clientByShipment=new Map<string,string|null>();
+   (shipmentRows||[]).forEach((row:any)=>{
+    shipmentById.set(row.id,row);
+    clientByShipment.set(row.id,row.client_id||caseById.get(row.case_id)?.client_id||null);
+   });
    const historyWithCaseOrderNumber=(historyRows||[]).map((row:any)=>{
     const shipment=shipmentById.get(row.shipment_id);
     const caseOrder=shipment?.case_id?caseById.get(shipment.case_id)?.registration_order_no:null;
