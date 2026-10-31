@@ -65,11 +65,11 @@ const pickMostFrequent = (
     if (!key) continue;
     const timestamp = row.updated_at ? Date.parse(row.updated_at) || 0 : 0;
     const previous = groups.get(key);
-    if (!previous) groups.set(key, { count: 1, value, latest: timestamp });
+    if (!previous) groups.set(key, { count: 1, value: normalization === 'digits' ? key : value, latest: timestamp });
     else {
       previous.count += 1;
       if (timestamp >= previous.latest) {
-        previous.value = value;
+        previous.value = normalization === 'digits' ? key : value;
         previous.latest = timestamp;
       }
     }
