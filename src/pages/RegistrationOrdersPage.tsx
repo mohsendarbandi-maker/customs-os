@@ -73,10 +73,11 @@ export const RegistrationOrdersPage:React.FC=()=>{
   setBackfillBusy(true);setBackfillStatus('در حال تطبیق شماره‌های ثبت سفارش با سوابق محموله‌ها…');setError('');
   try{
    const pageSize=1000;
-   const fetchAll=async(table:'shipment_customs_data'|'shipments'|'cases',columns:string)=>{
+   const fetchAll=async(table:'shipment_customs_data'|'shipments'|'cases',columns:string,orderColumn:string)=>{
     const rows:any[]=[];
     for(let offset=0;;offset+=pageSize){
-     const{data,error:e}=await supabase.from(table).select(columns).eq('organization_id',profile.organization_id).range(offset,offset+pageSize-1);
+     const query:any=supabase.from(table as any).select(columns).eq('organization_id',profile.organization_id).order(orderColumn,{ascending:true}).range(offset,offset+pageSize-1);
+     const{data,error:e}=await query;
      if(e)throw e;
      rows.push(...(data||[]));
      if((data||[]).length<pageSize)break;
@@ -84,9 +85,9 @@ export const RegistrationOrdersPage:React.FC=()=>{
     return rows;
    };
    const[historyRows,shipmentRows,caseRows,masterRows]=await Promise.all([
-    fetchAll('shipment_customs_data','shipment_id,registration_order_no,bank_name,bank_branch,bank_branch_code,lc_number,invoice_amount,invoice_currency,updated_at'),
-    fetchAll('shipments','id,client_id,case_id'),
-    fetchAll('cases','id,client_id'),
+    fetchAll('shipment_customs_data','shipment_id,registration_order_no,bank_name,bank_branch,bank_branch_code,lc_number,invoice_amount,invoice_currency,updated_at','shipment_id'),
+    fetchAll('shipments','id,client_id,case_id','id'),
+    fetchAll('cases','id,client_id','id'),
     supabase.from('registration_orders').select('id,client_id,order_number,bank_name,bank_branch,bank_branch_code,payment_instrument_code,currency,notes').eq('organization_id',profile.organization_id)
    ]);
    if(masterRows.error)throw masterRows.error;
@@ -112,9 +113,10 @@ export const RegistrationOrdersPage:React.FC=()=>{
      });
      if(!existing.client_id)updates.client_id=item.client_id;
      if(!existing.currency&&item.currency)updates.currency=item.currency;
-     if(existing.currency&&item.currency&&String(existing.currency)!==item.currency){skipped++;continue;}
-     if(item.conflicts.length){
-      const warning='تطبیق تاریخی: اختلاف در '+item.conflicts.join('، ')+' بین محموله‌ها؛ مقدار پرتکرارتر ثبت شده و نیازمند کنترل است.';
+     const conflicts=[...item.conflicts];
+     if(existing.currency&&item.currency&&String(existing.currency)!==item.currency)conflicts.push('ارز ثبت سفارش با سابقه فاکتور متفاوت است');
+     if(conflicts.length){
+      const warning='تطبیق تاریخی: '+conflicts.join('، ')+'؛ اطلاعات پرتکرار ذخیره شده و مورد اختلاف نیازمند کنترل است.';
       if(!String(existing.notes||'').includes(warning))updates.notes=[String(existing.notes||'').trim(),warning].filter(Boolean).join('\n');
      }
      if(Object.keys(updates).length){
