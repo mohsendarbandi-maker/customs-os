@@ -30,6 +30,18 @@ const STORE_NAME = 'sessions';
 export function createAuthStorageAdapter(dependencies: StorageDependencies = {}): AuthSessionStorage {
   const memory = new Map<string, string>();
   let databasePromise: Promise<IDBDatabase | null> | null = null;
+  const indexedDBQueues = new Map<string, Promise<unknown>>();
+
+  const enqueueIndexedDB = <T>(key: string, operation: () => Promise<T>): Promise<T> => {
+    const previous = indexedDBQueues.get(key) ?? Promise.resolve();
+    const next = previous.catch(() => undefined).then(operation);
+    indexedDBQueues.set(key, next);
+    void next.then(
+      () => { if (indexedDBQueues.get(key) === next) indexedDBQueues.delete(key); },
+      () => { if (indexedDBQueues.get(key) === next) indexedDBQueues.delete(key); },
+    );
+    return next;
+  };
 
   const getLocalStorage =
     dependencies.getLocalStorage ??
@@ -140,15 +152,15 @@ export function createAuthStorageAdapter(dependencies: StorageDependencies = {})
         const value = storage?.getItem(key);
         if (value !== null && value !== undefined) {
           memory.set(key, value);
-          // Best-effort mirror. The localStorage value remains immediately usable.
-          void writeIndexedDB(key, value);
+          // Do not mirror on reads: racing tab reads can otherwise write a stale
+          // refresh token over a newer token in the asynchronous fallback store.
           return value;
         }
       } catch {
         // Safari may deny localStorage access in restricted contexts; try IndexedDB.
       }
 
-      const durableFallback = await readIndexedDB(key);
+      const durableFallback = await enqueueIndexedDB(key, () => readIndexedDB(key));
       if (durableFallback !== null) {
         memory.set(key, durableFallback);
         try {
@@ -174,7 +186,7 @@ export function createAuthStorageAdapter(dependencies: StorageDependencies = {})
         // Try IndexedDB if localStorage is disabled/quota-limited.
       }
 
-      const indexedDBWriteSucceeded = await writeIndexedDB(key, value);
+      const indexedDBWriteSucceeded = await enqueueIndexedDB(key, () => writeIndexedDB(key, value));
       if (!localStorageWriteSucceeded && !indexedDBWriteSucceeded) {
         // Keep the session usable until this page closes, while preserving neither
         // a false "durable" guarantee nor a silent logout on the next navigation.
@@ -189,7 +201,7 @@ export function createAuthStorageAdapter(dependencies: StorageDependencies = {})
       } catch {
         // Continue clearing the other session stores.
       }
-      await removeIndexedDB(key);
+      await enqueueIndexedDB(key, () => removeIndexedDB(key));
     },
   };
 }
