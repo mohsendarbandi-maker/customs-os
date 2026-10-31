@@ -111,8 +111,11 @@ begin
         s.registration_order_id is null
         and (
           s.case_id = v_order.case_id
-          or public.normalize_registration_order_number(c.registration_order_no::text)
-             = public.normalize_registration_order_number(v_order.order_number)
+          or (
+            c.client_id = v_order.client_id
+            and public.normalize_registration_order_number(c.registration_order_no::text)
+                = public.normalize_registration_order_number(v_order.order_number)
+          )
         )
       )
     );
@@ -262,8 +265,11 @@ left join lateral (
         s.registration_order_id is null
         and (
           s.case_id=ro.case_id
-          or public.normalize_registration_order_number(c.registration_order_no::text)
-             = public.normalize_registration_order_number(ro.order_number)
+          or (
+            c.client_id=ro.client_id
+            and public.normalize_registration_order_number(c.registration_order_no::text)
+                = public.normalize_registration_order_number(ro.order_number)
+          )
         )
       )
     )
