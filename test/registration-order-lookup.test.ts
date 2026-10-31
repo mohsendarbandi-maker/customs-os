@@ -3,6 +3,7 @@ import {
   normalizeRegistrationOrderNumber,
   registrationOrderNumberVariants,
   resolveLegacyRegistrationBankDetails,
+  buildLegacyRegistrationOrderBackfillPlan,
 } from "../src/lib/registrationOrderLookup";
 
 describe("registration order lookup", () => {
@@ -57,5 +58,53 @@ describe("registration order lookup", () => {
       source_count: 0,
       conflicts: [],
     });
+  });
+
+  it("builds a bank backfill plan only for one unambiguous cargo owner", () => {
+    const plan = buildLegacyRegistrationOrderBackfillPlan(
+      [
+        { shipment_id: "s1", registration_order_no: "۹۱۹۰۰۰۲۷", bank_name: "سامان", bank_branch: "جام جم", bank_branch_code: "5606117", lc_number: "26188567" },
+        { shipment_id: "s2", registration_order_no: "91900027", bank_name: "سامان", bank_branch: "جام جم", bank_branch_code: "5606117", lc_number: null },
+        { shipment_id: "s3", registration_order_no: "91900027", bank_name: "سامان", bank_branch: "مشهد", bank_branch_code: "611", lc_number: "26188567" },
+      ],
+      new Map([["s1", "client-1"], ["s2", "client-1"], ["s3", "client-1"]]),
+    );
+
+    expect(plan.items).toHaveLength(1);
+    expect(plan.items[0]).toMatchObject({
+      order_number: "91900027",
+      client_id: "client-1",
+      bank_name: "سامان",
+      bank_branch: "جام جم",
+      bank_branch_code: "5606117",
+      payment_instrument_code: "26188567",
+      source_count: 3,
+    });
+    expect(plan.items[0].conflicts).toContain("نام شعبه");
+    expect(plan.items[0].conflicts).toContain("کد شعبه");
+    expect(plan.ambiguous_order_numbers).toEqual([]);
+  });
+
+  it("does not mix one registration number across different cargo owners", () => {
+    const plan = buildLegacyRegistrationOrderBackfillPlan(
+      [
+        { shipment_id: "s1", registration_order_no: "12345678", bank_name: "ملت", lc_number: "LC-1" },
+        { shipment_id: "s2", registration_order_no: "12345678", bank_name: "ملت", lc_number: "LC-1" },
+      ],
+      new Map([["s1", "client-1"], ["s2", "client-2"]]),
+    );
+
+    expect(plan.items).toEqual([]);
+    expect(plan.ambiguous_order_numbers).toEqual(["12345678"]);
+  });
+
+  it("skips history rows without a resolvable cargo owner", () => {
+    const plan = buildLegacyRegistrationOrderBackfillPlan(
+      [{ shipment_id: "s1", registration_order_no: "12345678", bank_name: "ملت" }],
+      new Map(),
+    );
+
+    expect(plan.items).toEqual([]);
+    expect(plan.missing_owner_order_numbers).toEqual(["12345678"]);
   });
 });
