@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { attachSupabaseClient, rpcWithOfflineQueue, startOfflineQueue, readOfflineQueryCache, saveOfflineQueryCache } from './offlineQueue';
 import { authSessionStorage } from './authStorage';
 
