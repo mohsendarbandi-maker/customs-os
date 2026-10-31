@@ -64,7 +64,7 @@ const readyWorkflow = () => ({
     standard: { expert_review: 'not_required' },
   },
   cashier: { method: 'cash', cash_paid_irr: '0' },
-  loadingPermit: { tax_permission_status: 'not_required', central_bank_status: 'not_required' },
+  loadingPermit: { clause2_request_status: 'not_required', tax_permission_status: 'not_required', central_bank_status: 'not_required', sata_code: '' },
   exit: {
     loading_permission_status: 'approved',
     financial_registration_status: 'registered',
@@ -233,6 +233,30 @@ describe('customs workflow stage prerequisites', () => {
     state.port.supplemental_invoice_status = 'received';
     expect(getWorkflowStageIssues('port_charges', state)).not.toContain(
       'با ثبت بارگیری کامیون آخر، دریافت یا پرداخت صورتحساب متمم را ثبت کنید.',
+    );
+  });
+});
+
+
+describe('customs workflow SATA requirement', () => {
+  it('keeps SATA optional before exit and requires it at exit unless no-SATA is selected', () => {
+    const state = readyWorkflow();
+    state.loadingPermit.clause2_request_status = 'not_required';
+    state.loadingPermit.tax_permission_status = 'not_required';
+    state.loadingPermit.central_bank_status = 'approved';
+    state.loadingPermit.sata_code = '';
+    expect(getWorkflowStageIssues('loading_permit', state)).toEqual([]);
+    expect(getWorkflowStageIssues('exit', state)).toContain(
+      'کد ساتا را برای خروج نهایی ثبت کنید؛ در صورت عدم نیاز به ساتا، وضعیت بانک مرکزی را «نیازی نیست» انتخاب کنید.',
+    );
+    state.loadingPermit.sata_code = 'SATA-12345';
+    expect(getWorkflowStageIssues('exit', state)).not.toContain(
+      'کد ساتا را برای خروج نهایی ثبت کنید؛ در صورت عدم نیاز به ساتا، وضعیت بانک مرکزی را «نیازی نیست» انتخاب کنید.',
+    );
+    state.loadingPermit.sata_code = '';
+    state.loadingPermit.central_bank_status = 'not_required';
+    expect(getWorkflowStageIssues('exit', state)).not.toContain(
+      'کد ساتا را برای خروج نهایی ثبت کنید؛ در صورت عدم نیاز به ساتا، وضعیت بانک مرکزی را «نیازی نیست» انتخاب کنید.',
     );
   });
 });
