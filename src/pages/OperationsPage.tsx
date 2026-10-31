@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 
 
-const makeCompatibleUUID=()=>{if(typeof globalThis.crypto?.randomUUID==='function')return globalThis.makeCompatibleUUID();const bytes=new Uint8Array(16);if(globalThis.crypto?.getRandomValues)globalThis.crypto.getRandomValues(bytes);else{for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5')};import {ArrowRight,Calculator,ClipboardPaste,FileCheck2,FileText,Loader2,Save,Trash2,Upload,ShieldCheck,Plus} from 'lucide-react';
+const makeCompatibleUUID=()=>{if(typeof globalThis.crypto?.randomUUID==='function')return globalThis.makeCompatibleUUID();const bytes=new Uint8Array(16);if(globalThis.crypto?.getRandomValues)globalThis.crypto.getRandomValues(bytes);else{for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5')};import {ArrowRight,Calculator,ClipboardPaste,FileCheck2,FileText,Loader2,Save,Trash2,Upload,ShieldCheck} from 'lucide-react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
 import {normalizeRegistrationOrderNumber} from '../lib/registrationOrderLookup';
