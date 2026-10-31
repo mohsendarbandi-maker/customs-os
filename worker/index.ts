@@ -1,7 +1,11 @@
+import { applySupabaseAuthForwardedFor } from './supabaseAuthProxy';
+
 export interface Env {
   ASSETS: { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY?: string;
+  /** Secret API key used only on /auth/v1/token so Supabase can rate-limit by the real client IP. */
+  SUPABASE_SECRET_KEY?: string;
   TURN_API_TOKEN_V2?: string;
   TURN_KEY_ID_V2?: string;
 }
@@ -414,6 +418,16 @@ export default {
       const headers = new Headers(request.headers);
       headers.delete('host');
       headers.delete('content-length');
+      // Supabase rate-limits /auth/v1/token by source IP. All browser traffic shares
+      // the Worker's egress IP, so forward Cloudflare's verified client IP when a
+      // server-only Supabase secret key is configured. The user's Authorization
+      // bearer token is preserved; the secret is never sent back to the browser.
+      applySupabaseAuthForwardedFor(
+        headers,
+        url.pathname,
+        request.headers.get('CF-Connecting-IP'),
+        env.SUPABASE_SECRET_KEY,
+      );
       if (!headers.has('apikey') && env.SUPABASE_ANON_KEY) {
         headers.set('apikey', env.SUPABASE_ANON_KEY);
       }
