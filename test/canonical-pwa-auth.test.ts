@@ -15,6 +15,7 @@ const manifest = JSON.parse(read('public/manifest.webmanifest')) as {
   icons: Array<{ src: string; sizes: string; type: string; purpose?: string }>;
 };
 const worker = read('worker/index.ts');
+const vercel = JSON.parse(read('vercel.json')) as { redirects?: Array<{ source?: string; destination?: string; permanent?: boolean; has?: Array<{ type?: string; value?: string }> }> };
 const pwaLifecycle = read('src/features/reminders/PwaLifecycle.tsx');
 const app = read('src/App.tsx');
 const mainEntry = read('src/main.tsx');
@@ -48,6 +49,17 @@ describe('one canonical Customs OS PWA', () => {
     expect(html).toContain('window.location.replace(canonicalUrl.toString())');
     expect(html.indexOf("host === 'customs-os-me-a4f6.vercel.app'"))
       .toBeLessThan(html.indexOf('<script type="module" src="/src/main.tsx">'));
+  });
+
+  it('redirects the retired Vercel hostname before the app initializes', () => {
+    const redirect = vercel.redirects?.find((item) =>
+      item.has?.some((condition) => condition.type === 'host' && condition.value === 'customs-os-me-a4f6.vercel.app'),
+    );
+    expect(redirect).toBeDefined();
+    expect(redirect?.source).toBe('/:path*');
+    expect(redirect?.destination).toBe('https://darbandicommercial.ir/:path*');
+    expect(redirect?.permanent).toBe(true);
+    expect(html).toContain("host === 'customs-os-me-a4f6.vercel.app'");
   });
 
   it('has one root-scoped standalone identity and every required PNG size', () => {
