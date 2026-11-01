@@ -6,6 +6,7 @@
       "has": [
         {
           "type": "host",
+          "key": "host",
           "value": "customs-os-me-a4f6.vercel.app"
         }
       ],
