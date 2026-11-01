@@ -36,7 +36,7 @@ export const EplPrintAssistantPage: React.FC = () => {
       if (!active) return;
       const webApp = window.Bale?.WebApp;
       if (!webApp) return;
-      setInsideBale(Boolean(webApp.isMiniAppSupported));
+      setInsideBale(webApp.isMiniAppSupported === true);
       webApp.ready?.();
       webApp.expand?.();
     };
@@ -45,7 +45,7 @@ export const EplPrintAssistantPage: React.FC = () => {
       initialize();
     } else if (!existing) {
       const script = document.createElement('script');
-      script.src = 'https://tapi.bale.ai/miniapp.js?3';
+      script.src = 'https://tapi.bale.ai/miniapp.js';
       script.async = true;
       script.dataset.baleMiniapp = 'true';
       script.onload = initialize;
@@ -64,7 +64,7 @@ export const EplPrintAssistantPage: React.FC = () => {
 
   const openEpl = () => {
     setError('');
-    setNotice('EPL در صفحه جداگانه باز می‌شود. پس از ذخیره PDF پروانه، به این صفحه برگردید و فایل را انتخاب کنید.');
+    setNotice('سامانه EPL در مرورگر داخلی بله باز می‌شود. پس از ذخیره PDF پروانه، به مینی‌اپ برگردید و فایل را انتخاب کنید.');
     const webApp = window.Bale?.WebApp;
     if (webApp?.openLink) {
       webApp.openLink(EPL_URL);
