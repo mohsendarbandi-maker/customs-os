@@ -1,6 +1,6 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
 import{createPortal}from'react-dom';
-import{AlertCircle,ArrowRight,Bell,BellOff,Check,CheckCheck,ChevronDown,Clock,Hash,Loader2,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Star,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
+import{AlertCircle,ArrowRight,Bell,BellOff,Check,CheckCheck,ChevronDown,Clock,FileText,FolderOpen,Hash,Loader2,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Star,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
 import{useNavigate,useSearchParams}from'react-router-dom';
 import{createAppFileTransfer,consumeAppFileTransfer}from'../../lib/appFileTransfer';
 import{useAuth}from'../../context/AuthContext';
