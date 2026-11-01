@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDown, ArrowUp, Check, ChevronLeft, FileImage, FilePlus2, FileText, Files, Folder, Loader2, Minus, RotateCw, Scissors, ShieldCheck, Stamp, Trash2, Upload, Sparkles, X,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { createAppFileTransfer, consumeAppFileTransfer } from '../lib/appFileTransfer';
 import { PDFDocument, degrees } from 'pdf-lib';
 import { createWorker } from 'tesseract.js';
 import { supabase } from '../lib/supabase';
@@ -86,6 +87,9 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
 
 export const PdfStudioPage: React.FC = () => {
   const { profile } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const handledTransferIds = useRef(new Set<string>());
   const organizationId = profile?.organization_id || '';
   const inputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
@@ -159,6 +163,18 @@ export const PdfStudioPage: React.FC = () => {
       item.id === output.id ? { ...item, downloadedAt: new Date().toISOString() } : item
     ));
     setStatus('دانلود «' + output.name + '» آغاز شد. فایل‌های فراخوانی‌شده، ترتیب صفحات و تنظیمات در PDF Studio باقی ماندند.');
+  };
+
+  const transferReadyOutput = async (output: ReadyOutput, target: 'chat' | 'file-manager') => {
+    try {
+      const file = new File([output.blob], output.name, { type: 'application/pdf', lastModified: Date.now() });
+      const transferId = await createAppFileTransfer([file], target);
+      navigate(target === 'chat'
+        ? '/chat?fileTransfer=' + encodeURIComponent(transferId)
+        : '/file-manager?fileTransfer=' + encodeURIComponent(transferId));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'انتقال خروجی ناموفق بود.');
+    }
   };
   const currentFileManagerFolder = useMemo(
     () => fileManagerFolders.find((folder) => folder.id === fileManagerCurrentFolderId) || null,
@@ -335,6 +351,24 @@ export const PdfStudioPage: React.FC = () => {
       setBusy(false);
     }
   }, [recognitionSamples]);
+
+  const incomingTransferId = searchParams.get('fileTransfer');
+  useEffect(() => {
+    if (!incomingTransferId || handledTransferIds.current.has(incomingTransferId)) return;
+    handledTransferIds.current.add(incomingTransferId);
+    void consumeAppFileTransfer(incomingTransferId, 'pdf-studio')
+      .then(async (files) => {
+        await loadFiles(files);
+        setStudioTab('pages');
+        setStatus(files.length + ' فایل انتقال‌یافته از بخش دیگر به PDF Studio اضافه شد.');
+      })
+      .catch((reason) => setError(reason instanceof Error ? reason.message : 'دریافت فایل انتقالی ناموفق بود.'))
+      .finally(() => {
+        const next = new URLSearchParams(searchParams);
+        next.delete('fileTransfer');
+        setSearchParams(next, { replace: true });
+      });
+  }, [incomingTransferId, loadFiles, searchParams, setSearchParams]);
 
   useEffect(() => () => { sourcePdfs.current.clear(); }, []);
 
@@ -709,9 +743,12 @@ export const PdfStudioPage: React.FC = () => {
     setOutputPreset(preset);
     if (preset === 'shipPass') {
       setPackageName('پاس کشتی');
-      setSplitRows(PDF_STUDIO_PRESETS.shipPass.map((item) => ({
-        id: crypto.randomUUID(), name: item.name, pageExpression: pageExpressionForMatches(pages, [...item.patterns]),
-      })));
+      const patterns = PDF_STUDIO_PRESETS.shipPass.flatMap((item) => [...item.patterns]);
+      const pageExpression = pageExpressionForMatches(pages, patterns);
+      setSplitRows([{ id: crypto.randomUUID(), name: 'پاس کشتی', pageExpression }]);
+      setStatus(pageExpression
+        ? 'صفحات قبض انبار رو، قبض انبار پشت و مانیفست در یک PDF و به ترتیب فعلی صفحات قرار می‌گیرند.'
+        : 'قالب پاس کشتی روی یک PDF تنظیم شد؛ برچسب صفحات را بررسی و در صورت نیاز شماره صفحات را دستی وارد کنید.');
     } else if (preset === 'guarantee') {
       setPackageName('درخواست ضمانتنامه');
       setSplitRows(PDF_STUDIO_PRESETS.guarantee.map((item) => ({
@@ -724,6 +761,12 @@ export const PdfStudioPage: React.FC = () => {
       setPackageName('اسناد خروجی');
       setSplitRows([{ id: crypto.randomUUID(), name: 'سند خروجی', pageExpression: '' }]);
     }
+  };
+
+  const openQuickOutputPreset = (preset: 'shipPass' | 'standard') => {
+    setStudioTab('outputs');
+    setOutputTools((previous) => ({ ...previous, split: true }));
+    applyOutputPreset(preset);
   };
 
   const splitPdf = async () => {
@@ -1175,7 +1218,7 @@ export const PdfStudioPage: React.FC = () => {
   };
 
   return (
-    <main className="min-h-[calc(100dvh-64px)] bg-[var(--bg)] text-[var(--text)] p-3 md:p-6" dir="rtl">
+    <main className="pdf-studio-page min-h-[calc(100dvh-64px)] bg-[var(--bg)] text-[var(--text)] p-3 md:p-6" dir="rtl">
       <div className="mx-auto max-w-7xl space-y-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1192,6 +1235,35 @@ export const PdfStudioPage: React.FC = () => {
             <Link to="/office" className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold">دبیرخانه</Link>
           </div>
         </header>
+
+        <section className="overflow-hidden rounded-3xl border border-blue-500/25 bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-900 p-4 text-white shadow-lg md:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold tracking-[0.18em] text-blue-200/80">WORKSPACE · PDF TOOLS</div>
+              <h2 className="mt-1 text-lg font-black md:text-xl">میز کار اسناد</h2>
+              <p className="mt-1 max-w-2xl text-xs leading-6 text-blue-100/80">فایل‌ها را ترکیب، مرتب، اصلاح و آماده کن؛ سپس بدون دانلود مجدد به چت یا فایل‌منیجر بفرست.</p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5">{documents.length} فایل ورودی</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5">{pages.length} صفحه</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5">{readyOutputs.length} خروجی آماده</span>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <button type="button" onClick={() => inputRef.current?.click()} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-white px-3 text-xs font-black text-slate-900 transition hover:bg-blue-50">
+              <Upload size={15}/>افزودن فایل
+            </button>
+            <button type="button" onClick={() => void openFileManager()} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 text-xs font-bold text-white transition hover:bg-white/15">
+              <Folder size={15}/>ورود از فایل‌منیجر
+            </button>
+            <button type="button" onClick={() => openQuickOutputPreset('shipPass')} disabled={!pages.length} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-cyan-200/30 bg-cyan-300/15 px-3 text-xs font-bold text-cyan-50 transition hover:bg-cyan-300/25 disabled:opacity-40">
+              <Files size={15}/>پاس کشتی · یک PDF
+            </button>
+            <button type="button" onClick={() => openQuickOutputPreset('standard')} disabled={!pages.length} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-200/30 bg-emerald-300/15 px-3 text-xs font-bold text-emerald-50 transition hover:bg-emerald-300/25 disabled:opacity-40">
+              <ShieldCheck size={15}/>خروجی استاندارد
+            </button>
+          </div>
+        </section>
 
         <nav className="sticky top-0 z-20 grid grid-cols-3 gap-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-sm" aria-label="بخش‌های PDF Studio">
           <button type="button" onClick={() => setStudioTab('pages')} className={'min-h-10 rounded-xl px-2 text-xs font-bold ' + (studioTab === 'pages' ? 'bg-blue-600 text-white' : 'text-[var(--muted)]')}>صفحات ({pages.length})</button>
@@ -1388,13 +1460,17 @@ export const PdfStudioPage: React.FC = () => {
                           <div className="mt-1 text-[10px] leading-5 text-[var(--muted)]">{output.description} · {formatSize(output.size)}</div>
                           <div className="mt-1 text-[10px] text-[var(--muted)]">{output.downloadedAt ? 'دانلود قبلی ثبت شد؛ امکان دانلود دوباره وجود دارد.' : 'هنوز دانلود نشده است.'}</div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => downloadReadyOutput(output)}
-                          className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white"
-                        >
-                          <FileText size={14}/>{output.downloadedAt ? 'دانلود دوباره' : 'دانلود فایل'}
-                        </button>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button type="button" onClick={() => downloadReadyOutput(output)} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white">
+                            <FileText size={14}/>{output.downloadedAt ? 'دانلود دوباره' : 'دانلود'}
+                          </button>
+                          <button type="button" onClick={() => void transferReadyOutput(output, 'file-manager')} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 text-xs font-bold">
+                            <Folder size={14}/>فایل‌منیجر
+                          </button>
+                          <button type="button" onClick={() => void transferReadyOutput(output, 'chat')} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 text-xs font-bold">
+                            <MessageCircle size={14}/>چت
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1419,11 +1495,11 @@ export const PdfStudioPage: React.FC = () => {
 
                 {outputTools.split && (
                   <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-                    <h3 className="mb-3 font-black">تفکیک صفحات به PDFهای جداگانه</h3>
+                    <h3 className="mb-3 font-black">ساخت بسته اسناد یا تفکیک صفحات</h3>
                     <label className="block text-xs text-[var(--muted)]">قالب تفکیک</label>
                     <select value={outputPreset} onChange={(event) => applyOutputPreset(event.target.value as 'custom' | 'shipPass' | 'guarantee' | 'standard')} className="mt-1 min-h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm">
                       <option value="custom">تفکیک دلخواه</option>
-                      <option value="shipPass">پاس کشتی</option>
+                      <option value="shipPass">پاس کشتی · یک PDF واحد</option>
                       <option value="guarantee">درخواست ضمانتنامه</option>
                       <option value="standard">مدارک استاندارد - حداکثر ۲ مگابایت</option>
                     </select>
@@ -1452,9 +1528,9 @@ export const PdfStudioPage: React.FC = () => {
                       </>
                     )}
                     <button type="button" onClick={() => void splitPdf()} disabled={busy || !pages.length || !packageName.trim()} className="mt-3 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40">
-                      <Scissors className="ml-1 inline" size={15}/>{outputPreset === 'standard' ? 'ساخت PDF استاندارد' : 'ساخت PDFهای جداگانه'}
+                      <Scissors className="ml-1 inline" size={15}/>{outputPreset === 'standard' ? 'ساخت PDF استاندارد' : outputPreset === 'shipPass' ? 'ساخت یک PDF برای پاس کشتی' : 'ساخت PDFهای جداگانه'}
                     </button>
-                    <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">هر ردیف یک PDF مستقل خواهد بود و دکمه دانلود جداگانه می‌گیرد؛ فایل ZIP ساخته نمی‌شود.</p>
+                    <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">در قالب پاس کشتی، صفحات قبض انبار رو و پشت و مانیفست در یک PDF ادغام می‌شوند. در قالب دلخواه و ضمانتنامه، هر ردیف همچنان یک PDF مستقل است. فایل ورودی دست‌نخورده می‌ماند.</p>
                   </section>
                 )}
 
