@@ -42,6 +42,14 @@ describe('one canonical Customs OS PWA', () => {
     expect(html).not.toContain('link.setAttribute(\'href\', manifest)');
   });
 
+  it('redirects the old Vercel workspace to the canonical Cloudflare origin before auth starts', () => {
+    expect(html).toContain("host === 'customs-os-me-a4f6.vercel.app'");
+    expect(html).toContain("canonicalUrl.hostname = 'darbandicommercial.ir'");
+    expect(html).toContain('window.location.replace(canonicalUrl.toString())');
+    expect(html.indexOf("host === 'customs-os-me-a4f6.vercel.app'"))
+      .toBeLessThan(html.indexOf('<script type="module" src="/src/main.tsx">'));
+  });
+
   it('has one root-scoped standalone identity and every required PNG size', () => {
     expect(manifest.id).toBe('/');
     expect(manifest.start_url).toBe('/');
@@ -87,6 +95,15 @@ describe('one canonical Customs OS PWA', () => {
     expect(mainEntry).not.toContain('normalizeLegacyPwaLaunch');
     expect(mainEntry).not.toContain("searchParams.get('source') !== 'pwa'");
     expect(mainEntry).toContain('ReactDOM.createRoot(rootElement).render(');
+  });
+
+  it('bounds session and workspace-profile bootstrap so the desktop cannot spin forever', () => {
+    expect(authContext).toContain("import { withTimeout } from '../lib/withTimeout'");
+    expect(authContext).toContain("AUTH_SESSION_TIMEOUT_MS = 10_000");
+    expect(authContext).toContain("AUTH_PROFILE_TIMEOUT_MS = 12_000");
+    expect(authContext).toContain("AUTH_CACHE_TIMEOUT_MS = 2_500");
+    expect(authContext).toContain("'loading the workspace profile'");
+    expect(authContext).toContain("'reading the cached workspace profile'");
   });
 
   it('starts service-worker registration even when the load event has already fired', () => {
