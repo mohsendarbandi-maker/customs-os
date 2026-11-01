@@ -518,7 +518,7 @@ export const ChatPage:React.FC=()=>{
   const attachments=message?.attachments??[];
   if(!attachments.length){setError('این پیام پیوستی برای انتقال ندارد.');return}
   const selectedAttachments=target==='pdf-studio'
-   ?attachments.filter(item=>{const mime=(item.mime_type||'').toLowerCase();return mime==='application/pdf'||mime==='image/jpeg'||mime==='image/png'||/\\.(pdf|jpe?g|png)$/i.test(item.original_name||'')})
+   ?attachments.filter(item=>{const mime=(item.mime_type||'').toLowerCase();return mime==='application/pdf'||mime==='image/jpeg'||mime==='image/png'||/\.(pdf|jpe?g|png)$/i.test(item.original_name||'')})
    :attachments;
   if(!selectedAttachments.length){setError('PDF Studio فقط PDF و تصویرهای JPG یا PNG را می‌پذیرد.');return}
   setTransferBusy(true);setError(null);setSuccess(null);
