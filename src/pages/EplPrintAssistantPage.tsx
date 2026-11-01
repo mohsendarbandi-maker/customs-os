@@ -5,15 +5,19 @@ import {
 } from 'lucide-react';
 import { fitPdfToA4 } from '../lib/eplPrintUtils';
 
-type BaleWebApp = {
+type BaleWebAppApi = {
   ready?: () => void;
   expand?: () => void;
-  openLink?: (url: string) => void;
+  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
   isMiniAppSupported?: boolean;
+  isIframe?: boolean;
 };
 declare global {
   interface Window {
-    Bale?: { WebApp?: BaleWebApp };
+    Bale?: { WebApp?: BaleWebAppApi };
+    // Bale's SDK calls this native bridge in non-iframe clients. Some clients
+    // do not expose it, so guard every SDK method that would post an event.
+    BaleWebApp?: { postEvent?: (eventType: string, eventData?: string) => void };
   }
 }
 
@@ -36,9 +40,28 @@ export const EplPrintAssistantPage: React.FC = () => {
       if (!active) return;
       const webApp = window.Bale?.WebApp;
       if (!webApp) return;
+
+      const hasNativeBridge = typeof window.BaleWebApp?.postEvent === 'function';
+      const canPostEvents = webApp.isIframe === true || hasNativeBridge;
       setInsideBale(webApp.isMiniAppSupported === true);
-      webApp.ready?.();
-      webApp.expand?.();
+
+      // In Bale's native WebView the SDK delegates to the global
+      // BaleWebApp.postEvent bridge. Older/unsupported clients may omit it;
+      // calling ready()/expand() there throws a ReferenceError and crashes
+      // the whole Mini App. In that case keep the page usable as a normal web
+      // page instead of invoking an unavailable native bridge.
+      if (canPostEvents) {
+        try {
+          webApp.ready?.();
+          webApp.expand?.();
+        } catch (bridgeError) {
+          console.warn('[EPL Mini App] Bale bridge unavailable; using web fallback.', bridgeError);
+          setInsideBale(false);
+        }
+      } else {
+        console.warn('[EPL Mini App] Native Bale bridge is unavailable; using web fallback.');
+        setInsideBale(false);
+      }
     };
 
     if (window.Bale?.WebApp) {
@@ -66,9 +89,17 @@ export const EplPrintAssistantPage: React.FC = () => {
     setError('');
     setNotice('سامانه EPL در مرورگر داخلی بله باز می‌شود. پس از ذخیره PDF پروانه، به مینی‌اپ برگردید و فایل را انتخاب کنید.');
     const webApp = window.Bale?.WebApp;
-    if (webApp?.openLink) {
-      webApp.openLink(EPL_URL);
-      return;
+    const canPostEvents =
+      webApp?.isIframe === true ||
+      typeof window.BaleWebApp?.postEvent === 'function';
+
+    if (webApp?.openLink && canPostEvents) {
+      try {
+        webApp.openLink(EPL_URL);
+        return;
+      } catch (bridgeError) {
+        console.warn('[EPL Mini App] openLink failed; opening EPL in browser.', bridgeError);
+      }
     }
     window.open(EPL_URL, '_blank', 'noopener,noreferrer');
   };
