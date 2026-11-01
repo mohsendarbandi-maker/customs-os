@@ -10,6 +10,11 @@ import React, {
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
 import { authSessionStorage } from '../lib/authStorage';
+import { withTimeout } from '../lib/withTimeout';
+
+const AUTH_SESSION_TIMEOUT_MS = 10_000;
+const AUTH_PROFILE_TIMEOUT_MS = 12_000;
+const AUTH_CACHE_TIMEOUT_MS = 2_500;
 import { readOfflineQueryCache, saveOfflineQueryCache } from '../lib/offlineQueue';
 import {
   AUTH_SESSION_RETRY_MESSAGE,
@@ -98,7 +103,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (!pending) {
       pending = (async () => {
-        const { data, error: refreshError } = await supabase.auth.refreshSession();
+        const { data, error: refreshError } = await withTimeout(
+          supabase.auth.refreshSession(),
+          AUTH_SESSION_TIMEOUT_MS,
+          'refreshing the login session',
+        );
         if (refreshError) throw refreshError;
 
         const refreshedSession = data.session;
@@ -139,7 +148,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           .eq('id', userId)
           .maybeSingle();
 
-      let profileResult = await loadProfile();
+      let profileResult = await withTimeout(
+        loadProfile(),
+        AUTH_PROFILE_TIMEOUT_MS,
+        'loading the workspace profile',
+      );
 
       // An idle/background tab can resume with an expired access token before
       // the SDK's foreground refresh cycle has completed. Refresh once and retry.
@@ -150,7 +163,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
-        profileResult = await loadProfile();
+        profileResult = await withTimeout(
+          loadProfile(),
+          AUTH_PROFILE_TIMEOUT_MS,
+          'retrying the workspace profile request',
+        );
         if (isAuthTokenExpiredError(profileResult.error)) {
           throw new Error(AUTH_SESSION_RETRY_MESSAGE);
         }
@@ -214,7 +231,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         rawMessage === AUTH_SESSION_RETRY_MESSAGE;
 
       if (retryableAuthFailure) {
-        const cachedProfile = await readOfflineQueryCache<UserProfile | null>('auth-profile', userId, userId).catch(() => null);
+        const cachedProfile = await withTimeout(
+          readOfflineQueryCache<UserProfile | null>('auth-profile', userId, userId),
+          AUTH_CACHE_TIMEOUT_MS,
+          'reading the offline workspace profile',
+        ).catch(() => null);
         if (!isMounted.current || fetchId !== currentFetchId.current) return;
         const offlineProfile = cachedProfile?.payload;
         if (
@@ -261,7 +282,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         const {
           data: { session: initialSession },
           error: sessionError,
-        } = await supabase.auth.getSession();
+        } = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_SESSION_TIMEOUT_MS,
+          'restoring the saved login session',
+        );
 
         if (!active || !isMounted.current) return;
 
@@ -298,10 +323,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           // user-scoped IndexedDB profile before waiting on the network. The
           // server profile is still refreshed immediately in the background;
           // all data writes remain protected by Supabase RLS.
-          const cachedProfile = await readOfflineQueryCache<UserProfile | null>(
-            'auth-profile',
-            userId,
-            userId,
+          const cachedProfile = await withTimeout(
+            readOfflineQueryCache<UserProfile | null>('auth-profile', userId, userId),
+            AUTH_CACHE_TIMEOUT_MS,
+            'reading the cached workspace profile',
           ).catch(() => null);
           const offlineProfile = cachedProfile?.payload;
           if (
@@ -422,7 +447,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // getSession() refreshes expired sessions when possible. This runs outside
       // onAuthStateChange so it cannot wait on the SDK's auth lock from a callback.
-      void supabase.auth.getSession().then(({ data: { session: visibleSession }, error: sessionError }) => {
+      void withTimeout(
+        supabase.auth.getSession(),
+        AUTH_SESSION_TIMEOUT_MS,
+        'recovering the active login session',
+      ).then(({ data: { session: visibleSession }, error: sessionError }) => {
         if (!active || !isMounted.current) return;
 
         if (sessionError) {
@@ -539,7 +568,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const {
         data: { session: recoveredSession },
         error: sessionError,
-      } = await supabase.auth.getSession();
+      } = await withTimeout(
+        supabase.auth.getSession(),
+        AUTH_SESSION_TIMEOUT_MS,
+        'restoring the login session',
+      );
 
       if (sessionError) {
         console.error('[Auth] session recovery failed:', sessionError);
