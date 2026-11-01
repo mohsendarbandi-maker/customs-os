@@ -12,16 +12,16 @@ import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
 import { authSessionStorage } from '../lib/authStorage';
 import { readOfflineQueryCache, saveOfflineQueryCache } from '../lib/offlineQueue';
 import { withTimeout } from '../lib/withTimeout';
-
-const AUTH_SESSION_TIMEOUT_MS = 10_000;
-const AUTH_PROFILE_TIMEOUT_MS = 12_000;
-const AUTH_CACHE_TIMEOUT_MS = 2_500;
 import {
   AUTH_SESSION_RETRY_MESSAGE,
   isAuthTokenExpiredError,
   isRetryableAuthSessionError,
   isUnrecoverableAuthSessionError,
 } from '../lib/authSessionErrors';
+
+const AUTH_SESSION_TIMEOUT_MS = 10_000;
+const AUTH_PROFILE_TIMEOUT_MS = 12_000;
+const AUTH_CACHE_TIMEOUT_MS = 2_500;
 
 const clearLocalAuthStorage = () => {
   try {
