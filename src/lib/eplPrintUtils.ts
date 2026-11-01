@@ -27,7 +27,7 @@ export async function fitPdfToA4(
   if (pageCount < 1) throw new Error('فایل PDF صفحه‌ای ندارد.');
 
   const output = await PDFDocument.create();
-  const embeddedPages = await output.embedPdf(input);
+  const embeddedPages = await output.embedPdf(input, Array.from({ length: pageCount }, (_, index) => index));
   if (embeddedPages.length !== pageCount) {
     throw new Error('تعداد صفحات PDF برای آماده‌سازی چاپ یکسان نیست.');
   }
