@@ -5,8 +5,8 @@ import { fitPdfToA4 } from '../src/lib/eplPrintUtils';
 describe('fitPdfToA4', () => {
   it('keeps every source page and fits portrait and landscape pages to A4', async () => {
     const source = await PDFDocument.create();
-    source.addPage([600, 900]);
-    source.addPage([1000, 600]);
+    source.addPage([600, 900]).drawText('Portrait sample');
+    source.addPage([1000, 600]).drawText('Landscape sample');
 
     const result = await fitPdfToA4(await source.save());
     const output = await PDFDocument.load(result.bytes);
