@@ -645,6 +645,15 @@ jobs:
                   async () => new URL(mobileRedirectPage.url()).hostname,
                   { timeout: 15000, message: 'iPhone browser did not transition to the mobile hostname' },
                 ).toBe('mobile.darbandicommercial.ir');
+                // The inline host handoff updates location before the destination
+                // document finishes parsing. Wait for the mobile document itself,
+                // then confirm React has rendered rather than reading the old page
+                // during the cross-origin navigation gap.
+                await mobileRedirectPage.waitForLoadState('domcontentloaded', { timeout: 15000 });
+                await expect.poll(
+                  async () => (await mobileRedirectPage.locator('#root').textContent() || '').trim(),
+                  { timeout: 15000, message: 'Mobile destination did not render its app shell after navigation' },
+                ).not.toBe('');
                 const mobileEntry = await mobileRedirectPage.evaluate(() => ({
                   hostname: window.location.hostname,
                   pathname: window.location.pathname,
