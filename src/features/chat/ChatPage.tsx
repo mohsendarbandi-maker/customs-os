@@ -1,7 +1,8 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
 import{createPortal}from'react-dom';
-import{AlertCircle,ArrowRight,Bell,BellOff,Check,CheckCheck,ChevronDown,Clock,Hash,Loader2,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Star,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
-import{useSearchParams}from'react-router-dom';
+import{AlertCircle,ArrowRight,Bell,BellOff,Check,CheckCheck,ChevronDown,Clock,FileText,FolderOpen,Hash,Loader2,Mic,MicOff,MoreVertical,PackageCheck,Paperclip,Phone,Pin,Plus,Search,Send,Star,Trash2,UserPlus,UserRound,Users,Wifi,WifiOff,X}from'lucide-react';
+import{useNavigate,useSearchParams}from'react-router-dom';
+import{createAppFileTransfer,consumeAppFileTransfer}from'../../lib/appFileTransfer';
 import{useAuth}from'../../context/AuthContext';
 import{normalizeFaText}from'../../lib/jalali';
 import{makeClientId}from'../../lib/clientId';
@@ -80,7 +81,7 @@ class ChatFeatureBoundary extends React.Component<{children:React.ReactNode}, {f
 }
 
 export const ChatPage:React.FC=()=>{
- const{user,profile}=useAuth();const[searchParams]=useSearchParams();
+ const{user,profile}=useAuth();const navigate=useNavigate();const[searchParams,setSearchParams]=useSearchParams();
  const requestedConversationId=searchParams.get('conversation');const requestedCallId=searchParams.get('call');
  const[conversations,setConversations]=useState<ChatConversation[]>([]);const[selectedId,setSelectedId]=useState<string|null>(null);
   const chatDraftKey=user?.id&&profile?.organization_id&&selectedId
@@ -100,7 +101,18 @@ export const ChatPage:React.FC=()=>{
  const[shipmentUpdateOpen,setShipmentUpdateOpen]=useState(false);const[shipmentStatus,setShipmentStatus]=useState('در حال بررسی');const[shipmentNote,setShipmentNote]=useState('');
  const[peopleMode,setPeopleMode]=useState<'direct'|'member'>('direct');const[channelOpen,setChannelOpen]=useState(false);const[channelTitle,setChannelTitle]=useState('');
  const[channelType,setChannelType]=useState<'group'|'company_channel'|'shared_company'>('company_channel');const[sharedConnections,setSharedConnections]=useState<Array<{id:string;target_organization_id:string;target_name:string}>>([]);
- const[selectedConnection,setSelectedConnection]=useState('');const[attachmentBusy,setAttachmentBusy]=useState(false);const[mediaState,setMediaState]=useState<MediaState>('idle');const[attachmentProgress,setAttachmentProgress]=useState<number|null>(null);const[pendingFiles,setPendingFiles]=useState<Array<{id:string;file:File;caption:string}>>([]);
+ const[selectedConnection,setSelectedConnection]=useState('');const[attachmentBusy,setAttachmentBusy]=useState(false);const[mediaState,setMediaState]=useState<MediaState>('idle');const[attachmentProgress,setAttachmentProgress]=useState<number|null>(null);const[pendingFiles,setPendingFiles]=useState<Array<{id:string;file:File;caption:string}>>([]);const[transferBusy,setTransferBusy]=useState(false);const handledTransferIds=useRef(new Set<string>());
+ const incomingFileTransferId=searchParams.get('fileTransfer');
+ useEffect(()=>{
+  if(!incomingFileTransferId||handledTransferIds.current.has(incomingFileTransferId))return;
+  handledTransferIds.current.add(incomingFileTransferId);
+  void consumeAppFileTransfer(incomingFileTransferId,'chat').then(files=>{
+   setPendingFiles(current=>[...current,...files.map(file=>({id:makeClientId(),file,caption:''}))]);
+   setSuccess(files.length+' فایل از بخش دیگر دریافت شد؛ یک گفتگو را انتخاب و ارسال را بزنید.');
+  }).catch(e=>setError(err(e))).finally(()=>{
+   const next=new URLSearchParams(searchParams);next.delete('fileTransfer');setSearchParams(next,{replace:true});
+  });
+ },[incomingFileTransferId,searchParams,setSearchParams]);
  const[recording,setRecording]=useState(false);const[ocrBusy,setOcrBusy]=useState(false);const[pushReady,setPushReady]=useState(false);const[pushBusy,setPushBusy]=useState(false);const[settingsOpen,setSettingsOpen]=useState(false);
  const[menu,setMenu]=useState<string|null>(null);const[menuPosition,setMenuPosition]=useState<{top:number;left:number;width:number}|null>(null);const[directoryOpen,setDirectoryOpen]=useState(false);const[directoryMode,setDirectoryMode]=useState<ChatDirectoryMode>('members');
  const[folder,setFolder]=useState<ChatFolder>('all');const[newMessageCount,setNewMessageCount]=useState(0);
@@ -500,6 +512,30 @@ export const ChatPage:React.FC=()=>{
  const remove=async(m:ChatMessage,all:boolean)=>{try{if(all)await deleteForAll(m.id);else await deleteForMe(m.id);closeMessageMenu();if(selectedId)await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
  const editCurrent=async()=>{if(!editId||!selectedId)return;const body=normalizeFaText(text);if(!body)return;try{await editChatMessage(editId,body);setEditId(null);setText(chatDraftBeforeEdit.current);chatDraftBeforeEdit.current='';await loadConversation(selectedId,false)}catch(e){setError(err(e))}};
  const forwardCurrent=async(targetId:string)=>{if(!forwardId||forwardingBusyRef.current)return;forwardingBusyRef.current=true;setForwardingBusy(true);setError(null);setSuccess(null);const operationId=forwardOperationId??makeClientId();if(!forwardOperationId)setForwardOperationId(operationId);try{await forwardChatMessage(forwardId,targetId,operationId);setForwardId(null);setForwardOperationId(null);setError(null);setSuccess('پیام و پیوست‌ها به گفتگو ارسال شدند.');void refresh()}catch(e){setSuccess(null);setError(err(e))}finally{forwardingBusyRef.current=false;setForwardingBusy(false)}};
+ const transferMessageAttachments=async(target:'pdf-studio'|'file-manager')=>{
+  if(!forwardId||transferBusy)return;
+  const message=messages.find(item=>item.id===forwardId);
+  const attachments=message?.attachments??[];
+  if(!attachments.length){setError('این پیام پیوستی برای انتقال ندارد.');return}
+  const selectedAttachments=target==='pdf-studio'
+   ?attachments.filter(item=>{const mime=(item.mime_type||'').toLowerCase();return mime==='application/pdf'||mime==='image/jpeg'||mime==='image/png'||/\.(pdf|jpe?g|png)$/i.test(item.original_name||'')})
+   :attachments;
+  if(!selectedAttachments.length){setError('PDF Studio فقط PDF و تصویرهای JPG یا PNG را می‌پذیرد.');return}
+  setTransferBusy(true);setError(null);setSuccess(null);
+  try{
+   const files:File[]=[];
+   for(const attachment of selectedAttachments){
+    if(!attachment.storage_path)throw new Error('مسیر ذخیره پیوست «'+attachment.original_name+'» موجود نیست.');
+    const {data,error:downloadError}=await supabase.storage.from('chat-files').download(attachment.storage_path);
+    if(downloadError||!data)throw new Error(downloadError?.message||'دریافت پیوست از چت ناموفق بود.');
+    files.push(new File([data],attachment.original_name||'attachment',{type:attachment.mime_type||data.type||'application/octet-stream',lastModified:Date.now()}));
+   }
+   const transferId=await createAppFileTransfer(files,target);
+   setForwardId(null);setForwardOperationId(null);
+   navigate(target==='pdf-studio'?'/pdf-studio?fileTransfer='+encodeURIComponent(transferId):'/file-manager?fileTransfer='+encodeURIComponent(transferId));
+  }catch(e){setError(err(e))}
+  finally{setTransferBusy(false)}
+ };
  const publishShipmentUpdate=async()=>{const selected=conversations.find(c=>c.conversation_id===selectedId);if(!selectedId||!selected?.shipment_id)return;try{await shareShipmentUpdate(selectedId,selected.shipment_id,shipmentStatus,shipmentNote.trim()||undefined);setShipmentUpdateOpen(false);setShipmentNote('');await loadConversation(selectedId,false);void refresh()}catch(e){setError(err(e))}};
 
  const loadOlder=useCallback(async()=>{
@@ -637,7 +673,8 @@ export const ChatPage:React.FC=()=>{
     <div className="chat-search-row px-3 py-1.5 border-b app-border"><div className="h-10 rounded-xl bg-black/5 dark:bg-white/10 flex items-center gap-2 px-3"><Search size={16} className="app-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void runSearch()}} placeholder="جست‌وجو در گفتگوها" className="bg-transparent outline-none flex-1 text-sm min-w-0"/></div></div>
     <div className="chat-folder-strip px-2 py-1 border-b app-border overflow-x-auto flex gap-2">{Object.entries(folderLabels).map(([key,label])=><button type="button" key={key} onClick={()=>setFolder(key as ChatFolder)} className={"shrink-0 min-h-9 px-2.5 rounded-lg text-[11px] font-bold border app-border "+(folder===key?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]')} aria-pressed={folder===key}>{label}{key==='unread'&&unread>0?<span className="mr-1">({unread})</span>:null}</button>)}</div>
     {results.length>0&&<div className="border-b app-border max-h-48 overflow-y-auto">{results.map(r=><button type="button" key={r.id} onClick={()=>jumpToSearchResult(r)} className="w-full text-right px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5"><b className="text-xs block truncate">{r.title}</b><span className="text-[10px] app-muted block truncate mt-1">{r.snippet}</span></button>)}</div>}
-    <ChatHierarchyPanel selectedId={selectedId} onSelect={id=>{setSelectedId(id);setMessages([]);setResults([]);closeMessageMenu()}} conversations={conversations} folder={folder}/>
+    {pendingFiles.length>0&&<div className="mx-3 mt-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 text-xs leading-5"><b>{pendingFiles.length} فایل آماده ارسال</b><div className="app-muted">فایل از فایل‌منیجر یا بخش دیگری آمده است. یک گفتگو را باز کنید تا فایل‌ها را ارسال کنید.</div></div>}
+   <ChatHierarchyPanel selectedId={selectedId} onSelect={id=>{setSelectedId(id);setMessages([]);setResults([]);closeMessageMenu()}} conversations={conversations} folder={folder}/>
    </section>
   </div>}
 
@@ -753,8 +790,13 @@ export const ChatPage:React.FC=()=>{
 
   {forwardId&&<div className="fixed inset-0 z-[620] bg-black/45 flex items-end md:items-center justify-center" onClick={()=>{if(!forwardingBusyRef.current){setForwardId(null);setForwardOperationId(null)}}}>
    <div dir="rtl" className="w-full md:max-w-lg max-h-[82vh] overflow-hidden rounded-t-3xl md:rounded-2xl bg-[var(--surface)] border app-border shadow-2xl" onClick={e=>e.stopPropagation()}>
-    <div className="p-4 border-b app-border flex items-center justify-between"><b>فوروارد پیام</b><button type="button" disabled={forwardingBusy} onClick={()=>{if(!forwardingBusyRef.current){setForwardId(null);setForwardOperationId(null)}}} aria-label="بستن" className="disabled:opacity-40"><X size={16}/></button></div>
+    <div className="p-4 border-b app-border flex items-center justify-between"><b>فوروارد پیام و پیوست‌ها</b><button type="button" disabled={forwardingBusy||transferBusy} onClick={()=>{if(!forwardingBusyRef.current&&!transferBusy){setForwardId(null);setForwardOperationId(null)}}} aria-label="بستن" className="disabled:opacity-40"><X size={16}/></button></div>
+    <div className="grid grid-cols-2 gap-2 border-b app-border p-3">
+     <button type="button" disabled={forwardingBusy||transferBusy} onClick={()=>void transferMessageAttachments('pdf-studio')} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border app-border px-2 text-xs font-bold disabled:opacity-40"><FileText size={15}/>بازکردن در PDF Studio</button>
+     <button type="button" disabled={forwardingBusy||transferBusy} onClick={()=>void transferMessageAttachments('file-manager')} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border app-border px-2 text-xs font-bold disabled:opacity-40"><FolderOpen size={15}/>انتقال به فایل‌منیجر</button>
+    </div>
     {forwardingBusy&&<div role="status" aria-live="polite" className="px-4 py-3 text-sm text-center app-muted">در حال انتقال پیام و پیوست‌ها؛ لطفاً صبر کنید…</div>}
+    {transferBusy&&<div role="status" aria-live="polite" className="px-4 py-3 text-sm text-center app-muted">در حال دریافت و انتقال پیوست‌ها…</div>}
     <div className="max-h-[60vh] overflow-y-auto p-2">{conversations.filter(c=>c.conversation_id!==selectedId).map(c=><button type="button" key={c.conversation_id} disabled={forwardingBusy} onClick={()=>void forwardCurrent(c.conversation_id)} className="w-full min-h-[62px] rounded-xl px-3 py-2 flex items-center gap-3 text-right hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"><div className="h-10 w-10 rounded-full bg-[var(--primary)] text-white flex items-center justify-center">{c.type==='company_channel'?<Hash size={16}/>:<Users size={16}/>}</div><div className="min-w-0 flex-1"><b className="block truncate text-sm">{title(c)}</b><span className="block truncate text-xs app-muted mt-1">{c.last_message_body||'گفتگو'}</span></div></button>)}</div>
    </div>
   </div>}

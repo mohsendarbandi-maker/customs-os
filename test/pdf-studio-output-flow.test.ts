@@ -35,6 +35,15 @@ describe('PDF Studio prepared output workflow', () => {
   });
 
 
+  it('packages the three ship-pass document types into one PDF and keeps standard output directly available', () => {
+    expect(source).toContain('PDF_STUDIO_PRESETS.shipPass.flatMap');
+    expect(source).toContain("setSplitRows([{ id: crypto.randomUUID(), name: 'پاس کشتی', pageExpression }]);");
+    expect(source).toContain("if (outputPreset === 'standard')");
+    expect(source).toContain("openQuickOutputPreset('standard')");
+    expect(source).toContain('پاس کشتی · یک PDF واحد');
+    expect(source).toContain('۲ مگابایت');
+  });
+
   it('never labels an unchanged PDF as a compressed output', () => {
     expect(source).toContain('if (candidate.blob.size >= originalBytes.byteLength)');
     expect(source).toContain('خروجی تکراری ساخته نشد');
