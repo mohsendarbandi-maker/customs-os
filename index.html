@@ -6,6 +6,20 @@
       // Auth/session state is origin-scoped, so production always uses HTTPS.
       (() => {
         const host = window.location.hostname.toLowerCase();
+
+        // Desktop sign-in traffic showed that some users still open the old
+        // Vercel deployment. It does not share the production Cloudflare Auth
+        // proxy or PWA cache. Move it to the one canonical origin before React
+        // or Supabase Auth initializes; do not copy refresh tokens between origins.
+        if (host === 'customs-os-me-a4f6.vercel.app') {
+          const canonicalUrl = new URL(window.location.href);
+          canonicalUrl.protocol = 'https:';
+          canonicalUrl.hostname = 'darbandicommercial.ir';
+          canonicalUrl.port = '';
+          window.location.replace(canonicalUrl.toString());
+          return;
+        }
+
         const isPrimaryHost =
           host === 'darbandicommercial.ir' ||
           host === 'www.darbandicommercial.ir';
