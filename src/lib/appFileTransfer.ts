@@ -134,11 +134,12 @@ export async function consumeAppFileTransfer(
     database.close();
   }
 
-  if (!record) {
+  const transferRecord = record as TransferRecord | null;
+  if (!transferRecord) {
     throw new Error('فایل انتقالی پیدا نشد، منقضی شده یا برای این بخش ثبت نشده است؛ فایل را دوباره فوروارد کنید.');
   }
 
-  return record.files.map((file) => new File(
+  return transferRecord.files.map((file) => new File(
     [file.blob],
     file.name,
     { type: file.type || file.blob.type || 'application/octet-stream', lastModified: file.lastModified || Date.now() },
