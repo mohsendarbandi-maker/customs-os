@@ -56,6 +56,7 @@ const nav: NavItem[] = [
 { label: 'صاحب کالا', en: 'Clients', to: '/clients', icon: Contact, group: 'حمل و اسناد', roles: management },
   { label: 'فایل‌منیجر', en: 'File Manager', to: '/file-manager', icon: Folder, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'PDF Studio', en: 'PDF Studio', to: '/pdf-studio', icon: FileStack, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
+  { label: 'چاپگر هوشمند EPL', en: 'EPL Print Assistant', to: '/epl-print', icon: Printer, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'دبیرخانه و مکاتبات', en: 'Office Automation', to: '/office', icon: FileSignature, group: 'سیستم', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'اسناد و مجوزها', en: 'Documents & Permits', to: '/documents', icon: FileText, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'استخراج هوشمند اسناد', en: 'Document Intelligence', to: '/documents/extract', icon: FileSearch, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
@@ -424,6 +425,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             .sort((a, b) => b.to.length - a.to.length)
             .find((item) => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))
             ?.label || 'Customs OS';
+
+  // The Bale Mini App uses a dedicated full-screen shell without the main app navigation.
+  if (location.pathname === '/epl-print') return <>{children}</>;
 
   return (
     <div className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''} ${isChatRoute ? 'is-chat-route' : ''}`} dir="rtl">
