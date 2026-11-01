@@ -15,7 +15,7 @@ const manifest = JSON.parse(read('public/manifest.webmanifest')) as {
   icons: Array<{ src: string; sizes: string; type: string; purpose?: string }>;
 };
 const worker = read('worker/index.ts');
-const vercel = JSON.parse(read('vercel.json')) as { redirects?: Array<{ source?: string; destination?: string; permanent?: boolean; has?: Array<{ type?: string; value?: string }> }> };
+const vercel = JSON.parse(read('vercel.json')) as { redirects?: Array<{ source?: string; destination?: string; permanent?: boolean; has?: Array<{ type?: string; key?: string; value?: string }> }> };
 const pwaLifecycle = read('src/features/reminders/PwaLifecycle.tsx');
 const app = read('src/App.tsx');
 const mainEntry = read('src/main.tsx');
@@ -53,7 +53,7 @@ describe('one canonical Customs OS PWA', () => {
 
   it('redirects the retired Vercel hostname before the app initializes', () => {
     const redirect = vercel.redirects?.find((item) =>
-      item.has?.some((condition) => condition.type === 'host' && condition.value === 'customs-os-me-a4f6.vercel.app'),
+      item.has?.some((condition) => condition.type === 'host' && condition.key === 'host' && condition.value === 'customs-os-me-a4f6.vercel.app'),
     );
     expect(redirect).toBeDefined();
     expect(redirect?.source).toBe('/:path*');
