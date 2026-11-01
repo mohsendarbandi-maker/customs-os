@@ -99,7 +99,9 @@ export const EplPrintAssistantPage: React.FC = () => {
     try {
       const input = new Uint8Array(await source.arrayBuffer());
       const result = await fitPdfToA4(input, 18);
-      const blob = new Blob([result.bytes], { type: 'application/pdf' });
+      const pdfBytes = new Uint8Array(result.bytes.byteLength);
+      pdfBytes.set(result.bytes);
+      const blob = new Blob([pdfBytes.buffer], { type: 'application/pdf' });
       const nextUrl = URL.createObjectURL(blob);
       setOutputUrl(nextUrl);
       setPageCount(result.pageCount);
