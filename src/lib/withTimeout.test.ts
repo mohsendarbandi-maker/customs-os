@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { withTimeout } from './withTimeout';
 
 describe('withTimeout', () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => { vi.useRealTimers(); });
 
   it('returns a resolved operation without waiting for the deadline', async () => {
     await expect(withTimeout(Promise.resolve('ready'), 1000, 'workspace profile'))
