@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity, MessageCircle, Landmark, ChevronLeft, ChevronRight,
+  Activity, MessageCircle, Monitor, Landmark, ChevronLeft, ChevronRight,
   FileText, FileSearch, History, LayoutDashboard, Palette, Printer,
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
