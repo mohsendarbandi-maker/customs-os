@@ -426,6 +426,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             .find((item) => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))
             ?.label || 'Customs OS';
 
+  // The Bale Mini App uses a dedicated full-screen shell without the main app navigation.
+  if (location.pathname === '/epl-print') return <>{children}</>;
+
   return (
     <div className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''} ${isChatRoute ? 'is-chat-route' : ''}`} dir="rtl">
       {/* Desktop navigation is mounted only at >=1024px. It is not merely hidden on phones. */}
