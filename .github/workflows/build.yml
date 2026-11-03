@@ -307,29 +307,7 @@ jobs:
             }
             assert_legacy_redirect "chat.darbandicommercial.ir" "/chat" "__chat_alias_smoke"
             assert_legacy_redirect "reminders.darbandicommercial.ir" "/reminders" "__reminders_alias_smoke"
-
-            echo "Checking dedicated mobile hostname stays on mobile.darbandicommercial.ir"
-            mobile_status=""
-            mobile_location=""
-            for attempt in 1 2 3 4 5 6; do
-              mobile_status="$(curl --silent --show-error --max-time 20 -D /tmp/mobile.headers -o /tmp/mobile.html -w '%{http_code}' "https://mobile.darbandicommercial.ir/?__mobile_smoke=${GITHUB_RUN_ID}&attempt=${attempt}")"
-              mobile_location="$(grep -i '^location:' /tmp/mobile.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
-              echo "Dedicated mobile check: attempt=${attempt}, status=${mobile_status}, location=${mobile_location}"
-              if [ "$mobile_status" = "200" ] && [ -z "$mobile_location" ] && grep -Fq '<div id="root">' /tmp/mobile.html && grep -Eq 'src="/assets/[^" ]+\.js' /tmp/mobile.html; then
-                break
-              fi
-              sleep 3
-            done
-            if [ "$mobile_status" != "200" ] || [ -n "$mobile_location" ] || ! grep -Fq '<div id="root">' /tmp/mobile.html || ! grep -Eq 'src="/assets/[^" ]+\.js' /tmp/mobile.html; then
-              echo "::error::Dedicated mobile host did not serve the app shell directly: HTTP ${mobile_status}, Location=${mobile_location}"
-              exit 1
-            fi
-            mobile_script_src="$(sed -n 's/.*<script[^>]*type="module"[^>]*src="\([^"]*\)".*/\1/p' /tmp/mobile.html | head -n 1)"
-            case "$mobile_script_src" in /assets/*.js) ;; *) echo "Invalid mobile module path: $mobile_script_src"; exit 1;; esac
-            mobile_asset_status="$(curl --silent --show-error --max-time 20 -D /tmp/mobile-asset.headers -o /tmp/mobile-asset.js -w '%{http_code}' "https://mobile.darbandicommercial.ir$mobile_script_src")"
-            test "$mobile_asset_status" = "200"
-            grep -Eiq '^content-type: (application|text)/(javascript|ecmascript)' /tmp/mobile-asset.headers
-            test -s /tmp/mobile-asset.js
+            assert_legacy_redirect "mobile.darbandicommercial.ir" "/" "__mobile_alias_smoke"
 
             legacy_manifest_status=""
             legacy_manifest_location=""
@@ -364,13 +342,15 @@ jobs:
             gateway_status="$(curl --silent --show-error --location --max-time 20 -o /tmp/messenger-gateway.json -w '%{http_code}' "$base/webhooks/messenger/telegram/00000000-0000-4000-8000-000000000000")"
             test "$gateway_status" = "404"
 
-            echo "Checking primary HTML has one static manifest plus the mobile auth handoff"
+            echo "Checking primary HTML has one static manifest and no cross-origin auth handoff"
             curl --fail --silent --show-error --location --max-time 20 -o /tmp/customs-main.html "$base/?__canonical_pwa_smoke=${GITHUB_RUN_ID}"
             grep -Fq '<link rel="manifest" href="/manifest.webmanifest" />' /tmp/customs-main.html
             test "$(grep -o 'rel="manifest"' /tmp/customs-main.html | wc -l | tr -d ' ')" = "1"
             grep -Fq 'rel="apple-touch-icon" sizes="180x180" href="/pwa/mobile-icon-180.png' /tmp/customs-main.html
-            grep -Fq "target.hostname = 'mobile.darbandicommercial.ir'" /tmp/customs-main.html
-            grep -Fq "type: 'customs-auth-sync'" /tmp/customs-main.html
+            if grep -Eq "target\.hostname = 'mobile\.darbandicommercial\.ir'|type: 'customs-auth-sync'" /tmp/customs-main.html; then
+              echo "Cross-origin auth session handoff must remain disabled."
+              exit 1
+            fi
             if grep -Eq 'chat-app-v4\\.webmanifest|chat-subdomain\\.webmanifest|manifest-reminders\\.webmanifest|reminders-subdomain\\.webmanifest|mobile-subdomain\\.webmanifest|apple-touch-icon-precomposed' /tmp/customs-main.html; then
               echo "Legacy origin/manifest/icon selection remains in primary HTML."
               exit 1
