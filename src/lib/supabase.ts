@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { attachSupabaseClient, rpcWithOfflineQueue, startOfflineQueue, readOfflineQueryCache, saveOfflineQueryCache } from './offlineQueue';
 import { authSessionStorage } from './authStorage';
+import { createAuthRefreshResilientFetch } from './supabaseAuthFetch';
 
 const env = (import.meta as any).env;
 const configuredSupabaseUrl = env.VITE_SUPABASE_URL as string;
@@ -23,6 +24,7 @@ type CachedRestResponse = {
 };
 
 const nativeFetch: typeof fetch = globalThis.fetch.bind(globalThis);
+const authResilientFetch = createAuthRefreshResilientFetch(nativeFetch);
 type CachedAuthIdentity = { userId: string; accessToken: string };
 let cachedAuthIdentity: CachedAuthIdentity | null = null;
 let authIdentityReady = false;
@@ -129,7 +131,7 @@ const cachedRestFetch: typeof fetch = async (input, init) => {
   } catch {
     return nativeFetch(input, init);
   }
-  if (!canCacheRestRead(request)) return nativeFetch(input, init);
+  if (!canCacheRestRead(request)) return authResilientFetch(input, init);
 
   const scope = await getRestCacheScope();
   if (!scope || request.headers.get('authorization') !== 'Bearer ' + scope.accessToken) return nativeFetch(input, init);
@@ -152,7 +154,7 @@ const cachedRestFetch: typeof fetch = async (input, init) => {
     const payload = cached?.payload;
     if (payload && payload.status === 200 && typeof payload.body === 'string' && Array.isArray(payload.headers)) {
       // Revalidate in the background while returning the last user-scoped result immediately.
-      void nativeFetch(input, init)
+      void authResilientFetch(input, init)
         .then(response => cacheRestResponse(namespace, scope.userId, scope.organizationId, response.clone()))
         .catch(() => undefined);
       const headers = new Headers(payload.headers);
@@ -163,7 +165,7 @@ const cachedRestFetch: typeof fetch = async (input, init) => {
     // Fall through to the network if IndexedDB is unavailable.
   }
 
-  const response = await nativeFetch(input, init);
+  const response = await authResilientFetch(input, init);
   if (response.ok) {
     void cacheRestResponse(namespace, scope.userId, scope.organizationId, response.clone());
   }
