@@ -903,3 +903,237 @@ html[data-layout-preset="compact"] .app-shell .app-content .future-route-stage .
   --text:#182338; --text-muted:#64748b; --border:#d4deeb; --primary:#475569; --primary-2:#0f766e;
   --hero-a:#dbeafe; --hero-b:#cbd5e1; --shadow:0 12px 32px rgba(30,41,59,.08); color-scheme:light;
 }
+
+
+/* Compact mobile density pass — preserve content and behavior while removing oversized
+   vertical spacing from the dashboard, shipment progress cards and shared navigation. */
+@media (max-width: 767px), (pointer: coarse) {
+  .app-shell .app-mobilebar {
+    min-height: calc(56px + env(safe-area-inset-top)) !important;
+    height: calc(56px + env(safe-area-inset-top)) !important;
+    padding: calc(6px + env(safe-area-inset-top)) 10px 6px !important;
+    gap: 7px !important;
+  }
+  .app-shell .app-mobilebar .icon-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+    flex-basis: 38px !important;
+    border-radius: 12px !important;
+  }
+  .app-shell .mobile-current-page__title { font-size: 14px !important; line-height: 1.25 !important; }
+  .app-shell .mobile-current-page__eyebrow { font-size: 8px !important; }
+
+  .app-shell .app-content {
+    padding: 10px 10px calc(78px + env(safe-area-inset-bottom)) !important;
+  }
+  .app-shell .app-mobile-dock {
+    inset-inline: 12px !important;
+    bottom: calc(6px + env(safe-area-inset-bottom)) !important;
+    min-height: 0 !important;
+    padding: 4px 5px !important;
+    gap: 3px !important;
+    border-radius: 17px !important;
+    box-shadow: 0 6px 20px rgba(8,22,42,.14), inset 0 1px 0 rgba(255,255,255,.08) !important;
+  }
+  .app-shell .app-mobile-dock > button {
+    min-height: 43px !important;
+    padding: 3px 1px !important;
+    gap: 2px !important;
+    border-radius: 12px !important;
+    font-size: 10px !important;
+    line-height: 1.1 !important;
+  }
+  .app-shell .app-mobile-dock > button > span {
+    -webkit-line-clamp: 1 !important;
+    white-space: nowrap !important;
+    font-size: 10px !important;
+  }
+  .app-shell .app-mobile-dock > button svg {
+    width: 19px !important;
+    height: 19px !important;
+  }
+
+  .app-shell .customs-home {
+    padding-bottom: calc(82px + env(safe-area-inset-bottom)) !important;
+  }
+  .app-shell .customs-home > div { padding-inline: 10px !important; }
+  .app-shell .customs-home header {
+    gap: 7px !important;
+    margin-bottom: 10px !important;
+    padding-bottom: 9px !important;
+  }
+  .app-shell .customs-home header > div:first-child { gap: 7px !important; }
+  .app-shell .customs-home header h1 {
+    font-size: 18px !important;
+    line-height: 1.3 !important;
+  }
+  .app-shell .customs-home header p {
+    font-size: 11px !important;
+    line-height: 1.45 !important;
+  }
+  .app-shell .customs-home .customs-home-mark {
+    width: 34px !important;
+    height: 34px !important;
+    flex-basis: 34px !important;
+    border-radius: 10px !important;
+  }
+  .app-shell .customs-home .customs-primary-button,
+  .app-shell .customs-home .customs-line-button {
+    min-height: 35px !important;
+    padding-inline: 10px !important;
+    border-radius: 9px !important;
+    font-size: 11px !important;
+  }
+  .app-shell .customs-home .customs-stat-line {
+    gap: 7px !important;
+  }
+  .app-shell .customs-home .customs-stat {
+    min-height: 66px !important;
+    height: 66px !important;
+    padding: 8px 9px !important;
+    grid-template-columns: 17px minmax(0,1fr) !important;
+    gap: 3px 6px !important;
+    border-radius: 11px !important;
+  }
+  .app-shell .customs-home .customs-stat > svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+  .app-shell .customs-home .customs-stat > span {
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+  }
+  .app-shell .customs-home .customs-stat strong {
+    font-size: 19px !important;
+    line-height: 1 !important;
+  }
+  .app-shell .customs-home .customs-widget-grid { gap: 9px !important; }
+  .app-shell .customs-home .customs-widget-frame { min-width: 0 !important; }
+  .app-shell .customs-home .customs-widget-body > section,
+  .app-shell .customs-home .customs-shipments-section {
+    padding: 10px !important;
+    border-radius: 12px !important;
+  }
+  .app-shell .customs-home .customs-widget-body h2 { font-size: 14px !important; }
+  .app-shell .customs-home .customs-widget-body .text-3xl { font-size: 23px !important; }
+  .app-shell .customs-home .customs-widget-body .p-3 { padding: 8px !important; }
+
+  .app-shell .shipment-status-toolbar {
+    padding: 8px !important;
+    gap: 6px !important;
+  }
+  .app-shell .shipment-status-search {
+    min-height: 36px !important;
+    padding-inline: 9px !important;
+  }
+  .app-shell .shipment-status-search input { height: 34px !important; min-height: 34px !important; font-size: 13px !important; }
+  .app-shell .shipment-compact-list {
+    gap: 7px !important;
+    padding: 7px !important;
+  }
+  .app-shell .shipment-compact-row {
+    gap: 5px 6px !important;
+    padding: 8px !important;
+    border-radius: 11px !important;
+    grid-template-rows: auto auto auto auto !important;
+  }
+  .app-shell .shipment-name { gap: 2px !important; }
+  .app-shell .shipment-name b {
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+  }
+  .app-shell .shipment-name span,
+  .app-shell .shipment-kottaj {
+    font-size: 9px !important;
+    line-height: 1.3 !important;
+  }
+  .app-shell .shipment-kottaj { padding: 3px 7px !important; }
+  .app-shell .shipment-go {
+    width: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    height: 32px !important;
+  }
+  .app-shell .shipment-stages {
+    gap: 2px !important;
+    padding: 6px 0 2px !important;
+  }
+  .app-shell .shipment-stage-dot {
+    min-height: 0 !important;
+    height: auto !important;
+    gap: 2px !important;
+    padding: 0 !important;
+  }
+  .app-shell .shipment-stage-number {
+    width: 24px !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    font-size: 10px !important;
+  }
+  .app-shell .shipment-stage-label {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+  }
+  .app-shell .shipment-current-stage {
+    min-height: 29px !important;
+    height: auto !important;
+    padding-top: 5px !important;
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+  }
+  .app-shell .shipment-warnings,
+  .app-shell .shipment-expanded {
+    margin-inline: 7px !important;
+    font-size: 10px !important;
+  }
+  .app-shell .shipment-expanded { padding: 8px !important; }
+  .app-shell .shipment-expanded-head { font-size: 11px !important; }
+
+  .app-shell .ai-launcher {
+    width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    inset-inline-end: 12px !important;
+    bottom: calc(64px + env(safe-area-inset-bottom)) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 5px 14px color-mix(in srgb, var(--primary) 25%, transparent) !important;
+  }
+  .app-shell .ai-launcher svg { width: 18px !important; height: 18px !important; }
+  .app-shell .ai-chat-panel {
+    inset-inline: 8px !important;
+    bottom: calc(60px + env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+    max-height: calc(100dvh - 78px - env(safe-area-inset-top)) !important;
+    border-radius: 16px !important;
+  }
+}
+
+/* The iPhone Safari desktop-site fallback receives the same compact density. */
+.app-shell.is-narrow-device .app-content {
+  padding: 10px 10px calc(78px + env(safe-area-inset-bottom)) !important;
+}
+.app-shell.is-narrow-device .app-mobile-dock {
+  inset-inline: 12px !important;
+  bottom: calc(6px + env(safe-area-inset-bottom)) !important;
+  min-height: 0 !important;
+  padding: 4px 5px !important;
+  border-radius: 17px !important;
+}
+.app-shell.is-narrow-device .app-mobile-dock > button {
+  min-height: 43px !important;
+  font-size: 10px !important;
+}
+.app-shell.is-narrow-device .customs-home .customs-stat {
+  min-height: 66px !important;
+  height: 66px !important;
+  padding: 8px 9px !important;
+}
+.app-shell.is-narrow-device .shipment-stage-dot { min-height: 0 !important; }
+.app-shell.is-narrow-device .shipment-current-stage { min-height: 29px !important; }
+.app-shell.is-narrow-device .ai-launcher {
+  width: 44px !important;
+  height: 44px !important;
+  bottom: calc(64px + env(safe-area-inset-bottom)) !important;
+}

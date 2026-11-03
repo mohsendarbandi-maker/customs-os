@@ -149,3 +149,29 @@ describe('primary-domain mobile viewport and selectable UI presets', () => {
     expect(mobileStyles).toContain('.layout-preset-preview.compact');
   });
 });
+
+
+describe('compact mobile density regressions', () => {
+  it('reduces dashboard statistics, shell navigation and mobile header dimensions', () => {
+    expect(mobileStyles).toContain('min-height: calc(56px + env(safe-area-inset-top)) !important;');
+    expect(mobileStyles).toContain('.app-shell .app-mobile-dock > button');
+    expect(mobileStyles).toContain('min-height: 43px !important;');
+    expect(mobileStyles).toContain('.app-shell .customs-home .customs-stat');
+    expect(mobileStyles).toContain('height: 66px !important;');
+  });
+
+  it('prevents inherited 48px button sizing from expanding every shipment stage row', () => {
+    expect(mobileStyles).toContain('.app-shell .shipment-stage-dot');
+    expect(mobileStyles).toContain('min-height: 0 !important;');
+    expect(mobileStyles).toContain('.app-shell .shipment-stage-number');
+    expect(mobileStyles).toContain('width: 24px !important;');
+    expect(mobileStyles).toContain('.app-shell .shipment-current-stage');
+    expect(mobileStyles).toContain('min-height: 29px !important;');
+  });
+
+  it('keeps the AI launcher compact and above the bottom navigation without covering content', () => {
+    expect(mobileStyles).toContain('.app-shell .ai-launcher');
+    expect(mobileStyles).toContain('width: 44px !important;');
+    expect(mobileStyles).toContain('bottom: calc(64px + env(safe-area-inset-bottom)) !important;');
+  });
+});
