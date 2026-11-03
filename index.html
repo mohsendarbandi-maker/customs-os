@@ -34,16 +34,45 @@
       })();
     </script>
     <script>
-      // All devices use one canonical origin so Supabase refresh-token rotation
-      // and browser locks are shared across tabs. The app is responsive; a second
-      // hostname and cross-origin token bridge are not required.
+      // Normalize www before Auth initializes, then route genuine phone browsers
+      // to the mobile hostname. Do not infer mobile from window size or pointer:
+      // small Windows windows/touchscreens must remain on the desktop origin.
       (() => {
-        if (window.location.hostname.toLowerCase() !== 'www.darbandicommercial.ir') return;
-        const canonicalUrl = new URL(window.location.href);
-        canonicalUrl.protocol = 'https:';
-        canonicalUrl.hostname = 'darbandicommercial.ir';
-        canonicalUrl.port = '';
-        window.location.replace(canonicalUrl.toString());
+        const host = window.location.hostname.toLowerCase();
+        if (host === 'www.darbandicommercial.ir') {
+          const canonicalUrl = new URL(window.location.href);
+          canonicalUrl.protocol = 'https:';
+          canonicalUrl.hostname = 'darbandicommercial.ir';
+          canonicalUrl.port = '';
+          window.location.replace(canonicalUrl.toString());
+          return;
+        }
+
+        if (
+          window.location.protocol !== 'https:' ||
+          host !== 'darbandicommercial.ir' ||
+          window.matchMedia('(display-mode: standalone)').matches ||
+          navigator.standalone === true
+        ) return;
+
+        const ua = navigator.userAgent || '';
+        const appleTablet = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+        const mobileDevice = /android|iphone|ipad|ipod|mobile/i.test(ua) || appleTablet;
+        if (!mobileDevice) return;
+
+        // Keep OAuth/PKCE callbacks on the origin where their verifier was created.
+        const params = new URLSearchParams(window.location.search);
+        if (
+          ['code', 'error', 'error_description', 'access_token', 'refresh_token', 'type']
+            .some((key) => params.has(key)) ||
+          /(?:access_token|refresh_token|error)=/.test(window.location.hash)
+        ) return;
+
+        const target = new URL(window.location.href);
+        target.protocol = 'https:';
+        target.hostname = 'mobile.darbandicommercial.ir';
+        target.port = '';
+        window.location.replace(target.toString());
       })();
     </script>
     <meta charset="UTF-8" />
