@@ -16,6 +16,21 @@ const appearanceContext = read('src/context/AppearanceContext.tsx');
 const appearanceSettings = read('src/pages/SettingsEnterprisePage.tsx');
 
 describe('mobile visual cohesion regressions', () => {
+  it('loads the Ocean Pro visual layer last and redesigns the actual dashboard surfaces', () => {
+    expect(mainStyles).toContain("import './styles/ocean-pro-ui.css';");
+    expect(mainStyles.indexOf("import './styles/ocean-pro-ui.css';")).toBeGreaterThan(
+      mainStyles.indexOf("import './styles/mobile-chat-calendar-fix.css';"),
+    );
+    const oceanCss = read('src/styles/ocean-pro-ui.css');
+    expect(oceanCss).toContain(':root[data-visual-style="ocean"]');
+    expect(oceanCss).toContain('.customs-home header');
+    expect(oceanCss).toContain('.customs-stat-line');
+    expect(oceanCss).toContain('.customs-widget-frame');
+    expect(oceanCss).toContain('.shipment-compact-row');
+    expect(oceanCss).toContain('.app-mobile-viewport-dock');
+    expect(oceanCss).toContain('@media (min-width:768px) and (max-width:1023px)');
+  });
+
   it('keeps the mobile navigation dock attached to the viewport and exposes full visual themes', () => {
     expect(appShell).toContain('createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock"');
     expect(appShell).toContain('document.body');
