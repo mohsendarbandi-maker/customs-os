@@ -327,7 +327,6 @@ export default {
 
     // The mobile hostname remains a valid standalone mobile app URL on every device.
     // Only inbound phone navigations from the primary hostname are redirected to it.
-    const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir';
 
     if (isLegacyAppOrigin && ['GET', 'HEAD'].includes(request.method) && !isLegacyIntegrationRequest) {
       const canonical = new URL(url.toString());
