@@ -325,6 +325,43 @@ export default {
     const isLegacyIntegrationRequest =
       /^\/(?:auth|rest|storage|realtime|functions|graphql|api|webhooks)(?:\/|$)/i.test(url.pathname);
 
+    // Redirect only actual phone/tablet document navigations from the primary
+    // hostname to the dedicated mobile hostname. The mobile hostname itself
+    // stays valid on all devices; asset and API requests retain their origin.
+    const userAgent = request.headers.get('user-agent') || '';
+    const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent);
+    const isPrimaryDomain = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir';
+    const isDocumentNavigation =
+      ['GET', 'HEAD'].includes(request.method) &&
+      (request.headers.get('sec-fetch-dest') === 'document' ||
+        (request.headers.get('accept') || '').includes('text/html'));
+    const isStaticAsset =
+      url.pathname.startsWith('/assets/') ||
+      /\\.(?:js|mjs|css|map|png|jpe?g|gif|webp|svg|ico|webmanifest|json|txt|woff2?|ttf|eot)$/i.test(url.pathname);
+
+    if (
+      isPrimaryDomain &&
+      isPhoneOrTablet &&
+      isDocumentNavigation &&
+      !isLegacyIntegrationRequest &&
+      !isStaticAsset &&
+      url.pathname !== '/__auth-bridge.html'
+    ) {
+      const mobileUrl = new URL(url.toString());
+      mobileUrl.protocol = 'https:';
+      mobileUrl.hostname = 'mobile.darbandicommercial.ir';
+      mobileUrl.port = '';
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: mobileUrl.toString(),
+          'Cache-Control': 'private, no-store',
+          Vary: 'User-Agent',
+          'X-Customs-OS-Mobile-Redirect': '1',
+        },
+      });
+    }
+
     // The mobile hostname remains a valid standalone mobile app URL on every device.
     // Only inbound phone navigations from the primary hostname are redirected to it.
 
