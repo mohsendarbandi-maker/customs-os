@@ -318,13 +318,39 @@ export default {
     // Chat and Reminders remain aliases of the unified app; all aliases resolve
     // to the same authenticated app and same-origin Cloudflare/Supabase proxy.
     const legacyHost = url.hostname.toLowerCase();
+    const isLegacyIntegrationRequest =
+      /^\/(?:auth|rest|storage|realtime|functions|graphql|api|webhooks)(?:\/|$)/i.test(url.pathname);
+
+    // Some narrow Windows/touch displays were misclassified as phones by the
+    // HTML viewport heuristic. Keep the mobile alias for genuine phone browsers,
+    // but send desktop operating systems back to the primary auth origin.
+    const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir';
+    const userAgent = request.headers.get('User-Agent') || '';
+    const isDesktopBrowser = /Windows NT|Macintosh|X11|CrOS/i.test(userAgent);
+    if (
+      isMobileHost &&
+      isDesktopBrowser &&
+      ['GET', 'HEAD'].includes(request.method) &&
+      !isLegacyIntegrationRequest
+    ) {
+      const canonical = new URL(url.toString());
+      canonical.protocol = 'https:';
+      canonical.hostname = 'darbandicommercial.ir';
+      canonical.port = '';
+      return new Response(null, {
+        status: 301,
+        headers: {
+          Location: canonical.toString(),
+          'Cache-Control': 'public, max-age=3600',
+          'X-Customs-OS-Canonical-Redirect': '1',
+        },
+      });
+    }
+
     const isLegacyAppOrigin = [
       'chat.darbandicommercial.ir',
       'reminders.darbandicommercial.ir',
-      'mobile.darbandicommercial.ir',
     ].includes(legacyHost);
-    const isLegacyIntegrationRequest =
-      /^\/(?:auth|rest|storage|realtime|functions|graphql|api|webhooks)(?:\/|$)/i.test(url.pathname);
     if (isLegacyAppOrigin && ['GET', 'HEAD'].includes(request.method) && !isLegacyIntegrationRequest) {
       const canonical = new URL(url.toString());
       canonical.protocol = 'https:';
