@@ -5,7 +5,7 @@ export interface Env {
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY?: string;
   /** Secret API key used only on /auth/v1/token so Supabase can rate-limit by the real client IP. */
-  SUPABASE_SECRET_KEY?: string;
+  SUPABASE_SECRET_KEY: string;
   TURN_API_TOKEN_V2?: string;
   TURN_KEY_ID_V2?: string;
 }
