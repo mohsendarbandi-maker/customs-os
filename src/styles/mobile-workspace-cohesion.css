@@ -1137,3 +1137,70 @@ html[data-layout-preset="compact"] .app-shell .app-content .future-route-stage .
   height: 44px !important;
   bottom: calc(64px + env(safe-area-inset-bottom)) !important;
 }
+
+
+/* Portal correction: the fixed mobile dock is rendered into document.body,
+   outside .app-shell. Keep these selectors intentionally unscoped. */
+@media (max-width: 767px), (pointer: coarse) {
+  .app-mobile-viewport-dock {
+    position: fixed !important;
+    inset-inline: 10px !important;
+    bottom: calc(5px + env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 4px !important;
+    gap: 2px !important;
+    border-radius: 15px !important;
+    z-index: 900 !important;
+  }
+  .app-mobile-viewport-dock > button {
+    min-width: 0 !important;
+    min-height: 42px !important;
+    height: 42px !important;
+    padding: 3px 1px !important;
+    gap: 2px !important;
+    font-size: 10px !important;
+    line-height: 1.1 !important;
+  }
+  .app-mobile-viewport-dock > button svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  .app-mobile-viewport-dock > button > span {
+    display: block !important;
+    font-size: 9px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* Narrow-device fallback, including Safari's Request Desktop Website mode. */
+.app-shell.is-narrow-device .customs-home > div {
+  padding-inline: 10px !important;
+  padding-top: 10px !important;
+}
+.app-shell.is-narrow-device .customs-home header {
+  gap: 7px !important;
+  margin-bottom: 9px !important;
+  padding-bottom: 8px !important;
+}
+.app-shell.is-narrow-device .customs-home .customs-stat-line {
+  gap: 6px !important;
+}
+.app-shell.is-narrow-device .customs-home .customs-stat {
+  min-height: 62px !important;
+  height: 62px !important;
+  padding: 7px 8px !important;
+}
+.app-shell.is-narrow-device .customs-home .customs-widget-grid {
+  gap: 8px !important;
+}
+.app-shell.is-narrow-device .shipment-compact-list {
+  gap: 6px !important;
+  padding: 6px !important;
+}
+.app-shell.is-narrow-device .shipment-compact-row {
+  padding: 7px !important;
+  gap: 4px 5px !important;
+}
