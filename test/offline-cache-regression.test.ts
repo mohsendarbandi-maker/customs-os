@@ -17,7 +17,7 @@ describe('offline and background-update safety', () => {
     const navigationRoute = serviceWorker.indexOf("registerRoute(({request,url})=>request.mode==='navigate'");
     const precacheRoute = serviceWorker.indexOf('precacheAndRoute(self.__WB_MANIFEST)');
     expect(navigationRoute).toBeGreaterThan(-1);
-    expect(serviceWorker).toContain("cacheName:'customs-os-navigation-v2'");
+    expect(serviceWorker).toContain("cacheName:'customs-os-navigation-v3'");
     expect(serviceWorker).toContain('networkTimeoutSeconds:1');
     expect(serviceWorker).not.toContain("new NetworkOnly()");
     expect(precacheRoute).toBeGreaterThan(navigationRoute);
