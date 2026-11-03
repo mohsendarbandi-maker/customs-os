@@ -382,20 +382,18 @@ jobs:
               exit 1
             fi
 
-            echo "Desktop visits to mobile alias must redirect"
+            echo "Desktop requests to the mobile alias remain on the requested mobile hostname"
             mobile_desktop_status=""
             mobile_desktop_location=""
             for attempt in 1 2 3 4 5 6; do
-              mobile_desktop_status="$(curl --silent --show-error --max-time 20 -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36' -D /tmp/mobile-desktop.headers -o /dev/null -w '%{http_code}' "https://mobile.darbandicommercial.ir/?__mobile_desktop_smoke=${GITHUB_RUN_ID}&attempt=${attempt}")"
+              mobile_desktop_status="$(curl --silent --show-error --max-time 20 -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36' -D /tmp/mobile-desktop.headers -o /tmp/mobile-desktop.html -w '%{http_code}' "https://mobile.darbandicommercial.ir/?__mobile_desktop_smoke=${GITHUB_RUN_ID}&attempt=${attempt}")"
               mobile_desktop_location="$(grep -i '^location:' /tmp/mobile-desktop.headers | tail -n 1 | tr -d '\\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
-              echo "Desktop mobile-alias check: attempt=${attempt}, status=${mobile_desktop_status}, location=${mobile_desktop_location}"
-              if [ "$mobile_desktop_status" = "301" ] && [ "$mobile_desktop_location" = "https://darbandicommercial.ir/?__mobile_desktop_smoke=${GITHUB_RUN_ID}&attempt=${attempt}" ]; then
-                break
-              fi
+              echo "Desktop mobile-host check: attempt=${attempt}, status=${mobile_desktop_status}, location=${mobile_desktop_location}"
+              if [ "${mobile_desktop_status}" = "200" ] && [ -z "${mobile_desktop_location}" ] && grep -Fq '<div id="root">' /tmp/mobile-desktop.html; then break; fi
               sleep 3
             done
-            if [ "$mobile_desktop_status" != "301" ] || [ "$mobile_desktop_location" != "https://darbandicommercial.ir/?__mobile_desktop_smoke=${GITHUB_RUN_ID}&attempt=${attempt}" ]; then
-              echo "::error::Desktop browser was not redirected from the mobile auth origin: HTTP ${mobile_desktop_status}, Location=${mobile_desktop_location}"
+            if [ "${mobile_desktop_status}" != "200" ] || [ -n "${mobile_desktop_location}" ] || ! grep -Fq '<div id="root">' /tmp/mobile-desktop.html; then
+              echo "::error::Desktop request to the mobile hostname was unexpectedly redirected or failed: HTTP ${mobile_desktop_status}, Location=${mobile_desktop_location}"
               exit 1
             fi
 
