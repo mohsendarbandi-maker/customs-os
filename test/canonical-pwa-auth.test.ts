@@ -87,7 +87,7 @@ describe('one canonical Customs OS PWA', () => {
     const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
     expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
     expect(worker).toContain("const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir'");
-    expect(worker).toContain("const isDesktopBrowser = /Windows NT|Macintosh|X11|CrOS/i.test(userAgent)");
+    expect(worker).toContain("const isDesktopBrowser = /Windows NT|X11|CrOS/i.test(userAgent)");
     expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
     expect(worker).toContain("canonical.pathname = '/chat'");
     expect(worker).toContain("canonical.pathname = '/reminders'");
