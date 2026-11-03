@@ -20,7 +20,8 @@ describe('authenticated REST read cache', () => {
   });
   it('returns cached JSON immediately and refreshes it in the background', () => {
     expect(source).toContain("headers.set('X-Customs-OS-Read-Cache', 'HIT')");
-    expect(source).toContain('void nativeFetch(input, init)');
+    expect(source).toContain('void authResilientFetch(input, init)');
+    expect(source).toContain('createAuthRefreshResilientFetch(nativeFetch)');
     expect(source).toContain('global: { fetch: cachedRestFetch }');
   });
 });
