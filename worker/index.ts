@@ -330,7 +330,7 @@ export default {
     // but send desktop operating systems back to the primary auth origin.
     const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir';
     const userAgent = request.headers.get('User-Agent') || '';
-    const isDesktopBrowser = /Windows NT|Macintosh|X11|CrOS/i.test(userAgent);
+    const isDesktopBrowser = /Windows NT|X11|CrOS/i.test(userAgent);
     if (
       isMobileHost &&
       isDesktopBrowser &&
