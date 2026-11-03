@@ -15,6 +15,7 @@ const manifest = JSON.parse(read('public/manifest.webmanifest')) as {
   icons: Array<{ src: string; sizes: string; type: string; purpose?: string }>;
 };
 const worker = read('worker/index.ts');
+const wrangler = JSON.parse(read('wrangler.jsonc')) as { secrets?: { required?: string[] } };
 const vercel = JSON.parse(read('vercel.json')) as { redirects?: Array<{ source?: string; destination?: string; permanent?: boolean; has?: Array<{ type?: string; key?: string; value?: string }> }> };
 const pwaLifecycle = read('src/features/reminders/PwaLifecycle.tsx');
 const app = read('src/App.tsx');
@@ -23,6 +24,11 @@ const supabaseClient = read('src/lib/supabase.ts');
 const authContext = read('src/context/AuthContext.tsx');
 
 describe('one canonical Customs OS PWA', () => {
+  it('requires the server-only Supabase Auth proxy secret before Worker deployment', () => {
+    expect(wrangler.secrets?.required).toContain('SUPABASE_SECRET_KEY');
+    expect(worker).toContain('SUPABASE_SECRET_KEY: string;');
+  });
+
   it('declares exactly one static manifest and one PNG Apple touch icon in the HTML shell', () => {
     const links = html.match(/<link\b[^>]*rel="manifest"[^>]*>/g) ?? [];
     const appleIcons = html.match(/<link\b[^>]*rel="apple-touch-icon"[^>]*>/g) ?? [];
