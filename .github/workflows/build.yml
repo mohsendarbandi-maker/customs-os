@@ -91,6 +91,12 @@ jobs:
           secret_names="$(npx wrangler@4 secret list --name customs --format json)"
           has_key_id="$(printf '%s' "$secret_names" | jq -r 'any(.[]; .name == "TURN_KEY_ID_V2")')"
           has_api_token="$(printf '%s' "$secret_names" | jq -r 'any(.[]; .name == "TURN_API_TOKEN_V2")')"
+          has_supabase_secret="$(printf '%s' "$secret_names" | jq -r 'any(.[]; .name == "SUPABASE_SECRET_KEY")')"
+          if [ "$has_supabase_secret" = "true" ]; then
+            echo "::notice::Cloudflare Worker has the server-side Supabase Auth forwarding key configured."
+          else
+            echo "::warning::SUPABASE_SECRET_KEY is not configured on the Cloudflare Worker; Supabase still sees the shared Worker egress IP for Auth token requests."
+          fi
           if [ "$has_key_id" = "true" ] && [ "$has_api_token" = "true" ]; then
             echo "Cloudflare TURN credentials already exist; keeping the current key."
             exit 0
