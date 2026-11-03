@@ -23,7 +23,7 @@ describe('Supabase refresh transient-error protection', () => {
       }),
     );
     const upstream: typeof fetch = (input, init) => upstreamMock(input, init);
-    const fetcher = createAuthRefreshResilientFetch(upstream, 30_000);
+    const fetcher = createAuthRefreshResilientFetch(upstream as unknown as typeof fetch, 30_000);
 
     const response = await fetcher(refreshRequest());
 
@@ -50,7 +50,7 @@ describe('Supabase refresh transient-error protection', () => {
       new Response(JSON.stringify({ code: 'over_request_rate_limit' }), { status: 429 }),
     );
     const upstream: typeof fetch = (input, init) => upstreamMock(input, init);
-    const fetcher = createAuthRefreshResilientFetch(upstream, 30_000);
+    const fetcher = createAuthRefreshResilientFetch(upstream as unknown as typeof fetch, 30_000);
 
     const first = await fetcher(refreshRequest());
     const second = await fetcher(refreshRequest());
@@ -77,7 +77,7 @@ describe('Supabase refresh transient-error protection', () => {
       }),
     );
     const upstream: typeof fetch = (input, init) => upstreamMock(input, init);
-    const fetcher = createAuthRefreshResilientFetch(upstream, 30_000);
+    const fetcher = createAuthRefreshResilientFetch(upstream as unknown as typeof fetch, 30_000);
 
     const passwordLogin = new Request(
       'https://darbandicommercial.ir/auth/v1/token?grant_type=password',
@@ -102,7 +102,7 @@ describe('Supabase refresh transient-error protection', () => {
       }),
     );
     const upstream: typeof fetch = (input, init) => upstreamMock(input, init);
-    const fetcher = createAuthRefreshResilientFetch(upstream, 30_000);
+    const fetcher = createAuthRefreshResilientFetch(upstream as unknown as typeof fetch, 30_000);
 
     const response = await fetcher(refreshRequest());
 
