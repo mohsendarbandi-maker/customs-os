@@ -312,8 +312,8 @@ export default {
       });
     }
 
-    // Keep desktop and phone browsers on the same canonical app origin. Mobile
-    // layout differences are handled by the shared responsive UI, not host redirects.
+    // Keep the mobile alias for genuine phone/tablet user agents only.
+    // Desktop operating systems arriving here are redirected to the primary origin below.
 
     // Chat and Reminders remain aliases of the unified app; all aliases resolve
     // to the same authenticated app and same-origin Cloudflare/Supabase proxy.
