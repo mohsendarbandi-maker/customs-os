@@ -35,13 +35,16 @@ describe('PWA manifest requests pass through the canonical Worker', () => {
     expect(worker).toContain("'reminders.darbandicommercial.ir'");
   });
 
-  it('redirects the retired mobile hostname to the one canonical auth origin', () => {
+  it('keeps the phone alias but redirects Windows and other desktop browsers to the canonical origin', () => {
     expect(worker).toContain('same canonical app origin');
+    expect(worker).toContain("const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("const isDesktopBrowser = /Windows NT|Macintosh|X11|CrOS/i.test(userAgent)");
     expect(worker).toContain("status: 301");
     expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
     const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
-    expect(legacyBlock).toContain("'mobile.darbandicommercial.ir'");
-    expect(workflow).toContain('assert_legacy_redirect "mobile.darbandicommercial.ir" "/"');
+    expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
+    expect(workflow).toContain('Desktop visits to mobile alias must redirect');
+    expect(workflow).toContain('Phone UA remains on mobile host');
   });
 
   it('does not abort before diagnostics when a response lacks a Location header', () => {
