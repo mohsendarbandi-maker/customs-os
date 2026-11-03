@@ -1,31 +1,42 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+
 const root = path.resolve(__dirname, '..');
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
-describe('mobile hostname handoff', () => {
-  it('routes phone browsers to the mobile host and preserves the route', () => {
+
+describe('single-origin Customs OS session routing', () => {
+  it('does not route touch-sized Windows windows or phones to a second auth origin', () => {
     const html = read('index.html');
-    expect(html).toContain('mobile.darbandicommercial.ir');
-    expect(html).toContain('window.location.replace(target.toString())');
-    expect(html).toContain('const target = new URL(window.location.href)');
-    expect(html).toContain('navigator.maxTouchPoints');
-    expect(html).toContain("window.matchMedia('(display-mode: standalone)').matches");
-    expect(html).toContain('navigator.standalone === true');
-  });
-  it('transfers auth only via nonce-scoped postMessage and never via URL parameters', () => {
-    const html = read('index.html');
-    const bridge = read('public/__auth-bridge.html');
-    expect(html).toContain("event.origin !== mobileOrigin");
-    expect(html).toContain('event.source !== frame.contentWindow');
-    expect(html).toContain("type: 'customs-auth-sync'");
-    expect(bridge).toContain("event.origin !== MAIN_ORIGIN");
-    expect(bridge).toContain("event.source !== window.parent");
-    expect(bridge).toContain("window.localStorage.setItem(STORAGE_KEY, event.data.value)");
-    expect(html).not.toContain('target.searchParams.set(\'token\'');
-  });
-  it('serves the bridge as a private non-cached document with a narrow frame allowlist', () => {
     const worker = read('worker/index.ts');
+
+    expect(html).not.toContain('mobile.darbandicommercial.ir');
+    expect(html).not.toContain('touchSmall');
+    expect(html).not.toContain('navigator.maxTouchPoints');
+    expect(html).toContain("canonicalUrl.hostname = 'darbandicommercial.ir'");
+
+    const legacyHosts = worker.slice(
+      worker.indexOf('const isLegacyAppOrigin'),
+      worker.indexOf('const isLegacyIntegrationRequest'),
+    );
+    expect(legacyHosts).toContain("'mobile.darbandicommercial.ir'");
+    expect(worker).toContain('status: 301');
+  });
+
+  it('does not copy rotating auth tokens through a cross-origin postMessage bridge', () => {
+    const html = read('index.html');
+
+    expect(html).not.toContain("type: 'customs-auth-sync'");
+    expect(html).not.toContain('event.origin !== mobileOrigin');
+    expect(html).not.toContain('postMessage');
+    expect(html).not.toContain("target.searchParams.set('token'");
+  });
+
+  it('keeps the retired bridge endpoint private while the app no longer depends on it', () => {
+    const html = read('index.html');
+    const worker = read('worker/index.ts');
+
+    expect(html).not.toContain('__auth-bridge.html');
     expect(worker).toContain("url.pathname === '/__auth-bridge.html'");
     expect(worker).toContain("headers.set('Cache-Control', 'no-store, private')");
     expect(worker).toContain('frame-ancestors https://darbandicommercial.ir');
