@@ -13,4 +13,4 @@ Customs OS proxies browser API requests through the `customs` Cloudflare Worker.
 
 For `/auth/v1/token` only, the Worker changes the upstream `apikey` to this server-side secret and adds `Sb-Forwarded-For: <CF-Connecting-IP>`. The user's `Authorization` bearer token and request body remain unchanged. The secret is never returned to the browser and is not used for PostgREST, Storage, or Realtime, so normal user JWT/RLS behavior is retained for data requests.
 
-If the Worker secret is not configured, the Worker deliberately keeps the old proxy behavior. The code does not silently expose or substitute another key; the shared-IP rate-limit issue can therefore continue until this one-time secret is installed.
+If the Worker secret is not configured, the Worker deliberately keeps the old proxy behavior and does not expose or substitute another key. The Wrangler configuration now declares `SUPABASE_SECRET_KEY` as required, so future Worker deployments fail before release until this one-time Secret is installed. This prevents a code deployment from silently reintroducing the shared-egress-IP refresh-rate-limit problem.
