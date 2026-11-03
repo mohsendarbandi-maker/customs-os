@@ -35,14 +35,13 @@ describe('PWA manifest requests pass through the canonical Worker', () => {
     expect(worker).toContain("'reminders.darbandicommercial.ir'");
   });
 
-  it('keeps phone browsers on the canonical responsive app origin', () => {
+  it('redirects the retired mobile hostname to the one canonical auth origin', () => {
     expect(worker).toContain('same canonical app origin');
-    expect(worker).toContain("url.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
-    expect(worker).toContain("assetBase.hostname = 'darbandicommercial.ir'");
-    expect(worker).not.toContain('X-Customs-OS-Mobile-Redirect');
-    const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
-    expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("status: 301");
     expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
+    const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
+    expect(legacyBlock).toContain("'mobile.darbandicommercial.ir'");
+    expect(workflow).toContain('assert_legacy_redirect "mobile.darbandicommercial.ir" "/"');
   });
 
   it('does not abort before diagnostics when a response lacks a Location header', () => {
