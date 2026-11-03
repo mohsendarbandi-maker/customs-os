@@ -53,6 +53,7 @@ export const SettingsEnterprisePage:React.FC=()=>{const loc=useLocation(),nav=us
    writeUserSettings(user.id,{...readUserSettings<Record<string,unknown>>(user.id,{}),...personal});
    appearance.setTheme(settings.theme==='light'?'light':'dark');
    appearance.setAccentColor(typeof settings.accentColor==='string'&&/^#[0-9a-fA-F]{6}$/.test(settings.accentColor)?settings.accentColor:'#0A66C2');
+   appearance.setVisualStyle(['ocean','aurora','glass','emerald','sunset','minimal'].includes(settings.visualStyle)?settings.visualStyle:'ocean');
    appearance.setDensity(settings.density==='compact'?'compact':'comfortable');
     appearance.setLayoutPreset(settings.layoutPreset==='cards'||settings.layoutPreset==='compact'?settings.layoutPreset:'standard');
    appearance.setComfort(settings.comfort==='reading'||settings.comfort==='soft'||settings.comfort==='warm'||settings.comfort==='normal'?settings.comfort:'normal');
