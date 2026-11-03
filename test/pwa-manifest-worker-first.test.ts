@@ -36,7 +36,7 @@ describe('PWA manifest requests pass through the canonical Worker', () => {
   });
 
   it('keeps the phone alias but redirects Windows and other desktop browsers to the canonical origin', () => {
-    expect(worker).toContain('same canonical app origin');
+    expect(worker).toContain('mobile alias for genuine phone/tablet user agents only');
     expect(worker).toContain("const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir'");
     expect(worker).toContain("const isDesktopBrowser = /Windows NT|Macintosh|X11|CrOS/i.test(userAgent)");
     expect(worker).toContain("status: 301");
