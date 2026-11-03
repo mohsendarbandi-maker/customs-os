@@ -337,7 +337,7 @@ export default {
         (request.headers.get('accept') || '').includes('text/html'));
     const isStaticAsset =
       url.pathname.startsWith('/assets/') ||
-      /\\.(?:js|mjs|css|map|png|jpe?g|gif|webp|svg|ico|webmanifest|json|txt|woff2?|ttf|eot)$/i.test(url.pathname);
+      /\.(?:js|mjs|css|map|png|jpe?g|gif|webp|svg|ico|webmanifest|json|txt|woff2?|ttf|eot)$/i.test(url.pathname);
 
     if (
       isPrimaryDomain &&
