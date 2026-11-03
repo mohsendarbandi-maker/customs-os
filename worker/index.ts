@@ -331,6 +331,37 @@ export default {
     const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir';
     const userAgent = request.headers.get('User-Agent') || '';
     const isDesktopBrowser = /Windows NT|X11|CrOS/i.test(userAgent);
+    const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent);
+    const isPrimaryAppHost = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir';
+    const isStaticOrApiRequest =
+      isLegacyIntegrationRequest ||
+      url.pathname.startsWith('/assets/') ||
+      /\\.(?:js|mjs|css|map|png|jpe?g|gif|webp|svg|ico|webmanifest|json|txt|woff2?|ttf|eot)$/i.test(url.pathname);
+
+    // Send real phone/tablet page navigations from the primary domain to the
+    // dedicated mobile hostname. Preserve the full path, query and hash; leave
+    // API, auth bridge, and fingerprinted asset requests on their original host.
+    if (
+      isPrimaryAppHost &&
+      isPhoneOrTablet &&
+      ['GET', 'HEAD'].includes(request.method) &&
+      !isStaticOrApiRequest &&
+      url.pathname !== '/__auth-bridge.html'
+    ) {
+      const mobileUrl = new URL(url.toString());
+      mobileUrl.protocol = 'https:';
+      mobileUrl.hostname = 'mobile.darbandicommercial.ir';
+      mobileUrl.port = '';
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: mobileUrl.toString(),
+          'Cache-Control': 'private, no-store',
+          'Vary': 'User-Agent',
+          'X-Customs-OS-Mobile-Redirect': '1',
+        },
+      });
+    }
     if (
       isMobileHost &&
       isDesktopBrowser &&
