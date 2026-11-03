@@ -294,8 +294,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           console.error('[Auth] getSession failed:', sessionError);
 
           if (isUnrecoverableAuthSessionError(sessionError)) {
-            // Only remove persisted credentials when Auth says the token/session
-            // is invalid or revoked. A network outage must not look like logout.
+            // Only remove persisted credentials when Auth confirms they are
+            // invalid/revoked. Temporary throttling must never become a logout.
             clearLocalAuthStorage();
             currentFetchId.current++;
             setSession(null);
@@ -303,13 +303,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             setProfile(null);
             setNeedsOnboarding(false);
             setError(null);
-            initialized.current = true;
           } else {
-            // Preserve stored credentials and show recovery controls instead of
-            // redirecting the user to login after a temporary connectivity error.
+            // getSession may return the saved session together with a temporary
+            // refresh error (for example HTTP 429). Keep that identity in memory
+            // so ProtectedRoute does not send an already signed-in user to Login.
+            if (initialSession?.user) {
+              const userId = initialSession.user.id;
+              setSession(initialSession);
+              setUser(initialSession.user);
+
+              const cachedProfile = await withTimeout(
+                readOfflineQueryCache<UserProfile | null>('auth-profile', userId, userId),
+                AUTH_CACHE_TIMEOUT_MS,
+                'restoring the cached workspace profile after a temporary Auth failure',
+              ).catch(() => null);
+              const offlineProfile = cachedProfile?.payload;
+              if (
+                offlineProfile &&
+                offlineProfile.id === userId &&
+                offlineProfile.is_active &&
+                Boolean(offlineProfile.organization_id)
+              ) {
+                setProfile(offlineProfile);
+                setNeedsOnboarding(false);
+              }
+            }
+
             setError(AUTH_SESSION_RETRY_MESSAGE);
           }
 
+          // Mark bootstrap complete even on a retryable error, allowing the
+          // normal focus/visibility recovery path to try again later.
+          initialized.current = true;
           setLoading(false);
           return;
         }
