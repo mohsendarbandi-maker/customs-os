@@ -367,6 +367,21 @@ jobs:
             }
             assert_legacy_redirect "chat.darbandicommercial.ir" "/chat" "__chat_alias_smoke"
             assert_legacy_redirect "reminders.darbandicommercial.ir" "/reminders" "__reminders_alias_smoke"
+            echo "Phone visits to the primary domain must redirect to the mobile alias"
+            primary_phone_status=""
+            primary_phone_location=""
+            for attempt in 1 2 3 4 5 6; do
+              primary_phone_status="$(curl --silent --show-error --max-time 20 -A 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1' -D /tmp/primary-phone.headers -o /dev/null -w '%{http_code}' "https://darbandicommercial.ir/?__primary_phone_smoke=${GITHUB_RUN_ID}&attempt=${attempt}")"
+              primary_phone_location="$(grep -i '^location:' /tmp/primary-phone.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
+              echo "Primary phone redirect check: attempt=${attempt}, status=${primary_phone_status}, location=${primary_phone_location}"
+              if [ "${primary_phone_status}" = "302" ] && [ "${primary_phone_location}" = "https://mobile.darbandicommercial.ir/?__primary_phone_smoke=${GITHUB_RUN_ID}&attempt=${attempt}" ]; then break; fi
+              sleep 3
+            done
+            if [ "${primary_phone_status}" != "302" ] || [ "${primary_phone_location}" != "https://mobile.darbandicommercial.ir/?__primary_phone_smoke=${GITHUB_RUN_ID}&attempt=${attempt}" ]; then
+              echo "::error::Phone browser was not redirected from the primary domain to the mobile hostname: HTTP ${primary_phone_status}, Location=${primary_phone_location}"
+              exit 1
+            fi
+
             echo "Desktop visits to mobile alias must redirect"
             mobile_desktop_status=""
             mobile_desktop_location=""
