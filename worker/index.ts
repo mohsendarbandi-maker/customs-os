@@ -321,6 +321,7 @@ export default {
     const isLegacyAppOrigin = [
       'chat.darbandicommercial.ir',
       'reminders.darbandicommercial.ir',
+      'mobile.darbandicommercial.ir',
     ].includes(legacyHost);
     const isLegacyIntegrationRequest =
       /^\/(?:auth|rest|storage|realtime|functions|graphql|api|webhooks)(?:\/|$)/i.test(url.pathname);
