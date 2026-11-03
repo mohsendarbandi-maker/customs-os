@@ -28,19 +28,18 @@ describe('mobile hostname routing without cross-origin session sharing', () => {
     expect(html).toContain("target.hostname = 'mobile.darbandicommercial.ir'");
   });
 
-  it('redirects desktop browsers off the mobile hostname while keeping real phones there', () => {
+  it('redirects phone page visits from the primary hostname and keeps the mobile hostname standalone', () => {
     const worker = read('worker/index.ts');
     const workflow = read('.github/workflows/build.yml');
 
-    expect(worker).toContain("const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir'");
-    expect(worker).toContain("const isDesktopBrowser = /Windows NT|X11|CrOS/i.test(userAgent)");
-    expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
-    const legacyBlock = worker.slice(
-      worker.indexOf('const isLegacyAppOrigin'),
-      worker.indexOf('const isLegacyIntegrationRequest'),
-    );
-    expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
-    expect(workflow).toContain('Desktop visits to mobile alias must redirect');
+    expect(worker).toContain("const isPrimaryDomain = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir'");
+    expect(worker).toContain("const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent)");
+    expect(worker).toContain("mobileUrl.hostname = 'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("status: 302");
+    expect(worker).toContain("'X-Customs-OS-Mobile-Redirect': '1'");
+    expect(worker).not.toContain('const isDesktopBrowser =');
+    expect(workflow).toContain('Phone visits to the primary domain must redirect to the mobile alias');
+    expect(workflow).toContain('Desktop requests to the mobile alias remain on the requested mobile hostname');
     expect(workflow).toContain('Phone UA remains on mobile host');
   });
 
