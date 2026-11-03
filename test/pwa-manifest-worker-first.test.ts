@@ -35,15 +35,14 @@ describe('PWA manifest requests pass through the canonical Worker', () => {
     expect(worker).toContain("'reminders.darbandicommercial.ir'");
   });
 
-  it('keeps the phone alias but redirects Windows and other desktop browsers to the canonical origin', () => {
-    expect(worker).toContain('mobile alias for genuine phone/tablet user agents only');
-    expect(worker).toContain("const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir'");
-    expect(worker).toContain("const isDesktopBrowser = /Windows NT|X11|CrOS/i.test(userAgent)");
-    expect(worker).toContain("status: 301");
-    expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
-    const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
-    expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
-    expect(workflow).toContain('Desktop visits to mobile alias must redirect');
+  it('redirects primary-domain phone navigations to mobile and keeps the mobile hostname standalone', () => {
+    expect(worker).toContain("const isPrimaryDomain = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir'");
+    expect(worker).toContain("const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent)");
+    expect(worker).toContain("mobileUrl.hostname = 'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("status: 302");
+    expect(worker).not.toContain('const isDesktopBrowser =');
+    expect(workflow).toContain('Phone visits to the primary domain must redirect to the mobile alias');
+    expect(workflow).toContain('Desktop requests to the mobile alias remain on the requested mobile hostname');
     expect(workflow).toContain('Phone UA remains on mobile host');
   });
 
