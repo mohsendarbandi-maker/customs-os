@@ -33,7 +33,7 @@ describe('mobile hostname routing without cross-origin session sharing', () => {
     const workflow = read('.github/workflows/build.yml');
 
     expect(worker).toContain("const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir'");
-    expect(worker).toContain("const isDesktopBrowser = /Windows NT|Macintosh|X11|CrOS/i.test(userAgent)");
+    expect(worker).toContain("const isDesktopBrowser = /Windows NT|X11|CrOS/i.test(userAgent)");
     expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
     const legacyBlock = worker.slice(
       worker.indexOf('const isLegacyAppOrigin'),
