@@ -35,9 +35,12 @@ describe('one canonical Customs OS PWA', () => {
     expect(html).toContain('name="apple-mobile-web-app-capable" content="yes"');
     expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="black-translucent"');
     expect(html).not.toContain('apple-touch-icon-precomposed');
-    // The mobile hostname may appear only in the device-routing bootstrap, never in PWA identity links.
-    expect(html).toContain("target.hostname = 'mobile.darbandicommercial.ir'");
-    expect(html).toContain("type: 'customs-auth-sync'");
+    // Authentication is single-origin. Device size/pointer heuristics must not
+    // copy one rotating refresh token between the main and mobile hostnames.
+    expect(html).not.toContain("target.hostname = 'mobile.darbandicommercial.ir'");
+    expect(html).not.toContain("type: 'customs-auth-sync'");
+    expect(html).not.toContain('touchSmall');
+    expect(html).toContain("canonicalUrl.hostname = 'darbandicommercial.ir'");
     expect(html).not.toContain('manifest-reminders.webmanifest');
     expect(html).not.toContain('chat-app-v4.webmanifest');
     expect(html).not.toContain('link.setAttribute(\'href\', manifest)');
@@ -78,11 +81,10 @@ describe('one canonical Customs OS PWA', () => {
     expect(worker).toContain('status: 301');
     expect(worker).toContain("'chat.darbandicommercial.ir'");
     expect(worker).toContain("'reminders.darbandicommercial.ir'");
-    // Mobile keeps its browser URL but fetches the shared app shell/assets from the canonical origin.
-    expect(worker).toContain("url.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
-    expect(worker).toContain("assetBase.hostname = 'darbandicommercial.ir'");
+    // Mobile is a compatibility hostname only; browser navigation returns to
+    // the primary origin so the same login is never refreshed on two origins.
     const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
-    expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
+    expect(legacyBlock).toContain("'mobile.darbandicommercial.ir'");
     expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
     expect(worker).toContain("canonical.pathname = '/chat'");
     expect(worker).toContain("canonical.pathname = '/reminders'");
