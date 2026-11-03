@@ -604,13 +604,13 @@ export default {
 
     const accept = request.headers.get('Accept') || '';
 
-    const isStaticAsset =
+    const isMobileRedirectStaticAsset =
       url.pathname.startsWith('/assets/') ||
       /\.(?:js|mjs|css|map|png|jpe?g|gif|webp|svg|ico|webmanifest|json|txt|woff2?|ttf|eot)$/i.test(url.pathname);
     const isHtmlNavigation =
       request.method === 'GET' &&
       !url.pathname.startsWith('/api/') &&
-      !isStaticAsset &&
+      !isMobileRedirectStaticAsset &&
       (url.pathname === '/' || url.pathname.startsWith('/chat') || accept.includes('text/html'));
     // Resolve normal custom domains against their incoming host. The dedicated
     // mobile custom domain can be served by a Worker Domain before the static-assets
