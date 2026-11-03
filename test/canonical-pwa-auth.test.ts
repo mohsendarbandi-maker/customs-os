@@ -35,11 +35,12 @@ describe('one canonical Customs OS PWA', () => {
     expect(html).toContain('name="apple-mobile-web-app-capable" content="yes"');
     expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="black-translucent"');
     expect(html).not.toContain('apple-touch-icon-precomposed');
-    // Authentication is single-origin. Device size/pointer heuristics must not
-    // copy one rotating refresh token between the main and mobile hostnames.
-    expect(html).not.toContain("target.hostname = 'mobile.darbandicommercial.ir'");
-    expect(html).not.toContain("type: 'customs-auth-sync'");
+    // Only real phone/tablet user agents use the mobile alias. Narrow Windows
+    // windows are never classified as phones, and no refresh token is bridged.
+    expect(html).toContain("target.hostname = 'mobile.darbandicommercial.ir'");
+    expect(html).toContain('const mobileDevice = /android|iphone|ipad|ipod|mobile/i.test(ua) || appleTablet;');
     expect(html).not.toContain('touchSmall');
+    expect(html).not.toContain("type: 'customs-auth-sync'");
     expect(html).toContain("canonicalUrl.hostname = 'darbandicommercial.ir'");
     expect(html).not.toContain('manifest-reminders.webmanifest');
     expect(html).not.toContain('chat-app-v4.webmanifest');
@@ -81,10 +82,12 @@ describe('one canonical Customs OS PWA', () => {
     expect(worker).toContain('status: 301');
     expect(worker).toContain("'chat.darbandicommercial.ir'");
     expect(worker).toContain("'reminders.darbandicommercial.ir'");
-    // Mobile is a compatibility hostname only; browser navigation returns to
-    // the primary origin so the same login is never refreshed on two origins.
+    // Keep mobile for real phones, but redirect desktop operating systems
+    // away from it before a second Auth client can initialize.
     const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
-    expect(legacyBlock).toContain("'mobile.darbandicommercial.ir'");
+    expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("const isDesktopBrowser = /Windows NT|Macintosh|X11|CrOS/i.test(userAgent)");
     expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
     expect(worker).toContain("canonical.pathname = '/chat'");
     expect(worker).toContain("canonical.pathname = '/reminders'");
