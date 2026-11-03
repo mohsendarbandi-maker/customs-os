@@ -82,12 +82,14 @@ describe('one canonical Customs OS PWA', () => {
     expect(worker).toContain('status: 301');
     expect(worker).toContain("'chat.darbandicommercial.ir'");
     expect(worker).toContain("'reminders.darbandicommercial.ir'");
-    // Keep mobile for real phones, but redirect desktop operating systems
-    // away from it before a second Auth client can initialize.
-    const legacyBlock = worker.slice(worker.indexOf('const isLegacyAppOrigin'), worker.indexOf('const isLegacyIntegrationRequest'));
-    expect(legacyBlock).not.toContain("'mobile.darbandicommercial.ir'");
-    expect(worker).toContain("const isMobileHost = legacyHost === 'mobile.darbandicommercial.ir'");
-    expect(worker).toContain("const isDesktopBrowser = /Windows NT|X11|CrOS/i.test(userAgent)");
+    // Only phone/tablet page visits from the primary host redirect to mobile.
+    // The mobile hostname itself stays standalone for any device.
+    expect(worker).toContain("const isPrimaryDomain = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir'");
+    expect(worker).toContain("const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent)");
+    expect(worker).toContain("const isDocumentNavigation =");
+    expect(worker).toContain("mobileUrl.hostname = 'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("status: 302");
+    expect(worker).not.toContain('const isDesktopBrowser =');
     expect(worker).toContain("canonical.hostname = 'darbandicommercial.ir'");
     expect(worker).toContain("canonical.pathname = '/chat'");
     expect(worker).toContain("canonical.pathname = '/reminders'");
