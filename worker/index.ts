@@ -318,6 +318,10 @@ export default {
     // Chat and Reminders remain aliases of the unified app; all aliases resolve
     // to the same authenticated app and same-origin Cloudflare/Supabase proxy.
     const legacyHost = url.hostname.toLowerCase();
+    const isLegacyAppOrigin = [
+      'chat.darbandicommercial.ir',
+      'reminders.darbandicommercial.ir',
+    ].includes(legacyHost);
     const isLegacyIntegrationRequest =
       /^\/(?:auth|rest|storage|realtime|functions|graphql|api|webhooks)(?:\/|$)/i.test(url.pathname);
 
@@ -347,10 +351,6 @@ export default {
       });
     }
 
-    const isLegacyAppOrigin = [
-      'chat.darbandicommercial.ir',
-      'reminders.darbandicommercial.ir',
-    ].includes(legacyHost);
     if (isLegacyAppOrigin && ['GET', 'HEAD'].includes(request.method) && !isLegacyIntegrationRequest) {
       const canonical = new URL(url.toString());
       canonical.protocol = 'https:';
