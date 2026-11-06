@@ -10,7 +10,7 @@ export interface Env {
   TURN_KEY_ID_V2?: string;
 }
 
-const BUILD_SIGNATURE = '20261013-reminders-list-first-teal-theme';
+const BUILD_SIGNATURE = '20261106-ocean-responsive-mobile-v4';
 
 const EDGE_FUNCTIONS = new Set([
   'ai-assistant', 'ai-core', 'ai-operator', 'ai-voice', 'knowledge-ai',
