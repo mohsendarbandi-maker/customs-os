@@ -799,7 +799,7 @@ export const FileManagerPage: React.FC = () => {
   const uploadEnabled = Boolean(currentFolder && (currentFolder.shipment_id || (currentFolder.client_id && ['client', 'custom'].includes(currentFolder.folder_type))));
   const directoryProps = { webkitdirectory: '', directory: '' } as any;
 
-  return <main dir="rtl" className="file-manager-page min-h-screen px-3 py-3 sm:p-4 md:p-6" style={{ color: 'var(--text)' }}>
+  return <main dir="rtl" className="mobile-app-page file-manager-page min-h-screen px-3 py-3 sm:p-4 md:p-6" style={{ color: 'var(--text)' }}>
     <div className="mx-auto max-w-7xl space-y-3 sm:space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
