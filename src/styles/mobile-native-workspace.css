@@ -583,7 +583,7 @@
   }
   .pdf-studio-page nav[aria-label="بخش‌های PDF Studio"] {
     position: sticky !important;
-    inset-block-start: calc(var(--mobile-header-height) + env(safe-area-inset-top) + 4px) !important;
+    inset-block-start: 4px !important;
     z-index: 35 !important;
     display: grid !important;
     grid-template-columns: repeat(3,minmax(0,1fr)) !important;
