@@ -100,6 +100,51 @@
     border-color: rgba(255,255,255,.28) !important;
     background: rgba(255,255,255,.12) !important;
   }
+  .app-shell.is-touch-layout .mobile-ocean-highlight {
+    position: relative;
+    display: flex;
+    min-height: 104px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: -2px 0 12px;
+    padding: 15px 17px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.38);
+    border-radius: 21px;
+    background: linear-gradient(110deg,rgba(3,39,84,.84),rgba(0,115,184,.60));
+    color: #fff;
+    box-shadow: 0 12px 26px rgba(0,35,78,.22);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  .app-shell.is-touch-layout .mobile-ocean-highlight::after {
+    content: "";
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    inset-inline-end: -35px;
+    top: -62px;
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 50%;
+    box-shadow: 0 0 0 18px rgba(255,255,255,.05), 0 0 0 38px rgba(255,255,255,.04);
+    pointer-events: none;
+  }
+  .mobile-ocean-highlight > div { display: flex; flex-direction: column; gap: 3px; }
+  .mobile-ocean-highlight span,
+  .mobile-ocean-highlight small { color: rgba(255,255,255,.88) !important; font-size: 10px; font-weight: 800; }
+  .mobile-ocean-highlight strong { color: #fff !important; font-size: 31px; line-height: 1.1; font-weight: 950; }
+  .mobile-ocean-highlight-icon {
+    display: grid;
+    width: 56px;
+    height: 56px;
+    place-items: center;
+    border: 1px solid rgba(255,255,255,.26);
+    border-radius: 18px;
+    background: rgba(255,255,255,.14);
+    color: #fff !important;
+  }
+
   .app-shell.is-touch-layout .mobile-dashboard-actions { gap: 8px !important; margin: 0 0 12px !important; }
   .app-shell.is-touch-layout .mobile-dashboard-actions > a {
     min-height: 76px !important;
