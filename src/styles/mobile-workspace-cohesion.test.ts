@@ -47,6 +47,7 @@ describe('mobile visual cohesion regressions', () => {
   });
 
   it('applies the Adaptive preset as a responsive card dashboard on touch and tablet widths', () => {
+    const oceanCss = read('src/styles/ocean-pro-ui.css');
     expect(oceanCss).toContain('html[data-layout-preset="adaptive"] .app-shell .customs-widget-grid');
     expect(oceanCss).toContain('@media (max-width: 767px), (pointer: coarse)');
     expect(oceanCss).toContain('@media (min-width:768px) and (max-width:1023px)');
