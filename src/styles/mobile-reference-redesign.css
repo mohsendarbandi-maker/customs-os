@@ -393,4 +393,196 @@
   .shipment-detail-page { padding:12px !important; }
   .shipment-detail-page > div > header h1 { font-size:21px !important; }
   .shipment-detail-page section { padding:14px !important; }
+
+  /* Premium shipment status cards: luminous maritime dashboard treatment. */
+  .app-shell.is-touch-layout .customs-status-board > section {
+    overflow: hidden !important;
+    border: 0 !important;
+    border-radius: 24px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .app-shell.is-touch-layout .shipment-status-toolbar {
+    position: relative;
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) auto;
+    gap: 11px !important;
+    padding: 15px !important;
+    border: 1px solid rgba(255,255,255,.22) !important;
+    border-radius: 22px 22px 0 0;
+    background:
+      radial-gradient(circle at 92% 0%,rgba(58,190,255,.42),transparent 38%),
+      linear-gradient(125deg,#04264f 0%,#075a9a 58%,#087fbb 100%) !important;
+    color: #fff !important;
+    box-shadow: 0 10px 26px rgba(0,39,83,.22);
+  }
+  .app-shell.is-touch-layout .shipment-status-toolbar > div:first-child { min-width:0; flex-wrap:wrap; }
+  .app-shell.is-touch-layout .shipment-status-toolbar :is(h2,span,svg) { color:#fff !important; }
+  .app-shell.is-touch-layout .shipment-status-toolbar > a {
+    align-self:center; color:#dff4ff !important; font-size:10px !important;
+    padding:8px 10px; border:1px solid rgba(255,255,255,.22); border-radius:12px;
+    background:rgba(255,255,255,.10);
+  }
+  .app-shell.is-touch-layout .shipment-status-search {
+    grid-column:1/-1; display:flex; align-items:center; gap:9px; min-width:0;
+    min-height:43px; padding:0 12px; border:1px solid rgba(255,255,255,.25);
+    border-radius:14px; background:rgba(255,255,255,.13); color:#fff;
+    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+  }
+  .app-shell.is-touch-layout .shipment-status-search input {
+    min-width:0; min-height:41px !important; padding:0 !important; border:0 !important;
+    outline:0; background:transparent !important; color:#fff !important; font-size:12px !important;
+    box-shadow:none !important;
+  }
+  .app-shell.is-touch-layout .shipment-status-search input::placeholder { color:rgba(255,255,255,.72); }
+  .app-shell.is-touch-layout .shipment-status-search button { color:#fff; }
+  .app-shell.is-touch-layout .shipment-compact-list {
+    display:grid !important; grid-template-columns:minmax(0,1fr) !important;
+    gap:12px !important; padding:13px !important; overflow:visible !important;
+    border:1px solid rgba(255,255,255,.5); border-top:0;
+    border-radius:0 0 23px 23px;
+    background:linear-gradient(180deg,rgba(5,55,101,.16),rgba(255,255,255,.12)) !important;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card {
+    position:relative; isolation:isolate; display:grid !important;
+    grid-template-columns:minmax(0,1fr) 40px !important;
+    grid-template-rows:auto auto auto auto auto;
+    align-items:center; gap:9px 8px !important; min-width:0 !important;
+    min-height:0 !important; padding:15px 14px 13px !important;
+    overflow:hidden; border:1px solid rgba(255,255,255,.92) !important;
+    border-radius:22px !important;
+    background:
+      radial-gradient(circle at 100% 0%,rgba(42,157,255,.13),transparent 37%),
+      linear-gradient(145deg,#ffffff 0%,#f5faff 54%,#eaf4ff 100%) !important;
+    color:#09284a !important;
+    box-shadow:0 11px 26px rgba(1,42,88,.15),inset 0 1px 0 #fff !important;
+    transition:transform .22s ease,box-shadow .22s ease;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card::before {
+    content:""; position:absolute; z-index:-1; width:118px; height:118px;
+    inset-inline-end:-55px; bottom:-72px; border:1px solid rgba(0,111,207,.13);
+    border-radius:50%; box-shadow:0 0 0 14px rgba(0,111,207,.035),0 0 0 30px rgba(0,111,207,.025);
+    pointer-events:none;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card:active { transform:scale(.992); }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-name {
+    grid-column:1; grid-row:1; width:100%; min-width:0; gap:5px;
+    padding:0 1px !important; text-align:right;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-name b {
+    color:#082d55 !important; font-size:14px !important; font-weight:950 !important;
+    line-height:1.55 !important; white-space:normal !important; overflow-wrap:anywhere;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-name span {
+    color:#68819d !important; font-size:10px !important; font-weight:750;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-go {
+    grid-column:2; grid-row:1; width:39px; min-width:39px !important; height:39px; min-height:39px !important;
+    border:1px solid rgba(255,255,255,.9) !important; border-radius:14px !important;
+    background:linear-gradient(145deg,#1c9cff,#075ce3) !important;
+    color:#fff !important; box-shadow:0 7px 16px rgba(0,103,224,.27);
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-kottaj {
+    grid-column:1/-1; grid-row:2; justify-self:start; display:inline-flex;
+    align-items:center; width:max-content; max-width:100%; padding:5px 9px;
+    border:1px solid rgba(18,119,210,.13); border-radius:999px;
+    background:#e5f2ff !important; color:#145c9f !important; font-size:10px !important; font-weight:850;
+  }
+  .app-shell.is-touch-layout .shipment-card-progress {
+    grid-column:1/-1; grid-row:3; display:grid; gap:8px; padding:10px 11px;
+    border:1px solid rgba(25,125,211,.12); border-radius:15px;
+    background:linear-gradient(110deg,#edf7ff,#f8fbff);
+  }
+  .app-shell.is-touch-layout .shipment-card-progress-copy {
+    display:flex; align-items:center; gap:7px; min-width:0; color:#0b477d;
+  }
+  .app-shell.is-touch-layout .shipment-card-progress-copy b {
+    min-width:0; overflow:hidden; color:#0a477f !important;
+    font-size:11px !important; font-weight:950; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .app-shell.is-touch-layout .shipment-card-progress-copy small {
+    margin-inline-start:auto; color:#5c7895; font-size:9px; font-weight:800; white-space:nowrap;
+  }
+  .app-shell.is-touch-layout .shipment-live-dot {
+    width:8px; height:8px; flex:0 0 8px; border-radius:50%;
+    background:#13b981; box-shadow:0 0 0 4px rgba(19,185,129,.13),0 0 12px rgba(19,185,129,.45);
+  }
+  .app-shell.is-touch-layout .shipment-progress-track {
+    height:7px; overflow:hidden; border-radius:99px; background:#d5e6f8;
+    box-shadow:inset 0 1px 2px rgba(8,48,89,.10);
+  }
+  .app-shell.is-touch-layout .shipment-progress-track > span {
+    display:block; height:100%; border-radius:99px;
+    background:linear-gradient(90deg,#16c5a0 0%,#0b9fe8 48%,#1765f3 100%);
+    box-shadow:0 0 12px rgba(14,137,230,.38);
+    transition:width .35s ease;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stages {
+    position:relative; grid-column:1/-1; grid-row:4;
+    display:grid !important; grid-template-columns:repeat(5,minmax(0,1fr));
+    align-items:start; gap:3px !important; width:100%; padding:8px 0 1px !important;
+    border:0 !important; background:transparent !important;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stage-dot {
+    position:relative; z-index:1; display:flex !important; flex-direction:column;
+    align-items:center; justify-content:flex-start; gap:6px;
+    width:100% !important; height:auto !important; min-width:0 !important;
+    padding:0 !important; overflow:visible !important; color:#8aa0b8 !important;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stage-dot::before {
+    content:""; position:absolute; z-index:-1; top:13px; inset-inline-start:50%;
+    width:100%; height:3px; background:#dce8f5; pointer-events:none;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stage-dot:last-child::before { display:none; }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stage-number {
+    display:grid; place-items:center; width:27px; height:27px; border-radius:50%;
+    border:2px solid #d6e4f3; background:#fff !important; color:#8ba0b6 !important;
+    font-size:10px !important; font-weight:950;
+    box-shadow:0 2px 7px rgba(10,53,91,.08);
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stage-dot.done .shipment-stage-number {
+    border-color:#13b981 !important; background:linear-gradient(145deg,#26d5a0,#0da879) !important;
+    color:#fff !important; box-shadow:0 0 0 4px rgba(19,185,129,.11),0 4px 10px rgba(12,168,121,.22);
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stage-dot.current .shipment-stage-number,
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stage-dot.chosen .shipment-stage-number {
+    border-color:#0878ed !important; background:linear-gradient(145deg,#39aaff,#0865e7) !important;
+    color:#fff !important; box-shadow:0 0 0 4px rgba(8,120,237,.14),0 5px 13px rgba(8,100,225,.26);
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stage-label {
+    display:block !important; max-width:100%; color:#5e7895 !important;
+    font-size:9px !important; font-weight:800; line-height:1.35 !important;
+    text-align:center; white-space:normal !important; overflow-wrap:anywhere;
+  }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stage-dot.done .shipment-stage-label,
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-stage-dot.current .shipment-stage-label { color:#075caa !important; }
+  .app-shell.is-touch-layout .shipment-visual-card .shipment-current-stage {
+    grid-column:1/-1; grid-row:5; justify-content:space-between; width:100%;
+    min-height:35px; padding:7px 10px !important; border:1px solid rgba(9,112,205,.13);
+    border-radius:12px; background:rgba(221,239,255,.66) !important;
+    color:#075caa !important; font-size:10px !important; font-weight:900;
+  }
+  .app-shell.is-touch-layout .shipment-warnings {
+    margin:-12px 4px 0 !important; padding:14px 11px 9px !important;
+    border:1px solid rgba(245,158,11,.18) !important; border-top:0 !important;
+    border-radius:0 0 15px 15px; background:linear-gradient(180deg,#fff8e8,#fffdf7);
+    color:#9a5b08 !important; font-size:10px !important;
+  }
+  .app-shell.is-touch-layout .shipment-expanded {
+    margin:-12px 4px 0 !important; padding:17px 13px 12px !important;
+    border:1px solid rgba(20,118,210,.18) !important; border-top:0 !important;
+    border-radius:0 0 18px 18px; background:linear-gradient(180deg,#edf6ff,#fff) !important;
+    color:#123b61 !important;
+  }
+  .app-shell.is-touch-layout .shipment-expanded-head { color:#0a477d; }
+  .app-shell.is-touch-layout .shipment-details-grid { gap:9px; }
+  .app-shell.is-touch-layout .shipment-details-grid > span {
+    padding:7px 9px; border:1px solid rgba(20,118,210,.10); border-radius:10px;
+    background:rgba(255,255,255,.75); color:#66809a;
+  }
+  .app-shell.is-touch-layout .shipment-details-grid b { color:#123b61 !important; }
+  .app-shell.is-touch-layout .shipment-search-empty {
+    border:1px dashed rgba(255,255,255,.7); border-radius:18px;
+    background:rgba(255,255,255,.9); color:#234d75 !important;
+  }
 }
