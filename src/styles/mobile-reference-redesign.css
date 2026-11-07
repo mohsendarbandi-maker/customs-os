@@ -1,0 +1,281 @@
+/* Reference-led mobile redesign: ocean hero, porcelain cards, iOS-like navigation. */
+@media (max-width: 767px), (pointer: coarse) {
+  :root {
+    --mobile-ink: #09284a;
+    --mobile-muted: #55708d;
+    --mobile-paper: rgba(248, 251, 255, .96);
+    --mobile-paper-2: rgba(232, 242, 253, .94);
+    --mobile-line: rgba(74, 132, 190, .20);
+    --mobile-blue: #0877ed;
+    --mobile-deep: #062b57;
+  }
+
+  html[data-visual-style="ocean"] body,
+  html[data-visual-style="ocean"] #root {
+    background:
+      radial-gradient(ellipse at 18% 8%, rgba(110, 196, 255, .44), transparent 30%),
+      radial-gradient(ellipse at 86% 28%, rgba(7, 119, 214, .28), transparent 36%),
+      linear-gradient(160deg, #eaf6ff 0%, #b8dcfa 28%, #1678bc 64%, #063c72 100%) !important;
+  }
+
+  .app-shell.is-touch-layout:not(.is-chat-route) {
+    background: transparent !important;
+  }
+
+  .app-shell.is-touch-layout .app-mobilebar {
+    background: linear-gradient(115deg, rgba(5, 42, 87, .97), rgba(6, 105, 173, .92)) !important;
+    color: #fff !important;
+    border: 0 !important;
+    box-shadow: 0 8px 24px rgba(0, 35, 82, .22) !important;
+  }
+  .app-shell.is-touch-layout .app-mobilebar .mobile-current-page__title,
+  .app-shell.is-touch-layout .app-mobilebar .mobile-current-page__eyebrow { color: #fff !important; }
+  .app-shell.is-touch-layout .app-mobilebar .icon-btn {
+    color: #fff !important;
+    border-color: rgba(255,255,255,.24) !important;
+    background: rgba(255,255,255,.13) !important;
+  }
+
+  /* Home screen: the blue maritime hero is the visual anchor. */
+  .app-shell[data-route="/"] .app-mobilebar { display: none !important; }
+  .app-shell.is-touch-layout .app-content {
+    padding: 0 12px calc(78px + env(safe-area-inset-bottom)) !important;
+  }
+  .app-shell.is-touch-layout .customs-home {
+    position: relative;
+    isolation: isolate;
+    min-height: 100%;
+    padding: 0 !important;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 15% 2%, rgba(255,255,255,.30), transparent 34%),
+      radial-gradient(ellipse at 88% 36%, rgba(34,177,238,.26), transparent 38%),
+      linear-gradient(180deg, #063b77 0%, #0878b8 26%, #4ba9d8 49%, #d8edff 72%, #eff7ff 100%) !important;
+  }
+  .app-shell.is-touch-layout .customs-home::before,
+  .app-shell.is-touch-layout .customs-home::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset-inline: -18%;
+    height: 240px;
+    bottom: 0;
+    border-radius: 48% 52% 0 0 / 24% 28% 0 0;
+    background: linear-gradient(180deg, rgba(8,116,181,.34), rgba(4,58,112,.78));
+    transform: rotate(-5deg);
+    pointer-events: none;
+  }
+  .app-shell.is-touch-layout .customs-home::after {
+    bottom: -44px;
+    height: 180px;
+    background: linear-gradient(180deg, rgba(113,202,242,.40), rgba(3,51,104,.88));
+    transform: rotate(4deg);
+  }
+  .app-shell.is-touch-layout .customs-home > div {
+    padding: max(14px, env(safe-area-inset-top)) 0 22px !important;
+  }
+  .app-shell.is-touch-layout .customs-home > div > header {
+    min-height: 104px;
+    margin: 0 0 12px !important;
+    padding: 14px 15px !important;
+    border: 1px solid rgba(255,255,255,.24) !important;
+    border-radius: 0 0 24px 24px !important;
+    background: linear-gradient(125deg, rgba(3,34,76,.88), rgba(0,112,185,.76)) !important;
+    color: #fff !important;
+    box-shadow: 0 12px 30px rgba(0,30,70,.20) !important;
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+  }
+  .app-shell.is-touch-layout .customs-home > div > header h1,
+  .app-shell.is-touch-layout .customs-home > div > header p,
+  .app-shell.is-touch-layout .customs-home > div > header .customs-home-tagline { color: #fff !important; }
+  .app-shell.is-touch-layout .customs-home .customs-home-mark {
+    color: #fff !important;
+    border-color: rgba(255,255,255,.3) !important;
+    background: rgba(255,255,255,.13) !important;
+  }
+  .app-shell.is-touch-layout .customs-home > div > header > div:last-child > a {
+    color: #fff !important;
+    border-color: rgba(255,255,255,.28) !important;
+    background: rgba(255,255,255,.12) !important;
+  }
+  .app-shell.is-touch-layout .mobile-dashboard-actions { gap: 8px !important; margin: 0 0 12px !important; }
+  .app-shell.is-touch-layout .mobile-dashboard-actions > a {
+    min-height: 76px !important;
+    border: 1px solid rgba(255,255,255,.58) !important;
+    border-radius: 18px !important;
+    background: linear-gradient(155deg, rgba(255,255,255,.97), rgba(224,241,255,.92)) !important;
+    color: var(--mobile-ink) !important;
+    box-shadow: 0 9px 22px rgba(2,47,91,.15) !important;
+  }
+  .app-shell.is-touch-layout .mobile-dashboard-actions > a b { color: var(--mobile-ink) !important; }
+  .app-shell.is-touch-layout .customs-widget-toolbar { display: none !important; }
+  .app-shell.is-touch-layout .customs-widget-grid { gap: 10px !important; }
+  .app-shell.is-touch-layout .customs-widget-frame {
+    border: 1px solid rgba(255,255,255,.7) !important;
+    border-radius: 22px !important;
+    background: var(--mobile-paper) !important;
+    box-shadow: 0 10px 26px rgba(2,42,86,.15) !important;
+    overflow: hidden;
+  }
+  .app-shell.is-touch-layout .customs-stat {
+    min-height: 78px !important;
+    border: 1px solid var(--mobile-line) !important;
+    border-radius: 17px !important;
+    background: linear-gradient(145deg, #fff, #eaf4ff) !important;
+    color: var(--mobile-ink) !important;
+    box-shadow: 0 5px 14px rgba(18,77,130,.09) !important;
+  }
+  .app-shell.is-touch-layout .customs-stat strong,
+  .app-shell.is-touch-layout .customs-stat > span { color: var(--mobile-ink) !important; }
+  .app-shell.is-touch-layout .customs-widget-body { color: var(--mobile-ink) !important; }
+  .app-shell.is-touch-layout .customs-widget-body :is(h2,h3,strong,.font-black) { color: var(--mobile-ink); }
+  .app-shell.is-touch-layout .customs-widget-body :is(.app-muted,.text-slate-400,.text-slate-500) { color: var(--mobile-muted) !important; }
+  .app-shell.is-touch-layout .customs-widget-body a { color: #075db9; }
+  .app-shell.is-touch-layout .customs-widget-body :is(.rounded-xl.border,.rounded-2xl.border) {
+    border-color: var(--mobile-line) !important;
+    background: rgba(255,255,255,.82);
+  }
+
+  /* Five equal native tabs; white translucent dock and blue active state. */
+  .app-mobile-viewport-dock {
+    grid-template-columns: repeat(5, minmax(0,1fr)) !important;
+    height: calc(72px + env(safe-area-inset-bottom)) !important;
+    min-height: calc(72px + env(safe-area-inset-bottom)) !important;
+    padding: 5px 9px calc(7px + env(safe-area-inset-bottom)) !important;
+    border: 1px solid rgba(255,255,255,.82) !important;
+    border-bottom: 0 !important;
+    border-radius: 23px 23px 0 0 !important;
+    background: rgba(249,252,255,.94) !important;
+    box-shadow: 0 -9px 32px rgba(0,42,89,.20) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(170%) !important;
+    backdrop-filter: blur(24px) saturate(170%) !important;
+  }
+  .app-mobile-viewport-dock > button {
+    min-height: 58px !important;
+    color: #234b76 !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+  }
+  .app-mobile-viewport-dock > button svg { width: 22px !important; height: 22px !important; }
+  .app-mobile-viewport-dock > button.is-active {
+    color: #fff !important;
+    background: linear-gradient(145deg,#168bff,#0058d8) !important;
+    box-shadow: 0 7px 17px rgba(0,100,235,.32) !important;
+    border-radius: 15px !important;
+  }
+  .app-mobile-viewport-dock > button.is-active::before { display: none !important; }
+
+  /* New shipment form: white app sheet, stage marker, large controls. */
+  .shipment-first-page {
+    color: var(--mobile-ink) !important;
+    background: transparent !important;
+  }
+  .shipment-first-page > div > header {
+    color: #fff !important;
+    padding: 12px 4px 16px;
+  }
+  .shipment-first-page > div > header :is(h1,p,.app-muted) { color: #fff !important; }
+  .shipment-first-page > div > header::after {
+    content: "●  اطلاعات پایه       ○  اسناد       ○  تأیید نهایی";
+    display: block;
+    width: 100%;
+    padding: 11px 13px;
+    border: 1px solid rgba(255,255,255,.28);
+    border-radius: 16px;
+    background: rgba(3,42,88,.40);
+    color: #e9f5ff;
+    font-size: 11px;
+    font-weight: 900;
+    text-align: center;
+  }
+  .shipment-first-page > div > section {
+    border: 1px solid rgba(255,255,255,.85) !important;
+    background: var(--mobile-paper) !important;
+    color: var(--mobile-ink) !important;
+    box-shadow: 0 12px 28px rgba(0,38,82,.14) !important;
+  }
+  .shipment-first-page :is(label, label span, h2, h3, p, .app-muted) { color: var(--mobile-ink) !important; }
+  .shipment-first-page :is(input,select,textarea) {
+    background: #f1f6ff !important;
+    border-color: #d3e2f7 !important;
+    color: #102b4d !important;
+  }
+  .shipment-first-page button.bg-\[var\(--primary\)\],
+  .shipment-first-page button[class*="bg-blue"] {
+    min-height: 48px;
+    border-radius: 16px !important;
+    background: linear-gradient(135deg,#148bff,#0059df) !important;
+    box-shadow: 0 8px 18px rgba(0,94,225,.24);
+  }
+
+  /* Reminder list becomes the light card list shown in the reference. */
+  .reminders-app-standalone {
+    color: var(--mobile-ink) !important;
+    background: transparent !important;
+  }
+  .reminders-app-standalone .reminders-route-screen { padding: 10px 0 18px !important; }
+  .reminders-app-standalone .reminders-hub-header {
+    margin: 0 0 12px !important;
+    padding: 17px !important;
+    border: 1px solid rgba(255,255,255,.35) !important;
+    border-radius: 22px !important;
+    background: linear-gradient(135deg,rgba(4,43,91,.96),rgba(5,119,184,.88)) !important;
+    color: #fff !important;
+    box-shadow: 0 10px 26px rgba(0,38,82,.18);
+  }
+  .reminders-app-standalone .reminders-hub-header :is(h1,p,span,small) { color: #fff !important; }
+  .reminders-app-standalone :is(.reminders-hub-screen > section,.reminder-card,.reminders-list-item,[data-reminder-id]) {
+    border-color: var(--mobile-line) !important;
+    border-radius: 18px !important;
+    background: var(--mobile-paper) !important;
+    color: var(--mobile-ink) !important;
+    box-shadow: 0 7px 18px rgba(0,50,100,.09);
+  }
+
+  /* Chat: keep conversation legible over a soft sea/sky wash. */
+  .app-shell.is-chat-route .chat-standalone {
+    background:
+      radial-gradient(ellipse at 10% 5%, rgba(114,193,239,.45), transparent 38%),
+      linear-gradient(160deg,#d8edff,#eef7ff 54%,#b8d9f4) !important;
+  }
+  .app-shell.is-chat-route .chat-app-header {
+    background: linear-gradient(120deg,#063b78,#087db9) !important;
+    color: #fff !important;
+    border: 0 !important;
+  }
+  .app-shell.is-chat-route .chat-app-header :is(b,small,span) { color: #fff !important; }
+  .app-shell.is-chat-route .chat-conversation-panel-heading,
+  .app-shell.is-chat-route .chat-standalone section {
+    border-color: rgba(70,130,185,.22) !important;
+  }
+  .app-shell.is-chat-route .chat-standalone .chat-message-area { background: transparent !important; }
+
+  /* Settings preview cards and shipment detail cards. */
+  .settings-enterprise-page { color: var(--mobile-ink) !important; }
+  .settings-enterprise-page section,
+  .settings-enterprise-page aside {
+    border-color: var(--mobile-line) !important;
+    background: var(--mobile-paper) !important;
+    color: var(--mobile-ink) !important;
+    box-shadow: 0 7px 18px rgba(0,50,100,.08);
+  }
+  .settings-enterprise-page :is(h1,h2,h3,label,span,p,b) { color: var(--mobile-ink); }
+  .settings-enterprise-page .visual-theme-options > button,
+  .settings-enterprise-page .layout-preset-options > button {
+    border: 1px solid #d5e5f7 !important;
+    border-radius: 15px !important;
+    background: linear-gradient(145deg,#fff,#e9f3ff) !important;
+    color: var(--mobile-ink) !important;
+  }
+  .shipment-detail-page {
+    color: var(--mobile-ink) !important;
+  }
+  .shipment-detail-page section {
+    border-color: var(--mobile-line) !important;
+    border-radius: 21px !important;
+    background: var(--mobile-paper) !important;
+    color: var(--mobile-ink) !important;
+    box-shadow: 0 9px 22px rgba(0,48,96,.10);
+  }
+}
