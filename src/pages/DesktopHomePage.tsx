@@ -103,6 +103,10 @@ export const DesktopHomePage:React.FC=()=>{
     <div className="flex items-center gap-3"><div className="customs-home-mark"><Ship size={24}/><span/></div><div><div className="customs-home-tagline text-[10px] font-bold tracking-[.08em] text-[var(--primary)] mb-1">CUSTOMS & LOGISTICS MANAGEMENT</div><h1 className="text-xl lg:text-2xl font-black tracking-tight">میزکار عملیاتی</h1><p className="text-xs app-muted mt-1">{faDate.format(now)}<span className="mx-1 opacity-40">،</span>{faTime.format(now)}</p></div></div>
     <div className="flex items-center gap-2"><Link to="/settings" className="customs-line-button" aria-label="تنظیمات"><Settings size={17}/><span className="hidden sm:inline">تنظیمات</span></Link><Link to="/operations?tab=pre-declaration" className="customs-primary-button"><Plus size={16}/>ثبت محموله</Link></div>
    </header>
+   <section className="mobile-ocean-highlight" aria-label="نمای کلی محموله‌ها">
+    <div><span>محموله‌های ثبت‌شده</span><strong>{stats.shipments.toLocaleString('fa-IR')}</strong><small>نمای کلی عملیات گمرکی</small></div>
+    <span className="mobile-ocean-highlight-icon"><Ship size={25}/></span>
+   </section>
    <nav className="mobile-dashboard-actions" aria-label="دسترسی سریع">
     <Link to="/operations?tab=pre-declaration"><span><Plus size={19}/></span><b>ثبت محموله</b></Link>
     <Link to="/registration-orders"><span><FileText size={19}/></span><b>ثبت سفارش</b></Link>
