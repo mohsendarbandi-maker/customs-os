@@ -1218,7 +1218,7 @@ export const PdfStudioPage: React.FC = () => {
   };
 
   return (
-    <main className="pdf-studio-page min-h-[calc(100dvh-64px)] bg-[var(--bg)] text-[var(--text)] p-3 md:p-6" dir="rtl">
+    <main className="mobile-app-page pdf-studio-page min-h-[calc(100dvh-64px)] bg-[var(--bg)] text-[var(--text)] p-3 md:p-6" dir="rtl">
       <div className="mx-auto max-w-7xl space-y-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
