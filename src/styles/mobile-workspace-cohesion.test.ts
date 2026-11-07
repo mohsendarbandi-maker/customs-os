@@ -136,19 +136,20 @@ describe('primary-domain mobile viewport and selectable UI presets', () => {
   });
 
   it('persists the selected UI preset per user and applies it to the document root', () => {
-    expect(appearanceContext).toContain("type LayoutPreset='standard'|'cards'|'compact'");
-    expect(appearanceContext).toContain('layoutPreset:settings.layoutPreset');
+    expect(appearanceContext).toContain("type LayoutPreset='adaptive'|'standard'|'cards'|'compact'");
+    expect(appearanceContext).toContain('settings.layoutPresetVersion===2');
+    expect(appearanceContext).toContain(":'adaptive'");
     expect(appearanceContext).toContain('document.documentElement.dataset.layoutPreset=appearance.layoutPreset');
     expect(appearanceContext).toContain('setLayoutPreset');
     expect(appearanceSettings).toContain("'layoutPreset'");
   });
 
-  it('offers three accessible layout choices in Appearance settings with live preview', () => {
+  it('offers four accessible layout choices in Appearance settings with live preview', () => {
     expect(appearanceSettings).toContain('layout-preset-options');
     expect(appearanceSettings).toContain("title:'استاندارد'");
     expect(appearanceSettings).toContain("title:'کارت‌محور'");
     expect(appearanceSettings).toContain("title:'فشرده'");
-    expect(appearanceSettings).toContain('aria-pressed={(settings.layoutPreset||\'standard\')===p.value}');
+    expect(appearanceSettings).toContain('aria-pressed={appearance.layoutPreset===p.value}');
     expect(appearanceSettings).toContain('appearance.setLayoutPreset');
   });
 
