@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-label="کشتی باری در دریای خزر">
+<defs>
+ <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#073b78"/><stop offset=".56" stop-color="#1689c7"/><stop offset="1" stop-color="#9bdcf3"/></linearGradient>
+ <linearGradient id="sea" x2="0" y2="1"><stop stop-color="#31a9dc"/><stop offset="1" stop-color="#063c78"/></linearGradient>
+ <linearGradient id="hull" x2="0" y2="1"><stop stop-color="#253f5c"/><stop offset="1" stop-color="#071c35"/></linearGradient>
+ <linearGradient id="container" x2="0" y2="1"><stop stop-color="#f5a44c"/><stop offset="1" stop-color="#c75d32"/></linearGradient>
+ <filter id="glow"><feGaussianBlur stdDeviation="18"/></filter>
+</defs>
+<rect width="900" height="520" fill="url(#sky)"/>
+<circle cx="730" cy="125" r="65" fill="#d9f6ff" opacity=".45" filter="url(#glow)"/>
+<path d="M0 255 Q120 225 235 260 T470 250 T710 252 T900 235 V520 H0Z" fill="url(#sea)"/>
+<path d="M0 295 Q130 270 250 300 T500 292 T740 298 T900 280" fill="none" stroke="#b5efff" stroke-width="5" opacity=".5"/>
+<path d="M0 365 Q100 340 220 368 T450 360 T700 368 T900 350" fill="none" stroke="#a9e8ff" stroke-width="4" opacity=".34"/>
+<g opacity=".23" fill="#fff"><path d="M72 96q28-30 59-4 23-24 50 5H72Z"/><path d="M520 78q30-33 61-3 24-22 52 4H520Z"/></g>
+<!-- distant coast and port cranes -->
+<path d="M690 254v-72m-22 10h48m-43 0 18-20 17 20m-39 0v32m39-32v32M785 258v-90m-27 18h55m-49 0 21-24 22 24m-49 0v42m49-42v42" stroke="#d9f4ff" stroke-width="7" fill="none" opacity=".65"/>
+<g transform="translate(100 110)">
+ <path d="M15 175h565l-55 78q-20 22-68 22H102q-55-4-70-45Z" fill="url(#hull)" stroke="#c5e7f7" stroke-width="5"/>
+ <path d="M55 168h470v20H55Z" fill="#dfebf4"/>
+ <g stroke="#213d5b" stroke-width="3">
+  <rect x="100" y="92" width="115" height="75" rx="5" fill="#e06b3b"/>
+  <rect x="220" y="92" width="112" height="75" rx="5" fill="#e8a044"/>
+  <rect x="338" y="92" width="112" height="75" rx="5" fill="#347b9c"/>
+  <rect x="455" y="92" width="66" height="75" rx="5" fill="#d85b37"/>
+  <rect x="125" y="15" width="102" height="72" rx="5" fill="#e7a044"/>
+  <rect x="232" y="15" width="104" height="72" rx="5" fill="#397c9c"/>
+  <rect x="341" y="15" width="105" height="72" rx="5" fill="#d96b3b"/>
+  <rect x="450" y="15" width="71" height="72" rx="5" fill="#e7a044"/>
+ </g>
+ <path d="M30 168h90V96h70V54h-25V20h-55v34H93v42H30Z" fill="#f4f8fc" stroke="#244b70" stroke-width="4"/>
+ <path d="M77 18h46v33H77Z" fill="#d8edf8" stroke="#244b70" stroke-width="4"/>
+ <path d="M98 18V-12h7v30" stroke="#d9efff" stroke-width="5"/>
+ <path d="M0 270q80 20 160 4t160 0 160 0 160-3" stroke="#e2f8ff" stroke-width="8" fill="none" opacity=".6"/>
+</g>
+<path d="M0 435q130-30 260 0t260 0 260 0 260 0v85H0Z" fill="#062c60" opacity=".34"/>
+</svg>
