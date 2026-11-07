@@ -345,7 +345,8 @@
   .shipment-first-page .shipment-mobile-stepper { margin-top:4px; }
   .shipment-first-page .shipment-mobile-stepper + section { margin-top:0; }
 
-  .app-shell.is-chat-route .chat-standalone { min-height:0 !important; }
+  .app-shell.is-chat-route .app-content { overflow:hidden !important; }
+  .app-shell.is-chat-route .chat-standalone { min-height:0 !important; height:100% !important; max-height:100% !important; }
   .app-shell.is-chat-route .chat-safe-top { min-height:env(safe-area-inset-top); }
   .app-shell.is-chat-route .chat-app-header { padding:9px 12px !important; }
   .app-shell.is-chat-route .chat-app-header-main { min-height:48px; }
