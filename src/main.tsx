@@ -11,6 +11,7 @@ import './styles/ai-workspace.css';
 import './styles/mobile-workspace-cohesion.css';
 import './styles/mobile-chat-calendar-fix.css';
 import './styles/ocean-pro-ui.css';
+import './styles/mobile-native-workspace.css';
 import { startOfflineQueue } from './lib/offlineQueue';
 import { registerSW } from 'virtual:pwa-register';
 
