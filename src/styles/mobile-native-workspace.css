@@ -1,3 +1,6 @@
+/* Mobile actions are rendered in the DOM for all screen sizes, but are touch-only UI. */
+.mobile-dashboard-actions { display: none; }
+
 /* Native-feeling mobile workspace. This file is imported last intentionally:
    mobile routes use their own screen rhythm; desktop styles remain untouched. */
 
