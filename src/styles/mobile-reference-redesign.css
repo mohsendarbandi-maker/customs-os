@@ -48,6 +48,7 @@
     padding: 0 !important;
     overflow: hidden;
     background:
+      url('/mobile-ocean-hero.svg') center top / 100% 270px no-repeat,
       radial-gradient(ellipse at 15% 2%, rgba(255,255,255,.30), transparent 34%),
       radial-gradient(ellipse at 88% 36%, rgba(34,177,238,.26), transparent 38%),
       linear-gradient(180deg, #063b77 0%, #0878b8 26%, #4ba9d8 49%, #d8edff 72%, #eff7ff 100%) !important;
