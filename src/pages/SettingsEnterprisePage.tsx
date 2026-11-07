@@ -11,8 +11,8 @@ import{readUserSettings,writeUserSettings}from'../lib/userSettingsStorage';
 type Role='owner'|'admin'|'broker'|'accountant'|'warehouse'|'client';type Section={id:string;title:string;group:string;icon:React.ElementType;admin?:boolean;ownerOnly?:boolean};
 const sections:Section[]=[{id:'profile',title:'پروفایل',group:'حساب',icon:Users},{id:'appearance',title:'ظاهر و شخصی‌سازی',group:'حساب',icon:Palette},{id:'notifications',title:'اعلان‌ها',group:'حساب',icon:Bell},{id:'security',title:'امنیت و نشست‌ها',group:'حساب',icon:Lock},{id:'organization',title:'سازمان و شعب',group:'سازمان',icon:Building2,admin:true},{id:'users',title:'کاربران',group:'سازمان',icon:Users,admin:true},{id:'roles',title:'نقش و دسترسی',group:'سازمان',icon:ShieldCheck,admin:true},{id:'customs',title:'گمرک و EPL',group:'عملیات',icon:FileText},{id:'shipping',title:'کشتیرانی و کشتی‌ها',group:'عملیات',icon:Ship},{id:'transport',title:'حمل و نقل',group:'عملیات',icon:Activity},{id:'warehouse',title:'انبار',group:'عملیات',icon:Database},{id:'documents',title:'اسناد و چاپ',group:'عملیات',icon:FileText},{id:'workflow',title:'Workflow و وضعیت',group:'عملیات',icon:Activity},{id:'finance',title:'مالی و ارز',group:'مالی',icon:Wallet},{id:'calendar',title:'تقویم و تاریخ',group:'مالی',icon:Calendar},{id:'integrations',title:'API و Integration',group:'سیستم',icon:Plug,admin:true},{id:'messengers',title:'اتصال پیام‌رسان‌ها',group:'سیستم',icon:Plug,admin:true},{id:'webhooks',title:'Webhooks',group:'سیستم',icon:Webhook,admin:true},{id:'storage',title:'Storage',group:'سیستم',icon:HardDrive,admin:true},{id:'backup',title:'Backup / Export',group:'سیستم',icon:Database,admin:true},{id:'audit',title:'Audit Log',group:'سیستم',icon:Server,admin:true},{id:'advanced',title:'پیشرفته',group:'سیستم',icon:Settings2,admin:true,ownerOnly:true},{id:'about',title:'درباره سیستم',group:'سیستم',icon:Globe}];
 const groups=['حساب','سازمان','عملیات','مالی','سیستم'];
-const base={theme:'dark',accentColor:'#168BD2',visualStyle:'ocean',density:'comfortable',layoutPreset:'standard',comfort:'normal',sidebarCollapsed:false,calendar:'jalali',timezone:'Asia/Tehran',currency:'IRR',defaultPort:'بندر شهید رجایی',defaultCustomsOffice:'گمرک شهید رجایی',numberPrefix:'DB',vatRate:10,reminderEnabled:true,desktopNotifications:true,sessionTimeout:60,documentMaxMb:25,retentionDays:3650};
-const personalSettingKeys=['theme','accentColor','visualStyle','density','layoutPreset','comfort','sidebarCollapsed','calendar','timezone','reminderEnabled','desktopNotifications','sessionTimeout','chat','fontSize','animations','reducedMotion','stickyHeader','zebraRows','hoverRows','autoSave','quietHours','quietFrom','quietTo'];
+const base={theme:'dark',accentColor:'#168BD2',visualStyle:'ocean',density:'comfortable',layoutPreset:'adaptive',layoutPresetVersion:2,comfort:'normal',sidebarCollapsed:false,calendar:'jalali',timezone:'Asia/Tehran',currency:'IRR',defaultPort:'بندر شهید رجایی',defaultCustomsOffice:'گمرک شهید رجایی',numberPrefix:'DB',vatRate:10,reminderEnabled:true,desktopNotifications:true,sessionTimeout:60,documentMaxMb:25,retentionDays:3650};
+const personalSettingKeys=['theme','accentColor','visualStyle','density','layoutPreset','layoutPresetVersion','comfort','sidebarCollapsed','calendar','timezone','reminderEnabled','desktopNotifications','sessionTimeout','chat','fontSize','animations','reducedMotion','stickyHeader','zebraRows','hoverRows','autoSave','quietHours','quietFrom','quietTo'];
 const organizationOnlyKeys=[
  'defaultPort','defaultCustomsOffice','defaultWorkflow','currency','exchangeMode','vatRate',
  'documentMaxMb','retentionDays','vesselAutoRefresh','numberPrefix','numberingPrefix',
@@ -38,7 +38,11 @@ export const SettingsEnterprisePage:React.FC=()=>{const loc=useLocation(),nav=us
   const organizationSettings=o.data?.settings&&typeof o.data.settings==='object'?o.data.settings as Record<string,any>:{};
   setUserServerSettings(userSettings);
   setOrgServerSettings(organizationSettings);
-  setSettings({...base,...organizationSettings,...pickSettings(userSettings,personalSettingKeys)});
+  const savedPreset=userSettings.layoutPreset;
+  const loadedPreset=userSettings.layoutPresetVersion===2&&['adaptive','standard','cards','compact'].includes(String(savedPreset))
+   ?savedPreset
+   :savedPreset==='cards'||savedPreset==='compact'?savedPreset:'adaptive';
+  setSettings({...base,...organizationSettings,...pickSettings(userSettings,personalSettingKeys),layoutPreset:loadedPreset,layoutPresetVersion:2});
   setUsers(u.data||[]);
   if(od.data)setOrg(od.data);
  };void load()},[user?.id,profile?.organization_id]);
@@ -55,7 +59,7 @@ export const SettingsEnterprisePage:React.FC=()=>{const loc=useLocation(),nav=us
    appearance.setAccentColor(typeof settings.accentColor==='string'&&/^#[0-9a-fA-F]{6}$/.test(settings.accentColor)?settings.accentColor:'#0A66C2');
    appearance.setVisualStyle(['ocean','aurora','glass','emerald','sunset','minimal'].includes(settings.visualStyle)?settings.visualStyle:'ocean');
    appearance.setDensity(settings.density==='compact'?'compact':'comfortable');
-    appearance.setLayoutPreset(settings.layoutPreset==='cards'||settings.layoutPreset==='compact'?settings.layoutPreset:'standard');
+    appearance.setLayoutPreset(['adaptive','standard','cards','compact'].includes(settings.layoutPreset)?settings.layoutPreset:'adaptive');
    appearance.setComfort(settings.comfort==='reading'||settings.comfort==='soft'||settings.comfort==='warm'||settings.comfort==='normal'?settings.comfort:'normal');
    appearance.setSidebarCollapsed(Boolean(settings.sidebarCollapsed));
    const{error:userError}=await supabase.from('user_settings').upsert({user_id:user.id,settings:personal,updated_at:new Date().toISOString()},{onConflict:'user_id'});
