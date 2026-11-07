@@ -557,10 +557,13 @@ jobs:
               try {
                 const offlinePage = await offlineContext.newPage();
                 const offlineUrl = baseURL + '/?__offline_reopen_smoke=' + encodeURIComponent(smokeToken);
-                // Expected API/network errors while offline are not app boot failures.
-                // Keep tracking failed JavaScript/service-worker requests separately below.
+                // Offline mode is expected to block third-party scripts (for example,
+                // messenger Mini Apps). Only same-origin app bundles and the service
+                // worker are required to remain available from the app shell cache.
                 offlinePage.on('requestfailed', (request) => {
-                  if (/sw\.js|workbox|\.(js|mjs)(\?|$)/i.test(request.url())) {
+                  const failedUrl = new URL(request.url());
+                  const appOrigin = new URL(baseURL).origin;
+                  if (failedUrl.origin === appOrigin && /sw\.js|workbox|\.(js|mjs)(\?|$)/i.test(failedUrl.pathname)) {
                     errors.push(`offline requestfailed: ${request.url()} — ${request.failure()?.errorText || 'unknown'}`);
                   }
                 });
