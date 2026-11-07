@@ -324,4 +324,72 @@
     color: var(--mobile-ink) !important;
     box-shadow: 0 9px 22px rgba(0,48,96,.10);
   }
+
+  .app-shell.is-touch-layout .customs-stat-line { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+  .app-shell.is-touch-layout .customs-stat-divider { display:none !important; }
+  .app-shell.is-touch-layout .customs-stat { display:grid !important; grid-template-columns:24px 1fr; grid-template-rows:auto auto; align-items:center; column-gap:7px; padding:12px !important; }
+  .app-shell.is-touch-layout .customs-stat > svg { grid-row:1 / span 2; }
+  .app-shell.is-touch-layout .customs-stat > span { font-size:10px !important; }
+  .app-shell.is-touch-layout .customs-stat > strong { font-size:21px !important; text-align:right; }
+  .app-shell.is-touch-layout .customs-widget-grid > * { min-width:0; }
+
+  .shipment-first-page > div > header { align-items:flex-start !important; gap:10px !important; }
+  .shipment-first-page > div > header h1 { font-size:21px !important; }
+  .shipment-first-page > div > header > div:last-child { width:100%; }
+  .shipment-first-page > div > header > div:last-child > button { flex:1; justify-content:center; }
+  .shipment-first-page > div > section { padding:15px !important; border-radius:22px !important; }
+  .shipment-first-page label { display:block; min-width:0; font-size:11px !important; font-weight:800; }
+  .shipment-first-page :is(input,select,textarea) { width:100%; min-height:47px; border-radius:13px !important; padding:11px 12px !important; font-size:14px !important; }
+  .shipment-first-page .grid { grid-template-columns:minmax(0,1fr) !important; }
+  .shipment-first-page [class*="lg:col-span"] { grid-column:1 / -1 !important; }
+  .shipment-first-page .shipment-mobile-stepper { margin-top:4px; }
+  .shipment-first-page .shipment-mobile-stepper + section { margin-top:0; }
+
+  .app-shell.is-chat-route .chat-standalone { min-height:0 !important; }
+  .app-shell.is-chat-route .chat-safe-top { min-height:env(safe-area-inset-top); }
+  .app-shell.is-chat-route .chat-app-header { padding:9px 12px !important; }
+  .app-shell.is-chat-route .chat-app-header-main { min-height:48px; }
+  .app-shell.is-chat-route .chat-message-area { padding:14px 10px 18px !important; }
+  .app-shell.is-chat-route [data-chat-message="true"] > div { max-width:88% !important; }
+  .app-shell.is-chat-route [data-chat-message="true"] > div > div:first-child {
+    border:1px solid rgba(255,255,255,.55); border-radius:19px !important; padding:11px 13px !important;
+    box-shadow:0 5px 14px rgba(0,40,80,.09) !important;
+  }
+  .app-shell.is-chat-route [data-chat-message="true"] > div > div:first-child:has(.chat-message-text) {
+    background:rgba(255,255,255,.94) !important; color:#102d50 !important;
+  }
+  .app-shell.is-chat-route [data-chat-message="true"] > div > div:first-child:has(.chat-message-text) .chat-message-text { color:inherit !important; }
+  .app-shell.is-chat-route [data-chat-message="true"] > div > div:first-child:has(.chat-message-text) .app-muted { color:#55708d !important; }
+
+  .reminders-app-standalone .reminders-home-stats { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px !important; padding:10px 12px !important; }
+  .reminders-app-standalone .reminders-home-stat {
+    min-height:66px; border:1px solid var(--mobile-line) !important; border-radius:16px !important;
+    background:var(--mobile-paper) !important; color:var(--mobile-ink) !important; box-shadow:0 5px 13px rgba(0,50,100,.08);
+  }
+  .reminders-app-standalone .reminders-hub-section {
+    margin:10px 12px !important; padding:14px !important; border:1px solid var(--mobile-line) !important;
+    border-radius:21px !important; background:var(--mobile-paper) !important; color:var(--mobile-ink) !important;
+    box-shadow:0 8px 20px rgba(0,50,100,.09);
+  }
+  .reminders-app-standalone .reminders-open-grid { display:grid !important; grid-template-columns:minmax(0,1fr) !important; gap:9px !important; }
+  .reminders-app-standalone .reminders-open-task {
+    border:1px solid var(--mobile-line) !important; border-radius:16px !important;
+    background:linear-gradient(145deg,#fff,#edf5ff) !important; box-shadow:0 4px 12px rgba(0,50,100,.06);
+  }
+  .reminders-app-standalone .reminders-standalone-header { position:relative !important; top:auto !important; border-radius:18px !important; background:rgba(255,255,255,.94) !important; }
+
+  .settings-enterprise-page > div { padding:12px !important; }
+  .settings-enterprise-page > div > header { align-items:center !important; margin-bottom:12px !important; }
+  .settings-enterprise-page > div > header h1 { font-size:22px !important; }
+  .settings-enterprise-page > div > div { grid-template-columns:minmax(0,1fr) !important; gap:10px !important; }
+  .settings-enterprise-page aside { padding:10px !important; }
+  .settings-enterprise-page .visual-theme-options { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:9px !important; }
+  .settings-enterprise-page .visual-theme-option { min-width:0; padding:11px !important; }
+  .settings-enterprise-page .visual-theme-swatches { height:48px; align-items:stretch; }
+  .settings-enterprise-page .visual-theme-swatches i { flex:1; border-radius:8px; }
+  .settings-enterprise-page .layout-preset-options { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:9px !important; }
+  .settings-enterprise-page .layout-preset-preview { min-height:46px; }
+  .shipment-detail-page { padding:12px !important; }
+  .shipment-detail-page > div > header h1 { font-size:21px !important; }
+  .shipment-detail-page section { padding:14px !important; }
 }
