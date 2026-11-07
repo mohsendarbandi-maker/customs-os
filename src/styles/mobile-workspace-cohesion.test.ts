@@ -46,7 +46,14 @@ describe('mobile visual cohesion regressions', () => {
     }
   });
 
-  it('lets reminders inherit the global site palette and background', () => {
+  it('applies the Adaptive preset as a responsive card dashboard on touch and tablet widths', () => {
+    expect(oceanCss).toContain('html[data-layout-preset="adaptive"] .app-shell .customs-widget-grid');
+    expect(oceanCss).toContain('@media (max-width: 767px), (pointer: coarse)');
+    expect(oceanCss).toContain('@media (min-width:768px) and (max-width:1023px)');
+    expect(oceanCss).toContain('html[data-visual-style] .app-mobile-viewport-dock > button svg');
+  });
+
+  it('lets reminders inherit the same global site palette and background', () => {
     const start = responsive.indexOf('/* Reminders use the same global appearance tokens');
     const end = responsive.indexOf('@media (orientation: landscape) and (max-height: 520px)', start);
     expect(start).toBeGreaterThanOrEqual(0);

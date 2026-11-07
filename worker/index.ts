@@ -10,7 +10,7 @@ export interface Env {
   TURN_KEY_ID_V2?: string;
 }
 
-const BUILD_SIGNATURE = '20261106-ocean-responsive-mobile-v4';
+const BUILD_SIGNATURE = '20261107-ocean-adaptive-mobile-v5';
 
 const EDGE_FUNCTIONS = new Set([
   'ai-assistant', 'ai-core', 'ai-operator', 'ai-voice', 'knowledge-ai',
@@ -330,6 +330,7 @@ export default {
     // stays valid on all devices; asset and API requests retain their origin.
     const userAgent = request.headers.get('user-agent') || '';
     const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent);
+    const isMobileRequest = isPhoneOrTablet || request.headers.get('sec-ch-ua-mobile') === '?1';
     const isPrimaryDomain = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir';
     const isDocumentNavigation =
       ['GET', 'HEAD'].includes(request.method) &&
@@ -341,7 +342,7 @@ export default {
 
     if (
       isPrimaryDomain &&
-      isPhoneOrTablet &&
+      isMobileRequest &&
       isDocumentNavigation &&
       !isLegacyIntegrationRequest &&
       !isStaticAsset &&

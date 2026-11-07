@@ -19,7 +19,10 @@ describe('mobile chat viewport and calendar legibility', () => {
     expect(shell).toContain('window.visualViewport');
     expect(css).toContain('var(--chat-visible-height, 100dvh)');
     expect(css).toContain('.app-shell.is-narrow-device.is-chat-route');
-    expect(css).toContain('html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock');
+    expect(css).not.toContain('html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock');
+    expect(css).toContain('.app-shell.is-touch-layout.is-chat-route .chat-standalone');
+    const mobilePolish = read('src/styles/mobile-polish.css');
+    expect(mobilePolish).toContain('.app-mobile-viewport-dock {');
     expect(css).toContain('.app-shell.is-chat-route .app-topbar');
     expect(main).toContain("import './styles/mobile-chat-calendar-fix.css';");
   });

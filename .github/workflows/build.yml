@@ -382,6 +382,14 @@ jobs:
               exit 1
             fi
 
+            echo "Mobile Client Hints also route to the mobile hostname"
+            hint_status="$(curl --silent --show-error --max-time 20 -H 'Accept: text/html,application/xhtml+xml' -H 'sec-ch-ua-mobile: ?1' -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36' -D /tmp/mobile-hint.headers -o /dev/null -w '%{http_code}' "https://darbandicommercial.ir/?__mobile_hint_smoke=${GITHUB_RUN_ID}")"
+            hint_location="$(grep -i '^location:' /tmp/mobile-hint.headers | tail -n 1 | tr -d '\\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
+            if [ "${hint_status}" != "302" ] || [ "${hint_location}" != "https://mobile.darbandicommercial.ir/?__mobile_hint_smoke=${GITHUB_RUN_ID}" ]; then
+              echo "::error::Mobile Client Hints were not redirected: HTTP ${hint_status}, Location=${hint_location}"
+              exit 1
+            fi
+
             echo "Desktop requests to the mobile alias remain on the requested mobile hostname"
             mobile_desktop_status=""
             mobile_desktop_location=""

@@ -56,9 +56,17 @@
         ) return;
 
         const ua = navigator.userAgent || '';
-        const appleTablet = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+        const touchPoints = navigator.maxTouchPoints || 0;
+        const appleTablet = navigator.platform === 'MacIntel' && touchPoints > 1;
+        // iOS/iPadOS may send a desktop-style Macintosh UA after "Request Desktop Website".
+        // Require multiple touch points plus an Apple desktop UA and a tablet/phone-sized
+        // physical screen so a small desktop browser window is never mistaken for a phone.
+        const appleDesktopMode = /macintosh|mac os x/i.test(ua) &&
+          touchPoints > 1 &&
+          Math.min(window.screen?.width || window.innerWidth, window.screen?.height || window.innerHeight) <= 1200;
+        const browserReportsMobile = navigator.userAgentData?.mobile === true;
         const mobileDevice = /android|iphone|ipad|ipod|mobile/i.test(ua) || appleTablet;
-        if (!mobileDevice) return;
+        if (!mobileDevice && !appleDesktopMode && !browserReportsMobile) return;
 
         // Keep OAuth/PKCE callbacks on the origin where their verifier was created.
         const params = new URLSearchParams(window.location.search);

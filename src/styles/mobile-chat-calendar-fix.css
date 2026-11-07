@@ -5,9 +5,6 @@
 .app-shell.is-chat-route .app-mobilebar {
   display: none !important;
 }
-html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock {
-  display: none !important;
-}
 .app-shell.is-chat-route,
 .app-shell.is-chat-route .app-main,
 .app-shell.is-chat-route .app-content,
@@ -91,6 +88,13 @@ html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock {
 }
 .app-shell.is-chat-route .chat-conversation-header {
   flex: 0 0 auto;
+}
+
+/* Keep the shared iPhone-style dock reachable on the chat screen. The chat root
+   is a flex column, so this reserved bottom area keeps the composer above the dock. */
+.app-shell.is-touch-layout.is-chat-route .chat-standalone {
+  padding-bottom: calc(var(--app-mobile-tabbar-height, 70px) + env(safe-area-inset-bottom) + 8px) !important;
+  box-sizing: border-box !important;
 }
 
 /* Readable calendar controls across phone, tablet and desktop.

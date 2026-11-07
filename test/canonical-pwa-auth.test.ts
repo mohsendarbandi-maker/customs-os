@@ -39,6 +39,8 @@ describe('one canonical Customs OS PWA', () => {
     // windows are never classified as phones, and no refresh token is bridged.
     expect(html).toContain("target.hostname = 'mobile.darbandicommercial.ir'");
     expect(html).toContain('const mobileDevice = /android|iphone|ipad|ipod|mobile/i.test(ua) || appleTablet;');
+    expect(html).toContain('appleDesktopMode');
+    expect(html).toContain('browserReportsMobile');
     expect(html).not.toContain('touchSmall');
     expect(html).not.toContain("type: 'customs-auth-sync'");
     expect(html).toContain("canonicalUrl.hostname = 'darbandicommercial.ir'");
@@ -86,6 +88,8 @@ describe('one canonical Customs OS PWA', () => {
     // The mobile hostname itself stays standalone for any device.
     expect(worker).toContain("const isPrimaryDomain = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir'");
     expect(worker).toContain("const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent)");
+    expect(worker).toContain("request.headers.get('sec-ch-ua-mobile') === '?1'");
+    expect(worker).toContain("const isMobileRequest = isPhoneOrTablet");
     expect(worker).toContain("const isDocumentNavigation =");
     expect(worker).toContain("mobileUrl.hostname = 'mobile.darbandicommercial.ir'");
     expect(worker).toContain("status: 302");

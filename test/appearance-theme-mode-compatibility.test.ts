@@ -15,6 +15,14 @@ describe('appearance theme and comfort compatibility', () => {
     }
   });
 
+  it('offers the adaptive responsive card layout and keeps older explicit presets available', () => {
+    expect(appearance).toContain("type LayoutPreset='adaptive'|'standard'|'cards'|'compact'");
+    expect(appearance).toContain("layoutPreset:'adaptive'");
+    expect(appearance).toContain('layoutPresetVersion:2');
+    expect(settings).toContain("value:'adaptive'");
+    expect(settings).toContain('appearance.layoutPreset===p.value');
+  });
+
   it('lets every palette use the light appearance mode', () => {
     for (const style of ['ocean', 'aurora', 'glass', 'emerald', 'sunset', 'minimal']) {
       expect(modes).toContain(`html[data-theme="light"][data-visual-style="${style}"]`);
