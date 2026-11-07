@@ -8,6 +8,7 @@ const referenceCss = read('src/styles/mobile-reference-redesign.css');
 const main = read('src/main.tsx');
 const shell = read('src/components/AppShell.tsx');
 const detail = read('src/pages/CaseStagePage.tsx');
+const shipment = read('src/pages/ShipmentFirstPage.tsx');
 
 describe('reference-led ocean mobile redesign', () => {
   it('loads the reference layer after the native mobile foundation', () => {
@@ -36,6 +37,9 @@ describe('reference-led ocean mobile redesign', () => {
     expect(referenceCss).toContain('.chat-standalone');
     expect(referenceCss).toContain('.visual-theme-options');
     expect(referenceCss).toContain('.shipment-detail-page');
+    expect(shipment).toContain('className="shipment-mobile-stepper"');
+    expect(shipment).toContain('اطلاعات پایه');
+    expect(shipment).toContain('تأیید نهایی');
   });
 
   it('marks the case detail view for its dedicated mobile card layout', () => {
