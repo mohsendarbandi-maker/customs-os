@@ -430,7 +430,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   if (location.pathname === '/epl-print') return <>{children}</>;
 
   return (
-    <div className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''} ${isChatRoute ? 'is-chat-route' : ''}`} dir="rtl">
+    <div data-route={location.pathname} className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''} ${isChatRoute ? 'is-chat-route' : ''}`} dir="rtl">
       {/* Desktop navigation is mounted only at >=1024px. It is not merely hidden on phones. */}
       {isDesktop && (
         <aside className={`app-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
@@ -720,11 +720,11 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </div>
       </main>
       {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock" aria-label="پیمایش سریع">
-        <button type="button" className={isActive('/')?'is-active':''} aria-current={isActive('/')?'page':undefined} onClick={()=>go('/')}><Home size={21}/><span>خانه</span></button>
+        <button ref={moreTriggerRef} type="button" className={mobileOpen?'is-active':''} aria-label="بیشتر" aria-haspopup="dialog" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}><Layers3 size={21}/><span>بیشتر</span></button>
+        <button type="button" className={location.pathname.startsWith('/chat')?'is-active':''} aria-current={location.pathname.startsWith('/chat')?'page':undefined} onClick={()=>go('/chat')}><MessageCircle size={21}/><span>چت</span></button>
         <button type="button" className={location.pathname.startsWith('/operations')?'is-active':''} aria-current={location.pathname.startsWith('/operations')?'page':undefined} onClick={()=>go('/operations')}><ClipboardList size={21}/><span>عملیات</span></button>
         <button type="button" className={location.pathname.startsWith('/reminders')?'is-active':''} aria-current={location.pathname.startsWith('/reminders')?'page':undefined} onClick={()=>go('/reminders')}><CalendarDays size={21}/><span>یادآورها</span></button>
-        <button type="button" className={location.pathname.startsWith('/chat')?'is-active':''} aria-current={location.pathname.startsWith('/chat')?'page':undefined} onClick={()=>go('/chat')}><MessageCircle size={21}/><span>چت</span></button>
-        <button ref={moreTriggerRef} type="button" className={mobileOpen?'is-active':''} aria-label="بیشتر" aria-haspopup="dialog" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}><Layers3 size={21}/><span>بیشتر</span></button>
+        <button type="button" className={isActive('/')?'is-active':''} aria-current={isActive('/')?'page':undefined} onClick={()=>go('/')}><Home size={21}/><span>خانه</span></button>
       </nav>, document.body)}
       {!location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />}
     </div>
