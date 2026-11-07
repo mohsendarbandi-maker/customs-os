@@ -12,6 +12,8 @@ describe('mobile hostname routing without cross-origin session sharing', () => {
     expect(html).toContain("target.hostname = 'mobile.darbandicommercial.ir'");
     expect(html).toContain('const mobileDevice = /android|iphone|ipad|ipod|mobile/i.test(ua) || appleTablet;');
     expect(html).toContain('navigator.maxTouchPoints');
+    expect(html).toContain('const appleDesktopMode = /macintosh|mac os x/i.test(ua)');
+    expect(html).toContain('navigator.userAgentData?.mobile === true');
     expect(html).toContain("window.matchMedia('(display-mode: standalone)').matches");
     expect(html).toContain('navigator.standalone === true');
     expect(html).not.toContain('touchSmall');
@@ -34,6 +36,8 @@ describe('mobile hostname routing without cross-origin session sharing', () => {
 
     expect(worker).toContain("const isPrimaryDomain = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir'");
     expect(worker).toContain("const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent)");
+    expect(worker).toContain("request.headers.get('sec-ch-ua-mobile') === '?1'");
+    expect(worker).toContain('const isMobileRequest = isPhoneOrTablet');
     expect(worker).toContain("mobileUrl.hostname = 'mobile.darbandicommercial.ir'");
     expect(worker).toContain("status: 302");
     expect(worker).toContain("'X-Customs-OS-Mobile-Redirect': '1'");

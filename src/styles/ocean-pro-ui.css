@@ -334,10 +334,75 @@ html[data-visual-style] .app-shell .customs-shortcut > svg:first-child { color:v
     height:var(--chat-visible-height,100dvh)!important; overflow:hidden!important;
     padding:0!important;
   }
-  html[data-visual-style] .app-shell.is-chat-route .app-mobile-viewport-dock { display:none!important; }
   html[data-visual-style] .app-shell :is(input,select,textarea,button) { scroll-margin-block:100px; }
   html[data-visual-style] .app-shell :is(input,select,textarea) { max-width:100%; min-height:42px; }
   html[data-visual-style] .app-shell :is(table) { min-width:640px; }
   html[data-visual-style] .app-shell :is(.overflow-x-auto,[data-horizontal-scroll]) { max-width:100%; overscroll-behavior-inline:contain; }
   html[data-visual-style] .app-shell :is(.card,.rounded-xl.border,.rounded-2xl.border) { min-width:0; }
+}
+
+
+/* Adaptive layout preset: preserve the dashboard card system and reflow it by device. */
+html[data-layout-preset="adaptive"] .app-shell .customs-widget-grid {
+  display:grid!important;
+  grid-template-columns:repeat(12,minmax(0,1fr));
+  gap:14px;
+}
+html[data-layout-preset="adaptive"] .app-shell .customs-widget-frame {
+  min-width:0;
+  align-self:stretch;
+  border-radius:22px;
+}
+html[data-layout-preset="adaptive"] .app-shell .customs-widget-body > section,
+html[data-layout-preset="adaptive"] .app-shell .customs-status-board {
+  min-width:0;
+  border-radius:18px;
+}
+html[data-layout-preset="adaptive"] .app-shell .customs-stat { min-height:100px; }
+@media (max-width: 767px), (pointer: coarse) {
+  html[data-layout-preset="adaptive"] .app-shell .customs-widget-grid {
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:11px!important;
+  }
+  html[data-layout-preset="adaptive"] .app-shell .customs-widget-frame { grid-column:1/-1!important; }
+  html[data-layout-preset="adaptive"] .app-shell .customs-stat-line {
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px!important;
+  }
+}
+@media (min-width:768px) and (max-width:1023px) {
+  html[data-layout-preset="adaptive"] .app-shell .customs-widget-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  html[data-layout-preset="adaptive"] .app-shell .customs-widget-frame { grid-column:span 1!important; }
+  html[data-layout-preset="adaptive"] .app-shell .customs-widget-frame[data-customs-widget="stats"],
+  html[data-layout-preset="adaptive"] .app-shell .customs-widget-frame[data-customs-widget="shipments"],
+  html[data-layout-preset="adaptive"] .app-shell .customs-widget-frame[data-customs-widget="reminders"] { grid-column:1/-1!important; }
+  html[data-layout-preset="adaptive"] .app-shell .customs-stat-line {
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+}
+
+/* The body-portal dock is deliberately unscoped: it is not a child of .app-shell. */
+html[data-visual-style] .app-mobile-viewport-dock {
+  z-index:90!important;
+  min-height:70px!important;
+  padding:7px 9px!important;
+  border-radius:24px!important;
+  gap:5px!important;
+}
+html[data-visual-style] .app-mobile-viewport-dock > button {
+  min-height:55px!important;
+  gap:4px!important;
+  font-size:11px!important;
+  font-weight:800!important;
+}
+html[data-visual-style] .app-mobile-viewport-dock > button svg { width:22px!important; height:22px!important; }
+html[data-visual-style] .app-mobile-viewport-dock > button > span {
+  font-size:11px!important;
+  line-height:1.15!important;
+}
+html[data-visual-style] .app-mobile-viewport-dock > button.is-active {
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--primary-2) 34%,transparent),
+    0 5px 16px color-mix(in srgb,var(--primary) 12%,transparent)!important;
 }

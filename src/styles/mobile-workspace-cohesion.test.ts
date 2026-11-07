@@ -46,7 +46,15 @@ describe('mobile visual cohesion regressions', () => {
     }
   });
 
-  it('lets reminders inherit the global site palette and background', () => {
+  it('applies the Adaptive preset as a responsive card dashboard on touch and tablet widths', () => {
+    const oceanCss = read('src/styles/ocean-pro-ui.css');
+    expect(oceanCss).toContain('html[data-layout-preset="adaptive"] .app-shell .customs-widget-grid');
+    expect(oceanCss).toContain('@media (max-width: 767px), (pointer: coarse)');
+    expect(oceanCss).toContain('@media (min-width:768px) and (max-width:1023px)');
+    expect(oceanCss).toContain('html[data-visual-style] .app-mobile-viewport-dock > button svg');
+  });
+
+  it('lets reminders inherit the same global site palette and background', () => {
     const start = responsive.indexOf('/* Reminders use the same global appearance tokens');
     const end = responsive.indexOf('@media (orientation: landscape) and (max-height: 520px)', start);
     expect(start).toBeGreaterThanOrEqual(0);
@@ -128,19 +136,20 @@ describe('primary-domain mobile viewport and selectable UI presets', () => {
   });
 
   it('persists the selected UI preset per user and applies it to the document root', () => {
-    expect(appearanceContext).toContain("type LayoutPreset='standard'|'cards'|'compact'");
-    expect(appearanceContext).toContain('layoutPreset:settings.layoutPreset');
+    expect(appearanceContext).toContain("type LayoutPreset='adaptive'|'standard'|'cards'|'compact'");
+    expect(appearanceContext).toContain('settings.layoutPresetVersion===2');
+    expect(appearanceContext).toContain(":'adaptive'");
     expect(appearanceContext).toContain('document.documentElement.dataset.layoutPreset=appearance.layoutPreset');
     expect(appearanceContext).toContain('setLayoutPreset');
     expect(appearanceSettings).toContain("'layoutPreset'");
   });
 
-  it('offers three accessible layout choices in Appearance settings with live preview', () => {
+  it('offers four accessible layout choices in Appearance settings with live preview', () => {
     expect(appearanceSettings).toContain('layout-preset-options');
     expect(appearanceSettings).toContain("title:'استاندارد'");
     expect(appearanceSettings).toContain("title:'کارت‌محور'");
     expect(appearanceSettings).toContain("title:'فشرده'");
-    expect(appearanceSettings).toContain('aria-pressed={(settings.layoutPreset||\'standard\')===p.value}');
+    expect(appearanceSettings).toContain('aria-pressed={appearance.layoutPreset===p.value}');
     expect(appearanceSettings).toContain('appearance.setLayoutPreset');
   });
 

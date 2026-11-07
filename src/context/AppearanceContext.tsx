@@ -5,7 +5,7 @@ import{readUserSettings,writeUserSettings}from'../lib/userSettingsStorage';
 type ThemeMode='light'|'dark';
 type ComfortMode='normal'|'soft'|'warm'|'reading';
 type Density='comfortable'|'compact';
-type LayoutPreset='standard'|'cards'|'compact';
+type LayoutPreset='adaptive'|'standard'|'cards'|'compact';
 type VisualStyle='ocean'|'aurora'|'glass'|'emerald'|'sunset'|'minimal';
 type AppearanceState={
  theme:ThemeMode;
@@ -30,6 +30,7 @@ type StoredAppearance={
  comfort:ComfortMode;
  density:Density;
  layoutPreset:LayoutPreset;
+ layoutPresetVersion:number;
  visualStyle:VisualStyle;
  sidebarCollapsed:boolean;
 };
@@ -41,7 +42,8 @@ const defaults:StoredAppearance={
  accentColor:'#168BD2',
  comfort:'normal',
  density:'comfortable',
- layoutPreset:'standard',
+ layoutPreset:'adaptive',
+ layoutPresetVersion:2,
  visualStyle:'ocean',
  sidebarCollapsed:false,
 };
@@ -56,7 +58,10 @@ const readAppearance=(userId:string|null|undefined):StoredAppearance=>{
     ? settings.comfort
     : defaults.comfort,
    density:settings.density==='compact'?'compact':'comfortable',
-   layoutPreset:settings.layoutPreset==='cards'||settings.layoutPreset==='compact'||settings.layoutPreset==='standard'?settings.layoutPreset:'standard',
+   layoutPreset:settings.layoutPresetVersion===2&&['adaptive','cards','compact','standard'].includes(String(settings.layoutPreset))
+    ?settings.layoutPreset as LayoutPreset
+    :settings.layoutPreset==='cards'||settings.layoutPreset==='compact'?settings.layoutPreset:'adaptive',
+   layoutPresetVersion:2,
    visualStyle:['ocean','aurora','glass','emerald','sunset','minimal'].includes(String(settings.visualStyle))?settings.visualStyle as VisualStyle:defaults.visualStyle,
    sidebarCollapsed:settings.sidebarCollapsed===true,
   };
@@ -94,7 +99,10 @@ export const AppearanceProvider:React.FC<{children:React.ReactNode}>=({children}
  const setAccentColor=(v:string)=>persist({accentColor:/^#[0-9a-fA-F]{6}$/.test(v)?v:defaults.accentColor});
  const setComfort=(v:ComfortMode)=>persist({comfort:v});
  const setDensity=(v:Density)=>persist({density:v});
- const setLayoutPreset=(v:LayoutPreset)=>persist({layoutPreset:v==='cards'||v==='compact'?v:'standard'});
+ const setLayoutPreset=(v:LayoutPreset)=>persist({
+  layoutPreset:['adaptive','standard','cards','compact'].includes(v)?v:'adaptive',
+  layoutPresetVersion:2,
+ });
  const setVisualStyle=(v:VisualStyle)=>{const palettes:Record<VisualStyle,string>={ocean:'#168BD2',aurora:'#A78BFA',glass:'#38BDF8',emerald:'#10B981',sunset:'#FB923C',minimal:'#475569'};const selected=['ocean','aurora','glass','emerald','sunset','minimal'].includes(v)?v:'ocean';persist({visualStyle:selected,accentColor:palettes[selected]});};
  const setSidebarCollapsed=(v:boolean)=>persist({sidebarCollapsed:v});
 
