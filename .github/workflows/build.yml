@@ -384,7 +384,7 @@ jobs:
 
             echo "Mobile Client Hints also route to the mobile hostname"
             hint_status="$(curl --silent --show-error --max-time 20 -H 'Accept: text/html,application/xhtml+xml' -H 'sec-ch-ua-mobile: ?1' -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36' -D /tmp/mobile-hint.headers -o /dev/null -w '%{http_code}' "https://darbandicommercial.ir/?__mobile_hint_smoke=${GITHUB_RUN_ID}")"
-            hint_location="$(grep -i '^location:' /tmp/mobile-hint.headers | tail -n 1 | tr -d '\\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
+            hint_location="$(grep -i '^location:' /tmp/mobile-hint.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
             if [ "${hint_status}" != "302" ] || [ "${hint_location}" != "https://mobile.darbandicommercial.ir/?__mobile_hint_smoke=${GITHUB_RUN_ID}" ]; then
               echo "::error::Mobile Client Hints were not redirected: HTTP ${hint_status}, Location=${hint_location}"
               exit 1
@@ -395,7 +395,7 @@ jobs:
             mobile_desktop_location=""
             for attempt in 1 2 3 4 5 6; do
               mobile_desktop_status="$(curl --silent --show-error --max-time 20 -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36' -D /tmp/mobile-desktop.headers -o /tmp/mobile-desktop.html -w '%{http_code}' "https://mobile.darbandicommercial.ir/?__mobile_desktop_smoke=${GITHUB_RUN_ID}&attempt=${attempt}")"
-              mobile_desktop_location="$(grep -i '^location:' /tmp/mobile-desktop.headers | tail -n 1 | tr -d '\\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
+              mobile_desktop_location="$(grep -i '^location:' /tmp/mobile-desktop.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
               echo "Desktop mobile-host check: attempt=${attempt}, status=${mobile_desktop_status}, location=${mobile_desktop_location}"
               if [ "${mobile_desktop_status}" = "200" ] && [ -z "${mobile_desktop_location}" ] && grep -Fq '<div id="root">' /tmp/mobile-desktop.html; then break; fi
               sleep 3
@@ -410,7 +410,7 @@ jobs:
             mobile_location=""
             for attempt in 1 2 3 4 5 6; do
               mobile_status="$(curl --silent --show-error --max-time 20 -A 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1' -D /tmp/mobile.headers -o /tmp/mobile.html -w '%{http_code}' "https://mobile.darbandicommercial.ir/?__mobile_smoke=${GITHUB_RUN_ID}&attempt=${attempt}")"
-              mobile_location="$(grep -i '^location:' /tmp/mobile.headers | tail -n 1 | tr -d '\\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
+              mobile_location="$(grep -i '^location:' /tmp/mobile.headers | tail -n 1 | tr -d '\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
               echo "Phone mobile-host check: attempt=${attempt}, status=${mobile_status}, location=${mobile_location}"
               if [ "$mobile_status" = "200" ] && [ -z "$mobile_location" ] && grep -Fq '<div id="root">' /tmp/mobile.html && grep -Eq 'src="/assets/[^" ]+\\.js' /tmp/mobile.html; then
                 break
