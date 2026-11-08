@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertCircle, ArrowLeft, Bell, CheckCircle2, Clock3, FileText, RefreshCw, Search, Ship, Truck } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Activity, AlertCircle, Bell, Clock3, FileText, RefreshCw, Search, Ship, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -8,21 +8,21 @@ type Shipment = { id:string; display_name:string|null; bill_of_lading_no:string|
 type Reminder = { id:string; shipment_id:string|null; title:string; description:string|null; due_at:string|null; priority:string; status:string; };
 type Report = { id:string; shipment_id:string; status:string; stage:string; report:string; actor_name:string; created_at:string; };
 const faDate=(v:string|null)=>v?new Date(v).toLocaleDateString('fa-IR'):'—';
-const statusText=(s:string|null)=>{const v=(s||'').toLowerCase();if(/complete|done|released|ترخیص|انجام/.test(v))return 'تکمیل شده';if(/block|hold|وقف|مانع|مشکل/.test(v))return 'دارای مانع';if(/action|required|نیاز/.test(v))return 'نیازمند اقدام';if(/arriv|رسید|تخلیه/.test(v))return 'رسیده / تخلیه';if(/load|depart|حمل|بارگیری/.test(v))return 'در حال حمل';return s||'در جریان';};
+const statusText=(s:string|null)=>{const v=(s||'').toLowerCase();if(/complete|done|released|ترخیص|انجام|archived/.test(v))return /archiv/.test(v)?'مختومه':'تکمیل شده';if(/block|hold|وقف|مانع|مشکل/.test(v))return 'دارای مانع';if(/action|required|نیاز/.test(v))return 'نیازمند اقدام';if(/received|دریافت/.test(v))return 'دریافت شده';if(/review|بررسی/.test(v))return 'در حال بررسی';if(/arriv|رسید|تخلیه/.test(v))return 'رسیده / تخلیه';if(/load|depart|حمل|بارگیری/.test(v))return 'در حال حمل';return s||'در جریان';};
 const statusTone=(s:string)=>s==='تکمیل شده'?'done':s==='دارای مانع'||s==='نیازمند اقدام'?'alert':'active';
 export const ShipmentShowcasePage:React.FC=()=>{
  const {profile}=useAuth(); const org=profile?.organization_id||'';
  const [shipments,setShipments]=useState<Shipment[]>([]); const [reminders,setReminders]=useState<Reminder[]>([]); const [reports,setReports]=useState<Report[]>([]);
  const [query,setQuery]=useState(''); const [filter,setFilter]=useState('all'); const [loading,setLoading]=useState(true); const [error,setError]=useState('');
- const load=async()=>{if(!org)return;setLoading(true);setError('');try{
+ const load=useCallback(async()=>{if(!org)return;setLoading(true);setError('');try{
   const [sh,rm]=await Promise.all([
    supabase.from('shipments').select('id,display_name,bill_of_lading_no,shipping_line,current_status,current_location,eta_destination,cargo_count,cargo_count_unit,gross_weight_kg,created_at').eq('organization_id',org).order('created_at',{ascending:false}).limit(500),
    supabase.from('operational_reminders').select('id,shipment_id,title,description,due_at,priority,status').eq('organization_id',org).is('deleted_at',null).order('due_at',{ascending:true}).limit(1000)
   ]);
   if(sh.error)throw sh.error;if(rm.error)throw rm.error;const shipmentRows=(sh.data||[]) as Shipment[];setShipments(shipmentRows);setReminders((rm.data||[]) as Reminder[]);
   const ids=shipmentRows.map(x=>x.id);if(ids.length){const rr=await (supabase as any).from('file_manager_shipment_reports').select('id,shipment_id,status,stage,report,actor_name,created_at').eq('organization_id',org).in('shipment_id',ids).order('created_at',{ascending:false}).limit(1500);if(rr.error)throw rr.error;setReports((rr.data||[]) as Report[]);}else setReports([]);
- }catch(e){setError(e instanceof Error?e.message:'بارگذاری ویترین محموله ناموفق بود.');}finally{setLoading(false);}};
- useEffect(()=>{void load();},[org]);
+ }catch(e){setError(e instanceof Error?e.message:'بارگذاری ویترین محموله ناموفق بود.');}finally{setLoading(false);}},[org]);
+ useEffect(()=>{void load();},[load]);
  const latest=useMemo(()=>{const m=new Map<string,Report>();for(const r of reports)if(!m.has(r.shipment_id))m.set(r.shipment_id,r);return m;},[reports]);
  const today=new Date();const todayKey=today.toDateString();
  const visible=useMemo(()=>shipments.filter(s=>{const q=query.trim().toLocaleLowerCase();const text=[s.display_name,s.bill_of_lading_no,s.shipping_line,s.current_status,s.current_location].filter(Boolean).join(' ').toLocaleLowerCase();if(q&&!text.includes(q))return false;const rep=latest.get(s.id);const label=rep?statusText(rep.status):statusText(s.current_status);if(filter==='attention')return label==='دارای مانع'||label==='نیازمند اقدام';if(filter==='done')return label==='تکمیل شده';if(filter==='active')return label!=='تکمیل شده'&&label!=='دارای مانع';return true;}),[shipments,query,filter,latest]);
