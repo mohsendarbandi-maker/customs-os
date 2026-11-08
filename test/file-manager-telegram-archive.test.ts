@@ -17,6 +17,7 @@ describe('Telegram-backed Customs OS file manager', () => {
   const documentReportsMigration = read('supabase/migrations/20261108185733_file_manager_document_workflow_reports.sql');
   const documentReportActorMigration = read('supabase/migrations/20261108185740_file_manager_document_report_actor_label.sql');
   const documentReportServerActorMigration = read('supabase/migrations/20261108191704_file_manager_document_report_server_actor.sql');
+  const shipmentReportsMigration = read('supabase/migrations/20261108203000_file_manager_shipment_workflow_reports.sql');
   const fileManagerClient = read('src/lib/fileManager.ts');
   const shipmentPage = read('src/pages/ShipmentFirstPage.tsx');
   const documentPage = read('src/pages/CustomsDocumentManagerPage.tsx');
@@ -310,12 +311,14 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('file-manager-flat-panel');
   });
 
-  it('provides append-only document workflow reports visible to organization staff', () => {
-    expect(fileManager).toContain('file_manager_document_reports');
-    expect(fileManager).toContain('ویترین پیگیری و گزارش اسناد');
-    expect(fileManager).toContain('ثبت گزارش برای همه همکاران');
+  it('shows workflow reports only at shipment level, never on individual documents', () => {
+    expect(fileManager).toContain('file_manager_shipment_reports');
+    expect(fileManager).toContain('گزارش و پیگیری محموله‌ها');
+    expect(fileManager).toContain('ثبت گزارش محموله');
     expect(fileManager).toContain('actor_name');
     expect(fileManager).toContain('action_required');
+    expect(fileManager).not.toContain('گزارش و وضعیت سند');
+    expect(fileManager).not.toContain('ویترین پیگیری و گزارش اسناد');
   });
 
   it('skips operating-system sidecar files and continues when a local folder cannot be created', () => {
@@ -341,17 +344,27 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(documentReportActorMigration).toContain('actor_name');
   });
 
-  it('includes employee workflow reports in organization and folder metadata sync exports', () => {
-    expect(fileManager).toContain("tableNames.push('file_manager_document_reports')");
-    expect(fileManager).toContain('const documentReportRows =');
-    expect(fileManager).toContain("title: 'گزارش‌ها و گردش وضعیت اسناد'");
+  it('includes shipment workflow reports in organization and shipment metadata sync exports', () => {
+    expect(fileManager).toContain("tableNames.push('file_manager_shipment_reports')");
+    expect(fileManager).toContain("title: 'گزارش‌ها و گردش وضعیت محموله'");
+    expect(fileManager).not.toContain('file_manager_document_reports');
   });
 
-  it('paginates the company-wide document status showcase beyond the newest page', () => {
-    expect(fileManager).toContain('workflowHasMore');
-    expect(fileManager).toContain('loadMoreWorkflowFiles');
-    expect(fileManager).toContain('بارگذاری اسناد قدیمی‌تر');
-    expect(fileManager).toContain('.range(workflowFiles.length, workflowFiles.length + 299)');
+  it('does not paginate or render a document-centric report showcase', () => {
+    expect(fileManager).not.toContain('workflowHasMore');
+    expect(fileManager).not.toContain('loadMoreWorkflowFiles');
+    expect(fileManager).not.toContain('بارگذاری اسناد قدیمی‌تر');
+  });
+
+  it('creates tenant-scoped append-only shipment report history with server-derived authorship', () => {
+    expect(shipmentReportsMigration).toContain('create table if not exists public.file_manager_shipment_reports');
+    expect(shipmentReportsMigration).toContain('shipment_id uuid not null references public.shipments(id)');
+    expect(shipmentReportsMigration).toContain('enable row level security');
+    expect(shipmentReportsMigration).toContain('public.user_org_id()');
+    expect(shipmentReportsMigration).toContain('new.created_by := auth.uid()');
+    expect(shipmentReportsMigration).toContain('new.created_at := now()');
+    expect(shipmentReportsMigration).toContain('p.organization_id = new.organization_id');
+    expect(shipmentReportsMigration).not.toContain('for delete');
   });
 
   it('derives document report authorship and timestamps from the authenticated server session', () => {
