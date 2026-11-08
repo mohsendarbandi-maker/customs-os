@@ -346,6 +346,13 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain("title: 'گزارش‌ها و گردش وضعیت اسناد'");
   });
 
+  it('paginates the company-wide document status showcase beyond the newest page', () => {
+    expect(fileManager).toContain('workflowHasMore');
+    expect(fileManager).toContain('loadMoreWorkflowFiles');
+    expect(fileManager).toContain('بارگذاری اسناد قدیمی‌تر');
+    expect(fileManager).toContain('.range(workflowFiles.length, workflowFiles.length + 299)');
+  });
+
   it('registers the page and exposes it from the main navigation', () => {
     expect(app).toContain('path="/file-manager"');
     expect(app).toContain("import('./pages/FileManagerPage')");
