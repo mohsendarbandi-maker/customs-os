@@ -19,6 +19,7 @@ import {
 import { folderToneClass, getFolderSubtreeCounts, isCopyableFolder } from '../lib/fileManagerExplorer';
 import { optimizeFileForUpload } from '../lib/clientFileOptimizer';
 import { safeWindowsFileName } from '../lib/safeWindowsFileName';
+import { createPortableSyncArchive, readPortableSyncArchive, PORTABLE_SYNC_ROOT_NAME } from '../lib/fileManagerPortableSync';
 import {
   buildDocumentMetadataText,
   buildFolderMetadataText,
@@ -118,6 +119,9 @@ export const FileManagerPage: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [syncDirectoryName, setSyncDirectoryName] = useState('');
   const [syncProgress, setSyncProgress] = useState<WindowsSyncProgress | null>(null);
+  const [portableSyncOpen, setPortableSyncOpen] = useState(false);
+  const portableDirectoryInput = useRef<HTMLInputElement | null>(null);
+  const portableArchiveInput = useRef<HTMLInputElement | null>(null);
   const [smbAddress, setSmbAddress] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
