@@ -81,6 +81,18 @@ describe('one-click file manager synchronization', () => {
     expect(sync).toContain("name === 'اطلاعات_کامل_سازمان.json'");
   });
 
+  it('provides a portable folder and ZIP sync path when directory handles are unavailable', () => {
+    expect(page).toContain('setPortableSyncOpen(true)');
+    expect(page).toContain('exportPortableSyncArchive');
+    expect(page).toContain('importPortableSyncEntries');
+    expect(page).toContain('readPortableSyncArchive');
+    expect(page).toContain('انتخاب پوشه از دستگاه');
+    expect(page).toContain('وارد کردن ZIP قبلی');
+    expect(page).toContain('دریافت ZIP کامل سازمان برای Files');
+    expect(page).toContain('webkitdirectory');
+    expect(page).not.toContain('همگام‌سازی مستقیم پوشه فقط در Microsoft Edge یا Google Chrome');
+  });
+
   it('uses Supabase Storage as a fallback for Telegram-archived files, including files over 20 MB', () => {
     expect(page).toContain('if (file.storage_path && Number(file.size_bytes) > FILE_ARCHIVE_MAX_BYTES)');
     expect(page).toContain('if (file.storage_path) return downloadStorageCopy()');
