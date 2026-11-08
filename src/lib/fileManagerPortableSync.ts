@@ -65,17 +65,34 @@ export function readPortableSyncArchive(
     }
     if (!segments.length) continue;
 
+    const rawName = segments[segments.length - 1];
+    const rawLowerName = rawName.toLocaleLowerCase();
+    if (
+      rawLowerName === 'desktop.ini' ||
+      rawLowerName === 'thumbs.db' ||
+      rawLowerName === '.ds_store' ||
+      rawLowerName.startsWith('~' + '
+      continue;
+    }
+
+    result.push({
+      relativePath: safeSegments.join('/'),
+      name,
+      data,
+    });
+  }
+
+  return result;
+}
+) ||
+      rawName.startsWith('._') ||
+      segments.some((segment) => segment === '__MACOSX')
+    ) {
+      continue;
+    }
     const safeSegments = segments.map(safeWindowsFileName);
     const name = safeSegments[safeSegments.length - 1];
-    const lowerName = name.toLocaleLowerCase();
-    if (
-      lowerName === 'desktop.ini' ||
-      lowerName === 'thumbs.db' ||
-      lowerName === '.ds_store' ||
-      lowerName.startsWith('~$') ||
-      segments.some((segment) => segment === '__MACOSX') ||
-      isManagedSyncMetadataFile(name)
-    ) {
+    if (isManagedSyncMetadataFile(name)) {
       continue;
     }
 
