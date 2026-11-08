@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity, MessageCircle, Landmark, ChevronLeft, ChevronRight,
+  Activity, MessageCircle, Monitor, Landmark, ChevronLeft, ChevronRight,
   FileText, FileSearch, History, LayoutDashboard, Palette, Printer,
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
@@ -57,6 +57,7 @@ const nav: NavItem[] = [
   { label: 'فایل‌منیجر', en: 'File Manager', to: '/file-manager', icon: Folder, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'PDF Studio', en: 'PDF Studio', to: '/pdf-studio', icon: FileStack, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'چاپگر هوشمند EPL', en: 'EPL Print Assistant', to: '/epl-print', icon: Printer, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
+  { label: 'EPL دسکتاپ', en: 'EPL Desktop', to: '/epl-desktop-test', icon: Monitor, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'دبیرخانه و مکاتبات', en: 'Office Automation', to: '/office', icon: FileSignature, group: 'سیستم', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'اسناد و مجوزها', en: 'Documents & Permits', to: '/documents', icon: FileText, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'استخراج هوشمند اسناد', en: 'Document Intelligence', to: '/documents/extract', icon: FileSearch, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
