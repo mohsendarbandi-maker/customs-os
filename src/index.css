@@ -636,3 +636,55 @@ body{
   .app-sidebar:not(.is-collapsed){width:294px!important}
   .app-main:not(.sidebar-compact){width:calc(100% - 294px)!important;margin-right:294px!important}
 }
+
+
+/* File Manager workspace v2: clean folder rail + roomy content surface. */
+.app-content .file-manager-page .file-manager-workspace{
+  display:grid;
+  align-items:start;
+  gap:1rem;
+  min-width:0;
+}
+.app-content .file-manager-page .file-manager-workspace>aside{
+  border-radius:1.1rem!important;
+  background:var(--surface-2)!important;
+  border:1px solid var(--border)!important;
+  padding:.75rem!important;
+}
+.app-content .file-manager-page .file-manager-workspace>aside>div:first-child{
+  min-height:1.8rem;
+}
+.app-content .file-manager-page .file-manager-workspace>aside [class*="flex min-w-0 flex-1 items-center"]{
+  transition:background-color .18s ease,color .18s ease;
+}
+.app-content .file-manager-page .file-manager-workspace>aside button:hover{
+  background:color-mix(in srgb,var(--primary) 7%,transparent);
+}
+.app-content .file-manager-page .file-manager-workspace>section{
+  min-width:0;
+  border-radius:1.1rem!important;
+}
+.app-content .file-manager-page .file-manager-breadcrumbs{
+  min-height:2.75rem;
+  border-radius:.85rem!important;
+  background:var(--surface-2)!important;
+}
+.app-content .file-manager-page .file-manager-workflow-showcase article{
+  border:1px solid var(--border);
+  border-radius:1rem;
+  background:var(--surface);
+  padding:1rem;
+  box-shadow:0 5px 18px rgba(0,0,0,.035);
+  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+.app-content .file-manager-page .file-manager-workflow-showcase article:hover{
+  transform:translateY(-2px);
+  border-color:color-mix(in srgb,var(--primary) 40%,var(--border));
+  box-shadow:0 12px 28px rgba(0,0,0,.07);
+}
+@media(max-width:1023px){
+  .app-content .file-manager-page .file-manager-workspace{grid-template-columns:minmax(0,1fr)}
+}
+@media(min-width:1024px){
+  .app-content .file-manager-page .file-manager-workspace{grid-template-columns:minmax(0,1fr) minmax(230px,280px)}
+}
