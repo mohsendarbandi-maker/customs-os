@@ -1120,6 +1120,8 @@ export const FileManagerPage: React.FC = () => {
         'finance_payment_request_lines', 'finance_payment_requests', 'finance_payments',
         'petty_cash_ledger',
       ];
+      // Internal employee workflow notes are part of the company archive snapshot.
+      if (profile?.role !== 'client') tableNames.push('file_manager_document_reports');
       const tableRows = await Promise.all(tableNames.map((table) => fetchOrgRows(table)));
       const data = Object.fromEntries(tableNames.map((table, index) => [table, tableRows[index]])) as Record<string, Record<string, any>[]>;
       const byId = (rows: Record<string, any>[], id: unknown) => rows.find((row) => row.id === id) || null;
@@ -1233,6 +1235,9 @@ export const FileManagerPage: React.FC = () => {
         const customsOffice = byId(data.customs_offices, folder.customs_office_id || shipment?.customs_office_id || caseRecord?.customs_office_id);
         const customsData = data.shipment_customs_data.find((row) => row.shipment_id === folder.shipment_id) || null;
         const folderFileRows = latestFiles.filter((row) => row.folder_id === folder.id);
+        const folderFileIds = new Set(folderFileRows.map((row) => row.id));
+        const documentReportRows = ((data.file_manager_document_reports || []) as Record<string, any>[])
+          .filter((row) => folderFileIds.has(row.file_id));
         const customsDocumentRows = data.customs_documents.filter((row) => row.folder_id === folder.id || (folder.shipment_id && row.shipment_id === folder.shipment_id && row.folder_id == null));
         const shipmentDocumentRows = data.shipment_documents.filter((row) => row.folder_id === folder.id || (folder.shipment_id && row.shipment_id === folder.shipment_id && row.folder_id == null));
         const text = buildFolderMetadataText({
@@ -1265,6 +1270,7 @@ export const FileManagerPage: React.FC = () => {
             { title: 'درخواست‌های پرداخت', records: paymentRequests },
             { title: 'ردیف‌های درخواست پرداخت', records: paymentRequestLines },
             { title: 'اسناد حسابداری گمرک', records: accountingVouchers },
+            { title: 'گزارش‌ها و گردش وضعیت اسناد', records: documentReportRows },
             { title: 'تنخواه و صندوق', records: pettyCashEntries },
             { title: 'دسته‌بندی هزینه‌ها', records: costCategories },
             { title: 'تنظیمات مالی و اطلاعات بانکی سازمان', records: organizationFinanceSettings },
