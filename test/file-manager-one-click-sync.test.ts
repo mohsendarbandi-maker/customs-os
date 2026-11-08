@@ -48,7 +48,10 @@ describe('one-click file manager synchronization', () => {
     expect(page).toContain('setup-iphone-files-share.ps1');
     expect(page).toContain('smb://');
     expect(smb).toContain('-RemoteAddress LocalSubnet');
-    expect(smb).toContain('-Profile Private');
+    expect(smb).toContain('-Profile Private,Domain');
+    expect(smb).toContain("$_.NetworkCategory -eq 'Public'");
+    expect(smb).toContain('Set-NetConnectionProfile -InterfaceIndex');
+    expect(smb).toContain('هیچ اتصال Private یا Domain معتبر پیدا نشد');
     expect(smb).toContain('-EnableSMB1Protocol $false');
     expect(smb).toContain('DarbandiFiles');
   });
