@@ -1352,7 +1352,7 @@ export const FileManagerPage: React.FC = () => {
           <div className="rounded-2xl bg-[var(--primary)]/10 p-3 text-[var(--primary)]"><FolderOpen size={24} /></div>
           <div>
             <div className="hidden text-xs app-muted sm:block">CUSTOMS OS · DOCUMENTS</div>
-            <h1 className="text-xl sm:text-2xl font-black">فایل‌منیجر اسناد و مدارک</h1>
+            <h1 className="text-xl sm:text-2xl font-black">مدیریت فایل</h1>
           </div>
         </div>
         <div className="file-manager-page-actions flex flex-wrap gap-2">
@@ -1374,8 +1374,8 @@ export const FileManagerPage: React.FC = () => {
       </section>
       <details className="file-manager-archive-help text-xs app-muted"><summary>دربارهٔ اسناد قدیمی</summary><p>اسناد قدیمی به‌صورت خودکار به تلگرام منتقل نمی‌شوند. فایل‌های جدیدی که از مسیر آرشیو آپلود شوند در گفت‌وگوی تلگرام ثبت می‌شوند.</p></details>
 
-<section className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(330px,.85fr)]">
-        <div className="relative overflow-hidden rounded-2xl border border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-[var(--surface)] to-cyan-500/5 p-4 shadow-sm sm:p-5">
+<details className="file-manager-sync-dropdown group border-b app-border py-2"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 [&::-webkit-details-marker]:hidden"><span className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600"><HardDrive size={20}/></span><span className="min-w-0"><span className="block text-sm font-black">همگام‌سازی و دریافت نسخهٔ پشتیبان</span><span className="mt-0.5 block text-xs app-muted">{syncDirectoryName ? `پوشه متصل: ${syncDirectoryName}` : 'برای نمایش گزینه‌های همگام‌سازی انتخاب کنید'}</span></span></span><span className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--primary)]"><span>نمایش گزینه‌ها</span><ChevronDown size={17} className="transition-transform group-open:rotate-180"/></span></summary><div className="grid gap-3 pt-3">
+        <div className="relative overflow-hidden border-0 bg-transparent p-0 shadow-none">
           <div className="pointer-events-none absolute -left-8 -top-8 h-36 w-36 rounded-full bg-sky-500/10 blur-2xl"/>
           <div className="relative flex items-start gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 text-sky-600"><HardDrive size={24}/></span>
@@ -1443,7 +1443,7 @@ export const FileManagerPage: React.FC = () => {
           </div>}
         </div>
 
-        <div className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5">
+        <div className="hidden">
           <div className="flex items-start gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600"><Smartphone size={24}/></span>
             <div className="min-w-0 flex-1">
@@ -1479,9 +1479,9 @@ export const FileManagerPage: React.FC = () => {
             <span>فقط شبکه داخلی یا VPN امن؛ پورت 445 را روی مودم به اینترنت باز نکنید. آیفون و ویندوز باید به یک شبکه دسترسی داشته باشند.</span>
           </div>
         </div>
-      </section>
+      </div></details>
 
-      <section className="rounded-2xl border app-border bg-[var(--surface)] p-3">
+      <section className="border-b app-border bg-transparent py-3">
         <label className="relative block">
           <Search size={18} className="absolute right-3 top-3.5 app-muted" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جست‌وجوی صاحب کالا، محموله یا سند…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] py-3 pr-10 pl-3 outline-none focus:border-[var(--primary)]" />
