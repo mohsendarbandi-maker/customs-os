@@ -1,38 +1,43 @@
 /**
  * Creates a single portable Windows path component for the File System Access API.
- * Chromium rejects Windows device names and shell-integrated extensions even when
- * the rest of the filename contains no forbidden punctuation.
+ * Chromium rejects invalid Unicode, Windows device names and shell-integrated
+ * extensions even when the rest of the filename contains no forbidden punctuation.
  */
 export function safeWindowsFileName(value: string): string {
   const normalized = String(value ?? '').normalize('NFKC');
-  let name = normalized
-    // eslint-disable-next-line no-control-regex -- Windows forbids C0/C1 control characters in path components.
-    .replace(/[<>:"/\\|?*\x00-\x1f\x7f-\x9f]/g, '_')
+  let name = Array.from(normalized)
+    // Keep Persian ZWNJ/ZWJ, but remove invalid/control code points and bidi overrides.
+    .filter((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return !(/[<>:"/\\|?*]/.test(character) ||
+        codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f) ||
+        (codePoint >= 0xd800 && codePoint <= 0xdfff) ||
+        (codePoint >= 0xfdd0 && codePoint <= 0xfdef) ||
+        (codePoint & 0xffff) === 0xfffe || (codePoint & 0xffff) === 0xffff ||
+        (codePoint >= 0x202a && codePoint <= 0x202e) ||
+        (codePoint >= 0x2066 && codePoint <= 0x2069) || codePoint === 0xfeff);
+    })
+    .join('')
     .replace(/[. ]+$/g, '')
     .slice(0, 120);
 
   if (!name || name === '.' || name === '..') name = 'بدون نام';
 
-  // File System Access implementations may reject hidden/dot-prefixed path
-  // components (for example ".name") even though some desktop file systems allow them.
-  // Prefix them so the same archive paths work across Windows, macOS, and browsers.
+  // Prefix dot-leading components for predictable cross-platform archive paths.
   if (name.startsWith('.')) name = '_' + name;
 
-  // Windows treats device names as reserved even when followed by an extension.
+  // Windows device names are reserved even when followed by an extension.
   const deviceBase = name.split('.')[0].replace(/[ .]+$/g, '');
-  if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)$/i.test(deviceBase)) {
+  if (/^(con|prn|aux|nul|clock\$|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)$/i.test(deviceBase)) {
     name = '_' + name;
   }
 
-  // Chromium blocks these shell-integrated extensions through File System Access.
-  if (/\.(lnk|scf|url)$/i.test(name)) {
-    name += '_file';
-  }
+  // Chromium blocks shell-integrated extensions through File System Access.
+  if (/\.(lnk|scf|url)$/i.test(name)) name += '_file';
 
-  // A final CLSID extension is blocked by Chromium even though braces are legal in Windows names.
+  // A final CLSID extension is blocked by Chromium.
   name = name.replace(/\.\{([0-9a-f-]{36})\}$/i, '._clsid_$1');
 
-  // Guard the final component after every transformation.
   name = name.replace(/[. ]+$/g, '');
   return name && name !== '.' && name !== '..' ? name : 'بدون نام';
 }
