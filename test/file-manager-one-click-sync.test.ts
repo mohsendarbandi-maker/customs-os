@@ -76,6 +76,9 @@ describe('one-click file manager synchronization', () => {
     expect(page).toContain('syncProgress.metadataWritten');
     expect(page).toContain('syncProgress.failed');
     expect(page).toContain('savedFile.size !== blob.size');
+    expect(page).toContain('tables: data');
+    expect(page).toContain('files: latestFiles');
+    expect(sync).toContain("name === 'اطلاعات_کامل_سازمان.json'");
   });
 
   it('uses Supabase Storage as a fallback for Telegram-archived files, including files over 20 MB', () => {
