@@ -1,5 +1,5 @@
-import React,{useEffect,useMemo,useState} from 'react';
-import {Activity,AlertCircle,ClipboardList,Filter,Plus,RefreshCw,Search,X} from 'lucide-react';
+import React,{useCallback,useEffect,useMemo,useState} from 'react';
+import {AlertCircle,Plus,RefreshCw,Search} from 'lucide-react';
 import {useSearchParams} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
 import {useAuth} from '../context/AuthContext';
@@ -11,8 +11,8 @@ export const ShipmentReportsPage:React.FC=()=>{
  const {profile}=useAuth();const org=profile?.organization_id||'';const [params,setParams]=useSearchParams();
  const [shipments,setShipments]=useState<Shipment[]>([]);const [reports,setReports]=useState<Report[]>([]);const [selected,setSelected]=useState(params.get('shipmentId')||'all');const [statusFilter,setStatusFilter]=useState('all');const [query,setQuery]=useState('');
  const [status,setStatus]=useState<Report['status']>('in_review');const [stage,setStage]=useState('');const [draft,setDraft]=useState('');const [saving,setSaving]=useState(false);const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [message,setMessage]=useState('');
- const load=async()=>{if(!org)return;setLoading(true);setError('');try{const [s,r]=await Promise.all([supabase.from('shipments').select('id,display_name,bill_of_lading_no,shipping_line,current_status').eq('organization_id',org).order('created_at',{ascending:false}).limit(500),(supabase as any).from('file_manager_shipment_reports').select('id,shipment_id,status,stage,report,actor_name,created_at').eq('organization_id',org).order('created_at',{ascending:false}).limit(2000)]);if(s.error)throw s.error;if(r.error)throw r.error;setShipments((s.data||[]) as Shipment[]);setReports((r.data||[]) as Report[]);}catch(e){setError(e instanceof Error?e.message:'دریافت گزارش‌ها ناموفق بود.');}finally{setLoading(false);}};
- useEffect(()=>{void load();},[org]);
+ const load=useCallback(async()=>{if(!org)return;setLoading(true);setError('');try{const [s,r]=await Promise.all([supabase.from('shipments').select('id,display_name,bill_of_lading_no,shipping_line,current_status').eq('organization_id',org).order('created_at',{ascending:false}).limit(500),(supabase as any).from('file_manager_shipment_reports').select('id,shipment_id,status,stage,report,actor_name,created_at').eq('organization_id',org).order('created_at',{ascending:false}).limit(2000)]);if(s.error)throw s.error;if(r.error)throw r.error;setShipments((s.data||[]) as Shipment[]);setReports((r.data||[]) as Report[]);}catch(e){setError(e instanceof Error?e.message:'دریافت گزارش‌ها ناموفق بود.');}finally{setLoading(false);}},[org]);
+ useEffect(()=>{void load();},[load]);
  const selectedShipment=shipments.find(s=>s.id===selected)||null;
  const filtered=useMemo(()=>reports.filter(r=>{if(selected!=='all'&&r.shipment_id!==selected)return false;if(statusFilter!=='all'&&r.status!==statusFilter)return false;const sh=shipments.find(s=>s.id===r.shipment_id);const q=query.toLocaleLowerCase().trim();return !q||[sh?.display_name,sh?.bill_of_lading_no,sh?.shipping_line,r.report,r.stage,r.actor_name].filter(Boolean).join(' ').toLocaleLowerCase().includes(q);}),[reports,selected,statusFilter,query,shipments]);
  const save=async()=>{if(!selectedShipment||!draft.trim()||saving)return;setSaving(true);setError('');setMessage('');try{const {error:e}=await (supabase as any).from('file_manager_shipment_reports').insert({organization_id:org,shipment_id:selectedShipment.id,status,stage:stage.trim(),report:draft.trim()});if(e)throw e;setDraft('');setMessage('گزارش محموله ثبت شد و برای همکاران قابل مشاهده است.');await load();}catch(e){setError(e instanceof Error?e.message:'ثبت گزارش ناموفق بود.');}finally{setSaving(false);}};
