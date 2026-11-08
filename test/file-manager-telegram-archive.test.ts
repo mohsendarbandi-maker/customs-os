@@ -295,9 +295,9 @@ describe('Telegram-backed Customs OS file manager', () => {
   it('keeps the mobile folder tree in a full-height scrollable drawer and avoids a tiny nested upload scroller', () => {
     expect(fileManager).toContain('fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)]');
     expect(fileManager).toContain('min-h-0 flex-1 overflow-y-auto overscroll-contain');
-    expect(fileManager).toContain('p-0 lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-visible');
+    expect(fileManager).toContain("className={'fm-folder-sidebar '+(treeOpen?");
     expect(fileManager).toContain('className="shrink-0 border-b app-border p-3 md:p-4"');
-    expect(fileManager).toContain('min-h-[60dvh] max-h-none flex-col overflow-visible');
+    expect(fileManager).toContain('className="fm-files-panel"');
     expect(fileManager).toContain('whitespace-normal break-words leading-5');
   });
 
@@ -307,7 +307,9 @@ describe('Telegram-backed Customs OS file manager', () => {
   });
 
   it('renders the File Management workspace full-width with a collapsed sync disclosure', () => {
-    expect(fileManager).toContain('w-full max-w-none');
+    expect(fileManager).toContain('className="fm-page-inner"');
+    expect(fileManager).toContain('className="mobile-app-page file-manager-page fm-fullscreen-page"');
+    expect(globalCss).toContain('.fm-fullscreen-page{');
     expect(fileManager).toContain('>مدیریت فایل</h1>');
     expect(fileManager).toContain('file-manager-sync-dropdown');
     expect(fileManager).toContain('<details className="file-manager-sync-dropdown');
