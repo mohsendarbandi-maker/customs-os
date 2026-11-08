@@ -16,7 +16,7 @@ const safeJson = (value: unknown) => JSON.stringify(value)
 
 export function buildLocalFileManagerHtml(input: LocalFileManagerIndex): string {
   const payload = safeJson(input);
-  return String.raw\`<!doctype html>
+  return String.raw`<!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark">
 <title>مدیریت محلی اسناد | Darbandi Commercial</title>
 <style>
@@ -41,5 +41,5 @@ function matches(d){if(selected&&!pathOf(d).startsWith(selected))return false;if
 function renderDocs(){const rows=docs.filter(matches);$('currentTitle').textContent=selected||'همه اسناد';$('fileCount').textContent=rows.length.toLocaleString('fa-IR')+' سند';$('files').innerHTML=rows.slice(0,600).map(d=>'<button class="file" data-id="'+esc(d.id)+'"><strong>📄 '+esc(d.original_name||'سند بدون نام')+'</strong><small>'+esc(d.relativePath||'')+'</small><small>'+esc(d.document_type||'سند')+' · '+Number(d.size_bytes||0).toLocaleString('fa-IR')+' بایت</small></button>').join('')||'<div class="empty">سندی در این بخش پیدا نشد.</div>';$('files').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>showDetail(b.dataset.id));}
 function showDetail(id){const d=docs.find(x=>String(x.id)===String(id));if(!d)return;$('detailTitle').hidden=false;$('detail').hidden=false;$('detailTitle').textContent='اطلاعات سند: '+(d.original_name||'');const related={document:d,folder:folders.find(f=>f.id===d.folder_id)||null,shipment:(tables.shipments||[]).find(x=>x.id===d.shipment_id)||null,client:(tables.clients||[]).find(x=>x.id===d.client_id)||null,registrationOrders:(tables.registration_orders||[]).filter(x=>x.case_id===((tables.shipments||[]).find(s=>s.id===d.shipment_id)||{}).case_id),customsDeclarations:(tables.customs_declarations||[]).filter(x=>x.shipment_id===d.shipment_id),financialTransactions:(tables.financial_transactions||[]).filter(x=>x.source_id===d.shipment_id)};$('detail').textContent=JSON.stringify(related,null,2);}
 $('search').addEventListener('input',e=>{term=e.target.value.trim();renderDocs();});stats();renderTree();renderDocs();
-</script></body></html>\`.replace('__PAYLOAD__', payload);
+</script></body></html>`.replace('__PAYLOAD__', payload);
 }
