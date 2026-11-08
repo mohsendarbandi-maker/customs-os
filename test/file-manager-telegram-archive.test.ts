@@ -13,6 +13,9 @@ describe('Telegram-backed Customs OS file manager', () => {
   const folderCopyMigration = read('supabase/migrations/20261024174637_file_manager_folder_copy.sql');
   const gateway = read('supabase/functions/messenger-gateway/index.ts');
   const fileManager = read('src/pages/FileManagerPage.tsx');
+  const globalCss = read('src/index.css');
+  const documentReportsMigration = read('supabase/migrations/20261108185733_file_manager_document_workflow_reports.sql');
+  const documentReportActorMigration = read('supabase/migrations/20261108185740_file_manager_document_report_actor_label.sql');
   const fileManagerClient = read('src/lib/fileManager.ts');
   const shipmentPage = read('src/pages/ShipmentFirstPage.tsx');
   const documentPage = read('src/pages/CustomsDocumentManagerPage.tsx');
@@ -319,6 +322,22 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain("lower.startsWith('._')");
     expect(fileManager).toContain('failedItems.push(folderPath');
     expect(fileManager).toContain('try { await ensureLocalFolder(folderPath);');
+  });
+
+  it('keeps desktop content width aligned with the expanded and collapsed sidebar', () => {
+    expect(globalCss).toContain('.app-main.sidebar-compact{width:calc(100% - 82px)!important;margin-right:82px!important}');
+    expect(globalCss).toContain('.app-main:not(.sidebar-compact){width:calc(100% - 230px)!important;margin-right:230px!important}');
+    expect(globalCss).toContain('.app-sidebar.is-collapsed{width:82px!important}');
+  });
+
+  it('keeps document workflow report migrations append-only and tenant scoped', () => {
+    expect(documentReportsMigration).toContain('enable row level security');
+    expect(documentReportsMigration).toContain('file_manager_document_reports_insert');
+    expect(documentReportsMigration).toContain('public.user_org_id()');
+    expect(documentReportsMigration).toContain("array['owner','admin','broker','accountant','warehouse']");
+    expect(documentReportsMigration).not.toContain('for update');
+    expect(documentReportsMigration).not.toContain('for delete');
+    expect(documentReportActorMigration).toContain('actor_name');
   });
 
   it('registers the page and exposes it from the main navigation', () => {
