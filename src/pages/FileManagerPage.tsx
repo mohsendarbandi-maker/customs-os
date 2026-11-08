@@ -897,8 +897,13 @@ export const FileManagerPage: React.FC = () => {
           path = path ? path + '/' + part : part;
           if (localDirectories.has(path)) handle = localDirectories.get(path);
           else {
-            handle = await handle.getDirectoryHandle(part, { create: true });
-            localDirectories.set(path, handle);
+            try {
+              handle = await handle.getDirectoryHandle(part, { create: true });
+              localDirectories.set(path, handle);
+            } catch (reason) {
+              const detail = reason instanceof Error ? reason.message : 'خطای نامشخص مرورگر';
+              throw new Error('مرورگر اجازه ساخت پوشه با نام «' + part + '» را نداد. مسیر: «' + path + '». جزئیات: ' + detail);
+            }
           }
         }
         return handle;
