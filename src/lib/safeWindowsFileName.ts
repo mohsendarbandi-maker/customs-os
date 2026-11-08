@@ -6,11 +6,12 @@
 export function safeWindowsFileName(value: string): string {
   const normalized = String(value ?? '').normalize('NFKC');
   let name = Array.from(normalized)
+    // Replace Windows-forbidden punctuation, but remove invalid/control code points.
+    .map((character) => /[<>:"/\\|?*]/.test(character) ? '_' : character)
     // Keep Persian ZWNJ/ZWJ, but remove invalid/control code points and bidi overrides.
     .filter((character) => {
       const codePoint = character.codePointAt(0) ?? 0;
-      return !(/[<>:"/\\|?*]/.test(character) ||
-        codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f) ||
+      return !(codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f) ||
         (codePoint >= 0xd800 && codePoint <= 0xdfff) ||
         (codePoint >= 0xfdd0 && codePoint <= 0xfdef) ||
         (codePoint & 0xffff) === 0xfffe || (codePoint & 0xffff) === 0xffff ||
