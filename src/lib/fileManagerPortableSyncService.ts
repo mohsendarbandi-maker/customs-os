@@ -115,9 +115,19 @@ function portablePath(rawPath: string, ownerRootName: string): string {
   if (!parts.length) return '';
   const rawFilename = parts[parts.length - 1];
   const rawLower = rawFilename.toLocaleLowerCase();
+  const isEditorTemporaryFile = rawFilename.startsWith('~') && rawFilename.charCodeAt(1) === 36;
   if (
-    rawLower === 'desktop.ini' || rawLower === 'thumbs.db' || rawLower === '.ds_store' ||
-    rawLower.startsWith('~' + '
+    rawLower === 'desktop.ini' ||
+    rawLower === 'thumbs.db' ||
+    rawLower === '.ds_store' ||
+    isEditorTemporaryFile ||
+    rawFilename.startsWith('._') ||
+    parts.includes('__MACOSX')
+  ) return '';
+  const safeParts = parts.map(safeWindowsFileName);
+  const filename = safeParts[safeParts.length - 1];
+  if (isManagedSyncMetadataFile(filename)) return '';
+  return safeParts.join('/');
 }
 
 async function digest(blob: Blob): Promise<string> {
