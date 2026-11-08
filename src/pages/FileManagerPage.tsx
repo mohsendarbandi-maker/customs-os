@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight, CheckCircle2, ChevronDown, ChevronLeft, Copy, ClipboardPaste,
   Download, Eye, FileText, Folder, FolderOpen, Loader2, MessageCircle,
-  RefreshCw, Search, Upload, UploadCloud, X,
+  RefreshCw, Search, Upload, UploadCloud, X, HardDrive, Smartphone, ShieldCheck,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createAppFileTransfer, consumeAppFileTransfer } from '../lib/appFileTransfer';
@@ -18,6 +18,15 @@ import {
 } from '../lib/fileManager';
 import { folderToneClass, getFolderSubtreeCounts, isCopyableFolder } from '../lib/fileManagerExplorer';
 import { optimizeFileForUpload } from '../lib/clientFileOptimizer';
+import {
+  buildDocumentMetadataText,
+  buildFolderMetadataText,
+  clearSavedSyncDirectoryHandle,
+  getSavedSyncDirectoryHandle,
+  isManagedSyncMetadataFile,
+  requestSyncDirectoryPermission,
+  saveSyncDirectoryHandle,
+} from '../lib/fileManagerSync';
 
 type FolderRow = {
   id: string;
@@ -92,8 +101,9 @@ export const FileManagerPage: React.FC = () => {
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncDirectoryName, setSyncDirectoryName] = useState('');
+  const [smbAddress, setSmbAddress] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [tagInput, setTagInput] = useState('');
@@ -206,6 +216,13 @@ export const FileManagerPage: React.FC = () => {
   }, [organizationId]);
 
   useEffect(() => { void loadFolders(); }, [loadFolders]);
+  useEffect(() => {
+    let active = true;
+    void getSavedSyncDirectoryHandle().then((handle) => {
+      if (active) setSyncDirectoryName(handle?.name || '');
+    }).catch(() => { if (active) setSyncDirectoryName(''); });
+    return () => { active = false; };
+  }, []);
 
   const incomingTransferId = params.get('fileTransfer');
   useEffect(() => {
@@ -503,84 +520,95 @@ export const FileManagerPage: React.FC = () => {
   };
   useEffect(()=>()=>{if(preview?.url)URL.revokeObjectURL(preview.url);},[preview?.url]);
 
-  const exportFolderToWindows = async () => {
-    if (!currentFolder) return;
+  const chooseSyncDirectory = async () => {
     const picker = (window as any).showDirectoryPicker;
     if (typeof picker !== 'function') {
-      setError('مرورگر فعلی انتخاب پوشه ویندوز را پشتیبانی نمی‌کند؛ از Microsoft Edge یا Google Chrome روی ویندوز استفاده کنید.');
+      setError('انتخاب محل ذخیره در این مرورگر پشتیبانی نمی‌شود؛ برای همگام‌سازی از Microsoft Edge یا Google Chrome روی ویندوز استفاده کنید.');
       return;
     }
-    setExporting(true);
-    setError('');
-    setMessage('');
-    let saved = 0;
     try {
-      const destination = await picker({ mode: 'readwrite' });
-      const base = await destination.getDirectoryHandle(windowsName(currentFolder.display_name), { create: true });
-      const writeFolder = async (folder: FolderRow, handle: any): Promise<void> => {
-        const { data: folderFiles, error: folderFilesError } = await supabase
-          .from('file_manager_files')
-          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
-          .eq('organization_id', organizationId).eq('folder_id', folder.id).eq('is_archived', false)
-          .order('created_at', { ascending: true });
-        if (folderFilesError) throw folderFilesError;
-        for (const row of (folderFiles || []) as FileRow[]) {
-          setProgress(`دریافت ${row.original_name}`);
-          const blob = await getFileBlob(row);
-          const fileHandle = await handle.getFileHandle(windowsName(row.original_name), { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          saved += 1;
-        }
-        const children = folders.filter((child) => child.parent_id === folder.id);
-        for (const child of children) {
-          const childHandle = await handle.getDirectoryHandle(windowsName(child.display_name), { create: true });
-          await writeFolder(child, childHandle);
-        }
-      };
-      await writeFolder(currentFolder, base);
-      setMessage(`خروجی پوشه روی ویندوز آماده شد؛ ${saved} فایل نوشته شد. این عملیات انتقال دستی است و همگام‌سازی دائمی در پس‌زمینه نیست.`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'انتقال پوشه به ویندوز کامل نشد.');
-      if (saved) setMessage(`تا پیش از خطا، ${saved} فایل روی ویندوز ذخیره شد.`);
-    } finally {
-      setExporting(false);
-      setProgress('');
+      const handle = await picker({ mode: 'readwrite', id: 'customs-os-file-manager-sync' });
+      await saveSyncDirectoryHandle(handle);
+      setSyncDirectoryName(handle.name || '');
+      setMessage('محل ذخیره ثبت شد. از این پس با یک کلیک همه اطلاعات و فایل‌های سازمان همگام‌سازی می‌شوند.');
+      setError('');
+    } catch (reason) {
+      if (reason instanceof DOMException && reason.name === 'AbortError') return;
+      setError(reason instanceof Error ? reason.message : 'ذخیره محل همگام‌سازی ناموفق بود.');
     }
   };
 
-  // Manual bidirectional Windows sync. Never deletes either side; differing files are reported as conflicts.
-  const syncWindowsFolder = async () => {
-    if (!currentFolder || !uploadEnabled || !roleCanModifyStructure(role)) {
-      setError('برای همگام‌سازی، پوشه صاحب کالا یا یک زیرپوشه اسناد را انتخاب کنید.');
+  const forgetSyncDirectory = async () => {
+    try {
+      await clearSavedSyncDirectoryHandle();
+      setSyncDirectoryName('');
+      setMessage('محل ذخیره قبلی فراموش شد. هنگام همگام‌سازی بعدی یک پوشه جدید انتخاب کنید.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'حذف محل ذخیره ناموفق بود.');
+    }
+  };
+
+  const copySmbAddress = async () => {
+    const value = smbAddress.trim();
+    if (!value || !/^[a-zA-Z0-9.-]+$/.test(value)) {
+      setError('IP یا نام شبکه معتبر وارد کنید؛ مثال: 192.168.1.20');
       return;
     }
-    if (currentFolder.folder_type === 'shipment' || currentFolder.folder_type === 'root') {
-      setError('برای همگام‌سازی کامل صاحب کالا، پوشه خود صاحب کالا را انتخاب کنید؛ برای همگام‌سازی محموله، یکی از زیرپوشه‌های آن را انتخاب کنید.');
+    try {
+      await navigator.clipboard.writeText('smb://' + value);
+      setMessage('آدرس SMB کپی شد. آن را در Files آیفون، بخش Connect to Server وارد کنید.');
+    } catch {
+      setError('کپی آدرس ممکن نشد؛ آدرس smb://' + value + ' را دستی وارد کنید.');
+    }
+  };
+
+  // One-time folder selection followed by one-click, organization-wide safe sync.
+  // Existing document bytes are never overwritten or deleted; changed paths become conflicts.
+  const syncWindowsFolder = async () => {
+    if (!organizationId || !roleCanModifyStructure(role)) {
+      setError('برای همگام‌سازی کامل سازمان، دسترسی فایل‌منیجر لازم است.');
+      return;
+    }
+    const cloudRoot = folders.find((folder) => folder.parent_id === null && folder.folder_key === 'owners-root');
+    if (!cloudRoot) {
+      setError('پوشه اصلی «صاحبان کالا» در فایل‌منیجر پیدا نشد؛ ساختار پوشه‌ها را تازه‌سازی کنید.');
       return;
     }
     const picker = (window as any).showDirectoryPicker;
     if (typeof picker !== 'function') {
-      setError('همگام‌سازی پوشه ویندوز در این مرورگر پشتیبانی نمی‌شود؛ از Chrome یا Edge روی ویندوز استفاده کنید.');
+      setError('همگام‌سازی مستقیم پوشه فقط در Microsoft Edge یا Google Chrome روی ویندوز پشتیبانی می‌شود.');
       return;
     }
 
     setSyncing(true);
     setError('');
     setMessage('');
-    setProgress('بررسی ساختار پوشه‌ها…');
+    setProgress('آماده‌سازی محل ذخیره و دریافت اطلاعات سازمان…');
     let uploaded = 0;
     let downloaded = 0;
     let identical = 0;
     let conflicts = 0;
     let oversized = 0;
+
     try {
-      const localRoot = await picker({ mode: 'readwrite' });
-      const folderPathById = new Map<string, string>([[currentFolder.id, '']]);
-      const serverFolderByPath = new Map<string, FolderRow>([['', currentFolder]]);
+      let selectedHandle = await getSavedSyncDirectoryHandle().catch(() => null);
+      if (!selectedHandle) {
+        selectedHandle = await picker({ mode: 'readwrite', id: 'customs-os-file-manager-sync' });
+        await saveSyncDirectoryHandle(selectedHandle);
+        setSyncDirectoryName(selectedHandle.name || '');
+      }
+      const permissionGranted = await requestSyncDirectoryPermission(selectedHandle);
+      if (!permissionGranted) {
+        throw new Error('اجازه نوشتن در پوشه ذخیره داده نشد. یک‌بار «تغییر محل ذخیره» را بزنید و پوشه را دوباره انتخاب کنید.');
+      }
+      // Keep the user's chosen directory clean and make the exact folder shareable over SMB.
+      const localRoot = await selectedHandle.getDirectoryHandle('Darbandi Commercial', { create: true });
+      setProgress('بررسی ساختار کامل صاحبان کالا، محموله‌ها و زیرپوشه‌ها…');
+
+      const folderPathById = new Map<string, string>([[cloudRoot.id, '']]);
+      const serverFolderByPath = new Map<string, FolderRow>([['', cloudRoot]]);
       const ambiguousPaths = new Set<string>();
-      const queue: FolderRow[] = [currentFolder];
+      const queue: FolderRow[] = [cloudRoot];
       while (queue.length) {
         const parent = queue.shift()!;
         const parentPath = folderPathById.get(parent.id) ?? '';
@@ -612,7 +640,9 @@ export const FileManagerPage: React.FC = () => {
             }
             localDirectories.set(relativePath, entry);
             await walkLocal(entry, relativePath);
-          } else if (entry.kind === 'file' && !['desktop.ini', 'thumbs.db', '.ds_store'].includes(name.toLowerCase())) {
+          } else if (entry.kind === 'file') {
+            const lower = name.toLowerCase();
+            if (['desktop.ini', 'thumbs.db', '.ds_store'].includes(lower) || lower.startsWith('~$') || isManagedSyncMetadataFile(name)) continue;
             const key = canonicalPath(relativePath);
             if (localFiles.has(key)) {
               ambiguousFileKeys.add(key);
@@ -672,9 +702,8 @@ export const FileManagerPage: React.FC = () => {
         let handle = localRoot;
         for (const part of parts) {
           path = path ? path + '/' + part : part;
-          if (localDirectories.has(path)) {
-            handle = localDirectories.get(path);
-          } else {
+          if (localDirectories.has(path)) handle = localDirectories.get(path);
+          else {
             handle = await handle.getDirectoryHandle(part, { create: true });
             localDirectories.set(path, handle);
           }
@@ -682,29 +711,32 @@ export const FileManagerPage: React.FC = () => {
         return handle;
       };
 
-      // Ensure server-side folders that already exist also exist on the selected Windows tree.
       for (const folderPath of [...serverFolderByPath.keys()].filter(Boolean).sort((a, b) => a.split('/').length - b.split('/').length)) {
         if (!ambiguousPaths.has(folderPath)) await ensureLocalFolder(folderPath);
       }
 
       const destination = await getFileArchiveDestination();
       const digest = async (blob: Blob): Promise<string> => {
-        const bytes = await blob.arrayBuffer();
-        const hash = await crypto.subtle.digest('SHA-256', bytes);
-        return Array.from(new Uint8Array(hash)).map((value) => value.toString(16).padStart(2, '0')).join('');
+        const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+        return Array.from(new Uint8Array(hash), (value) => value.toString(16).padStart(2, '0')).join('');
       };
 
       for (const [relativeKey, local] of localFiles) {
         const relativePath = local.relativePath;
-        if (ambiguousPaths.has(relativePath) || ambiguousFileKeys.has(relativeKey)) { conflicts += 1; continue; }
+        if (ambiguousPaths.has(local.parentPath) || ambiguousFileKeys.has(relativeKey)) {
+          conflicts += 1;
+          continue;
+        }
         const remoteEntry = serverFilesByPath.get(relativeKey);
-        const remote = remoteEntry?.file;
-        const localHash = await digest(local.file);
-        if (remote) {
-          if (Number(remote.size_bytes) !== local.file.size) { conflicts += 1; continue; }
+        if (remoteEntry) {
+          const remote = remoteEntry.file;
+          if (Number(remote.size_bytes) !== local.file.size) {
+            conflicts += 1;
+            continue;
+          }
           setProgress('مقایسهٔ محتوا: ' + relativePath);
           const remoteBlob = await getFileBlob(remote);
-          if (localHash === await digest(remoteBlob)) identical += 1;
+          if (await digest(local.file) === await digest(remoteBlob)) identical += 1;
           else conflicts += 1;
           continue;
         }
@@ -713,10 +745,10 @@ export const FileManagerPage: React.FC = () => {
           continue;
         }
         const parent = await ensureServerFolder(local.parentPath);
+        const localHash = await digest(local.file);
         const keyMaterial = [organizationId, parent.id, relativePath, local.file.size, localHash].join('|');
-        const keyHash = await digest(new Blob([keyMaterial]));
-        const idempotencyKey = 'windows-sync:' + keyHash;
-        setProgress('ارسال به آرشیو تلگرام: ' + relativePath);
+        const idempotencyKey = 'windows-sync:' + await digest(new Blob([keyMaterial]));
+        setProgress('ارسال فایل جدید به آرشیو: ' + relativePath);
         await uploadTelegramArchivedFile(local.file, {
           folderId: parent.id,
           ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
@@ -742,7 +774,7 @@ export const FileManagerPage: React.FC = () => {
           oversized += 1;
           continue;
         }
-        setProgress('دریافت از آرشیو تلگرام: ' + relativePath);
+        setProgress('دریافت از آرشیو: ' + relativePath);
         const blob = await getFileBlob(remote);
         const directory = await ensureLocalFolder(parentPath);
         const fileHandle = await directory.getFileHandle(filename, { create: true });
@@ -752,21 +784,128 @@ export const FileManagerPage: React.FC = () => {
         downloaded += 1;
       }
 
+      setProgress('تجمیع اطلاعات کشتیرانی، گمرک، ثبت سفارش و حساب مالی…');
+      const fetchOrgRows = async (table: string): Promise<Record<string, any>[]> => {
+        const collected: Record<string, any>[] = [];
+        for (let offset = 0; ; offset += 500) {
+          const { data, error: queryError } = await (supabase as any).from(table)
+            .select('*').eq('organization_id', organizationId).range(offset, offset + 499);
+          if (queryError) throw new Error('خواندن اطلاعات جدول ' + table + ' ناموفق بود: ' + queryError.message);
+          const rows = (data || []) as Record<string, any>[];
+          collected.push(...rows);
+          if (rows.length < 500) break;
+        }
+        return collected;
+      };
+      const tableNames = [
+        'clients', 'shipments', 'shipment_customs_data', 'cases', 'vessels',
+        'shipping_lines', 'customs_offices', 'registration_orders',
+        'customs_declarations', 'financial_transactions', 'customs_documents',
+        'shipment_documents',
+      ];
+      const tableRows = await Promise.all(tableNames.map((table) => fetchOrgRows(table)));
+      const data = Object.fromEntries(tableNames.map((table, index) => [table, tableRows[index]])) as Record<string, Record<string, any>[]>;
+      const byId = (rows: Record<string, any>[], id: unknown) => rows.find((row) => row.id === id) || null;
+
+      const latestFiles: FileRow[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data: rows, error: fileError } = await supabase
+          .from('file_manager_files')
+          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
+          .eq('organization_id', organizationId)
+          .in('folder_id', [...folderPathById.keys()])
+          .eq('is_archived', false)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + 499);
+        if (fileError) throw fileError;
+        const rowsBatch = (rows || []) as FileRow[];
+        latestFiles.push(...rowsBatch);
+        if (rowsBatch.length < 500) break;
+      }
+
+      const folderMetadata = new Map<string, string>();
+      for (const [relativePath, folder] of serverFolderByPath) {
+        const shipment = byId(data.shipments, folder.shipment_id);
+        const caseRecord = byId(data.cases, shipment?.case_id);
+        const client = byId(data.clients, folder.client_id || shipment?.client_id || caseRecord?.client_id);
+        const relevantCases = data.cases.filter((row) => caseRecord ? row.id === caseRecord.id : Boolean(folder.client_id && row.client_id === folder.client_id));
+        const caseIds = relevantCases.map((row) => row.id);
+        const relevantShipments = data.shipments.filter((row) => shipment ? row.id === shipment.id : Boolean(folder.client_id && row.client_id === folder.client_id));
+        const relevantShipmentIds = relevantShipments.map((row) => row.id);
+        const declarationRows = data.customs_declarations.filter((row) =>
+          (folder.shipment_id && row.shipment_id === folder.shipment_id) || (row.case_id && caseIds.includes(row.case_id)));
+        const declarationIds = declarationRows.map((row) => row.id);
+        const transactions = data.financial_transactions.filter((row) =>
+          (row.case_id && caseIds.includes(row.case_id)) ||
+          (row.source_id && (relevantShipmentIds.includes(row.source_id) || declarationIds.includes(row.source_id))));
+        const order = data.registration_orders.find((row) =>
+          (shipment?.registration_order_id && row.id === shipment.registration_order_id) ||
+          (caseRecord && row.case_id === caseRecord.id)) || null;
+        const relatedOrders = data.registration_orders.filter((row) =>
+          (order && row.id === order.id) || caseIds.includes(row.case_id) ||
+          (folder.client_id && row.client_id === folder.client_id));
+        const vessel = byId(data.vessels, shipment?.vessel_id);
+        const shippingLine = byId(data.shipping_lines, vessel?.shipping_line_id);
+        const customsOffice = byId(data.customs_offices, folder.customs_office_id || shipment?.customs_office_id || caseRecord?.customs_office_id);
+        const customsData = data.shipment_customs_data.find((row) => row.shipment_id === folder.shipment_id) || null;
+        const folderFileRows = latestFiles.filter((row) => row.folder_id === folder.id);
+        const customsDocumentRows = data.customs_documents.filter((row) => row.folder_id === folder.id || (folder.shipment_id && row.shipment_id === folder.shipment_id && row.folder_id == null));
+        const shipmentDocumentRows = data.shipment_documents.filter((row) => row.folder_id === folder.id || (folder.shipment_id && row.shipment_id === folder.shipment_id && row.folder_id == null));
+        const text = buildFolderMetadataText({
+          folder,
+          client,
+          shipment,
+          customsData,
+          caseRecord,
+          vessel,
+          shippingLine,
+          customsOffice,
+          registrationOrder: order,
+          declarations: declarationRows,
+          financialTransactions: transactions,
+          documents: [...folderFileRows, ...customsDocumentRows, ...shipmentDocumentRows],
+          relatedSections: [
+            { title: 'پرونده‌های مرتبط صاحب کالا', records: relevantCases },
+            { title: 'سایر محموله‌های مرتبط صاحب کالا', records: relevantShipments.filter((row) => row.id !== shipment?.id) },
+            { title: 'سایر ثبت سفارش‌های مرتبط', records: relatedOrders.filter((row) => row.id !== order?.id) },
+          ],
+          generatedAt: new Date().toISOString(),
+        });
+        folderMetadata.set(folder.id, text);
+        const directory = await ensureLocalFolder(relativePath);
+        const infoHandle = await directory.getFileHandle('اطلاعات_عملیاتی.txt', { create: true });
+        const infoWritable = await infoHandle.createWritable();
+        await infoWritable.write(text);
+        await infoWritable.close();
+
+        for (const file of folderFileRows) {
+          const fileName = windowsName(file.original_name || 'document');
+          const companionName = windowsName(fileName + '.اطلاعات.txt');
+          const companionHandle = await directory.getFileHandle(companionName, { create: true });
+          const companionWritable = await companionHandle.createWritable();
+          await companionWritable.write(buildDocumentMetadataText(file as unknown as Record<string, unknown>, text));
+          await companionWritable.close();
+        }
+      }
+
+      setProgress('ثبت نتیجه و تازه‌سازی فهرست فایل‌ها…');
       await loadFolders();
       await loadFiles(selectedFolderId);
       const parts = [
-        'همگام‌سازی دستی تمام شد.',
-        uploaded + ' فایل به آرشیو ارسال شد',
-        downloaded + ' فایل از آرشیو دریافت شد',
-        identical + ' فایل یکسان بود',
-        conflicts + ' تعارض برای بررسی دستی نگه داشته شد',
+        'همگام‌سازی کامل سازمان تمام شد.',
+        uploaded + ' فایل جدید از کامپیوتر/آیفون به آرشیو ارسال شد',
+        downloaded + ' فایل از ابر دریافت شد',
+        identical + ' فایل بدون تغییر بود',
+        conflicts + ' تعارض برای بررسی دستی حفظ شد',
+        folderMetadata.size + ' پوشه دارای فایل اطلاعات متنی شد',
+        latestFiles.length + ' سند دارای فراداده شد',
       ];
       if (oversized) parts.push(oversized + ' فایل بزرگ‌تر از ۲۰ مگابایت رد شد');
-      parts.push('هیچ فایلی از هیچ‌کدام از دو طرف حذف یا بازنویسی نشد.');
-      setMessage(parts.join('؛ ') + ' همگام‌سازی خودکار پس‌زمینه در این نسخه وجود ندارد.');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'همگام‌سازی پوشه ویندوز کامل نشد.');
-      if (uploaded || downloaded) setMessage('تا پیش از خطا: ' + uploaded + ' فایل ارسال و ' + downloaded + ' فایل دریافت شد؛ اجرای بعدی تعارض‌ها را بازنویسی نمی‌کند.');
+      parts.push('هیچ سند اصلی حذف یا بازنویسی نشد؛ فقط فایل‌های اطلاعاتی تولیدشده به‌روزرسانی شدند.');
+      setMessage(parts.join('؛ '));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'همگام‌سازی کامل سازمان ناموفق بود.');
+      if (uploaded || downloaded) setMessage('تا پیش از خطا: ' + uploaded + ' فایل ارسال و ' + downloaded + ' فایل دریافت شد. اجرای بعدی می‌تواند ادامه دهد.');
     } finally {
       setSyncing(false);
       setProgress('');
@@ -828,6 +967,77 @@ export const FileManagerPage: React.FC = () => {
       </section>
       <details className="file-manager-archive-help text-xs app-muted"><summary>دربارهٔ اسناد قدیمی</summary><p>اسناد قدیمی به‌صورت خودکار به تلگرام منتقل نمی‌شوند. فایل‌های جدیدی که از مسیر آرشیو آپلود شوند در گفت‌وگوی تلگرام ثبت می‌شوند.</p></details>
 
+<section className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(330px,.85fr)]">
+        <div className="relative overflow-hidden rounded-2xl border border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-[var(--surface)] to-cyan-500/5 p-4 shadow-sm sm:p-5">
+          <div className="pointer-events-none absolute -left-8 -top-8 h-36 w-36 rounded-full bg-sky-500/10 blur-2xl"/>
+          <div className="relative flex items-start gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 text-sky-600"><HardDrive size={24}/></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-bold tracking-wide text-sky-700 dark:text-sky-300">ONE-CLICK COMPANY SYNC</div>
+              <h2 className="mt-1 text-base font-black sm:text-lg">همگام‌سازی کامل فایل‌منیجر</h2>
+              <p className="mt-1 text-xs leading-6 app-muted">همه صاحبان کالا، محموله‌ها، زیرپوشه‌ها، اسناد، اطلاعات کشتیرانی، گمرک، ثبت سفارش و حساب مالی در یک پوشه ذخیره می‌شوند.</p>
+            </div>
+          </div>
+          <div className="relative mt-4 flex flex-wrap items-center gap-2 rounded-xl border app-border bg-[var(--surface)]/80 p-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600"><ShieldCheck size={17}/></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] app-muted">محل ذخیره متصل</div>
+              <div className="truncate text-xs font-bold">{syncDirectoryName ? syncDirectoryName + ' / Darbandi Commercial' : 'هنوز انتخاب نشده؛ بار اول یک پوشه انتخاب می‌کنید'}</div>
+            </div>
+            {syncDirectoryName && <button type="button" onClick={()=>void forgetSyncDirectory()} className="shrink-0 rounded-lg border app-border px-2.5 py-2 text-[10px]">قطع اتصال</button>}
+          </div>
+          <div className="relative mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={()=>void syncWindowsFolder()} disabled={syncing||uploading||loading}
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-900/10 transition hover:brightness-110 disabled:opacity-50">
+              {syncing?<Loader2 size={17} className="animate-spin"/>:<RefreshCw size={17}/>}
+              {syncing?'در حال همگام‌سازی همه داده‌ها…':syncDirectoryName?'همگام‌سازی همه اطلاعات با یک کلیک':'انتخاب پوشه و شروع همگام‌سازی'}
+            </button>
+            <button type="button" onClick={()=>void chooseSyncDirectory()} disabled={syncing}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border app-border bg-[var(--surface)] px-3 py-2 text-xs font-bold disabled:opacity-50">
+              <FolderOpen size={15}/>تغییر محل ذخیره
+            </button>
+          </div>
+          <p className="relative mt-2 text-[10px] leading-5 app-muted">پوشه فقط یک‌بار انتخاب می‌شود. فایل‌های اصلی حذف یا بی‌اجازه بازنویسی نمی‌شوند؛ تغییرات متعارض جداگانه گزارش می‌شوند.</p>
+        </div>
+
+        <div className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600"><Smartphone size={24}/></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-bold tracking-wide text-emerald-700 dark:text-emerald-300">APPLE FILES · SMB</div>
+              <h2 className="mt-1 text-base font-black">اتصال آیفون به پوشه شرکت</h2>
+              <p className="mt-1 text-xs leading-6 app-muted">یک‌بار اشتراک‌گذاری امن SMB را روی ویندوز فعال کنید؛ سپس آیفون با IP کامپیوتر و حساب اختصاصی وارد پوشه می‌شود.</p>
+            </div>
+          </div>
+          <a href="/setup-iphone-files-share.ps1" download="Darbandi-Commercial-iPhone-SMB.ps1"
+            className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+            <Download size={15}/>دانلود راه‌انداز امن ویندوز (PowerShell)
+          </a>
+          <label className="mt-3 block">
+            <span className="mb-1.5 block text-xs font-bold">IP کامپیوتر شرکت</span>
+            <div className="flex gap-2">
+              <input value={smbAddress} onChange={event=>setSmbAddress(event.target.value)} placeholder="مثلاً 192.168.1.20" inputMode="decimal" dir="ltr"
+                className="min-w-0 flex-1 rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)]"/>
+              <button type="button" onClick={()=>void copySmbAddress()} disabled={!smbAddress.trim()}
+                className="shrink-0 rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-bold text-white disabled:opacity-40">کپی آدرس</button>
+            </div>
+          </label>
+          <div className="mt-3 rounded-xl bg-[var(--surface-2)] p-3 text-[11px] leading-6">
+            <div className="font-bold">مراحل اتصال در آیفون</div>
+            <ol className="mr-4 mt-1 list-decimal space-y-0.5 app-muted">
+              <li>اسکریپت دانلودشده را در ویندوز با Run as administrator اجرا کنید.</li>
+              <li>در Files آیفون: Browse ← سه‌نقطه ← Connect to Server.</li>
+              <li>آدرس smb://IP را وارد و Registered User را انتخاب کنید.</li>
+              <li>نام کاربری COMPUTERNAME\DarbandiFiles و رمز ساخته‌شده را وارد کنید.</li>
+            </ol>
+          </div>
+          <div className="mt-2 flex items-start gap-2 text-[10px] leading-5 text-amber-700 dark:text-amber-300">
+            <ShieldCheck size={14} className="mt-0.5 shrink-0"/>
+            <span>فقط شبکه داخلی یا VPN امن؛ پورت 445 را روی مودم به اینترنت باز نکنید. آیفون و ویندوز باید به یک شبکه دسترسی داشته باشند.</span>
+          </div>
+        </div>
+      </section>
+
       <section className="rounded-2xl border app-border bg-[var(--surface)] p-3">
         <label className="relative block">
           <Search size={18} className="absolute right-3 top-3.5 app-muted" />
@@ -858,10 +1068,19 @@ export const FileManagerPage: React.FC = () => {
         </aside>
         <section className="flex min-w-0 min-h-[60dvh] max-h-none flex-col overflow-visible rounded-2xl border app-border bg-[var(--surface)] lg:max-h-[calc(100dvh-15rem)] lg:min-h-[380px] lg:overflow-hidden">
           <div className="shrink-0 border-b app-border p-3 md:p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <button type="button" onClick={()=>setTreeOpen(v=>!v)} className="rounded-lg border app-border px-2.5 py-1.5 text-xs lg:hidden">{treeOpen?'بستن فهرست':'فهرست پوشه‌ها'}</button>
-              <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs app-muted">{breadcrumbs.map((crumb,i)=><React.Fragment key={crumb.id}>{i>0&&<ChevronLeft size={13}/>}<button type="button" onClick={()=>chooseFolder(crumb)} className={i===breadcrumbs.length-1?'max-w-32 truncate font-bold text-[var(--text)]':'max-w-24 truncate hover:text-[var(--primary)]'}>{crumb.display_name}</button></React.Fragment>)}</div>
-              
+            <div className="mb-3 flex min-w-0 items-center gap-2">
+              <button type="button" onClick={()=>setTreeOpen(v=>!v)} className="shrink-0 rounded-lg border app-border px-2.5 py-2 text-xs lg:hidden">{treeOpen?'بستن فهرست':'فهرست پوشه‌ها'}</button>
+              <nav aria-label="مسیر پوشه" className="file-manager-breadcrumbs flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-xl border app-border bg-[var(--surface-2)] px-2.5 py-2 text-xs">
+                <FolderOpen size={14} className="shrink-0 text-[var(--primary)]"/>
+                {breadcrumbs.length === 0 && <span className="min-w-0 truncate font-semibold">فایل‌منیجر</span>}
+                {breadcrumbs.map((crumb,i)=><React.Fragment key={crumb.id}>
+                  {i>0&&<ChevronLeft size={13} className="shrink-0 app-muted"/>}
+                  <button type="button" onClick={()=>chooseFolder(crumb)} title={crumb.display_name}
+                    className={i===breadcrumbs.length-1?'min-w-0 flex-1 truncate rounded-lg bg-[var(--primary)]/10 px-2 py-1 font-bold text-[var(--primary)]':'max-w-24 shrink truncate rounded-md px-1 py-1 hover:bg-[var(--surface)] hover:text-[var(--primary)]'}>
+                    {crumb.display_name}
+                  </button>
+                </React.Fragment>)}
+              </nav>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0 flex-1"><h2 className="truncate text-base sm:text-lg font-black">{currentFolder?.display_name||'فایل‌منیجر'}</h2></div>
@@ -869,8 +1088,6 @@ export const FileManagerPage: React.FC = () => {
                 <button type="button" onClick={()=>setUploadPanelOpen(v=>!v)} disabled={!currentFolder} title={uploadEnabled?'آپلود و آرشیو در تلگرام':'برای مشاهدهٔ علت محدودیت، پنل آپلود را باز کنید و پوشهٔ صاحب کالا یا محموله را انتخاب کنید'} className="rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><UploadCloud size={14} className="ml-1 inline"/>{uploadPanelOpen?'بستن آپلود':'آپلود فایل'}</button>
                 {currentFolder&&isCopyableFolder(currentFolder)&&<button type="button" onClick={()=>beginCopyFolder(currentFolder)} disabled={!folderCopyAvailable||copyingFolder} title={folderCopyAvailable?'کپی پوشه همراه با زیرپوشه‌ها':'برای کپی کامل، migration دیتابیس لازم است'} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-40"><Copy size={14} className="ml-1 inline"/>کپی</button>}
                 {clipboardFolderId&&<button type="button" onClick={()=>void pasteCopiedFolder()} disabled={!folderCopyAvailable||copyingFolder||!currentFolder||currentFolder.folder_type==='root'} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-40">{copyingFolder?<Loader2 size={14} className="ml-1 inline animate-spin"/>:<ClipboardPaste size={14} className="ml-1 inline"/>}چسباندن</button>}
-                <button type="button" onClick={()=>void syncWindowsFolder()} disabled={!currentFolder||syncing||exporting||uploading||loading} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-50">{syncing?<Loader2 size={14} className="ml-1 inline animate-spin"/>:<RefreshCw size={14} className="ml-1 inline"/>}همگام‌سازی ویندوز</button>
-                <button type="button" onClick={()=>void exportFolderToWindows()} disabled={!currentFolder||exporting||syncing||loading} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-50"><Download size={14} className="ml-1 inline"/>خروجی پوشه</button>
                 {uploadEnabled&&roleCanModifyStructure(role)&&<form onSubmit={e=>{e.preventDefault();void createFolder();}} className="flex gap-1"><input value={folderName} onChange={e=>setFolderName(e.target.value)} placeholder="نام زیرپوشه" aria-label="نام زیرپوشه جدید" className="w-28 rounded-lg border app-border bg-[var(--surface-2)] px-2 py-2 text-xs"/><button type="submit" disabled={creatingFolder||!folderName.trim()} className="rounded-lg border app-border px-2.5 py-2 text-xs disabled:opacity-50">{creatingFolder?<Loader2 size={14} className="animate-spin"/>:'ساخت پوشه'}</button></form>}
               </div>
             </div>
@@ -894,7 +1111,7 @@ export const FileManagerPage: React.FC = () => {
           </div>
         </section>
       </section>
-      <p className="text-xs app-muted">فایل‌های جدید بدون OCR یا استخراج محتوا ارسال می‌شوند؛ کنترل دسترسی و جداسازی سازمانی حفظ می‌شود. همگام‌سازی ویندوز دستی است و در پس‌زمینه اجرا نمی‌شود.</p>
+      <p className="text-xs app-muted">همگام‌سازی کامل سازمان با یک کلیک و پس از انتخاب یک‌باره پوشه ذخیره انجام می‌شود. کنار هر سند فایل متنی اطلاعات عملیاتی و مالی ساخته می‌شود؛ اسناد اصلی بدون اجازه حذف یا بازنویسی نمی‌شوند.</p>
       {preview&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3" role="dialog" aria-modal="true" aria-label={'پیش‌نمایش '+preview.name}><section className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border app-border bg-[var(--surface)] shadow-2xl"><header className="flex shrink-0 items-center justify-between gap-3 border-b app-border px-4 py-3"><b className="min-w-0 truncate text-sm">{preview.name}</b><button type="button" onClick={()=>setPreview(null)} className="rounded-lg border app-border p-2" aria-label="بستن پیش‌نمایش"><X size={17}/></button></header><div className="min-h-0 flex-1 overflow-auto p-2">{preview.mime.startsWith('image/')?<img src={preview.url} alt={preview.name} className="mx-auto max-h-[82dvh] max-w-full object-contain"/>:preview.mime==='application/pdf'?<iframe src={preview.url} title={preview.name} className="h-[82dvh] w-full rounded-lg bg-white"/>:<iframe src={preview.url} title={preview.name} sandbox="" className="h-[82dvh] w-full rounded-lg bg-white"/>}</div></section></div>}
     </div>
   </main>;
