@@ -221,5 +221,5 @@ export function buildDocumentMetadataText(file: Record<string, unknown>, folderT
 }
 
 export function isManagedSyncMetadataFile(name: string): boolean {
-  return name === 'اطلاعات_عملیاتی.txt' || name.endsWith('.اطلاعات.txt');
+  return name === 'اطلاعات_کامل_سازمان.json' || name === 'اطلاعات_عملیاتی.txt' || name.endsWith('.اطلاعات.txt');
 }

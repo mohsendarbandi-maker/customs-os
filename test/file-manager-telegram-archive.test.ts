@@ -174,7 +174,8 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('const keyMaterial = [organizationId, parent.id, relativePath, local.file.size, localHash].join');
     expect(fileManager).toContain('هیچ سند اصلی حذف یا بازنویسی نشد');
     expect(fileManager).toContain('اطلاعات_عملیاتی.txt');
-    expect(fileManager).toContain('remote.file_asset_id && Number(remote.size_bytes) > FILE_ARCHIVE_MAX_BYTES');
+    expect(fileManager).toContain('if (file.storage_path && Number(file.size_bytes) > FILE_ARCHIVE_MAX_BYTES)');
+    expect(fileManager).toContain('return downloadStorageCopy()');
     expect(fileManager).toContain("getSavedSyncDirectoryHandle()");
   });
 
