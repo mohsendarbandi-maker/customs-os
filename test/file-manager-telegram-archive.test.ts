@@ -340,6 +340,12 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(documentReportActorMigration).toContain('actor_name');
   });
 
+  it('includes employee workflow reports in organization and folder metadata sync exports', () => {
+    expect(fileManager).toContain("tableNames.push('file_manager_document_reports')");
+    expect(fileManager).toContain('const documentReportRows =');
+    expect(fileManager).toContain("title: 'گزارش‌ها و گردش وضعیت اسناد'");
+  });
+
   it('registers the page and exposes it from the main navigation', () => {
     expect(app).toContain('path="/file-manager"');
     expect(app).toContain("import('./pages/FileManagerPage')");
