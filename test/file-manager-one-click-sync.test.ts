@@ -56,5 +56,7 @@ describe('one-click file manager synchronization', () => {
   it('uses a bounded breadcrumb container and keeps the folder label inside the content card', () => {
     expect(page).toContain('file-manager-breadcrumbs flex min-w-0 flex-1');
     expect(page).toContain("currentFolder?.display_name || 'فایل‌منیجر'");
+    expect(page).toContain("font-normal app-muted");
+    expect(page).not.toContain("currentFolder?.display_name||'پوشه'");
   });
 });
