@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight, CheckCircle2, ChevronDown, ChevronLeft, Copy, ClipboardPaste,
   Download, Eye, FileText, Folder, FolderOpen, Loader2, MessageCircle,
-  RefreshCw, Search, Upload, UploadCloud, X, HardDrive, Smartphone, ShieldCheck, ClipboardList,
+  RefreshCw, Search, Upload, UploadCloud, X, HardDrive, Smartphone, ShieldCheck,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createAppFileTransfer, consumeAppFileTransfer } from '../lib/appFileTransfer';
