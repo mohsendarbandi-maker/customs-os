@@ -92,7 +92,9 @@ describe('one-click file manager synchronization', () => {
     expect(page).toContain('webkitdirectory');
     const directSyncStart = page.indexOf('const syncWindowsFolder');
     const directSyncBody = page.slice(directSyncStart);
-    expect(directSyncBody).not.toContain('همگام‌سازی مستقیم پوشه فقط در Microsoft Edge یا Google Chrome');
+    const unsupportedBrowserBranch = directSyncBody.slice(0, directSyncBody.indexOf('setSyncing(true)'));
+    expect(unsupportedBrowserBranch).toContain('setPortableSyncOpen(true)');
+    expect(unsupportedBrowserBranch).not.toContain('همگام‌سازی مستقیم پوشه فقط در Microsoft Edge یا Google Chrome');
   });
 
   it('uses Supabase Storage as a fallback for Telegram-archived files, including files over 20 MB', () => {
