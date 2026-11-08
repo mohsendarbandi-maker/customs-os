@@ -959,13 +959,14 @@ export const FileManagerPage: React.FC = () => {
       }
 
       const ensureServerFolder = async (relativePath: string): Promise<FolderRow> => {
-        const existing = serverFolderByPath.get(relativePath);
+        const canonicalTarget = canonicalPath(relativePath);
+        const existing = [...serverFolderByPath.entries()].find(([path]) => canonicalPath(path) === canonicalTarget)?.[1];
         if (existing) return existing;
         const parts = relativePath.split('/').filter(Boolean);
         const parentPath = parts.slice(0, -1).join('/');
         const parent = await ensureServerFolder(parentPath);
         const segment = parts[parts.length - 1];
-        const matching = folders.find((item) => item.parent_id === parent.id && windowsName(item.display_name) === segment);
+        const matching = folders.find((item) => item.parent_id === parent.id && canonicalPath(windowsName(item.display_name)) === canonicalPath(segment));
         const folder = matching || await getOrCreateSubfolder(parent, segment);
         serverFolderByPath.set(relativePath, folder);
         folderPathById.set(folder.id, relativePath);
