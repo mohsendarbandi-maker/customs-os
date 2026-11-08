@@ -937,8 +937,13 @@ export const FileManagerPage: React.FC = () => {
           path = path ? path + '/' + part : part;
           if (localDirectories.has(path)) handle = localDirectories.get(path);
           else {
-            handle = await handle.getDirectoryHandle(part, { create: true });
-            localDirectories.set(path, handle);
+            try {
+              handle = await handle.getDirectoryHandle(part, { create: true });
+              localDirectories.set(path, handle);
+            } catch (reason) {
+              const detail = reason instanceof Error ? reason.message : 'خطای نامشخص مرورگر';
+              throw new Error('ساخت پوشه محلی ناموفق بود؛ نام: «' + part + '»، مسیر: «' + path + '». جزئیات مرورگر: ' + detail);
+            }
           }
         }
         return handle;
