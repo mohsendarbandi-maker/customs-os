@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { safeWindowsFileName } from './safeWindowsFileName';
 
 describe('safeWindowsFileName', () => {
-  it('replaces characters forbidden in Windows path components', () => {
+  it('replaces characters forbidden in Windows path components and strips unsafe controls', () => {
     expect(safeWindowsFileName('گزارش: نهایی?.pdf')).toBe('گزارش_ نهایی_.pdf');
     expect(safeWindowsFileName('folder/name\\subfolder')).toBe('folder_name_subfolder');
+    expect(safeWindowsFileName('گزارش\u202E.exe')).toBe('گزارش.exe');
+    expect(safeWindowsFileName('نام\u0000فایل')).toBe('نامفایل');
+    expect(safeWindowsFileName('نام‌کالا')).toBe('نام‌کالا');
   });
 
   it('protects reserved Windows device names, including names with extensions', () => {
-    for (const name of ['CON', 'con.txt', 'PRN', 'AUX.pdf', 'NUL.tar.gz', 'COM1', 'LPT9', 'COM¹.log']) {
+    for (const name of ['CON', 'con.txt', 'PRN', 'AUX.pdf', 'NUL.tar.gz', 'CLOCK$', 'COM1', 'LPT9', 'COM¹.log']) {
       expect(safeWindowsFileName(name)).toMatch(/^_/);
     }
   });

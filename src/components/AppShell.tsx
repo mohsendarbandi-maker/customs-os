@@ -54,7 +54,7 @@ const nav: NavItem[] = [
   { label: 'وضعیت دریا و لنگرگاه', en: 'Marine & Anchorage', to: '/marine-conditions', icon: Waves, group: 'حمل و اسناد', roles: allStaff },
   { label: 'گمرک', en: 'Customs Offices', to: '/customs-offices', icon: Landmark, group: 'حمل و اسناد', roles: management },
 { label: 'صاحب کالا', en: 'Clients', to: '/clients', icon: Contact, group: 'حمل و اسناد', roles: management },
-  { label: 'فایل‌منیجر', en: 'File Manager', to: '/file-manager', icon: Folder, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
+  { label: 'مدیریت فایل', en: 'File Management', to: '/file-manager', icon: Folder, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'PDF Studio', en: 'PDF Studio', to: '/pdf-studio', icon: FileStack, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'چاپگر هوشمند EPL', en: 'EPL Print Assistant', to: '/epl-print', icon: Printer, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'دبیرخانه و مکاتبات', en: 'Office Automation', to: '/office', icon: FileSignature, group: 'سیستم', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },

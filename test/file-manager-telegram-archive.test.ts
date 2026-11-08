@@ -13,6 +13,9 @@ describe('Telegram-backed Customs OS file manager', () => {
   const folderCopyMigration = read('supabase/migrations/20261024174637_file_manager_folder_copy.sql');
   const gateway = read('supabase/functions/messenger-gateway/index.ts');
   const fileManager = read('src/pages/FileManagerPage.tsx');
+  const globalCss = read('src/index.css');
+  const documentReportsMigration = read('supabase/migrations/20261108185733_file_manager_document_workflow_reports.sql');
+  const documentReportActorMigration = read('supabase/migrations/20261108185740_file_manager_document_report_actor_label.sql');
   const fileManagerClient = read('src/lib/fileManager.ts');
   const shipmentPage = read('src/pages/ShipmentFirstPage.tsx');
   const documentPage = read('src/pages/CustomsDocumentManagerPage.tsx');
@@ -287,7 +290,7 @@ describe('Telegram-backed Customs OS file manager', () => {
   it('keeps the mobile folder tree in a full-height scrollable drawer and avoids a tiny nested upload scroller', () => {
     expect(fileManager).toContain('fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)]');
     expect(fileManager).toContain('min-h-0 flex-1 overflow-y-auto overscroll-contain');
-    expect(fileManager).toContain('lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto lg:shadow-none');
+    expect(fileManager).toContain('p-0 lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-visible');
     expect(fileManager).toContain('className="shrink-0 border-b app-border p-3 md:p-4"');
     expect(fileManager).toContain('min-h-[60dvh] max-h-none flex-col overflow-visible');
     expect(fileManager).toContain('whitespace-normal break-words leading-5');
@@ -296,6 +299,45 @@ describe('Telegram-backed Customs OS file manager', () => {
   it('keeps upload guidance reachable on mobile and shows complete folder-card labels', () => {
     expect(fileManager).toContain('disabled={!currentFolder} title={uploadEnabled?');
     expect(fileManager).toContain('whitespace-normal break-words text-sm font-bold leading-5');
+  });
+
+  it('renders the File Management workspace full-width with a collapsed sync disclosure', () => {
+    expect(fileManager).toContain('w-full max-w-none');
+    expect(fileManager).toContain('>مدیریت فایل</h1>');
+    expect(fileManager).toContain('file-manager-sync-dropdown');
+    expect(fileManager).toContain('<details className="file-manager-sync-dropdown');
+    expect(fileManager).toContain('file-manager-flat-panel');
+  });
+
+  it('provides append-only document workflow reports visible to organization staff', () => {
+    expect(fileManager).toContain('file_manager_document_reports');
+    expect(fileManager).toContain('ویترین پیگیری و گزارش اسناد');
+    expect(fileManager).toContain('ثبت گزارش برای همه همکاران');
+    expect(fileManager).toContain('actor_name');
+    expect(fileManager).toContain('action_required');
+  });
+
+  it('skips operating-system sidecar files and continues when a local folder cannot be created', () => {
+    expect(fileManager).toContain('isSystemSyncEntry');
+    expect(fileManager).toContain("lower.startsWith('._')");
+    expect(fileManager).toContain('failedItems.push(folderPath');
+    expect(fileManager).toContain('try { await ensureLocalFolder(folderPath);');
+  });
+
+  it('keeps desktop content width aligned with the expanded and collapsed sidebar', () => {
+    expect(globalCss).toContain('.app-main.sidebar-compact{width:calc(100% - 82px)!important;margin-right:82px!important}');
+    expect(globalCss).toContain('.app-main:not(.sidebar-compact){width:calc(100% - 230px)!important;margin-right:230px!important}');
+    expect(globalCss).toContain('.app-sidebar.is-collapsed{width:82px!important}');
+  });
+
+  it('keeps document workflow report migrations append-only and tenant scoped', () => {
+    expect(documentReportsMigration).toContain('enable row level security');
+    expect(documentReportsMigration).toContain('file_manager_document_reports_insert');
+    expect(documentReportsMigration).toContain('public.user_org_id()');
+    expect(documentReportsMigration).toContain("array['owner','admin','broker','accountant','warehouse']");
+    expect(documentReportsMigration).not.toContain('for update');
+    expect(documentReportsMigration).not.toContain('for delete');
+    expect(documentReportActorMigration).toContain('actor_name');
   });
 
   it('registers the page and exposes it from the main navigation', () => {
