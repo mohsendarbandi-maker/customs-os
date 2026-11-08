@@ -13,6 +13,11 @@ export function safeWindowsFileName(value: string): string {
 
   if (!name || name === '.' || name === '..') name = 'بدون نام';
 
+  // File System Access implementations may reject hidden/dot-prefixed path
+  // components (for example ".name") even though some desktop file systems allow them.
+  // Prefix them so the same archive paths work across Windows, macOS, and browsers.
+  if (name.startsWith('.')) name = '_' + name;
+
   // Windows treats device names as reserved even when followed by an extension.
   const deviceBase = name.split('.')[0].replace(/[ .]+$/g, '');
   if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)$/i.test(deviceBase)) {
