@@ -1159,6 +1159,7 @@ export const FileManagerPage: React.FC = () => {
       let metadataTasksDone = 1;
       const metadataTasksTotal = 1 + serverFolderByPath.size + latestFiles.length;
       for (const [relativePath, folder] of serverFolderByPath) {
+        try {
         const shipment = byId(data.shipments, folder.shipment_id);
         const caseRecord = byId(data.cases, shipment?.case_id);
         const client = byId(data.clients, folder.client_id || shipment?.client_id || caseRecord?.client_id);
@@ -1299,6 +1300,10 @@ export const FileManagerPage: React.FC = () => {
             bytesSaved,
             failed,
           });
+        }
+        } catch (reason) {
+          failed += 1;
+          failedItems.push((relativePath || 'ریشه سازمان') + ' / فراداده: ' + (reason instanceof Error ? reason.message : 'ذخیره اطلاعات پوشه یا سند ناموفق بود.'));
         }
       }
 
