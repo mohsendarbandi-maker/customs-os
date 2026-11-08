@@ -298,6 +298,29 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('whitespace-normal break-words text-sm font-bold leading-5');
   });
 
+  it('renders the File Management workspace full-width with a collapsed sync disclosure', () => {
+    expect(fileManager).toContain('w-full max-w-none');
+    expect(fileManager).toContain('>مدیریت فایل</h1>');
+    expect(fileManager).toContain('file-manager-sync-dropdown');
+    expect(fileManager).toContain('<details className="file-manager-sync-dropdown');
+    expect(fileManager).toContain('file-manager-flat-panel');
+  });
+
+  it('provides append-only document workflow reports visible to organization staff', () => {
+    expect(fileManager).toContain('file_manager_document_reports');
+    expect(fileManager).toContain('ویترین پیگیری و گزارش اسناد');
+    expect(fileManager).toContain('ثبت گزارش برای همه همکاران');
+    expect(fileManager).toContain('actor_name');
+    expect(fileManager).toContain('action_required');
+  });
+
+  it('skips operating-system sidecar files and continues when a local folder cannot be created', () => {
+    expect(fileManager).toContain('isSystemSyncEntry');
+    expect(fileManager).toContain("lower.startsWith('._')");
+    expect(fileManager).toContain('failedItems.push(folderPath');
+    expect(fileManager).toContain('try { await ensureLocalFolder(folderPath);');
+  });
+
   it('registers the page and exposes it from the main navigation', () => {
     expect(app).toContain('path="/file-manager"');
     expect(app).toContain("import('./pages/FileManagerPage')");
