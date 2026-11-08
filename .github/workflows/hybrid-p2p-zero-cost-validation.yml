@@ -1,0 +1,85 @@
+name: hybrid-p2p-zero-cost-validation
+
+on:
+  push:
+    branches:
+      - architecture/hybrid-p2p-offline
+  pull_request:
+    branches:
+      - architecture/hybrid-p2p-offline
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hybrid-p2p-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-staging:
+    name: Ephemeral local Supabase + application checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      SUPABASE_TELEMETRY_DISABLED: "1"
+      # No project ref, hosted database URL, or privileged cloud credentials are
+      # configured in this job. All Supabase commands explicitly target --local.
+    steps:
+      - name: Checkout dedicated architecture branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Confirm local-only environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "architecture/hybrid-p2p-offline" || test "${GITHUB_EVENT_NAME}" = "pull_request" || test "${GITHUB_EVENT_NAME}" = "workflow_dispatch"
+          if [[ -n "${SUPABASE_DB_URL:-}" || -n "${SUPABASE_ACCESS_TOKEN:-}" || -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
+            echo "Unexpected hosted Supabase credentials are configured in this job."
+            exit 1
+          fi
+          supabase --version
+          docker info >/dev/null
+
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run frontend unit tests
+        run: npm test
+
+      - name: Run TypeScript check
+        run: npm run typecheck
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Build web application
+        run: npm run build
+
+      - name: Start isolated local Supabase stack
+        run: supabase start
+
+      - name: Apply repository migrations to LOCAL database only
+        run: supabase db reset --local
+
+      - name: Run local database tests
+        run: supabase test db --local
+
+      - name: Capture local database status (no secrets)
+        if: always()
+        run: supabase status --output env | sed -E 's/(KEY|TOKEN|PASSWORD|SECRET)=.*/\1=[REDACTED]/' || true
+
+      - name: Stop ephemeral local stack
+        if: always()
+        run: supabase stop --no-backup || true
