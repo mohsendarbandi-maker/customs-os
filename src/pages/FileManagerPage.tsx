@@ -1357,32 +1357,37 @@ export const FileManagerPage: React.FC = () => {
         for (const file of folderFileRows) {
           const fileName = windowsName(file.original_name || 'document');
           const companionName = windowsName(fileName + '.اطلاعات.txt');
-          const companionText = buildDocumentMetadataText(file as unknown as Record<string, unknown>, text);
-          let companionHandle: any;
-          try { companionHandle = await directory.getFileHandle(companionName, { create: true }); }
-          catch (reason) {
-            const compatibleName = safeLocalFallbackName(companionName);
-            if (compatibleName === companionName) throw reason;
-            companionHandle = await directory.getFileHandle(compatibleName, { create: true });
+          try {
+            const companionText = buildDocumentMetadataText(file as unknown as Record<string, unknown>, text);
+            let companionHandle: any;
+            try { companionHandle = await directory.getFileHandle(companionName, { create: true }); }
+            catch (reason) {
+              const compatibleName = safeLocalFallbackName(companionName);
+              if (compatibleName === companionName) throw reason;
+              companionHandle = await directory.getFileHandle(compatibleName, { create: true });
+            }
+            const companionWritable = await companionHandle.createWritable();
+            await companionWritable.write(companionText);
+            await companionWritable.close();
+            const savedCompanion = await companionHandle.getFile();
+            if (savedCompanion.size !== new TextEncoder().encode(companionText).byteLength) {
+              throw new Error('ذخیره فراداده سند «' + fileName + '» تأیید نشد.');
+            }
+            metadataWritten += 1;
+            bytesSaved += savedCompanion.size;
+            metadataTasksDone += 1;
+            publishSyncProgress({
+              phase: 'ذخیره اطلاعات اسناد',
+              percent: 80 + Math.round((metadataTasksDone / metadataTasksTotal) * 20),
+              currentItem: relativePath ? relativePath + '/' + companionName : companionName,
+              metadataWritten,
+              bytesSaved,
+              failed,
+            });
+          } catch (reason) {
+            failed += 1;
+            failedItems.push((relativePath ? relativePath + '/' : '') + companionName + ': ' + (reason instanceof Error ? reason.message : 'ذخیره فراداده سند ناموفق بود.'));
           }
-          const companionWritable = await companionHandle.createWritable();
-          await companionWritable.write(companionText);
-          await companionWritable.close();
-          const savedCompanion = await companionHandle.getFile();
-          if (savedCompanion.size !== new TextEncoder().encode(companionText).byteLength) {
-            throw new Error('ذخیره فراداده سند «' + fileName + '» تأیید نشد.');
-          }
-          metadataWritten += 1;
-          bytesSaved += savedCompanion.size;
-          metadataTasksDone += 1;
-          publishSyncProgress({
-            phase: 'ذخیره اطلاعات اسناد',
-            percent: 80 + Math.round((metadataTasksDone / metadataTasksTotal) * 20),
-            currentItem: relativePath ? relativePath + '/' + companionName : companionName,
-            metadataWritten,
-            bytesSaved,
-            failed,
-          });
         }
         } catch (reason) {
           failed += 1;
