@@ -108,9 +108,15 @@ jobs:
             exit 1
           fi
           echo "Using disposable local database container: $db_container"
+          echo "Disposable Postgres role capabilities (no secrets):"
+          docker exec "$db_container" psql -U postgres -d postgres -Atc \
+            "SELECT rolname || ':superuser=' || rolsuper || ':bypassrls=' || rolbypassrls FROM pg_roles WHERE rolname IN ('postgres','supabase_admin','supabase_auth_admin','supabase_migrations_admin') ORDER BY rolname;"
+          docker exec "$db_container" psql -U postgres -d postgres -Atc \
+            "SELECT n.nspname || ':owner=' || r.rolname || ':postgres_create=' || has_schema_privilege('postgres', n.oid, 'CREATE') FROM pg_namespace n JOIN pg_roles r ON r.oid=n.nspowner WHERE n.nspname='auth';"
+          docker exec "$db_container" psql -U supabase_admin -d postgres -Atc "SELECT 'connected_as=' || current_user"
           while IFS= read -r migration; do
-            echo "Applying $(basename "$migration") to ephemeral local Postgres"
-            docker exec -i "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$migration"
+            echo "Applying $(basename "$migration") to ephemeral local Postgres as supabase_admin"
+            docker exec -i "$db_container" psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 < "$migration"
           done < <(find "$RUNNER_TEMP/darbandi-migrations" -maxdepth 1 -type f -name '*.sql' -print | sort)
 
       - name: Restore repository migration directory
