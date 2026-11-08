@@ -685,7 +685,9 @@ export const FileManagerPage: React.FC = () => {
   const chooseSyncDirectory = async () => {
     const picker = (window as any).showDirectoryPicker;
     if (typeof picker !== 'function') {
-      setError('انتخاب محل ذخیره در این مرورگر پشتیبانی نمی‌شود؛ برای همگام‌سازی از Microsoft Edge یا Google Chrome روی ویندوز استفاده کنید.');
+      setPortableSyncOpen(true);
+      setError('');
+      setMessage('این مرورگر دسترسی مستقیم به پوشه ندارد؛ از روش پوشه یا ZIP استفاده کنید.');
       return;
     }
     try {
@@ -738,7 +740,9 @@ export const FileManagerPage: React.FC = () => {
     }
     const picker = (window as any).showDirectoryPicker;
     if (typeof picker !== 'function') {
-      setError('همگام‌سازی مستقیم پوشه فقط در Microsoft Edge یا Google Chrome روی ویندوز پشتیبانی می‌شود.');
+      setPortableSyncOpen(true);
+      setError('');
+      setMessage('روش سازگار با این مرورگر فعال شد؛ پوشه یا ZIP را انتخاب کنید.');
       return;
     }
 
@@ -1380,7 +1384,7 @@ export const FileManagerPage: React.FC = () => {
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600"><ShieldCheck size={17}/></span>
             <div className="min-w-0 flex-1">
               <div className="text-[10px] app-muted">محل ذخیره متصل</div>
-              <div className="truncate text-xs font-bold">{syncDirectoryName ? syncDirectoryName + ' / Darbandi Commercial' : 'هنوز انتخاب نشده؛ بار اول یک پوشه انتخاب می‌کنید'}</div>
+              <div className="truncate text-xs font-bold">{syncDirectoryName ? syncDirectoryName + ' / Darbandi Commercial' : (typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker !== 'function') ? 'روش سازگار مرورگر: انتخاب پوشه یا ZIP و ذخیره در Files' : 'هنوز انتخاب نشده؛ بار اول یک پوشه انتخاب می‌کنید'}</div>
             </div>
             {syncDirectoryName && <button type="button" onClick={()=>void forgetSyncDirectory()} className="shrink-0 rounded-lg border app-border px-2.5 py-2 text-[10px]">قطع اتصال</button>}
           </div>
@@ -1388,14 +1392,50 @@ export const FileManagerPage: React.FC = () => {
             <button type="button" onClick={()=>void syncWindowsFolder()} disabled={syncing||uploading||loading}
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-900/10 transition hover:brightness-110 disabled:opacity-50">
               {syncing?<Loader2 size={17} className="animate-spin"/>:<RefreshCw size={17}/>}
-              {syncing?'در حال همگام‌سازی همه داده‌ها…':syncDirectoryName?'همگام‌سازی همه اطلاعات با یک کلیک':'انتخاب پوشه و شروع همگام‌سازی'}
+              {syncing?'در حال همگام‌سازی همه داده‌ها…':syncDirectoryName?'همگام‌سازی همه اطلاعات با یک کلیک':(typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker !== 'function')?'شروع همگام‌سازی سازگار':'انتخاب پوشه و شروع همگام‌سازی'}
             </button>
             <button type="button" onClick={()=>void chooseSyncDirectory()} disabled={syncing}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border app-border bg-[var(--surface)] px-3 py-2 text-xs font-bold disabled:opacity-50">
-              <FolderOpen size={15}/>تغییر محل ذخیره
+              <FolderOpen size={15}/>{typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker !== 'function'?'روش همگام‌سازی':'تغییر محل ذخیره'}
             </button>
           </div>
-          <p className="relative mt-2 text-[10px] leading-5 app-muted">پوشه فقط یک‌بار انتخاب می‌شود. فایل‌های اصلی حذف یا بی‌اجازه بازنویسی نمی‌شوند؛ تغییرات متعارض جداگانه گزارش می‌شوند.</p>
+          <p className="relative mt-2 text-[10px] leading-5 app-muted">فایل‌های اصلی حذف یا بی‌اجازه بازنویسی نمی‌شوند. در مرورگرهای فاقد دسترسی مستقیم پوشه، از روش پوشه/ZIP استفاده کنید.</p>
+          {portableSyncOpen && <div className="relative mt-3 space-y-3 rounded-xl border border-sky-500/25 bg-sky-500/5 p-3">
+            <div>
+              <div className="text-sm font-black">همگام‌سازی سازگار با Safari، Firefox و موبایل</div>
+              <p className="mt-1 text-xs leading-5 app-muted">پوشه اصلی «Darbandi Commercial» یا «صاحبان کالا» را انتخاب کنید؛ در صورت داشتن نسخه قبلی، ZIP را از Files وارد کنید. پس از مقایسه و ارسال فایل‌های جدید، نسخه تازه ZIP از کل آرشیو و اطلاعات سازمان آماده دانلود می‌شود.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button type="button" onClick={()=>portableDirectoryInput.current?.click()} disabled={syncing||uploading}
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg border app-border bg-[var(--surface)] px-3 py-2 text-xs font-bold disabled:opacity-50">
+                <FolderOpen size={15}/>انتخاب پوشه از دستگاه
+              </button>
+              <button type="button" onClick={()=>portableArchiveInput.current?.click()} disabled={syncing||uploading}
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg border app-border bg-[var(--surface)] px-3 py-2 text-xs font-bold disabled:opacity-50">
+                <Upload size={15}/>وارد کردن ZIP قبلی
+              </button>
+              <button type="button" onClick={()=>void exportPortableSyncArchive()} disabled={syncing||uploading||loading}
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-black text-white disabled:opacity-50 sm:col-span-2">
+                <Download size={15}/>دریافت ZIP کامل سازمان برای Files
+              </button>
+            </div>
+            <input ref={portableDirectoryInput} {...directoryProps} type="file" multiple className="hidden" disabled={syncing||uploading}
+              onChange={event=>{
+                const picked=Array.from(event.currentTarget.files||[]);
+                if(picked.length) void importPortableSyncEntries(picked.map(file=>({
+                  file,
+                  relativePath:(file as File & {webkitRelativePath?:string}).webkitRelativePath||file.name,
+                })));
+                event.currentTarget.value='';
+              }}/>
+            <input ref={portableArchiveInput} type="file" accept=".zip,application/zip,application/x-zip-compressed" className="hidden" disabled={syncing||uploading}
+              onChange={event=>{
+                const picked=event.currentTarget.files?.[0];
+                if(picked) void importPortableZip(picked);
+                event.currentTarget.value='';
+              }}/>
+            <div className="text-[10px] leading-5 app-muted">Safari آیفون از iOS 18.4 به بعد انتخاب پوشه را پشتیبانی می‌کند؛ در نسخه‌های قدیمی‌تر ZIP را از Files انتخاب کنید. مرورگر اجازه ذخیره بی‌واسطه در هر پوشه دلخواه را نمی‌دهد. ارسال فایل جدید به آرشیو تلگرام فعلی حداکثر ۲۰ مگابایت برای هر فایل است؛ فایل‌های بزرگ‌تر موجود با نسخه Storage در خروجی ZIP دریافت می‌شوند.</div>
+          </div>}
         </div>
 
         <div className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5">
