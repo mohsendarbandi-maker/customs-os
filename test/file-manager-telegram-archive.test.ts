@@ -16,6 +16,7 @@ describe('Telegram-backed Customs OS file manager', () => {
   const globalCss = read('src/index.css');
   const documentReportsMigration = read('supabase/migrations/20261108185733_file_manager_document_workflow_reports.sql');
   const documentReportActorMigration = read('supabase/migrations/20261108185740_file_manager_document_report_actor_label.sql');
+  const documentReportServerActorMigration = read('supabase/migrations/20261108191704_file_manager_document_report_server_actor.sql');
   const fileManagerClient = read('src/lib/fileManager.ts');
   const shipmentPage = read('src/pages/ShipmentFirstPage.tsx');
   const documentPage = read('src/pages/CustomsDocumentManagerPage.tsx');
@@ -351,6 +352,14 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('loadMoreWorkflowFiles');
     expect(fileManager).toContain('بارگذاری اسناد قدیمی‌تر');
     expect(fileManager).toContain('.range(workflowFiles.length, workflowFiles.length + 299)');
+  });
+
+  it('derives document report authorship and timestamps from the authenticated server session', () => {
+    expect(documentReportServerActorMigration).toContain('security definer');
+    expect(documentReportServerActorMigration).toContain('new.created_by := auth.uid()');
+    expect(documentReportServerActorMigration).toContain('new.created_at := now()');
+    expect(documentReportServerActorMigration).toContain('p.organization_id = new.organization_id');
+    expect(documentReportServerActorMigration).toContain('revoke all on function');
   });
 
   it('registers the page and exposes it from the main navigation', () => {
