@@ -976,7 +976,6 @@ export const FileManagerPage: React.FC = () => {
         failed,
       });
 
-      const folderMetadata = new Map<string, string>();
       let metadataTasksDone = 1;
       const metadataTasksTotal = 1 + serverFolderByPath.size + latestFiles.length;
       for (const [relativePath, folder] of serverFolderByPath) {
@@ -1076,7 +1075,6 @@ export const FileManagerPage: React.FC = () => {
           ],
           generatedAt: new Date().toISOString(),
         });
-        folderMetadata.set(folder.id, text);
         const directory = await ensureLocalFolder(relativePath);
         const infoHandle = await directory.getFileHandle('اطلاعات_عملیاتی.txt', { create: true });
         const infoWritable = await infoHandle.createWritable();
