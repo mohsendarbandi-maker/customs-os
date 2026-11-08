@@ -274,7 +274,7 @@ export const FileManagerPage: React.FC = () => {
     if (!fileId || !report || !organizationId || savingReport) return;
     setSavingReport(true);
     try {
-      const { error: insertError } = await (supabase as any).from('file_manager_document_reports').insert({ organization_id: organizationId, file_id: fileId, status: reportStatus, stage: reportStage.trim(), report, actor_name: profile?.full_name || 'کارمند' });
+      const { error: insertError } = await (supabase as any).from('file_manager_document_reports').insert({ organization_id: organizationId, file_id: fileId, status: reportStatus, stage: reportStage.trim(), report });
       if (insertError) throw insertError;
       const { data, error: reloadError } = await (supabase as any).from('file_manager_document_reports').select('id,file_id,status,stage,report,actor_name,created_at').eq('organization_id', organizationId).eq('file_id', fileId).order('created_at', { ascending: false }).limit(100);
       if (reloadError) throw reloadError;
