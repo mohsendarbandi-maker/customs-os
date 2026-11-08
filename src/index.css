@@ -594,3 +594,17 @@ body{
 #root a[class*="bg-purple-"]:hover{background-position:100% 50%;transform:translateY(-1px)}
 #root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 #root textarea,#root select{accent-color:var(--primary)}
+
+
+/* File management workspace: deliberately flat, full-width layout. */
+.app-content:has(.file-manager-page){max-width:none!important;width:100%!important}
+.app-content .file-manager-page .file-manager-flat-panel,
+.app-content .file-manager-page .file-manager-flat-panel:hover{
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  background:transparent!important;
+  transform:none!important;
+}
+.app-content .file-manager-page .file-manager-sync-dropdown>summary{border:0!important;box-shadow:none!important}
+.app-content .file-manager-page .file-manager-sync-dropdown[open]>summary{border-bottom:1px solid var(--border)!important}
