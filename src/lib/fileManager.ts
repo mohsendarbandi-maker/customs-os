@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { safeWindowsFileName } from './safeWindowsFileName';
 
 export type FileArchiveDestination = {
   connectionId: string;
@@ -194,12 +195,22 @@ export async function uploadTelegramArchivedFile(
     throw new Error('برای اینکه فایل با Bot API معمولی تلگرام قابل بازیابی هم باشد، حجم هر فایل در حال حاضر حداکثر ۲۰ مگابایت است.');
   }
 
+  // Never pass hidden/dot-prefixed or otherwise invalid path components to the
+  // browser/Worker upload pipeline. Keep the original bytes and MIME type intact.
+  const safeName = safeWindowsFileName(file.name || 'document');
+  const uploadFile = file.name === safeName ? file : new File([file], safeName, {
+    type: file.type || 'application/octet-stream',
+    lastModified: file.lastModified,
+  });
+  const safeDocumentName = input.documentName
+    ? safeWindowsFileName(input.documentName)
+    : safeName;
   const destination = input.destination || await getFileArchiveDestination();
-  const idempotencyKey = input.idempotencyKey || await createTelegramArchiveIdempotencyKey(file, {
+  const idempotencyKey = input.idempotencyKey || await createTelegramArchiveIdempotencyKey(uploadFile, {
     folderId: input.folderId,
     ...(input.shipmentId ? { shipmentId: input.shipmentId } : {}),
     documentType: input.documentType,
-    documentName: input.documentName,
+    documentName: safeDocumentName,
     destination,
   });
   const query = new URLSearchParams({
@@ -207,7 +218,7 @@ export async function uploadTelegramArchivedFile(
     folderId: input.folderId,
     ...(input.shipmentId ? { shipmentId: input.shipmentId } : {}),
     documentType: input.documentType || 'other',
-    ...(input.documentName ? { documentName: input.documentName } : {}),
+    documentName: safeDocumentName,
     tags: JSON.stringify((input.tags || []).slice(0, 20)),
   });
 
@@ -216,12 +227,12 @@ export async function uploadTelegramArchivedFile(
     {
       method: 'POST',
       headers: {
-        'Content-Type': file.type || 'application/octet-stream',
-        'X-File-Name': encodeURIComponent(file.name),
-        'X-File-Size': String(file.size),
+        'Content-Type': uploadFile.type || 'application/octet-stream',
+        'X-File-Name': encodeURIComponent(uploadFile.name),
+        'X-File-Size': String(uploadFile.size),
         'Idempotency-Key': idempotencyKey,
       },
-      body: file,
+      body: uploadFile,
     },
   );
   if (!response?.fileAssetId) throw new Error('تلگرام فایل را تأیید نکرد؛ وضعیت ذخیره‌سازی قطعی نیست.');
