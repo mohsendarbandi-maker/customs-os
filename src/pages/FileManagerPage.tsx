@@ -19,7 +19,8 @@ import {
 import { folderToneClass, getFolderSubtreeCounts, isCopyableFolder } from '../lib/fileManagerExplorer';
 import { optimizeFileForUpload } from '../lib/clientFileOptimizer';
 import { safeWindowsFileName } from '../lib/safeWindowsFileName';
-import { createPortableSyncArchive, readPortableSyncArchive, PORTABLE_SYNC_ROOT_NAME } from '../lib/fileManagerPortableSync';
+import { readPortableSyncArchive } from '../lib/fileManagerPortableSync';
+import { exportPortableOrganization, importPortableOrganizationFiles, type PortableSyncInputFile } from '../lib/fileManagerPortableSyncService';
 import {
   buildDocumentMetadataText,
   buildFolderMetadataText,
@@ -553,6 +554,133 @@ export const FileManagerPage: React.FC = () => {
     }finally{setCopyingFolder(false);await loadFolders().catch(()=>undefined);}
   };
   useEffect(()=>()=>{if(preview?.url)URL.revokeObjectURL(preview.url);},[preview?.url]);
+
+
+  const publishPortableProgress = (progressState: import('../lib/fileManagerPortableSyncService').PortableSyncProgress) => {
+    setSyncProgress({
+      ...progressState,
+    });
+  };
+
+  const savePortableArchive = (bytes: Uint8Array) => {
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    saveBlob(new Blob([buffer], { type: 'application/zip' }), 'CustomsOS-Backup-' + dateStamp + '.zip');
+  };
+
+  const exportPortableSyncArchive = async (manageSyncState = true) => {
+    if (!organizationId) throw new Error('سازمان فعال پیدا نشد.');
+    if (manageSyncState) {
+      setSyncing(true);
+      setError('');
+      setMessage('');
+      setProgress('ساخت بسته ZIP سازمان…');
+    }
+    try {
+      const result = await exportPortableOrganization(organizationId, getFileBlob, publishPortableProgress);
+      if (!result.archive) {
+        setError(result.failures.slice(0, 4).join(' | ') || 'ساخت نسخه ZIP ناموفق بود.');
+        return result;
+      }
+      savePortableArchive(result.archive);
+      setMessage(
+        'بسته ZIP آماده شد: ' + result.downloaded + ' فایل، ' +
+        result.metadataWritten + ' فایل اطلاعاتی، حجم ' + byteLabel(result.archive.byteLength) +
+        '. آن را در Files ذخیره کنید.'
+      );
+      if (result.failed) setError(result.failed + ' فایل از آرشیو دریافت نشد: ' + result.failures.slice(0, 3).join(' | '));
+      return result;
+    } finally {
+      if (manageSyncState) {
+        setSyncing(false);
+        setProgress('');
+      }
+    }
+  };
+
+  const importPortableSyncEntries = async (inputs: PortableSyncInputFile[]) => {
+    if (!organizationId || !roleCanModifyStructure(role)) {
+      setError('برای وارد کردن نسخه پشتیبان سازمان، دسترسی فایل‌منیجر لازم است.');
+      return;
+    }
+    const cloudRoot = folders.find((folder) => folder.parent_id === null && folder.folder_key === 'owners-root');
+    if (!cloudRoot) {
+      setError('پوشه اصلی صاحبان کالا پیدا نشد؛ ابتدا ساختار فایل‌منیجر را تازه‌سازی کنید.');
+      return;
+    }
+    setSyncing(true);
+    setPortableSyncOpen(true);
+    setError('');
+    setMessage('');
+    setProgress('بررسی پوشه یا بسته انتخاب‌شده…');
+    try {
+      const imported = await importPortableOrganizationFiles(
+        organizationId,
+        cloudRoot.display_name,
+        inputs,
+        getFileBlob,
+        publishPortableProgress,
+      );
+      await loadFolders();
+      const exported = await exportPortableOrganization(
+        organizationId,
+        getFileBlob,
+        (state) => publishPortableProgress({
+          ...state,
+          percent: 72 + Math.round(state.percent * 0.28),
+        }),
+      );
+      if (exported.archive) savePortableArchive(exported.archive);
+      const summary = [
+        imported.uploaded + ' فایل جدید ارسال شد',
+        imported.identical + ' فایل یکسان بود',
+        imported.conflicts + ' تعارض بدون بازنویسی حفظ شد',
+        imported.foldersCreated + ' پوشه جدید ساخته شد',
+        imported.oversized + ' فایل بیش از ۲۰ مگابایت ارسال نشد',
+        imported.failed + ' خطای انتقال',
+        exported.downloaded + ' فایل در ZIP خروجی قرار گرفت',
+      ];
+      setMessage(summary.join('؛ ') + (exported.archive ? '؛ بسته کامل ZIP برای ذخیره در Files دانلود شد.' : ''));
+      const problems = [...imported.failures, ...exported.failures];
+      if (imported.failed || imported.oversized || imported.conflicts || exported.failed) {
+        setError('همگام‌سازی بخشی نیازمند بررسی است: ' + problems.slice(0, 4).join(' | '));
+      }
+      await loadFiles(selectedFolderId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'همگام‌سازی سازگار ناموفق بود.');
+    } finally {
+      setSyncing(false);
+      setProgress('');
+    }
+  };
+
+  const importPortableZip = async (file: File) => {
+    try {
+      const cloudRoot = folders.find((folder) => folder.parent_id === null && folder.folder_key === 'owners-root');
+      if (!cloudRoot) throw new Error('پوشه اصلی صاحبان کالا پیدا نشد.');
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const entries = readPortableSyncArchive(bytes, cloudRoot.display_name);
+      const inputs: PortableSyncInputFile[] = entries.map((entry) => {
+        const buffer = entry.data.buffer.slice(
+          entry.data.byteOffset,
+          entry.data.byteOffset + entry.data.byteLength,
+        ) as ArrayBuffer;
+        return {
+          file: new File([buffer], entry.name, { type: 'application/octet-stream', lastModified: file.lastModified }),
+          relativePath: entry.relativePath,
+        };
+      });
+      await importPortableSyncEntries(inputs);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'خواندن بسته ZIP ناموفق بود.');
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker !== 'function') {
+      setPortableSyncOpen(true);
+    }
+  }, []);
 
   const chooseSyncDirectory = async () => {
     const picker = (window as any).showDirectoryPicker;
