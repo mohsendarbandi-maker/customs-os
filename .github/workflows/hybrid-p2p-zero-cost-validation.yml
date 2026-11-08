@@ -67,6 +67,29 @@ jobs:
       - name: Build web application
         run: npm run build
 
+      - name: Prepare disposable legacy schema baseline for local CI only
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Production migration history already contains the original baseline,
+          # but these eight historical bootstrap files are intentionally stored
+          # outside supabase/migrations. A brand-new local database needs them
+          # before replaying the timestamped migrations. Copy only into this
+          # ephemeral Actions checkout; never commit or deploy these copies.
+          for migration in \
+            00003_auth_foundation.sql \
+            00004_reference_data.sql \
+            00005_core_entities.sql \
+            00006_finance_documents.sql \
+            00007_audit_logs.sql \
+            00008_indexes.sql \
+            00009_rls.sql \
+            00010_triggers.sql; do
+            test -s "supabase/legacy-migrations/$migration"
+            test ! -e "supabase/migrations/$migration"
+            cp "supabase/legacy-migrations/$migration" "supabase/migrations/$migration"
+          done
+
       - name: Start isolated local Supabase stack
         run: supabase start
 
