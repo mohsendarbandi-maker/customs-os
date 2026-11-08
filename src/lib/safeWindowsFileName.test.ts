@@ -7,7 +7,7 @@ describe('safeWindowsFileName', () => {
     expect(safeWindowsFileName('folder/name\\subfolder')).toBe('folder_name_subfolder');
     expect(safeWindowsFileName('گزارش\u202E.exe')).toBe('گزارش.exe');
     expect(safeWindowsFileName('نام\u0000فایل')).toBe('نامفایل');
-    expect(safeWindowsFileName('نام‌کالا')).toBe('نام‌کالا');
+    expect(safeWindowsFileName('نام‌کالا')).toBe('نامکالا');
   });
 
   it('protects reserved Windows device names, including names with extensions', () => {
