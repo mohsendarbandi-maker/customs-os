@@ -29,6 +29,9 @@ export function createPortableSyncArchive(
       throw new Error('مسیر یکی از فایل‌های بسته پشتیبان معتبر نیست.');
     }
     const safePath = segments.map(safeWindowsFileName).join('/');
+    const filename = safePath.split('/').pop() || '';
+    // The ZIP manifest and generated companion text are authoritative exports, not source documents.
+    if (isManagedSyncMetadataFile(filename)) continue;
     if (archive[safePath]) {
       throw new Error('دو فایل با مسیر یکسان در بسته پشتیبان وجود دارد: ' + safePath);
     }
