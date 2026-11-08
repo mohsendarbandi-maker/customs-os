@@ -1862,7 +1862,7 @@ export default FileManagerPage;
         const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
         return Array.from(new Uint8Array(hash), (value) => value.toString(16).padStart(2, '0')).join('');
       };
-      const destination = await getFileArchiveDestination();
+      let destination: Awaited<ReturnType<typeof getFileArchiveDestination>> | null = null;
       for (let index = 0; index < normalized.length; index += 1) {
         const item = normalized[index];
         const relativePath = item.relativePath;
@@ -1894,11 +1894,16 @@ export default FileManagerPage;
             failures.push(relativePath + ': حجم فایل برای آرشیو تلگرام باید حداکثر ۲۰ مگابایت باشد.');
             continue;
           }
+          if (tree.folderConflicts.has(parentPath)) {
+            conflicts += 1;
+            continue;
+          }
           const parent = await ensureRemoteFolder(parentPath);
           const uploadFile = item.file.name === filename ? item.file : new File([item.file], filename, {
             type: item.file.type || portableMimeType(filename),
             lastModified: item.file.lastModified,
           });
+          destination ??= await getFileArchiveDestination();
           const idempotencyKey = await createTelegramArchiveIdempotencyKey(uploadFile, {
             folderId: parent.id,
             ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
