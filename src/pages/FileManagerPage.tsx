@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight, CheckCircle2, ChevronDown, ChevronLeft, Copy, ClipboardPaste,
   Download, Eye, FileText, Folder, FolderOpen, Loader2, MessageCircle,
-  RefreshCw, Search, Upload, UploadCloud, X, HardDrive, Smartphone, ShieldCheck,
+  RefreshCw, Search, Upload, UploadCloud, X, HardDrive, Smartphone, ShieldCheck, ClipboardList,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createAppFileTransfer, consumeAppFileTransfer } from '../lib/appFileTransfer';
@@ -247,8 +247,8 @@ export const FileManagerPage: React.FC = () => {
   useEffect(() => {
     if (!organizationId || files.length === 0) { setDocumentReports([]); return; }
     let cancelled = false;
-    void supabase.from('file_manager_document_reports').select('id,file_id,status,stage,report,actor_name,created_at').eq('organization_id', organizationId).in('file_id', files.map((file) => file.id)).order('created_at', { ascending: false }).limit(300)
-      .then(({ data, error: reportError }) => { if (cancelled) return; if (reportError) { setError('دریافت گزارش اسناد ناموفق بود: ' + reportError.message); return; } setDocumentReports((data || []) as DocumentReportRow[]); });
+    void (supabase as any).from('file_manager_document_reports').select('id,file_id,status,stage,report,actor_name,created_at').eq('organization_id', organizationId).in('file_id', files.map((file) => file.id)).order('created_at', { ascending: false }).limit(300)
+      .then(({ data, error: reportError }: any) => { if (cancelled) return; if (reportError) { setError('دریافت گزارش اسناد ناموفق بود: ' + reportError.message); return; } setDocumentReports((data || []) as DocumentReportRow[]); });
     return () => { cancelled = true; };
   }, [files, organizationId]);
   const saveDocumentReport = async () => {
@@ -256,9 +256,9 @@ export const FileManagerPage: React.FC = () => {
     if (!fileId || !report || !organizationId || savingReport) return;
     setSavingReport(true);
     try {
-      const { error: insertError } = await supabase.from('file_manager_document_reports').insert({ organization_id: organizationId, file_id: fileId, status: reportStatus, stage: reportStage.trim(), report, actor_name: profile?.full_name || 'کارمند' });
+      const { error: insertError } = await (supabase as any).from('file_manager_document_reports').insert({ organization_id: organizationId, file_id: fileId, status: reportStatus, stage: reportStage.trim(), report, actor_name: profile?.full_name || 'کارمند' });
       if (insertError) throw insertError;
-      const { data, error: reloadError } = await supabase.from('file_manager_document_reports').select('id,file_id,status,stage,report,actor_name,created_at').eq('organization_id', organizationId).eq('file_id', fileId).order('created_at', { ascending: false }).limit(100);
+      const { data, error: reloadError } = await (supabase as any).from('file_manager_document_reports').select('id,file_id,status,stage,report,actor_name,created_at').eq('organization_id', organizationId).eq('file_id', fileId).order('created_at', { ascending: false }).limit(100);
       if (reloadError) throw reloadError;
       setDocumentReports((previous) => [...((data || []) as DocumentReportRow[]), ...previous.filter((row) => row.file_id !== fileId)]);
       setReportDraft(''); setMessage('گزارش سند ثبت شد و برای همکاران قابل مشاهده است.');
@@ -930,13 +930,8 @@ export const FileManagerPage: React.FC = () => {
           path = path ? path + '/' + part : part;
           if (localDirectories.has(path)) handle = localDirectories.get(path);
           else {
-            try {
-              handle = await handle.getDirectoryHandle(part, { create: true });
-              localDirectories.set(path, handle);
-            } catch (reason) {
-              const detail = reason instanceof Error ? reason.message : 'خطای نامشخص مرورگر';
-              throw new Error('مرورگر اجازه ساخت پوشه با نام «' + part + '» را نداد. مسیر: «' + path + '». جزئیات: ' + detail);
-            }
+            handle = await handle.getDirectoryHandle(part, { create: true });
+            localDirectories.set(path, handle);
           }
         }
         return handle;
@@ -1379,13 +1374,13 @@ export const FileManagerPage: React.FC = () => {
   const directoryProps = { webkitdirectory: '', directory: '' } as any;
 
   return <main dir="rtl" className="mobile-app-page file-manager-page min-h-screen px-3 py-3 sm:p-4 md:p-6" style={{ color: 'var(--text)' }}>
-    <div className="mx-auto w-full max-w-none space-y-3 sm:space-y-4">
+    <div className="mx-auto max-w-7xl space-y-3 sm:space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-[var(--primary)]/10 p-3 text-[var(--primary)]"><FolderOpen size={24} /></div>
           <div>
             <div className="hidden text-xs app-muted sm:block">CUSTOMS OS · DOCUMENTS</div>
-            <h1 className="text-xl sm:text-2xl font-black">مدیریت فایل</h1>
+            <h1 className="text-xl sm:text-2xl font-black">فایل‌منیجر اسناد و مدارک</h1>
           </div>
         </div>
         <div className="file-manager-page-actions flex flex-wrap gap-2">
@@ -1395,7 +1390,7 @@ export const FileManagerPage: React.FC = () => {
         </div>
       </header>
 
-      <section className="file-manager-flat-panel file-manager-archive-status flex flex-wrap items-center justify-between gap-2 px-1 py-2.5">
+      <section className="file-manager-archive-status flex flex-wrap items-center justify-between gap-2 rounded-2xl border app-border bg-[var(--surface)] px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600"><MessageCircle size={18}/></span>
           <div className="min-w-0">
@@ -1407,8 +1402,8 @@ export const FileManagerPage: React.FC = () => {
       </section>
       <details className="file-manager-archive-help text-xs app-muted"><summary>دربارهٔ اسناد قدیمی</summary><p>اسناد قدیمی به‌صورت خودکار به تلگرام منتقل نمی‌شوند. فایل‌های جدیدی که از مسیر آرشیو آپلود شوند در گفت‌وگوی تلگرام ثبت می‌شوند.</p></details>
 
-<details className="file-manager-sync-dropdown group border-b app-border py-2"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 [&::-webkit-details-marker]:hidden"><span className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600"><HardDrive size={20}/></span><span className="min-w-0"><span className="block text-sm font-black">همگام‌سازی و دریافت نسخهٔ پشتیبان</span><span className="mt-0.5 block text-xs app-muted">{syncDirectoryName ? `پوشه متصل: ${syncDirectoryName}` : 'برای نمایش گزینه‌های همگام‌سازی انتخاب کنید'}</span></span></span><span className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--primary)]"><span>نمایش گزینه‌ها</span><ChevronDown size={17} className="transition-transform group-open:rotate-180"/></span></summary><div className="grid gap-3 pt-3">
-        <div className="relative overflow-hidden border-0 bg-transparent p-0 shadow-none">
+<section className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(330px,.85fr)]">
+        <div className="relative overflow-hidden rounded-2xl border border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-[var(--surface)] to-cyan-500/5 p-4 shadow-sm sm:p-5">
           <div className="pointer-events-none absolute -left-8 -top-8 h-36 w-36 rounded-full bg-sky-500/10 blur-2xl"/>
           <div className="relative flex items-start gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 text-sky-600"><HardDrive size={24}/></span>
@@ -1476,7 +1471,7 @@ export const FileManagerPage: React.FC = () => {
           </div>}
         </div>
 
-        <div className="hidden">
+        <div className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5">
           <div className="flex items-start gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600"><Smartphone size={24}/></span>
             <div className="min-w-0 flex-1">
@@ -1512,9 +1507,9 @@ export const FileManagerPage: React.FC = () => {
             <span>فقط شبکه داخلی یا VPN امن؛ پورت 445 را روی مودم به اینترنت باز نکنید. آیفون و ویندوز باید به یک شبکه دسترسی داشته باشند.</span>
           </div>
         </div>
-      </div></details>
+      </section>
 
-      <section className="file-manager-flat-panel border-b app-border bg-transparent py-3">
+      <section className="rounded-2xl border app-border bg-[var(--surface)] p-3">
         <label className="relative block">
           <Search size={18} className="absolute right-3 top-3.5 app-muted" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جست‌وجوی صاحب کالا، محموله یا سند…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] py-3 pr-10 pl-3 outline-none focus:border-[var(--primary)]" />
@@ -1553,26 +1548,26 @@ export const FileManagerPage: React.FC = () => {
         </div>
       </section>}
 
-      <section className="file-manager-flat-panel grid items-start gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
+      <section className="grid items-start gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
         {treeOpen&&<button type="button" aria-label="بستن فهرست پوشه‌ها" onClick={()=>setTreeOpen(false)} className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" />}
-        <aside className={(treeOpen?'fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 flex flex-col overflow-hidden':'hidden')+' p-0 lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-visible'}>
-          <div className="mb-2 flex shrink-0 items-center justify-between gap-2 border-b app-border px-1 pb-2"><h2 className="font-black">پوشه‌ها</h2><div className="flex items-center gap-2"><span className="text-xs app-muted">{folders.length} پوشه · {Object.values(folderFileCounts).reduce((sum,count)=>sum+count,0)} سند</span><button type="button" onClick={()=>setTreeOpen(false)} className="rounded-lg border app-border p-2 lg:hidden" aria-label="بستن فهرست"><X size={16}/></button></div></div>
+        <aside className={(treeOpen?'fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 flex flex-col overflow-hidden':'hidden')+' rounded-2xl border app-border bg-[var(--surface)] p-3 shadow-2xl lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto lg:shadow-none'}>
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-2 px-1"><h2 className="font-black">پوشه‌ها</h2><div className="flex items-center gap-2"><span className="text-xs app-muted">{folders.length} پوشه</span><button type="button" onClick={()=>setTreeOpen(false)} className="rounded-lg border app-border p-2 lg:hidden" aria-label="بستن فهرست"><X size={16}/></button></div></div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-0.5 lg:flex-none lg:overflow-visible">{folders.filter(folder=>folder.parent_id===null).map(root=>renderFolderNode(root))}
             {!folders.length&&<div className="p-5 text-center text-sm app-muted">ساختار پوشه هنوز بارگذاری نشده است.</div>}
           </div>
           
         </aside>
-        <section className="flex min-w-0 min-h-[60dvh] max-h-none flex-col overflow-visible border-0 bg-transparent lg:max-h-[calc(100dvh-15rem)] lg:min-h-[380px] lg:overflow-hidden">
+        <section className="flex min-w-0 min-h-[60dvh] max-h-none flex-col overflow-visible rounded-2xl border app-border bg-[var(--surface)] lg:max-h-[calc(100dvh-15rem)] lg:min-h-[380px] lg:overflow-hidden">
           <div className="shrink-0 border-b app-border p-3 md:p-4">
             <div className="mb-3 flex min-w-0 items-center gap-2">
               <button type="button" onClick={()=>setTreeOpen(v=>!v)} className="shrink-0 rounded-lg border app-border px-2.5 py-2 text-xs lg:hidden">{treeOpen?'بستن فهرست':'فهرست پوشه‌ها'}</button>
-              <nav aria-label="مسیر پوشه" className="file-manager-breadcrumbs flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap border-0 bg-transparent px-0 py-2 text-xs">
+              <nav aria-label="مسیر پوشه" className="file-manager-breadcrumbs flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-xl border app-border bg-[var(--surface-2)] px-2.5 py-2 text-xs">
                 <FolderOpen size={14} className="shrink-0 text-[var(--primary)]"/>
                 {breadcrumbs.length === 0 && <span className="min-w-0 truncate font-semibold">فایل‌منیجر</span>}
                 {breadcrumbs.map((crumb,i)=><React.Fragment key={crumb.id}>
                   {i>0&&<ChevronLeft size={13} className="shrink-0 app-muted"/>}
                   <button type="button" onClick={()=>chooseFolder(crumb)} title={crumb.display_name}
-                    aria-current={i===breadcrumbs.length-1?'page':undefined} className={i===breadcrumbs.length-1?'max-w-[min(55vw,18rem)] shrink-0 truncate rounded-lg bg-[var(--primary)]/10 px-2.5 py-1.5 font-bold text-[var(--primary)]':'max-w-[min(32vw,9rem)] shrink-0 truncate rounded-md px-1.5 py-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--primary)]'}>
+                    className={i===breadcrumbs.length-1?'min-w-0 flex-1 truncate rounded-lg bg-[var(--primary)]/10 px-2 py-1 font-bold text-[var(--primary)]':'max-w-24 shrink truncate rounded-md px-1 py-1 hover:bg-[var(--surface)] hover:text-[var(--primary)]'}>
                     {crumb.display_name}
                   </button>
                 </React.Fragment>)}
@@ -1601,9 +1596,9 @@ export const FileManagerPage: React.FC = () => {
           </div>}
           <div className="flex shrink-0 items-center justify-between gap-2 border-b app-border bg-[var(--surface-2)] px-3 py-2.5 text-xs"><b className="min-w-0 truncate">{currentFolder?.display_name || 'فایل‌منیجر'} <span className="font-normal app-muted">· {files.length} سند</span></b><span className="shrink-0 rounded-full border app-border px-2 py-1">{childFolders.length} زیرپوشه</span></div>
           <div className="min-h-0 flex-none overflow-visible p-3 md:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-            {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">پوشه‌ها</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 border-b app-border py-1 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'پوشه پیش‌فرض':'پوشه سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی پوشه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
-            {files.length>0&&<div className="overflow-hidden"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];const latestReport=latestReportByFile.get(file.id);return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>{setActiveReportFileId(file.id);setReportDraft('');setReportStage(latestReport?.stage||'');setReportStatus(latestReport?.status||'in_review');}} className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1.5 text-xs text-sky-600" title="گزارش و وضعیت سند"><ClipboardList size={13}/>گزارش</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
-            {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center border-t app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این پوشه خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
+            {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">پوشه‌ها</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 rounded-xl border app-border p-1.5 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'پوشه پیش‌فرض':'پوشه سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی پوشه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
+            {files.length>0&&<div className="overflow-hidden rounded-xl border app-border"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];const latestReport=latestReportByFile.get(file.id);return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>{setActiveReportFileId(file.id);setReportDraft('');setReportStage(latestReport?.stage||'');setReportStatus(latestReport?.status||'in_review');}} className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1.5 text-xs text-sky-600" title="گزارش و وضعیت سند"><ClipboardList size={13}/>گزارش</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
+            {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این پوشه خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
           </div>
         </section>
       </section>
@@ -1628,7 +1623,6 @@ export default FileManagerPage;
         const parent = queue.shift()!;
         const parentPath = folderPathById.get(parent.id) ?? '';
         for (const child of folders.filter((item) => item.parent_id === parent.id)) {
-          if (isSystemSyncEntry(child.display_name)) continue;
           const segment = windowsName(child.display_name);
           const childPath = parentPath ? parentPath + '/' + segment : segment;
           if (serverFolderByPath.has(childPath)) {
@@ -1690,7 +1684,7 @@ export default FileManagerPage;
       const serverFilesByPath = new Map<string, { file: FileRow; relativePath: string }>();
       for (const file of serverFiles) {
         const parentPath = folderPathById.get(file.folder_id);
-        if (parentPath === undefined || isSystemSyncEntry(file.original_name)) continue;
+        if (parentPath === undefined) continue;
         const relativePath = parentPath ? parentPath + '/' + windowsName(file.original_name) : windowsName(file.original_name);
         const key = canonicalPath(relativePath);
         if (serverFilesByPath.has(key)) ambiguousFileKeys.add(key);
@@ -1720,13 +1714,8 @@ export default FileManagerPage;
           path = path ? path + '/' + part : part;
           if (localDirectories.has(path)) handle = localDirectories.get(path);
           else {
-            try {
-              handle = await handle.getDirectoryHandle(part, { create: true });
-              localDirectories.set(path, handle);
-            } catch (reason) {
-              const detail = reason instanceof Error ? reason.message : 'خطای نامشخص مرورگر';
-              throw new Error('مرورگر اجازه ساخت پوشه با نام «' + part + '» را نداد. مسیر: «' + path + '». جزئیات: ' + detail);
-            }
+            handle = await handle.getDirectoryHandle(part, { create: true });
+            localDirectories.set(path, handle);
           }
         }
         return handle;
@@ -1738,8 +1727,8 @@ export default FileManagerPage;
       for (let index = 0; index < folderPathsToPrepare.length; index += 1) {
         const folderPath = folderPathsToPrepare[index];
         if (!ambiguousPaths.has(folderPath)) {
-          try { await ensureLocalFolder(folderPath); foldersCreated += 1; }
-          catch (reason) { failed += 1; failedItems.push(folderPath + ': ' + (reason instanceof Error ? reason.message : 'ساخت پوشه در دستگاه ناموفق بود.')); }
+          await ensureLocalFolder(folderPath);
+          foldersCreated += 1;
         }
         publishSyncProgress({
           phase: 'آماده‌سازی پوشه‌ها',
@@ -2169,13 +2158,13 @@ export default FileManagerPage;
   const directoryProps = { webkitdirectory: '', directory: '' } as any;
 
   return <main dir="rtl" className="mobile-app-page file-manager-page min-h-screen px-3 py-3 sm:p-4 md:p-6" style={{ color: 'var(--text)' }}>
-    <div className="mx-auto w-full max-w-none space-y-3 sm:space-y-4">
+    <div className="mx-auto max-w-7xl space-y-3 sm:space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-[var(--primary)]/10 p-3 text-[var(--primary)]"><FolderOpen size={24} /></div>
           <div>
             <div className="hidden text-xs app-muted sm:block">CUSTOMS OS · DOCUMENTS</div>
-            <h1 className="text-xl sm:text-2xl font-black">مدیریت فایل</h1>
+            <h1 className="text-xl sm:text-2xl font-black">فایل‌منیجر اسناد و مدارک</h1>
           </div>
         </div>
         <div className="file-manager-page-actions flex flex-wrap gap-2">
@@ -2185,7 +2174,7 @@ export default FileManagerPage;
         </div>
       </header>
 
-      <section className="file-manager-flat-panel file-manager-archive-status flex flex-wrap items-center justify-between gap-2 px-1 py-2.5">
+      <section className="file-manager-archive-status flex flex-wrap items-center justify-between gap-2 rounded-2xl border app-border bg-[var(--surface)] px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600"><MessageCircle size={18}/></span>
           <div className="min-w-0">
@@ -2197,8 +2186,8 @@ export default FileManagerPage;
       </section>
       <details className="file-manager-archive-help text-xs app-muted"><summary>دربارهٔ اسناد قدیمی</summary><p>اسناد قدیمی به‌صورت خودکار به تلگرام منتقل نمی‌شوند. فایل‌های جدیدی که از مسیر آرشیو آپلود شوند در گفت‌وگوی تلگرام ثبت می‌شوند.</p></details>
 
-<details className="file-manager-sync-dropdown group border-b app-border py-2"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 [&::-webkit-details-marker]:hidden"><span className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600"><HardDrive size={20}/></span><span className="min-w-0"><span className="block text-sm font-black">همگام‌سازی و دریافت نسخهٔ پشتیبان</span><span className="mt-0.5 block text-xs app-muted">{syncDirectoryName ? `پوشه متصل: ${syncDirectoryName}` : 'برای نمایش گزینه‌های همگام‌سازی انتخاب کنید'}</span></span></span><span className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--primary)]"><span>نمایش گزینه‌ها</span><ChevronDown size={17} className="transition-transform group-open:rotate-180"/></span></summary><div className="grid gap-3 pt-3">
-        <div className="relative overflow-hidden border-0 bg-transparent p-0 shadow-none">
+<section className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(330px,.85fr)]">
+        <div className="relative overflow-hidden rounded-2xl border border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-[var(--surface)] to-cyan-500/5 p-4 shadow-sm sm:p-5">
           <div className="pointer-events-none absolute -left-8 -top-8 h-36 w-36 rounded-full bg-sky-500/10 blur-2xl"/>
           <div className="relative flex items-start gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 text-sky-600"><HardDrive size={24}/></span>
@@ -2266,7 +2255,7 @@ export default FileManagerPage;
           </div>}
         </div>
 
-        <div className="hidden">
+        <div className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5">
           <div className="flex items-start gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600"><Smartphone size={24}/></span>
             <div className="min-w-0 flex-1">
@@ -2302,9 +2291,9 @@ export default FileManagerPage;
             <span>فقط شبکه داخلی یا VPN امن؛ پورت 445 را روی مودم به اینترنت باز نکنید. آیفون و ویندوز باید به یک شبکه دسترسی داشته باشند.</span>
           </div>
         </div>
-      </div></details>
+      </section>
 
-      <section className="file-manager-flat-panel border-b app-border bg-transparent py-3">
+      <section className="rounded-2xl border app-border bg-[var(--surface)] p-3">
         <label className="relative block">
           <Search size={18} className="absolute right-3 top-3.5 app-muted" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جست‌وجوی صاحب کالا، محموله یا سند…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] py-3 pr-10 pl-3 outline-none focus:border-[var(--primary)]" />
@@ -2343,26 +2332,26 @@ export default FileManagerPage;
         </div>
       </section>}
 
-      <section className="file-manager-flat-panel grid items-start gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
+      <section className="grid items-start gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
         {treeOpen&&<button type="button" aria-label="بستن فهرست پوشه‌ها" onClick={()=>setTreeOpen(false)} className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" />}
-        <aside className={(treeOpen?'fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 flex flex-col overflow-hidden':'hidden')+' p-0 lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-visible'}>
-          <div className="mb-2 flex shrink-0 items-center justify-between gap-2 border-b app-border px-1 pb-2"><h2 className="font-black">پوشه‌ها</h2><div className="flex items-center gap-2"><span className="text-xs app-muted">{folders.length} پوشه · {Object.values(folderFileCounts).reduce((sum,count)=>sum+count,0)} سند</span><button type="button" onClick={()=>setTreeOpen(false)} className="rounded-lg border app-border p-2 lg:hidden" aria-label="بستن فهرست"><X size={16}/></button></div></div>
+        <aside className={(treeOpen?'fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 flex flex-col overflow-hidden':'hidden')+' rounded-2xl border app-border bg-[var(--surface)] p-3 shadow-2xl lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto lg:shadow-none'}>
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-2 px-1"><h2 className="font-black">پوشه‌ها</h2><div className="flex items-center gap-2"><span className="text-xs app-muted">{folders.length} پوشه</span><button type="button" onClick={()=>setTreeOpen(false)} className="rounded-lg border app-border p-2 lg:hidden" aria-label="بستن فهرست"><X size={16}/></button></div></div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-0.5 lg:flex-none lg:overflow-visible">{folders.filter(folder=>folder.parent_id===null).map(root=>renderFolderNode(root))}
             {!folders.length&&<div className="p-5 text-center text-sm app-muted">ساختار پوشه هنوز بارگذاری نشده است.</div>}
           </div>
           
         </aside>
-        <section className="flex min-w-0 min-h-[60dvh] max-h-none flex-col overflow-visible border-0 bg-transparent lg:max-h-[calc(100dvh-15rem)] lg:min-h-[380px] lg:overflow-hidden">
+        <section className="flex min-w-0 min-h-[60dvh] max-h-none flex-col overflow-visible rounded-2xl border app-border bg-[var(--surface)] lg:max-h-[calc(100dvh-15rem)] lg:min-h-[380px] lg:overflow-hidden">
           <div className="shrink-0 border-b app-border p-3 md:p-4">
             <div className="mb-3 flex min-w-0 items-center gap-2">
               <button type="button" onClick={()=>setTreeOpen(v=>!v)} className="shrink-0 rounded-lg border app-border px-2.5 py-2 text-xs lg:hidden">{treeOpen?'بستن فهرست':'فهرست پوشه‌ها'}</button>
-              <nav aria-label="مسیر پوشه" className="file-manager-breadcrumbs flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap border-0 bg-transparent px-0 py-2 text-xs">
+              <nav aria-label="مسیر پوشه" className="file-manager-breadcrumbs flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-xl border app-border bg-[var(--surface-2)] px-2.5 py-2 text-xs">
                 <FolderOpen size={14} className="shrink-0 text-[var(--primary)]"/>
                 {breadcrumbs.length === 0 && <span className="min-w-0 truncate font-semibold">فایل‌منیجر</span>}
                 {breadcrumbs.map((crumb,i)=><React.Fragment key={crumb.id}>
                   {i>0&&<ChevronLeft size={13} className="shrink-0 app-muted"/>}
                   <button type="button" onClick={()=>chooseFolder(crumb)} title={crumb.display_name}
-                    aria-current={i===breadcrumbs.length-1?'page':undefined} className={i===breadcrumbs.length-1?'max-w-[min(55vw,18rem)] shrink-0 truncate rounded-lg bg-[var(--primary)]/10 px-2.5 py-1.5 font-bold text-[var(--primary)]':'max-w-[min(32vw,9rem)] shrink-0 truncate rounded-md px-1.5 py-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--primary)]'}>
+                    className={i===breadcrumbs.length-1?'min-w-0 flex-1 truncate rounded-lg bg-[var(--primary)]/10 px-2 py-1 font-bold text-[var(--primary)]':'max-w-24 shrink truncate rounded-md px-1 py-1 hover:bg-[var(--surface)] hover:text-[var(--primary)]'}>
                     {crumb.display_name}
                   </button>
                 </React.Fragment>)}
@@ -2391,17 +2380,12 @@ export default FileManagerPage;
           </div>}
           <div className="flex shrink-0 items-center justify-between gap-2 border-b app-border bg-[var(--surface-2)] px-3 py-2.5 text-xs"><b className="min-w-0 truncate">{currentFolder?.display_name || 'فایل‌منیجر'} <span className="font-normal app-muted">· {files.length} سند</span></b><span className="shrink-0 rounded-full border app-border px-2 py-1">{childFolders.length} زیرپوشه</span></div>
           <div className="min-h-0 flex-none overflow-visible p-3 md:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-            {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">پوشه‌ها</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 border-b app-border py-1 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'پوشه پیش‌فرض':'پوشه سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی پوشه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
-            {files.length>0&&<div className="overflow-hidden"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];const latestReport=latestReportByFile.get(file.id);return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>{setActiveReportFileId(file.id);setReportDraft('');setReportStage(latestReport?.stage||'');setReportStatus(latestReport?.status||'in_review');}} className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1.5 text-xs text-sky-600" title="گزارش و وضعیت سند"><ClipboardList size={13}/>گزارش</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
-            {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center border-t app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این پوشه خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
+            {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">پوشه‌ها</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 rounded-xl border app-border p-1.5 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'پوشه پیش‌فرض':'پوشه سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی پوشه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
+            {files.length>0&&<div className="overflow-hidden rounded-xl border app-border"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
+            {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این پوشه خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
           </div>
         </section>
       </section>
-      <section className="file-manager-workflow-showcase border-t app-border pt-5" aria-labelledby="document-workflow-title">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="text-[10px] font-black tracking-[.18em] text-cyan-500">DOCUMENT CONTROL · LIVE BOARD</div><h2 id="document-workflow-title" className="mt-1 text-lg font-black">ویترین پیگیری و گزارش اسناد</h2><p className="mt-1 text-xs app-muted">آخرین وضعیت و گزارش‌های ثبت‌شده برای اطلاع و اقدام همکاران</p></div><div className="flex gap-2 text-[10px] app-muted"><span>{files.length} سند در پوشه جاری</span><span>·</span><span>{documentReports.length} گزارش ثبت‌شده</span></div></div>
-        {files.length===0?<div className="border-y app-border py-8 text-center text-sm app-muted">برای نمایش ویترین، ابتدا پوشه‌ای دارای سند انتخاب کنید.</div>:<div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">{files.map((file)=>{const latest=latestReportByFile.get(file.id);const label=latest?reportStatusLabel(latest.status):'بدون گزارش';const tone=latest?.status==='completed'?'text-emerald-500 bg-emerald-500/10':latest?.status==='action_required'||latest?.status==='blocked'?'text-amber-500 bg-amber-500/10':'text-sky-500 bg-sky-500/10';return <article key={file.id} className="relative overflow-hidden border-b border-[var(--border)] px-1 py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-black break-words">{typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name}</div><div className="mt-1 text-[10px] app-muted">{file.document_type||'سند'} · {new Date(file.created_at).toLocaleDateString('fa-IR')}</div></div><span className={'shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold '+tone}>{label}</span></div><div className="mt-3 min-h-12 border-r-2 border-cyan-500/50 pr-3 text-xs leading-6 app-muted">{latest?.report||'هنوز گزارشی برای این سند ثبت نشده است.'}</div><div className="mt-3 flex items-center justify-between gap-2"><span className="min-w-0 truncate text-[10px] app-muted">{latest?(latest.stage||'مرحله ثبت نشده')+' · '+latest.actor_name:'آماده ثبت اولین گزارش'}</span><button type="button" onClick={()=>{setActiveReportFileId(file.id);setReportDraft('');setReportStage(latest?.stage||'');setReportStatus(latest?.status||'in_review');}} className="shrink-0 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-bold text-white">ثبت گزارش / پیگیری</button></div></article>;})}</div>}
-      </section>
-      {activeReportFile&&<div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/65 p-3" role="dialog" aria-modal="true" aria-label="گزارش و وضعیت سند"><section className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border app-border bg-[var(--surface)] p-4 shadow-2xl"><header className="flex items-start justify-between gap-3 border-b app-border pb-3"><div className="min-w-0"><div className="text-[10px] font-black text-cyan-500">DOCUMENT ACTIVITY</div><h3 className="mt-1 break-words text-base font-black">{activeReportFile.original_name}</h3></div><button type="button" onClick={()=>setActiveReportFileId(null)} className="rounded-lg border app-border p-2" aria-label="بستن"><X size={17}/></button></header><div className="mt-4"><h4 className="mb-2 text-sm font-black">تاریخچه گزارش‌ها</h4>{documentReports.filter((row)=>row.file_id===activeReportFile.id).length===0?<p className="py-4 text-xs app-muted">هنوز گزارشی ثبت نشده است.</p>:<div className="space-y-3">{documentReports.filter((row)=>row.file_id===activeReportFile.id).map((row)=><article key={row.id} className="border-r-2 border-cyan-500/60 pr-3 py-1"><div className="flex flex-wrap items-center gap-2 text-[10px] app-muted"><b className="text-[var(--text)]">{row.actor_name}</b><span>{new Date(row.created_at).toLocaleString('fa-IR')}</span><span>· {reportStatusLabel(row.status)}</span></div>{row.stage&&<div className="mt-1 text-xs font-bold">مرحله: {row.stage}</div>}<p className="mt-1 whitespace-pre-wrap text-xs leading-6">{row.report}</p></article>)}</div>}</div><div className="mt-5 border-t app-border pt-4"><h4 className="mb-3 text-sm font-black">ثبت گزارش جدید</h4><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs"><span className="mb-1 block app-muted">وضعیت سند</span><select value={reportStatus} onChange={(e)=>setReportStatus(e.target.value as DocumentReportRow['status'])} className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"><option value="received">دریافت شده</option><option value="in_review">در حال بررسی</option><option value="action_required">نیازمند اقدام</option><option value="completed">انجام شده</option><option value="blocked">متوقف / دارای مانع</option><option value="archived">مختومه</option></select></label><label className="text-xs"><span className="mb-1 block app-muted">مرحله فعلی کار</span><input value={reportStage} onChange={(e)=>setReportStage(e.target.value)} placeholder="مثلاً بررسی قبض انبار، اخذ مجوز…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"/></label></div><label className="mt-3 block text-xs"><span className="mb-1 block app-muted">شرح گزارش و اقدام موردنیاز</span><textarea value={reportDraft} onChange={(e)=>setReportDraft(e.target.value)} rows={4} maxLength={4000} placeholder="چه کاری انجام شده؟ چه مدرکی ناقص است؟ همکار بعدی باید چه اقدامی انجام دهد؟" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"/></label><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={()=>setActiveReportFileId(null)} className="rounded-xl border app-border px-4 py-2 text-xs">انصراف</button><button type="button" onClick={()=>void saveDocumentReport()} disabled={savingReport||!reportDraft.trim()} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{savingReport?'در حال ثبت…':'ثبت گزارش برای همه همکاران'}</button></div></div></section></div>}
       <p className="text-xs app-muted">همگام‌سازی کامل سازمان با یک کلیک و پس از انتخاب یک‌باره پوشه ذخیره انجام می‌شود. کنار هر سند فایل متنی اطلاعات عملیاتی و مالی ساخته می‌شود؛ اسناد اصلی بدون اجازه حذف یا بازنویسی نمی‌شوند.</p>
       {preview&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3" role="dialog" aria-modal="true" aria-label={'پیش‌نمایش '+preview.name}><section className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border app-border bg-[var(--surface)] shadow-2xl"><header className="flex shrink-0 items-center justify-between gap-3 border-b app-border px-4 py-3"><b className="min-w-0 truncate text-sm">{preview.name}</b><button type="button" onClick={()=>setPreview(null)} className="rounded-lg border app-border p-2" aria-label="بستن پیش‌نمایش"><X size={17}/></button></header><div className="min-h-0 flex-1 overflow-auto p-2">{preview.mime.startsWith('image/')?<img src={preview.url} alt={preview.name} className="mx-auto max-h-[82dvh] max-w-full object-contain"/>:preview.mime==='application/pdf'?<iframe src={preview.url} title={preview.name} className="h-[82dvh] w-full rounded-lg bg-white"/>:<iframe src={preview.url} title={preview.name} sandbox="" className="h-[82dvh] w-full rounded-lg bg-white"/>}</div></section></div>}
     </div>
