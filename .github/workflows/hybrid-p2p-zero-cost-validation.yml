@@ -67,23 +67,19 @@ jobs:
       - name: Build web application
         run: npm run build
 
-      - name: Prepare disposable legacy schema baseline for local CI only
+      - name: Prepare disposable SQL replay set and suppress automatic migration replay
         shell: bash
         run: |
           set -euo pipefail
-          # Production migration history already contains the original baseline,
-          # but these eight historical bootstrap files are intentionally stored
-          # outside supabase/migrations. A brand-new local database needs them
-          # before replaying the timestamped migrations. Copy only into this
-          # ephemeral Actions checkout; never commit or deploy these copies.
-          # The hosted Auth schema is managed by Supabase. In a disposable
-          # local-only database, grant the app migration role the minimum
-          # schema-create permission required by the original auth helper
-          # functions. This file exists only in the ephemeral Actions checkout.
-          cat > supabase/migrations/00000_ci_auth_schema_grants.sql <<'SQL'
-          GRANT USAGE, CREATE ON SCHEMA auth TO PUBLIC;
-          SQL
-
+          # The original baseline is preserved under legacy-migrations because
+          # production has already applied it. A clean local DB needs the base
+          # migrations too. Build an ephemeral replay directory and temporarily
+          # empty the CLI migration folder so 'supabase start' initializes only
+          # Supabase's system schemas. Nothing here is committed back to Git.
+          replay_dir="$RUNNER_TEMP/darbandi-migrations"
+          active_dir="$RUNNER_TEMP/darbandi-active-migrations"
+          mkdir -p "$replay_dir"
+          cp supabase/migrations/*.sql "$replay_dir/"
           for migration in \
             00003_auth_foundation.sql \
             00004_reference_data.sql \
@@ -94,15 +90,39 @@ jobs:
             00009_rls.sql \
             00010_triggers.sql; do
             test -s "supabase/legacy-migrations/$migration"
-            test ! -e "supabase/migrations/$migration"
-            cp "supabase/legacy-migrations/$migration" "supabase/migrations/$migration"
+            cp "supabase/legacy-migrations/$migration" "$replay_dir/$migration"
           done
+          mv supabase/migrations "$active_dir"
+          mkdir -p supabase/migrations
 
-      - name: Start isolated local Supabase stack
+      - name: Start isolated local Supabase system services
         run: supabase start
 
-      - name: Apply repository migrations to LOCAL database only
-        run: supabase db reset --local
+      - name: Apply historical baseline and repository migrations to disposable LOCAL Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_container="$(docker ps --filter 'name=supabase_db_customs-os' --format '{{.Names}}' | head -n 1)"
+          if [[ -z "$db_container" ]]; then
+            echo "Local Supabase Postgres container was not found."
+            exit 1
+          fi
+          echo "Using disposable local database container: $db_container"
+          while IFS= read -r migration; do
+            echo "Applying $(basename "$migration") to ephemeral local Postgres"
+            docker exec -i "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$migration"
+          done < <(find "$RUNNER_TEMP/darbandi-migrations" -maxdepth 1 -type f -name '*.sql' -print | sort)
+
+      - name: Restore repository migration directory
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          active_dir="$RUNNER_TEMP/darbandi-active-migrations"
+          if [[ -d "$active_dir" ]]; then
+            rm -rf supabase/migrations
+            mv "$active_dir" supabase/migrations
+          fi
 
       - name: Run local database tests
         run: supabase test db --local
