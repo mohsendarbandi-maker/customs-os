@@ -19,6 +19,7 @@ import {
 import { folderToneClass, getFolderSubtreeCounts, isCopyableFolder } from '../lib/fileManagerExplorer';
 import { optimizeFileForUpload } from '../lib/clientFileOptimizer';
 import { safeWindowsFileName } from '../lib/safeWindowsFileName';
+import { buildLocalFileManagerHtml } from '../lib/fileManagerLocalIndex';
 import { readPortableSyncArchive } from '../lib/fileManagerPortableSync';
 import { exportPortableOrganization, importPortableOrganizationFiles, type PortableSyncInputFile } from '../lib/fileManagerPortableSyncService';
 import {
@@ -861,6 +862,16 @@ export const FileManagerPage: React.FC = () => {
       }
       // Keep the user's chosen directory clean and make the exact folder shareable over SMB.
       const localRoot = await selectedHandle.getDirectoryHandle('Darbandi Commercial', { create: true });
+      // Create the offline dashboard immediately; it is refreshed with the full archive snapshot below.
+      const localIndexHandle = await localRoot.getFileHandle('مدیریت_فایل.html', { create: true });
+      const writeLocalIndex = async (html: string) => {
+        const writable = await localIndexHandle.createWritable();
+        await writable.write(html);
+        await writable.close();
+        const saved = await localIndexHandle.getFile();
+        if (saved.size !== new TextEncoder().encode(html).byteLength) throw new Error('تأیید ذخیره فایل مدیریت_فایل.html ناموفق بود.');
+      };
+      await writeLocalIndex(buildLocalFileManagerHtml({ schemaVersion: 1, exportedAt: new Date().toISOString(), organizationId, tables: {}, fileManager: { folders: [], files: [] }, syncSummary: { status: 'در حال همگام‌سازی' } }));
       setProgress('بررسی ساختار کامل صاحبان کالا، محموله‌ها و زیرپوشه‌ها…');
 
       const isSystemSyncEntry = (name: string) => {
@@ -891,7 +902,7 @@ export const FileManagerPage: React.FC = () => {
         }
       }
 
-      const canonicalPath = (value: string) => value.normalize('NFKC').toLocaleLowerCase('en-US');
+      const canonicalPath = (value: string) => value.normalize('NFKC').replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '').toLocaleLowerCase('en-US');
       const ambiguousFileKeys = new Set<string>();
       const localDirectories = new Map<string, any>([['', localRoot]]);
       const localFiles = new Map<string, { file: File; parentPath: string; relativePath: string }>();
@@ -948,18 +959,21 @@ export const FileManagerPage: React.FC = () => {
       }
 
       const ensureServerFolder = async (relativePath: string): Promise<FolderRow> => {
-        const existing = serverFolderByPath.get(relativePath);
+        const canonicalTarget = canonicalPath(relativePath);
+        const existing = [...serverFolderByPath.entries()].find(([path]) => canonicalPath(path) === canonicalTarget)?.[1];
         if (existing) return existing;
         const parts = relativePath.split('/').filter(Boolean);
         const parentPath = parts.slice(0, -1).join('/');
         const parent = await ensureServerFolder(parentPath);
         const segment = parts[parts.length - 1];
-        const matching = folders.find((item) => item.parent_id === parent.id && windowsName(item.display_name) === segment);
+        const matching = folders.find((item) => item.parent_id === parent.id && canonicalPath(windowsName(item.display_name)) === canonicalPath(segment));
         const folder = matching || await getOrCreateSubfolder(parent, segment);
         serverFolderByPath.set(relativePath, folder);
         folderPathById.set(folder.id, relativePath);
         return folder;
       };
+
+      const safeLocalFallbackName = (value: string) => value.normalize('NFKC').replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '').replace(/[. ]+$/g, '') || 'بدون نام';
 
       const ensureLocalFolder = async (relativePath: string): Promise<any> => {
         if (localDirectories.has(relativePath)) return localDirectories.get(relativePath);
@@ -974,6 +988,20 @@ export const FileManagerPage: React.FC = () => {
               handle = await handle.getDirectoryHandle(part, { create: true });
               localDirectories.set(path, handle);
             } catch (reason) {
+              // Chromium on Windows can reject Persian ZWNJ/format marks even when the visible name is valid.
+              // Retry with only invisible formatting code points removed; logical names remain unchanged in metadata.
+              const compatibleName = safeLocalFallbackName(part);
+              if (compatibleName !== part) {
+                try {
+                  handle = await handle.getDirectoryHandle(compatibleName, { create: true });
+                  localDirectories.set(path, handle);
+                  continue;
+                } catch (fallbackReason) {
+                  const fallbackDetail = fallbackReason instanceof Error ? fallbackReason.message : 'خطای نامشخص در مسیر جایگزین';
+                  const originalDetail = reason instanceof Error ? reason.message : 'خطای نامشخص مرورگر';
+                  throw new Error('ساخت پوشه محلی ناموفق بود؛ نام اصلی: «' + part + '»، نام سازگار: «' + compatibleName + '»، مسیر: «' + path + '». خطای اصلی: ' + originalDetail + '؛ خطای جایگزین: ' + fallbackDetail);
+                }
+              }
               const detail = reason instanceof Error ? reason.message : 'خطای نامشخص مرورگر';
               throw new Error('ساخت پوشه محلی ناموفق بود؛ نام: «' + part + '»، مسیر: «' + path + '». جزئیات مرورگر: ' + detail);
             }
@@ -1086,7 +1114,13 @@ export const FileManagerPage: React.FC = () => {
             throw new Error('حجم فایل دریافتی با اندازه ثبت‌شده در آرشیو مطابقت ندارد.');
           }
           const directory = await ensureLocalFolder(parentPath);
-          const fileHandle = await directory.getFileHandle(filename, { create: true });
+          let fileHandle: any;
+          try { fileHandle = await directory.getFileHandle(filename, { create: true }); }
+          catch (reason) {
+            const compatibleName = safeLocalFallbackName(filename);
+            if (compatibleName === filename) throw reason;
+            fileHandle = await directory.getFileHandle(compatibleName, { create: true });
+          }
           const writable = await fileHandle.createWritable();
           await writable.write(blob);
           await writable.close();
@@ -1168,9 +1202,14 @@ export const FileManagerPage: React.FC = () => {
         tables: data,
         fileManager: {
           folders: [...serverFolderByPath.entries()].map(([relativePath, folder]) => ({ relativePath, ...folder })),
-          files: latestFiles,
+          files: latestFiles.map((file) => {
+            const parentPath = folderPathById.get(file.folder_id) ?? '';
+            return { ...file, relativePath: parentPath ? parentPath + '/' + windowsName(file.original_name) : windowsName(file.original_name) };
+          }),
         },
       };
+      // Replace the initial dashboard with a complete offline index before per-folder metadata work.
+      await writeLocalIndex(buildLocalFileManagerHtml(organizationSnapshot));
       const organizationJson = JSON.stringify(organizationSnapshot, null, 2);
       const organizationSnapshotHandle = await localRoot.getFileHandle('اطلاعات_کامل_سازمان.json', { create: true });
       const organizationSnapshotWritable = await organizationSnapshotHandle.createWritable();
@@ -1319,26 +1358,37 @@ export const FileManagerPage: React.FC = () => {
         for (const file of folderFileRows) {
           const fileName = windowsName(file.original_name || 'document');
           const companionName = windowsName(fileName + '.اطلاعات.txt');
-          const companionText = buildDocumentMetadataText(file as unknown as Record<string, unknown>, text);
-          const companionHandle = await directory.getFileHandle(companionName, { create: true });
-          const companionWritable = await companionHandle.createWritable();
-          await companionWritable.write(companionText);
-          await companionWritable.close();
-          const savedCompanion = await companionHandle.getFile();
-          if (savedCompanion.size !== new TextEncoder().encode(companionText).byteLength) {
-            throw new Error('ذخیره فراداده سند «' + fileName + '» تأیید نشد.');
+          try {
+            const companionText = buildDocumentMetadataText(file as unknown as Record<string, unknown>, text);
+            let companionHandle: any;
+            try { companionHandle = await directory.getFileHandle(companionName, { create: true }); }
+            catch (reason) {
+              const compatibleName = safeLocalFallbackName(companionName);
+              if (compatibleName === companionName) throw reason;
+              companionHandle = await directory.getFileHandle(compatibleName, { create: true });
+            }
+            const companionWritable = await companionHandle.createWritable();
+            await companionWritable.write(companionText);
+            await companionWritable.close();
+            const savedCompanion = await companionHandle.getFile();
+            if (savedCompanion.size !== new TextEncoder().encode(companionText).byteLength) {
+              throw new Error('ذخیره فراداده سند «' + fileName + '» تأیید نشد.');
+            }
+            metadataWritten += 1;
+            bytesSaved += savedCompanion.size;
+            metadataTasksDone += 1;
+            publishSyncProgress({
+              phase: 'ذخیره اطلاعات اسناد',
+              percent: 80 + Math.round((metadataTasksDone / metadataTasksTotal) * 20),
+              currentItem: relativePath ? relativePath + '/' + companionName : companionName,
+              metadataWritten,
+              bytesSaved,
+              failed,
+            });
+          } catch (reason) {
+            failed += 1;
+            failedItems.push((relativePath ? relativePath + '/' : '') + companionName + ': ' + (reason instanceof Error ? reason.message : 'ذخیره فراداده سند ناموفق بود.'));
           }
-          metadataWritten += 1;
-          bytesSaved += savedCompanion.size;
-          metadataTasksDone += 1;
-          publishSyncProgress({
-            phase: 'ذخیره اطلاعات اسناد',
-            percent: 80 + Math.round((metadataTasksDone / metadataTasksTotal) * 20),
-            currentItem: relativePath ? relativePath + '/' + companionName : companionName,
-            metadataWritten,
-            bytesSaved,
-            failed,
-          });
         }
         } catch (reason) {
           failed += 1;
@@ -1346,6 +1396,7 @@ export const FileManagerPage: React.FC = () => {
         }
       }
 
+      await writeLocalIndex(buildLocalFileManagerHtml({ ...organizationSnapshot, exportedAt: new Date().toISOString(), syncSummary: { uploaded, downloaded, identical, conflicts, failed, foldersCreated, metadataWritten, bytesSaved, oversized } }));
       setProgress('ثبت نتیجه و تازه‌سازی فهرست فایل‌ها…');
       await loadFolders();
       await loadFiles(selectedFolderId);
