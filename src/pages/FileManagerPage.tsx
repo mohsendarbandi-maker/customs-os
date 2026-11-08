@@ -339,7 +339,7 @@ export const FileManagerPage: React.FC = () => {
     if (currentFolder.folder_type !== 'shipment') return currentFolder;
     const preferred = folders.find((folder) =>
       folder.parent_id === currentFolder.id && folder.folder_type === 'other');
-    if (!preferred) throw new Error('زیرپوشه «سایر اسناد» محموله پیدا نشد؛ ساختار پوشه‌ها را تازه‌سازی کنید.');
+    if (!preferred) throw new Error('زیرپوشه «سایر اسناد» محموله پیدا نشد؛ ساختار آرشیو را تازه‌سازی کنید.');
     return preferred;
   };
 
@@ -461,7 +461,7 @@ export const FileManagerPage: React.FC = () => {
       setSelectedFolderId(folder.id);
       setMessage('زیرپوشه ایجاد شد.');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'ساخت پوشه ناموفق بود.');
+      setError(e instanceof Error ? e.message : 'ساخت شاخه ناموفق بود.');
     } finally {
       setCreatingFolder(false);
     }
@@ -736,7 +736,7 @@ export const FileManagerPage: React.FC = () => {
     }
     const cloudRoot = folders.find((folder) => folder.parent_id === null && folder.folder_key === 'owners-root');
     if (!cloudRoot) {
-      setError('پوشه اصلی «صاحبان کالا» در فایل‌منیجر پیدا نشد؛ ساختار پوشه‌ها را تازه‌سازی کنید.');
+      setError('شاخه اصلی «صاحبان کالا» در فایل‌منیجر پیدا نشد؛ ساختار پوشه‌ها را تازه‌سازی کنید.');
       return;
     }
     const picker = (window as any).showDirectoryPicker;
@@ -934,7 +934,7 @@ export const FileManagerPage: React.FC = () => {
                 } catch (fallbackReason) {
                   const fallbackDetail = fallbackReason instanceof Error ? fallbackReason.message : 'خطای نامشخص در مسیر جایگزین';
                   const originalDetail = reason instanceof Error ? reason.message : 'خطای نامشخص مرورگر';
-                  throw new Error('ساخت پوشه محلی ناموفق بود؛ نام اصلی: «' + part + '»، نام سازگار: «' + compatibleName + '»، مسیر: «' + path + '». خطای اصلی: ' + originalDetail + '؛ خطای جایگزین: ' + fallbackDetail);
+                  throw new Error('ساخت شاخه محلی ناموفق بود؛ نام اصلی: «' + part + '»، نام سازگار: «' + compatibleName + '»، مسیر: «' + path + '». خطای اصلی: ' + originalDetail + '؛ خطای جایگزین: ' + fallbackDetail);
                 }
               }
               const detail = reason instanceof Error ? reason.message : 'خطای نامشخص مرورگر';
@@ -952,7 +952,7 @@ export const FileManagerPage: React.FC = () => {
         const folderPath = folderPathsToPrepare[index];
         if (!ambiguousPaths.has(folderPath)) {
           try { await ensureLocalFolder(folderPath); foldersCreated += 1; }
-          catch (reason) { failed += 1; failedItems.push(folderPath + ': ' + (reason instanceof Error ? reason.message : 'ساخت پوشه در دستگاه ناموفق بود.')); }
+          catch (reason) { failed += 1; failedItems.push(folderPath + ': ' + (reason instanceof Error ? reason.message : 'ساخت شاخه در دستگاه ناموفق بود.')); }
         }
         publishSyncProgress({
           phase: 'آماده‌سازی پوشه‌ها',
@@ -1632,7 +1632,7 @@ export const FileManagerPage: React.FC = () => {
           </div>}
           <div className="flex shrink-0 items-center justify-between gap-2 border-b app-border bg-[var(--surface-2)] px-3 py-2.5 text-xs"><b className="min-w-0 truncate">{currentFolder?.display_name || 'فایل‌منیجر'} <span className="font-normal app-muted">· {files.length} سند</span></b><span className="shrink-0 rounded-full border app-border px-2 py-1">{childFolders.length} زیرپوشه</span></div>
           <div className="min-h-0 flex-none overflow-visible p-3 md:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-            {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">محتویات زیرشاخه</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 rounded-xl border app-border p-1.5 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'سیستمی':'سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی پوشه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
+            {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">محتویات زیرشاخه</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 rounded-xl border app-border p-1.5 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'سیستمی':'سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی شاخه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
             {files.length>0&&<div className="overflow-hidden rounded-xl border app-border"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
             {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این پوشه خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
           </div>
