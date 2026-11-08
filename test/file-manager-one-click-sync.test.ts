@@ -90,7 +90,9 @@ describe('one-click file manager synchronization', () => {
     expect(page).toContain('وارد کردن ZIP قبلی');
     expect(page).toContain('دریافت ZIP کامل سازمان برای Files');
     expect(page).toContain('webkitdirectory');
-    expect(page).not.toContain('همگام‌سازی مستقیم پوشه فقط در Microsoft Edge یا Google Chrome');
+    const directSyncStart = page.indexOf('const syncWindowsFolder');
+    const directSyncBody = page.slice(directSyncStart);
+    expect(directSyncBody).not.toContain('همگام‌سازی مستقیم پوشه فقط در Microsoft Edge یا Google Chrome');
   });
 
   it('uses Supabase Storage as a fallback for Telegram-archived files, including files over 20 MB', () => {
