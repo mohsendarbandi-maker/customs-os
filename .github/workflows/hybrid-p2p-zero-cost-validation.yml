@@ -76,6 +76,14 @@ jobs:
           # outside supabase/migrations. A brand-new local database needs them
           # before replaying the timestamped migrations. Copy only into this
           # ephemeral Actions checkout; never commit or deploy these copies.
+          # The hosted Auth schema is managed by Supabase. In a disposable
+          # local-only database, grant the app migration role the minimum
+          # schema-create permission required by the original auth helper
+          # functions. This file exists only in the ephemeral Actions checkout.
+          cat > supabase/migrations/00000_ci_auth_schema_grants.sql <<'SQL'
+          GRANT USAGE, CREATE ON SCHEMA auth TO postgres;
+          SQL
+
           for migration in \
             00003_auth_foundation.sql \
             00004_reference_data.sql \
