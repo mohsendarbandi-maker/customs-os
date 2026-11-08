@@ -69,6 +69,21 @@ type SearchHit = {
   client_id: string | null;
 };
 
+type WindowsSyncProgress = {
+  percent: number;
+  phase: string;
+  currentItem: string;
+  foldersCreated: number;
+  downloaded: number;
+  uploaded: number;
+  identical: number;
+  metadataWritten: number;
+  bytesSaved: number;
+  failed: number;
+  conflicts: number;
+  oversized: number;
+};
+
 const byteLabel = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes <= 0) return 'اندازه نامشخص';
   if (bytes < 1024) return `${bytes} بایت`;
@@ -103,6 +118,7 @@ export const FileManagerPage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncDirectoryName, setSyncDirectoryName] = useState('');
+  const [syncProgress, setSyncProgress] = useState<WindowsSyncProgress | null>(null);
   const [smbAddress, setSmbAddress] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
@@ -459,13 +475,28 @@ export const FileManagerPage: React.FC = () => {
 
   const getFileBlob = async (file: FileRow): Promise<Blob> => {
     const copyAliasAssetId = typeof file.metadata?.copyAliasFileAssetId === 'string' ? file.metadata.copyAliasFileAssetId : '';
-    if (copyAliasAssetId) return downloadTelegramArchivedFile(copyAliasAssetId);
-    if (file.file_asset_id) return downloadTelegramArchivedFile(file.file_asset_id);
-    if (file.storage_path) {
+    const downloadStorageCopy = async (): Promise<Blob> => {
+      if (!file.storage_path) throw new Error('نسخه پشتیبان فایل در Supabase Storage ثبت نشده است.');
       const { data, error: storageError } = await supabase.storage.from('customs_documents').download(file.storage_path);
       if (storageError) throw storageError;
       return data;
+    };
+
+    // Telegram Bot API download is limited to 20 MB. Prefer the original Storage
+    // copy for larger files, and fall back to it if Telegram retrieval fails.
+    if (file.storage_path && Number(file.size_bytes) > FILE_ARCHIVE_MAX_BYTES) {
+      return downloadStorageCopy();
     }
+    const assetId = copyAliasAssetId || file.file_asset_id;
+    if (assetId) {
+      try {
+        return await downloadTelegramArchivedFile(assetId);
+      } catch (telegramError) {
+        if (file.storage_path) return downloadStorageCopy();
+        throw telegramError;
+      }
+    }
+    if (file.storage_path) return downloadStorageCopy();
     throw new Error('مسیر بازیابی فایل ثبت نشده است.');
   };
 
@@ -589,6 +620,33 @@ export const FileManagerPage: React.FC = () => {
     let identical = 0;
     let conflicts = 0;
     let oversized = 0;
+    let failed = 0;
+    let foldersCreated = 0;
+    let metadataWritten = 0;
+    let bytesSaved = 0;
+    let transferCompleted = 0;
+    let transferTotal = 0;
+    let archiveDestination: Awaited<ReturnType<typeof getFileArchiveDestination>> | null = null;
+    const failedItems: string[] = [];
+    let progressSnapshot: WindowsSyncProgress = {
+      percent: 0,
+      phase: 'آماده‌سازی همگام‌سازی',
+      currentItem: '',
+      foldersCreated: 0,
+      downloaded: 0,
+      uploaded: 0,
+      identical: 0,
+      metadataWritten: 0,
+      bytesSaved: 0,
+      failed: 0,
+      conflicts: 0,
+      oversized: 0,
+    };
+    const publishSyncProgress = (patch: Partial<WindowsSyncProgress>) => {
+      progressSnapshot = { ...progressSnapshot, ...patch };
+      setSyncProgress(progressSnapshot);
+    };
+    setSyncProgress(progressSnapshot);
 
     try {
       let selectedHandle = await getSavedSyncDirectoryHandle().catch(() => null);
@@ -711,79 +769,139 @@ export const FileManagerPage: React.FC = () => {
         return handle;
       };
 
-      for (const folderPath of [...serverFolderByPath.keys()].filter(Boolean).sort((a, b) => a.split('/').length - b.split('/').length)) {
-        if (!ambiguousPaths.has(folderPath)) await ensureLocalFolder(folderPath);
+      const folderPathsToPrepare = [...serverFolderByPath.keys()]
+        .filter(Boolean)
+        .sort((a, b) => a.split('/').length - b.split('/').length);
+      for (let index = 0; index < folderPathsToPrepare.length; index += 1) {
+        const folderPath = folderPathsToPrepare[index];
+        if (!ambiguousPaths.has(folderPath)) {
+          await ensureLocalFolder(folderPath);
+          foldersCreated += 1;
+        }
+        publishSyncProgress({
+          phase: 'آماده‌سازی پوشه‌ها',
+          percent: folderPathsToPrepare.length ? Math.round(((index + 1) / folderPathsToPrepare.length) * 10) : 10,
+          currentItem: folderPath,
+          foldersCreated,
+        });
       }
 
-      const destination = await getFileArchiveDestination();
       const digest = async (blob: Blob): Promise<string> => {
         const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
         return Array.from(new Uint8Array(hash), (value) => value.toString(16).padStart(2, '0')).join('');
       };
+      transferTotal = localFiles.size + [...serverFilesByPath.keys()].filter((key) => !localFiles.has(key)).length;
+      const publishTransferProgress = (currentItem: string) => {
+        transferCompleted += 1;
+        publishSyncProgress({
+          phase: 'انتقال و بررسی فایل‌ها',
+          percent: 10 + Math.round((transferCompleted / Math.max(transferTotal, 1)) * 60),
+          currentItem,
+          downloaded,
+          uploaded,
+          identical,
+          bytesSaved,
+          failed,
+          conflicts,
+          oversized,
+        });
+      };
 
       for (const [relativeKey, local] of localFiles) {
         const relativePath = local.relativePath;
-        if (ambiguousPaths.has(local.parentPath) || ambiguousFileKeys.has(relativeKey)) {
-          conflicts += 1;
-          continue;
-        }
-        const remoteEntry = serverFilesByPath.get(relativeKey);
-        if (remoteEntry) {
-          const remote = remoteEntry.file;
-          if (Number(remote.size_bytes) !== local.file.size) {
+        try {
+          if (ambiguousPaths.has(local.parentPath) || ambiguousFileKeys.has(relativeKey)) {
             conflicts += 1;
             continue;
           }
-          setProgress('مقایسهٔ محتوا: ' + relativePath);
-          const remoteBlob = await getFileBlob(remote);
-          if (await digest(local.file) === await digest(remoteBlob)) identical += 1;
-          else conflicts += 1;
-          continue;
+          const remoteEntry = serverFilesByPath.get(relativeKey);
+          if (remoteEntry) {
+            const remote = remoteEntry.file;
+            if (Number(remote.size_bytes) !== local.file.size) {
+              conflicts += 1;
+              continue;
+            }
+            setProgress('مقایسهٔ محتوا: ' + relativePath);
+            const remoteBlob = await getFileBlob(remote);
+            if (await digest(local.file) === await digest(remoteBlob)) identical += 1;
+            else conflicts += 1;
+            continue;
+          }
+          if (local.file.size <= 0 || local.file.size > FILE_ARCHIVE_MAX_BYTES) {
+            oversized += 1;
+            failedItems.push(relativePath + ': فایل محلی برای آرشیو تلگرام باید بین ۱ بایت تا ۲۰ مگابایت باشد.');
+            continue;
+          }
+          const parent = await ensureServerFolder(local.parentPath);
+          const localHash = await digest(local.file);
+          const keyMaterial = [organizationId, parent.id, relativePath, local.file.size, localHash].join('|');
+          const idempotencyKey = 'windows-sync:' + await digest(new Blob([keyMaterial]));
+          archiveDestination ??= await getFileArchiveDestination();
+          setProgress('ارسال فایل جدید به آرشیو: ' + relativePath);
+          await uploadTelegramArchivedFile(local.file, {
+            folderId: parent.id,
+            ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+            documentType: parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG',
+            tags: [],
+            destination: archiveDestination,
+            idempotencyKey,
+          });
+          uploaded += 1;
+        } catch (reason) {
+          failed += 1;
+          failedItems.push(relativePath + ': ' + (reason instanceof Error ? reason.message : 'انتقال ناموفق بود.'));
+        } finally {
+          publishTransferProgress(relativePath);
         }
-        if (local.file.size <= 0 || local.file.size > FILE_ARCHIVE_MAX_BYTES) {
-          oversized += 1;
-          continue;
-        }
-        const parent = await ensureServerFolder(local.parentPath);
-        const localHash = await digest(local.file);
-        const keyMaterial = [organizationId, parent.id, relativePath, local.file.size, localHash].join('|');
-        const idempotencyKey = 'windows-sync:' + await digest(new Blob([keyMaterial]));
-        setProgress('ارسال فایل جدید به آرشیو: ' + relativePath);
-        await uploadTelegramArchivedFile(local.file, {
-          folderId: parent.id,
-          ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
-          documentType: parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG',
-          tags: [],
-          destination,
-          idempotencyKey,
-        });
-        uploaded += 1;
       }
 
       for (const [relativeKey, remoteEntry] of serverFilesByPath) {
+        if (localFiles.has(relativeKey)) continue;
         const relativePath = remoteEntry.relativePath;
         const remote = remoteEntry.file;
-        if (ambiguousFileKeys.has(relativeKey) || localFiles.has(relativeKey)) {
-          if (ambiguousFileKeys.has(relativeKey) && !localFiles.has(relativeKey)) conflicts += 1;
-          continue;
+        try {
+          if (ambiguousFileKeys.has(relativeKey)) {
+            conflicts += 1;
+            continue;
+          }
+          const slash = relativePath.lastIndexOf('/');
+          const parentPath = slash >= 0 ? relativePath.slice(0, slash) : '';
+          const filename = slash >= 0 ? relativePath.slice(slash + 1) : relativePath;
+          setProgress('دریافت از آرشیو: ' + relativePath);
+          const blob = await getFileBlob(remote);
+          if (Number(remote.size_bytes) > 0 && blob.size !== Number(remote.size_bytes)) {
+            throw new Error('حجم فایل دریافتی با اندازه ثبت‌شده در آرشیو مطابقت ندارد.');
+          }
+          const directory = await ensureLocalFolder(parentPath);
+          const fileHandle = await directory.getFileHandle(filename, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          const savedFile = await fileHandle.getFile();
+          if (savedFile.size !== blob.size) {
+            throw new Error('تأیید ذخیره روی دیسک ناموفق بود؛ اندازه فایل نوشته‌شده صحیح نیست.');
+          }
+          downloaded += 1;
+          bytesSaved += savedFile.size;
+        } catch (reason) {
+          failed += 1;
+          failedItems.push(relativePath + ': ' + (reason instanceof Error ? reason.message : 'دریافت یا ذخیره فایل ناموفق بود.'));
+        } finally {
+          publishTransferProgress(relativePath);
         }
-        const slash = relativePath.lastIndexOf('/');
-        const parentPath = slash >= 0 ? relativePath.slice(0, slash) : '';
-        const filename = slash >= 0 ? relativePath.slice(slash + 1) : relativePath;
-        if (remote.file_asset_id && Number(remote.size_bytes) > FILE_ARCHIVE_MAX_BYTES) {
-          oversized += 1;
-          continue;
-        }
-        setProgress('دریافت از آرشیو: ' + relativePath);
-        const blob = await getFileBlob(remote);
-        const directory = await ensureLocalFolder(parentPath);
-        const fileHandle = await directory.getFileHandle(filename, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        downloaded += 1;
       }
-
+      publishSyncProgress({
+        phase: 'دریافت اطلاعات سازمانی و مالی',
+        percent: 72,
+        currentItem: 'خواندن اطلاعات کشتیرانی، گمرک، ثبت سفارش و حسابداری…',
+        downloaded,
+        uploaded,
+        identical,
+        bytesSaved,
+        failed,
+        conflicts,
+        oversized,
+      });
       setProgress('تجمیع اطلاعات کشتیرانی، گمرک، ثبت سفارش و حساب مالی…');
       const fetchOrgRows = async (table: string): Promise<Record<string, any>[]> => {
         const collected: Record<string, any>[] = [];
@@ -827,7 +945,40 @@ export const FileManagerPage: React.FC = () => {
         if (rowsBatch.length < 500) break;
       }
 
+      const exportedAt = new Date().toISOString();
+      const organizationSnapshot = {
+        schemaVersion: 1,
+        exportedAt,
+        organizationId,
+        tables: data,
+        fileManager: {
+          folders: [...serverFolderByPath.entries()].map(([relativePath, folder]) => ({ relativePath, ...folder })),
+          files: latestFiles,
+        },
+      };
+      const organizationJson = JSON.stringify(organizationSnapshot, null, 2);
+      const organizationSnapshotHandle = await localRoot.getFileHandle('اطلاعات_کامل_سازمان.json', { create: true });
+      const organizationSnapshotWritable = await organizationSnapshotHandle.createWritable();
+      await organizationSnapshotWritable.write(organizationJson);
+      await organizationSnapshotWritable.close();
+      const savedSnapshot = await organizationSnapshotHandle.getFile();
+      if (savedSnapshot.size !== new TextEncoder().encode(organizationJson).byteLength) {
+        throw new Error('ذخیره فایل اطلاعات کامل سازمان تأیید نشد.');
+      }
+      metadataWritten += 1;
+      bytesSaved += savedSnapshot.size;
+      publishSyncProgress({
+        phase: 'ذخیره نسخه کامل اطلاعات سازمان',
+        percent: 80,
+        currentItem: 'اطلاعات_کامل_سازمان.json',
+        metadataWritten,
+        bytesSaved,
+        failed,
+      });
+
       const folderMetadata = new Map<string, string>();
+      let metadataTasksDone = 1;
+      const metadataTasksTotal = 1 + serverFolderByPath.size + latestFiles.length;
       for (const [relativePath, folder] of serverFolderByPath) {
         const shipment = byId(data.shipments, folder.shipment_id);
         const caseRecord = byId(data.cases, shipment?.case_id);
@@ -931,14 +1082,45 @@ export const FileManagerPage: React.FC = () => {
         const infoWritable = await infoHandle.createWritable();
         await infoWritable.write(text);
         await infoWritable.close();
+        const savedInfo = await infoHandle.getFile();
+        if (savedInfo.size !== new TextEncoder().encode(text).byteLength) {
+          throw new Error('ذخیره اطلاعات پوشه «' + folder.display_name + '» تأیید نشد.');
+        }
+        metadataWritten += 1;
+        bytesSaved += savedInfo.size;
+        metadataTasksDone += 1;
+        publishSyncProgress({
+          phase: 'ذخیره اطلاعات پرونده‌ها و محموله‌ها',
+          percent: 80 + Math.round((metadataTasksDone / metadataTasksTotal) * 20),
+          currentItem: relativePath || 'ریشه سازمان',
+          metadataWritten,
+          bytesSaved,
+          failed,
+        });
 
         for (const file of folderFileRows) {
           const fileName = windowsName(file.original_name || 'document');
           const companionName = windowsName(fileName + '.اطلاعات.txt');
+          const companionText = buildDocumentMetadataText(file as unknown as Record<string, unknown>, text);
           const companionHandle = await directory.getFileHandle(companionName, { create: true });
           const companionWritable = await companionHandle.createWritable();
-          await companionWritable.write(buildDocumentMetadataText(file as unknown as Record<string, unknown>, text));
+          await companionWritable.write(companionText);
           await companionWritable.close();
+          const savedCompanion = await companionHandle.getFile();
+          if (savedCompanion.size !== new TextEncoder().encode(companionText).byteLength) {
+            throw new Error('ذخیره فراداده سند «' + fileName + '» تأیید نشد.');
+          }
+          metadataWritten += 1;
+          bytesSaved += savedCompanion.size;
+          metadataTasksDone += 1;
+          publishSyncProgress({
+            phase: 'ذخیره اطلاعات اسناد',
+            percent: 80 + Math.round((metadataTasksDone / metadataTasksTotal) * 20),
+            currentItem: relativePath ? relativePath + '/' + companionName : companionName,
+            metadataWritten,
+            bytesSaved,
+            failed,
+          });
         }
       }
 
@@ -946,19 +1128,52 @@ export const FileManagerPage: React.FC = () => {
       await loadFolders();
       await loadFiles(selectedFolderId);
       const parts = [
-        'همگام‌سازی کامل سازمان تمام شد.',
-        uploaded + ' فایل جدید از کامپیوتر/آیفون به آرشیو ارسال شد',
-        downloaded + ' فایل از ابر دریافت شد',
+        'همگام‌سازی سازمان به پایان رسید.',
+        uploaded + ' فایل از ویندوز به آرشیو ارسال شد',
+        downloaded + ' فایل از آرشیو روی دیسک ذخیره و تأیید شد',
         identical + ' فایل بدون تغییر بود',
         conflicts + ' تعارض برای بررسی دستی حفظ شد',
-        folderMetadata.size + ' پوشه دارای فایل اطلاعات متنی شد',
-        latestFiles.length + ' سند دارای فراداده شد',
+        foldersCreated + ' پوشه آماده شد',
+        metadataWritten + ' فایل اطلاعاتی/فراداده ذخیره شد',
+        latestFiles.length + ' سند در فهرست آرشیو بررسی شد',
+        'حجم کل نوشته‌شده روی دیسک: ' + byteLabel(bytesSaved),
       ];
-      if (oversized) parts.push(oversized + ' فایل بزرگ‌تر از ۲۰ مگابایت رد شد');
-      parts.push('هیچ سند اصلی حذف یا بازنویسی نشد؛ فقط فایل‌های اطلاعاتی تولیدشده به‌روزرسانی شدند.');
+      if (oversized) parts.push(oversized + ' فایل محلی به علت محدودیت ۲۰ مگابایت برای آپلود تلگرام ارسال نشد');
+      if (failed) parts.push(failed + ' فایل با خطا مواجه شد');
+      parts.push('هیچ سند اصلی حذف یا بی‌اجازه بازنویسی نشد.');
       setMessage(parts.join('؛ '));
+      if (failed) {
+        setError('همگام‌سازی کامل نیست؛ ' + failed + ' مورد ذخیره نشد. ' + failedItems.slice(0, 4).join(' | '));
+      }
+      publishSyncProgress({
+        phase: failed ? 'پایان با موارد ناموفق' : 'همگام‌سازی کامل شد',
+        percent: 100,
+        currentItem: failed ? failedItems.slice(0, 2).join(' | ') : 'تمام فایل‌ها و اطلاعات قابل دسترس بررسی و ذخیره شدند.',
+        foldersCreated,
+        downloaded,
+        uploaded,
+        identical,
+        metadataWritten,
+        bytesSaved,
+        failed,
+        conflicts,
+        oversized,
+      });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'همگام‌سازی کامل سازمان ناموفق بود.');
+      const failureMessage = reason instanceof Error ? reason.message : 'همگام‌سازی کامل سازمان ناموفق بود.';
+      setError(failureMessage);
+      publishSyncProgress({
+        phase: 'همگام‌سازی متوقف شد',
+        currentItem: failureMessage,
+        downloaded,
+        uploaded,
+        identical,
+        metadataWritten,
+        bytesSaved,
+        failed: failed + 1,
+        conflicts,
+        oversized,
+      });
       if (uploaded || downloaded) setMessage('تا پیش از خطا: ' + uploaded + ' فایل ارسال و ' + downloaded + ' فایل دریافت شد. اجرای بعدی می‌تواند ادامه دهد.');
     } finally {
       setSyncing(false);
@@ -1110,6 +1325,26 @@ export const FileManagerPage: React.FC = () => {
       {error && <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm"><X size={17} className="mt-0.5 shrink-0 text-red-500" /><span>{error}</span></div>}
       {message && <div className="flex items-start gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm"><CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-500" /><span>{message}</span></div>}
       {progress && <div className="flex items-center gap-2 rounded-xl border app-border p-3 text-sm app-muted"><Loader2 size={16} className="animate-spin" />{progress}</div>}
+      {syncProgress && <section className="rounded-xl border app-border bg-[var(--surface)] p-3 sm:p-4" aria-label="پیشرفت همگام‌سازی">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-black">{syncProgress.phase}</div>
+            <div className="mt-1 break-all text-[10px] app-muted">{syncProgress.currentItem}</div>
+          </div>
+          <div className="shrink-0 text-xl font-black tabular-nums">{syncProgress.percent}٪</div>
+        </div>
+        <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-[var(--surface-2)]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={syncProgress.percent} aria-label="درصد پیشرفت ذخیره‌سازی">
+          <div className="h-full rounded-full bg-[var(--primary)] transition-all duration-300" style={{ width: syncProgress.percent + '%' }} />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3 lg:grid-cols-6">
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b>{syncProgress.foldersCreated}</b><div className="app-muted">پوشه آماده</div></div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b>{syncProgress.downloaded}</b><div className="app-muted">فایل ذخیره‌شده</div></div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b>{syncProgress.uploaded}</b><div className="app-muted">فایل ارسال‌شده</div></div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b>{syncProgress.metadataWritten}</b><div className="app-muted">فایل اطلاعاتی</div></div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b>{byteLabel(syncProgress.bytesSaved)}</b><div className="app-muted">حجم ذخیره‌شده</div></div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b className={syncProgress.failed ? 'text-red-500' : ''}>{syncProgress.failed}</b><div className="app-muted">ناموفق</div></div>
+        </div>
+      </section>}
 
       <section className="grid items-start gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
         {treeOpen&&<button type="button" aria-label="بستن فهرست پوشه‌ها" onClick={()=>setTreeOpen(false)} className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" />}
