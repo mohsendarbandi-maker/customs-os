@@ -863,7 +863,11 @@ export const FileManagerPage: React.FC = () => {
           registrationOrder: order,
           declarations: declarationRows,
           financialTransactions: transactions,
-          documents: [...folderFileRows, ...customsDocumentRows, ...shipmentDocumentRows],
+          documents: [
+            ...folderFileRows.map((row) => row as unknown as Record<string, unknown>),
+            ...customsDocumentRows,
+            ...shipmentDocumentRows,
+          ],
           relatedSections: [
             { title: 'پرونده‌های مرتبط صاحب کالا', records: relevantCases },
             { title: 'سایر محموله‌های مرتبط صاحب کالا', records: relevantShipments.filter((row) => row.id !== shipment?.id) },
