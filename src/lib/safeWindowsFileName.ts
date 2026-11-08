@@ -8,13 +8,14 @@ export function safeWindowsFileName(value: string): string {
   let name = Array.from(normalized)
     // Replace Windows-forbidden punctuation, but remove invalid/control code points.
     .map((character) => /[<>:"/\\|?*]/.test(character) ? '_' : character)
-    // Keep Persian ZWNJ/ZWJ, but remove invalid/control code points and bidi overrides.
+    // Remove zero-width format marks (including Persian ZWNJ/ZWJ) that Chromium/Windows may reject; original display names remain in metadata.
     .filter((character) => {
       const codePoint = character.codePointAt(0) ?? 0;
       return !(codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f) ||
         (codePoint >= 0xd800 && codePoint <= 0xdfff) ||
         (codePoint >= 0xfdd0 && codePoint <= 0xfdef) ||
         (codePoint & 0xffff) === 0xfffe || (codePoint & 0xffff) === 0xffff ||
+        (codePoint >= 0x200b && codePoint <= 0x200f) ||
         (codePoint >= 0x202a && codePoint <= 0x202e) ||
         (codePoint >= 0x2066 && codePoint <= 0x2069) || codePoint === 0xfeff);
     })
