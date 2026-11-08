@@ -5,8 +5,8 @@
  */
 export function safeWindowsFileName(value: string): string {
   const normalized = String(value ?? '').normalize('NFKC');
-  // eslint-disable-next-line no-control-regex -- Windows forbids C0/C1 control characters in path components.
   let name = normalized
+    // eslint-disable-next-line no-control-regex -- Windows forbids C0/C1 control characters in path components.
     .replace(/[<>:"/\\|?*\x00-\x1f\x7f-\x9f]/g, '_')
     .replace(/[. ]+$/g, '')
     .slice(0, 120);
