@@ -130,6 +130,7 @@ export type FolderSyncMetadata = {
   declarations?: Record<string, unknown>[];
   financialTransactions?: Record<string, unknown>[];
   documents?: Record<string, unknown>[];
+  relatedSections?: Array<{ title: string; records: Record<string, unknown>[] }>;
   generatedAt?: string;
 };
 
@@ -173,6 +174,13 @@ export function buildFolderMetadataText(input: FolderSyncMetadata): string {
     ? input.financialTransactions.map((item, index) => '--- تراکنش ' + (index + 1) + ' ---\n' + formatRecord(item)).join('\n\n')
     : 'تراکنش مالی مرتبطی ثبت نشده است.');
   output.push('');
+  for (const section of input.relatedSections || []) {
+    output.push('========== ' + section.title + ' ==========');
+    output.push(section.records.length
+      ? section.records.map((item, index) => '--- مورد ' + (index + 1) + ' ---\\n' + formatRecord(item)).join('\\n\\n')
+      : 'موردی ثبت نشده است.');
+    output.push('');
+  }
   output.push('========== مشخصات اسناد این پوشه ==========');
   output.push(input.documents?.length
     ? input.documents.map((item, index) => '--- سند ' + (index + 1) + ' ---\n' + formatRecord(item)).join('\n\n')
