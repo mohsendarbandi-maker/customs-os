@@ -54,6 +54,8 @@ describe('one-click file manager synchronization', () => {
     expect(smb).toContain('هیچ اتصال Private یا Domain معتبر پیدا نشد');
     expect(smb).toContain('-EnableSMB1Protocol $false');
     expect(smb).toContain('DarbandiFiles');
+    expect(smb).toContain("$activeProfiles = @(Get-NetConnectionProfile");
+    expect(smb.indexOf('$trustedProfiles.Count -eq 0')).toBeLessThan(smb.indexOf("$shareName = 'DarbandiCommercial'"));
   });
 
   it('uses a bounded breadcrumb container and keeps the folder label inside the content card', () => {
