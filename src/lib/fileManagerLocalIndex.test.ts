@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildLocalFileManagerHtml } from './fileManagerLocalIndex';
+import { isManagedSyncMetadataFile } from './fileManagerSync';
 
 describe('buildLocalFileManagerHtml', () => {
   it('creates a self-contained Persian offline dashboard with the folder tree and document metadata', () => {
@@ -31,5 +32,12 @@ describe('buildLocalFileManagerHtml', () => {
     });
     expect(html).not.toContain('</script><script>alert(1)</script>');
     expect(html).toContain('\\u003c/script\\u003e');
+  });
+});
+
+
+describe('local dashboard sync exclusion', () => {
+  it('does not re-upload the generated HTML index as an archived business document', () => {
+    expect(isManagedSyncMetadataFile('مدیریت_فایل.html')).toBe(true);
   });
 });
