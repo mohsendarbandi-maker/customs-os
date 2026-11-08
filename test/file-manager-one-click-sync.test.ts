@@ -58,6 +58,32 @@ describe('one-click file manager synchronization', () => {
     expect(smb.indexOf('$trustedProfiles.Count -eq 0')).toBeLessThan(smb.indexOf("$shareName = 'DarbandiCommercial'"));
   });
 
+  it('downloads remote files even when no Telegram upload destination is configured', () => {
+    const start = page.indexOf('const syncWindowsFolder');
+    const end = page.indexOf('\n  const ', start + 20);
+    const syncBody = page.slice(start, end);
+    expect(syncBody.indexOf('for (const [relativeKey, local] of localFiles)')).toBeLessThan(syncBody.indexOf('archiveDestination ??= await getFileArchiveDestination()'));
+    expect(syncBody).toContain('await writable.write(blob)');
+    expect(syncBody).toContain('await fileHandle.getFile()');
+    expect(syncBody).toContain('اطلاعات_کامل_سازمان.json');
+    expect(syncBody).toContain('latestFiles');
+  });
+
+  it('shows a real percentage and verified file, byte, folder, and metadata counts', () => {
+    expect(page).toContain('aria-valuenow={syncProgress.percent}');
+    expect(page).toContain("byteLabel(syncProgress.bytesSaved)");
+    expect(page).toContain('syncProgress.downloaded');
+    expect(page).toContain('syncProgress.metadataWritten');
+    expect(page).toContain('syncProgress.failed');
+    expect(page).toContain('savedFile.size !== blob.size');
+  });
+
+  it('uses Supabase Storage as a fallback for Telegram-archived files, including files over 20 MB', () => {
+    expect(page).toContain('if (file.storage_path && Number(file.size_bytes) > FILE_ARCHIVE_MAX_BYTES)');
+    expect(page).toContain('if (file.storage_path) return downloadStorageCopy()');
+    expect(page).not.toContain('if (remote.file_asset_id && Number(remote.size_bytes) > FILE_ARCHIVE_MAX_BYTES)');
+  });
+
   it('uses a bounded breadcrumb container and keeps the folder label inside the content card', () => {
     expect(page).toContain('file-manager-breadcrumbs flex min-w-0 flex-1');
     expect(page).toContain("currentFolder?.display_name || 'فایل‌منیجر'");
