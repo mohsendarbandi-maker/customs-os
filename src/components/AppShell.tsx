@@ -50,6 +50,8 @@ const nav: NavItem[] = [
   { label: 'پرونده', en: 'Cases', to: '/cases', icon: Folder, group: 'عملیات', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'ثبت سفارش‌ها', en: 'Registration Orders', to: '/registration-orders', icon: FileText, group: 'عملیات', roles: management },
   { label: 'یادآورها', en: 'Reminders', to: '/reminders', icon: ClipboardList, group: 'عملیات' },
+  { label: 'ویترین محموله', en: 'Shipment Showcase', to: '/shipment-showcase', icon: Activity, group: 'عملیات', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
+  { label: 'گزارش محموله‌ها', en: 'Shipment Reports', to: '/shipment-reports', icon: ClipboardList, group: 'کنترل', roles: allStaff },
   { label: 'کشتیرانی', en: 'Shipping & Vessel Search', to: '/maritime', icon: Ship, group: 'حمل و اسناد', roles: management },
   { label: 'وضعیت دریا و لنگرگاه', en: 'Marine & Anchorage', to: '/marine-conditions', icon: Waves, group: 'حمل و اسناد', roles: allStaff },
   { label: 'گمرک', en: 'Customs Offices', to: '/customs-offices', icon: Landmark, group: 'حمل و اسناد', roles: management },
