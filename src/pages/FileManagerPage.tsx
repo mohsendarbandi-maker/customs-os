@@ -73,7 +73,7 @@ type SearchHit = {
   client_id: string | null;
 };
 
-type DocumentReportRow = { id:string; file_id:string; status:'received'|'in_review'|'action_required'|'completed'|'blocked'|'archived'; stage:string; report:string; actor_name:string; created_at:string; };
+type ShipmentReportRow = { id:string; shipment_id:string; status:'received'|'in_review'|'action_required'|'completed'|'blocked'|'archived'; stage:string; report:string; actor_name:string; created_at:string; };
 
 type WindowsSyncProgress = {
   percent: number;
@@ -144,14 +144,11 @@ export const FileManagerPage: React.FC = () => {
   const [copyingFolder, setCopyingFolder] = useState(false);
   const [folderCopyAvailable, setFolderCopyAvailable] = useState(false);
   const [preview, setPreview] = useState<{url:string; name:string; mime:string} | null>(null);
-  const [documentReports, setDocumentReports] = useState<DocumentReportRow[]>([]);
-  const [workflowFiles, setWorkflowFiles] = useState<FileRow[]>([]);
-  const [workflowHasMore, setWorkflowHasMore] = useState(false);
-  const [workflowLoadingMore, setWorkflowLoadingMore] = useState(false);
-  const [activeReportFileId, setActiveReportFileId] = useState<string | null>(null);
+  const [shipmentReports, setShipmentReports] = useState<ShipmentReportRow[]>([]);
+  const [activeReportShipmentId, setActiveReportShipmentId] = useState<string | null>(null);
   const [reportDraft, setReportDraft] = useState('');
   const [reportStage, setReportStage] = useState('');
-  const [reportStatus, setReportStatus] = useState<DocumentReportRow['status']>('in_review');
+  const [reportStatus, setReportStatus] = useState<ShipmentReportRow['status']>('in_review');
   const [savingReport, setSavingReport] = useState(false);
   const directoryInput = useRef<HTMLInputElement | null>(null);
 
@@ -249,59 +246,45 @@ export const FileManagerPage: React.FC = () => {
 
   useEffect(() => { void loadFolders(); }, [loadFolders]);
   useEffect(() => {
-    if (!organizationId) { setWorkflowFiles([]); setDocumentReports([]); return; }
+    const shipmentIds = [...new Set(folders.filter((folder) => folder.folder_type === 'shipment' && folder.shipment_id).map((folder) => folder.shipment_id!))];
+    if (!organizationId || shipmentIds.length === 0) { setShipmentReports([]); return; }
     let cancelled = false;
-    void (supabase as any).from('file_manager_files')
-      .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
-      .eq('organization_id', organizationId).eq('is_archived', false)
-      .order('created_at', { ascending: false }).limit(300)
-      .then(({ data, error: filesError }: any) => {
+    void (supabase as any).from('file_manager_shipment_reports')
+      .select('id,shipment_id,status,stage,report,actor_name,created_at')
+      .eq('organization_id', organizationId).in('shipment_id', shipmentIds)
+      .order('created_at', { ascending: false }).limit(1500)
+      .then(({ data, error: reportError }: any) => {
         if (cancelled) return;
-        if (filesError) { setError('دریافت فهرست ویترین اسناد ناموفق بود: ' + filesError.message); return; }
-        setWorkflowFiles((data || []) as FileRow[]);
-        setWorkflowHasMore((data || []).length === 300);
+        if (reportError) { setError('دریافت گزارش محموله‌ها ناموفق بود: ' + reportError.message); return; }
+        setShipmentReports((data || []) as ShipmentReportRow[]);
       });
     return () => { cancelled = true; };
-  }, [organizationId]);
-  useEffect(() => {
-    if (!organizationId || workflowFiles.length === 0) { setDocumentReports([]); return; }
-    let cancelled = false;
-    void (supabase as any).from('file_manager_document_reports').select('id,file_id,status,stage,report,actor_name,created_at').eq('organization_id', organizationId).in('file_id', workflowFiles.map((file) => file.id)).order('created_at', { ascending: false }).limit(1000)
-      .then(({ data, error: reportError }: any) => { if (cancelled) return; if (reportError) { setError('دریافت گزارش اسناد ناموفق بود: ' + reportError.message); return; } setDocumentReports((data || []) as DocumentReportRow[]); });
-    return () => { cancelled = true; };
-  }, [workflowFiles, organizationId]);
-  const saveDocumentReport = async () => {
-    const fileId = activeReportFileId; const report = reportDraft.trim();
-    if (!fileId || !report || !organizationId || savingReport) return;
+  }, [folders, organizationId]);
+  const saveShipmentReport = async () => {
+    const shipmentId = activeReportShipmentId; const report = reportDraft.trim();
+    if (!shipmentId || !report || !organizationId || savingReport) return;
     setSavingReport(true);
     try {
-      const { error: insertError } = await (supabase as any).from('file_manager_document_reports').insert({ organization_id: organizationId, file_id: fileId, status: reportStatus, stage: reportStage.trim(), report });
+      const { error: insertError } = await (supabase as any).from('file_manager_shipment_reports')
+        .insert({ organization_id: organizationId, shipment_id: shipmentId, status: reportStatus, stage: reportStage.trim(), report });
       if (insertError) throw insertError;
-      const { data, error: reloadError } = await (supabase as any).from('file_manager_document_reports').select('id,file_id,status,stage,report,actor_name,created_at').eq('organization_id', organizationId).eq('file_id', fileId).order('created_at', { ascending: false }).limit(100);
+      const { data, error: reloadError } = await (supabase as any).from('file_manager_shipment_reports')
+        .select('id,shipment_id,status,stage,report,actor_name,created_at')
+        .eq('organization_id', organizationId).eq('shipment_id', shipmentId)
+        .order('created_at', { ascending: false }).limit(100);
       if (reloadError) throw reloadError;
-      setDocumentReports((previous) => [...((data || []) as DocumentReportRow[]), ...previous.filter((row) => row.file_id !== fileId)]);
-      setReportDraft(''); setMessage('گزارش سند ثبت شد و برای همکاران قابل مشاهده است.');
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'ثبت گزارش سند ناموفق بود.'); }
+      setShipmentReports((previous) => [...((data || []) as ShipmentReportRow[]), ...previous.filter((row) => row.shipment_id !== shipmentId)]);
+      setReportDraft(''); setMessage('گزارش محموله ثبت شد و برای همکاران قابل مشاهده است.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'ثبت گزارش محموله ناموفق بود.'); }
     finally { setSavingReport(false); }
   };
-  const latestReportByFile = useMemo(() => { const map = new Map<string, DocumentReportRow>(); for (const report of documentReports) if (!map.has(report.file_id)) map.set(report.file_id, report); return map; }, [documentReports]);
-  const activeReportFile = workflowFiles.find((file) => file.id === activeReportFileId) || files.find((file) => file.id === activeReportFileId) || null;
-  const loadMoreWorkflowFiles = async () => {
-    if (!organizationId || !workflowHasMore || workflowLoadingMore) return;
-    setWorkflowLoadingMore(true);
-    try {
-      const { data, error: moreError } = await (supabase as any).from('file_manager_files')
-        .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
-        .eq('organization_id', organizationId).eq('is_archived', false)
-        .order('created_at', { ascending: false }).range(workflowFiles.length, workflowFiles.length + 299);
-      if (moreError) throw moreError;
-      const rows = (data || []) as FileRow[];
-      setWorkflowFiles((previous) => [...previous, ...rows]);
-      setWorkflowHasMore(rows.length === 300);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'دریافت اسناد قدیمی‌تر ناموفق بود.'); }
-    finally { setWorkflowLoadingMore(false); }
-  };
-  const reportStatusLabel = (status: DocumentReportRow['status']) => ({ received:'دریافت شده', in_review:'در حال بررسی', action_required:'نیازمند اقدام', completed:'انجام شده', blocked:'متوقف / دارای مانع', archived:'مختومه' }[status]);
+  const latestReportByShipment = useMemo(() => {
+    const map = new Map<string, ShipmentReportRow>();
+    for (const report of shipmentReports) if (!map.has(report.shipment_id)) map.set(report.shipment_id, report);
+    return map;
+  }, [shipmentReports]);
+  const activeReportShipment = folders.find((folder) => folder.shipment_id === activeReportShipmentId && folder.folder_type === 'shipment') || null;
+  const reportStatusLabel = (status: ShipmentReportRow['status']) => ({ received:'دریافت شده', in_review:'در حال بررسی', action_required:'نیازمند اقدام', completed:'انجام شده', blocked:'متوقف / دارای مانع', archived:'مختومه' }[status]);
   useEffect(() => {
     let active = true;
     void getSavedSyncDirectoryHandle().then((handle) => {
@@ -1172,8 +1155,8 @@ export const FileManagerPage: React.FC = () => {
         'finance_payment_request_lines', 'finance_payment_requests', 'finance_payments',
         'petty_cash_ledger',
       ];
-      // Internal employee workflow notes are part of the company archive snapshot.
-      if (profile?.role !== 'client') tableNames.push('file_manager_document_reports');
+      // Shipment-level workflow history is included in the offline company snapshot.
+      if (profile?.role !== 'client') tableNames.push('file_manager_shipment_reports');
       const tableRows = await Promise.all(tableNames.map((table) => fetchOrgRows(table)));
       const data = Object.fromEntries(tableNames.map((table, index) => [table, tableRows[index]])) as Record<string, Record<string, any>[]>;
       const byId = (rows: Record<string, any>[], id: unknown) => rows.find((row) => row.id === id) || null;
@@ -1292,9 +1275,6 @@ export const FileManagerPage: React.FC = () => {
         const customsOffice = byId(data.customs_offices, folder.customs_office_id || shipment?.customs_office_id || caseRecord?.customs_office_id);
         const customsData = data.shipment_customs_data.find((row) => row.shipment_id === folder.shipment_id) || null;
         const folderFileRows = latestFiles.filter((row) => row.folder_id === folder.id);
-        const folderFileIds = new Set(folderFileRows.map((row) => row.id));
-        const documentReportRows = ((data.file_manager_document_reports || []) as Record<string, any>[])
-          .filter((row) => folderFileIds.has(row.file_id));
         const customsDocumentRows = data.customs_documents.filter((row) => row.folder_id === folder.id || (folder.shipment_id && row.shipment_id === folder.shipment_id && row.folder_id == null));
         const shipmentDocumentRows = data.shipment_documents.filter((row) => row.folder_id === folder.id || (folder.shipment_id && row.shipment_id === folder.shipment_id && row.folder_id == null));
         const text = buildFolderMetadataText({
@@ -1327,7 +1307,7 @@ export const FileManagerPage: React.FC = () => {
             { title: 'درخواست‌های پرداخت', records: paymentRequests },
             { title: 'ردیف‌های درخواست پرداخت', records: paymentRequestLines },
             { title: 'اسناد حسابداری گمرک', records: accountingVouchers },
-            { title: 'گزارش‌ها و گردش وضعیت اسناد', records: documentReportRows },
+            { title: 'گزارش‌ها و گردش وضعیت محموله', records: ((data.file_manager_shipment_reports || []) as Record<string, any>[]).filter((row) => row.shipment_id === folder.shipment_id) },
             { title: 'تنخواه و صندوق', records: pettyCashEntries },
             { title: 'دسته‌بندی هزینه‌ها', records: costCategories },
             { title: 'تنظیمات مالی و اطلاعات بانکی سازمان', records: organizationFinanceSettings },
@@ -1704,17 +1684,49 @@ export const FileManagerPage: React.FC = () => {
           <div className="flex shrink-0 items-center justify-between gap-2 border-b app-border bg-[var(--surface-2)] px-3 py-2.5 text-xs"><b className="min-w-0 truncate">{currentFolder?.display_name || 'فایل‌منیجر'} <span className="font-normal app-muted">· {files.length} سند</span></b><span className="shrink-0 rounded-full border app-border px-2 py-1">{childFolders.length} زیرپوشه</span></div>
           <div className="min-h-0 flex-none overflow-visible p-3 md:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">پوشه‌ها</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 rounded-xl border app-border p-1.5 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'پوشه پیش‌فرض':'پوشه سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی پوشه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
-            {files.length>0&&<div className="overflow-hidden rounded-xl border app-border"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];const latestReport=latestReportByFile.get(file.id);return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>{setActiveReportFileId(file.id);setReportDraft('');setReportStage(latestReport?.stage||'');setReportStatus(latestReport?.status||'in_review');}} className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1.5 text-xs text-sky-600" title="گزارش و وضعیت سند"><ClipboardList size={13}/>گزارش</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
+            {files.length>0&&<div className="overflow-hidden rounded-xl border app-border"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
             {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این پوشه خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
           </div>
         </section>
       </section>
-      <section className="file-manager-workflow-showcase border-t app-border pt-5" aria-labelledby="document-workflow-title">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="text-[10px] font-black tracking-[.18em] text-cyan-500">DOCUMENT CONTROL · TEAM BOARD</div><h2 id="document-workflow-title" className="mt-1 text-lg font-black">ویترین پیگیری و گزارش اسناد</h2><p className="mt-1 text-xs app-muted">آخرین وضعیت و گزارش‌های ثبت‌شده برای اطلاع و اقدام همکاران</p></div><div className="flex gap-2 text-[10px] app-muted"><span>{workflowFiles.length} سند اخیر</span><span>·</span><span>{documentReports.length} گزارش ثبت‌شده</span></div></div>
-        {workflowFiles.length===0?<div className="border-y app-border py-8 text-center text-sm app-muted">برای نمایش ویترین، ابتدا پوشه‌ای دارای سند انتخاب کنید.</div>:<div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">{workflowFiles.map((file)=>{const latest=latestReportByFile.get(file.id);const label=latest?reportStatusLabel(latest.status):'بدون گزارش';const tone=latest?.status==='completed'?'text-emerald-500 bg-emerald-500/10':latest?.status==='action_required'||latest?.status==='blocked'?'text-amber-500 bg-amber-500/10':'text-sky-500 bg-sky-500/10';return <article key={file.id} className="relative overflow-hidden border-b border-[var(--border)] px-1 py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-black break-words">{typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name}</div><div className="mt-1 text-[10px] app-muted">{file.document_type||'سند'} · {new Date(file.created_at).toLocaleDateString('fa-IR')}</div></div><span className={'shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold '+tone}>{label}</span></div><div className="mt-3 min-h-12 border-r-2 border-cyan-500/50 pr-3 text-xs leading-6 app-muted">{latest?.report||'هنوز گزارشی برای این سند ثبت نشده است.'}</div><div className="mt-3 flex items-center justify-between gap-2"><span className="min-w-0 truncate text-[10px] app-muted">{latest?(latest.stage||'مرحله ثبت نشده')+' · '+latest.actor_name+' · '+new Date(latest.created_at).toLocaleString('fa-IR'):'آماده ثبت اولین گزارش'}</span><button type="button" onClick={()=>{setActiveReportFileId(file.id);setReportDraft('');setReportStage(latest?.stage||'');setReportStatus(latest?.status||'in_review');}} className="shrink-0 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-bold text-white">ثبت گزارش / پیگیری</button></div></article>;})}</div>}
-        {workflowHasMore&&<div className="flex justify-center pt-4"><button type="button" onClick={()=>void loadMoreWorkflowFiles()} disabled={workflowLoadingMore} className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-5 py-2.5 text-xs font-bold text-cyan-600 disabled:opacity-50">{workflowLoadingMore?'در حال دریافت…':'بارگذاری اسناد قدیمی‌تر'}</button></div>}
+      <section className="fm-shipment-board" aria-labelledby="shipment-report-title">
+        <div className="fm-section-heading">
+          <div><span className="fm-eyebrow">SHIPMENT CONTROL · TEAM WORKSPACE</span><h2 id="shipment-report-title">گزارش و پیگیری محموله‌ها</h2><p>گزارش‌ها فقط به محموله تعلق دارند؛ اسناد هر محموله در همان پرونده دیده می‌شوند.</p></div>
+          <div className="fm-board-total"><strong>{folders.filter((folder)=>folder.folder_type==='shipment'&&folder.shipment_id).length.toLocaleString('fa-IR')}</strong><span>محموله</span></div>
+        </div>
+        <div className="fm-shipment-grid">
+          {folders.filter((folder)=>folder.folder_type==='shipment'&&folder.shipment_id).map((folder)=>{
+            const latest=latestReportByShipment.get(folder.shipment_id!);
+            const count=folderDescendantCounts[folder.id]||0;
+            const status=latest?reportStatusLabel(latest.status):'بدون گزارش';
+            const tone=latest?.status==='completed'?'is-done':latest?.status==='action_required'||latest?.status==='blocked'?'is-alert':'is-progress';
+            return <article className="fm-shipment-card" key={folder.id}>
+              <div className="fm-shipment-card-top"><span className="fm-shipment-icon"><FolderOpen size={20}/></span><span className={'fm-status '+tone}>{status}</span></div>
+              <h3>{folder.display_name}</h3>
+              <div className="fm-shipment-meta"><span>{count.toLocaleString('fa-IR')} سند و فایل</span><span>پرونده محموله</span></div>
+              <div className="fm-shipment-latest">{latest?.report||'هنوز گزارشی برای این محموله ثبت نشده است.'}</div>
+              <div className="fm-shipment-footer">
+                <span>{latest?latest.actor_name+' · '+new Date(latest.created_at).toLocaleDateString('fa-IR'):'آماده ثبت گزارش'}</span>
+                <button type="button" onClick={()=>{setActiveReportShipmentId(folder.shipment_id);setReportDraft('');setReportStage(latest?.stage||'');setReportStatus(latest?.status||'in_review');}}><ClipboardList size={14}/> گزارش محموله</button>
+              </div>
+            </article>;
+          })}
+          {folders.every((folder)=>folder.folder_type!=='shipment'||!folder.shipment_id)&&<div className="fm-empty-state">هنوز پوشه‌ای برای محموله‌ها ثبت نشده است.</div>}
+        </div>
       </section>
-      {activeReportFile&&<div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/65 p-3" role="dialog" aria-modal="true" aria-label="گزارش و وضعیت سند"><section className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border app-border bg-[var(--surface)] p-4 shadow-2xl"><header className="flex items-start justify-between gap-3 border-b app-border pb-3"><div className="min-w-0"><div className="text-[10px] font-black text-cyan-500">DOCUMENT ACTIVITY</div><h3 className="mt-1 break-words text-base font-black">{activeReportFile.original_name}</h3></div><button type="button" onClick={()=>setActiveReportFileId(null)} className="rounded-lg border app-border p-2" aria-label="بستن"><X size={17}/></button></header><div className="mt-4"><h4 className="mb-2 text-sm font-black">تاریخچه گزارش‌ها</h4>{documentReports.filter((row)=>row.file_id===activeReportFile.id).length===0?<p className="py-4 text-xs app-muted">هنوز گزارشی ثبت نشده است.</p>:<div className="space-y-3">{documentReports.filter((row)=>row.file_id===activeReportFile.id).map((row)=><article key={row.id} className="border-r-2 border-cyan-500/60 pr-3 py-1"><div className="flex flex-wrap items-center gap-2 text-[10px] app-muted"><b className="text-[var(--text)]">{row.actor_name}</b><span>{new Date(row.created_at).toLocaleString('fa-IR')}</span><span>· {reportStatusLabel(row.status)}</span></div>{row.stage&&<div className="mt-1 text-xs font-bold">مرحله: {row.stage}</div>}<p className="mt-1 whitespace-pre-wrap text-xs leading-6">{row.report}</p></article>)}</div>}</div><div className="mt-5 border-t app-border pt-4"><h4 className="mb-3 text-sm font-black">ثبت گزارش جدید</h4><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs"><span className="mb-1 block app-muted">وضعیت سند</span><select value={reportStatus} onChange={(e)=>setReportStatus(e.target.value as DocumentReportRow['status'])} className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"><option value="received">دریافت شده</option><option value="in_review">در حال بررسی</option><option value="action_required">نیازمند اقدام</option><option value="completed">انجام شده</option><option value="blocked">متوقف / دارای مانع</option><option value="archived">مختومه</option></select></label><label className="text-xs"><span className="mb-1 block app-muted">مرحله فعلی کار</span><input value={reportStage} onChange={(e)=>setReportStage(e.target.value)} placeholder="مثلاً بررسی قبض انبار، اخذ مجوز…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"/></label></div><label className="mt-3 block text-xs"><span className="mb-1 block app-muted">شرح گزارش و اقدام موردنیاز</span><textarea value={reportDraft} onChange={(e)=>setReportDraft(e.target.value)} rows={4} maxLength={4000} placeholder="چه کاری انجام شده؟ چه مدرکی ناقص است؟ همکار بعدی باید چه اقدامی انجام دهد؟" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"/></label><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={()=>setActiveReportFileId(null)} className="rounded-xl border app-border px-4 py-2 text-xs">انصراف</button><button type="button" onClick={()=>void saveDocumentReport()} disabled={savingReport||!reportDraft.trim()} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{savingReport?'در حال ثبت…':'ثبت گزارش برای همه همکاران'}</button></div></div></section></div>}
+      {activeReportShipment&&<div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/65 p-3" role="dialog" aria-modal="true" aria-label="گزارش محموله">
+        <section className="fm-report-dialog">
+          <header><div><span className="fm-eyebrow">SHIPMENT ACTIVITY</span><h3>{activeReportShipment.display_name}</h3></div><button type="button" onClick={()=>setActiveReportShipmentId(null)} aria-label="بستن"><X size={18}/></button></header>
+          <div className="fm-report-history"><h4>تاریخچه گزارش محموله</h4>
+            {shipmentReports.filter((row)=>row.shipment_id===activeReportShipment.shipment_id).length===0?<p className="app-muted">هنوز گزارشی ثبت نشده است.</p>:shipmentReports.filter((row)=>row.shipment_id===activeReportShipment.shipment_id).map((row)=><article key={row.id}><div><b>{row.actor_name}</b><span>{new Date(row.created_at).toLocaleString('fa-IR')} · {reportStatusLabel(row.status)}</span></div>{row.stage&&<strong>مرحله: {row.stage}</strong>}<p>{row.report}</p></article>)}
+          </div>
+          <div className="fm-report-form"><h4>ثبت گزارش جدید برای محموله</h4>
+            <div className="grid gap-3 sm:grid-cols-2"><label>وضعیت محموله<select value={reportStatus} onChange={(e)=>setReportStatus(e.target.value as ShipmentReportRow['status'])}><option value="received">دریافت شده</option><option value="in_review">در حال بررسی</option><option value="action_required">نیازمند اقدام</option><option value="completed">انجام شده</option><option value="blocked">متوقف / دارای مانع</option><option value="archived">مختومه</option></select></label><label>مرحله فعلی کار<input value={reportStage} onChange={(e)=>setReportStage(e.target.value)} placeholder="مثلاً ترخیص، اخذ مجوز، بارگیری…"/></label></div>
+            <label>شرح گزارش و اقدام بعدی<textarea value={reportDraft} onChange={(e)=>setReportDraft(e.target.value)} rows={4} maxLength={4000} placeholder="وضعیت کلی محموله، اقدامات انجام‌شده، موانع و اقدام بعدی…"/></label>
+            <div className="fm-report-actions"><button type="button" onClick={()=>setActiveReportShipmentId(null)}>انصراف</button><button type="button" onClick={()=>void saveShipmentReport()} disabled={savingReport||!reportDraft.trim()}>{savingReport?'در حال ثبت…':'ثبت گزارش محموله'}</button></div>
+          </div>
+        </section>
+      </div>}
       <p className="text-xs app-muted">همگام‌سازی کامل سازمان با یک کلیک و پس از انتخاب یک‌باره پوشه ذخیره انجام می‌شود. کنار هر سند فایل متنی اطلاعات عملیاتی و مالی ساخته می‌شود؛ اسناد اصلی بدون اجازه حذف یا بازنویسی نمی‌شوند.</p>
       {preview&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3" role="dialog" aria-modal="true" aria-label={'پیش‌نمایش '+preview.name}><section className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border app-border bg-[var(--surface)] shadow-2xl"><header className="flex shrink-0 items-center justify-between gap-3 border-b app-border px-4 py-3"><b className="min-w-0 truncate text-sm">{preview.name}</b><button type="button" onClick={()=>setPreview(null)} className="rounded-lg border app-border p-2" aria-label="بستن پیش‌نمایش"><X size={17}/></button></header><div className="min-h-0 flex-1 overflow-auto p-2">{preview.mime.startsWith('image/')?<img src={preview.url} alt={preview.name} className="mx-auto max-h-[82dvh] max-w-full object-contain"/>:preview.mime==='application/pdf'?<iframe src={preview.url} title={preview.name} className="h-[82dvh] w-full rounded-lg bg-white"/>:<iframe src={preview.url} title={preview.name} sandbox="" className="h-[82dvh] w-full rounded-lg bg-white"/>}</div></section></div>}
     </div>
