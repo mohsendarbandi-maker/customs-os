@@ -608,3 +608,31 @@ body{
 }
 .app-content .file-manager-page .file-manager-sync-dropdown>summary{border:0!important;box-shadow:none!important}
 .app-content .file-manager-page .file-manager-sync-dropdown[open]>summary{border-bottom:1px solid var(--border)!important}
+
+
+/* File Manager: full-bleed workspace and uncluttered folder navigation. */
+.app-content:has(.file-manager-page){width:100%!important;max-width:none!important}
+.app-content .file-manager-page .file-manager-flat-panel,
+.app-content .file-manager-page .file-manager-flat-panel:hover{
+  border:0!important;border-radius:0!important;box-shadow:none!important;
+  background:transparent!important;transform:none!important;
+}
+.app-content .file-manager-page .file-manager-sync-dropdown>summary{border:0!important;box-shadow:none!important}
+.app-content .file-manager-page .file-manager-sync-dropdown[open]>summary{border-bottom:1px solid var(--border)!important}
+
+/* Keep the desktop content width exactly synchronized with the fixed sidebar.
+   Explicit width + margin prevents the left edge from being clipped during collapse. */
+@media(min-width:1024px){
+  .app-sidebar{transition:width .22s ease}
+  .app-sidebar.is-collapsed{width:82px!important}
+  .app-main{width:calc(100% - 276px)!important;max-width:none!important;margin-right:276px!important;min-width:0;transition:width .22s ease,margin-right .22s ease}
+  .app-main.sidebar-compact{width:calc(100% - 82px)!important;margin-right:82px!important}
+}
+@media(min-width:1024px) and (max-width:1199px){
+  .app-sidebar:not(.is-collapsed){width:230px!important}
+  .app-main:not(.sidebar-compact){width:calc(100% - 230px)!important;margin-right:230px!important}
+}
+@media(min-width:1920px){
+  .app-sidebar:not(.is-collapsed){width:294px!important}
+  .app-main:not(.sidebar-compact){width:calc(100% - 294px)!important;margin-right:294px!important}
+}
