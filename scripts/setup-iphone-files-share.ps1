@@ -40,14 +40,46 @@ $ntfsRule = $env:COMPUTERNAME + '\' + $userName + ':(OI)(CI)M'
 if ($LASTEXITCODE -ne 0) { throw 'اعمال مجوز فایل‌سیستم کامل نشد؛ پوشه و مجوزهای آن را بررسی کنید.' }
 
 Set-SmbServerConfiguration -EnableSMB2Protocol $true -EnableSMB1Protocol $false -Force | Out-Null
-$ruleName = 'Customs OS iPhone Files SMB (Private LAN only)'
+# SMB is deliberately never enabled on Public networks.
+$activeProfiles = @(Get-NetConnectionProfile | Where-Object { $_.IPv4Connectivity -ne 'Disconnected' })
+$trustedProfiles = @($activeProfiles | Where-Object { $_.NetworkCategory -in @('Private', 'DomainAuthenticated') })
+if ($trustedProfiles.Count -eq 0) {
+  foreach ($profile in $activeProfiles | Where-Object { $_.NetworkCategory -eq 'Public' }) {
+    $answer = Read-Host ("شبکه «{0}» عمومی است. فقط اگر این شبکه Wi-Fi/شبکهٔ مطمئن شرکت است آن را Private کنیم؟ (Y/N)" -f $profile.Name)
+    if ($answer -match '^(Y|YES)
+Write-Host ''
+Write-Host 'اشتراک‌گذاری امن محلی آماده شد.' -ForegroundColor Green
+Write-Host "Share: \\$env:COMPUTERNAME\$shareName"
+Write-Host "Username: $env:COMPUTERNAME\$userName"
+if ($newCredential) { Write-Host 'رمز را فقط در آیفون وارد کنید؛ این اسکریپت آن را ذخیره نمی‌کند.' -ForegroundColor Yellow }
+Write-Host ''
+Write-Host 'در iPhone > Files > Browse > … > Connect to Server یکی از آدرس‌های زیر را وارد کنید:'
+foreach ($item in $addresses) { Write-Host ("{0}: smb://{1}" -f $item.Interface, $item.IPAddress) -ForegroundColor Cyan }
+Write-Host ''
+Write-Host 'آیفون و کامپیوتر باید روی یک Wi-Fi باشند. پورت SMB را روی مودم/اینترنت Forward نکنید؛ قانون فایروال فقط روی شبکه Private/Domain و محدوده LAN باز است.'
+) {
+      Set-NetConnectionProfile -InterfaceIndex $profile.InterfaceIndex -NetworkCategory Private
+    }
+  }
+  $activeProfiles = @(Get-NetConnectionProfile | Where-Object { $_.IPv4Connectivity -ne 'Disconnected' })
+  $trustedProfiles = @($activeProfiles | Where-Object { $_.NetworkCategory -in @('Private', 'DomainAuthenticated') })
+}
+if ($trustedProfiles.Count -eq 0) {
+  throw 'هیچ اتصال Private یا Domain معتبر پیدا نشد. برای امنیت، اشتراک‌گذاری روی شبکه Public فعال نشد. به Wi-Fi مطمئن شرکت وصل شوید و اجرای اسکریپت را تکرار کنید.'
+}
+
+$ruleName = 'Customs OS iPhone Files SMB (Private or Domain LAN only)'
 $oldRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
 if ($oldRule) { Remove-NetFirewallRule -DisplayName $ruleName }
-New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort 445 -Profile Private -RemoteAddress LocalSubnet | Out-Null
+New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort 445 -Profile Private,Domain -RemoteAddress LocalSubnet | Out-Null
 
-$addresses = Get-NetIPAddress -AddressFamily IPv4 |
-  Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.AddressState -eq 'Preferred' } |
-  Select-Object -ExpandProperty IPAddress -Unique
+$addresses = @(
+  foreach ($profile in $trustedProfiles) {
+    Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $profile.InterfaceIndex |
+      Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.AddressState -eq 'Preferred' } |
+      ForEach-Object { [PSCustomObject]@{ Interface = $profile.InterfaceAlias; IPAddress = $_.IPAddress } }
+  }
+) | Sort-Object Interface, IPAddress -Unique
 Write-Host ''
 Write-Host 'اشتراک‌گذاری امن محلی آماده شد.' -ForegroundColor Green
 Write-Host "Share: \\$env:COMPUTERNAME\$shareName"
