@@ -801,7 +801,11 @@ export const FileManagerPage: React.FC = () => {
         'clients', 'shipments', 'shipment_customs_data', 'cases', 'vessels',
         'shipping_lines', 'customs_offices', 'registration_orders',
         'customs_declarations', 'financial_transactions', 'customs_documents',
-        'shipment_documents',
+        'shipment_documents', 'customs_accounting_vouchers', 'finance_cost_categories',
+        'finance_cost_items', 'finance_invoice_lines', 'finance_invoice_shipments',
+        'finance_invoices', 'finance_org_settings', 'finance_payment_allocations',
+        'finance_payment_request_lines', 'finance_payment_requests', 'finance_payments',
+        'petty_cash_ledger',
       ];
       const tableRows = await Promise.all(tableNames.map((table) => fetchOrgRows(table)));
       const data = Object.fromEntries(tableNames.map((table, index) => [table, tableRows[index]])) as Record<string, Record<string, any>[]>;
@@ -838,6 +842,40 @@ export const FileManagerPage: React.FC = () => {
         const transactions = data.financial_transactions.filter((row) =>
           (row.case_id && caseIds.includes(row.case_id)) ||
           (row.source_id && (relevantShipmentIds.includes(row.source_id) || declarationIds.includes(row.source_id))));
+        const relevantCostItems = data.finance_cost_items.filter((row) =>
+          (row.shipment_id && relevantShipmentIds.includes(row.shipment_id)) ||
+          (row.case_id && caseIds.includes(row.case_id)) ||
+          (row.client_id && folder.client_id === row.client_id));
+        const costItemIds = relevantCostItems.map((row) => row.id);
+        const invoiceShipmentLinks = data.finance_invoice_shipments.filter((row) => relevantShipmentIds.includes(row.shipment_id));
+        const linkedInvoiceIds = invoiceShipmentLinks.map((row) => row.invoice_id);
+        const invoices = data.finance_invoices.filter((row) =>
+          linkedInvoiceIds.includes(row.id) || (folder.client_id && row.client_id === folder.client_id));
+        const invoiceIds = invoices.map((row) => row.id);
+        const invoiceLines = data.finance_invoice_lines.filter((row) =>
+          invoiceIds.includes(row.invoice_id) || (row.shipment_id && relevantShipmentIds.includes(row.shipment_id)));
+        const paymentRequests = data.finance_payment_requests.filter((row) =>
+          (row.shipment_id && relevantShipmentIds.includes(row.shipment_id)) ||
+          (row.client_id && folder.client_id === row.client_id));
+        const paymentRequestIds = paymentRequests.map((row) => row.id);
+        const paymentRequestLines = data.finance_payment_request_lines.filter((row) => paymentRequestIds.includes(row.request_id));
+        const payments = data.finance_payments.filter((row) =>
+          (row.shipment_id && relevantShipmentIds.includes(row.shipment_id)) ||
+          (row.case_id && caseIds.includes(row.case_id)) ||
+          (row.client_id && folder.client_id === row.client_id));
+        const paymentIds = payments.map((row) => row.id);
+        const paymentAllocations = data.finance_payment_allocations.filter((row) =>
+          paymentIds.includes(row.payment_id) || invoiceIds.includes(row.invoice_id));
+        const accountingVouchers = data.customs_accounting_vouchers.filter((row) =>
+          (row.case_id && caseIds.includes(row.case_id)) ||
+          (row.client_id && folder.client_id === row.client_id) ||
+          (row.declaration_id && declarationIds.includes(row.declaration_id)));
+        const pettyCashEntries = data.petty_cash_ledger.filter((row) =>
+          (folder.parent_id === null) || (row.related_expense_id && costItemIds.includes(row.related_expense_id)));
+        const costCategoryIds = relevantCostItems.map((row) => row.category_id).filter(Boolean);
+        const costCategories = data.finance_cost_categories.filter((row) =>
+          folder.parent_id === null || costCategoryIds.includes(row.id));
+        const organizationFinanceSettings = folder.parent_id === null ? data.finance_org_settings : [];
         const order = data.registration_orders.find((row) =>
           (shipment?.registration_order_id && row.id === shipment.registration_order_id) ||
           (caseRecord && row.case_id === caseRecord.id)) || null;
@@ -872,6 +910,18 @@ export const FileManagerPage: React.FC = () => {
             { title: 'پرونده‌های مرتبط صاحب کالا', records: relevantCases },
             { title: 'سایر محموله‌های مرتبط صاحب کالا', records: relevantShipments.filter((row) => row.id !== shipment?.id) },
             { title: 'سایر ثبت سفارش‌های مرتبط', records: relatedOrders.filter((row) => row.id !== order?.id) },
+            { title: 'هزینه‌های مستقیم و غیرمستقیم محموله', records: relevantCostItems },
+            { title: 'فاکتورهای مالی', records: invoices },
+            { title: 'ردیف‌های فاکتور', records: invoiceLines },
+            { title: 'ارتباط فاکتور با محموله', records: invoiceShipmentLinks },
+            { title: 'پرداخت‌ها و دریافت‌ها', records: payments },
+            { title: 'تخصیص پرداخت به فاکتورها', records: paymentAllocations },
+            { title: 'درخواست‌های پرداخت', records: paymentRequests },
+            { title: 'ردیف‌های درخواست پرداخت', records: paymentRequestLines },
+            { title: 'اسناد حسابداری گمرک', records: accountingVouchers },
+            { title: 'تنخواه و صندوق', records: pettyCashEntries },
+            { title: 'دسته‌بندی هزینه‌ها', records: costCategories },
+            { title: 'تنظیمات مالی و اطلاعات بانکی سازمان', records: organizationFinanceSettings },
           ],
           generatedAt: new Date().toISOString(),
         });
