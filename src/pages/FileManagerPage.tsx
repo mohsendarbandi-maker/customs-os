@@ -1362,7 +1362,7 @@ export const FileManagerPage: React.FC = () => {
         </div>
       </header>
 
-      <section className="file-manager-archive-status flex flex-wrap items-center justify-between gap-2 rounded-2xl border app-border bg-[var(--surface)] px-3 py-2.5">
+      <section className="file-manager-flat-panel file-manager-archive-status flex flex-wrap items-center justify-between gap-2 px-1 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600"><MessageCircle size={18}/></span>
           <div className="min-w-0">
@@ -1481,7 +1481,7 @@ export const FileManagerPage: React.FC = () => {
         </div>
       </div></details>
 
-      <section className="border-b app-border bg-transparent py-3">
+      <section className="file-manager-flat-panel border-b app-border bg-transparent py-3">
         <label className="relative block">
           <Search size={18} className="absolute right-3 top-3.5 app-muted" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جست‌وجوی صاحب کالا، محموله یا سند…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] py-3 pr-10 pl-3 outline-none focus:border-[var(--primary)]" />
@@ -1520,7 +1520,7 @@ export const FileManagerPage: React.FC = () => {
         </div>
       </section>}
 
-      <section className="grid items-start gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
+      <section className="file-manager-flat-panel grid items-start gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
         {treeOpen&&<button type="button" aria-label="بستن فهرست پوشه‌ها" onClick={()=>setTreeOpen(false)} className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" />}
         <aside className={(treeOpen?'fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 flex flex-col overflow-hidden':'hidden')+' p-0 lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-visible'}>
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2 border-b app-border px-1 pb-2"><h2 className="font-black">پوشه‌ها</h2><div className="flex items-center gap-2"><span className="text-xs app-muted">{folders.length} پوشه · {Object.values(folderFileCounts).reduce((sum,count)=>sum+count,0)} سند</span><button type="button" onClick={()=>setTreeOpen(false)} className="rounded-lg border app-border p-2 lg:hidden" aria-label="بستن فهرست"><X size={16}/></button></div></div>
