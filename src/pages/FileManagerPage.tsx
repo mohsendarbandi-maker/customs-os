@@ -1518,7 +1518,7 @@ export const FileManagerPage: React.FC = () => {
       <section className="grid items-start gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
         {treeOpen&&<button type="button" aria-label="بستن فهرست پوشه‌ها" onClick={()=>setTreeOpen(false)} className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" />}
         <aside className={(treeOpen?'fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 flex flex-col overflow-hidden':'hidden')+' p-0 lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-visible'}>
-          <div className="mb-2 flex shrink-0 items-center justify-between gap-2 border-b app-border px-1 pb-2"><h2 className="font-black">پوشه‌ها</h2><div className="flex items-center gap-2"><span className="text-xs app-muted">{folders.length} پوشه</span><button type="button" onClick={()=>setTreeOpen(false)} className="rounded-lg border app-border p-2 lg:hidden" aria-label="بستن فهرست"><X size={16}/></button></div></div>
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-2 border-b app-border px-1 pb-2"><h2 className="font-black">پوشه‌ها</h2><div className="flex items-center gap-2"><span className="text-xs app-muted">{folders.length} پوشه · {Object.values(folderFileCounts).reduce((sum,count)=>sum+count,0)} سند</span><button type="button" onClick={()=>setTreeOpen(false)} className="rounded-lg border app-border p-2 lg:hidden" aria-label="بستن فهرست"><X size={16}/></button></div></div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-0.5 lg:flex-none lg:overflow-visible">{folders.filter(folder=>folder.parent_id===null).map(root=>renderFolderNode(root))}
             {!folders.length&&<div className="p-5 text-center text-sm app-muted">ساختار پوشه هنوز بارگذاری نشده است.</div>}
           </div>
@@ -1534,7 +1534,7 @@ export const FileManagerPage: React.FC = () => {
                 {breadcrumbs.map((crumb,i)=><React.Fragment key={crumb.id}>
                   {i>0&&<ChevronLeft size={13} className="shrink-0 app-muted"/>}
                   <button type="button" onClick={()=>chooseFolder(crumb)} title={crumb.display_name}
-                    className={i===breadcrumbs.length-1?'min-w-0 flex-1 truncate rounded-lg bg-[var(--primary)]/10 px-2 py-1 font-bold text-[var(--primary)]':'max-w-24 shrink truncate rounded-md px-1 py-1 hover:bg-[var(--surface)] hover:text-[var(--primary)]'}>
+                    aria-current={i===breadcrumbs.length-1?'page':undefined} className={i===breadcrumbs.length-1?'max-w-[min(55vw,18rem)] shrink-0 truncate rounded-lg bg-[var(--primary)]/10 px-2.5 py-1.5 font-bold text-[var(--primary)]':'max-w-[min(32vw,9rem)] shrink-0 truncate rounded-md px-1.5 py-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--primary)]'}>
                     {crumb.display_name}
                   </button>
                 </React.Fragment>)}
