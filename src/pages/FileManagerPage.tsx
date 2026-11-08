@@ -18,6 +18,7 @@ import {
 } from '../lib/fileManager';
 import { folderToneClass, getFolderSubtreeCounts, isCopyableFolder } from '../lib/fileManagerExplorer';
 import { optimizeFileForUpload } from '../lib/clientFileOptimizer';
+import { safeWindowsFileName } from '../lib/safeWindowsFileName';
 import {
   buildDocumentMetadataText,
   buildFolderMetadataText,
@@ -90,10 +91,8 @@ const byteLabel = (bytes: number) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} کیلوبایت`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} مگابایت`;
 };
-// Windows disallows control characters in file and directory names.
-const windowsName = (value: string) =>
-  // eslint-disable-next-line no-control-regex -- Windows paths must exclude NUL and C0 control characters.
-  value.normalize('NFKC').replace(/[<>:"\/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/g, '').slice(0, 120) || 'بدون نام';
+// Use the same Chromium-safe name mapping for every synced file and folder.
+const windowsName = safeWindowsFileName;
 const folderSlug = (value: string) =>
   value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '-').replace(/[^\p{L}\p{N}_-]/gu, '').slice(0, 72) || crypto.randomUUID();
 
