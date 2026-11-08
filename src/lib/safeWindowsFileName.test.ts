@@ -33,6 +33,7 @@ describe('safeWindowsFileName', () => {
 
   it('allows ordinary Persian names and dot-prefixed files', () => {
     expect(safeWindowsFileName('اسناد گمرکی')).toBe('اسناد گمرکی');
-    expect(safeWindowsFileName('.env')).toBe('.env');
+    expect(safeWindowsFileName('.env')).toBe('_.env');
+    expect(safeWindowsFileName('.name')).toBe('_.name');
   });
 });
