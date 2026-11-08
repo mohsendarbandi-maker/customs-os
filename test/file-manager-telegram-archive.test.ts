@@ -13,6 +13,8 @@ describe('Telegram-backed Customs OS file manager', () => {
   const folderCopyMigration = read('supabase/migrations/20261024174637_file_manager_folder_copy.sql');
   const gateway = read('supabase/functions/messenger-gateway/index.ts');
   const fileManager = read('src/pages/FileManagerPage.tsx');
+  const shipmentShowcase = read('src/pages/ShipmentShowcasePage.tsx');
+  const shipmentReportsPage = read('src/pages/ShipmentReportsPage.tsx');
   const globalCss = read('src/index.css');
   const documentReportsMigration = read('supabase/migrations/20261108185733_file_manager_document_workflow_reports.sql');
   const documentReportActorMigration = read('supabase/migrations/20261108185740_file_manager_document_report_actor_label.sql');
@@ -311,14 +313,31 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManager).toContain('file-manager-flat-panel');
   });
 
-  it('shows workflow reports only at shipment level, never on individual documents', () => {
-    expect(fileManager).toContain('file_manager_shipment_reports');
-    expect(fileManager).toContain('گزارش و پیگیری محموله‌ها');
-    expect(fileManager).toContain('ثبت گزارش محموله');
-    expect(fileManager).toContain('actor_name');
-    expect(fileManager).toContain('action_required');
-    expect(fileManager).not.toContain('گزارش و وضعیت سند');
-    expect(fileManager).not.toContain('ویترین پیگیری و گزارش اسناد');
+  it('keeps File Manager archive-only and exposes shipment reports in a separate workspace', () => {
+    expect(fileManager).not.toContain('file_manager_shipment_reports');
+    expect(fileManager).not.toContain('گزارش محموله');
+    expect(shipmentReportsPage).toContain('file_manager_shipment_reports');
+    expect(shipmentReportsPage).toContain('گزارش‌های محموله');
+    expect(app).toContain('path="/shipment-reports"');
+    expect(navigation).toContain("to: '/shipment-reports'");
+  });
+
+  it('keeps the shipment showcase independent and connects daily reminders to shipment cards', () => {
+    expect(shipmentShowcase).toContain('ویترین محموله');
+    expect(shipmentShowcase).toContain('SHIPMENT BOARD');
+    expect(shipmentShowcase).toContain('operational_reminders');
+    expect(shipmentShowcase).toContain('shipment-reports?shipmentId=');
+    expect(app).toContain('path="/shipment-showcase"');
+    expect(navigation).toContain("to: '/shipment-showcase'");
+  });
+
+  it('uses a full-width non-overlapping archive workspace and removes folder wording from its toolbar', () => {
+    expect(fileManager).toContain('fm-workspace-layout');
+    expect(fileManager).toContain('fm-file-content');
+    expect(globalCss).toContain('.file-manager-page .fm-workspace-layout');
+    expect(globalCss).toContain('.file-manager-page>.mx-auto');
+    expect(fileManager).not.toContain('انتخاب پوشه ویندوز');
+    expect(fileManager).not.toContain(":'ساخت پوشه'");
   });
 
   it('skips operating-system sidecar files and continues when a local folder cannot be created', () => {
@@ -344,10 +363,10 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(documentReportActorMigration).toContain('actor_name');
   });
 
-  it('includes shipment workflow reports in organization and shipment metadata sync exports', () => {
-    expect(fileManager).toContain("tableNames.push('file_manager_shipment_reports')");
-    expect(fileManager).toContain("title: 'گزارش‌ها و گردش وضعیت محموله'");
-    expect(fileManager).not.toContain('file_manager_document_reports');
+  it('does not mix shipment report data into the File Manager archive snapshot', () => {
+    expect(fileManager).not.toContain("tableNames.push('file_manager_shipment_reports')");
+    expect(fileManager).not.toContain("title: 'گزارش‌ها و گردش وضعیت محموله'");
+    expect(fileManager).not.toContain('file_manager_shipment_reports');
   });
 
   it('does not paginate or render a document-centric report showcase', () => {
