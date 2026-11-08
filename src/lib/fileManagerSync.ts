@@ -107,6 +107,28 @@ const FIELD_LABELS: Record<string, string> = {
   quantity_unit: 'واحد مقدار', value_amount: 'ارزش ثبت سفارش', is_closed: 'بسته شده',
   final_settlement_required: 'نیازمند تسویه نهایی', final_settlement_status: 'وضعیت تسویه نهایی',
   final_settlement_amount_irr: 'مبلغ تسویه نهایی (ریال)',
+  voucher_number: 'شماره سند حسابداری', company_name: 'نام شرکت', cargo_type: 'نوع کالا',
+  tonnage: 'تناژ', unit_count: 'تعداد واحد', unit_type: 'نوع واحد', debit_total: 'جمع بدهکار',
+  credit_total: 'جمع بستانکار', balance_total: 'مانده حساب', is_balanced: 'سند تراز است',
+  invoice_no: 'شماره فاکتور', invoice_year: 'سال فاکتور', subtotal: 'جمع جزء',
+  discount_amount: 'مبلغ تخفیف', total_amount: 'مبلغ کل', due_date: 'سررسید',
+  payment_terms: 'شرایط پرداخت', public_note: 'یادداشت عمومی', internal_note: 'یادداشت داخلی',
+  payment_no: 'شماره پرداخت', payment_date: 'تاریخ پرداخت', direction: 'جهت پرداخت',
+  amount: 'مبلغ', amount_irr: 'مبلغ به ریال', method: 'روش پرداخت', reference_no: 'شماره پیگیری',
+  account_last4: 'چهار رقم پایانی حساب', payment_type: 'نوع پرداخت', request_no: 'شماره درخواست پرداخت',
+  request_date: 'تاریخ درخواست', requested_amount: 'مبلغ درخواستی', subject: 'موضوع',
+  trigger_point: 'مرحله ایجاد درخواست', unit_price: 'قیمت واحد', amount_irr: 'مبلغ به ریال',
+  payable_by: 'پرداخت‌کننده', billable: 'قابل صدور صورتحساب', reimbursable: 'قابل بازپرداخت',
+  paid_by: 'پرداخت‌شده توسط', approval_status: 'وضعیت تأیید', workflow_status: 'وضعیت گردش کار',
+  payment_date: 'تاریخ پرداخت', receipt_files: 'فایل‌های رسید', is_pass_through: 'هزینه عبوری',
+  is_billable_default: 'قابل صدور صورتحساب به‌صورت پیش‌فرض', bank_account_name: 'نام صاحب حساب',
+  bank_account_no: 'شماره حساب', iban: 'شماره شبا', default_currency: 'ارز پیش‌فرض',
+  next_invoice_number: 'شماره بعدی فاکتور', next_payment_request_number: 'شماره بعدی درخواست پرداخت',
+  receipt_mandatory_threshold_irr: 'آستانه الزام رسید (ریال)', cargo_entry_date: 'تاریخ ورود کالا',
+  permit_issue_date: 'تاریخ صدور مجوز', unit_count: 'تعداد واحد', cost_type: 'نوع هزینه',
+  cost_category: 'دسته هزینه', occurred_at: 'زمان وقوع هزینه', vat_rate: 'نرخ مالیات',
+  vat_amount: 'مبلغ مالیات', payment_request_prefix: 'پیشوند درخواست پرداخت',
+
 };
 
 function formatRecord(record: Record<string, unknown> | null | undefined): string {
