@@ -92,6 +92,14 @@ jobs:
             test -s "supabase/legacy-migrations/$migration"
             cp "supabase/legacy-migrations/$migration" "$replay_dir/$migration"
           done
+          # The active Phase 12 migration references a Phase 13 helper that
+          # production already had from the old migration stream. Restore those
+          # semantic definitions only in this disposable local replay, in the
+          # historical slot before the Phase 12 view is recreated.
+          cp "supabase/legacy-migrations/00021_phase13_workflow_integrity_and_credential_boundary.sql" \
+            "$replay_dir/20260913184000_ci_phase13_prerequisite.sql"
+          cp "supabase/legacy-migrations/00026_completion_requires_release.sql" \
+            "$replay_dir/20260913184100_ci_completion_release_gate.sql"
           mv supabase/migrations "$active_dir"
           mkdir -p supabase/migrations
 
