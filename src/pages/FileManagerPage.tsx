@@ -72,6 +72,8 @@ type SearchHit = {
   client_id: string | null;
 };
 
+type DocumentReportRow = { id:string; file_id:string; status:'received'|'in_review'|'action_required'|'completed'|'blocked'|'archived'; stage:string; report:string; actor_name:string; created_at:string; };
+
 type WindowsSyncProgress = {
   percent: number;
   phase: string;
@@ -141,6 +143,12 @@ export const FileManagerPage: React.FC = () => {
   const [copyingFolder, setCopyingFolder] = useState(false);
   const [folderCopyAvailable, setFolderCopyAvailable] = useState(false);
   const [preview, setPreview] = useState<{url:string; name:string; mime:string} | null>(null);
+  const [documentReports, setDocumentReports] = useState<DocumentReportRow[]>([]);
+  const [activeReportFileId, setActiveReportFileId] = useState<string | null>(null);
+  const [reportDraft, setReportDraft] = useState('');
+  const [reportStage, setReportStage] = useState('');
+  const [reportStatus, setReportStatus] = useState<DocumentReportRow['status']>('in_review');
+  const [savingReport, setSavingReport] = useState(false);
   const directoryInput = useRef<HTMLInputElement | null>(null);
 
   const currentFolder = useMemo(
@@ -236,6 +244,30 @@ export const FileManagerPage: React.FC = () => {
   }, [organizationId]);
 
   useEffect(() => { void loadFolders(); }, [loadFolders]);
+  useEffect(() => {
+    if (!organizationId || files.length === 0) { setDocumentReports([]); return; }
+    let cancelled = false;
+    void supabase.from('file_manager_document_reports').select('id,file_id,status,stage,report,actor_name,created_at').eq('organization_id', organizationId).in('file_id', files.map((file) => file.id)).order('created_at', { ascending: false }).limit(300)
+      .then(({ data, error: reportError }) => { if (cancelled) return; if (reportError) { setError('دریافت گزارش اسناد ناموفق بود: ' + reportError.message); return; } setDocumentReports((data || []) as DocumentReportRow[]); });
+    return () => { cancelled = true; };
+  }, [files, organizationId]);
+  const saveDocumentReport = async () => {
+    const fileId = activeReportFileId; const report = reportDraft.trim();
+    if (!fileId || !report || !organizationId || savingReport) return;
+    setSavingReport(true);
+    try {
+      const { error: insertError } = await supabase.from('file_manager_document_reports').insert({ organization_id: organizationId, file_id: fileId, status: reportStatus, stage: reportStage.trim(), report, actor_name: profile?.full_name || 'کارمند' });
+      if (insertError) throw insertError;
+      const { data, error: reloadError } = await supabase.from('file_manager_document_reports').select('id,file_id,status,stage,report,actor_name,created_at').eq('organization_id', organizationId).eq('file_id', fileId).order('created_at', { ascending: false }).limit(100);
+      if (reloadError) throw reloadError;
+      setDocumentReports((previous) => [...((data || []) as DocumentReportRow[]), ...previous.filter((row) => row.file_id !== fileId)]);
+      setReportDraft(''); setMessage('گزارش سند ثبت شد و برای همکاران قابل مشاهده است.');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'ثبت گزارش سند ناموفق بود.'); }
+    finally { setSavingReport(false); }
+  };
+  const latestReportByFile = useMemo(() => { const map = new Map<string, DocumentReportRow>(); for (const report of documentReports) if (!map.has(report.file_id)) map.set(report.file_id, report); return map; }, [documentReports]);
+  const activeReportFile = files.find((file) => file.id === activeReportFileId) || null;
+  const reportStatusLabel = (status: DocumentReportRow['status']) => ({ received:'دریافت شده', in_review:'در حال بررسی', action_required:'نیازمند اقدام', completed:'انجام شده', blocked:'متوقف / دارای مانع', archived:'مختومه' }[status]);
   useEffect(() => {
     let active = true;
     void getSavedSyncDirectoryHandle().then((handle) => {
@@ -798,7 +830,7 @@ export const FileManagerPage: React.FC = () => {
       const localRoot = await selectedHandle.getDirectoryHandle('Darbandi Commercial', { create: true });
       setProgress('بررسی ساختار کامل صاحبان کالا، محموله‌ها و زیرپوشه‌ها…');
 
-      const folderPathById = new Map<string, string>([[cloudRoot.id, '']]);
+      const isSystemSyncEntry = (name: string) => { const lower = name.toLocaleLowerCase('en-US'); return ['desktop.ini','thumbs.db','.ds_store','__macosx'].includes(lower) || lower.startsWith('~
       const serverFolderByPath = new Map<string, FolderRow>([['', cloudRoot]]);
       const ambiguousPaths = new Set<string>();
       const queue: FolderRow[] = [cloudRoot];
@@ -806,6 +838,7 @@ export const FileManagerPage: React.FC = () => {
         const parent = queue.shift()!;
         const parentPath = folderPathById.get(parent.id) ?? '';
         for (const child of folders.filter((item) => item.parent_id === parent.id)) {
+          if (isSystemSyncEntry(child.display_name)) continue;
           const segment = windowsName(child.display_name);
           const childPath = parentPath ? parentPath + '/' + segment : segment;
           if (serverFolderByPath.has(childPath)) {
@@ -867,7 +900,7 @@ export const FileManagerPage: React.FC = () => {
       const serverFilesByPath = new Map<string, { file: FileRow; relativePath: string }>();
       for (const file of serverFiles) {
         const parentPath = folderPathById.get(file.folder_id);
-        if (parentPath === undefined) continue;
+        if (parentPath === undefined || isSystemSyncEntry(file.original_name)) continue;
         const relativePath = parentPath ? parentPath + '/' + windowsName(file.original_name) : windowsName(file.original_name);
         const key = canonicalPath(relativePath);
         if (serverFilesByPath.has(key)) ambiguousFileKeys.add(key);
@@ -915,8 +948,8 @@ export const FileManagerPage: React.FC = () => {
       for (let index = 0; index < folderPathsToPrepare.length; index += 1) {
         const folderPath = folderPathsToPrepare[index];
         if (!ambiguousPaths.has(folderPath)) {
-          await ensureLocalFolder(folderPath);
-          foldersCreated += 1;
+          try { await ensureLocalFolder(folderPath); foldersCreated += 1; }
+          catch (reason) { failed += 1; failedItems.push(folderPath + ': ' + (reason instanceof Error ? reason.message : 'ساخت پوشه در دستگاه ناموفق بود.')); }
         }
         publishSyncProgress({
           phase: 'آماده‌سازی پوشه‌ها',
@@ -1569,11 +1602,806 @@ export const FileManagerPage: React.FC = () => {
           <div className="flex shrink-0 items-center justify-between gap-2 border-b app-border bg-[var(--surface-2)] px-3 py-2.5 text-xs"><b className="min-w-0 truncate">{currentFolder?.display_name || 'فایل‌منیجر'} <span className="font-normal app-muted">· {files.length} سند</span></b><span className="shrink-0 rounded-full border app-border px-2 py-1">{childFolders.length} زیرپوشه</span></div>
           <div className="min-h-0 flex-none overflow-visible p-3 md:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">پوشه‌ها</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 border-b app-border py-1 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'پوشه پیش‌فرض':'پوشه سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی پوشه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
-            {files.length>0&&<div className="overflow-hidden"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
+            {files.length>0&&<div className="overflow-hidden"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];const latestReport=latestReportByFile.get(file.id);return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>{setActiveReportFileId(file.id);setReportDraft('');setReportStage(latestReport?.stage||'');setReportStatus(latestReport?.status||'in_review');}} className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1.5 text-xs text-sky-600" title="گزارش و وضعیت سند"><ClipboardList size={13}/>گزارش</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
             {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center border-t app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این پوشه خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
           </div>
         </section>
       </section>
+      <section className="file-manager-workflow-showcase border-t app-border pt-5" aria-labelledby="document-workflow-title">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="text-[10px] font-black tracking-[.18em] text-cyan-500">DOCUMENT CONTROL · LIVE BOARD</div><h2 id="document-workflow-title" className="mt-1 text-lg font-black">ویترین پیگیری و گزارش اسناد</h2><p className="mt-1 text-xs app-muted">آخرین وضعیت و گزارش‌های ثبت‌شده برای اطلاع و اقدام همکاران</p></div><div className="flex gap-2 text-[10px] app-muted"><span>{files.length} سند در پوشه جاری</span><span>·</span><span>{documentReports.length} گزارش ثبت‌شده</span></div></div>
+        {files.length===0?<div className="border-y app-border py-8 text-center text-sm app-muted">برای نمایش ویترین، ابتدا پوشه‌ای دارای سند انتخاب کنید.</div>:<div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">{files.map((file)=>{const latest=latestReportByFile.get(file.id);const label=latest?reportStatusLabel(latest.status):'بدون گزارش';const tone=latest?.status==='completed'?'text-emerald-500 bg-emerald-500/10':latest?.status==='action_required'||latest?.status==='blocked'?'text-amber-500 bg-amber-500/10':'text-sky-500 bg-sky-500/10';return <article key={file.id} className="relative overflow-hidden border-b border-[var(--border)] px-1 py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-black break-words">{typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name}</div><div className="mt-1 text-[10px] app-muted">{file.document_type||'سند'} · {new Date(file.created_at).toLocaleDateString('fa-IR')}</div></div><span className={'shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold '+tone}>{label}</span></div><div className="mt-3 min-h-12 border-r-2 border-cyan-500/50 pr-3 text-xs leading-6 app-muted">{latest?.report||'هنوز گزارشی برای این سند ثبت نشده است.'}</div><div className="mt-3 flex items-center justify-between gap-2"><span className="min-w-0 truncate text-[10px] app-muted">{latest?(latest.stage||'مرحله ثبت نشده')+' · '+latest.actor_name:'آماده ثبت اولین گزارش'}</span><button type="button" onClick={()=>{setActiveReportFileId(file.id);setReportDraft('');setReportStage(latest?.stage||'');setReportStatus(latest?.status||'in_review');}} className="shrink-0 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-bold text-white">ثبت گزارش / پیگیری</button></div></article>;})}</div>}
+      </section>
+      {activeReportFile&&<div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/65 p-3" role="dialog" aria-modal="true" aria-label="گزارش و وضعیت سند"><section className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border app-border bg-[var(--surface)] p-4 shadow-2xl"><header className="flex items-start justify-between gap-3 border-b app-border pb-3"><div className="min-w-0"><div className="text-[10px] font-black text-cyan-500">DOCUMENT ACTIVITY</div><h3 className="mt-1 break-words text-base font-black">{activeReportFile.original_name}</h3></div><button type="button" onClick={()=>setActiveReportFileId(null)} className="rounded-lg border app-border p-2" aria-label="بستن"><X size={17}/></button></header><div className="mt-4"><h4 className="mb-2 text-sm font-black">تاریخچه گزارش‌ها</h4>{documentReports.filter((row)=>row.file_id===activeReportFile.id).length===0?<p className="py-4 text-xs app-muted">هنوز گزارشی ثبت نشده است.</p>:<div className="space-y-3">{documentReports.filter((row)=>row.file_id===activeReportFile.id).map((row)=><article key={row.id} className="border-r-2 border-cyan-500/60 pr-3 py-1"><div className="flex flex-wrap items-center gap-2 text-[10px] app-muted"><b className="text-[var(--text)]">{row.actor_name}</b><span>{new Date(row.created_at).toLocaleString('fa-IR')}</span><span>· {reportStatusLabel(row.status)}</span></div>{row.stage&&<div className="mt-1 text-xs font-bold">مرحله: {row.stage}</div>}<p className="mt-1 whitespace-pre-wrap text-xs leading-6">{row.report}</p></article>)}</div>}</div><div className="mt-5 border-t app-border pt-4"><h4 className="mb-3 text-sm font-black">ثبت گزارش جدید</h4><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs"><span className="mb-1 block app-muted">وضعیت سند</span><select value={reportStatus} onChange={(e)=>setReportStatus(e.target.value as DocumentReportRow['status'])} className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"><option value="received">دریافت شده</option><option value="in_review">در حال بررسی</option><option value="action_required">نیازمند اقدام</option><option value="completed">انجام شده</option><option value="blocked">متوقف / دارای مانع</option><option value="archived">مختومه</option></select></label><label className="text-xs"><span className="mb-1 block app-muted">مرحله فعلی کار</span><input value={reportStage} onChange={(e)=>setReportStage(e.target.value)} placeholder="مثلاً بررسی قبض انبار، اخذ مجوز…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"/></label></div><label className="mt-3 block text-xs"><span className="mb-1 block app-muted">شرح گزارش و اقدام موردنیاز</span><textarea value={reportDraft} onChange={(e)=>setReportDraft(e.target.value)} rows={4} maxLength={4000} placeholder="چه کاری انجام شده؟ چه مدرکی ناقص است؟ همکار بعدی باید چه اقدامی انجام دهد؟" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"/></label><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={()=>setActiveReportFileId(null)} className="rounded-xl border app-border px-4 py-2 text-xs">انصراف</button><button type="button" onClick={()=>void saveDocumentReport()} disabled={savingReport||!reportDraft.trim()} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{savingReport?'در حال ثبت…':'ثبت گزارش برای همه همکاران'}</button></div></div></section></div>}
+      <p className="text-xs app-muted">همگام‌سازی کامل سازمان با یک کلیک و پس از انتخاب یک‌باره پوشه ذخیره انجام می‌شود. کنار هر سند فایل متنی اطلاعات عملیاتی و مالی ساخته می‌شود؛ اسناد اصلی بدون اجازه حذف یا بازنویسی نمی‌شوند.</p>
+      {preview&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3" role="dialog" aria-modal="true" aria-label={'پیش‌نمایش '+preview.name}><section className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border app-border bg-[var(--surface)] shadow-2xl"><header className="flex shrink-0 items-center justify-between gap-3 border-b app-border px-4 py-3"><b className="min-w-0 truncate text-sm">{preview.name}</b><button type="button" onClick={()=>setPreview(null)} className="rounded-lg border app-border p-2" aria-label="بستن پیش‌نمایش"><X size={17}/></button></header><div className="min-h-0 flex-1 overflow-auto p-2">{preview.mime.startsWith('image/')?<img src={preview.url} alt={preview.name} className="mx-auto max-h-[82dvh] max-w-full object-contain"/>:preview.mime==='application/pdf'?<iframe src={preview.url} title={preview.name} className="h-[82dvh] w-full rounded-lg bg-white"/>:<iframe src={preview.url} title={preview.name} sandbox="" className="h-[82dvh] w-full rounded-lg bg-white"/>}</div></section></div>}
+    </div>
+  </main>;
+};
+
+export default FileManagerPage;
+) || lower.startsWith('._') || isManagedSyncMetadataFile(name); };
+      const folderPathById = new Map<string, string>([[cloudRoot.id, '']]);
+      const serverFolderByPath = new Map<string, FolderRow>([['', cloudRoot]]);
+      const ambiguousPaths = new Set<string>();
+      const queue: FolderRow[] = [cloudRoot];
+      while (queue.length) {
+        const parent = queue.shift()!;
+        const parentPath = folderPathById.get(parent.id) ?? '';
+        for (const child of folders.filter((item) => item.parent_id === parent.id)) {
+          if (isSystemSyncEntry(child.display_name)) continue;
+          const segment = windowsName(child.display_name);
+          const childPath = parentPath ? parentPath + '/' + segment : segment;
+          if (serverFolderByPath.has(childPath)) {
+            ambiguousPaths.add(childPath);
+            continue;
+          }
+          folderPathById.set(child.id, childPath);
+          serverFolderByPath.set(childPath, child);
+          queue.push(child);
+        }
+      }
+
+      const canonicalPath = (value: string) => value.normalize('NFKC').toLocaleLowerCase('en-US');
+      const ambiguousFileKeys = new Set<string>();
+      const localDirectories = new Map<string, any>([['', localRoot]]);
+      const localFiles = new Map<string, { file: File; parentPath: string; relativePath: string }>();
+      const walkLocal = async (directory: any, relative: string): Promise<void> => {
+        for await (const [entryName, entry] of directory.entries()) {
+          const name = windowsName(String(entryName));
+          const relativePath = relative ? relative + '/' + name : name;
+          if (entry.kind === 'directory') {
+            if (localDirectories.has(relativePath)) {
+              ambiguousPaths.add(relativePath);
+              continue;
+            }
+            localDirectories.set(relativePath, entry);
+            await walkLocal(entry, relativePath);
+          } else if (entry.kind === 'file') {
+            const lower = name.toLowerCase();
+            if (['desktop.ini', 'thumbs.db', '.ds_store'].includes(lower) || lower.startsWith('~$') || isManagedSyncMetadataFile(name)) continue;
+            const key = canonicalPath(relativePath);
+            if (localFiles.has(key)) {
+              ambiguousFileKeys.add(key);
+              continue;
+            }
+            localFiles.set(key, { file: await entry.getFile(), parentPath: relative, relativePath });
+          }
+        }
+      };
+      await walkLocal(localRoot, '');
+
+      const folderIds = [...folderPathById.keys()];
+      const serverFiles: FileRow[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error: listError } = await supabase
+          .from('file_manager_files')
+          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
+          .eq('organization_id', organizationId)
+          .in('folder_id', folderIds)
+          .eq('is_archived', false)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + 499);
+        if (listError) throw listError;
+        const batch = (data || []) as FileRow[];
+        serverFiles.push(...batch);
+        if (batch.length < 500) break;
+      }
+
+      const serverFilesByPath = new Map<string, { file: FileRow; relativePath: string }>();
+      for (const file of serverFiles) {
+        const parentPath = folderPathById.get(file.folder_id);
+        if (parentPath === undefined || isSystemSyncEntry(file.original_name)) continue;
+        const relativePath = parentPath ? parentPath + '/' + windowsName(file.original_name) : windowsName(file.original_name);
+        const key = canonicalPath(relativePath);
+        if (serverFilesByPath.has(key)) ambiguousFileKeys.add(key);
+        else serverFilesByPath.set(key, { file, relativePath });
+      }
+
+      const ensureServerFolder = async (relativePath: string): Promise<FolderRow> => {
+        const existing = serverFolderByPath.get(relativePath);
+        if (existing) return existing;
+        const parts = relativePath.split('/').filter(Boolean);
+        const parentPath = parts.slice(0, -1).join('/');
+        const parent = await ensureServerFolder(parentPath);
+        const segment = parts[parts.length - 1];
+        const matching = folders.find((item) => item.parent_id === parent.id && windowsName(item.display_name) === segment);
+        const folder = matching || await getOrCreateSubfolder(parent, segment);
+        serverFolderByPath.set(relativePath, folder);
+        folderPathById.set(folder.id, relativePath);
+        return folder;
+      };
+
+      const ensureLocalFolder = async (relativePath: string): Promise<any> => {
+        if (localDirectories.has(relativePath)) return localDirectories.get(relativePath);
+        const parts = relativePath.split('/').filter(Boolean);
+        let path = '';
+        let handle = localRoot;
+        for (const part of parts) {
+          path = path ? path + '/' + part : part;
+          if (localDirectories.has(path)) handle = localDirectories.get(path);
+          else {
+            try {
+              handle = await handle.getDirectoryHandle(part, { create: true });
+              localDirectories.set(path, handle);
+            } catch (reason) {
+              const detail = reason instanceof Error ? reason.message : 'خطای نامشخص مرورگر';
+              throw new Error('مرورگر اجازه ساخت پوشه با نام «' + part + '» را نداد. مسیر: «' + path + '». جزئیات: ' + detail);
+            }
+          }
+        }
+        return handle;
+      };
+
+      const folderPathsToPrepare = [...serverFolderByPath.keys()]
+        .filter(Boolean)
+        .sort((a, b) => a.split('/').length - b.split('/').length);
+      for (let index = 0; index < folderPathsToPrepare.length; index += 1) {
+        const folderPath = folderPathsToPrepare[index];
+        if (!ambiguousPaths.has(folderPath)) {
+          try { await ensureLocalFolder(folderPath); foldersCreated += 1; }
+          catch (reason) { failed += 1; failedItems.push(folderPath + ': ' + (reason instanceof Error ? reason.message : 'ساخت پوشه در دستگاه ناموفق بود.')); }
+        }
+        publishSyncProgress({
+          phase: 'آماده‌سازی پوشه‌ها',
+          percent: folderPathsToPrepare.length ? Math.round(((index + 1) / folderPathsToPrepare.length) * 10) : 10,
+          currentItem: folderPath,
+          foldersCreated,
+        });
+      }
+
+      const digest = async (blob: Blob): Promise<string> => {
+        const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+        return Array.from(new Uint8Array(hash), (value) => value.toString(16).padStart(2, '0')).join('');
+      };
+      transferTotal = localFiles.size + [...serverFilesByPath.keys()].filter((key) => !localFiles.has(key)).length;
+      const publishTransferProgress = (currentItem: string) => {
+        transferCompleted += 1;
+        publishSyncProgress({
+          phase: 'انتقال و بررسی فایل‌ها',
+          percent: 10 + Math.round((transferCompleted / Math.max(transferTotal, 1)) * 60),
+          currentItem,
+          downloaded,
+          uploaded,
+          identical,
+          bytesSaved,
+          failed,
+          conflicts,
+          oversized,
+        });
+      };
+
+      for (const [relativeKey, local] of localFiles) {
+        const relativePath = local.relativePath;
+        try {
+          if (ambiguousPaths.has(local.parentPath) || ambiguousFileKeys.has(relativeKey)) {
+            conflicts += 1;
+            continue;
+          }
+          const remoteEntry = serverFilesByPath.get(relativeKey);
+          if (remoteEntry) {
+            const remote = remoteEntry.file;
+            if (Number(remote.size_bytes) !== local.file.size) {
+              conflicts += 1;
+              continue;
+            }
+            setProgress('مقایسهٔ محتوا: ' + relativePath);
+            const remoteBlob = await getFileBlob(remote);
+            if (await digest(local.file) === await digest(remoteBlob)) identical += 1;
+            else conflicts += 1;
+            continue;
+          }
+          if (local.file.size <= 0 || local.file.size > FILE_ARCHIVE_MAX_BYTES) {
+            oversized += 1;
+            failedItems.push(relativePath + ': فایل محلی برای آرشیو تلگرام باید بین ۱ بایت تا ۲۰ مگابایت باشد.');
+            continue;
+          }
+          const parent = await ensureServerFolder(local.parentPath);
+          const localHash = await digest(local.file);
+          const keyMaterial = [organizationId, parent.id, relativePath, local.file.size, localHash].join('|');
+          const idempotencyKey = 'windows-sync:' + await digest(new Blob([keyMaterial]));
+          archiveDestination ??= await getFileArchiveDestination();
+          setProgress('ارسال فایل جدید به آرشیو: ' + relativePath);
+          await uploadTelegramArchivedFile(local.file, {
+            folderId: parent.id,
+            ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+            documentType: parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG',
+            tags: [],
+            destination: archiveDestination,
+            idempotencyKey,
+          });
+          uploaded += 1;
+        } catch (reason) {
+          failed += 1;
+          failedItems.push(relativePath + ': ' + (reason instanceof Error ? reason.message : 'انتقال ناموفق بود.'));
+        } finally {
+          publishTransferProgress(relativePath);
+        }
+      }
+
+      for (const [relativeKey, remoteEntry] of serverFilesByPath) {
+        if (localFiles.has(relativeKey)) continue;
+        const relativePath = remoteEntry.relativePath;
+        const remote = remoteEntry.file;
+        try {
+          if (ambiguousFileKeys.has(relativeKey)) {
+            conflicts += 1;
+            continue;
+          }
+          const slash = relativePath.lastIndexOf('/');
+          const parentPath = slash >= 0 ? relativePath.slice(0, slash) : '';
+          const filename = slash >= 0 ? relativePath.slice(slash + 1) : relativePath;
+          setProgress('دریافت از آرشیو: ' + relativePath);
+          const blob = await getFileBlob(remote);
+          if (Number(remote.size_bytes) > 0 && blob.size !== Number(remote.size_bytes)) {
+            throw new Error('حجم فایل دریافتی با اندازه ثبت‌شده در آرشیو مطابقت ندارد.');
+          }
+          const directory = await ensureLocalFolder(parentPath);
+          const fileHandle = await directory.getFileHandle(filename, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          const savedFile = await fileHandle.getFile();
+          if (savedFile.size !== blob.size) {
+            throw new Error('تأیید ذخیره روی دیسک ناموفق بود؛ اندازه فایل نوشته‌شده صحیح نیست.');
+          }
+          downloaded += 1;
+          bytesSaved += savedFile.size;
+        } catch (reason) {
+          failed += 1;
+          failedItems.push(relativePath + ': ' + (reason instanceof Error ? reason.message : 'دریافت یا ذخیره فایل ناموفق بود.'));
+        } finally {
+          publishTransferProgress(relativePath);
+        }
+      }
+      publishSyncProgress({
+        phase: 'دریافت اطلاعات سازمانی و مالی',
+        percent: 72,
+        currentItem: 'خواندن اطلاعات کشتیرانی، گمرک، ثبت سفارش و حسابداری…',
+        downloaded,
+        uploaded,
+        identical,
+        bytesSaved,
+        failed,
+        conflicts,
+        oversized,
+      });
+      setProgress('تجمیع اطلاعات کشتیرانی، گمرک، ثبت سفارش و حساب مالی…');
+      const fetchOrgRows = async (table: string): Promise<Record<string, any>[]> => {
+        const collected: Record<string, any>[] = [];
+        for (let offset = 0; ; offset += 500) {
+          const { data, error: queryError } = await (supabase as any).from(table)
+            .select('*').eq('organization_id', organizationId).range(offset, offset + 499);
+          if (queryError) throw new Error('خواندن اطلاعات جدول ' + table + ' ناموفق بود: ' + queryError.message);
+          const rows = (data || []) as Record<string, any>[];
+          collected.push(...rows);
+          if (rows.length < 500) break;
+        }
+        return collected;
+      };
+      const tableNames = [
+        'clients', 'shipments', 'shipment_customs_data', 'cases', 'vessels',
+        'shipping_lines', 'customs_offices', 'registration_orders',
+        'customs_declarations', 'financial_transactions', 'customs_documents',
+        'shipment_documents', 'customs_accounting_vouchers', 'finance_cost_categories',
+        'finance_cost_items', 'finance_invoice_lines', 'finance_invoice_shipments',
+        'finance_invoices', 'finance_org_settings', 'finance_payment_allocations',
+        'finance_payment_request_lines', 'finance_payment_requests', 'finance_payments',
+        'petty_cash_ledger',
+      ];
+      const tableRows = await Promise.all(tableNames.map((table) => fetchOrgRows(table)));
+      const data = Object.fromEntries(tableNames.map((table, index) => [table, tableRows[index]])) as Record<string, Record<string, any>[]>;
+      const byId = (rows: Record<string, any>[], id: unknown) => rows.find((row) => row.id === id) || null;
+
+      const latestFiles: FileRow[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data: rows, error: fileError } = await supabase
+          .from('file_manager_files')
+          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
+          .eq('organization_id', organizationId)
+          .in('folder_id', [...folderPathById.keys()])
+          .eq('is_archived', false)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + 499);
+        if (fileError) throw fileError;
+        const rowsBatch = (rows || []) as FileRow[];
+        latestFiles.push(...rowsBatch);
+        if (rowsBatch.length < 500) break;
+      }
+
+      const exportedAt = new Date().toISOString();
+      const organizationSnapshot = {
+        schemaVersion: 1,
+        exportedAt,
+        organizationId,
+        tables: data,
+        fileManager: {
+          folders: [...serverFolderByPath.entries()].map(([relativePath, folder]) => ({ relativePath, ...folder })),
+          files: latestFiles,
+        },
+      };
+      const organizationJson = JSON.stringify(organizationSnapshot, null, 2);
+      const organizationSnapshotHandle = await localRoot.getFileHandle('اطلاعات_کامل_سازمان.json', { create: true });
+      const organizationSnapshotWritable = await organizationSnapshotHandle.createWritable();
+      await organizationSnapshotWritable.write(organizationJson);
+      await organizationSnapshotWritable.close();
+      const savedSnapshot = await organizationSnapshotHandle.getFile();
+      if (savedSnapshot.size !== new TextEncoder().encode(organizationJson).byteLength) {
+        throw new Error('ذخیره فایل اطلاعات کامل سازمان تأیید نشد.');
+      }
+      metadataWritten += 1;
+      bytesSaved += savedSnapshot.size;
+      publishSyncProgress({
+        phase: 'ذخیره نسخه کامل اطلاعات سازمان',
+        percent: 80,
+        currentItem: 'اطلاعات_کامل_سازمان.json',
+        metadataWritten,
+        bytesSaved,
+        failed,
+      });
+
+      let metadataTasksDone = 1;
+      const metadataTasksTotal = 1 + serverFolderByPath.size + latestFiles.length;
+      for (const [relativePath, folder] of serverFolderByPath) {
+        const shipment = byId(data.shipments, folder.shipment_id);
+        const caseRecord = byId(data.cases, shipment?.case_id);
+        const client = byId(data.clients, folder.client_id || shipment?.client_id || caseRecord?.client_id);
+        const relevantCases = data.cases.filter((row) => caseRecord ? row.id === caseRecord.id : Boolean(folder.client_id && row.client_id === folder.client_id));
+        const caseIds = relevantCases.map((row) => row.id);
+        const relevantShipments = data.shipments.filter((row) => shipment ? row.id === shipment.id : Boolean(folder.client_id && row.client_id === folder.client_id));
+        const relevantShipmentIds = relevantShipments.map((row) => row.id);
+        const declarationRows = data.customs_declarations.filter((row) =>
+          (folder.shipment_id && row.shipment_id === folder.shipment_id) || (row.case_id && caseIds.includes(row.case_id)));
+        const declarationIds = declarationRows.map((row) => row.id);
+        const transactions = data.financial_transactions.filter((row) =>
+          (row.case_id && caseIds.includes(row.case_id)) ||
+          (row.source_id && (relevantShipmentIds.includes(row.source_id) || declarationIds.includes(row.source_id))));
+        const relevantCostItems = data.finance_cost_items.filter((row) =>
+          (row.shipment_id && relevantShipmentIds.includes(row.shipment_id)) ||
+          (row.case_id && caseIds.includes(row.case_id)) ||
+          (row.client_id && folder.client_id === row.client_id));
+        const costItemIds = relevantCostItems.map((row) => row.id);
+        const invoiceShipmentLinks = data.finance_invoice_shipments.filter((row) => relevantShipmentIds.includes(row.shipment_id));
+        const linkedInvoiceIds = invoiceShipmentLinks.map((row) => row.invoice_id);
+        const invoices = data.finance_invoices.filter((row) =>
+          linkedInvoiceIds.includes(row.id) || (folder.client_id && row.client_id === folder.client_id));
+        const invoiceIds = invoices.map((row) => row.id);
+        const invoiceLines = data.finance_invoice_lines.filter((row) =>
+          invoiceIds.includes(row.invoice_id) || (row.shipment_id && relevantShipmentIds.includes(row.shipment_id)));
+        const paymentRequests = data.finance_payment_requests.filter((row) =>
+          (row.shipment_id && relevantShipmentIds.includes(row.shipment_id)) ||
+          (row.client_id && folder.client_id === row.client_id));
+        const paymentRequestIds = paymentRequests.map((row) => row.id);
+        const paymentRequestLines = data.finance_payment_request_lines.filter((row) => paymentRequestIds.includes(row.request_id));
+        const payments = data.finance_payments.filter((row) =>
+          (row.shipment_id && relevantShipmentIds.includes(row.shipment_id)) ||
+          (row.case_id && caseIds.includes(row.case_id)) ||
+          (row.client_id && folder.client_id === row.client_id));
+        const paymentIds = payments.map((row) => row.id);
+        const paymentAllocations = data.finance_payment_allocations.filter((row) =>
+          paymentIds.includes(row.payment_id) || invoiceIds.includes(row.invoice_id));
+        const accountingVouchers = data.customs_accounting_vouchers.filter((row) =>
+          (row.case_id && caseIds.includes(row.case_id)) ||
+          (row.client_id && folder.client_id === row.client_id) ||
+          (row.declaration_id && declarationIds.includes(row.declaration_id)));
+        const pettyCashEntries = data.petty_cash_ledger.filter((row) =>
+          (folder.parent_id === null) || (row.related_expense_id && costItemIds.includes(row.related_expense_id)));
+        const costCategoryIds = relevantCostItems.map((row) => row.category_id).filter(Boolean);
+        const costCategories = data.finance_cost_categories.filter((row) =>
+          folder.parent_id === null || costCategoryIds.includes(row.id));
+        const organizationFinanceSettings = folder.parent_id === null ? data.finance_org_settings : [];
+        const order = data.registration_orders.find((row) =>
+          (shipment?.registration_order_id && row.id === shipment.registration_order_id) ||
+          (caseRecord && row.case_id === caseRecord.id)) || null;
+        const relatedOrders = data.registration_orders.filter((row) =>
+          (order && row.id === order.id) || caseIds.includes(row.case_id) ||
+          (folder.client_id && row.client_id === folder.client_id));
+        const vessel = byId(data.vessels, shipment?.vessel_id);
+        const shippingLine = byId(data.shipping_lines, vessel?.shipping_line_id);
+        const customsOffice = byId(data.customs_offices, folder.customs_office_id || shipment?.customs_office_id || caseRecord?.customs_office_id);
+        const customsData = data.shipment_customs_data.find((row) => row.shipment_id === folder.shipment_id) || null;
+        const folderFileRows = latestFiles.filter((row) => row.folder_id === folder.id);
+        const customsDocumentRows = data.customs_documents.filter((row) => row.folder_id === folder.id || (folder.shipment_id && row.shipment_id === folder.shipment_id && row.folder_id == null));
+        const shipmentDocumentRows = data.shipment_documents.filter((row) => row.folder_id === folder.id || (folder.shipment_id && row.shipment_id === folder.shipment_id && row.folder_id == null));
+        const text = buildFolderMetadataText({
+          folder,
+          client,
+          shipment,
+          customsData,
+          caseRecord,
+          vessel,
+          shippingLine,
+          customsOffice,
+          registrationOrder: order,
+          declarations: declarationRows,
+          financialTransactions: transactions,
+          documents: [
+            ...folderFileRows.map((row) => row as unknown as Record<string, unknown>),
+            ...customsDocumentRows,
+            ...shipmentDocumentRows,
+          ],
+          relatedSections: [
+            { title: 'پرونده‌های مرتبط صاحب کالا', records: relevantCases },
+            { title: 'سایر محموله‌های مرتبط صاحب کالا', records: relevantShipments.filter((row) => row.id !== shipment?.id) },
+            { title: 'سایر ثبت سفارش‌های مرتبط', records: relatedOrders.filter((row) => row.id !== order?.id) },
+            { title: 'هزینه‌های مستقیم و غیرمستقیم محموله', records: relevantCostItems },
+            { title: 'فاکتورهای مالی', records: invoices },
+            { title: 'ردیف‌های فاکتور', records: invoiceLines },
+            { title: 'ارتباط فاکتور با محموله', records: invoiceShipmentLinks },
+            { title: 'پرداخت‌ها و دریافت‌ها', records: payments },
+            { title: 'تخصیص پرداخت به فاکتورها', records: paymentAllocations },
+            { title: 'درخواست‌های پرداخت', records: paymentRequests },
+            { title: 'ردیف‌های درخواست پرداخت', records: paymentRequestLines },
+            { title: 'اسناد حسابداری گمرک', records: accountingVouchers },
+            { title: 'تنخواه و صندوق', records: pettyCashEntries },
+            { title: 'دسته‌بندی هزینه‌ها', records: costCategories },
+            { title: 'تنظیمات مالی و اطلاعات بانکی سازمان', records: organizationFinanceSettings },
+          ],
+          generatedAt: new Date().toISOString(),
+        });
+        const directory = await ensureLocalFolder(relativePath);
+        const infoHandle = await directory.getFileHandle('اطلاعات_عملیاتی.txt', { create: true });
+        const infoWritable = await infoHandle.createWritable();
+        await infoWritable.write(text);
+        await infoWritable.close();
+        const savedInfo = await infoHandle.getFile();
+        if (savedInfo.size !== new TextEncoder().encode(text).byteLength) {
+          throw new Error('ذخیره اطلاعات پوشه «' + folder.display_name + '» تأیید نشد.');
+        }
+        metadataWritten += 1;
+        bytesSaved += savedInfo.size;
+        metadataTasksDone += 1;
+        publishSyncProgress({
+          phase: 'ذخیره اطلاعات پرونده‌ها و محموله‌ها',
+          percent: 80 + Math.round((metadataTasksDone / metadataTasksTotal) * 20),
+          currentItem: relativePath || 'ریشه سازمان',
+          metadataWritten,
+          bytesSaved,
+          failed,
+        });
+
+        for (const file of folderFileRows) {
+          const fileName = windowsName(file.original_name || 'document');
+          const companionName = windowsName(fileName + '.اطلاعات.txt');
+          const companionText = buildDocumentMetadataText(file as unknown as Record<string, unknown>, text);
+          const companionHandle = await directory.getFileHandle(companionName, { create: true });
+          const companionWritable = await companionHandle.createWritable();
+          await companionWritable.write(companionText);
+          await companionWritable.close();
+          const savedCompanion = await companionHandle.getFile();
+          if (savedCompanion.size !== new TextEncoder().encode(companionText).byteLength) {
+            throw new Error('ذخیره فراداده سند «' + fileName + '» تأیید نشد.');
+          }
+          metadataWritten += 1;
+          bytesSaved += savedCompanion.size;
+          metadataTasksDone += 1;
+          publishSyncProgress({
+            phase: 'ذخیره اطلاعات اسناد',
+            percent: 80 + Math.round((metadataTasksDone / metadataTasksTotal) * 20),
+            currentItem: relativePath ? relativePath + '/' + companionName : companionName,
+            metadataWritten,
+            bytesSaved,
+            failed,
+          });
+        }
+      }
+
+      setProgress('ثبت نتیجه و تازه‌سازی فهرست فایل‌ها…');
+      await loadFolders();
+      await loadFiles(selectedFolderId);
+      const parts = [
+        'همگام‌سازی سازمان به پایان رسید.',
+        uploaded + ' فایل از ویندوز به آرشیو ارسال شد',
+        downloaded + ' فایل از آرشیو روی دیسک ذخیره و تأیید شد',
+        identical + ' فایل بدون تغییر بود',
+        conflicts + ' تعارض برای بررسی دستی حفظ شد',
+        foldersCreated + ' پوشه آماده شد',
+        metadataWritten + ' فایل اطلاعاتی/فراداده ذخیره شد',
+        latestFiles.length + ' سند در فهرست آرشیو بررسی شد',
+        'حجم کل نوشته‌شده روی دیسک: ' + byteLabel(bytesSaved),
+      ];
+      if (oversized) parts.push(oversized + ' فایل محلی به علت محدودیت ۲۰ مگابایت برای آپلود تلگرام ارسال نشد');
+      if (failed) parts.push(failed + ' فایل با خطا مواجه شد');
+      parts.push('هیچ سند اصلی حذف یا بازنویسی نشد؛ اسناد اصلی بدون اجازه تغییر نمی‌کنند.');
+      setMessage(parts.join('؛ '));
+      if (failed) {
+        setError('همگام‌سازی کامل نیست؛ ' + failed + ' مورد ذخیره نشد. ' + failedItems.slice(0, 4).join(' | '));
+      }
+      publishSyncProgress({
+        phase: failed ? 'پایان با موارد ناموفق' : 'همگام‌سازی کامل شد',
+        percent: 100,
+        currentItem: failed ? failedItems.slice(0, 2).join(' | ') : 'تمام فایل‌ها و اطلاعات قابل دسترس بررسی و ذخیره شدند.',
+        foldersCreated,
+        downloaded,
+        uploaded,
+        identical,
+        metadataWritten,
+        bytesSaved,
+        failed,
+        conflicts,
+        oversized,
+      });
+    } catch (reason) {
+      const failureMessage = reason instanceof Error ? reason.message : 'همگام‌سازی کامل سازمان ناموفق بود.';
+      setError(failureMessage);
+      publishSyncProgress({
+        phase: 'همگام‌سازی متوقف شد',
+        currentItem: failureMessage,
+        downloaded,
+        uploaded,
+        identical,
+        metadataWritten,
+        bytesSaved,
+        failed: failed + 1,
+        conflicts,
+        oversized,
+      });
+      if (uploaded || downloaded) setMessage('تا پیش از خطا: ' + uploaded + ' فایل ارسال و ' + downloaded + ' فایل دریافت شد. اجرای بعدی می‌تواند ادامه دهد.');
+    } finally {
+      setSyncing(false);
+      setProgress('');
+    }
+  };
+
+  const openHit = (hit: SearchHit) => {
+    const folder = hit.folder_id ? folders.find((item) => item.id === hit.folder_id) : null;
+    const fallback = hit.shipment_id
+      ? folders.find((item) => item.shipment_id === hit.shipment_id && item.folder_type === 'shipment')
+      : hit.client_id ? folders.find((item) => item.client_id === hit.client_id && item.folder_type === 'client') : null;
+    if (folder || fallback) chooseFolder((folder || fallback)!);
+    else setError('برای این نتیجه هنوز پوشه مرتبط ثبت نشده است.');
+  };
+
+  const toggleFolderExpansion=(id:string)=>setExpandedFolders(previous=>{const next=new Set(previous);if(next.has(id))next.delete(id);else next.add(id);return next;});
+  const renderFolderNode=(folder:FolderRow,depth=0):React.ReactNode=>{
+    const children=folderChildrenByParent.get(folder.id)||[],expanded=expandedFolders.has(folder.id),count=folderDescendantCounts[folder.id]||0,selected=selectedFolderId===folder.id;
+    return <div key={folder.id} className="select-none">
+      <div className={'flex items-start gap-1 rounded-lg '+(selected?'bg-[var(--primary)]/10':'hover:bg-[var(--surface-2)]')} style={{paddingInlineStart:Math.min(depth,4)*8}}>
+        <button type="button" onClick={()=>toggleFolderExpansion(folder.id)} disabled={!children.length} aria-expanded={expanded} aria-label={expanded?'بستن زیرپوشه‌ها':'بازکردن زیرپوشه‌ها'} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md app-muted disabled:opacity-20">{children.length?(expanded?<ChevronDown size={14}/>:<ChevronLeft size={14}/>):<span className="h-1 w-1 rounded-full bg-[var(--border)]"/>}</button>
+        <button type="button" onClick={()=>chooseFolder(folder)} title={folder.display_name} className={'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-right text-sm '+(selected?'font-bold text-[var(--primary)]':'')}>
+          <span className={'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={16}/>:<Folder size={16}/>}</span>
+          <span className="min-w-0 flex-1 whitespace-normal break-words leading-5">{folder.display_name}</span>{count>0&&<span className="mt-0.5 shrink-0 rounded-full bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px]">{count}</span>}
+        </button>
+      </div>
+      {expanded&&children.map(child=>renderFolderNode(child,depth+1))}
+    </div>;
+  };
+  const uploadEnabled = Boolean(currentFolder && (currentFolder.shipment_id || (currentFolder.client_id && ['client', 'custom'].includes(currentFolder.folder_type))));
+  const directoryProps = { webkitdirectory: '', directory: '' } as any;
+
+  return <main dir="rtl" className="mobile-app-page file-manager-page min-h-screen px-3 py-3 sm:p-4 md:p-6" style={{ color: 'var(--text)' }}>
+    <div className="mx-auto w-full max-w-none space-y-3 sm:space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl bg-[var(--primary)]/10 p-3 text-[var(--primary)]"><FolderOpen size={24} /></div>
+          <div>
+            <div className="hidden text-xs app-muted sm:block">CUSTOMS OS · DOCUMENTS</div>
+            <h1 className="text-xl sm:text-2xl font-black">مدیریت فایل</h1>
+          </div>
+        </div>
+        <div className="file-manager-page-actions flex flex-wrap gap-2">
+          <Link to="/operations" className="rounded-xl border app-border px-2.5 sm:px-3 py-2 text-xs sm:text-sm"><ArrowRight size={15} className="ml-1 inline" />عملیات</Link>
+          <Link to="/settings/messengers" className="rounded-xl border app-border px-2.5 sm:px-3 py-2 text-xs sm:text-sm">تنظیم آرشیو</Link>
+          <button type="button" onClick={() => { void loadFolders(); if (selectedFolderId) void loadFiles(selectedFolderId); }} disabled={loading} className="rounded-xl border app-border px-2.5 sm:px-3 py-2 text-xs sm:text-sm disabled:opacity-50"><RefreshCw size={15} className="ml-1 inline" />تازه‌سازی</button>
+        </div>
+      </header>
+
+      <section className="file-manager-flat-panel file-manager-archive-status flex flex-wrap items-center justify-between gap-2 px-1 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600"><MessageCircle size={18}/></span>
+          <div className="min-w-0">
+            <div className="text-sm font-bold">آرشیو تلگرام: {archiveDestinationStatus==='checking'?'در حال بررسی…':archiveDestination?.displayName||'در دسترس نیست'}</div>
+          </div>
+        </div>
+        {['owner','admin'].includes(role)&&<Link to="/settings/messengers" className="shrink-0 rounded-lg border app-border px-3 py-2 text-xs">تنظیم مقصد</Link>}
+        {archiveDestinationStatus==='unavailable'&&<span className="text-xs text-amber-600">مقصد فعال پیدا نشد</span>}
+      </section>
+      <details className="file-manager-archive-help text-xs app-muted"><summary>دربارهٔ اسناد قدیمی</summary><p>اسناد قدیمی به‌صورت خودکار به تلگرام منتقل نمی‌شوند. فایل‌های جدیدی که از مسیر آرشیو آپلود شوند در گفت‌وگوی تلگرام ثبت می‌شوند.</p></details>
+
+<details className="file-manager-sync-dropdown group border-b app-border py-2"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 [&::-webkit-details-marker]:hidden"><span className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600"><HardDrive size={20}/></span><span className="min-w-0"><span className="block text-sm font-black">همگام‌سازی و دریافت نسخهٔ پشتیبان</span><span className="mt-0.5 block text-xs app-muted">{syncDirectoryName ? `پوشه متصل: ${syncDirectoryName}` : 'برای نمایش گزینه‌های همگام‌سازی انتخاب کنید'}</span></span></span><span className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--primary)]"><span>نمایش گزینه‌ها</span><ChevronDown size={17} className="transition-transform group-open:rotate-180"/></span></summary><div className="grid gap-3 pt-3">
+        <div className="relative overflow-hidden border-0 bg-transparent p-0 shadow-none">
+          <div className="pointer-events-none absolute -left-8 -top-8 h-36 w-36 rounded-full bg-sky-500/10 blur-2xl"/>
+          <div className="relative flex items-start gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 text-sky-600"><HardDrive size={24}/></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-bold tracking-wide text-sky-700 dark:text-sky-300">ONE-CLICK COMPANY SYNC</div>
+              <h2 className="mt-1 text-base font-black sm:text-lg">همگام‌سازی کامل فایل‌منیجر</h2>
+              <p className="mt-1 text-xs leading-6 app-muted">همه صاحبان کالا، محموله‌ها، زیرپوشه‌ها، اسناد، اطلاعات کشتیرانی، گمرک، ثبت سفارش و حساب مالی در یک پوشه ذخیره می‌شوند.</p>
+            </div>
+          </div>
+          <div className="relative mt-4 flex flex-wrap items-center gap-2 rounded-xl border app-border bg-[var(--surface)]/80 p-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600"><ShieldCheck size={17}/></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] app-muted">محل ذخیره متصل</div>
+              <div className="truncate text-xs font-bold">{syncDirectoryName ? syncDirectoryName + ' / Darbandi Commercial' : (typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker !== 'function') ? 'روش سازگار مرورگر: انتخاب پوشه یا ZIP و ذخیره در Files' : 'هنوز انتخاب نشده؛ بار اول یک پوشه انتخاب می‌کنید'}</div>
+            </div>
+            {syncDirectoryName && <button type="button" onClick={()=>void forgetSyncDirectory()} className="shrink-0 rounded-lg border app-border px-2.5 py-2 text-[10px]">قطع اتصال</button>}
+          </div>
+          <div className="relative mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={()=>void syncWindowsFolder()} disabled={syncing||uploading||loading}
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-900/10 transition hover:brightness-110 disabled:opacity-50">
+              {syncing?<Loader2 size={17} className="animate-spin"/>:<RefreshCw size={17}/>}
+              {syncing?'در حال همگام‌سازی همه داده‌ها…':syncDirectoryName?'همگام‌سازی همه اطلاعات با یک کلیک':(typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker !== 'function')?'شروع همگام‌سازی سازگار':'انتخاب پوشه و شروع همگام‌سازی'}
+            </button>
+            <button type="button" onClick={()=>void chooseSyncDirectory()} disabled={syncing}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border app-border bg-[var(--surface)] px-3 py-2 text-xs font-bold disabled:opacity-50">
+              <FolderOpen size={15}/>{typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker !== 'function'?'روش همگام‌سازی':'تغییر محل ذخیره'}
+            </button>
+          </div>
+          <p className="relative mt-2 text-[10px] leading-5 app-muted">فایل‌های اصلی حذف یا بی‌اجازه بازنویسی نمی‌شوند. در مرورگرهای فاقد دسترسی مستقیم پوشه، از روش پوشه/ZIP استفاده کنید.</p>
+          {portableSyncOpen && <div className="relative mt-3 space-y-3 rounded-xl border border-sky-500/25 bg-sky-500/5 p-3">
+            <div>
+              <div className="text-sm font-black">همگام‌سازی سازگار با Safari، Firefox و موبایل</div>
+              <p className="mt-1 text-xs leading-5 app-muted">پوشه اصلی «Darbandi Commercial» یا «صاحبان کالا» را انتخاب کنید؛ در صورت داشتن نسخه قبلی، ZIP را از Files وارد کنید. پس از مقایسه و ارسال فایل‌های جدید، نسخه تازه ZIP از کل آرشیو و اطلاعات سازمان آماده دانلود می‌شود.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button type="button" onClick={()=>portableDirectoryInput.current?.click()} disabled={syncing||uploading}
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg border app-border bg-[var(--surface)] px-3 py-2 text-xs font-bold disabled:opacity-50">
+                <FolderOpen size={15}/>انتخاب پوشه از دستگاه
+              </button>
+              <button type="button" onClick={()=>portableArchiveInput.current?.click()} disabled={syncing||uploading}
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg border app-border bg-[var(--surface)] px-3 py-2 text-xs font-bold disabled:opacity-50">
+                <Upload size={15}/>وارد کردن ZIP قبلی
+              </button>
+              <button type="button" onClick={()=>void exportPortableSyncArchive()} disabled={syncing||uploading||loading}
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-black text-white disabled:opacity-50 sm:col-span-2">
+                <Download size={15}/>دریافت ZIP کامل سازمان برای Files
+              </button>
+            </div>
+            <input ref={portableDirectoryInput} {...directoryProps} type="file" multiple className="hidden" disabled={syncing||uploading}
+              onChange={event=>{
+                const picked=Array.from(event.currentTarget.files||[]);
+                if(picked.length) void importPortableSyncEntries(picked.map(file=>({
+                  file,
+                  relativePath:(file as File & {webkitRelativePath?:string}).webkitRelativePath||file.name,
+                })));
+                event.currentTarget.value='';
+              }}/>
+            <input ref={portableArchiveInput} type="file" accept=".zip,application/zip,application/x-zip-compressed" className="hidden" disabled={syncing||uploading}
+              onChange={event=>{
+                const picked=event.currentTarget.files?.[0];
+                if(picked) void importPortableZip(picked);
+                event.currentTarget.value='';
+              }}/>
+            <div className="text-[10px] leading-5 app-muted">Safari آیفون از iOS 18.4 به بعد انتخاب پوشه را پشتیبانی می‌کند؛ در نسخه‌های قدیمی‌تر ZIP را از Files انتخاب کنید. مرورگر اجازه ذخیره بی‌واسطه در هر پوشه دلخواه را نمی‌دهد. ارسال فایل جدید به آرشیو تلگرام فعلی حداکثر ۲۰ مگابایت برای هر فایل است؛ فایل‌های بزرگ‌تر موجود با نسخه Storage در خروجی ZIP دریافت می‌شوند.</div>
+          </div>}
+        </div>
+
+        <div className="hidden">
+          <div className="flex items-start gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600"><Smartphone size={24}/></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-bold tracking-wide text-emerald-700 dark:text-emerald-300">APPLE FILES · SMB</div>
+              <h2 className="mt-1 text-base font-black">اتصال آیفون به پوشه شرکت</h2>
+              <p className="mt-1 text-xs leading-6 app-muted">یک‌بار اشتراک‌گذاری امن SMB را روی ویندوز فعال کنید؛ سپس آیفون با IP کامپیوتر و حساب اختصاصی وارد پوشه می‌شود.</p>
+            </div>
+          </div>
+          <a href="/setup-iphone-files-share.ps1" download="Darbandi-Commercial-iPhone-SMB.ps1"
+            className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+            <Download size={15}/>دانلود راه‌انداز امن ویندوز (PowerShell)
+          </a>
+          <label className="mt-3 block">
+            <span className="mb-1.5 block text-xs font-bold">IP کامپیوتر شرکت</span>
+            <div className="flex gap-2">
+              <input value={smbAddress} onChange={event=>setSmbAddress(event.target.value)} placeholder="مثلاً 192.168.1.20" inputMode="decimal" dir="ltr"
+                className="min-w-0 flex-1 rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)]"/>
+              <button type="button" onClick={()=>void copySmbAddress()} disabled={!smbAddress.trim()}
+                className="shrink-0 rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-bold text-white disabled:opacity-40">کپی آدرس</button>
+            </div>
+          </label>
+          <div className="mt-3 rounded-xl bg-[var(--surface-2)] p-3 text-[11px] leading-6">
+            <div className="font-bold">مراحل اتصال در آیفون</div>
+            <ol className="mr-4 mt-1 list-decimal space-y-0.5 app-muted">
+              <li>اسکریپت دانلودشده را در ویندوز با Run as administrator اجرا کنید.</li>
+              <li>در Files آیفون: Browse ← سه‌نقطه ← Connect to Server.</li>
+              <li>آدرس smb://IP را وارد و Registered User را انتخاب کنید.</li>
+              <li>نام کاربری COMPUTERNAME\DarbandiFiles و رمز ساخته‌شده را وارد کنید.</li>
+            </ol>
+          </div>
+          <div className="mt-2 flex items-start gap-2 text-[10px] leading-5 text-amber-700 dark:text-amber-300">
+            <ShieldCheck size={14} className="mt-0.5 shrink-0"/>
+            <span>فقط شبکه داخلی یا VPN امن؛ پورت 445 را روی مودم به اینترنت باز نکنید. آیفون و ویندوز باید به یک شبکه دسترسی داشته باشند.</span>
+          </div>
+        </div>
+      </div></details>
+
+      <section className="file-manager-flat-panel border-b app-border bg-transparent py-3">
+        <label className="relative block">
+          <Search size={18} className="absolute right-3 top-3.5 app-muted" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جست‌وجوی صاحب کالا، محموله یا سند…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] py-3 pr-10 pl-3 outline-none focus:border-[var(--primary)]" />
+        </label>
+        {query.trim().length >= 2 && <div className="mt-3 space-y-1">
+          <div className="px-1 text-xs app-muted">{loading ? 'در حال جست‌وجو…' : `${hits.length} نتیجه`}</div>
+          {hits.map((hit) => <button type="button" key={hit.entity_type + hit.entity_id} onClick={() => openHit(hit)} className="flex w-full items-start justify-between gap-3 rounded-xl border app-border p-3 text-right hover:bg-[var(--surface-2)]">
+            <span className="min-w-0"><span className="block truncate font-bold">{hit.title}</span><span className="mt-1 block text-xs app-muted">{hit.details || hit.entity_type}</span></span>
+            <span className="shrink-0 rounded-lg bg-[var(--surface-2)] px-2 py-1 text-[10px]">{({ client: 'صاحب کالا', shipment: 'محموله', vessel: 'کشتی', declaration: 'اظهارنامه', folder: 'پوشه', file: 'سند', document: 'سند', customs_document: 'سند گمرکی' } as Record<string, string>)[hit.entity_type] || hit.entity_type}</span>
+          </button>)}
+          {!loading && hits.length === 0 && <div className="p-4 text-center text-sm app-muted">نتیجه‌ای برای این عبارت پیدا نشد.</div>}
+        </div>}
+      </section>
+
+      {error && <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm"><X size={17} className="mt-0.5 shrink-0 text-red-500" /><span>{error}</span></div>}
+      {message && <div className="flex items-start gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm"><CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-500" /><span>{message}</span></div>}
+      {progress && <div className="flex items-center gap-2 rounded-xl border app-border p-3 text-sm app-muted"><Loader2 size={16} className="animate-spin" />{progress}</div>}
+      {syncProgress && <section className="rounded-xl border app-border bg-[var(--surface)] p-3 sm:p-4" aria-label="پیشرفت همگام‌سازی">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-black">{syncProgress.phase}</div>
+            <div className="mt-1 break-all text-[10px] app-muted">{syncProgress.currentItem}</div>
+          </div>
+          <div className="shrink-0 text-xl font-black tabular-nums">{syncProgress.percent}٪</div>
+        </div>
+        <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-[var(--surface-2)]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={syncProgress.percent} aria-label="درصد پیشرفت ذخیره‌سازی">
+          <div className="h-full rounded-full bg-[var(--primary)] transition-all duration-300" style={{ width: syncProgress.percent + '%' }} />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3 lg:grid-cols-6">
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b>{syncProgress.foldersCreated}</b><div className="app-muted">پوشه آماده</div></div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b>{syncProgress.downloaded}</b><div className="app-muted">فایل ذخیره‌شده</div></div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b>{syncProgress.uploaded}</b><div className="app-muted">فایل ارسال‌شده</div></div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b>{syncProgress.metadataWritten}</b><div className="app-muted">فایل اطلاعاتی</div></div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b>{byteLabel(syncProgress.bytesSaved)}</b><div className="app-muted">حجم ذخیره‌شده</div></div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2"><b className={syncProgress.failed ? 'text-red-500' : ''}>{syncProgress.failed}</b><div className="app-muted">ناموفق</div></div>
+        </div>
+      </section>}
+
+      <section className="file-manager-flat-panel grid items-start gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
+        {treeOpen&&<button type="button" aria-label="بستن فهرست پوشه‌ها" onClick={()=>setTreeOpen(false)} className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden" />}
+        <aside className={(treeOpen?'fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 flex flex-col overflow-hidden':'hidden')+' p-0 lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-visible'}>
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-2 border-b app-border px-1 pb-2"><h2 className="font-black">پوشه‌ها</h2><div className="flex items-center gap-2"><span className="text-xs app-muted">{folders.length} پوشه · {Object.values(folderFileCounts).reduce((sum,count)=>sum+count,0)} سند</span><button type="button" onClick={()=>setTreeOpen(false)} className="rounded-lg border app-border p-2 lg:hidden" aria-label="بستن فهرست"><X size={16}/></button></div></div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-0.5 lg:flex-none lg:overflow-visible">{folders.filter(folder=>folder.parent_id===null).map(root=>renderFolderNode(root))}
+            {!folders.length&&<div className="p-5 text-center text-sm app-muted">ساختار پوشه هنوز بارگذاری نشده است.</div>}
+          </div>
+          
+        </aside>
+        <section className="flex min-w-0 min-h-[60dvh] max-h-none flex-col overflow-visible border-0 bg-transparent lg:max-h-[calc(100dvh-15rem)] lg:min-h-[380px] lg:overflow-hidden">
+          <div className="shrink-0 border-b app-border p-3 md:p-4">
+            <div className="mb-3 flex min-w-0 items-center gap-2">
+              <button type="button" onClick={()=>setTreeOpen(v=>!v)} className="shrink-0 rounded-lg border app-border px-2.5 py-2 text-xs lg:hidden">{treeOpen?'بستن فهرست':'فهرست پوشه‌ها'}</button>
+              <nav aria-label="مسیر پوشه" className="file-manager-breadcrumbs flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap border-0 bg-transparent px-0 py-2 text-xs">
+                <FolderOpen size={14} className="shrink-0 text-[var(--primary)]"/>
+                {breadcrumbs.length === 0 && <span className="min-w-0 truncate font-semibold">فایل‌منیجر</span>}
+                {breadcrumbs.map((crumb,i)=><React.Fragment key={crumb.id}>
+                  {i>0&&<ChevronLeft size={13} className="shrink-0 app-muted"/>}
+                  <button type="button" onClick={()=>chooseFolder(crumb)} title={crumb.display_name}
+                    aria-current={i===breadcrumbs.length-1?'page':undefined} className={i===breadcrumbs.length-1?'max-w-[min(55vw,18rem)] shrink-0 truncate rounded-lg bg-[var(--primary)]/10 px-2.5 py-1.5 font-bold text-[var(--primary)]':'max-w-[min(32vw,9rem)] shrink-0 truncate rounded-md px-1.5 py-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--primary)]'}>
+                    {crumb.display_name}
+                  </button>
+                </React.Fragment>)}
+              </nav>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 flex-1"><h2 className="truncate text-base sm:text-lg font-black">{currentFolder?.display_name||'فایل‌منیجر'}</h2></div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button type="button" onClick={()=>setUploadPanelOpen(v=>!v)} disabled={!currentFolder} title={uploadEnabled?'آپلود و آرشیو در تلگرام':'برای مشاهدهٔ علت محدودیت، پنل آپلود را باز کنید و پوشهٔ صاحب کالا یا محموله را انتخاب کنید'} className="rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><UploadCloud size={14} className="ml-1 inline"/>{uploadPanelOpen?'بستن آپلود':'آپلود فایل'}</button>
+                {currentFolder&&isCopyableFolder(currentFolder)&&<button type="button" onClick={()=>beginCopyFolder(currentFolder)} disabled={!folderCopyAvailable||copyingFolder} title={folderCopyAvailable?'کپی پوشه همراه با زیرپوشه‌ها':'برای کپی کامل، migration دیتابیس لازم است'} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-40"><Copy size={14} className="ml-1 inline"/>کپی</button>}
+                {clipboardFolderId&&<button type="button" onClick={()=>void pasteCopiedFolder()} disabled={!folderCopyAvailable||copyingFolder||!currentFolder||currentFolder.folder_type==='root'} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-40">{copyingFolder?<Loader2 size={14} className="ml-1 inline animate-spin"/>:<ClipboardPaste size={14} className="ml-1 inline"/>}چسباندن</button>}
+                {uploadEnabled&&roleCanModifyStructure(role)&&<form onSubmit={e=>{e.preventDefault();void createFolder();}} className="flex gap-1"><input value={folderName} onChange={e=>setFolderName(e.target.value)} placeholder="نام زیرپوشه" aria-label="نام زیرپوشه جدید" className="w-28 rounded-lg border app-border bg-[var(--surface-2)] px-2 py-2 text-xs"/><button type="submit" disabled={creatingFolder||!folderName.trim()} className="rounded-lg border app-border px-2.5 py-2 text-xs disabled:opacity-50">{creatingFolder?<Loader2 size={14} className="animate-spin"/>:'ساخت پوشه'}</button></form>}
+              </div>
+            </div>
+          </div>
+          {currentFolder&&uploadPanelOpen&&<div className="max-h-none shrink-0 border-b app-border p-3 md:p-4 lg:max-h-none lg:overflow-visible">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-bold text-white"><UploadCloud size={16}/>انتخاب فایل<input type="file" multiple className="hidden" disabled={!uploadEnabled||uploading||syncing} onChange={e=>{const picked=Array.from(e.target.files||[]);if(picked.length){setPendingFiles(old=>[...old,...picked]);setUploadPanelOpen(true);setMessage(`${picked.length} فایل انتخاب شد؛ برای شروع، دکمه «ارسال به آرشیو تلگرام» را بزنید.`);setError('');}e.currentTarget.value='';}}/></label>
+              <button type="button" onClick={()=>directoryInput.current?.click()} disabled={!uploadEnabled||uploading} className="flex items-center gap-2 rounded-xl border app-border px-4 py-2.5 text-sm disabled:opacity-40"><FolderOpen size={16}/>انتخاب پوشه ویندوز</button>
+              <input ref={directoryInput} {...directoryProps} type="file" multiple className="hidden" disabled={!uploadEnabled||uploading} onChange={e=>{const picked=Array.from(e.target.files||[]);if(picked.length){setPendingFiles(old=>[...old,...picked]);setUploadPanelOpen(true);setMessage(`${picked.length} فایل از پوشه انتخاب شد؛ برای شروع، دکمه «ارسال به آرشیو تلگرام» را بزنید.`);setError('');}e.currentTarget.value='';}}/>
+              <span className="text-xs app-muted">حداکثر ۲۰ مگابایت برای بازیابی از Bot API فعلی تلگرام.</span>
+            </div>
+            <label className="mt-3 block"><span className="mb-1 block text-xs font-bold app-muted">برچسب‌ها</span><input value={tagInput} onChange={e=>setTagInput(e.target.value)} disabled={uploading} placeholder="فاکتور، قبض انبار، بیمه…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2 text-sm"/></label>
+            {pendingFiles.length>0&&<div className="mt-3 rounded-xl border app-border bg-[var(--surface-2)] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><b className="text-sm">{pendingFiles.length} فایل در صف</b><button type="button" onClick={()=>setPendingFiles([])} disabled={uploading} className="text-xs app-muted underline">پاک‌کردن صف</button></div><div className="mt-2 max-h-28 space-y-1 overflow-auto">{pendingFiles.slice(0,40).map((file,index)=><div key={file.name+file.size+file.lastModified+index} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate">{(file as File&{webkitRelativePath?:string}).webkitRelativePath||file.name}</span><span className="shrink-0 app-muted">{byteLabel(file.size)}</span></div>)}{pendingFiles.length>40&&<div className="text-xs app-muted">و {pendingFiles.length-40} فایل دیگر…</div>}</div><button type="button" onClick={()=>void archiveFiles()} disabled={uploading} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{uploading?<Loader2 size={16} className="animate-spin"/>:<Upload size={16}/>}ارسال به آرشیو تلگرام و ثبت فراداده</button></div>}
+            {!uploadEnabled&&<p className="mt-2 text-xs app-muted">برای آپلود، پوشه صاحب کالا یا محموله را انتخاب کنید.</p>}
+          </div>}
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b app-border bg-[var(--surface-2)] px-3 py-2.5 text-xs"><b className="min-w-0 truncate">{currentFolder?.display_name || 'فایل‌منیجر'} <span className="font-normal app-muted">· {files.length} سند</span></b><span className="shrink-0 rounded-full border app-border px-2 py-1">{childFolders.length} زیرپوشه</span></div>
+          <div className="min-h-0 flex-none overflow-visible p-3 md:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">پوشه‌ها</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 border-b app-border py-1 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'پوشه پیش‌فرض':'پوشه سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی پوشه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
+            {files.length>0&&<div className="overflow-hidden"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];const latestReport=latestReportByFile.get(file.id);return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>{setActiveReportFileId(file.id);setReportDraft('');setReportStage(latestReport?.stage||'');setReportStatus(latestReport?.status||'in_review');}} className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1.5 text-xs text-sky-600" title="گزارش و وضعیت سند"><ClipboardList size={13}/>گزارش</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
+            {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center border-t app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این پوشه خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
+          </div>
+        </section>
+      </section>
+      <section className="file-manager-workflow-showcase border-t app-border pt-5" aria-labelledby="document-workflow-title">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="text-[10px] font-black tracking-[.18em] text-cyan-500">DOCUMENT CONTROL · LIVE BOARD</div><h2 id="document-workflow-title" className="mt-1 text-lg font-black">ویترین پیگیری و گزارش اسناد</h2><p className="mt-1 text-xs app-muted">آخرین وضعیت و گزارش‌های ثبت‌شده برای اطلاع و اقدام همکاران</p></div><div className="flex gap-2 text-[10px] app-muted"><span>{files.length} سند در پوشه جاری</span><span>·</span><span>{documentReports.length} گزارش ثبت‌شده</span></div></div>
+        {files.length===0?<div className="border-y app-border py-8 text-center text-sm app-muted">برای نمایش ویترین، ابتدا پوشه‌ای دارای سند انتخاب کنید.</div>:<div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">{files.map((file)=>{const latest=latestReportByFile.get(file.id);const label=latest?reportStatusLabel(latest.status):'بدون گزارش';const tone=latest?.status==='completed'?'text-emerald-500 bg-emerald-500/10':latest?.status==='action_required'||latest?.status==='blocked'?'text-amber-500 bg-amber-500/10':'text-sky-500 bg-sky-500/10';return <article key={file.id} className="relative overflow-hidden border-b border-[var(--border)] px-1 py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-black break-words">{typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name}</div><div className="mt-1 text-[10px] app-muted">{file.document_type||'سند'} · {new Date(file.created_at).toLocaleDateString('fa-IR')}</div></div><span className={'shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold '+tone}>{label}</span></div><div className="mt-3 min-h-12 border-r-2 border-cyan-500/50 pr-3 text-xs leading-6 app-muted">{latest?.report||'هنوز گزارشی برای این سند ثبت نشده است.'}</div><div className="mt-3 flex items-center justify-between gap-2"><span className="min-w-0 truncate text-[10px] app-muted">{latest?(latest.stage||'مرحله ثبت نشده')+' · '+latest.actor_name:'آماده ثبت اولین گزارش'}</span><button type="button" onClick={()=>{setActiveReportFileId(file.id);setReportDraft('');setReportStage(latest?.stage||'');setReportStatus(latest?.status||'in_review');}} className="shrink-0 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-bold text-white">ثبت گزارش / پیگیری</button></div></article>;})}</div>}
+      </section>
+      {activeReportFile&&<div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/65 p-3" role="dialog" aria-modal="true" aria-label="گزارش و وضعیت سند"><section className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border app-border bg-[var(--surface)] p-4 shadow-2xl"><header className="flex items-start justify-between gap-3 border-b app-border pb-3"><div className="min-w-0"><div className="text-[10px] font-black text-cyan-500">DOCUMENT ACTIVITY</div><h3 className="mt-1 break-words text-base font-black">{activeReportFile.original_name}</h3></div><button type="button" onClick={()=>setActiveReportFileId(null)} className="rounded-lg border app-border p-2" aria-label="بستن"><X size={17}/></button></header><div className="mt-4"><h4 className="mb-2 text-sm font-black">تاریخچه گزارش‌ها</h4>{documentReports.filter((row)=>row.file_id===activeReportFile.id).length===0?<p className="py-4 text-xs app-muted">هنوز گزارشی ثبت نشده است.</p>:<div className="space-y-3">{documentReports.filter((row)=>row.file_id===activeReportFile.id).map((row)=><article key={row.id} className="border-r-2 border-cyan-500/60 pr-3 py-1"><div className="flex flex-wrap items-center gap-2 text-[10px] app-muted"><b className="text-[var(--text)]">{row.actor_name}</b><span>{new Date(row.created_at).toLocaleString('fa-IR')}</span><span>· {reportStatusLabel(row.status)}</span></div>{row.stage&&<div className="mt-1 text-xs font-bold">مرحله: {row.stage}</div>}<p className="mt-1 whitespace-pre-wrap text-xs leading-6">{row.report}</p></article>)}</div>}</div><div className="mt-5 border-t app-border pt-4"><h4 className="mb-3 text-sm font-black">ثبت گزارش جدید</h4><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs"><span className="mb-1 block app-muted">وضعیت سند</span><select value={reportStatus} onChange={(e)=>setReportStatus(e.target.value as DocumentReportRow['status'])} className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"><option value="received">دریافت شده</option><option value="in_review">در حال بررسی</option><option value="action_required">نیازمند اقدام</option><option value="completed">انجام شده</option><option value="blocked">متوقف / دارای مانع</option><option value="archived">مختومه</option></select></label><label className="text-xs"><span className="mb-1 block app-muted">مرحله فعلی کار</span><input value={reportStage} onChange={(e)=>setReportStage(e.target.value)} placeholder="مثلاً بررسی قبض انبار، اخذ مجوز…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"/></label></div><label className="mt-3 block text-xs"><span className="mb-1 block app-muted">شرح گزارش و اقدام موردنیاز</span><textarea value={reportDraft} onChange={(e)=>setReportDraft(e.target.value)} rows={4} maxLength={4000} placeholder="چه کاری انجام شده؟ چه مدرکی ناقص است؟ همکار بعدی باید چه اقدامی انجام دهد؟" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5"/></label><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={()=>setActiveReportFileId(null)} className="rounded-xl border app-border px-4 py-2 text-xs">انصراف</button><button type="button" onClick={()=>void saveDocumentReport()} disabled={savingReport||!reportDraft.trim()} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{savingReport?'در حال ثبت…':'ثبت گزارش برای همه همکاران'}</button></div></div></section></div>}
       <p className="text-xs app-muted">همگام‌سازی کامل سازمان با یک کلیک و پس از انتخاب یک‌باره پوشه ذخیره انجام می‌شود. کنار هر سند فایل متنی اطلاعات عملیاتی و مالی ساخته می‌شود؛ اسناد اصلی بدون اجازه حذف یا بازنویسی نمی‌شوند.</p>
       {preview&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3" role="dialog" aria-modal="true" aria-label={'پیش‌نمایش '+preview.name}><section className="flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border app-border bg-[var(--surface)] shadow-2xl"><header className="flex shrink-0 items-center justify-between gap-3 border-b app-border px-4 py-3"><b className="min-w-0 truncate text-sm">{preview.name}</b><button type="button" onClick={()=>setPreview(null)} className="rounded-lg border app-border p-2" aria-label="بستن پیش‌نمایش"><X size={17}/></button></header><div className="min-h-0 flex-1 overflow-auto p-2">{preview.mime.startsWith('image/')?<img src={preview.url} alt={preview.name} className="mx-auto max-h-[82dvh] max-w-full object-contain"/>:preview.mime==='application/pdf'?<iframe src={preview.url} title={preview.name} className="h-[82dvh] w-full rounded-lg bg-white"/>:<iframe src={preview.url} title={preview.name} sandbox="" className="h-[82dvh] w-full rounded-lg bg-white"/>}</div></section></div>}
     </div>
