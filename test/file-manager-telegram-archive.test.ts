@@ -15,6 +15,7 @@ describe('Telegram-backed Customs OS file manager', () => {
   const fileManager = read('src/pages/FileManagerPage.tsx');
   const shipmentShowcase = read('src/pages/ShipmentShowcasePage.tsx');
   const shipmentReportsPage = read('src/pages/ShipmentReportsPage.tsx');
+  const localFileManagerIndex = read('src/lib/fileManagerLocalIndex.ts');
   const globalCss = read('src/index.css');
   const documentReportsMigration = read('supabase/migrations/20261108185733_file_manager_document_workflow_reports.sql');
   const documentReportActorMigration = read('supabase/migrations/20261108185740_file_manager_document_report_actor_label.sql');
@@ -294,9 +295,9 @@ describe('Telegram-backed Customs OS file manager', () => {
   it('keeps the mobile folder tree in a full-height scrollable drawer and avoids a tiny nested upload scroller', () => {
     expect(fileManager).toContain('fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)]');
     expect(fileManager).toContain('min-h-0 flex-1 overflow-y-auto overscroll-contain');
-    expect(fileManager).toContain('p-0 lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-10rem)] lg:overflow-visible');
+    expect(fileManager).toContain("className={'fm-folder-sidebar '+(treeOpen?");
     expect(fileManager).toContain('className="shrink-0 border-b app-border p-3 md:p-4"');
-    expect(fileManager).toContain('min-h-[60dvh] max-h-none flex-col overflow-visible');
+    expect(fileManager).toContain('className="fm-files-panel"');
     expect(fileManager).toContain('whitespace-normal break-words leading-5');
   });
 
@@ -306,7 +307,9 @@ describe('Telegram-backed Customs OS file manager', () => {
   });
 
   it('renders the File Management workspace full-width with a collapsed sync disclosure', () => {
-    expect(fileManager).toContain('w-full max-w-none');
+    expect(fileManager).toContain('className="fm-page-inner"');
+    expect(fileManager).toContain('className="mobile-app-page file-manager-page fm-fullscreen-page"');
+    expect(globalCss).toContain('.fm-fullscreen-page{');
     expect(fileManager).toContain('>مدیریت فایل</h1>');
     expect(fileManager).toContain('file-manager-sync-dropdown');
     expect(fileManager).toContain('<details className="file-manager-sync-dropdown');
@@ -327,6 +330,10 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(shipmentShowcase).toContain('SHIPMENT BOARD');
     expect(shipmentShowcase).toContain('operational_reminders');
     expect(shipmentShowcase).toContain('shipment-reports?shipmentId=');
+    expect(shipmentShowcase).not.toContain('file_manager_shipment_reports');
+    expect(shipmentShowcase).not.toContain('آخرین فعالیت');
+    expect(shipmentShowcase).toContain('fm-showcase-pagination');
+    expect(shipmentShowcase).toContain('setPageSize');
     expect(app).toContain('path="/shipment-showcase"');
     expect(navigation).toContain("to: '/shipment-showcase'");
   });
@@ -334,7 +341,13 @@ describe('Telegram-backed Customs OS file manager', () => {
   it('uses a full-width non-overlapping archive workspace and removes folder wording from its toolbar', () => {
     expect(fileManager).toContain('fm-workspace-layout');
     expect(fileManager).toContain('fm-file-content');
+    expect(fileManager).toContain('fm-file-toolbar');
+    expect(fileManager).toContain('fm-branch-count');
+    expect(fileManager).not.toContain('زیرپوشه</span>');
+    expect(fileManager).not.toContain("folder: 'پوشه'");
     expect(globalCss).toContain('.file-manager-page .fm-workspace-layout');
+    expect(globalCss).toContain('.fm-files-panel{');
+    expect(globalCss).toContain('.fm-showcase-screen');
     expect(globalCss).toContain('.file-manager-page>.mx-auto');
     expect(fileManager).not.toContain('انتخاب پوشه ویندوز');
     expect(fileManager).not.toContain(":'ساخت پوشه'");
@@ -363,10 +376,12 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(documentReportActorMigration).toContain('actor_name');
   });
 
-  it('does not mix shipment report data into the File Manager archive snapshot', () => {
+  it('does not mix shipment report data into the File Manager or its offline archive view', () => {
     expect(fileManager).not.toContain("tableNames.push('file_manager_shipment_reports')");
     expect(fileManager).not.toContain("title: 'گزارش‌ها و گردش وضعیت محموله'");
     expect(fileManager).not.toContain('file_manager_shipment_reports');
+    expect(localFileManagerIndex).not.toContain('file_manager_shipment_reports');
+    expect(localFileManagerIndex).not.toContain('shipmentReports:');
   });
 
   it('does not paginate or render a document-centric report showcase', () => {
