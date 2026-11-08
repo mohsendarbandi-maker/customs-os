@@ -1138,7 +1138,7 @@ export const FileManagerPage: React.FC = () => {
       ];
       if (oversized) parts.push(oversized + ' فایل محلی به علت محدودیت ۲۰ مگابایت برای آپلود تلگرام ارسال نشد');
       if (failed) parts.push(failed + ' فایل با خطا مواجه شد');
-      parts.push('هیچ سند اصلی حذف یا بی‌اجازه بازنویسی نشد.');
+      parts.push('هیچ سند اصلی حذف یا بازنویسی نشد؛ اسناد اصلی بدون اجازه تغییر نمی‌کنند.');
       setMessage(parts.join('؛ '));
       if (failed) {
         setError('همگام‌سازی کامل نیست؛ ' + failed + ' مورد ذخیره نشد. ' + failedItems.slice(0, 4).join(' | '));
