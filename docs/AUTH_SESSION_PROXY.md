@@ -11,6 +11,10 @@ Customs OS proxies browser API requests through the `customs` Cloudflare Worker.
 
 ## What the Worker does
 
-For `/auth/v1/token` only, the Worker changes the upstream `apikey` to this server-side secret and adds `Sb-Forwarded-For: <CF-Connecting-IP>`. The user's `Authorization` bearer token and request body remain unchanged. The secret is never returned to the browser and is not used for PostgREST, Storage, or Realtime, so normal user JWT/RLS behavior is retained for data requests.
+For `/auth/v1/token` only, the Worker changes the upstream `apikey` to this server-side secret and adds `Sb-Forwarded-For: <CF-Connecting-IP>`. The user's `Authorization` bearer token and request body remain unchanged.
+
+**Important:** the incoming browser `User-Agent` must not be forwarded on this server-to-server request. Supabase rejects a secret API key when the upstream request carries a browser-style User-Agent. The Worker therefore replaces it with `CustomsOS-Cloudflare-Worker/1.0` only when it injects the secret key. This does not expose the secret to the browser; the value exists only on the Worker's outbound request.
+
+The secret is never returned to the browser and is not used for PostgREST, Storage, Realtime, or other Auth endpoints, so normal user JWT/RLS behavior is retained for data requests.
 
 If the Worker secret is not configured, the Worker deliberately keeps the old proxy behavior. The code does not silently expose or substitute another key; the shared-IP rate-limit issue can therefore continue until this one-time secret is installed.
