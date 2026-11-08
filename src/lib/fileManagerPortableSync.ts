@@ -28,6 +28,17 @@ export function createPortableSyncArchive(
     if (!segments.length || segments.some((segment) => segment === '.' || segment === '..')) {
       throw new Error('مسیر یکی از فایل‌های بسته پشتیبان معتبر نیست.');
     }
+    const rawFilename = segments[segments.length - 1];
+    const rawLowerFilename = rawFilename.toLocaleLowerCase();
+    const isEditorTemporaryFile = rawFilename.startsWith('~') && rawFilename.charCodeAt(1) === 36;
+    if (
+      rawLowerFilename === 'desktop.ini' ||
+      rawLowerFilename === 'thumbs.db' ||
+      rawLowerFilename === '.ds_store' ||
+      isEditorTemporaryFile ||
+      rawFilename.startsWith('._') ||
+      segments.includes('__MACOSX')
+    ) continue;
     const safePath = segments.map(safeWindowsFileName).join('/');
     // The organization manifest is already written at the ZIP root.
     if (safePath.toLocaleLowerCase() === manifestPath.toLocaleLowerCase()) continue;
