@@ -33,7 +33,7 @@ describe('one-click file manager synchronization', () => {
     expect(sync).toContain('buildDocumentMetadataText');
     expect(page).toContain("'اطلاعات_عملیاتی.txt'");
     expect(page).toContain("fileName + '.اطلاعات.txt'");
-    expect(sync).toContain('کد کوتاژ');
+    expect(sync).toContain('شماره کوتاژ');
     expect(sync).toContain('گردش حساب و تراکنش‌های مالی');
   });
 
