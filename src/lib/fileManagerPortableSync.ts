@@ -29,7 +29,7 @@ export function createPortableSyncArchive(
       throw new Error('مسیر یکی از فایل‌های بسته پشتیبان معتبر نیست.');
     }
     const safePath = segments.map(safeWindowsFileName).join('/');
-    // The organization manifest is created above and must not be duplicated by an imported local copy.
+    // The organization manifest is already written at the ZIP root.
     if (safePath.toLocaleLowerCase() === manifestPath.toLocaleLowerCase()) continue;
     if (archive[safePath]) {
       throw new Error('دو فایل با مسیر یکسان در بسته پشتیبان وجود دارد: ' + safePath);
@@ -41,9 +41,8 @@ export function createPortableSyncArchive(
 }
 
 /**
- * Extracts user documents from an exported ZIP. Organization JSON and generated
- * companion text files are intentionally excluded so they are never re-uploaded
- * as if they were original business documents.
+ * Extracts original business documents from a ZIP created by Customs OS.
+ * The manifest and generated text metadata are not re-uploaded as source files.
  */
 export function readPortableSyncArchive(
   bytes: Uint8Array,
@@ -67,34 +66,21 @@ export function readPortableSyncArchive(
 
     const rawName = segments[segments.length - 1];
     const rawLowerName = rawName.toLocaleLowerCase();
+    const isEditorTemporaryFile = rawName.startsWith('~') && rawName.charCodeAt(1) === 36;
     if (
       rawLowerName === 'desktop.ini' ||
       rawLowerName === 'thumbs.db' ||
       rawLowerName === '.ds_store' ||
-      rawLowerName.startsWith('~' + '
-      continue;
-    }
-
-    result.push({
-      relativePath: safeSegments.join('/'),
-      name,
-      data,
-    });
-  }
-
-  return result;
-}
-) ||
+      isEditorTemporaryFile ||
       rawName.startsWith('._') ||
       segments.some((segment) => segment === '__MACOSX')
     ) {
       continue;
     }
+
     const safeSegments = segments.map(safeWindowsFileName);
     const name = safeSegments[safeSegments.length - 1];
-    if (isManagedSyncMetadataFile(name)) {
-      continue;
-    }
+    if (isManagedSyncMetadataFile(name)) continue;
 
     result.push({
       relativePath: safeSegments.join('/'),
