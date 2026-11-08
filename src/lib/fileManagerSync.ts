@@ -177,7 +177,7 @@ export function buildFolderMetadataText(input: FolderSyncMetadata): string {
   for (const section of input.relatedSections || []) {
     output.push('========== ' + section.title + ' ==========');
     output.push(section.records.length
-      ? section.records.map((item, index) => '--- مورد ' + (index + 1) + ' ---\\n' + formatRecord(item)).join('\\n\\n')
+      ? section.records.map((item, index) => '--- مورد ' + (index + 1) + ' ---\n' + formatRecord(item)).join('\n\n')
       : 'موردی ثبت نشده است.');
     output.push('');
   }
