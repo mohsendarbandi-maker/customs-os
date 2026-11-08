@@ -26,7 +26,7 @@ describe('one-click file manager synchronization', () => {
   });
 
   it('exports operational, shipping, customs, order, bank, and finance data as readable text beside each document', () => {
-    for (const table of ['shipments', 'shipment_customs_data', 'vessels', 'shipping_lines', 'customs_declarations', 'registration_orders', 'financial_transactions']) {
+    for (const table of ['shipments', 'shipment_customs_data', 'vessels', 'shipping_lines', 'customs_declarations', 'registration_orders', 'financial_transactions', 'finance_invoices', 'finance_payments', 'finance_cost_items', 'customs_accounting_vouchers']) {
       expect(page).toContain("'" + table + "'");
     }
     expect(sync).toContain('buildFolderMetadataText');
