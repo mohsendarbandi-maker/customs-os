@@ -1605,11 +1605,11 @@ export const FileManagerPage: React.FC = () => {
             <button type="button" onClick={()=>void syncWindowsFolder()} disabled={syncing||uploading||loading}
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white shadow-lg shadow-sky-900/10 transition hover:brightness-110 disabled:opacity-50">
               {syncing?<Loader2 size={17} className="animate-spin"/>:<RefreshCw size={17}/>}
-              {syncing?'در حال همگام‌سازی همه داده‌ها…':syncDirectoryName?'همگام‌سازی همه اطلاعات با یک کلیک':'انتخاب پوشه و شروع همگام‌سازی'}
+              {syncing?'در حال همگام‌سازی همه داده‌ها…':syncDirectoryName?'همگام‌سازی همه اطلاعات با یک کلیک':(typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker !== 'function')?'شروع همگام‌سازی سازگار':'انتخاب پوشه و شروع همگام‌سازی'}
             </button>
             <button type="button" onClick={()=>void chooseSyncDirectory()} disabled={syncing}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border app-border bg-[var(--surface)] px-3 py-2 text-xs font-bold disabled:opacity-50">
-              <FolderOpen size={15}/>تغییر محل ذخیره
+              <FolderOpen size={15}/>{typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker !== 'function'?'روش همگام‌سازی':'تغییر محل ذخیره'}
             </button>
           </div>
           <p className="relative mt-2 text-[10px] leading-5 app-muted">فایل‌های اصلی حذف یا بی‌اجازه بازنویسی نمی‌شوند؛ تغییرات متعارض جداگانه گزارش می‌شوند. در مرورگرهای فاقد دسترسی مستقیم پوشه، از روش ZIP/Files استفاده می‌شود.</p>
@@ -1644,7 +1644,7 @@ export const FileManagerPage: React.FC = () => {
                 if(picked) void importPortableZip(picked);
                 event.currentTarget.value='';
               }}/>
-            <div className="text-[10px] leading-5 app-muted">در Safari آیفون، انتخاب پوشه در iOS 18.4 به بعد موجود است. در نسخه‌های قدیمی‌تر، ZIP را از Files انتخاب کنید. مرورگر اجازه نمی‌دهد وب‌سایت بی‌واسطه فایل‌ها را در هر پوشه دلخواه بازنویسی کند.</div>
+            <div className="text-[10px] leading-5 app-muted">در Safari آیفون، انتخاب پوشه در iOS 18.4 به بعد موجود است؛ در نسخه‌های قدیمی‌تر ZIP را از Files انتخاب کنید. مرورگر اجازه نمی‌دهد وب‌سایت بی‌واسطه فایل‌ها را در هر پوشه دلخواه بازنویسی کند. ارسال فایل جدید به آرشیو فعلی تلگرام برای هر فایل حداکثر ۲۰ مگابایت است؛ فایل‌های بزرگ‌ترِ موجود با نسخه Storage در خروجی ZIP دریافت می‌شوند.</div>
           </div>}
         </div>
 
