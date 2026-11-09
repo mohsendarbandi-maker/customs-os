@@ -543,6 +543,9 @@ jobs:
                 }
               });
 
+              if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
+                await page.setViewportSize({ width: 390, height: 844 });
+              }
               await page.goto(baseURL + '/?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
               await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
               await expect(page.locator('#root')).toBeAttached();
