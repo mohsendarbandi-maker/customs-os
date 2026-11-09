@@ -505,18 +505,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               <span className="mobile-current-page__title">{currentPageLabel}</span>
             </span>
           </div>
-          {pwaUpdateAvailable && (
-            <button
-              type="button"
-              className="icon-btn app-mobile-settings"
-              aria-label="به‌روزرسانی برنامه"
-              title={pwaUpdating ? 'در حال فعال‌سازی نسخه جدید…' : 'نسخه جدید آماده است؛ برای به‌روزرسانی بزنید'}
-              onClick={requestPwaUpdate}
-              disabled={pwaUpdating}
-            >
-              <RefreshCw size={18} className={pwaUpdating ? 'animate-spin' : ''} />
-            </button>
-          )}
           <button
             type="button"
             className="icon-btn app-mobile-settings"
@@ -721,6 +709,17 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
         </div>
       </main>
+      {pwaUpdateAvailable && !isDesktop && (
+        <div className="app-pwa-update-prompt" role="status" aria-live="polite">
+          <div className="app-pwa-update-copy">
+            <RefreshCw size={17} className={pwaUpdating ? 'animate-spin' : ''} aria-hidden="true" />
+            <span>{pwaUpdating ? 'در حال آماده‌سازی نسخه جدید…' : 'نسخه جدید برنامه آماده است'}</span>
+          </div>
+          <button type="button" onClick={requestPwaUpdate} disabled={pwaUpdating}>
+            {pwaUpdating ? 'در حال به‌روزرسانی' : 'به‌روزرسانی'}
+          </button>
+        </div>
+      )}
       {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock" aria-label="پیمایش سریع">
         <button ref={moreTriggerRef} type="button" className={mobileOpen?'is-active':''} aria-label="بیشتر" aria-haspopup="dialog" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}><Layers3 size={21}/><span>بیشتر</span></button>
         <button type="button" className={location.pathname.startsWith('/chat')?'is-active':''} aria-current={location.pathname.startsWith('/chat')?'page':undefined} onClick={()=>go('/chat')}><MessageCircle size={21}/><span>چت</span></button>
