@@ -9,6 +9,7 @@ const main = read('src/main.tsx');
 const shell = read('src/components/AppShell.tsx');
 const chat = read('src/features/chat/ChatPage.tsx');
 const shipments = read('src/components/LatestShipmentStatuses.tsx');
+const showcase = read('src/pages/ShipmentShowcasePage.tsx');
 
 describe('premium native mobile workspace', () => {
   it('loads the premium mobile layer after every existing visual layer', () => {
@@ -48,4 +49,26 @@ describe('premium native mobile workspace', () => {
     expect(css).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
     expect(css).toContain('overflow: visible !important');
   });
+
+  it('overrides legacy 740px shipment widths and keeps cards inside the phone viewport', () => {
+    expect(css).toContain('.shipment-compact-row');
+    expect(css).toContain('min-width: 0 !important;');
+    expect(css).toContain('.shipment-warnings');
+    expect(css).toContain('.shipment-showcase-page .showcase-grid');
+    expect(showcase).toContain('window.innerWidth < 650 ? 6');
+  });
+
+  it('styles the body-portalled dock and removes it while a chat conversation is open', () => {
+    expect(css).toContain('body .app-mobile-viewport-dock');
+    expect(css).toContain('html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock');
+    expect(css).toContain('.chat-composer');
+  });
+
+  it('makes the PWA update action visible even when the home mobile header is hidden', () => {
+    expect(shell).toContain('className="app-pwa-update-prompt"');
+    expect(shell).toContain('{pwaUpdateAvailable && !isDesktop && (');
+    expect(css).toContain('.app-pwa-update-prompt');
+    expect(css).toContain('top: calc(env(safe-area-inset-top) + 10px) !important;');
+  });
+
 });
