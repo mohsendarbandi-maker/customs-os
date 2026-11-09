@@ -51,6 +51,8 @@ describe('premium native mobile workspace', () => {
     expect(css).toContain('.shipment-showcase-page .showcase-card');
     expect(css).toContain('.fm-showcase-pagination');
     expect(css).toContain('.showcase-footer-note { display: none!important; }');
+    expect(showcase).toContain('const deviceWidth = Math.min(window.innerWidth, window.screen?.width || window.innerWidth)');
+    expect(showcase).toContain('setPageSize(deviceWidth < 650 ? 500');
   });
 
   it('keeps the mobile host on the app shell and honors the dedicated hostname', () => {
