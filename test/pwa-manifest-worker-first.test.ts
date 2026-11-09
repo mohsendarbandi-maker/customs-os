@@ -42,6 +42,13 @@ describe('PWA manifest requests pass through the canonical Worker', () => {
     expect(worker).toContain('legacyManifestPaths.has(url.pathname)');
   });
 
+  it('removes legacy PWA launch parameters on both the primary and mobile app hosts', () => {
+    expect(worker).toContain("['darbandicommercial.ir', 'mobile.darbandicommercial.ir'].includes(appHost)");
+    expect(worker).toContain("url.searchParams.get('source') === 'pwa'");
+    expect(worker).toContain('canonical.hostname = appHost');
+    expect(worker).toContain("canonical.searchParams.delete('source')");
+  });
+
   it('redirects primary-domain phone navigations to mobile and keeps the mobile hostname standalone', () => {
     expect(worker).toContain("const isPrimaryDomain = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir'");
     expect(worker).toContain("const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent)");
