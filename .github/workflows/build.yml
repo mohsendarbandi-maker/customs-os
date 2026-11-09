@@ -588,6 +588,20 @@ jobs:
                   card.append(row);
                   list.append(card);
                   appShell.append(list);
+
+                  const wrapper = document.createElement('div');
+                  wrapper.className = 'customs-status-board';
+                  const board = document.createElement('section');
+                  board.className = 'shipment-board';
+                  const boardGrid = document.createElement('div');
+                  boardGrid.className = 'shipment-board-grid';
+                  const premiumCard = document.createElement('article');
+                  premiumCard.className = 'shipment-premium-card active';
+                  boardGrid.append(premiumCard);
+                  board.append(boardGrid);
+                  wrapper.append(board);
+                  appShell.append(wrapper);
+
                   const dock = document.createElement('nav');
                   dock.className = 'app-mobile-viewport-dock';
                   document.body.append(appShell, dock);
@@ -595,7 +609,10 @@ jobs:
                   const beforeChat = {
                     viewportWidth: document.documentElement.clientWidth,
                     rowMinWidth: getComputedStyle(row).minWidth,
-                    cardWidth: Math.round(card.getBoundingClientRect().width),
+                    legacyCardWidth: Math.round(card.getBoundingClientRect().width),
+                    premiumCardWidth: Math.round(premiumCard.getBoundingClientRect().width),
+                    premiumBoardWidth: Math.round(board.getBoundingClientRect().width),
+                    wrapperOverflowX: getComputedStyle(wrapper).overflowX,
                     listOverflowX: getComputedStyle(list).overflowX,
                     dockPosition: getComputedStyle(dock).position,
                     dockDisplay: getComputedStyle(dock).display,
@@ -620,8 +637,11 @@ jobs:
                 });
                 expect(layoutProbe.viewportWidth).toBeLessThanOrEqual(767);
                 expect(layoutProbe.rowMinWidth).toBe('0px');
-                expect(layoutProbe.cardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
+                expect(layoutProbe.legacyCardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
+                expect(layoutProbe.premiumCardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
+                expect(layoutProbe.premiumBoardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
                 expect(layoutProbe.listOverflowX).toBe('visible');
+                expect(layoutProbe.wrapperOverflowX).toBe('visible');
                 expect(layoutProbe.dockPosition).toBe('fixed');
                 expect(layoutProbe.dockDisplay).not.toBe('none');
                 expect(layoutProbe.dockDisplayDuringChat).toBe('none');
