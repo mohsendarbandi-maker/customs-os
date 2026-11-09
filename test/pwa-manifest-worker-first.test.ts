@@ -60,9 +60,11 @@ describe('PWA manifest requests pass through the canonical Worker', () => {
     expect(workflow).toContain('Phone UA remains on mobile host');
   });
 
-  it('does not abort before diagnostics when a response lacks a Location header', () => {
-    expect(workflow).toContain("sed -E 's/^[^:]*:[[:space:]]*//' || true)");
+  it('checks the PWA redirect status and URL via curl write-out', () => {
+    expect(workflow).toContain("-w '%{http_code}'");
+    expect(workflow).toContain("-w '%{redirect_url}'");
+    expect(workflow).toContain('pwa_status=');
+    expect(workflow).toContain('pwa_location=');
     expect(workflow).toContain('Legacy manifest redirect check: attempt=');
-    expect(workflow).toContain('Expected HTTP 301 from');
   });
 });
