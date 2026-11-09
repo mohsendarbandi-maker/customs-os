@@ -72,7 +72,7 @@ export const ShipmentShowcasePage: React.FC = () => {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const updateSize = () => setPageSize(window.innerWidth < 650 ? 6 : window.innerWidth < 1100 ? 4 : 6);
+    const updateSize = () => setPageSize(window.innerWidth < 650 ? 500 : window.innerWidth < 1100 ? 4 : 6);
     updateSize();
     window.addEventListener('resize', updateSize, { passive: true });
     return () => window.removeEventListener('resize', updateSize);
