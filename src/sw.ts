@@ -11,8 +11,10 @@ cleanupOutdatedCaches();
 // fresh HTML replaces it whenever the network responds. API routes are not navigations
 // and remain uncached here, so tenant-specific data and authenticated responses stay private.
 registerRoute(({request,url})=>request.mode==='navigate'&&!['code','error','error_description','access_token','refresh_token','type'].some(key=>url.searchParams.has(key)),new NetworkFirst({
- cacheName:'customs-os-navigation-v5',
- networkTimeoutSeconds:1,
+ // Do not return an old HTML shell just because a mobile connection takes >1s.
+ // Old shells can reference fingerprinted JS chunks removed by a newer deployment,
+ // which causes "Importing a module script failed". Offline fallback is handled below.
+ cacheName:'customs-os-navigation-v6',
 }));
 precacheAndRoute(self.__WB_MANIFEST);
 setCatchHandler(async({request})=>{
