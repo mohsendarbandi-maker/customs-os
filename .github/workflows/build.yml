@@ -184,7 +184,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for base in "https://darbandicommercial.ir"; do
+          for base in "https://darbandicommercial.ir" "https://mobile.darbandicommercial.ir"; do
             echo "Checking $base/"
             success=0
             for attempt in 1 2 3 4 5 6; do
