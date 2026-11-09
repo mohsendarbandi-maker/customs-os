@@ -1613,6 +1613,8 @@
   .app-shell.is-touch-layout .shipment-showcase-page .showcase-card footer { display: grid!important; grid-template-columns: repeat(2,minmax(0,1fr)); }
   .app-shell.is-touch-layout .shipment-showcase-page .showcase-card footer a { justify-content: center; min-width: 0; }
   .app-shell.is-touch-layout .shipment-showcase-page .fm-showcase-pagination { display: none!important; }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-footer-note { display: none!important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
