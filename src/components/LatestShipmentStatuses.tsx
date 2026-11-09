@@ -211,7 +211,7 @@ export const LatestShipmentStatuses: React.FC = () => {
           <h2><Ship size={19} aria-hidden="true" /> وضعیت محموله‌ها</h2>
           <small>{filteredData.length.toLocaleString('fa-IR')} محموله فعال</small>
         </div>
-        <Link to="/operations" className="shipment-board-all">
+        <Link to="/shipment-showcase" className="shipment-board-all">
           همه محموله‌ها <ArrowRight size={15} aria-hidden="true" />
         </Link>
       </header>
