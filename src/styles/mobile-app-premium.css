@@ -716,3 +716,615 @@
   }
 }
 
+
+
+/* ── Mobile correction: override the legacy 740px table width ────────────── */
+@media (max-width: 1023px), (pointer: coarse) {
+  .app-shell.is-touch-layout .shipment-premium-glass {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-status-toolbar {
+    width: 100% !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 2px 2px 13px !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-status-toolbar > div:first-child {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-status-toolbar > a {
+    order: 2 !important;
+    margin-inline-start: auto !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-status-search {
+    order: 3 !important;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 46px !important;
+    margin: 0 !important;
+    padding-inline: 13px !important;
+    border: 1px solid var(--mobile-app-line) !important;
+    border-radius: 15px !important;
+    background: #fff !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-compact-list {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    gap: 12px !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overscroll-behavior: auto !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-item-card {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    border: 1px solid var(--mobile-app-line) !important;
+    border-radius: 22px !important;
+    background: linear-gradient(150deg, #fff 0%, #f8fbff 100%) !important;
+    box-shadow: 0 8px 23px rgba(27,66,106,.075) !important;
+    animation: mobile-app-card-in .42s cubic-bezier(.2,.75,.25,1) both;
+  }
+
+  .app-shell.is-touch-layout .shipment-compact-row {
+    display: grid !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) 42px !important;
+    grid-template-rows: auto auto auto auto auto !important;
+    gap: 10px !important;
+    min-height: 0 !important;
+    padding: 15px 15px 13px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-name {
+    grid-area: 1 / 1 / 2 / 3 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--mobile-app-ink) !important;
+    text-align: right !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-name b {
+    display: -webkit-box !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    -webkit-box-orient: vertical !important;
+    -webkit-line-clamp: 2 !important;
+    color: var(--mobile-app-ink) !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    line-height: 1.7 !important;
+    white-space: normal !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-name span {
+    color: var(--mobile-app-muted) !important;
+    font-size: 11px !important;
+    direction: rtl !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-card-progress {
+    grid-area: 2 / 1 / 3 / 3 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 9px !important;
+    padding: 11px 12px !important;
+    border: 1px solid rgba(8,120,201,.10) !important;
+    border-radius: 15px !important;
+    background: #f2f8fd !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-card-progress-copy {
+    display: flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    min-width: 0 !important;
+    color: var(--mobile-app-ink) !important;
+    font-size: 12px !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-card-progress-copy b {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 12px !important;
+    font-weight: 850 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-progress-track {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 6px !important;
+    overflow: hidden !important;
+    border-radius: 99px !important;
+    background: #dfeaf4 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-progress-track > span {
+    display: block !important;
+    height: 100% !important;
+    border-radius: inherit !important;
+    background: linear-gradient(90deg, #13a7df, #0872c0) !important;
+    transition: width .55s cubic-bezier(.2,.7,.25,1) !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-kottaj {
+    grid-area: 3 / 1 / 4 / 3 !important;
+    justify-self: start !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    padding: 4px 9px !important;
+    border: 1px solid var(--mobile-app-line) !important;
+    border-radius: 10px !important;
+    background: #f8fbff !important;
+    color: var(--mobile-app-muted) !important;
+    font-size: 10px !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-stages {
+    grid-area: 4 / 1 / 5 / 3 !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    padding-top: 2px !important;
+    overflow: visible !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-stage-dot {
+    min-width: 0 !important;
+    min-height: 44px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    padding: 4px 1px !important;
+    border: 1px solid transparent !important;
+    border-radius: 12px !important;
+    background: #f2f6fa !important;
+    color: #8496a9 !important;
+    transition: background .2s ease, color .2s ease, transform .2s ease !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-stage-dot.done {
+    background: #e8f6ef !important;
+    color: #16875c !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-stage-dot.current,
+  .app-shell.is-touch-layout .shipment-stage-dot.chosen {
+    border-color: rgba(8,120,201,.18) !important;
+    background: #e7f3fc !important;
+    color: #076db4 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-stage-number {
+    font-size: 11px !important;
+    font-weight: 900 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-stage-label {
+    font-size: 9px !important;
+    font-weight: 750 !important;
+    white-space: nowrap !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-current-stage {
+    grid-area: 5 / 1 / 6 / 2 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    min-height: 42px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding: 7px 10px !important;
+    border: 1px solid var(--mobile-app-line) !important;
+    border-radius: 13px !important;
+    background: #fff !important;
+    color: var(--mobile-app-ink) !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-go {
+    grid-area: 5 / 2 / 6 / 3 !important;
+    min-width: 42px !important;
+    width: 42px !important;
+    height: 42px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 13px !important;
+    background: var(--mobile-app-blue) !important;
+    color: #fff !important;
+    box-shadow: 0 5px 14px rgba(8,120,201,.18) !important;
+  }
+
+  /* These three had inherited min-width:740px rules in index.css. */
+  .app-shell.is-touch-layout .shipment-warnings,
+  .app-shell.is-touch-layout .shipment-expanded,
+  .app-shell.is-touch-layout .shipment-warnings > span {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-warnings {
+    display: grid !important;
+    gap: 6px !important;
+    margin: 0 15px 12px !important;
+    padding: 10px 11px !important;
+    border: 1px solid rgba(197,137,36,.16) !important;
+    border-radius: 14px !important;
+    background: #fffaf0 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-warnings > span {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 7px !important;
+    color: #8e6527 !important;
+    font-size: 10px !important;
+    line-height: 1.7 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-expanded {
+    margin: 0 !important;
+    padding: 13px 15px 15px !important;
+    border-top: 1px solid var(--mobile-app-line) !important;
+    border-radius: 0 !important;
+    background: #f7faff !important;
+    animation: mobile-app-panel-in .22s ease both;
+  }
+}
+
+/* The shipment showcase route also uses independent cards and one natural page scroll. */
+@media (max-width: 1023px), (pointer: coarse) {
+  .app-shell.is-touch-layout .shipment-showcase-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 12px !important;
+    gap: 13px !important;
+    color: var(--mobile-app-ink) !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-hero {
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 16px !important;
+    border: 1px solid var(--mobile-app-line) !important;
+    border-radius: 20px !important;
+    background: linear-gradient(140deg, #fff, #f1f8ff) !important;
+    box-shadow: var(--mobile-app-shadow) !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-kicker,
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-hero p {
+    display: none !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-hero h1 {
+    margin: 0 !important;
+    font-size: 20px !important;
+    line-height: 1.5 !important;
+    color: var(--mobile-app-ink) !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-hero > button {
+    min-height: 40px !important;
+    padding: 9px 11px !important;
+    border-radius: 13px !important;
+    background: var(--mobile-app-blue) !important;
+    color: #fff !important;
+    font-size: 10px !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-kpis {
+    display: none !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-toolbar {
+    display: block !important;
+    min-width: 0 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-toolbar > div:first-child {
+    display: none !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-controls {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 9px !important;
+    width: 100% !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-controls label,
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-controls select {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 46px !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    border: 1px solid var(--mobile-app-line) !important;
+    color: var(--mobile-app-ink) !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 16px !important;
+    border: 1px solid var(--mobile-app-line) !important;
+    border-radius: 21px !important;
+    background: linear-gradient(150deg, #fff, #f8fbff) !important;
+    box-shadow: var(--mobile-app-shadow) !important;
+    animation: mobile-app-card-in .38s ease both;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-card h3 {
+    color: var(--mobile-app-ink) !important;
+    font-size: 15px !important;
+    line-height: 1.7 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-identifiers {
+    gap: 6px !important;
+    color: var(--mobile-app-muted) !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-identifiers span {
+    max-width: 100% !important;
+    overflow-wrap: anywhere !important;
+    border-color: var(--mobile-app-line) !important;
+    border-radius: 10px !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-facts > div {
+    min-width: 0 !important;
+    border: 1px solid rgba(28,82,134,.07) !important;
+    border-radius: 12px !important;
+    background: #f3f8fd !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-reminders {
+    padding: 10px !important;
+    border-color: var(--mobile-app-line) !important;
+    border-radius: 13px !important;
+    background: #f7faff !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-card footer a {
+    min-height: 40px !important;
+    border-color: var(--mobile-app-line) !important;
+    border-radius: 11px !important;
+    color: var(--mobile-app-blue) !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-showcase-page .fm-showcase-pagination {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 10px !important;
+  }
+}
+
+/* The dock is portalled to document.body, not nested inside .app-shell. */
+@media (max-width: 1023px), (pointer: coarse) {
+  body .app-mobile-viewport-dock {
+    position: fixed !important;
+    z-index: 500 !important;
+    inset-inline: 12px !important;
+    inset-block-end: calc(8px + env(safe-area-inset-bottom)) !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    align-items: center !important;
+    gap: 4px !important;
+    width: auto !important;
+    height: 66px !important;
+    min-height: 66px !important;
+    padding: 6px !important;
+    border: 1px solid rgba(255,255,255,.9) !important;
+    border-radius: 23px !important;
+    background: rgba(250,252,255,.93) !important;
+    box-shadow: 0 8px 28px rgba(19,50,82,.14), inset 0 1px 0 #fff !important;
+    -webkit-backdrop-filter: blur(24px) saturate(165%) !important;
+    backdrop-filter: blur(24px) saturate(165%) !important;
+  }
+
+  body .app-mobile-viewport-dock > button {
+    display: flex !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    height: 52px !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    padding: 4px 2px !important;
+    border: 1px solid transparent !important;
+    border-radius: 16px !important;
+    background: transparent !important;
+    color: #788ba0 !important;
+    font-size: 10px !important;
+    font-weight: 750 !important;
+    line-height: 1.15 !important;
+    transition: color .2s ease, background .2s ease, transform .2s ease !important;
+  }
+
+  body .app-mobile-viewport-dock > button svg {
+    width: 22px !important;
+    height: 22px !important;
+    stroke-width: 1.9 !important;
+  }
+
+  body .app-mobile-viewport-dock > button.is-active {
+    border-color: rgba(8,120,201,.12) !important;
+    background: #e8f3fc !important;
+    color: #086fb5 !important;
+  }
+
+  body .app-mobile-viewport-dock > button:active {
+    transform: scale(.94) !important;
+  }
+
+  /* A conversation owns the entire chat viewport. Never place navigation over its composer. */
+  html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .app-shell.is-chat-route .chat-standalone[data-chat-selected="false"] {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .app-shell.is-chat-route .chat-standalone[data-chat-selected="true"] {
+    padding-bottom: 0 !important;
+  }
+
+  .app-shell.is-chat-route .chat-composer {
+    position: relative !important;
+    inset: auto !important;
+    z-index: 8 !important;
+    flex: 0 0 auto !important;
+    margin: 8px 10px 0 !important;
+    padding: 9px !important;
+    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    border: 1px solid rgba(24,91,144,.16) !important;
+    border-radius: 22px !important;
+    background: rgba(255,255,255,.97) !important;
+    box-shadow: 0 8px 24px rgba(17,55,91,.12), inset 0 1px 0 #fff !important;
+    -webkit-backdrop-filter: blur(22px) saturate(150%) !important;
+    backdrop-filter: blur(22px) saturate(150%) !important;
+  }
+
+  .app-shell.is-chat-route .chat-message-area {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    padding-bottom: 20px !important;
+    scroll-padding-bottom: 20px !important;
+  }
+}
+
+/* Always-visible safe update action: the Home Screen hides the normal mobile header. */
+@media (max-width: 1023px), (pointer: coarse) {
+  .app-pwa-update-prompt {
+    position: fixed !important;
+    z-index: 950 !important;
+    top: calc(env(safe-area-inset-top) + 10px) !important;
+    inset-inline: 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    width: auto !important;
+    min-height: 54px !important;
+    padding: 9px 11px !important;
+    border: 1px solid rgba(8,120,201,.18) !important;
+    border-radius: 17px !important;
+    background: rgba(255,255,255,.97) !important;
+    color: var(--mobile-app-ink) !important;
+    box-shadow: 0 12px 34px rgba(15,55,91,.19) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(155%) !important;
+    backdrop-filter: blur(22px) saturate(155%) !important;
+    animation: mobile-app-panel-in .22s ease both;
+  }
+
+  .app-pwa-update-copy {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    min-width: 0 !important;
+    font-size: 11px !important;
+    font-weight: 850 !important;
+  }
+
+  .app-pwa-update-copy svg { flex: 0 0 auto; color: var(--mobile-app-blue); }
+
+  .app-pwa-update-prompt button {
+    flex: 0 0 auto !important;
+    min-height: 37px !important;
+    padding: 7px 12px !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: var(--mobile-app-blue) !important;
+    color: #fff !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-pwa-update-prompt,
+  .app-shell.is-touch-layout .shipment-item-card,
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-card {
+    animation: none !important;
+  }
+}
