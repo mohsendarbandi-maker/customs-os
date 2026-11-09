@@ -555,7 +555,7 @@ jobs:
               // Verify the actual mobile card stylesheet is delivered by both hostnames.
               const shipmentCardStylesPresent = await page.evaluate(async () => {
                 const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-                  .map((link) => (link as HTMLLinkElement).href);
+                  .map((link) => link.href);
                 const styles = await Promise.all(links.map(async (url) => {
                   try {
                     const response = await fetch(url, { cache: 'no-store' });
