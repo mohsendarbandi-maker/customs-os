@@ -77,12 +77,12 @@ describe('mobile visual cohesion regressions', () => {
   });
 
   it('renders shipment progress as a labeled five-step card on phones, not a clipped 740px row', () => {
-    expect(shipments).toContain('shortLabel:\'انبار\'');
-    expect(shipments).toContain('className="shipment-stage-number"');
-    expect(shipments).toContain('className="shipment-stage-label"');
-    expect(mobileStyles).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
-    expect(mobileStyles).toContain('.shipment-compact-row');
-    expect(mobileStyles).toContain('min-width: 0 !important');
+    expect(shipments).toContain("shortLabel: 'انبار'");
+    expect(shipments).toContain('shipment-premium-step-dot');
+    expect(shipments).toContain('shipment-premium-step-label');
+    expect(read('src/styles/mobile-app-premium.css')).toContain('grid-template-columns: repeat(5,minmax(0,1fr))');
+    expect(read('src/styles/mobile-app-premium.css')).toContain('.shipment-premium-steps');
+    expect(read('src/styles/mobile-app-premium.css')).toContain('min-width: 0!important');
   });
 
   it('removes the duplicate explanation above the shipment status card', () => {
