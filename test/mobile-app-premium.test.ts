@@ -50,6 +50,7 @@ describe('premium native mobile workspace', () => {
     expect(css).toContain('.shipment-showcase-page .showcase-grid');
     expect(css).toContain('.shipment-showcase-page .showcase-card');
     expect(css).toContain('.fm-showcase-pagination');
+    expect(css).toContain('.showcase-footer-note { display: none!important; }');
   });
 
   it('keeps the mobile host on the app shell and honors the dedicated hostname', () => {
