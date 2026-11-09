@@ -554,6 +554,25 @@ jobs:
                 { timeout: 15000, message: `React did not render visible content into #root\nErrors: ${errors.join(' | ') || 'none'}\nScripts: ${scriptResponses.join(' | ') || 'none'}` },
               ).not.toBe('');
 
+              // Confirm that the live mobile host shipped the new shipment-card CSS.
+              if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
+                const stylesheetContent = await page.evaluate(async () => {
+                  const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                    .map((link) => link.href);
+                  const files = await Promise.all(links.map(async (url) => {
+                    try {
+                      const response = await fetch(url, { cache: 'no-store' });
+                      return response.ok ? response.text() : '';
+                    } catch {
+                      return '';
+                    }
+                  }));
+                  return files.join('\\n');
+                });
+                expect(stylesheetContent).toContain('.shipment-premium-card');
+                expect(stylesheetContent).toContain('.shipment-board-grid');
+              }
+
               // The mobile hostname must boot the touch shell at a phone-sized viewport.
               // Probe the actual shipped CSS against the same DOM structure used by the app.
               if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
