@@ -488,10 +488,13 @@ jobs:
 
             if [ "$base" = "https://darbandicommercial.ir" ]; then
               echo "Checking legacy PWA launch URL returns to canonical home"
-              pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
-              pwa_location="$(printf '%s\\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
-              echo "PWA redirect Location: $pwa_location"
-              test "$pwa_location" = "$base/?__legacy_pwa_smoke=${GITHUB_RUN_ID}"
+              pwa_status="$(curl --silent --show-error --max-time 20 -D /tmp/pwa-headers -o /dev/null -w '%{http_code}' "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
+              pwa_location="$(grep -i '^location:' /tmp/pwa-headers | tail -n 1 | tr -d '\\r' | sed -E 's/^[^:]*:[[:space:]]*//' || true)"
+              echo "PWA redirect status: $pwa_status; Location: [$pwa_location]"
+              if [ "$pwa_status" != "301" ] || [ "$pwa_location" != "$base/?__legacy_pwa_smoke=${GITHUB_RUN_ID}" ]; then
+                echo "::error::Legacy primary PWA launch redirect was unexpected: HTTP $pwa_status, Location=[$pwa_location]"
+                exit 1
+              fi
             else
               echo "Checking PWA launch query remains usable on the dedicated mobile host"
               mobile_pwa_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/mobile-pwa.headers -o /tmp/mobile-pwa.html -w '%{http_code}' "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
