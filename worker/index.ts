@@ -422,15 +422,16 @@ export default {
     }
 
     // Old installed launch URLs open the unified home, not a separate chat PWA.
+    const appHost = url.hostname.toLowerCase();
     if (
       ['GET', 'HEAD'].includes(request.method) &&
-      url.hostname.toLowerCase() === 'darbandicommercial.ir' &&
+      ['darbandicommercial.ir', 'mobile.darbandicommercial.ir'].includes(appHost) &&
       url.pathname === '/' &&
       url.searchParams.get('source') === 'pwa'
     ) {
       const canonical = new URL(url.toString());
       canonical.protocol = 'https:';
-      canonical.hostname = 'darbandicommercial.ir';
+      canonical.hostname = appHost;
       canonical.port = '';
       canonical.searchParams.delete('source');
       return new Response(null, {
