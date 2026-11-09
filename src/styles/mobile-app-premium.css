@@ -1,0 +1,718 @@
+/*
+ * Premium mobile workspace — native spacing, calm ocean surfaces,
+ * predictable safe areas, focused chat composition and subtle motion.
+ */
+
+:root {
+  --mobile-app-bg: #f3f7fc;
+  --mobile-app-paper: #ffffff;
+  --mobile-app-paper-soft: #f7faff;
+  --mobile-app-ink: #142f4b;
+  --mobile-app-muted: #6b8198;
+  --mobile-app-line: rgba(28, 82, 134, .13);
+  --mobile-app-blue: #0878c9;
+  --mobile-app-blue-soft: rgba(8, 120, 201, .09);
+  --mobile-app-shadow: 0 8px 26px rgba(25, 61, 99, .075);
+}
+
+@media (max-width: 1023px), (pointer: coarse) {
+  html, body, #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background: var(--mobile-app-bg);
+  }
+
+  .app-shell.is-touch-layout:not(.is-chat-route) {
+    min-height: 100dvh !important;
+    background: var(--mobile-app-bg) !important;
+    color: var(--mobile-app-ink);
+  }
+
+  .app-shell.is-touch-layout .app-mobilebar {
+    min-height: calc(58px + env(safe-area-inset-top)) !important;
+    height: calc(58px + env(safe-area-inset-top)) !important;
+    padding: env(safe-area-inset-top) 14px 0 !important;
+    background: rgba(250, 252, 255, .91) !important;
+    color: var(--mobile-app-ink) !important;
+    border-bottom: 1px solid var(--mobile-app-line) !important;
+    box-shadow: 0 3px 16px rgba(23, 55, 88, .045) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    backdrop-filter: blur(22px) saturate(150%);
+  }
+
+  .app-shell.is-touch-layout .app-mobilebar .mobile-current-page__eyebrow {
+    color: #8295aa !important;
+    font-size: 9px !important;
+    letter-spacing: .08em;
+  }
+
+  .app-shell.is-touch-layout .app-mobilebar .mobile-current-page__title {
+    color: var(--mobile-app-ink) !important;
+    font-size: 14px !important;
+    font-weight: 850 !important;
+  }
+
+  .app-shell.is-touch-layout .app-mobilebar .icon-btn {
+    width: 40px !important;
+    height: 40px !important;
+    border: 1px solid var(--mobile-app-line) !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    color: var(--mobile-app-ink) !important;
+    box-shadow: none !important;
+  }
+
+  .app-shell.is-touch-layout .app-main,
+  .app-shell.is-touch-layout .app-main.sidebar-compact {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  .app-shell.is-touch-layout .app-content {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 14px 13px calc(94px + env(safe-area-inset-bottom)) !important;
+    overflow-x: clip !important;
+    background: transparent !important;
+  }
+
+  .app-shell.is-touch-layout .future-route-stage {
+    min-width: 0 !important;
+    animation: mobile-app-screen-in .34s cubic-bezier(.2,.75,.25,1) both;
+  }
+
+  .app-shell.is-touch-layout .customs-home {
+    min-height: 100%;
+    overflow: hidden;
+    color: var(--mobile-app-ink) !important;
+    background:
+      radial-gradient(ellipse at 100% 0%, rgba(56, 158, 224, .11), transparent 38%),
+      linear-gradient(180deg, #f8fbff 0%, #f2f7fc 72%, #edf4fa 100%) !important;
+  }
+
+  .app-shell.is-touch-layout .customs-home::before,
+  .app-shell.is-touch-layout .customs-home::after {
+    opacity: .10 !important;
+    pointer-events: none;
+  }
+
+  .app-shell.is-touch-layout .customs-home-tagline {
+    display: none !important;
+  }
+
+  .app-shell.is-touch-layout .customs-widget-frame {
+    min-width: 0 !important;
+    border: 1px solid var(--mobile-app-line) !important;
+    border-radius: 22px !important;
+    background: rgba(255,255,255,.92) !important;
+    box-shadow: var(--mobile-app-shadow) !important;
+    overflow: hidden;
+  }
+
+  .app-shell.is-touch-layout .app-mobile-viewport-dock {
+    position: fixed !important;
+    z-index: 500 !important;
+    inset-inline: 12px !important;
+    inset-block-end: calc(8px + env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+    height: 66px !important;
+    min-height: 66px !important;
+    padding: 6px !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    align-items: center !important;
+    gap: 4px !important;
+    border: 1px solid rgba(255,255,255,.88) !important;
+    border-radius: 23px !important;
+    background: rgba(250,252,255,.91) !important;
+    box-shadow: 0 8px 28px rgba(19, 50, 82, .14), inset 0 1px 0 #fff !important;
+    -webkit-backdrop-filter: blur(24px) saturate(165%) !important;
+    backdrop-filter: blur(24px) saturate(165%) !important;
+    transform: translateZ(0);
+  }
+
+  .app-shell.is-touch-layout .app-mobile-viewport-dock > button {
+    display: flex !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    height: 52px !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    padding: 4px 2px !important;
+    border: 1px solid transparent !important;
+    border-radius: 16px !important;
+    background: transparent !important;
+    color: #788ba0 !important;
+    font-size: 10px !important;
+    font-weight: 750 !important;
+    line-height: 1.15 !important;
+    transition: color .2s ease, background .2s ease, transform .2s cubic-bezier(.2,.8,.2,1);
+  }
+
+  .app-shell.is-touch-layout .app-mobile-viewport-dock > button svg {
+    width: 22px !important;
+    height: 22px !important;
+    stroke-width: 1.9 !important;
+  }
+
+  .app-shell.is-touch-layout .app-mobile-viewport-dock > button.is-active {
+    border-color: rgba(8,120,201,.10) !important;
+    background: #e8f3fc !important;
+    color: #086fb5 !important;
+  }
+
+  .app-shell.is-touch-layout .app-mobile-viewport-dock > button:active {
+    transform: scale(.94);
+  }
+
+  .app-shell.is-touch-layout :is(button, a, [role="button"]) {
+    -webkit-tap-highlight-color: transparent;
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: .18s;
+    transition-timing-function: ease;
+  }
+
+  .app-shell.is-touch-layout :is(input, textarea, select) {
+    max-width: 100%;
+    font-size: 16px;
+  }
+
+  .app-shell.is-touch-layout :is(input, textarea, select):focus-visible {
+    outline: 3px solid rgba(8,120,201,.16);
+    outline-offset: 1px;
+  }
+
+  /* A quieter, consistent surface system. */
+  .app-shell.is-touch-layout :is(.shipment-premium-glass, .mobile-dashboard-card, .settings-enterprise-page section) {
+    border-color: var(--mobile-app-line) !important;
+    border-radius: 22px !important;
+    box-shadow: var(--mobile-app-shadow) !important;
+  }
+}
+
+/* Chat gets the full visible viewport; the global dock never covers the composer. */
+@media (max-width: 1023px), (pointer: coarse) {
+  .app-shell.is-chat-route,
+  .app-shell.is-chat-route .app-main.is-chat-main,
+  .app-shell.is-chat-route .app-content.is-chat-content,
+  .app-shell.is-chat-route .future-route-stage.is-chat-stage,
+  .app-shell.is-chat-route .chat-standalone {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .app-shell.is-chat-route .chat-standalone {
+    width: 100% !important;
+    height: var(--chat-visible-height, 100dvh) !important;
+    max-height: var(--chat-visible-height, 100dvh) !important;
+    padding: 0 0 0 !important;
+    background: #f4f8fc !important;
+  }
+
+  .app-shell.is-chat-route .chat-app-header {
+    flex: 0 0 auto !important;
+    min-height: 62px !important;
+    padding: calc(8px + env(safe-area-inset-top)) 14px 8px !important;
+    border-bottom: 1px solid var(--mobile-app-line) !important;
+    background: rgba(255,255,255,.94) !important;
+    box-shadow: 0 4px 15px rgba(20,53,84,.045) !important;
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+  }
+
+  .app-shell.is-chat-route .chat-app-header-main {
+    min-height: 44px !important;
+    gap: 10px !important;
+  }
+
+  .app-shell.is-chat-route .chat-app-brand {
+    min-width: 0;
+    gap: 10px !important;
+    color: var(--mobile-app-ink) !important;
+  }
+
+  .app-shell.is-chat-route .chat-app-brand b {
+    font-size: 14px !important;
+    font-weight: 850 !important;
+  }
+
+  .app-shell.is-chat-route .chat-app-brand small {
+    color: var(--mobile-app-muted) !important;
+    font-size: 10px !important;
+  }
+
+  .app-shell.is-chat-route .chat-message-area {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    padding: 14px 12px 22px !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    background: #f4f8fc !important;
+  }
+
+  .app-shell.is-chat-route .chat-composer {
+    position: sticky !important;
+    inset-block-end: 0 !important;
+    z-index: 8 !important;
+    flex: 0 0 auto !important;
+    margin: 8px 10px 0 !important;
+    padding: 9px !important;
+    border: 1px solid rgba(24,91,144,.16) !important;
+    border-radius: 22px !important;
+    background: rgba(255,255,255,.96) !important;
+    box-shadow: 0 8px 24px rgba(17,55,91,.12), inset 0 1px 0 #fff !important;
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    backdrop-filter: blur(22px) saturate(150%);
+  }
+
+  .app-shell.is-chat-route .chat-composer textarea {
+    min-height: 46px !important;
+    max-height: min(120px, 24dvh) !important;
+    padding: 11px 14px !important;
+    border: 0 !important;
+    border-radius: 17px !important;
+    background: #f2f6fa !important;
+    color: #183754 !important;
+    font-size: 16px !important;
+    line-height: 1.55 !important;
+    box-shadow: inset 0 1px 2px rgba(23,55,86,.04);
+  }
+
+  .app-shell.is-chat-route .chat-composer button {
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 16px !important;
+  }
+
+  .app-shell.is-chat-route .chat-composer button[aria-label="ارسال"] {
+    min-width: 46px;
+    min-height: 46px;
+    border-radius: 50% !important;
+    background: linear-gradient(145deg, #138cdb, #0869b0) !important;
+    box-shadow: 0 5px 13px rgba(8,105,176,.24);
+  }
+
+  /* Inbox reserves the floating dock space; open conversations reclaim it. */
+  .app-shell.is-chat-route .chat-standalone[data-chat-selected="false"] {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .app-shell.is-chat-route .chat-standalone[data-chat-selected="true"] {
+    padding-bottom: 0 !important;
+  }
+
+  html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .app-shell.is-chat-route .chat-standalone[data-chat-selected="true"] .chat-composer {
+    margin-block-end: max(8px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .app-shell.is-chat-route .chat-standalone[data-chat-selected="true"] .chat-message-area {
+    scroll-padding-block-end: 20px;
+  }
+}
+
+/* One shipment = one complete card, including alerts and expanded stage details. */
+@media (max-width: 1023px), (pointer: coarse) {
+  .app-shell.is-touch-layout .shipment-premium-glass {
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-status-toolbar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    padding: 2px 2px 13px !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-status-toolbar > div:first-child {
+    flex: 1 1 auto;
+  }
+
+  .app-shell.is-touch-layout .shipment-status-search {
+    order: 3;
+    flex: 1 0 100%;
+    min-height: 46px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 13px;
+    border: 1px solid var(--mobile-app-line);
+    border-radius: 15px;
+    background: #fff;
+    color: var(--mobile-app-muted);
+  }
+
+  .app-shell.is-touch-layout .shipment-status-search input {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    border: 0 !important;
+    outline: 0 !important;
+    background: transparent !important;
+    color: var(--mobile-app-ink) !important;
+    font-size: 13px !important;
+    box-shadow: none !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-compact-list {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-item-card {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--mobile-app-line);
+    border-radius: 22px;
+    background: linear-gradient(150deg, #fff 0%, #f9fcff 100%);
+    box-shadow: 0 8px 23px rgba(27,66,106,.075);
+    animation: mobile-app-card-in .42s cubic-bezier(.2,.75,.25,1) both;
+    transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+  }
+
+  .app-shell.is-touch-layout .shipment-item-card:nth-child(2) { animation-delay: .035s; }
+  .app-shell.is-touch-layout .shipment-item-card:nth-child(3) { animation-delay: .07s; }
+  .app-shell.is-touch-layout .shipment-item-card:nth-child(4) { animation-delay: .105s; }
+  .app-shell.is-touch-layout .shipment-item-card:nth-child(5) { animation-delay: .14s; }
+
+  .app-shell.is-touch-layout .shipment-item-card:active {
+    transform: scale(.992);
+    box-shadow: 0 4px 14px rgba(27,66,106,.10);
+  }
+
+  .app-shell.is-touch-layout .shipment-compact-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 42px !important;
+    grid-template-rows: auto auto auto auto auto;
+    gap: 10px !important;
+    min-height: 0 !important;
+    padding: 15px 15px 13px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-name {
+    grid-area: 1 / 1 / 2 / 3;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--mobile-app-ink) !important;
+    text-align: right;
+  }
+
+  .app-shell.is-touch-layout .shipment-name b {
+    max-width: 100%;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    color: var(--mobile-app-ink) !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    line-height: 1.7 !important;
+    white-space: normal !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-name span {
+    color: var(--mobile-app-muted) !important;
+    font-size: 11px !important;
+    direction: rtl;
+  }
+
+  .app-shell.is-touch-layout .shipment-card-progress {
+    grid-area: 2 / 1 / 3 / 3;
+    min-width: 0;
+    display: flex !important;
+    flex-direction: column;
+    gap: 9px;
+    padding: 11px 12px !important;
+    border: 1px solid rgba(8,120,201,.10);
+    border-radius: 15px;
+    background: #f2f8fd !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-card-progress-copy {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    color: var(--mobile-app-ink);
+    font-size: 12px;
+  }
+
+  .app-shell.is-touch-layout .shipment-card-progress-copy b {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 850;
+  }
+
+  .app-shell.is-touch-layout .shipment-card-progress-copy small {
+    flex: 0 0 auto;
+    color: var(--mobile-app-muted);
+    font-size: 10px;
+  }
+
+  .app-shell.is-touch-layout .shipment-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #16a36a;
+    box-shadow: 0 0 0 4px rgba(22,163,106,.10);
+  }
+
+  .app-shell.is-touch-layout .shipment-progress-track {
+    width: 100%;
+    height: 6px !important;
+    overflow: hidden;
+    border-radius: 99px;
+    background: #dfeaf4 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-progress-track > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #13a7df, #0872c0) !important;
+    transition: width .55s cubic-bezier(.2,.7,.25,1);
+  }
+
+  .app-shell.is-touch-layout .shipment-kottaj {
+    grid-area: 3 / 1 / 4 / 3;
+    justify-self: start;
+    max-width: 100%;
+    padding: 4px 9px !important;
+    border: 1px solid var(--mobile-app-line);
+    border-radius: 10px;
+    background: #f8fbff;
+    color: var(--mobile-app-muted) !important;
+    font-size: 10px !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-stages {
+    grid-area: 4 / 1 / 5 / 3;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 5px !important;
+    min-width: 0;
+    padding-top: 2px;
+    overflow: visible !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-stage-dot {
+    min-width: 0;
+    min-height: 44px;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px 1px !important;
+    border: 1px solid transparent;
+    border-radius: 12px !important;
+    background: #f2f6fa !important;
+    color: #8496a9 !important;
+    transition: background .2s ease, color .2s ease, transform .2s ease;
+  }
+
+  .app-shell.is-touch-layout .shipment-stage-dot.done {
+    background: #e8f6ef !important;
+    color: #16875c !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-stage-dot.current,
+  .app-shell.is-touch-layout .shipment-stage-dot.chosen {
+    border-color: rgba(8,120,201,.18);
+    background: #e7f3fc !important;
+    color: #076db4 !important;
+  }
+
+  .app-shell.is-touch-layout .shipment-stage-number {
+    font-size: 11px !important;
+    font-weight: 900;
+  }
+
+  .app-shell.is-touch-layout .shipment-stage-label {
+    font-size: 9px !important;
+    font-weight: 750;
+    white-space: nowrap;
+  }
+
+  .app-shell.is-touch-layout .shipment-current-stage {
+    grid-area: 5 / 1 / 6 / 2;
+    min-width: 0;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 10px !important;
+    border: 1px solid var(--mobile-app-line) !important;
+    border-radius: 13px !important;
+    background: #fff !important;
+    color: var(--mobile-app-ink) !important;
+    font-size: 11px !important;
+    font-weight: 800;
+  }
+
+  .app-shell.is-touch-layout .shipment-go {
+    grid-area: 5 / 2 / 6 / 3;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 13px;
+    background: var(--mobile-app-blue) !important;
+    color: #fff !important;
+    box-shadow: 0 5px 14px rgba(8,120,201,.18);
+  }
+
+  .app-shell.is-touch-layout .shipment-warnings {
+    display: grid;
+    gap: 6px;
+    margin: 0 15px 12px;
+    padding: 10px 11px;
+    border: 1px solid rgba(197,137,36,.16);
+    border-radius: 14px;
+    background: #fffaf0;
+  }
+
+  .app-shell.is-touch-layout .shipment-warnings > span {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    color: #8e6527;
+    font-size: 10px;
+    line-height: 1.7;
+  }
+
+  .app-shell.is-touch-layout .shipment-expanded {
+    margin: 0 !important;
+    padding: 13px 15px 15px !important;
+    border-top: 1px solid var(--mobile-app-line) !important;
+    border-radius: 0 !important;
+    background: #f7faff !important;
+    animation: mobile-app-panel-in .22s ease both;
+  }
+
+  .app-shell.is-touch-layout .shipment-expanded-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    color: var(--mobile-app-ink);
+    font-size: 12px;
+  }
+
+  .app-shell.is-touch-layout .shipment-expanded .shipment-go {
+    width: auto;
+    height: 34px;
+    min-width: 0;
+    padding: 0 10px;
+    border-radius: 11px;
+    font-size: 10px;
+  }
+
+  .app-shell.is-touch-layout .shipment-details-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 8px;
+  }
+
+  .app-shell.is-touch-layout .shipment-details-grid > span {
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid var(--mobile-app-line);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--mobile-app-muted);
+    font-size: 10px;
+    line-height: 1.6;
+  }
+
+  .app-shell.is-touch-layout .shipment-details-grid b {
+    color: var(--mobile-app-ink);
+  }
+
+  .app-shell.is-touch-layout .exit-three-checks {
+    display: grid;
+    gap: 7px;
+  }
+
+  .app-shell.is-touch-layout .exit-check-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 10px;
+    border: 1px solid var(--mobile-app-line);
+    border-radius: 12px;
+    background: #fff;
+    font-size: 10px;
+  }
+}
+
+/* Shared motion language across mobile screens and cards. */
+@keyframes mobile-app-screen-in {
+  from { opacity: 0; transform: translate3d(0, 9px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes mobile-app-card-in {
+  from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.99); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes mobile-app-panel-in {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.is-touch-layout .future-route-stage,
+  .app-shell.is-touch-layout .shipment-item-card,
+  .app-shell.is-touch-layout .shipment-expanded,
+  .app-shell.is-touch-layout .app-mobile-viewport-dock > button {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
