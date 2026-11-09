@@ -486,11 +486,18 @@ jobs:
             grep -Fqi 'Cache-Control: no-store, private' /tmp/auth-bridge.headers
             grep -Fqi 'frame-ancestors https://darbandicommercial.ir' /tmp/auth-bridge.headers
 
-            echo "Checking legacy PWA launch URL returns to canonical home"
-            pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
-            pwa_location="$(printf '%s\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
-            echo "PWA redirect Location: $pwa_location"
-            test "$pwa_location" = "$base/?__legacy_pwa_smoke=${GITHUB_RUN_ID}"
+            if [ "$base" = "https://darbandicommercial.ir" ]; then
+              echo "Checking legacy PWA launch URL returns to canonical home"
+              pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
+              pwa_location="$(printf '%s\\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
+              echo "PWA redirect Location: $pwa_location"
+              test "$pwa_location" = "$base/?__legacy_pwa_smoke=${GITHUB_RUN_ID}"
+            else
+              echo "Checking PWA launch query remains usable on the dedicated mobile host"
+              mobile_pwa_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/mobile-pwa.headers -o /tmp/mobile-pwa.html -w '%{http_code}' "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
+              test "$mobile_pwa_status" = "200"
+              grep -Fq '<div id="root">' /tmp/mobile-pwa.html
+            fi
 
             echo "Checking live-voice code is present in compiled bundle"
             grep -R -F -q 'تماس صوتی زنده' dist/assets
