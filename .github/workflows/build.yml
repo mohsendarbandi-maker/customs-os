@@ -488,9 +488,1064 @@ jobs:
 
             if [ "$base" = "https://darbandicommercial.ir" ]; then
               echo "Checking legacy PWA launch URL returns to canonical home"
-              pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
-              pwa_location="$(printf '%s\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
-              echo "PWA redirect Location: $pwa_location"
+              pwa_url="$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}"
+              pwa_result="$(curl --silent --show-error --max-time 20 -o /dev/null -w '%{http_code}\n%{redirect_url}' "$pwa_url")"
+              pwa_status="${pwa_result%%
+            else
+              echo "Checking PWA launch query remains usable on the dedicated mobile host"
+              mobile_pwa_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/mobile-pwa.headers -o /tmp/mobile-pwa.html -w '%{http_code}' "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
+              test "$mobile_pwa_status" = "200"
+              grep -Fq '<div id="root">' /tmp/mobile-pwa.html
+            fi
+
+            echo "Checking live-voice code is present in compiled bundle"
+            grep -R -F -q 'تماس صوتی زنده' dist/assets
+            grep -R -F -q 'RTCPeerConnection' dist/assets
+
+            js_count="$(find dist/assets -maxdepth 1 -type f -name '*.js' | wc -l | tr -d ' ')"
+            test "$js_count" -ge 1
+            echo "Compiled JavaScript asset count: $js_count"
+          done
+          echo "Production custom domain smoke test passed."
+
+          echo "Checking optional workers.dev endpoint"
+          if curl --fail --silent --show-error --location --max-time 20 -o /tmp/workers-dev.html "https://customs.mohsen-darbandi.workers.dev/"; then
+            grep -q '<div id="root">' /tmp/workers-dev.html
+            echo "Optional workers.dev endpoint is healthy."
+          else
+            echo "workers.dev is optional for production; continuing."
+          fi
+
+      - name: Browser runtime smoke test
+        if: steps.freshness.outputs.is_latest == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          cat > live-runtime-smoke.spec.mjs <<'EOF'
+          import { test, expect } from 'playwright/test';
+
+          const smokeToken = `${process.env.GITHUB_SHA || 'local'}-${process.env.GITHUB_RUN_ID || Date.now()}`;
+          for (const baseURL of [
+            'https://darbandicommercial.ir',
+            'https://mobile.darbandicommercial.ir',
+          ]) {
+            test(`runtime boot: ${baseURL}`, async ({ page, browser }) => {
+              const errors = [];
+              const scriptResponses = [];
+              page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+              page.on('console', (message) => {
+                if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+              });
+              page.on('requestfailed', (request) => {
+                const url = request.url();
+                if (/\.(js|mjs)(\?|$)/i.test(url)) {
+                  errors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+              page.on('response', (response) => {
+                const url = response.url();
+                if (/\.(js|mjs)(\?|$)/i.test(url)) {
+                  scriptResponses.push(`${response.status()} ${response.headers()['content-type'] || 'NO_CONTENT_TYPE'} ${url}`);
+                }
+              });
+
+              if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
+                await page.setViewportSize({ width: 390, height: 844 });
+              }
+              await page.goto(baseURL + '/?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+              await expect(page.locator('#root')).toBeAttached();
+              await expect.poll(
+                async () => (await page.locator('#root').innerText()).trim(),
+                { timeout: 15000, message: `React did not render visible content into #root\nErrors: ${errors.join(' | ') || 'none'}\nScripts: ${scriptResponses.join(' | ') || 'none'}` },
+              ).not.toBe('');
+
+              // Confirm that the live mobile host shipped the new shipment-card CSS.
+              if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
+                const stylesheetContent = await page.evaluate(async () => {
+                  const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                    .map((link) => link.href);
+                  const files = await Promise.all(links.map(async (url) => {
+                    try {
+                      const response = await fetch(url, { cache: 'no-store' });
+                      return response.ok ? response.text() : '';
+                    } catch {
+                      return '';
+                    }
+                  }));
+                  return files.join('\\n');
+                });
+                expect(stylesheetContent).toContain('.shipment-premium-card');
+                expect(stylesheetContent).toContain('.shipment-board-grid');
+              }
+
+              // The mobile hostname must boot the touch shell at a phone-sized viewport.
+              // Probe the actual shipped CSS against the same DOM structure used by the app.
+              if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
+                const layoutProbe = await page.evaluate(() => {
+                  const appShell = document.createElement('div');
+                  appShell.className = 'app-shell is-touch-layout';
+                  const list = document.createElement('div');
+                  list.className = 'shipment-compact-list';
+                  const card = document.createElement('article');
+                  card.className = 'shipment-item-card';
+                  const row = document.createElement('div');
+                  row.className = 'shipment-compact-row';
+                  card.append(row);
+                  list.append(card);
+                  appShell.append(list);
+
+                  const wrapper = document.createElement('div');
+                  wrapper.className = 'customs-status-board';
+                  const board = document.createElement('section');
+                  board.className = 'shipment-board';
+                  const boardGrid = document.createElement('div');
+                  boardGrid.className = 'shipment-board-grid';
+                  const premiumCard = document.createElement('article');
+                  premiumCard.className = 'shipment-premium-card active';
+                  boardGrid.append(premiumCard);
+                  board.append(boardGrid);
+                  wrapper.append(board);
+                  appShell.append(wrapper);
+
+                  const dock = document.createElement('nav');
+                  dock.className = 'app-mobile-viewport-dock';
+                  document.body.append(appShell, dock);
+
+                  const beforeChat = {
+                    viewportWidth: document.documentElement.clientWidth,
+                    rowMinWidth: getComputedStyle(row).minWidth,
+                    legacyCardWidth: Math.round(card.getBoundingClientRect().width),
+                    premiumCardWidth: Math.round(premiumCard.getBoundingClientRect().width),
+                    premiumBoardWidth: Math.round(board.getBoundingClientRect().width),
+                    wrapperOverflowX: getComputedStyle(wrapper).overflowX,
+                    listOverflowX: getComputedStyle(list).overflowX,
+                    dockPosition: getComputedStyle(dock).position,
+                    dockDisplay: getComputedStyle(dock).display,
+                  };
+
+                  const chatShell = document.createElement('div');
+                  chatShell.className = 'app-shell is-chat-route';
+                  const chat = document.createElement('div');
+                  chat.className = 'chat-standalone';
+                  chat.dataset.chatSelected = 'true';
+                  const composer = document.createElement('div');
+                  composer.className = 'chat-composer';
+                  chat.append(composer);
+                  chatShell.append(chat);
+                  document.body.append(chatShell);
+
+                  return {
+                    ...beforeChat,
+                    dockDisplayDuringChat: getComputedStyle(dock).display,
+                    composerPosition: getComputedStyle(composer).position,
+                  };
+                });
+                expect(layoutProbe.viewportWidth).toBeLessThanOrEqual(767);
+                expect(layoutProbe.rowMinWidth).toBe('0px');
+                expect(layoutProbe.legacyCardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
+                expect(layoutProbe.premiumCardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
+                expect(layoutProbe.premiumBoardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
+                expect(layoutProbe.listOverflowX).toBe('visible');
+                expect(layoutProbe.wrapperOverflowX).toBe('visible');
+                expect(layoutProbe.dockPosition).toBe('fixed');
+                expect(layoutProbe.dockDisplay).not.toBe('none');
+                expect(layoutProbe.dockDisplayDuringChat).toBe('none');
+                expect(layoutProbe.composerPosition).toBe('relative');
+                console.log('Mobile viewport/card/chat CSS probe passed:', JSON.stringify(layoutProbe));
+              }
+
+              // Verify an already-visited app opens from service-worker cache while offline.
+              // Use an isolated browser context so expected offline API failures do not affect
+              // the normal online smoke test's JavaScript/network assertions.
+              const offlineContext = await browser.newContext();
+              try {
+                const offlinePage = await offlineContext.newPage();
+                const offlineUrl = baseURL + '/?__offline_reopen_smoke=' + encodeURIComponent(smokeToken);
+                // Offline mode is expected to block third-party scripts (for example,
+                // messenger Mini Apps). Only same-origin app bundles and the service
+                // worker are required to remain available from the app shell cache.
+                offlinePage.on('requestfailed', (request) => {
+                  const failedUrl = new URL(request.url());
+                  const appOrigin = new URL(baseURL).origin;
+                  if (failedUrl.origin === appOrigin && /sw\.js|workbox|\.(js|mjs)(\?|$)/i.test(failedUrl.pathname)) {
+                    errors.push(`offline requestfailed: ${request.url()} — ${request.failure()?.errorText || 'unknown'}`);
+                  }
+                });
+                await offlinePage.goto(offlineUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await expect(offlinePage.locator('#root')).toBeAttached();
+                const registrationState = await offlinePage.evaluate(async () =>
+                  (await navigator.serviceWorker?.getRegistrations() || []).map((registration) => ({
+                    scope: registration.scope,
+                    active: registration.active?.state || null,
+                    waiting: registration.waiting?.state || null,
+                    installing: registration.installing?.state || null,
+                  })),
+                );
+                console.log('Service worker registration state:', JSON.stringify(registrationState));
+                await expect.poll(
+                  async () => await offlinePage.evaluate(async () =>
+                    (await navigator.serviceWorker?.getRegistrations() || []).some((registration) => registration.active?.state === 'activated'),
+                  ),
+                  { timeout: 20000, message: `Service worker did not activate: ${JSON.stringify(registrationState)}; errors: ${errors.join(' | ') || 'none'}` },
+                ).toBe(true);
+                await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                await expect.poll(
+                  async () => await offlinePage.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
+                  { timeout: 20000, message: `Service worker did not control the reloaded app shell; errors: ${errors.join(' | ') || 'none'}` },
+                ).toBe(true);
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  { timeout: 15000, message: 'App shell did not render before offline reopen' },
+                ).not.toBe('');
+                await offlineContext.setOffline(true);
+                await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 12000 });
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  { timeout: 12000, message: 'Visited app did not render from cached shell while offline' },
+                ).not.toBe('');
+                const offlineShell = await offlinePage.evaluate(() => ({
+                  controlled: Boolean(navigator.serviceWorker?.controller),
+                  rootText: document.querySelector('#root')?.textContent?.trim() || '',
+                  build: document.querySelector('meta[name="theme-color"]')?.getAttribute('content') || '',
+                }));
+                if (!offlineShell.controlled || !offlineShell.rootText) {
+                  throw new Error(`Cached app shell failed to reopen offline: ${JSON.stringify(offlineShell)}`);
+                }
+                console.log('Offline app-shell reopen passed:', JSON.stringify(offlineShell));
+                await offlineContext.setOffline(false);
+              } finally {
+                await offlineContext.close();
+              }
+
+              const chatPage = await page.context().newPage();
+              const chatErrors = [];
+              const chatScripts = [];
+              chatPage.on('pageerror', (error) => chatErrors.push(`pageerror: ${error.message}`));
+              chatPage.on('console', (message) => {
+                if (message.type() === 'error') chatErrors.push(`console: ${message.text()}`);
+              });
+              chatPage.on('requestfailed', (request) => {
+                const url = request.url();
+                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                  chatErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+              chatPage.on('response', (response) => {
+                const url = response.url();
+                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                  chatScripts.push(`${response.status()} ${response.headers()['content-type'] || 'NO_CONTENT_TYPE'} ${url}`);
+                }
+              });
+              await chatPage.goto(baseURL + '/chat?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await chatPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+              await expect(chatPage.locator('#root')).toBeAttached();
+              await expect.poll(
+                async () => (await chatPage.locator('#root').innerText()).trim(),
+                {
+                  timeout: 15000,
+                  message: `Chat route did not render visible content into #root\nURL: ${chatPage.url()}\nErrors: ${chatErrors.join(' | ') || 'none'}\nScripts: ${chatScripts.join(' | ') || 'none'}`,
+                },
+              ).not.toBe('');
+              await expect(chatPage).toHaveTitle(/چت سازمانی/);
+              const chatBody = (await chatPage.locator('#root').innerText()).trim();
+              if (!chatBody) throw new Error('Chat entry did not produce a rendered root');
+              const chatPath = new URL(chatPage.url()).pathname;
+              if (chatPath !== '/chat' && chatPath !== '/login') {
+                throw new Error(`Unexpected chat navigation path: ${chatPath}`);
+              }
+              await chatPage.close();
+
+              // The reminders PWA must remain standalone even before authentication.
+              const remindersPage = await page.context().newPage();
+              await remindersPage.setViewportSize({ width: 390, height: 844 });
+              const remindersErrors = [];
+              remindersPage.on('pageerror', (error) => remindersErrors.push(`pageerror: ${error.message}`));
+              remindersPage.on('requestfailed', (request) => {
+                const url = request.url();
+                if (url.includes('.js') || url.includes('.mjs')) {
+                  remindersErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+
+              await remindersPage.goto(baseURL + '/reminders?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await remindersPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+              await expect.poll(async () => new URL(remindersPage.url()).pathname, { timeout: 15000, message: 'Reminders did not stay inside its app scope' }).toBe('/reminders/login');
+              await expect(remindersPage).toHaveTitle(/یادآورها/);
+              await expect(remindersPage.locator('#root')).not.toBeEmpty();
+              await expect(remindersPage.locator('.app-sidebar')).toHaveCount(0);
+              await expect(remindersPage.locator('.app-topbar')).toHaveCount(0);
+              await expect(remindersPage.locator('.app-mobilebar')).toHaveCount(1);
+              await expect(remindersPage.locator('.app-mobile-dock')).toHaveCount(1);
+              const phoneLayout = await remindersPage.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                mobileHeaderDisplay: getComputedStyle(document.querySelector('.app-mobilebar')).display,
+                mobileDockDisplay: getComputedStyle(document.querySelector('.app-mobile-dock')).display,
+                sidebarCount: document.querySelectorAll('.app-sidebar').length,
+                topbarCount: document.querySelectorAll('.app-topbar').length,
+              }));
+              if (
+                phoneLayout.viewportWidth !== 390 ||
+                phoneLayout.mobileHeaderDisplay === 'none' ||
+                phoneLayout.mobileDockDisplay === 'none' ||
+                phoneLayout.sidebarCount !== 0 ||
+                phoneLayout.topbarCount !== 0
+              ) {
+                throw new Error(`390px iPhone layout regression: ${JSON.stringify(phoneLayout)}`);
+              }
+
+              // Simulate a touch-first device whose reported viewport is unusually wide.
+              // The app must still present the compact shell rather than a desktop sidebar.
+              const touchContext = await browser.newContext({
+                viewport: { width: 1280, height: 900 },
+                isMobile: true,
+                hasTouch: true,
+              });
+              try {
+                const touchPage = await touchContext.newPage();
+                await touchPage.goto(baseURL + '/reminders/login?__touch_layout_smoke=' + encodeURIComponent(smokeToken), {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 30000,
+                });
+                await touchPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+                const touchLayout = await touchPage.evaluate(() => ({
+                  viewportWidth: window.innerWidth,
+                  coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+                  mobileHeaderDisplay: getComputedStyle(document.querySelector('.app-mobilebar')).display,
+                  mobileDockDisplay: getComputedStyle(document.querySelector('.app-mobile-dock')).display,
+                  sidebarCount: document.querySelectorAll('.app-sidebar').length,
+                  topbarCount: document.querySelectorAll('.app-topbar').length,
+                }));
+                if (
+                  touchLayout.viewportWidth < 1024 ||
+                  !touchLayout.coarsePointer ||
+                  touchLayout.mobileHeaderDisplay === 'none' ||
+                  touchLayout.mobileDockDisplay === 'none' ||
+                  touchLayout.sidebarCount !== 0 ||
+                  touchLayout.topbarCount !== 0
+                ) {
+                  throw new Error(`Wide touch-first layout regression: ${JSON.stringify(touchLayout)}`);
+                }
+                console.log('Touch-first layout retained at a wide viewport:', JSON.stringify(touchLayout));
+              } finally {
+                await touchContext.close();
+              }
+
+              // Verify the primary domain hands an iPhone browser to the mobile
+              // hostname, retaining the deep link and transferring auth only through
+              // the nonce-scoped first-party bridge (never through URL parameters).
+              const mobileRedirectContext = await browser.newContext({
+                viewport: { width: 390, height: 844 },
+                screen: { width: 390, height: 844 },
+                deviceScaleFactor: 3,
+                isMobile: true,
+                hasTouch: true,
+                userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+              });
+              try {
+                const mobileRedirectPage = await mobileRedirectContext.newPage();
+                const mobileRedirectErrors = [];
+                mobileRedirectPage.on('pageerror', (error) => mobileRedirectErrors.push(error.message));
+                await mobileRedirectPage.goto(baseURL + '/reminders/login?__mobile_redirect_smoke=' + encodeURIComponent(smokeToken), {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 30000,
+                });
+                await expect.poll(
+                  async () => new URL(mobileRedirectPage.url()).hostname,
+                  { timeout: 15000, message: 'iPhone browser did not transition to the mobile hostname' },
+                ).toBe('mobile.darbandicommercial.ir');
+                // The inline host handoff updates location before the destination
+                // document finishes parsing. Wait for the mobile document itself,
+                // then confirm React has rendered rather than reading the old page
+                // during the cross-origin navigation gap.
+                await mobileRedirectPage.waitForLoadState('domcontentloaded', { timeout: 15000 });
+                await expect.poll(
+                  async () => (await mobileRedirectPage.locator('#root').textContent() || '').trim(),
+                  { timeout: 15000, message: 'Mobile destination did not render its app shell after navigation' },
+                ).not.toBe('');
+                const mobileEntry = await mobileRedirectPage.evaluate(() => ({
+                  hostname: window.location.hostname,
+                  pathname: window.location.pathname,
+                  search: window.location.search,
+                  rootText: document.querySelector('#root')?.textContent?.trim() || '',
+                  manifestHref: document.querySelector('link[rel="manifest"]')?.getAttribute('href') || '',
+                }));
+                if (
+                  mobileEntry.pathname !== '/reminders/login' ||
+                  !mobileEntry.search.includes('__mobile_redirect_smoke=') ||
+                  mobileEntry.manifestHref !== '/manifest.webmanifest' ||
+                  !mobileEntry.rootText
+                ) {
+                  throw new Error(`Mobile hostname handoff lost the route or failed to render: ${JSON.stringify(mobileEntry)}`);
+                }
+                if (mobileRedirectErrors.length) throw new Error(mobileRedirectErrors.join('; '));
+                console.log('iPhone routing and mobile shell render passed:', JSON.stringify(mobileEntry));
+              } finally {
+                await mobileRedirectContext.close();
+              }
+
+              const manifestHref = await remindersPage.locator('link[rel="manifest"]').getAttribute('href');
+              if (manifestHref !== '/manifest.webmanifest') {
+                throw new Error(`Reminders route must use the single canonical manifest: ${manifestHref || 'missing'}`);
+              }
+              const manifestCheck = await remindersPage.evaluate(async (href) => {
+                const response = await fetch(href);
+                if (!response.ok) throw new Error(`Canonical manifest HTTP ${response.status}`);
+                const manifest = await response.json();
+                const iconResults = await Promise.all((manifest.icons || []).map(async (icon) => {
+                  const result = await fetch(icon.src);
+                  return { src: icon.src, status: result.status };
+                }));
+                return { id: manifest.id, name: manifest.short_name, scope: manifest.scope, start_url: manifest.start_url, display: manifest.display, icons: iconResults };
+              }, manifestHref);
+              if (
+                manifestCheck.id !== '/' ||
+                manifestCheck.name !== 'Customs OS' ||
+                manifestCheck.scope !== '/' ||
+                manifestCheck.start_url !== '/' ||
+                manifestCheck.display !== 'standalone' ||
+                !manifestCheck.icons.some((icon) => icon.src.includes('180x180') || icon.src.includes('mobile-icon-180.png')) ||
+                manifestCheck.icons.some((icon) => icon.status !== 200)
+              ) {
+                throw new Error(`Canonical PWA manifest/icon validation failed: ${JSON.stringify(manifestCheck)}`);
+              }
+              if (remindersErrors.length) throw new Error(remindersErrors.join('; '));
+              console.log('Reminders internal route uses the canonical PWA manifest:', JSON.stringify(manifestCheck));
+              await remindersPage.close();
+
+              // Legacy PWA domains must return a permanent redirect and end up on the same origin.
+              const remindersSubdomainPage = await page.context().newPage();
+              await remindersSubdomainPage.setViewportSize({ width: 390, height: 844 });
+              const subdomainErrors = [];
+              const aliasRedirectStatuses = [];
+              remindersSubdomainPage.on('response', (response) => {
+                const responseURL = new URL(response.url());
+                if (responseURL.hostname === 'reminders.darbandicommercial.ir' && response.request().isNavigationRequest()) {
+                  aliasRedirectStatuses.push(response.status());
+                }
+              });
+              remindersSubdomainPage.on('pageerror', (error) => subdomainErrors.push(`pageerror: ${error.message}`));
+              remindersSubdomainPage.on('requestfailed', (request) => {
+                const url = request.url();
+                if (url.includes('.js') || url.includes('.mjs')) {
+                  subdomainErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+              await remindersSubdomainPage.goto('https://reminders.darbandicommercial.ir/?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 60000 });
+              await remindersSubdomainPage.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => undefined);
+              await expect.poll(
+                async () => new URL(remindersSubdomainPage.url()).hostname,
+                { timeout: 20000, message: 'Legacy reminders host did not redirect to the primary origin' },
+              ).toBe('darbandicommercial.ir');
+              await expect.poll(
+                async () => new URL(remindersSubdomainPage.url()).pathname,
+                { timeout: 20000, message: 'Reminders alias did not open the internal reminders route' },
+              ).toBe('/reminders/login');
+              if (!aliasRedirectStatuses.includes(301)) {
+                throw new Error(`Legacy reminders host did not emit HTTP 301: ${JSON.stringify(aliasRedirectStatuses)}`);
+              }
+              await expect(remindersSubdomainPage).toHaveTitle(/یادآورها/);
+              await expect(remindersSubdomainPage.locator('#root')).not.toBeEmpty();
+              await expect(remindersSubdomainPage.locator('.app-sidebar')).toHaveCount(0);
+              await expect(remindersSubdomainPage.locator('.app-topbar')).toHaveCount(0);
+              const aliasManifestHref = await remindersSubdomainPage.locator('link[rel="manifest"]').getAttribute('href');
+              if (aliasManifestHref !== '/manifest.webmanifest') {
+                throw new Error(`Legacy reminders redirect did not resolve to the one canonical manifest: ${aliasManifestHref || 'missing'}`);
+              }
+              if (subdomainErrors.length) throw new Error(subdomainErrors.join('; '));
+              console.log('Legacy reminders domain permanently redirects to canonical app.');
+              await remindersSubdomainPage.close();
+
+              // A fresh installation can activate the worker before it controls the first document.
+              // Wait for activation and reload once if needed, then verify the controlled offline shell.
+              await expect.poll(
+                async () => page.evaluate(async () => {
+                  if (!('serviceWorker' in navigator)) return 'unsupported';
+                  const registration = await navigator.serviceWorker.getRegistration('/');
+                  return registration?.active?.state ||
+                    registration?.installing?.state ||
+                    registration?.waiting?.state ||
+                    'not-registered';
+                }),
+                { timeout: 20000, message: 'Service worker did not activate; check /sw.js and registration' },
+              ).toBe('activated');
+              if (!(await page.evaluate(() => Boolean(navigator.serviceWorker?.controller)))) {
+                await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+              }
+              await expect.poll(
+                async () => page.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
+                { timeout: 15000, message: 'Active service worker did not control the app after reload' },
+              ).toBe(true);
+              const offlinePage = await page.context().newPage();
+              await page.context().setOffline(true);
+              try {
+                await offlinePage.goto(baseURL + '/?__offline_runtime_smoke=' + encodeURIComponent(smokeToken), {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 25000,
+                });
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  {
+                    timeout: 20000,
+                    message: 'Cached app shell did not render when the browser was offline',
+                  },
+                ).not.toBe('');
+                const offlineState = await offlinePage.evaluate(() => ({
+                  online: navigator.onLine,
+                  controlled: Boolean(navigator.serviceWorker?.controller),
+                  title: document.title,
+                  path: location.pathname,
+                  rootText: (document.querySelector('#root')?.textContent || '').trim().slice(0, 120),
+                }));
+                if (offlineState.online || !offlineState.controlled || !offlineState.rootText) {
+                  throw new Error(`Offline app-shell assertions failed: ${JSON.stringify(offlineState)}`);
+                }
+                console.log('Offline app shell rendered successfully:', JSON.stringify(offlineState));
+              } finally {
+                await page.context().setOffline(false);
+                await offlinePage.close().catch(() => undefined);
+              }
+
+              if (errors.length) {
+                throw new Error(errors.join('\n'));
+              }
+            });
+          }
+          EOF
+          npx playwright test live-runtime-smoke.spec.mjs --reporter=line
+          rm -f live-runtime-smoke.spec.mjs
+\n'*}"
+              pwa_location="${pwa_result#*
+            else
+              echo "Checking PWA launch query remains usable on the dedicated mobile host"
+              mobile_pwa_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/mobile-pwa.headers -o /tmp/mobile-pwa.html -w '%{http_code}' "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
+              test "$mobile_pwa_status" = "200"
+              grep -Fq '<div id="root">' /tmp/mobile-pwa.html
+            fi
+
+            echo "Checking live-voice code is present in compiled bundle"
+            grep -R -F -q 'تماس صوتی زنده' dist/assets
+            grep -R -F -q 'RTCPeerConnection' dist/assets
+
+            js_count="$(find dist/assets -maxdepth 1 -type f -name '*.js' | wc -l | tr -d ' ')"
+            test "$js_count" -ge 1
+            echo "Compiled JavaScript asset count: $js_count"
+          done
+          echo "Production custom domain smoke test passed."
+
+          echo "Checking optional workers.dev endpoint"
+          if curl --fail --silent --show-error --location --max-time 20 -o /tmp/workers-dev.html "https://customs.mohsen-darbandi.workers.dev/"; then
+            grep -q '<div id="root">' /tmp/workers-dev.html
+            echo "Optional workers.dev endpoint is healthy."
+          else
+            echo "workers.dev is optional for production; continuing."
+          fi
+
+      - name: Browser runtime smoke test
+        if: steps.freshness.outputs.is_latest == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          cat > live-runtime-smoke.spec.mjs <<'EOF'
+          import { test, expect } from 'playwright/test';
+
+          const smokeToken = `${process.env.GITHUB_SHA || 'local'}-${process.env.GITHUB_RUN_ID || Date.now()}`;
+          for (const baseURL of [
+            'https://darbandicommercial.ir',
+            'https://mobile.darbandicommercial.ir',
+          ]) {
+            test(`runtime boot: ${baseURL}`, async ({ page, browser }) => {
+              const errors = [];
+              const scriptResponses = [];
+              page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+              page.on('console', (message) => {
+                if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+              });
+              page.on('requestfailed', (request) => {
+                const url = request.url();
+                if (/\.(js|mjs)(\?|$)/i.test(url)) {
+                  errors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+              page.on('response', (response) => {
+                const url = response.url();
+                if (/\.(js|mjs)(\?|$)/i.test(url)) {
+                  scriptResponses.push(`${response.status()} ${response.headers()['content-type'] || 'NO_CONTENT_TYPE'} ${url}`);
+                }
+              });
+
+              if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
+                await page.setViewportSize({ width: 390, height: 844 });
+              }
+              await page.goto(baseURL + '/?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+              await expect(page.locator('#root')).toBeAttached();
+              await expect.poll(
+                async () => (await page.locator('#root').innerText()).trim(),
+                { timeout: 15000, message: `React did not render visible content into #root\nErrors: ${errors.join(' | ') || 'none'}\nScripts: ${scriptResponses.join(' | ') || 'none'}` },
+              ).not.toBe('');
+
+              // Confirm that the live mobile host shipped the new shipment-card CSS.
+              if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
+                const stylesheetContent = await page.evaluate(async () => {
+                  const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                    .map((link) => link.href);
+                  const files = await Promise.all(links.map(async (url) => {
+                    try {
+                      const response = await fetch(url, { cache: 'no-store' });
+                      return response.ok ? response.text() : '';
+                    } catch {
+                      return '';
+                    }
+                  }));
+                  return files.join('\\n');
+                });
+                expect(stylesheetContent).toContain('.shipment-premium-card');
+                expect(stylesheetContent).toContain('.shipment-board-grid');
+              }
+
+              // The mobile hostname must boot the touch shell at a phone-sized viewport.
+              // Probe the actual shipped CSS against the same DOM structure used by the app.
+              if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
+                const layoutProbe = await page.evaluate(() => {
+                  const appShell = document.createElement('div');
+                  appShell.className = 'app-shell is-touch-layout';
+                  const list = document.createElement('div');
+                  list.className = 'shipment-compact-list';
+                  const card = document.createElement('article');
+                  card.className = 'shipment-item-card';
+                  const row = document.createElement('div');
+                  row.className = 'shipment-compact-row';
+                  card.append(row);
+                  list.append(card);
+                  appShell.append(list);
+
+                  const wrapper = document.createElement('div');
+                  wrapper.className = 'customs-status-board';
+                  const board = document.createElement('section');
+                  board.className = 'shipment-board';
+                  const boardGrid = document.createElement('div');
+                  boardGrid.className = 'shipment-board-grid';
+                  const premiumCard = document.createElement('article');
+                  premiumCard.className = 'shipment-premium-card active';
+                  boardGrid.append(premiumCard);
+                  board.append(boardGrid);
+                  wrapper.append(board);
+                  appShell.append(wrapper);
+
+                  const dock = document.createElement('nav');
+                  dock.className = 'app-mobile-viewport-dock';
+                  document.body.append(appShell, dock);
+
+                  const beforeChat = {
+                    viewportWidth: document.documentElement.clientWidth,
+                    rowMinWidth: getComputedStyle(row).minWidth,
+                    legacyCardWidth: Math.round(card.getBoundingClientRect().width),
+                    premiumCardWidth: Math.round(premiumCard.getBoundingClientRect().width),
+                    premiumBoardWidth: Math.round(board.getBoundingClientRect().width),
+                    wrapperOverflowX: getComputedStyle(wrapper).overflowX,
+                    listOverflowX: getComputedStyle(list).overflowX,
+                    dockPosition: getComputedStyle(dock).position,
+                    dockDisplay: getComputedStyle(dock).display,
+                  };
+
+                  const chatShell = document.createElement('div');
+                  chatShell.className = 'app-shell is-chat-route';
+                  const chat = document.createElement('div');
+                  chat.className = 'chat-standalone';
+                  chat.dataset.chatSelected = 'true';
+                  const composer = document.createElement('div');
+                  composer.className = 'chat-composer';
+                  chat.append(composer);
+                  chatShell.append(chat);
+                  document.body.append(chatShell);
+
+                  return {
+                    ...beforeChat,
+                    dockDisplayDuringChat: getComputedStyle(dock).display,
+                    composerPosition: getComputedStyle(composer).position,
+                  };
+                });
+                expect(layoutProbe.viewportWidth).toBeLessThanOrEqual(767);
+                expect(layoutProbe.rowMinWidth).toBe('0px');
+                expect(layoutProbe.legacyCardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
+                expect(layoutProbe.premiumCardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
+                expect(layoutProbe.premiumBoardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
+                expect(layoutProbe.listOverflowX).toBe('visible');
+                expect(layoutProbe.wrapperOverflowX).toBe('visible');
+                expect(layoutProbe.dockPosition).toBe('fixed');
+                expect(layoutProbe.dockDisplay).not.toBe('none');
+                expect(layoutProbe.dockDisplayDuringChat).toBe('none');
+                expect(layoutProbe.composerPosition).toBe('relative');
+                console.log('Mobile viewport/card/chat CSS probe passed:', JSON.stringify(layoutProbe));
+              }
+
+              // Verify an already-visited app opens from service-worker cache while offline.
+              // Use an isolated browser context so expected offline API failures do not affect
+              // the normal online smoke test's JavaScript/network assertions.
+              const offlineContext = await browser.newContext();
+              try {
+                const offlinePage = await offlineContext.newPage();
+                const offlineUrl = baseURL + '/?__offline_reopen_smoke=' + encodeURIComponent(smokeToken);
+                // Offline mode is expected to block third-party scripts (for example,
+                // messenger Mini Apps). Only same-origin app bundles and the service
+                // worker are required to remain available from the app shell cache.
+                offlinePage.on('requestfailed', (request) => {
+                  const failedUrl = new URL(request.url());
+                  const appOrigin = new URL(baseURL).origin;
+                  if (failedUrl.origin === appOrigin && /sw\.js|workbox|\.(js|mjs)(\?|$)/i.test(failedUrl.pathname)) {
+                    errors.push(`offline requestfailed: ${request.url()} — ${request.failure()?.errorText || 'unknown'}`);
+                  }
+                });
+                await offlinePage.goto(offlineUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await expect(offlinePage.locator('#root')).toBeAttached();
+                const registrationState = await offlinePage.evaluate(async () =>
+                  (await navigator.serviceWorker?.getRegistrations() || []).map((registration) => ({
+                    scope: registration.scope,
+                    active: registration.active?.state || null,
+                    waiting: registration.waiting?.state || null,
+                    installing: registration.installing?.state || null,
+                  })),
+                );
+                console.log('Service worker registration state:', JSON.stringify(registrationState));
+                await expect.poll(
+                  async () => await offlinePage.evaluate(async () =>
+                    (await navigator.serviceWorker?.getRegistrations() || []).some((registration) => registration.active?.state === 'activated'),
+                  ),
+                  { timeout: 20000, message: `Service worker did not activate: ${JSON.stringify(registrationState)}; errors: ${errors.join(' | ') || 'none'}` },
+                ).toBe(true);
+                await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                await expect.poll(
+                  async () => await offlinePage.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
+                  { timeout: 20000, message: `Service worker did not control the reloaded app shell; errors: ${errors.join(' | ') || 'none'}` },
+                ).toBe(true);
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  { timeout: 15000, message: 'App shell did not render before offline reopen' },
+                ).not.toBe('');
+                await offlineContext.setOffline(true);
+                await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 12000 });
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  { timeout: 12000, message: 'Visited app did not render from cached shell while offline' },
+                ).not.toBe('');
+                const offlineShell = await offlinePage.evaluate(() => ({
+                  controlled: Boolean(navigator.serviceWorker?.controller),
+                  rootText: document.querySelector('#root')?.textContent?.trim() || '',
+                  build: document.querySelector('meta[name="theme-color"]')?.getAttribute('content') || '',
+                }));
+                if (!offlineShell.controlled || !offlineShell.rootText) {
+                  throw new Error(`Cached app shell failed to reopen offline: ${JSON.stringify(offlineShell)}`);
+                }
+                console.log('Offline app-shell reopen passed:', JSON.stringify(offlineShell));
+                await offlineContext.setOffline(false);
+              } finally {
+                await offlineContext.close();
+              }
+
+              const chatPage = await page.context().newPage();
+              const chatErrors = [];
+              const chatScripts = [];
+              chatPage.on('pageerror', (error) => chatErrors.push(`pageerror: ${error.message}`));
+              chatPage.on('console', (message) => {
+                if (message.type() === 'error') chatErrors.push(`console: ${message.text()}`);
+              });
+              chatPage.on('requestfailed', (request) => {
+                const url = request.url();
+                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                  chatErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+              chatPage.on('response', (response) => {
+                const url = response.url();
+                if (/\\.(js|mjs)(\\?|$)/i.test(url)) {
+                  chatScripts.push(`${response.status()} ${response.headers()['content-type'] || 'NO_CONTENT_TYPE'} ${url}`);
+                }
+              });
+              await chatPage.goto(baseURL + '/chat?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await chatPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+              await expect(chatPage.locator('#root')).toBeAttached();
+              await expect.poll(
+                async () => (await chatPage.locator('#root').innerText()).trim(),
+                {
+                  timeout: 15000,
+                  message: `Chat route did not render visible content into #root\nURL: ${chatPage.url()}\nErrors: ${chatErrors.join(' | ') || 'none'}\nScripts: ${chatScripts.join(' | ') || 'none'}`,
+                },
+              ).not.toBe('');
+              await expect(chatPage).toHaveTitle(/چت سازمانی/);
+              const chatBody = (await chatPage.locator('#root').innerText()).trim();
+              if (!chatBody) throw new Error('Chat entry did not produce a rendered root');
+              const chatPath = new URL(chatPage.url()).pathname;
+              if (chatPath !== '/chat' && chatPath !== '/login') {
+                throw new Error(`Unexpected chat navigation path: ${chatPath}`);
+              }
+              await chatPage.close();
+
+              // The reminders PWA must remain standalone even before authentication.
+              const remindersPage = await page.context().newPage();
+              await remindersPage.setViewportSize({ width: 390, height: 844 });
+              const remindersErrors = [];
+              remindersPage.on('pageerror', (error) => remindersErrors.push(`pageerror: ${error.message}`));
+              remindersPage.on('requestfailed', (request) => {
+                const url = request.url();
+                if (url.includes('.js') || url.includes('.mjs')) {
+                  remindersErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+
+              await remindersPage.goto(baseURL + '/reminders?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await remindersPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+              await expect.poll(async () => new URL(remindersPage.url()).pathname, { timeout: 15000, message: 'Reminders did not stay inside its app scope' }).toBe('/reminders/login');
+              await expect(remindersPage).toHaveTitle(/یادآورها/);
+              await expect(remindersPage.locator('#root')).not.toBeEmpty();
+              await expect(remindersPage.locator('.app-sidebar')).toHaveCount(0);
+              await expect(remindersPage.locator('.app-topbar')).toHaveCount(0);
+              await expect(remindersPage.locator('.app-mobilebar')).toHaveCount(1);
+              await expect(remindersPage.locator('.app-mobile-dock')).toHaveCount(1);
+              const phoneLayout = await remindersPage.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                mobileHeaderDisplay: getComputedStyle(document.querySelector('.app-mobilebar')).display,
+                mobileDockDisplay: getComputedStyle(document.querySelector('.app-mobile-dock')).display,
+                sidebarCount: document.querySelectorAll('.app-sidebar').length,
+                topbarCount: document.querySelectorAll('.app-topbar').length,
+              }));
+              if (
+                phoneLayout.viewportWidth !== 390 ||
+                phoneLayout.mobileHeaderDisplay === 'none' ||
+                phoneLayout.mobileDockDisplay === 'none' ||
+                phoneLayout.sidebarCount !== 0 ||
+                phoneLayout.topbarCount !== 0
+              ) {
+                throw new Error(`390px iPhone layout regression: ${JSON.stringify(phoneLayout)}`);
+              }
+
+              // Simulate a touch-first device whose reported viewport is unusually wide.
+              // The app must still present the compact shell rather than a desktop sidebar.
+              const touchContext = await browser.newContext({
+                viewport: { width: 1280, height: 900 },
+                isMobile: true,
+                hasTouch: true,
+              });
+              try {
+                const touchPage = await touchContext.newPage();
+                await touchPage.goto(baseURL + '/reminders/login?__touch_layout_smoke=' + encodeURIComponent(smokeToken), {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 30000,
+                });
+                await touchPage.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+                const touchLayout = await touchPage.evaluate(() => ({
+                  viewportWidth: window.innerWidth,
+                  coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+                  mobileHeaderDisplay: getComputedStyle(document.querySelector('.app-mobilebar')).display,
+                  mobileDockDisplay: getComputedStyle(document.querySelector('.app-mobile-dock')).display,
+                  sidebarCount: document.querySelectorAll('.app-sidebar').length,
+                  topbarCount: document.querySelectorAll('.app-topbar').length,
+                }));
+                if (
+                  touchLayout.viewportWidth < 1024 ||
+                  !touchLayout.coarsePointer ||
+                  touchLayout.mobileHeaderDisplay === 'none' ||
+                  touchLayout.mobileDockDisplay === 'none' ||
+                  touchLayout.sidebarCount !== 0 ||
+                  touchLayout.topbarCount !== 0
+                ) {
+                  throw new Error(`Wide touch-first layout regression: ${JSON.stringify(touchLayout)}`);
+                }
+                console.log('Touch-first layout retained at a wide viewport:', JSON.stringify(touchLayout));
+              } finally {
+                await touchContext.close();
+              }
+
+              // Verify the primary domain hands an iPhone browser to the mobile
+              // hostname, retaining the deep link and transferring auth only through
+              // the nonce-scoped first-party bridge (never through URL parameters).
+              const mobileRedirectContext = await browser.newContext({
+                viewport: { width: 390, height: 844 },
+                screen: { width: 390, height: 844 },
+                deviceScaleFactor: 3,
+                isMobile: true,
+                hasTouch: true,
+                userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+              });
+              try {
+                const mobileRedirectPage = await mobileRedirectContext.newPage();
+                const mobileRedirectErrors = [];
+                mobileRedirectPage.on('pageerror', (error) => mobileRedirectErrors.push(error.message));
+                await mobileRedirectPage.goto(baseURL + '/reminders/login?__mobile_redirect_smoke=' + encodeURIComponent(smokeToken), {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 30000,
+                });
+                await expect.poll(
+                  async () => new URL(mobileRedirectPage.url()).hostname,
+                  { timeout: 15000, message: 'iPhone browser did not transition to the mobile hostname' },
+                ).toBe('mobile.darbandicommercial.ir');
+                // The inline host handoff updates location before the destination
+                // document finishes parsing. Wait for the mobile document itself,
+                // then confirm React has rendered rather than reading the old page
+                // during the cross-origin navigation gap.
+                await mobileRedirectPage.waitForLoadState('domcontentloaded', { timeout: 15000 });
+                await expect.poll(
+                  async () => (await mobileRedirectPage.locator('#root').textContent() || '').trim(),
+                  { timeout: 15000, message: 'Mobile destination did not render its app shell after navigation' },
+                ).not.toBe('');
+                const mobileEntry = await mobileRedirectPage.evaluate(() => ({
+                  hostname: window.location.hostname,
+                  pathname: window.location.pathname,
+                  search: window.location.search,
+                  rootText: document.querySelector('#root')?.textContent?.trim() || '',
+                  manifestHref: document.querySelector('link[rel="manifest"]')?.getAttribute('href') || '',
+                }));
+                if (
+                  mobileEntry.pathname !== '/reminders/login' ||
+                  !mobileEntry.search.includes('__mobile_redirect_smoke=') ||
+                  mobileEntry.manifestHref !== '/manifest.webmanifest' ||
+                  !mobileEntry.rootText
+                ) {
+                  throw new Error(`Mobile hostname handoff lost the route or failed to render: ${JSON.stringify(mobileEntry)}`);
+                }
+                if (mobileRedirectErrors.length) throw new Error(mobileRedirectErrors.join('; '));
+                console.log('iPhone routing and mobile shell render passed:', JSON.stringify(mobileEntry));
+              } finally {
+                await mobileRedirectContext.close();
+              }
+
+              const manifestHref = await remindersPage.locator('link[rel="manifest"]').getAttribute('href');
+              if (manifestHref !== '/manifest.webmanifest') {
+                throw new Error(`Reminders route must use the single canonical manifest: ${manifestHref || 'missing'}`);
+              }
+              const manifestCheck = await remindersPage.evaluate(async (href) => {
+                const response = await fetch(href);
+                if (!response.ok) throw new Error(`Canonical manifest HTTP ${response.status}`);
+                const manifest = await response.json();
+                const iconResults = await Promise.all((manifest.icons || []).map(async (icon) => {
+                  const result = await fetch(icon.src);
+                  return { src: icon.src, status: result.status };
+                }));
+                return { id: manifest.id, name: manifest.short_name, scope: manifest.scope, start_url: manifest.start_url, display: manifest.display, icons: iconResults };
+              }, manifestHref);
+              if (
+                manifestCheck.id !== '/' ||
+                manifestCheck.name !== 'Customs OS' ||
+                manifestCheck.scope !== '/' ||
+                manifestCheck.start_url !== '/' ||
+                manifestCheck.display !== 'standalone' ||
+                !manifestCheck.icons.some((icon) => icon.src.includes('180x180') || icon.src.includes('mobile-icon-180.png')) ||
+                manifestCheck.icons.some((icon) => icon.status !== 200)
+              ) {
+                throw new Error(`Canonical PWA manifest/icon validation failed: ${JSON.stringify(manifestCheck)}`);
+              }
+              if (remindersErrors.length) throw new Error(remindersErrors.join('; '));
+              console.log('Reminders internal route uses the canonical PWA manifest:', JSON.stringify(manifestCheck));
+              await remindersPage.close();
+
+              // Legacy PWA domains must return a permanent redirect and end up on the same origin.
+              const remindersSubdomainPage = await page.context().newPage();
+              await remindersSubdomainPage.setViewportSize({ width: 390, height: 844 });
+              const subdomainErrors = [];
+              const aliasRedirectStatuses = [];
+              remindersSubdomainPage.on('response', (response) => {
+                const responseURL = new URL(response.url());
+                if (responseURL.hostname === 'reminders.darbandicommercial.ir' && response.request().isNavigationRequest()) {
+                  aliasRedirectStatuses.push(response.status());
+                }
+              });
+              remindersSubdomainPage.on('pageerror', (error) => subdomainErrors.push(`pageerror: ${error.message}`));
+              remindersSubdomainPage.on('requestfailed', (request) => {
+                const url = request.url();
+                if (url.includes('.js') || url.includes('.mjs')) {
+                  subdomainErrors.push(`requestfailed: ${url} — ${request.failure()?.errorText || 'unknown'}`);
+                }
+              });
+              await remindersSubdomainPage.goto('https://reminders.darbandicommercial.ir/?__runtime_smoke=' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 60000 });
+              await remindersSubdomainPage.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => undefined);
+              await expect.poll(
+                async () => new URL(remindersSubdomainPage.url()).hostname,
+                { timeout: 20000, message: 'Legacy reminders host did not redirect to the primary origin' },
+              ).toBe('darbandicommercial.ir');
+              await expect.poll(
+                async () => new URL(remindersSubdomainPage.url()).pathname,
+                { timeout: 20000, message: 'Reminders alias did not open the internal reminders route' },
+              ).toBe('/reminders/login');
+              if (!aliasRedirectStatuses.includes(301)) {
+                throw new Error(`Legacy reminders host did not emit HTTP 301: ${JSON.stringify(aliasRedirectStatuses)}`);
+              }
+              await expect(remindersSubdomainPage).toHaveTitle(/یادآورها/);
+              await expect(remindersSubdomainPage.locator('#root')).not.toBeEmpty();
+              await expect(remindersSubdomainPage.locator('.app-sidebar')).toHaveCount(0);
+              await expect(remindersSubdomainPage.locator('.app-topbar')).toHaveCount(0);
+              const aliasManifestHref = await remindersSubdomainPage.locator('link[rel="manifest"]').getAttribute('href');
+              if (aliasManifestHref !== '/manifest.webmanifest') {
+                throw new Error(`Legacy reminders redirect did not resolve to the one canonical manifest: ${aliasManifestHref || 'missing'}`);
+              }
+              if (subdomainErrors.length) throw new Error(subdomainErrors.join('; '));
+              console.log('Legacy reminders domain permanently redirects to canonical app.');
+              await remindersSubdomainPage.close();
+
+              // A fresh installation can activate the worker before it controls the first document.
+              // Wait for activation and reload once if needed, then verify the controlled offline shell.
+              await expect.poll(
+                async () => page.evaluate(async () => {
+                  if (!('serviceWorker' in navigator)) return 'unsupported';
+                  const registration = await navigator.serviceWorker.getRegistration('/');
+                  return registration?.active?.state ||
+                    registration?.installing?.state ||
+                    registration?.waiting?.state ||
+                    'not-registered';
+                }),
+                { timeout: 20000, message: 'Service worker did not activate; check /sw.js and registration' },
+              ).toBe('activated');
+              if (!(await page.evaluate(() => Boolean(navigator.serviceWorker?.controller)))) {
+                await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+              }
+              await expect.poll(
+                async () => page.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
+                { timeout: 15000, message: 'Active service worker did not control the app after reload' },
+              ).toBe(true);
+              const offlinePage = await page.context().newPage();
+              await page.context().setOffline(true);
+              try {
+                await offlinePage.goto(baseURL + '/?__offline_runtime_smoke=' + encodeURIComponent(smokeToken), {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 25000,
+                });
+                await expect.poll(
+                  async () => (await offlinePage.locator('#root').innerText()).trim(),
+                  {
+                    timeout: 20000,
+                    message: 'Cached app shell did not render when the browser was offline',
+                  },
+                ).not.toBe('');
+                const offlineState = await offlinePage.evaluate(() => ({
+                  online: navigator.onLine,
+                  controlled: Boolean(navigator.serviceWorker?.controller),
+                  title: document.title,
+                  path: location.pathname,
+                  rootText: (document.querySelector('#root')?.textContent || '').trim().slice(0, 120),
+                }));
+                if (offlineState.online || !offlineState.controlled || !offlineState.rootText) {
+                  throw new Error(`Offline app-shell assertions failed: ${JSON.stringify(offlineState)}`);
+                }
+                console.log('Offline app shell rendered successfully:', JSON.stringify(offlineState));
+              } finally {
+                await page.context().setOffline(false);
+                await offlinePage.close().catch(() => undefined);
+              }
+
+              if (errors.length) {
+                throw new Error(errors.join('\n'));
+              }
+            });
+          }
+          EOF
+          npx playwright test live-runtime-smoke.spec.mjs --reporter=line
+          rm -f live-runtime-smoke.spec.mjs
+\n'}"
+              echo "PWA redirect: HTTP $pwa_status -> $pwa_location"
+              test "$pwa_status" = "301"
               test "$pwa_location" = "$base/?__legacy_pwa_smoke=${GITHUB_RUN_ID}"
             else
               echo "Checking PWA launch query remains usable on the dedicated mobile host"
