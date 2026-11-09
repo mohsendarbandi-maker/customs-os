@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 const shell = read('src/components/AppShell.tsx');
 const mobileCss = read('src/styles/mobile-polish.css');
+const premiumMobileCss = read('src/styles/mobile-app-premium.css');
 const reminders = read('src/features/reminders/RemindersPage.tsx');
 const appSource = read('src/App.tsx');
 const mainSource = read('src/main.tsx');
@@ -98,7 +99,8 @@ describe('single mobile shell navigation regressions', () => {
 
   it('keeps shipment search in the page toolbar rather than as a fixed control', () => {
     const statuses = read('src/components/LatestShipmentStatuses.tsx');
-    expect(statuses).toContain('className="shipment-status-search"');
-    expect(mobileCss).toContain('.shipment-status-search { position: relative !important; inset: auto !important; }');
+    expect(statuses).toContain('className="shipment-board-search"');
+    expect(premiumMobileCss).toContain('.shipment-board-search {');
+    expect(premiumMobileCss).not.toContain('.shipment-board-search { position: fixed');
   });
 });
