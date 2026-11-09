@@ -35,6 +35,13 @@ describe('PWA manifest requests pass through the canonical Worker', () => {
     expect(worker).toContain("'reminders.darbandicommercial.ir'");
   });
 
+  it('redirects old per-area manifests on both canonical hosts to their own unified manifest', () => {
+    expect(worker).toContain("['darbandicommercial.ir', 'mobile.darbandicommercial.ir'].includes(manifestRequestHost)");
+    expect(worker).toContain('canonical.hostname = manifestRequestHost');
+    expect(worker).toContain("canonical.pathname = '/manifest.webmanifest'");
+    expect(worker).toContain('legacyManifestPaths.has(url.pathname)');
+  });
+
   it('redirects primary-domain phone navigations to mobile and keeps the mobile hostname standalone', () => {
     expect(worker).toContain("const isPrimaryDomain = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir'");
     expect(worker).toContain("const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent)");

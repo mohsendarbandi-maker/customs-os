@@ -399,14 +399,16 @@ export default {
       '/reminders-subdomain.webmanifest',
       '/mobile-subdomain.webmanifest',
     ]);
+    const manifestRequestHost = url.hostname.toLowerCase();
     if (
       ['GET', 'HEAD'].includes(request.method) &&
-      url.hostname.toLowerCase() === 'darbandicommercial.ir' &&
+      ['darbandicommercial.ir', 'mobile.darbandicommercial.ir'].includes(manifestRequestHost) &&
       legacyManifestPaths.has(url.pathname)
     ) {
       const canonical = new URL(url.toString());
       canonical.protocol = 'https:';
-      canonical.hostname = 'darbandicommercial.ir';
+      // Keep each supported app hostname on its own canonical manifest URL.
+      canonical.hostname = manifestRequestHost;
       canonical.port = '';
       canonical.pathname = '/manifest.webmanifest';
       return new Response(null, {
