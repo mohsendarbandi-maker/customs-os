@@ -1618,3 +1618,55 @@
 @media (prefers-reduced-motion: reduce) {
   .shipment-premium-card,.shipment-premium-expanded { animation: none!important; transition: none!important; }
 }
+
+
+/* The dashboard's legacy wrapper used a horizontal scroll viewport on phones. */
+@media (max-width: 767px), (pointer: coarse) {
+  .app-shell.is-touch-layout .customs-shipments-section,
+  .app-shell.is-touch-layout .customs-status-board,
+  .app-shell.is-touch-layout .customs-status-board > section {
+    width: 100%!important;
+    min-width: 0!important;
+    max-width: 100%!important;
+    overflow: visible!important;
+  }
+  .app-shell.is-touch-layout .customs-shipments-section {
+    padding: 9px!important;
+    border-radius: 18px!important;
+    background: transparent!important;
+    border: 0!important;
+    box-shadow: none!important;
+  }
+  .app-shell.is-touch-layout .customs-status-board { padding-top: 0!important; }
+  .app-shell.is-touch-layout .customs-status-board > section {
+    margin-top: 0!important;
+    border: 0!important;
+    background: transparent!important;
+  }
+  .app-shell.is-touch-layout .customs-widget-frame[data-customs-widget="shipments"] {
+    border: 0!important;
+    background: transparent!important;
+    box-shadow: none!important;
+    overflow: visible!important;
+  }
+  .app-shell.is-touch-layout .customs-widget-frame[data-customs-widget="shipments"] > .customs-widget-body {
+    padding: 0!important;
+  }
+  .app-shell.is-touch-layout .customs-home::before,
+  .app-shell.is-touch-layout .customs-home::after {
+    display: none!important;
+  }
+  .app-shell.is-touch-layout .customs-home .customs-widget-toolbar {
+    display: none!important;
+  }
+  .app-shell.is-touch-layout .customs-home .customs-widget-grid {
+    gap: 10px!important;
+  }
+  .app-shell.is-touch-layout .customs-home .customs-widget-frame {
+    border-radius: 18px!important;
+    box-shadow: 0 5px 18px rgba(27,66,106,.055)!important;
+  }
+  .app-shell.is-touch-layout .customs-home .customs-widget-frame[data-customs-widget="shipments"] {
+    padding: 0!important;
+  }
+}
