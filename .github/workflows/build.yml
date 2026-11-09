@@ -521,8 +521,10 @@ jobs:
           const smokeToken = `${process.env.GITHUB_SHA || 'local'}-${process.env.GITHUB_RUN_ID || Date.now()}`;
           for (const baseURL of [
             'https://darbandicommercial.ir',
+            'https://mobile.darbandicommercial.ir',
           ]) {
             test(`runtime boot: ${baseURL}`, async ({ page, browser }) => {
+              await page.setViewportSize({ width: 390, height: 844 });
               const errors = [];
               const scriptResponses = [];
               page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
@@ -549,6 +551,23 @@ jobs:
                 async () => (await page.locator('#root').innerText()).trim(),
                 { timeout: 15000, message: `React did not render visible content into #root\nErrors: ${errors.join(' | ') || 'none'}\nScripts: ${scriptResponses.join(' | ') || 'none'}` },
               ).not.toBe('');
+
+              // Verify the actual mobile card stylesheet is delivered by both hostnames.
+              const shipmentCardStylesPresent = await page.evaluate(async () => {
+                const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                  .map((link) => (link as HTMLLinkElement).href);
+                const styles = await Promise.all(links.map(async (url) => {
+                  try {
+                    const response = await fetch(url, { cache: 'no-store' });
+                    return response.ok ? response.text() : '';
+                  } catch {
+                    return '';
+                  }
+                }));
+                return styles.join('\\n').includes('.shipment-premium-card') &&
+                  styles.join('\\n').includes('.shipment-board-grid');
+              });
+              expect(shipmentCardStylesPresent, `Premium shipment-card CSS missing on ${baseURL}`).toBe(true);
 
               // Verify an already-visited app opens from service-worker cache while offline.
               // Use an isolated browser context so expected offline API failures do not affect
