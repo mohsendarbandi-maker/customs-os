@@ -46,7 +46,7 @@ describe('premium native mobile workspace', () => {
   });
 
   it('renders a separate shipment showcase as a one-column mobile card gallery', () => {
-    expect(showcase).toContain('className={\'showcase-card fm-showcase-card \'+tone}');
+    expect(showcase).toContain('className={'showcase-card fm-showcase-card ' + tone}');
     expect(css).toContain('.shipment-showcase-page .showcase-grid');
     expect(css).toContain('.shipment-showcase-page .showcase-card');
     expect(css).toContain('.fm-showcase-pagination');
