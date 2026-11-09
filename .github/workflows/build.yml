@@ -489,7 +489,7 @@ jobs:
             if [ "$base" = "https://darbandicommercial.ir" ]; then
               echo "Checking legacy PWA launch URL returns to canonical home"
               pwa_headers="$(curl --silent --show-error --max-time 20 -D - -o /dev/null "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
-              pwa_location="$(printf '%s\\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
+              pwa_location="$(printf '%s\n' "$pwa_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); print; exit}')"
               echo "PWA redirect Location: $pwa_location"
               test "$pwa_location" = "$base/?__legacy_pwa_smoke=${GITHUB_RUN_ID}"
             else
