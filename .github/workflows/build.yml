@@ -184,7 +184,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for base in "https://darbandicommercial.ir"; do
+          for base in "https://darbandicommercial.ir" "https://mobile.darbandicommercial.ir"; do
             echo "Checking $base/"
             success=0
             for attempt in 1 2 3 4 5 6; do
@@ -521,6 +521,7 @@ jobs:
           const smokeToken = `${process.env.GITHUB_SHA || 'local'}-${process.env.GITHUB_RUN_ID || Date.now()}`;
           for (const baseURL of [
             'https://darbandicommercial.ir',
+            'https://mobile.darbandicommercial.ir',
           ]) {
             test(`runtime boot: ${baseURL}`, async ({ page, browser }) => {
               const errors = [];
@@ -549,6 +550,62 @@ jobs:
                 async () => (await page.locator('#root').innerText()).trim(),
                 { timeout: 15000, message: `React did not render visible content into #root\nErrors: ${errors.join(' | ') || 'none'}\nScripts: ${scriptResponses.join(' | ') || 'none'}` },
               ).not.toBe('');
+
+              // The mobile hostname must boot the touch shell at a phone-sized viewport.
+              // Probe the actual shipped CSS against the same DOM structure used by the app.
+              if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
+                const layoutProbe = await page.evaluate(() => {
+                  const appShell = document.createElement('div');
+                  appShell.className = 'app-shell is-touch-layout';
+                  const list = document.createElement('div');
+                  list.className = 'shipment-compact-list';
+                  const card = document.createElement('article');
+                  card.className = 'shipment-item-card';
+                  const row = document.createElement('div');
+                  row.className = 'shipment-compact-row';
+                  card.append(row);
+                  list.append(card);
+                  appShell.append(list);
+                  const dock = document.createElement('nav');
+                  dock.className = 'app-mobile-viewport-dock';
+                  document.body.append(appShell, dock);
+
+                  const beforeChat = {
+                    viewportWidth: document.documentElement.clientWidth,
+                    rowMinWidth: getComputedStyle(row).minWidth,
+                    cardWidth: Math.round(card.getBoundingClientRect().width),
+                    listOverflowX: getComputedStyle(list).overflowX,
+                    dockPosition: getComputedStyle(dock).position,
+                    dockDisplay: getComputedStyle(dock).display,
+                  };
+
+                  const chatShell = document.createElement('div');
+                  chatShell.className = 'app-shell is-chat-route';
+                  const chat = document.createElement('div');
+                  chat.className = 'chat-standalone';
+                  chat.dataset.chatSelected = 'true';
+                  const composer = document.createElement('div');
+                  composer.className = 'chat-composer';
+                  chat.append(composer);
+                  chatShell.append(chat);
+                  document.body.append(chatShell);
+
+                  return {
+                    ...beforeChat,
+                    dockDisplayDuringChat: getComputedStyle(dock).display,
+                    composerPosition: getComputedStyle(composer).position,
+                  };
+                });
+                expect(layoutProbe.viewportWidth).toBeLessThanOrEqual(767);
+                expect(layoutProbe.rowMinWidth).toBe('0px');
+                expect(layoutProbe.cardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);
+                expect(layoutProbe.listOverflowX).toBe('visible');
+                expect(layoutProbe.dockPosition).toBe('fixed');
+                expect(layoutProbe.dockDisplay).not.toBe('none');
+                expect(layoutProbe.dockDisplayDuringChat).toBe('none');
+                expect(layoutProbe.composerPosition).toBe('relative');
+                console.log('Mobile viewport/card/chat CSS probe passed:', JSON.stringify(layoutProbe));
+              }
 
               // Verify an already-visited app opens from service-worker cache while offline.
               // Use an isolated browser context so expected offline API failures do not affect
