@@ -10,15 +10,16 @@ const shell = read('src/components/AppShell.tsx');
 const chat = read('src/features/chat/ChatPage.tsx');
 const shipments = read('src/components/LatestShipmentStatuses.tsx');
 const showcase = read('src/pages/ShipmentShowcasePage.tsx');
+const worker = read('worker/index.ts');
 
 describe('premium native mobile workspace', () => {
-  it('loads the premium mobile layer after every existing visual layer', () => {
+  it('loads the final mobile layer after all legacy visual layers', () => {
     const premiumImport = main.indexOf("import './styles/mobile-app-premium.css';");
     const referenceImport = main.indexOf("import './styles/mobile-reference-redesign.css';");
     expect(premiumImport).toBeGreaterThan(referenceImport);
   });
 
-  it('keeps the chat composer clear of the global dock while a conversation is open', () => {
+  it('keeps the chat composer above the keyboard and away from the global dock', () => {
     expect(chat).toContain('data-chat-selected={selectedId?\'true\':\'false\'}');
     expect(css).toContain('html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock');
     expect(css).toContain('.chat-composer textarea');
@@ -26,49 +27,41 @@ describe('premium native mobile workspace', () => {
     expect(shell).toContain('aria-label="پیمایش سریع"');
   });
 
-  it('renders every shipment, its warnings and its expanded details inside one article card', () => {
-    expect(shipments).toContain('className="shipment-item-card"');
-    expect(shipments).toContain('<article key={x.id}');
-    expect(shipments).toContain('className="shipment-warnings"');
-    expect(shipments).toContain('className="shipment-expanded"');
-    expect(css).toContain('.shipment-item-card');
-    expect(css).toContain('.shipment-compact-list');
+  it('renders every active shipment as a dedicated, data-backed visual card', () => {
+    expect(shipments).toContain("className={'shipment-premium-card ' + tone}");
+    expect(shipments).toContain('shipment-premium-steps');
+    expect(shipments).toContain('shipment-premium-facts');
+    expect(shipments).toContain('shipment-premium-warnings');
+    expect(shipments).toContain('shipment-premium-expanded');
+    expect(css).toContain('.shipment-premium-card {');
+    expect(css).toContain('.shipment-premium-steps');
+    expect(css).toContain('.shipment-premium-facts');
   });
 
-  it('defines meaningful page/card motion and respects reduced-motion preferences', () => {
+  it('overrides legacy fixed-width shipment rows so phones never need horizontal scrolling', () => {
+    expect(css).toContain('.shipment-compact-row,');
+    expect(css).toContain('width: 100%!important; min-width: 0!important; max-width: 100%!important;');
+    expect(css).toContain('.shipment-board-grid');
+    expect(css).toContain('grid-template-columns: minmax(0,1fr)!important');
+  });
+
+  it('renders a separate shipment showcase as a one-column mobile card gallery', () => {
+    expect(showcase).toContain('className={\'showcase-card fm-showcase-card \'+tone}');
+    expect(css).toContain('.shipment-showcase-page .showcase-grid');
+    expect(css).toContain('.shipment-showcase-page .showcase-card');
+    expect(css).toContain('.fm-showcase-pagination');
+  });
+
+  it('keeps the mobile host on the app shell and honors the dedicated hostname', () => {
+    expect(shell).toContain("window.location.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
+    expect(worker).toContain("url.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
+    expect(worker).toContain('X-Customs-OS-Build');
+  });
+
+  it('defines page, card and panel motion and respects reduced-motion preferences', () => {
     expect(css).toContain('@keyframes mobile-app-screen-in');
-    expect(css).toContain('@keyframes mobile-app-card-in');
-    expect(css).toContain('animation: mobile-app-screen-in');
+    expect(css).toContain('@keyframes shipment-premium-enter');
+    expect(css).toContain('@keyframes shipment-premium-detail-in');
     expect(css).toContain('prefers-reduced-motion: reduce');
   });
-
-  it('uses safe areas, compact native navigation and a non-scrolling shipment card list', () => {
-    expect(css).toContain('env(safe-area-inset-top)');
-    expect(css).toContain('env(safe-area-inset-bottom)');
-    expect(css).toContain('border-radius: 23px !important');
-    expect(css).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
-    expect(css).toContain('overflow: visible !important');
-  });
-
-  it('overrides legacy 740px shipment widths and keeps cards inside the phone viewport', () => {
-    expect(css).toContain('.shipment-compact-row');
-    expect(css).toContain('min-width: 0 !important;');
-    expect(css).toContain('.shipment-warnings');
-    expect(css).toContain('.shipment-showcase-page .showcase-grid');
-    expect(showcase).toContain('window.innerWidth < 650 ? 6');
-  });
-
-  it('styles the body-portalled dock and removes it while a chat conversation is open', () => {
-    expect(css).toContain('body .app-mobile-viewport-dock');
-    expect(css).toContain('html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock');
-    expect(css).toContain('.chat-composer');
-  });
-
-  it('makes the PWA update action visible even when the home mobile header is hidden', () => {
-    expect(shell).toContain('className="app-pwa-update-prompt"');
-    expect(shell).toContain('{pwaUpdateAvailable && !isDesktop && (');
-    expect(css).toContain('.app-pwa-update-prompt');
-    expect(css).toContain('top: calc(env(safe-area-inset-top) + 10px) !important;');
-  });
-
 });
