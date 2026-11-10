@@ -165,7 +165,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   }catch(e:any){setError(e?.message||'انتقال به مرحله درب خروج انجام نشد')}finally{setBusy(false)}
  };
 
- if(!declarationId)return <main dir="rtl" className="p-6"><div className="max-w-xl mx-auto rounded-2xl border app-border bg-[var(--surface)] p-6"><h1 className="font-black text-xl">اظهارنامه انتخاب نشده</h1><p className="text-sm app-muted mt-2">ابتدا اظهارنامه را ثبت کنید.</p><Link to={params.get('shipmentId')?`/operations?tab=declaration&shipmentId=${encodeURIComponent(params.get('shipmentId')||'')}`:'/operations'} className="inline-block mt-4 rounded-xl bg-[var(--primary)] text-white px-4 py-2">ثبت اظهار</Link></div></main>;
+ if(!declarationId)return <main dir="rtl" className="native-workflow-screen p-6"><div className="max-w-xl mx-auto rounded-2xl border app-border bg-[var(--surface)] p-6"><h1 className="font-black text-xl">اظهارنامه انتخاب نشده</h1><p className="text-sm app-muted mt-2">ابتدا اظهارنامه را ثبت کنید.</p><Link to={params.get('shipmentId')?`/operations?tab=declaration&shipmentId=${encodeURIComponent(params.get('shipmentId')||'')}`:'/operations'} className="inline-block mt-4 rounded-xl bg-[var(--primary)] text-white px-4 py-2">ثبت اظهار</Link></div></main>;
 
  return <main dir="rtl" className="min-h-screen p-4 md:p-8" style={{background:'var(--bg)',color:'var(--text)'}}><div className="max-w-5xl mx-auto space-y-5">
   <header className="flex flex-wrap items-center justify-between gap-3">
