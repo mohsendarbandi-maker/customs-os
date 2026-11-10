@@ -480,13 +480,12 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     location.pathname === '/more' ||
     (location.pathname === '/operations' && !location.search);
   const showMobileBack = !isPrimaryMobileRoute;
-  const isMoreTab = !(
+  const isMoreTab = isMoreRoute || !(
     location.pathname === '/' ||
     location.pathname.startsWith('/reminders') ||
     location.pathname.startsWith('/operations') ||
     location.pathname.startsWith('/finance/shipments/') ||
-    location.pathname.startsWith('/chat') ||
-    isMoreRoute
+    location.pathname.startsWith('/chat')
   );
 
   const goBack = () => {
