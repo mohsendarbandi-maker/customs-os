@@ -254,7 +254,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       const nextIsDesktop = getDesktopLayout();
       setIsDesktop(nextIsDesktop);
       setIsNarrowDevice(getNarrowDevice());
-      if (nextIsDesktop) setMobileOpen(false);
     };
     updateLayout();
     widthMedia.addEventListener('change', updateLayout);
