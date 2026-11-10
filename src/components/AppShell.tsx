@@ -581,7 +581,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           ?.label || 'بیشتر';
 
   return (
-    <div data-route={location.pathname} className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''} ${isChatRoute ? 'is-chat-route' : ''}`} dir="rtl">
+    <div ref={appShellRef} onClickCapture={handleNativeRouteLink} data-route={location.pathname} className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''} ${isChatRoute ? 'is-chat-route' : ''}`} dir="rtl">
       {/* Desktop navigation is mounted only at >=1024px. It is not merely hidden on phones. */}
       {isDesktop && (
         <aside className={`app-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
