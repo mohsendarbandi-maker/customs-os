@@ -37,8 +37,29 @@ export const FinanceShipmentPage:React.FC=()=>{
  const advance=payments.filter(x=>x.payment_type==='advance'&&x.direction==='received').reduce((a,x)=>a+Number(x.amount_irr||0),0);const refund=payments.filter(x=>x.payment_type==='advance_refund'&&x.direction==='paid').reduce((a,x)=>a+Number(x.amount_irr||0),0);const advanceBalance=advance-refund;
  const openInvoices=invoices.filter(x=>['draft','issued','partially_paid'].includes(x.status));const openRequests=requests.filter(x=>['draft','sent','issued','partially_paid'].includes(x.status));const closeReady=s?.finance_status==='ready'&&!openInvoices.length&&!openRequests.length&&advanceBalance===0;
  const close=async()=>{if(!canClose||!s)return;if(!closeReady)return setMsg('برای بستن مالی، صورتحساب‌ها و درخواست‌های وجه باز و مانده تنخواه باید تعیین تکلیف شوند.');setMsg('در حال بستن مالی...');const{error}=await supabase.from('shipments').update({finance_status:'closed',finance_closed_at:new Date().toISOString(),finance_closed_by:profile!.id,updated_at:new Date().toISOString()}).eq('id',s.id).eq('finance_status','ready');if(error)return setMsg(error.message);if(s.case_id){const ce=await supabase.from('cases').update({status:'archived',updated_at:new Date().toISOString()}).eq('id',s.case_id);if(ce.error)return setMsg('مالی بسته شد ولی بایگانی پرونده انجام نشد: '+ce.error.message)}setMsg('مالی بسته شد و پرونده به بایگانی منتقل شد.');await load()};
- return <main className="space-y-5" dir="rtl">
+ return <main className="space-y-5 shipment-detail-mobile-screen" dir="rtl">
   <div className="flex flex-wrap items-center gap-3"><Link to={canViewFinance?"/finance":"/operations"} className="icon-btn" aria-label="بازگشت"><ArrowRight size={18}/></Link><div><h1 className="text-2xl font-black">{canViewFinance?"مالی محموله":"ثبت هزینه محموله"}</h1><p className="app-muted">{s?.display_name||s?.bill_of_lading_no||'—'} · {c?.name||'—'}</p></div>{s&&<AddReminderButton entityType="shipments" entityId={s.id} defaultTitle={'پیگیری مالی محموله '+(s.display_name||s.bill_of_lading_no||'')}/>}{canViewFinance&&<button onClick={()=>window.print()} className="mr-auto px-3 py-2 rounded-xl bg-[var(--primary)] text-white"><Printer size={15} className="inline ml-1"/>چاپ</button>}</div>
+  {s&&<section className="shipment-detail-maritime-hero" aria-label="خلاصه محموله">
+   <img src="/mobile-ocean-hero.svg" alt="کشتی باری در دریا"/>
+   <div>
+    <span className="text-[10px] font-bold tracking-wide text-sky-700">SHIPMENT OVERVIEW</span>
+    <h2>{s.display_name||s.vessel_name||s.bill_of_lading_no||'جزئیات محموله'}</h2>
+    <p dir="ltr">B/L · {s.bill_of_lading_no||'—'}</p>
+    <span className="status-pill">{s.current_status==='completed'?'تکمیل عملیات':s.ship_passed?'پاس کشتی ثبت شده':'در حال بررسی'}</span>
+   </div>
+   <div className="shipment-detail-progress" aria-label="مسیر عملیات محموله">
+    <div className="shipment-detail-progress-step is-done"><i>✓</i><span>ثبت سفارش</span></div>
+    <div className={'shipment-detail-progress-step '+(s.transport_documents_status==='ready'?'is-done':'is-current')}><i>{s.transport_documents_status==='ready'?'✓':'۲'}</i><span>بررسی اسناد</span></div>
+    <div className={'shipment-detail-progress-step '+(s.ship_passed?'is-done':'is-pending')}><i>{s.ship_passed?'✓':'۳'}</i><span>پاس کشتی</span></div>
+    <div className={'shipment-detail-progress-step '+(s.current_status==='completed'?'is-done':'is-pending')}><i>{s.current_status==='completed'?'✓':'۴'}</i><span>خروج</span></div>
+   </div>
+   <div className="shipment-detail-facts">
+    <div><small>وزن خالص</small><b>{s.net_weight_kg!=null?Number(s.net_weight_kg).toLocaleString('fa-IR')+' kg':'—'}</b></div>
+    <div><small>ارزش فاکتور</small><b>{s.invoice_amount!=null?Number(s.invoice_amount).toLocaleString('fa-IR')+' '+(s.invoice_currency||''):'—'}</b></div>
+    <div><small>شماره بارنامه</small><b dir="ltr">{s.bill_of_lading_no||'—'}</b></div>
+   </div>
+   <Link className="detail-cta" to={'/operations?tab=pre-declaration&shipmentId='+encodeURIComponent(s.id)}>پیگیری و مشاهده عملیات <ArrowRight size={15}/></Link>
+  </section>}
   {msg&&<div className="app-surface border app-border rounded-xl p-3">{msg}</div>}
   {canViewFinance&&<section className="app-surface border app-border rounded-2xl p-4"><div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2">{[['costs','هزینه‌ها'],['cash','گردش وجه'],['invoices','صورتحساب‌ها'],['vouchers','اسناد حسابداری'],['requests','درخواست وجه']].map(([t,l])=><button key={t} onClick={()=>setTab(t as typeof tab)} className={'px-4 py-3 rounded-xl text-sm font-bold border '+(tab===t?'bg-[var(--primary)] text-white border-transparent':'app-border bg-[var(--surface)]')}>{l}</button>)}</div></section>}
   {(tab==='costs'||!canViewFinance)&&s&&<ShipmentCostsPanel shipment={s} profile={profile} onChanged={load} fixedStage={fixedStage} initialStage={initialStage} autoOpenOnMount={autoOpenCost}/>}
