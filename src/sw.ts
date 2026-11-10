@@ -15,6 +15,7 @@ registerRoute(({request,url})=>request.mode==='navigate'&&!['code','error','erro
  // Old shells can reference fingerprinted JS chunks removed by a newer deployment,
  // which causes "Importing a module script failed". Offline fallback is handled below.
  cacheName:'customs-os-navigation-v6',
+ networkTimeoutSeconds:1,
 }));
 precacheAndRoute(self.__WB_MANIFEST);
 setCatchHandler(async({request})=>{
