@@ -24,7 +24,8 @@ describe('premium native mobile workspace', () => {
     expect(css).toContain('html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock');
     expect(css).toContain('.chat-composer textarea');
     expect(css).toContain('env(safe-area-inset-bottom)');
-    expect(shell).toContain('aria-label="پیمایش سریع"');
+    expect(shell).toContain('aria-label="پیمایش اصلی برنامه"');
+    expect(shell).toContain('native-bottom-tabs');
   });
 
   it('renders every active shipment as a dedicated, data-backed visual card', () => {
