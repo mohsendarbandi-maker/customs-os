@@ -54,6 +54,21 @@ describe('Customs OS native unified mobile shell', () => {
     expect(styles).toContain('.app-shell.is-chat-route .app-mobile-dock.native-bottom-tabs');
   });
 
+  it('routes contextual header actions into real module workflows', () => {
+    expect(shell).toContain('customs-os:reminder-compose');
+    expect(shell).toContain('customs-os:chat-new-message');
+    expect(shell).toContain("go('/operations?tab=pre-declaration')");
+    expect(read('src/features/reminders/RemindersPage.tsx')).toContain("addEventListener('customs-os:reminder-compose'");
+    expect(read('src/features/chat/ChatPage.tsx')).toContain("addEventListener('customs-os:chat-new-message'");
+  });
+
+  it('restores and remembers scroll in the mobile content viewport rather than the document', () => {
+    expect(shell).toContain("document.querySelector<HTMLElement>('.app-shell .app-content')");
+    expect(shell).toContain('mobileScroller?.scrollTo');
+    expect(shell).toContain('mobileScroller?.scrollTop');
+    expect(styles).toContain('overflow-y: auto !important');
+  });
+
   it('loads the native shell layer after legacy mobile overrides', () => {
     expect(main.indexOf("import './styles/native-app-shell.css';"))
       .toBeGreaterThan(main.indexOf("import './styles/mobile-reference-final.css';"));
