@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity, MessageCircle, Landmark, ChevronLeft, ChevronRight,
@@ -722,7 +721,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </button>
         </div>
       )}
-      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock" aria-label="پیمایش اصلی" data-native-tabs="5">
+      {!isDesktop && (<nav className="app-mobile-dock app-mobile-viewport-dock" aria-label="پیمایش اصلی" data-native-tabs="5">
         <button type="button" className={isActive('/') ? 'is-active' : ''} aria-current={isActive('/') ? 'page' : undefined} onClick={() => navigate('/')}>
           <Home size={21} strokeWidth={2.1}/><span>خانه</span>
         </button>
@@ -738,7 +737,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <button type="button" className={(location.pathname === '/more' || !['/', '/reminders', '/operations', '/chat'].includes(location.pathname)) ? 'is-active' : ''} aria-current={(location.pathname === '/more' || !['/', '/reminders', '/operations', '/chat'].includes(location.pathname)) ? 'page' : undefined} onClick={() => navigate('/more')}>
           <Layers3 size={21} strokeWidth={2.1}/><span>بیشتر</span>
         </button>
-      </nav>, document.body)}
+      </nav>)}
       {!location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />}
     </div>
   );
