@@ -616,7 +616,12 @@ jobs:
                   appShell.append(wrapper);
 
                   const dock = document.createElement('nav');
-                  dock.className = 'app-mobile-viewport-dock';
+                  dock.className = 'app-mobile-dock app-mobile-viewport-dock native-bottom-tabs';
+                  for (let index = 0; index < 5; index += 1) {
+                    const tab = document.createElement('button');
+                    tab.type = 'button';
+                    dock.append(tab);
+                  }
                   document.body.append(appShell, dock);
 
                   const beforeChat = {
@@ -690,7 +695,7 @@ jobs:
                 expect(layoutProbe.dockDisplayDuringChat).not.toBe('none');
                 expect(layoutProbe.dockPositionDuringChat).toBe('fixed');
                 expect(layoutProbe.chatContentPaddingBottom).toBeGreaterThanOrEqual(50);
-                expect(layoutProbe.composerClearance).toBeGreaterThanOrEqual(0);
+                expect(layoutProbe.composerClearance, JSON.stringify(layoutProbe)).toBeGreaterThanOrEqual(0);
                 expect(layoutProbe.composerPosition).toBe('relative');
                 console.log('Mobile viewport/card/chat CSS probe passed:', JSON.stringify(layoutProbe));
               }
