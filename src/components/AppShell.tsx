@@ -176,6 +176,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   );
   const moreSheetRef = useRef<HTMLElement | null>(null);
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const contentScrollerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const widthMedia = window.matchMedia('(min-width: 1024px)');
@@ -255,11 +256,10 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     };
   }, []);
 
-  // Preserve the document scroll position per internal route. The previous version
-  // remounted every route with a keyed wrapper but never restored the prior route's
-  // position, so returning from a detail page could land halfway down a different page.
+  // Persist scroll inside the native app viewport rather than the browser document.
   useEffect(() => {
-    if (location.pathname === '/login' || location.pathname === '/onboarding') return undefined;
+    const scroller = contentScrollerRef.current;
+    if (!scroller || location.pathname === '/login' || location.pathname === '/onboarding') return undefined;
     const routeKey = location.pathname + location.search;
     const storageKey = routeScrollStorageKey(routeKey);
     let savedPosition = routeScrollPositions.get(routeKey);
@@ -271,28 +271,21 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         savedPosition = 0;
       }
     }
-
-    let firstFrame = 0;
-    let secondFrame = 0;
-    firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        window.scrollTo({ top: savedPosition ?? 0, left: 0, behavior: 'auto' });
-      });
+    const frame = window.requestAnimationFrame(() => {
+      scroller.scrollTo({ top: savedPosition ?? 0, left: 0, behavior: 'auto' });
     });
-    const remember = () => routeScrollPositions.set(routeKey, window.scrollY);
     const persist = () => {
-      const top = window.scrollY;
+      const top = scroller.scrollTop;
       routeScrollPositions.set(routeKey, top);
       try { sessionStorage.setItem(storageKey, String(top)); } catch { /* private browsing */ }
     };
-    window.addEventListener('scroll', remember, { passive: true });
+    scroller.addEventListener('scroll', persist, { passive: true });
     window.addEventListener('pagehide', persist);
     return () => {
       persist();
-      window.removeEventListener('scroll', remember);
+      scroller.removeEventListener('scroll', persist);
       window.removeEventListener('pagehide', persist);
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
+      window.cancelAnimationFrame(frame);
     };
   }, [location.pathname, location.search]);
 
@@ -712,7 +705,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             </div>
           </div>
         </header>}
-        <div className={`app-content ${isChatRoute ? 'is-chat-content' : ''}`}>
+        <div ref={contentScrollerRef} className={`app-content ${isChatRoute ? 'is-chat-content' : ''}`}>
           <div key={location.pathname + location.search} className={`future-route-stage ${isChatRoute ? 'is-chat-stage' : ''}`}>
             {children}
           </div>
