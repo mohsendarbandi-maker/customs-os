@@ -325,3 +325,33 @@
   }
 }
 @keyframes cosNativeEnter {from{opacity:.88;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+
+/* Dock must remain visible even while a conversation is open.
+   Older premium-chat rules hid the dock with a higher-specificity :has() selector. */
+@media (max-width: 1023px), (pointer: coarse) {
+  html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock {
+    display:grid!important;visibility:visible!important;opacity:1!important;
+    pointer-events:auto!important;z-index:900!important;
+  }
+  .app-shell.is-chat-route .app-mobile-dock.native-bottom-tabs {
+    display:grid!important;visibility:visible!important;opacity:1!important;
+    pointer-events:auto!important;z-index:900!important;
+  }
+  /* The AI launcher sits above, not on top of, the five-tab dock. */
+  .app-shell.is-touch-layout .ai-launcher {
+    bottom:calc(var(--cos-tab-height) + env(safe-area-inset-bottom) + 14px)!important;
+    inset-inline-end:14px!important;width:50px!important;height:50px!important;
+    border-radius:16px!important;z-index:870!important;
+  }
+  .app-shell.is-touch-layout .ai-chat-panel {
+    bottom:calc(var(--cos-tab-height) + env(safe-area-inset-bottom) + 74px)!important;
+    inset-inline:12px!important;width:auto!important;
+    max-height:calc(100dvh - var(--cos-tab-height) - env(safe-area-inset-bottom) - 94px)!important;
+  }
+  /* Keep the update notice in the safe region above the dock. */
+  .app-shell.is-touch-layout .app-pwa-update-prompt {
+    bottom:calc(var(--cos-tab-height) + env(safe-area-inset-bottom) + 12px)!important;
+    z-index:860!important;
+  }
+}
