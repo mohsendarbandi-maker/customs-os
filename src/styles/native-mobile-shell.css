@@ -224,6 +224,16 @@
     max-width: 100%;
   }
 
+  /* Keep the optional AI launcher clear of the fixed five-tab navigation. */
+  .app-shell.is-touch-layout .ai-launcher {
+    inset-block-end: calc(83px + env(safe-area-inset-bottom)) !important;
+    inset-inline-end: 15px !important;
+    z-index: 900 !important;
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 16px !important;
+  }
+
   .app-shell.is-touch-layout .app-mobile-dock,
   .app-shell.is-touch-layout .app-mobile-viewport-dock {
     position: fixed !important;
