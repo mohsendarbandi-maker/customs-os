@@ -404,11 +404,16 @@ export const ChatPage:React.FC=()=>{
   if(typing)typingTimer.current=window.setTimeout(()=>broadcastTyping(false),1200);
  },[user?.id]);
 
- const openPeople=async(mode:'direct'|'member'='direct')=>{
+ const openPeople=useCallback(async(mode:'direct'|'member'='direct')=>{
   if(!profile?.organization_id)return;
   const{data,error:e}=await supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',profile.organization_id).eq('is_active',true).order('full_name');
   if(e){setError(err(e));return}setPeople((data??[])as Person[]);setPersonQuery('');setPeopleMode(mode);setPeopleOpen(true);
- };
+ },[profile?.organization_id]);
+ useEffect(()=>{
+  const onShellNewMessage=()=>{void openPeople('direct')};
+  window.addEventListener('customs-os:chat-new-message',onShellNewMessage);
+  return()=>window.removeEventListener('customs-os:chat-new-message',onShellNewMessage);
+ },[openPeople]);
  const newChat=async(id:string)=>{
   if(!id||id===user?.id)return;
   try{
