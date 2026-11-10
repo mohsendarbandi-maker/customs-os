@@ -631,21 +631,51 @@ jobs:
                     dockDisplay: getComputedStyle(dock).display,
                   };
 
+                  // Recreate the real app shell hierarchy so this probe verifies
+                  // the actual chat viewport and not just the dock visibility selector.
                   const chatShell = document.createElement('div');
-                  chatShell.className = 'app-shell is-chat-route';
+                  chatShell.className = 'app-shell is-touch-layout is-chat-route';
+                  const status = document.createElement('div');
+                  status.className = 'native-system-status';
+                  const globalHeader = document.createElement('header');
+                  globalHeader.className = 'app-mobilebar native-app-header';
+                  const chatMain = document.createElement('main');
+                  chatMain.className = 'app-main is-chat-main';
+                  const chatContent = document.createElement('div');
+                  chatContent.className = 'app-content is-chat-content';
+                  const routeStage = document.createElement('div');
+                  routeStage.className = 'future-route-stage is-chat-stage';
                   const chat = document.createElement('div');
                   chat.className = 'chat-standalone';
                   chat.dataset.chatSelected = 'true';
+                  const conversation = document.createElement('section');
+                  conversation.className = 'chat-conversation-view';
+                  const conversationHeader = document.createElement('header');
+                  conversationHeader.className = 'chat-conversation-header';
+                  const messages = document.createElement('div');
+                  messages.className = 'chat-message-area';
                   const composer = document.createElement('div');
                   composer.className = 'chat-composer';
-                  chat.append(composer);
-                  chatShell.append(chat);
+                  composer.style.height = '58px';
+                  conversation.append(conversationHeader, messages, composer);
+                  chat.append(conversation);
+                  routeStage.append(chat);
+                  chatContent.append(routeStage);
+                  chatMain.append(chatContent);
+                  chatShell.append(status, globalHeader, chatMain);
                   document.body.append(chatShell);
 
+                  const composerRect = composer.getBoundingClientRect();
+                  const dockRect = dock.getBoundingClientRect();
                   return {
                     ...beforeChat,
                     dockDisplayDuringChat: getComputedStyle(dock).display,
+                    dockPositionDuringChat: getComputedStyle(dock).position,
+                    chatContentPaddingBottom: parseFloat(getComputedStyle(chatContent).paddingBottom) || 0,
                     composerPosition: getComputedStyle(composer).position,
+                    composerBottom: Math.round(composerRect.bottom),
+                    dockTop: Math.round(dockRect.top),
+                    composerClearance: Math.round(dockRect.top - composerRect.bottom),
                   };
                 });
                 expect(layoutProbe.viewportWidth).toBeLessThanOrEqual(767);
@@ -657,7 +687,10 @@ jobs:
                 expect(layoutProbe.wrapperOverflowX).toBe('visible');
                 expect(layoutProbe.dockPosition).toBe('fixed');
                 expect(layoutProbe.dockDisplay).not.toBe('none');
-                expect(layoutProbe.dockDisplayDuringChat).toBe('none');
+                expect(layoutProbe.dockDisplayDuringChat).not.toBe('none');
+                expect(layoutProbe.dockPositionDuringChat).toBe('fixed');
+                expect(layoutProbe.chatContentPaddingBottom).toBeGreaterThanOrEqual(50);
+                expect(layoutProbe.composerClearance).toBeGreaterThanOrEqual(0);
                 expect(layoutProbe.composerPosition).toBe('relative');
                 console.log('Mobile viewport/card/chat CSS probe passed:', JSON.stringify(layoutProbe));
               }
