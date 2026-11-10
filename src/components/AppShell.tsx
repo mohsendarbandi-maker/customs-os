@@ -250,7 +250,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     const clonedControls = clone.querySelectorAll('input, textarea, select');
     originalControls.forEach((control, index) => {
       const copy = clonedControls[index];
-      if (control instanceof HTMLInputElement && copy instanceof HTMLInputElement && control.type !== 'file') {
+      if (control instanceof HTMLInputElement && copy instanceof HTMLInputElement && !['file', 'password', 'hidden'].includes(control.type)) {
         copy.value = control.value;
         copy.checked = control.checked;
       } else if (control instanceof HTMLTextAreaElement && copy instanceof HTMLTextAreaElement) {
@@ -530,8 +530,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     if (destination.origin !== window.location.origin ||
         !['http:', 'https:'].includes(destination.protocol) ||
         (destination.pathname === location.pathname &&
-         destination.search === location.search &&
-         destination.hash === location.hash)) return;
+         destination.search === location.search)) return;
 
     event.preventDefault();
     captureNativeRouteExit();
