@@ -418,7 +418,7 @@ export const ExitPage: React.FC = () => {
   return (
     <main
       dir="rtl"
-      className="min-h-screen bg-[var(--bg)] text-[var(--text)] p-4 md:p-8"
+      className="native-workflow-screen min-h-screen bg-[var(--bg)] text-[var(--text)] p-4 md:p-8"
     >
       <input
         ref={inputRef}

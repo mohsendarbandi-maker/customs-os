@@ -517,19 +517,27 @@ export const RemindersPage:React.FC=()=>{
         ? <div className="reminders-hub-empty">{errorFa(query.error)} <button type="button" onClick={()=>void query.refetch()}>{t('تلاش دوباره')}</button></div>
         : query.isPending
           ? <div className="reminders-up-next-loading"><i/><i/><i/></div>
-          : <div className="reminders-open-grid">
-              {homeOpenReminders.map(r=>{
-                const dueMs=r.due_at?new Date(r.due_at).getTime():NaN;
-                const bucket=!Number.isFinite(dueMs)?3:(r.all_day?dueMs<homeTodayStart.getTime():dueMs<homeNowMs)?0:dueMs<homeTomorrowStart.getTime()?1:2;
-                const stateLabel=bucket===0?t('معوق'):bucket===1?t('امروز'):bucket===2?t('آینده'):t('بدون سررسید');
-                const stateKey=bucket===0?'overdue':bucket===1?'today':bucket===2?'future':'undated';
-                return <article key={r.id} className="reminders-open-task" data-state={stateKey}>
-                  <button type="button" onClick={()=>toggleDone(r)} aria-label={t('انجام شد')} title={t('انجام شد')} className="reminders-open-check"><span/></button>
-                  <div className="reminders-open-copy">
-                    <button type="button" className="reminders-open-title" dir="auto" onClick={()=>setEditor(r)}>{r.title}</button>{reminderShipmentId(r)&&<button type="button" onClick={()=>navigate('/operations?shipmentId='+encodeURIComponent(reminderShipmentId(r)!))} className="mt-1 inline-flex max-w-full items-center gap-1.5 text-xs font-semibold text-[var(--primary)]" aria-label="رفتن به محموله مرتبط"><Users size={12}/><span className="truncate">{shipmentDisplayName(reminderShipmentId(r)!)}</span>{shipmentLabels[reminderShipmentId(r)!]?.display_name&&shipmentLabels[reminderShipmentId(r)!]?.bill_of_lading_no&&<small className="truncate opacity-80">· بارنامه {shipmentLabels[reminderShipmentId(r)!].bill_of_lading_no}</small>}<ArrowUpRight size={12}/></button>}
+          : <div className="reminders-home-groups">
+              {(['overdue','today','future','undated'] as const).map(groupKey=>{
+                const groupItems=homeOpenReminders.filter(r=>{
+                  const dueMs=r.due_at?new Date(r.due_at).getTime():NaN;
+                  const bucket=!Number.isFinite(dueMs)?'undated':(r.all_day?dueMs<homeTodayStart.getTime():dueMs<homeNowMs)?'overdue':dueMs<homeTomorrowStart.getTime()?'today':'future';
+                  return bucket===groupKey;
+                });
+                if(!groupItems.length)return null;
+                const groupLabel=groupKey==='overdue'?t('معوق'):groupKey==='today'?t('امروز'):groupKey==='future'?t('آینده'):t('بدون سررسید');
+                return <section className={'reminders-task-group is-'+groupKey} key={groupKey}>
+                  <div className="reminders-task-group-heading"><h3>{groupLabel}</h3><span>{reminderNumber(groupItems.length,language)}</span></div>
+                  <div className="reminders-open-grid">
+                    {groupItems.map(r=><article key={r.id} className="reminders-open-task" data-state={groupKey}>
+                      <button type="button" onClick={()=>toggleDone(r)} aria-label={t('انجام شد')} title={t('انجام شد')} className="reminders-open-check"><span/></button>
+                      <div className="reminders-open-copy">
+                        <button type="button" className="reminders-open-title" dir="auto" onClick={()=>setEditor(r)}>{r.title}</button>{reminderShipmentId(r)&&<button type="button" onClick={()=>navigate('/operations?shipmentId='+encodeURIComponent(reminderShipmentId(r)!))} className="mt-1 inline-flex max-w-full items-center gap-1.5 text-xs font-semibold text-[var(--primary)]" aria-label="رفتن به محموله مرتبط"><Users size={12}/><span className="truncate">{shipmentDisplayName(reminderShipmentId(r)!)}</span>{shipmentLabels[reminderShipmentId(r)!]?.display_name&&shipmentLabels[reminderShipmentId(r)!]?.bill_of_lading_no&&<small className="truncate opacity-80">· بارنامه {shipmentLabels[reminderShipmentId(r)!].bill_of_lading_no}</small>}<ArrowUpRight size={12}/></button>}
+                      </div>
+                      <span className="reminders-open-status">{groupLabel}</span>
+                    </article>)}
                   </div>
-                  <span className="reminders-open-status">{stateLabel}</span>
-                </article>;
+                </section>;
               })}
               {!homeOpenReminders.length&&<div className="reminders-hub-empty reminders-home-empty"><Check size={20}/><strong>{t('همه‌چیز مرتب است')}</strong></div>}
             </div>}
