@@ -303,6 +303,16 @@ export const RemindersPage:React.FC=()=>{
  const openCardMenu=(id:string,event:React.MouseEvent<HTMLButtonElement>)=>{const rect=event.currentTarget.getBoundingClientRect();const width=Math.min(248,window.innerWidth-24);const height=276;let top=rect.bottom+8;if(top+height>window.innerHeight-12)top=Math.max(12,rect.top-height-8);const left=Math.max(12,Math.min(rect.right-width,window.innerWidth-width-12));setMenuId(id);setMenuPosition({top,left,width});};
  const closeCardMenu=()=>{setMenuId(null);setMenuPosition(null);};
  const openComposer=()=>{if(composerOpen){setComposerOpen(false);return;}setComposerOpen(true);window.setTimeout(()=>document.getElementById('reminder-quick-input')?.focus(),80);};
+ useEffect(()=>{
+  const createFromShell=()=>{
+   if(!composerOpen){
+    setComposerOpen(true);
+    window.setTimeout(()=>document.getElementById('reminder-quick-input')?.focus(),80);
+   }
+  };
+  window.addEventListener('customs-os:reminder-create',createFromShell);
+  return()=>window.removeEventListener('customs-os:reminder-create',createFromShell);
+ },[composerOpen]);
  const toggleDone=(r:Reminder)=>{if(r.id.startsWith('local-'))return;if(r.status==='done'){update.mutate({id:r.id,patch:{status:'open',completed_at:null,completed_by:null}});return;}completeReminder.mutate(r);};
  const softDelete=(r:Reminder)=>{const deletedAt=new Date().toISOString(),previousStatus=r.status,previousDeletedAt=r.deleted_at;update.mutate({id:r.id,patch:{deleted_at:deletedAt,status:'dismissed'}});setToast({text:t('یادآور از فهرست حذف شد'),undo:()=>update.mutate({id:r.id,patch:{deleted_at:previousDeletedAt,status:previousStatus}})});};
  const snooze=(r:Reminder,minutes:number)=>update.mutate({id:r.id,patch:{snoozed_until:new Date(Date.now()+minutes*60000).toISOString(),snooze_count:r.snooze_count+1}});
