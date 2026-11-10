@@ -347,7 +347,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     const ignoreSelector = [
       'input', 'textarea', 'select', '[contenteditable="true"]',
       '.overflow-x-auto', '[data-swipe-ignore="true"]', '.app-mobile-dock',
-      '.app-more-sheet', '.ds-overlay', '.chat-standalone', '.reminders-app-standalone',
+      '.ds-overlay', '.chat-standalone', '.reminders-app-standalone',
     ].join(',');
     const onTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1) { start = null; return; }
