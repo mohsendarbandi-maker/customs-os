@@ -291,6 +291,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     if (location.pathname === '/login' || location.pathname === '/onboarding') return undefined;
     const routeKey = location.pathname + location.search;
     const storageKey = routeScrollStorageKey(routeKey);
+    const mobileScroller = !isDesktop
+      ? document.querySelector<HTMLElement>('.app-shell .app-content')
+      : null;
     let savedPosition = routeScrollPositions.get(routeKey);
     if (savedPosition === undefined) {
       try {
@@ -305,25 +308,32 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     let secondFrame = 0;
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
-        window.scrollTo({ top: savedPosition ?? 0, left: 0, behavior: 'auto' });
+        if (isDesktop) {
+          window.scrollTo({ top: savedPosition ?? 0, left: 0, behavior: 'auto' });
+        } else {
+          mobileScroller?.scrollTo({ top: savedPosition ?? 0, left: 0, behavior: 'auto' });
+        }
       });
     });
-    const remember = () => routeScrollPositions.set(routeKey, window.scrollY);
+    const currentTop = () => isDesktop ? window.scrollY : (mobileScroller?.scrollTop ?? 0);
+    const remember = () => routeScrollPositions.set(routeKey, currentTop());
     const persist = () => {
-      const top = window.scrollY;
+      const top = currentTop();
       routeScrollPositions.set(routeKey, top);
       try { sessionStorage.setItem(storageKey, String(top)); } catch { /* private browsing */ }
     };
-    window.addEventListener('scroll', remember, { passive: true });
+    if (isDesktop) window.addEventListener('scroll', remember, { passive: true });
+    else mobileScroller?.addEventListener('scroll', remember, { passive: true });
     window.addEventListener('pagehide', persist);
     return () => {
       persist();
-      window.removeEventListener('scroll', remember);
+      if (isDesktop) window.removeEventListener('scroll', remember);
+      else mobileScroller?.removeEventListener('scroll', remember);
       window.removeEventListener('pagehide', persist);
       window.cancelAnimationFrame(firstFrame);
       window.cancelAnimationFrame(secondFrame);
     };
-  }, [location.pathname, location.search]);
+  }, [isDesktop, location.pathname, location.search]);
 
   // Safari supplies its own browser-chrome back swipe. For an installed Home Screen
   // app (which has no browser chrome), add an RTL right-edge swipe, and only when it
