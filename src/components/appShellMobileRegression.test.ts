@@ -47,11 +47,11 @@ describe('single mobile shell navigation regressions', () => {
     expect(mobileCss).toContain("@media (min-width: 1024px) and (pointer: fine)");
     expect(mobileCss).not.toContain("@media (min-width: 1024px) {");
     expect(shell).toContain("{isDesktop && (");
-    expect(shell).toContain('<header className="app-mobilebar"');
+    expect(shell).toContain('<header className="app-mobilebar native-app-header"');
   });
 
-  it('provides exactly five primary mobile tabs and a three-column More sheet', () => {
-    const start = shell.indexOf('{!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock"');
+  it('provides five primary mobile tabs and a full-screen More module hub', () => {
+    const start = shell.indexOf('{!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs"');
     expect(start).toBeGreaterThan(-1);
     const dock = shell.slice(start, shell.indexOf('</nav>, document.body)}', start));
     expect(dock.match(/<button\b/g)).toHaveLength(5);
@@ -60,8 +60,10 @@ describe('single mobile shell navigation regressions', () => {
     expect(dock).toContain('یادآورها');
     expect(dock).toContain('چت');
     expect(dock).toContain('بیشتر');
-    expect(shell).toContain('className="app-more-grid"');
-    expect(mobileCss).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
+    expect(shell).toContain('native-more-profile');
+    expect(shell).toContain('native-more-search');
+    expect(shell).toContain('native-more-grid');
+    expect(read('src/styles/native-app-shell.css')).toContain('.native-more-grid');
   });
 
   it('uses safe-area-aware dynamic viewport geometry and reserves content space for the dock', () => {

@@ -32,7 +32,7 @@ describe('mobile visual cohesion regressions', () => {
   });
 
   it('keeps the mobile navigation dock attached to the viewport and exposes full visual themes', () => {
-    expect(appShell).toContain('createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock"');
+    expect(appShell).toContain('createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs"');
     expect(appShell).toContain('document.body');
     expect(mobilePolish).toContain('.app-mobile-viewport-dock {');
     expect(mobilePolish).toContain('position: fixed !important');

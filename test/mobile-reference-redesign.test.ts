@@ -17,9 +17,9 @@ describe('reference-led ocean mobile redesign', () => {
       .toBeGreaterThan(main.indexOf("import './styles/mobile-native-workspace.css';"));
   });
 
-  it('uses the reference navigation order: more, chat, operations, reminders, home', () => {
-    const dock = shell.slice(shell.indexOf('aria-label="پیمایش سریع"'));
-    const labels = ['بیشتر', 'چت', 'عملیات', 'یادآورها', 'خانه'];
+  it('uses the unified five-tab RTL order: home, reminders, operations, chat, more', () => {
+    const dock = shell.slice(shell.indexOf('aria-label="پیمایش اصلی برنامه"'));
+    const labels = ['خانه', 'یادآورها', 'عملیات', 'چت', 'بیشتر'];
     let previous = -1;
     for (const label of labels) {
       const index = dock.indexOf('<span>' + label + '</span>');

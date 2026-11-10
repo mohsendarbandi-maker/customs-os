@@ -21,14 +21,14 @@ describe('iOS touch-first application shell', () => {
     expect(shell).toContain("getDesktopLayout");
     expect(shell).toContain("window.location.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
     expect(shell).toContain('{isDesktop && (');
-    expect(shell).toContain('{!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock"');
+    expect(shell).toContain('{!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs"');
     expect(mobileCss).toContain('@media (max-width: 1023px), (pointer: coarse)');
     expect(mobileCss).toContain('.app-sidebar, .app-topbar, .app-scrim, .app-mobile-drawer');
     expect(mobileCss).toContain('Desktop navigation is also removed from the React tree');
   });
 
-  it('mounts exactly one primary navigation and places all secondary routes in More', () => {
-    const dockStart = shell.indexOf('className="app-mobile-dock app-mobile-viewport-dock"');
+  it('mounts exactly five primary tabs and puts secondary modules in the full-screen More page', () => {
+    const dockStart = shell.indexOf('className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs"');
     const dockEnd = shell.indexOf('</nav>, document.body)}', dockStart);
     expect(dockStart).toBeGreaterThanOrEqual(0);
     expect(dockEnd).toBeGreaterThan(dockStart);
@@ -37,9 +37,11 @@ describe('iOS touch-first application shell', () => {
     for (const label of ['خانه', 'عملیات', 'یادآورها', 'چت', 'بیشتر']) {
       expect(dock).toContain('<span>' + label + '</span>');
     }
-    expect(shell).toContain('{mobileOpen && !isDesktop && (');
-    expect(shell).toContain('<nav className="app-more-grid" aria-label="همه بخش‌ها">');
-    expect(shell).toContain('{filteredNav.map((item) => {');
+    expect(shell).toContain('const isMoreRoute = location.pathname === \'/more\'');
+    expect(shell).toContain('native-more-profile');
+    expect(shell).toContain('native-more-search');
+    expect(shell).toContain('native-more-grid');
+    expect(shell).toContain('items.filter(item => item.group === group).map(item => {');
     expect(mobileCss).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
     expect(shell).not.toContain('mobile-menu-trigger');
   });
@@ -74,15 +76,15 @@ describe('iOS touch-first application shell', () => {
     expect(shell).toContain('aria-label="بازگشت"');
   });
 
-  it('adds Home Screen-only right-edge swipe back without hijacking editors or horizontal lists', () => {
+  it('adds Home Screen-only right-edge swipe back without hijacking editors or module scrollers', () => {
     expect(shell).toContain("!isStandalonePwa()");
     expect(shell).toContain('touch.clientX < window.innerWidth - 26');
+    expect(shell).toContain("'input'");
     expect(shell).toContain("'.overflow-x-auto'");
-    expect(shell).toContain("'.app-more-sheet'");
+    expect(shell).not.toContain("'.app-more-sheet'");
     expect(shell).toContain("'.chat-standalone'");
     expect(shell).toContain("'.reminders-app-standalone'");
-    expect(shell).toContain("event.key === 'Escape'");
-    expect(shell).toContain('focusableSelector');
-    expect(shell).toContain('moreSheetRef.current?.focus({ preventScroll: true })');
-  });
-});
+    expect(shell).toContain('event.changedTouches.length !== 1');
+    expect(shell).not.toContain('mobileOpen');
+    expect(shell).not.toContain('moreSheetRef');
+  });});

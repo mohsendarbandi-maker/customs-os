@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -87,6 +87,79 @@ const roles: Record<string, string> = {
 
 const canSee = (item: NavItem, role?: UserRole | null) =>
   !item.roles || (!!role && item.roles.includes(role));
+ 
+type MobileMoreContentProps = {
+  profile: any;
+  items: NavItem[];
+  query: string;
+  onQueryChange: (value: string) => void;
+  onNavigate: (path: string) => void;
+  onSignOut: () => void;
+};
+const MobileMoreContent: React.FC<MobileMoreContentProps> = ({
+  profile, items, query, onQueryChange, onNavigate, onSignOut,
+}) => {
+  const sections = groups.filter(group => items.some(item => item.group === group));
+  return (
+    <div className="native-more-page" dir="rtl">
+      <section className="native-more-profile">
+        <Avatar name={profile?.full_name || 'کاربر'} size="lg" aria-hidden="true" />
+        <div className="native-more-profile-copy">
+          <strong>{profile?.full_name || 'کاربر'}</strong>
+          <span>{roles[profile?.role || ''] || 'کاربر سامانه'}</span>
+          <small>{profile?.phone || 'حساب سازمانی Customs OS'}</small>
+        </div>
+        <button type="button" aria-label="ویرایش پروفایل" onClick={() => onNavigate('/settings/profile')}>
+          <Users size={18} />
+        </button>
+      </section>
+      <label className="native-more-search">
+        <Search size={18} aria-hidden="true" />
+        <input
+          type="search"
+          placeholder="جست‌وجوی ماژول‌ها و ابزارها"
+          aria-label="جست‌وجوی ماژول‌ها و ابزارها"
+          value={query}
+          onChange={event => onQueryChange(event.target.value)}
+          autoComplete="off"
+        />
+        {query && <button type="button" onClick={() => onQueryChange('')} aria-label="پاک کردن جست‌وجو"><X size={16} /></button>}
+      </label>
+      {sections.length ? sections.map(group => (
+        <section className="native-more-section" key={group}>
+          <h2>{group}</h2>
+          <div className="native-more-grid">
+            {items.filter(item => item.group === group).map(item => {
+              const Icon = item.icon;
+              return (
+                <button type="button" className="native-more-module" key={item.to} onClick={() => onNavigate(item.to)}>
+                  <span><Icon size={21} strokeWidth={1.9} /></span>
+                  <b>{item.label}</b>
+                  <small>{item.en}</small>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )) : (
+        <div className="native-more-empty">
+          <Search size={25} />
+          <strong>بخشی پیدا نشد</strong>
+          <span>عبارت دیگری را جست‌وجو کنید.</span>
+        </div>
+      )}
+      <section className="native-more-section">
+        <h2>حساب و تنظیمات</h2>
+        <div className="native-more-utilities">
+          <button type="button" onClick={() => onNavigate('/settings/appearance')}><Palette size={19} /><span>ظاهر و شخصی‌سازی</span><ChevronLeft size={16} /></button>
+          <button type="button" onClick={() => onNavigate('/settings/profile')}><Users size={19} /><span>پروفایل من</span><ChevronLeft size={16} /></button>
+          <button type="button" onClick={onSignOut}><LogOut size={19} /><span>خروج از حساب</span><ChevronLeft size={16} /></button>
+        </div>
+      </section>
+    </div>
+  );
+};
+
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -168,14 +241,11 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     };
   }, [isChatRoute]);
   const [isNarrowDevice, setIsNarrowDevice] = useState(getNarrowDevice);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState('');
   const [online, setOnline] = useState(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
-  const moreSheetRef = useRef<HTMLElement | null>(null);
-  const moreTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const widthMedia = window.matchMedia('(min-width: 1024px)');
@@ -184,7 +254,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       const nextIsDesktop = getDesktopLayout();
       setIsDesktop(nextIsDesktop);
       setIsNarrowDevice(getNarrowDevice());
-      if (nextIsDesktop) setMobileOpen(false);
     };
     updateLayout();
     widthMedia.addEventListener('change', updateLayout);
@@ -201,48 +270,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     };
   }, []);
 
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    const returnFocus = moreTriggerRef.current ??
-      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-    const focusFrame = window.requestAnimationFrame(() => moreSheetRef.current?.focus({ preventScroll: true }));
-    const focusableSelector = 'button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setMobileOpen(false);
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const panel = moreSheetRef.current;
-      if (!panel) return;
-      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector))
-        .filter((element) => element.getAttribute('aria-hidden') !== 'true');
-      if (!focusable.length) {
-        event.preventDefault();
-        panel.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', onKeyDown);
-      returnFocus?.focus({ preventScroll: true });
-    };
-  }, [mobileOpen]);
+
 
   useEffect(() => {
     const on = () => setOnline(true);
@@ -262,6 +290,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     if (location.pathname === '/login' || location.pathname === '/onboarding') return undefined;
     const routeKey = location.pathname + location.search;
     const storageKey = routeScrollStorageKey(routeKey);
+    const mobileScroller = !isDesktop
+      ? document.querySelector<HTMLElement>('.app-shell .app-content')
+      : null;
     let savedPosition = routeScrollPositions.get(routeKey);
     if (savedPosition === undefined) {
       try {
@@ -276,31 +307,38 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     let secondFrame = 0;
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
-        window.scrollTo({ top: savedPosition ?? 0, left: 0, behavior: 'auto' });
+        if (isDesktop) {
+          window.scrollTo({ top: savedPosition ?? 0, left: 0, behavior: 'auto' });
+        } else {
+          mobileScroller?.scrollTo({ top: savedPosition ?? 0, left: 0, behavior: 'auto' });
+        }
       });
     });
-    const remember = () => routeScrollPositions.set(routeKey, window.scrollY);
+    const currentTop = () => isDesktop ? window.scrollY : (mobileScroller?.scrollTop ?? 0);
+    const remember = () => routeScrollPositions.set(routeKey, currentTop());
     const persist = () => {
-      const top = window.scrollY;
+      const top = currentTop();
       routeScrollPositions.set(routeKey, top);
       try { sessionStorage.setItem(storageKey, String(top)); } catch { /* private browsing */ }
     };
-    window.addEventListener('scroll', remember, { passive: true });
+    if (isDesktop) window.addEventListener('scroll', remember, { passive: true });
+    else mobileScroller?.addEventListener('scroll', remember, { passive: true });
     window.addEventListener('pagehide', persist);
     return () => {
       persist();
-      window.removeEventListener('scroll', remember);
+      if (isDesktop) window.removeEventListener('scroll', remember);
+      else mobileScroller?.removeEventListener('scroll', remember);
       window.removeEventListener('pagehide', persist);
       window.cancelAnimationFrame(firstFrame);
       window.cancelAnimationFrame(secondFrame);
     };
-  }, [location.pathname, location.search]);
+  }, [isDesktop, location.pathname, location.search]);
 
   // Safari supplies its own browser-chrome back swipe. For an installed Home Screen
   // app (which has no browser chrome), add an RTL right-edge swipe, and only when it
   // does not start in a text field, horizontal scroller, chat, reminders, or overlay.
   useEffect(() => {
-    if (isDesktop || mobileOpen || !isStandalonePwa() ||
+    if (isDesktop || !isStandalonePwa() ||
         location.pathname === '/' || location.pathname === '/login' || location.pathname === '/onboarding') {
       return undefined;
     }
@@ -308,7 +346,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     const ignoreSelector = [
       'input', 'textarea', 'select', '[contenteditable="true"]',
       '.overflow-x-auto', '[data-swipe-ignore="true"]', '.app-mobile-dock',
-      '.app-more-sheet', '.ds-overlay', '.chat-standalone', '.reminders-app-standalone',
+      '.ds-overlay', '.chat-standalone', '.reminders-app-standalone',
     ].join(',');
     const onTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1) { start = null; return; }
@@ -342,7 +380,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       document.removeEventListener('touchend', onTouchEnd);
       document.removeEventListener('touchcancel', onTouchCancel);
     };
-  }, [isDesktop, mobileOpen, location.pathname, location.search, navigate]);
+  }, [isDesktop, location.pathname, location.search, navigate]);
 
 
 
@@ -360,6 +398,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           item.group.includes(query)
       )
     : visibleNav;
+  const moreNavItems = filteredNav.filter(item => !['/', '/reminders', '/operations', '/chat'].includes(item.to));
 
   if (bare) return <>{children}</>;
 
@@ -390,7 +429,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     comfort === 'reading' ? 'کتابخوان' : theme === 'light' ? 'روز' : 'شب';
 
   const closeMobile = () => {
-    setMobileOpen(false);
     setMobileSearch('');
   };
 
@@ -399,12 +437,21 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     closeMobile();
   };
 
+  const isMoreRoute = location.pathname === '/more';
   const isPrimaryMobileRoute =
     location.pathname === '/' ||
     location.pathname === '/chat' ||
     location.pathname === '/reminders' ||
+    location.pathname === '/more' ||
     (location.pathname === '/operations' && !location.search);
   const showMobileBack = !isPrimaryMobileRoute;
+  const isMoreTab = isMoreRoute || !(
+    location.pathname === '/' ||
+    location.pathname.startsWith('/reminders') ||
+    location.pathname.startsWith('/operations') ||
+    location.pathname.startsWith('/finance/shipments/') ||
+    location.pathname.startsWith('/chat')
+  );
 
   const goBack = () => {
     closeMobile();
@@ -418,18 +465,18 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   const currentPageLabel =
-    location.pathname === '/'
-      ? 'خانه'
-      : location.pathname.startsWith('/settings')
-        ? 'تنظیمات'
-        : [...visibleNav]
-            .filter((item) => item.to !== '/')
-            .sort((a, b) => b.to.length - a.to.length)
-            .find((item) => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))
-            ?.label || 'Customs OS';
-
-  // The Bale Mini App uses a dedicated full-screen shell without the main app navigation.
-  if (location.pathname === '/epl-print') return <>{children}</>;
+    location.pathname === '/' ? 'خانه'
+      : location.pathname.startsWith('/reminders') ? 'یادآورها'
+      : location.pathname.startsWith('/operations') ? 'عملیات پرونده'
+      : location.pathname.startsWith('/finance/shipments/') ? 'جزئیات محموله'
+      : location.pathname.startsWith('/chat') ? 'چت سازمانی'
+      : isMoreRoute ? 'بیشتر'
+      : location.pathname.startsWith('/settings') ? 'تنظیمات'
+      : [...visibleNav]
+          .filter((item) => item.to !== '/')
+          .sort((a, b) => b.to.length - a.to.length)
+          .find((item) => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))
+          ?.label || 'بیشتر';
 
   return (
     <div data-route={location.pathname} className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''} ${isChatRoute ? 'is-chat-route' : ''}`} dir="rtl">
@@ -490,104 +537,46 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       {/* Compact touch header: deliberately no hamburger and no theme toggle.
           Theme settings live in More > ظاهر و شخصی‌سازی. */}
       {!isDesktop && (
-        <header className="app-mobilebar" aria-label="هدر موبایل">
-          {showMobileBack ? (
-            <button type="button" className="icon-btn app-mobile-back" aria-label="بازگشت" title="بازگشت" onClick={goBack}>
-              <ChevronRight size={19} aria-hidden="true" />
+        <>
+          <div className="native-system-status" aria-hidden="true" />
+          <header className="app-mobilebar native-app-header" aria-label="هدر اصلی برنامه">
+            {showMobileBack ? (
+              <button type="button" className="native-header-back" aria-label="بازگشت" title="بازگشت" onClick={goBack}>
+                <ChevronRight size={21} aria-hidden="true" />
+              </button>
+            ) : (
+              <span className="native-header-mark" aria-hidden="true"><CustomsLogo size={29} showWordmark={false} /></span>
+            )}
+            <div className="app-mobile-title native-header-title">
+              <span className="mobile-current-page">
+                <span className="mobile-current-page__eyebrow">CUSTOMS OS · عملیات گمرکی و لجستیک</span>
+                <span className="mobile-current-page__title">{currentPageLabel}</span>
+              </span>
+            </div>
+            <button
+              type="button"
+              className="native-header-action"
+              aria-label={location.pathname.startsWith('/operations') ? 'ثبت محموله جدید' : location.pathname.startsWith('/reminders') ? 'یادآور جدید' : location.pathname.startsWith('/chat') ? 'گفت‌وگوی جدید' : 'تنظیمات'}
+              title={location.pathname.startsWith('/operations') ? 'ثبت محموله جدید' : location.pathname.startsWith('/reminders') ? 'یادآور جدید' : location.pathname.startsWith('/chat') ? 'گفت‌وگوی جدید' : 'تنظیمات'}
+              onClick={() => {
+                if (location.pathname.startsWith('/operations')) {
+                  go('/operations?tab=pre-declaration');
+                } else if (location.pathname.startsWith('/reminders')) {
+                  window.dispatchEvent(new Event('customs-os:reminder-compose'));
+                } else if (location.pathname.startsWith('/chat')) {
+                  window.dispatchEvent(new Event('customs-os:chat-new-message'));
+                } else {
+                  navigate('/settings/appearance');
+                }
+              }}
+            >
+              {location.pathname.startsWith('/operations') ? <FileSignature size={19} />
+                : location.pathname.startsWith('/reminders') ? <CalendarDays size={19} />
+                : location.pathname.startsWith('/chat') ? <Users size={19} />
+                : <Settings2 size={19} />}
             </button>
-          ) : (
-            <span className="app-mobile-back-placeholder" aria-hidden="true" />
-          )}
-          <div className="app-mobile-title">
-            <CustomsLogo size={30} showWordmark={false} />
-            <span className="mobile-current-page">
-              <span className="mobile-current-page__eyebrow">CUSTOMS OS</span>
-              <span className="mobile-current-page__title">{currentPageLabel}</span>
-            </span>
-          </div>
-          <button
-            type="button"
-            className="icon-btn app-mobile-settings"
-            aria-label="تنظیمات ظاهر"
-            title="تنظیمات ظاهر"
-            onClick={() => navigate('/settings/appearance')}
-          >
-            <Settings2 size={19} />
-          </button>
-        </header>
-      )}
-
-      {/* The More sheet is the only secondary mobile navigation. All role-visible
-          routes stay available, in a three-column grid instead of a side drawer. */}
-      {mobileOpen && !isDesktop && (
-        <div className="app-more-scrim" role="presentation" onClick={closeMobile}>
-          <section
-            ref={moreSheetRef}
-            className="app-more-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label="بیشتر"
-            tabIndex={-1}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="app-more-sheet-handle" aria-hidden="true" />
-            <header className="app-more-sheet-header">
-              <div className="min-w-0">
-                <strong>بیشتر</strong>
-                <span>{profile?.full_name || 'کاربر'} · {roles[profile?.role || ''] || 'کاربر'}</span>
-              </div>
-              <button type="button" className="icon-btn" aria-label="بستن بیشتر" onClick={closeMobile}>
-                <X size={18} />
-              </button>
-            </header>
-            <label className="app-more-search">
-              <Search size={17} aria-hidden="true" />
-              <input
-                type="search"
-                placeholder="جست‌وجو در بخش‌ها…"
-                aria-label="جست‌وجو در بخش‌ها"
-                value={mobileSearch}
-                onChange={(event) => setMobileSearch(event.target.value)}
-                autoComplete="off"
-              />
-              {mobileSearch && (
-                <button type="button" onClick={() => setMobileSearch('')} aria-label="پاک کردن جست‌وجو">
-                  <X size={15} />
-                </button>
-              )}
-            </label>
-            <nav className="app-more-grid" aria-label="همه بخش‌ها">
-              {filteredNav.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.to) || (item.to !== '/' && location.pathname.startsWith(item.to + '/'));
-                return (
-                  <button
-                    type="button"
-                    key={item.to}
-                    className={`app-more-item ${active ? 'is-active' : ''}`}
-                    aria-current={active ? 'page' : undefined}
-                    onClick={() => go(item.to)}
-                  >
-                    <span className="app-more-item-icon"><Icon size={21} strokeWidth={2} /></span>
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-              <button type="button" className={`app-more-item ${location.pathname.startsWith('/settings/appearance') ? 'is-active' : ''}`} onClick={() => go('/settings/appearance')}>
-                <span className="app-more-item-icon"><Palette size={21} /></span>
-                <span>ظاهر و رنگ‌بندی</span>
-              </button>
-              <button type="button" className="app-more-item" onClick={() => go('/settings/profile')}>
-                <span className="app-more-item-icon"><Users size={21} /></span>
-                <span>پروفایل من</span>
-              </button>
-              <button type="button" className="app-more-item" onClick={() => { closeMobile(); void signOut(); }}>
-                <span className="app-more-item-icon"><LogOut size={21} /></span>
-                <span>خروج از حساب</span>
-              </button>
-            </nav>
-          </section>
-        </div>
+          </header>
+        </>
       )}
 
       {/* ── Main content ── */}
@@ -704,8 +693,17 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
         </header>}
         <div className={`app-content ${isChatRoute ? 'is-chat-content' : ''}`}>
-          <div key={location.pathname + location.search} className={`future-route-stage ${isChatRoute ? 'is-chat-stage' : ''}`}>
-            {children}
+          <div key={location.pathname + location.search} className={`future-route-stage ${isChatRoute ? 'is-chat-stage' : ''} ${isMoreRoute ? 'is-more-stage' : ''}`}>
+            {isMoreRoute ? (
+              <MobileMoreContent
+                profile={profile}
+                items={moreNavItems}
+                query={mobileSearch}
+                onQueryChange={setMobileSearch}
+                onNavigate={go}
+                onSignOut={() => { closeMobile(); void signOut(); }}
+              />
+            ) : children}
           </div>
         </div>
       </main>
@@ -720,12 +718,22 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </button>
         </div>
       )}
-      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock" aria-label="پیمایش سریع">
-        <button ref={moreTriggerRef} type="button" className={mobileOpen?'is-active':''} aria-label="بیشتر" aria-haspopup="dialog" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}><Layers3 size={21}/><span>بیشتر</span></button>
-        <button type="button" className={location.pathname.startsWith('/chat')?'is-active':''} aria-current={location.pathname.startsWith('/chat')?'page':undefined} onClick={()=>go('/chat')}><MessageCircle size={21}/><span>چت</span></button>
-        <button type="button" className={location.pathname.startsWith('/operations')?'is-active':''} aria-current={location.pathname.startsWith('/operations')?'page':undefined} onClick={()=>go('/operations')}><ClipboardList size={21}/><span>عملیات</span></button>
-        <button type="button" className={location.pathname.startsWith('/reminders')?'is-active':''} aria-current={location.pathname.startsWith('/reminders')?'page':undefined} onClick={()=>go('/reminders')}><CalendarDays size={21}/><span>یادآورها</span></button>
-        <button type="button" className={isActive('/')?'is-active':''} aria-current={isActive('/')?'page':undefined} onClick={()=>go('/')}><Home size={21}/><span>خانه</span></button>
+      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs" aria-label="پیمایش اصلی برنامه">
+        <button type="button" className={location.pathname === '/' ? 'is-active' : ''} aria-current={location.pathname === '/' ? 'page' : undefined} onClick={() => go('/')}>
+          <Home size={22} strokeWidth={1.9} /><span>خانه</span>
+        </button>
+        <button type="button" className={location.pathname.startsWith('/reminders') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/reminders') ? 'page' : undefined} onClick={() => go('/reminders')}>
+          <CalendarDays size={22} strokeWidth={1.9} /><span>یادآورها</span>
+        </button>
+        <button type="button" className={location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 'page' : undefined} onClick={() => go('/operations')}>
+          <ClipboardList size={22} strokeWidth={1.9} /><span>عملیات</span>
+        </button>
+        <button type="button" className={location.pathname.startsWith('/chat') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/chat') ? 'page' : undefined} onClick={() => go('/chat')}>
+          <MessageCircle size={22} strokeWidth={1.9} /><span>چت</span>
+        </button>
+        <button type="button" className={isMoreTab ? 'is-active' : ''} aria-current={isMoreTab ? 'page' : undefined} onClick={() => go('/more')}>
+          <Layers3 size={22} strokeWidth={1.9} /><span>بیشتر</span>
+        </button>
       </nav>, document.body)}
       {!location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />}
     </div>

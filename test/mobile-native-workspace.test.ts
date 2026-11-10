@@ -27,7 +27,8 @@ describe('native mobile workspace screens', () => {
     expect(nativeCss).toContain('.app-mobile-viewport-dock');
     expect(nativeCss).toContain('inset-block-end: 0 !important');
     expect(nativeCss).toContain('env(safe-area-inset-bottom)');
-    expect(shell).toContain('aria-label="پیمایش سریع"');
+    expect(shell).toContain('aria-label="پیمایش اصلی برنامه"');
+    expect(shell).toContain('native-bottom-tabs');
     expect(shell).toContain('<span>چت</span>');
   });
 
