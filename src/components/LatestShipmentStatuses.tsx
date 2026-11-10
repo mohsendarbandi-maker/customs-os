@@ -259,7 +259,7 @@ export const LatestShipmentStatuses: React.FC = () => {
               <article className={'shipment-premium-card ' + tone} key={shipment.id} data-shipment-id={shipment.id}>
                 <div className="shipment-premium-card-head">
                   <div className="shipment-premium-identity">
-                    <span className="shipment-premium-icon"><Package size={19} /></span>
+                    <span className="shipment-premium-thumb"><img src="/mobile-ocean-hero.svg" alt="" loading="lazy" /><span aria-hidden="true"><Ship size={15} /></span></span>
                     <div>
                       <span className="shipment-premium-bl">BL · {shipment.bill_of_lading_no || 'بدون بارنامه'}</span>
                       <h3>{buildCargoName(shipment.cargo_count, shipment.cargo_count_unit, shipment.owner, shipment.vessel)}</h3>

@@ -1,0 +1,731 @@
+/*
+ * Darbandi Commercial — Maritime mobile reference system.
+ * Final mobile layer for the six-screen ocean-first design supplied by the user.
+ * Intentionally scoped to touch/mobile layouts; desktop ERP layout remains intact.
+ */
+@media (max-width: 767px), (pointer: coarse) {
+  :root {
+    --maritime-navy: #06244d;
+    --maritime-blue: #075fae;
+    --maritime-cyan: #43c7ed;
+    --maritime-paper: rgba(255,255,255,.96);
+    --maritime-ink: #102d51;
+    --maritime-muted: #6f8299;
+    --maritime-line: rgba(31,101,162,.15);
+    --maritime-shadow: 0 12px 30px rgba(4,40,83,.14);
+  }
+
+  .app-shell.is-touch-layout:not(.is-chat-route) {
+    background: linear-gradient(180deg,#06417e 0%,#0b74b7 29%,#dceeff 68%,#f5f9ff 100%) !important;
+  }
+  .app-shell.is-touch-layout .app-content {
+    padding: 0 12px calc(92px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* 01 — Ocean dashboard: ship artwork, deep-blue greeting band and luminous cards. */
+  .app-shell.is-touch-layout .customs-home {
+    position: relative !important;
+    isolation: isolate;
+    min-height: 100dvh !important;
+    overflow: hidden !important;
+    color: #fff !important;
+    background:
+      url('/mobile-ocean-hero.svg') center top / 100% 290px no-repeat,
+      linear-gradient(180deg,#062f67 0%,#0877b7 31%,#8ccdec 52%,#e8f5ff 70%,#f4f8ff 100%) !important;
+  }
+  .app-shell.is-touch-layout .customs-home::before {
+    display: block !important;
+    content: "" !important;
+    position: absolute !important;
+    z-index: -1;
+    inset-inline: -14%;
+    bottom: -30px;
+    height: 45%;
+    opacity: 1 !important;
+    background:
+      radial-gradient(ellipse at 20% 20%,rgba(255,255,255,.34),transparent 34%),
+      linear-gradient(178deg,rgba(57,174,222,.22),rgba(4,54,111,.68));
+    border-radius: 50% 50% 0 0 / 15% 18% 0 0;
+    pointer-events: none;
+  }
+  .app-shell.is-touch-layout .customs-home::after {
+    display: block !important;
+    content: "" !important;
+    position: absolute !important;
+    z-index: -1;
+    inset-inline: -22%;
+    bottom: -60px;
+    height: 28%;
+    opacity: 1 !important;
+    background: linear-gradient(180deg,rgba(37,146,204,.24),rgba(3,40,88,.74));
+    border-radius: 50% 50% 0 0 / 22% 24% 0 0;
+    pointer-events: none;
+  }
+  .app-shell.is-touch-layout .customs-home > div {
+    position: relative;
+    z-index: 1;
+    padding: max(12px,env(safe-area-inset-top)) 0 28px !important;
+  }
+  .app-shell.is-touch-layout .customs-home > div > header {
+    min-height: 78px !important;
+    margin: 0 -12px 178px !important;
+    padding: 13px 16px 12px !important;
+    border: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,.17) !important;
+    border-radius: 0 0 22px 22px !important;
+    background: linear-gradient(115deg,rgba(3,25,63,.91),rgba(4,81,144,.78)) !important;
+    color: #fff !important;
+    box-shadow: 0 10px 28px rgba(0,28,70,.19) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(145%);
+    backdrop-filter: blur(18px) saturate(145%);
+  }
+  .app-shell.is-touch-layout .customs-home > div > header h1,
+  .app-shell.is-touch-layout .customs-home > div > header p,
+  .app-shell.is-touch-layout .customs-home > div > header .customs-home-tagline {
+    display: block !important;
+    color: #fff !important;
+  }
+  .app-shell.is-touch-layout .customs-home > div > header h1 {
+    font-size: 17px !important;
+    font-weight: 900 !important;
+  }
+  .app-shell.is-touch-layout .customs-home > div > header p { color: rgba(235,248,255,.83) !important; }
+  .app-shell.is-touch-layout .customs-home .customs-home-mark {
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 15px !important;
+    background: rgba(255,255,255,.14) !important;
+    border: 1px solid rgba(255,255,255,.28) !important;
+    color: #fff !important;
+    box-shadow: inset 0 1px rgba(255,255,255,.18);
+  }
+  .app-shell.is-touch-layout .customs-home > div > header > div:last-child > a {
+    min-height: 38px !important;
+    border-radius: 13px !important;
+    color: #fff !important;
+    background: rgba(255,255,255,.14) !important;
+    border: 1px solid rgba(255,255,255,.25) !important;
+  }
+  .app-shell.is-touch-layout .mobile-ocean-highlight {
+    position: relative !important;
+    min-height: 112px !important;
+    margin: -164px 0 14px !important;
+    padding: 17px 18px !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(255,255,255,.44) !important;
+    border-radius: 23px !important;
+    color: #fff !important;
+    background:
+      linear-gradient(105deg,rgba(3,33,75,.94),rgba(0,104,176,.72)),
+      url('/mobile-ocean-hero.svg') center 55% / cover !important;
+    box-shadow: 0 12px 28px rgba(0,35,80,.25),inset 0 1px rgba(255,255,255,.20) !important;
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
+  .app-shell.is-touch-layout .mobile-ocean-highlight > div { gap: 3px !important; }
+  .app-shell.is-touch-layout .mobile-ocean-highlight span,
+  .app-shell.is-touch-layout .mobile-ocean-highlight small {
+    color: rgba(239,249,255,.90) !important;
+    font-weight: 750 !important;
+  }
+  .app-shell.is-touch-layout .mobile-ocean-highlight strong {
+    color: #fff !important;
+    font-size: 38px !important;
+    line-height: 1.05 !important;
+    text-shadow: 0 3px 16px rgba(0,20,54,.28);
+  }
+  .app-shell.is-touch-layout .mobile-ocean-highlight-icon {
+    width: 58px !important;
+    height: 58px !important;
+    border: 1px solid rgba(255,255,255,.3) !important;
+    border-radius: 19px !important;
+    background: rgba(255,255,255,.15) !important;
+    color: #fff !important;
+  }
+  .app-shell.is-touch-layout .mobile-dashboard-actions {
+    display: grid !important;
+    grid-template-columns: repeat(4,minmax(0,1fr)) !important;
+    gap: 8px !important;
+    margin: 0 0 15px !important;
+  }
+  .app-shell.is-touch-layout .mobile-dashboard-actions > a {
+    min-width: 0;
+    min-height: 66px !important;
+    padding: 8px 3px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center;
+    justify-content: center;
+    gap: 4px !important;
+    border: 1px solid rgba(255,255,255,.78) !important;
+    border-radius: 17px !important;
+    background: linear-gradient(145deg,rgba(255,255,255,.98),rgba(231,244,255,.94)) !important;
+    color: var(--maritime-ink) !important;
+    box-shadow: 0 7px 17px rgba(8,62,112,.12) !important;
+  }
+  .app-shell.is-touch-layout .mobile-dashboard-actions > a span {
+    width: 28px;height: 28px;display:grid;place-items:center;
+    color:#087ac5;background:#e4f3ff;border-radius:10px;
+  }
+  .app-shell.is-touch-layout .mobile-dashboard-actions > a b {
+    color: var(--maritime-ink) !important;
+    font-size: 10px !important;
+    white-space: nowrap;
+  }
+  .app-shell.is-touch-layout .customs-widget-toolbar { display:none !important; }
+  .app-shell.is-touch-layout .customs-widget-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  .app-shell.is-touch-layout .customs-widget-frame {
+    border: 1px solid rgba(255,255,255,.78) !important;
+    border-radius: 22px !important;
+    background: rgba(255,255,255,.95) !important;
+    color: var(--maritime-ink) !important;
+    box-shadow: 0 9px 25px rgba(8,55,105,.11) !important;
+    overflow: hidden !important;
+  }
+  .app-shell.is-touch-layout .customs-widget-body { color:var(--maritime-ink) !important; }
+  .app-shell.is-touch-layout .customs-stat-line {
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:9px !important;
+    padding:10px !important;
+  }
+  .app-shell.is-touch-layout .customs-stat-divider { display:none !important; }
+  .app-shell.is-touch-layout .customs-stat {
+    min-height:78px !important;
+    padding:12px 13px !important;
+    border:1px solid rgba(20,105,170,.12) !important;
+    border-radius:17px !important;
+    background:linear-gradient(145deg,#fff,#edf7ff) !important;
+    box-shadow:0 5px 13px rgba(15,78,130,.08) !important;
+    grid-template-columns:25px minmax(0,1fr) !important;
+    gap:4px 8px !important;
+  }
+  .app-shell.is-touch-layout .customs-stat > svg { color:#0879c6 !important; }
+  .app-shell.is-touch-layout .customs-stat > span { color:#71849a !important; }
+  .app-shell.is-touch-layout .customs-stat strong { color:#102e50 !important; font-size:22px !important; }
+  .app-shell.is-touch-layout .customs-shipments-section { padding:12px !important; }
+  .app-shell.is-touch-layout .customs-status-board {
+    border:0 !important;
+    border-radius:0 !important;
+    background:transparent !important;
+  }
+
+  /* Shipment cards carry a vessel image, live state, process rail and warning cues. */
+  .app-shell.is-touch-layout .shipment-premium-card {
+    padding:13px !important;
+    gap:10px !important;
+    border:1px solid rgba(25,106,168,.14) !important;
+    border-radius:20px !important;
+    background:linear-gradient(150deg,#fff 0%,#f5faff 100%) !important;
+    box-shadow:0 8px 22px rgba(6,59,111,.10) !important;
+  }
+  .app-shell.is-touch-layout .shipment-premium-identity { align-items:center !important; }
+  .app-shell.is-touch-layout .shipment-premium-thumb {
+    position:relative;
+    display:block;
+    width:72px;height:60px;flex:0 0 72px;
+    overflow:hidden;
+    border:1px solid rgba(21,120,186,.18);
+    border-radius:14px;
+    background:#dcefff;
+    box-shadow:0 5px 12px rgba(5,63,116,.12);
+  }
+  .app-shell.is-touch-layout .shipment-premium-thumb img {
+    display:block;width:100%;height:100%;object-fit:cover;
+  }
+  .app-shell.is-touch-layout .shipment-premium-thumb > span {
+    position:absolute;inset:auto 5px 5px auto;
+    width:23px;height:23px;display:grid;place-items:center;
+    border:1px solid rgba(255,255,255,.6);border-radius:8px;
+    background:rgba(2,49,94,.72);color:#fff;
+  }
+  .app-shell.is-touch-layout .shipment-premium-identity h3 {
+    color:#102d50 !important;
+    font-size:14px !important;
+    font-weight:900 !important;
+  }
+  .app-shell.is-touch-layout .shipment-premium-bl { color:#71859b !important; }
+  .app-shell.is-touch-layout .shipment-premium-meta { color:#637d98 !important; }
+  .app-shell.is-touch-layout .shipment-premium-progress-head { color:#17395d !important; }
+  .app-shell.is-touch-layout .shipment-premium-steps {
+    padding:10px 7px 5px !important;
+    border-radius:15px !important;
+    background:linear-gradient(180deg,#f2f8ff,#eaf4fe) !important;
+  }
+  .app-shell.is-touch-layout .shipment-premium-step-dot {
+    width:27px !important;height:27px !important;
+    border:2px solid #c9dbea !important;
+    background:#fff !important;
+    box-shadow:0 2px 5px rgba(8,59,106,.08);
+  }
+  .app-shell.is-touch-layout .shipment-premium-step.done .shipment-premium-step-dot {
+    background:#17a86f !important;border-color:#17a86f !important;color:#fff !important;
+  }
+  .app-shell.is-touch-layout .shipment-premium-step.current .shipment-premium-step-dot {
+    background:#087be0 !important;border-color:#087be0 !important;color:#fff !important;
+    box-shadow:0 0 0 4px rgba(8,123,224,.12);
+  }
+  .app-shell.is-touch-layout .shipment-premium-step-label { color:#607b97 !important; }
+  .app-shell.is-touch-layout .shipment-premium-facts {
+    padding:10px 11px !important;
+    border:1px solid rgba(28,103,162,.10);
+    border-radius:14px;
+    background:#f7fbff;
+  }
+  .app-shell.is-touch-layout .shipment-premium-facts span { color:#71859a !important; }
+  .app-shell.is-touch-layout .shipment-premium-facts b { color:#102e51 !important; }
+  .app-shell.is-touch-layout .shipment-premium-warnings span {
+    border:1px solid rgba(220,143,27,.20);
+    border-radius:11px;
+    background:#fff8e9;
+    color:#986016 !important;
+    padding:7px 9px;
+  }
+  .app-shell.is-touch-layout .shipment-premium-details {
+    border:1px solid rgba(21,103,169,.16) !important;
+    border-radius:12px !important;
+    background:#edf6ff !important;
+    color:#075da3 !important;
+  }
+  .app-shell.is-touch-layout .shipment-premium-enter {
+    border-radius:12px !important;
+    background:linear-gradient(115deg,#087fe3,#075bbd) !important;
+    box-shadow:0 5px 13px rgba(5,94,185,.22) !important;
+  }
+
+  /* 02 — New shipment: navy maritime frame, white paper form, blue primary action. */
+  .app-shell.is-touch-layout .shipment-first-page {
+    min-height:100dvh !important;
+    margin:0 -12px !important;
+    padding:calc(14px + env(safe-area-inset-top)) 13px 30px !important;
+    color:#f2f9ff !important;
+    background:
+      url('/mobile-ocean-hero.svg') center top / 100% 230px no-repeat,
+      linear-gradient(180deg,#062d63 0%,#075f9c 30%,#d9efff 31%,#eef6ff 100%) !important;
+  }
+  .app-shell.is-touch-layout .shipment-first-page > div { width:100% !important; }
+  .app-shell.is-touch-layout .shipment-first-page > div > header {
+    min-height:78px;
+    margin:-14px -13px 16px !important;
+    padding:calc(13px + env(safe-area-inset-top)) 14px 13px !important;
+    border:0 !important;
+    border-bottom:1px solid rgba(255,255,255,.18) !important;
+    border-radius:0 0 22px 22px !important;
+    background:rgba(2,31,73,.82) !important;
+    color:#fff !important;
+    box-shadow:0 10px 26px rgba(0,24,63,.2);
+  }
+  .app-shell.is-touch-layout .shipment-first-page h1,
+  .app-shell.is-touch-layout .shipment-first-page header p,
+  .app-shell.is-touch-layout .shipment-first-page header .app-muted { color:#fff !important; }
+  .app-shell.is-touch-layout .shipment-first-page .shipment-mobile-stepper {
+    display:flex !important;
+    align-items:center;justify-content:center;gap:7px;
+    margin:0 0 15px !important;padding:13px 10px !important;
+    border:1px solid rgba(255,255,255,.27) !important;
+    border-radius:18px !important;
+    background:rgba(4,40,88,.38) !important;
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  }
+  .app-shell.is-touch-layout .shipment-first-page .shipment-mobile-step {
+    min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;
+    color:rgba(239,248,255,.75) !important;
+  }
+  .app-shell.is-touch-layout .shipment-first-page .shipment-mobile-step span {
+    width:29px;height:29px;display:grid;place-items:center;border-radius:50%;
+    background:rgba(255,255,255,.17);color:#fff;font-weight:900;
+  }
+  .app-shell.is-touch-layout .shipment-first-page .shipment-mobile-step.is-active span {
+    background:#fff;color:#075cac;box-shadow:0 0 0 5px rgba(255,255,255,.14);
+  }
+  .app-shell.is-touch-layout .shipment-first-page .shipment-mobile-step b { font-size:10px !important; }
+  .app-shell.is-touch-layout .shipment-first-page .shipment-mobile-stepper > i {
+    width:24px;height:2px;flex:0 0 24px;background:rgba(255,255,255,.38);
+  }
+  .app-shell.is-touch-layout .shipment-first-page > div > section,
+  .app-shell.is-touch-layout .shipment-first-page section.rounded-2xl {
+    border:1px solid rgba(255,255,255,.92) !important;
+    border-radius:22px !important;
+    background:rgba(255,255,255,.97) !important;
+    color:#173757 !important;
+    box-shadow:0 10px 27px rgba(8,57,104,.12) !important;
+  }
+  .app-shell.is-touch-layout .shipment-first-page label { color:#56708b !important; }
+  .app-shell.is-touch-layout .shipment-first-page input,
+  .app-shell.is-touch-layout .shipment-first-page select,
+  .app-shell.is-touch-layout .shipment-first-page textarea {
+    min-height:45px;
+    border:1px solid #d5e3f1 !important;
+    border-radius:12px !important;
+    background:#f6f9ff !important;
+    color:#173451 !important;
+    font-size:14px !important;
+    box-shadow:inset 0 1px 2px rgba(12,53,91,.04);
+  }
+  .app-shell.is-touch-layout .shipment-first-page button[class*="bg-blue-600"],
+  .app-shell.is-touch-layout .shipment-first-page button[class*="bg-[var(--primary)]"] {
+    min-height:47px;
+    border-radius:14px !important;
+    background:linear-gradient(110deg,#0786ec,#075dc8) !important;
+    box-shadow:0 7px 18px rgba(4,100,200,.24);
+  }
+
+  /* 03 — Chat: deep sea glass while retaining the safe keyboard/composer behavior. */
+  .app-shell.is-chat-route .chat-standalone {
+    background:
+      url('/mobile-ocean-hero.svg') center top / 100% 42dvh no-repeat,
+      linear-gradient(180deg,#052b60 0%,#0875b2 38%,#eaf4ff 72%,#f3f8ff 100%) !important;
+  }
+  .app-shell.is-chat-route .chat-app-header {
+    color:#fff !important;
+    background:linear-gradient(115deg,rgba(3,29,69,.95),rgba(4,94,157,.86)) !important;
+    border-color:rgba(255,255,255,.18) !important;
+  }
+  .app-shell.is-chat-route .chat-app-brand,
+  .app-shell.is-chat-route .chat-app-brand b,
+  .app-shell.is-chat-route .chat-app-brand small { color:#fff !important; }
+  .app-shell.is-chat-route .chat-app-header-status { color:#d9f3ff !important; }
+  .app-shell.is-chat-route .chat-conversation-view,
+  .app-shell.is-chat-route .chat-conversation-panel-heading,
+  .app-shell.is-chat-route .chat-conversation-header {
+    color:#153553 !important;
+    background:rgba(255,255,255,.96) !important;
+  }
+  .app-shell.is-chat-route .chat-message-area {
+    background:
+      radial-gradient(circle at 12% 5%,rgba(72,180,228,.15),transparent 35%),
+      linear-gradient(180deg,#eaf5ff,#f4f8fd) !important;
+  }
+  .app-shell.is-chat-route .chat-message-area [id^="msg-"] > div > div {
+    border:1px solid rgba(18,91,151,.10);
+    box-shadow:0 5px 15px rgba(15,68,117,.08) !important;
+  }
+  .app-shell.is-chat-route .chat-message-area [id^="msg-"] > div > div.bg-\[var\(--primary\)\] {
+    background:linear-gradient(140deg,#087dd7,#075ab3) !important;
+  }
+  .app-shell.is-chat-route .chat-composer {
+    border:1px solid rgba(255,255,255,.9) !important;
+    background:rgba(255,255,255,.96) !important;
+    box-shadow:0 9px 25px rgba(7,55,101,.16) !important;
+  }
+  .app-shell.is-chat-route .chat-composer textarea {
+    background:#f1f6fc !important;color:#173655 !important;
+  }
+
+  /* 04 — Settings: distinct visual theme previews with glass cards. */
+  .app-shell.is-touch-layout .settings-enterprise-page {
+    min-height:100dvh;
+    margin:0 -12px;
+    padding:calc(12px + env(safe-area-inset-top)) 12px 24px;
+    color:#f3f9ff !important;
+    background:
+      url('/mobile-ocean-hero.svg') center top / 100% 210px no-repeat,
+      linear-gradient(180deg,#06356e 0%,#0b72b0 25%,#eaf4ff 26%,#f5f8fd 100%) !important;
+  }
+  .app-shell.is-touch-layout .settings-enterprise-page > div > header {
+    margin:-12px -12px 14px !important;
+    padding:calc(14px + env(safe-area-inset-top)) 14px 14px !important;
+    border-radius:0 0 22px 22px;
+    background:rgba(3,34,77,.78);
+    color:#fff !important;
+  }
+  .app-shell.is-touch-layout .settings-enterprise-page > div > header h1,
+  .app-shell.is-touch-layout .settings-enterprise-page > div > header .app-muted { color:#fff !important; }
+  .app-shell.is-touch-layout .settings-enterprise-page > div > div > aside { display:none !important; }
+  .app-shell.is-touch-layout .settings-enterprise-page > div > div > div > section,
+  .app-shell.is-touch-layout .settings-enterprise-page .rounded-2xl.border.app-border {
+    border:1px solid rgba(255,255,255,.86) !important;
+    border-radius:20px !important;
+    background:rgba(255,255,255,.97) !important;
+    color:#173957 !important;
+    box-shadow:0 8px 22px rgba(9,59,105,.10) !important;
+  }
+  .app-shell.is-touch-layout .settings-enterprise-page .visual-theme-options {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:9px !important;
+  }
+  .app-shell.is-touch-layout .settings-enterprise-page .visual-theme-option {
+    min-height:112px;
+    padding:10px !important;
+    border:1px solid #dbe7f2 !important;
+    border-radius:16px !important;
+    background:#f9fcff !important;
+    color:#163655 !important;
+  }
+  .app-shell.is-touch-layout .settings-enterprise-page .visual-theme-option.is-selected {
+    outline:2px solid #0a82dc;
+    background:#edf7ff !important;
+  }
+  .app-shell.is-touch-layout .settings-enterprise-page .visual-theme-swatches {
+    height:43px;
+    padding:5px;
+    border-radius:11px;
+    background:#e8f1fa;
+  }
+  .app-shell.is-touch-layout .settings-enterprise-page .visual-theme-swatches i {
+    flex:1;border-radius:7px;box-shadow:inset 0 1px rgba(255,255,255,.3);
+  }
+  .app-shell.is-touch-layout .settings-enterprise-page .layout-preset-options {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  /* 05 — Reminders: urgency colors, legible task rows and date controls. */
+  .app-shell.is-touch-layout .reminders-page {
+    min-height:100dvh !important;
+    margin:0 -12px !important;
+    padding:calc(12px + env(safe-area-inset-top)) 12px 30px !important;
+    background:
+      url('/mobile-ocean-hero.svg') center top / 100% 205px no-repeat,
+      linear-gradient(180deg,#06366f 0%,#0b72b1 24%,#edf6ff 25%,#f7faff 100%) !important;
+  }
+  .app-shell.is-touch-layout .reminders-hub-header {
+    padding:12px !important;
+    margin:-12px -12px 14px !important;
+    border:0 !important;
+    border-radius:0 0 22px 22px !important;
+    background:rgba(3,34,77,.82) !important;
+    color:#fff !important;
+  }
+  .app-shell.is-touch-layout .reminders-home-title h1,
+  .app-shell.is-touch-layout .reminders-home-title p { color:#fff !important; }
+  .app-shell.is-touch-layout .reminders-hub-actions button {
+    width:39px;height:39px;min-width:39px;
+    border:1px solid rgba(255,255,255,.24) !important;
+    border-radius:13px !important;
+    background:rgba(255,255,255,.13) !important;
+    color:#fff !important;
+  }
+  .app-shell.is-touch-layout .reminders-home-stats {
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:9px !important;
+  }
+  .app-shell.is-touch-layout .reminders-home-stat {
+    min-height:73px;
+    padding:12px !important;
+    border:1px solid rgba(22,103,164,.12) !important;
+    border-radius:17px !important;
+    background:linear-gradient(145deg,#fff,#f0f7ff) !important;
+    box-shadow:0 6px 16px rgba(13,62,110,.08) !important;
+    color:#173755 !important;
+  }
+  .app-shell.is-touch-layout .reminders-home-stat span { color:#71849a !important; }
+  .app-shell.is-touch-layout .reminders-home-stat strong { color:#163757 !important;font-size:24px !important; }
+  .app-shell.is-touch-layout .reminders-hub-section { margin-top:17px !important; }
+  .app-shell.is-touch-layout .reminders-home-section-heading { color:#143552 !important; }
+  .app-shell.is-touch-layout .reminders-open-grid { display:grid !important;grid-template-columns:1fr !important;gap:9px !important; }
+  .app-shell.is-touch-layout .reminders-open-task {
+    min-height:74px;
+    display:grid !important;
+    grid-template-columns:38px minmax(0,1fr) auto !important;
+    align-items:center;
+    gap:10px !important;
+    padding:12px !important;
+    border:1px solid rgba(22,100,164,.12) !important;
+    border-radius:17px !important;
+    background:rgba(255,255,255,.97) !important;
+    color:#163654 !important;
+    box-shadow:0 6px 16px rgba(13,62,110,.07) !important;
+  }
+  .app-shell.is-touch-layout .reminders-open-title { color:#173654 !important; }
+  .app-shell.is-touch-layout .reminders-open-status { color:#6c8299 !important; }
+  .app-shell.is-touch-layout .reminders-standalone-header {
+    border-radius:17px !important;
+    background:rgba(3,38,80,.9) !important;
+    color:#fff !important;
+  }
+  .app-shell.is-touch-layout .reminders-standalone-header h1,
+  .app-shell.is-touch-layout .reminders-standalone-header .app-muted { color:#fff !important; }
+  .app-shell.is-touch-layout .reminders-calendar-cell,
+  .app-shell.is-touch-layout .reminders-selected-day-panel,
+  .app-shell.is-touch-layout .reminders-compose-sheet {
+    border-radius:17px !important;
+    background:#fff !important;
+    color:#173654 !important;
+  }
+
+  /* 06 — Shipment detail and showcase share a data-rich detail card language. */
+  .app-shell.is-touch-layout .shipment-detail-mobile-screen {
+    min-height:100dvh;
+    margin:0 -12px;
+    padding:calc(12px + env(safe-area-inset-top)) 12px 28px;
+    background:
+      url('/mobile-ocean-hero.svg') center top / 100% 220px no-repeat,
+      linear-gradient(180deg,#06366e 0%,#0a71ae 26%,#eaf5ff 27%,#f6faff 100%) !important;
+  }
+  .app-shell.is-touch-layout .shipment-detail-mobile-screen > div:first-child {
+    margin:-12px -12px 14px !important;
+    padding:calc(13px + env(safe-area-inset-top)) 14px 14px !important;
+    border-radius:0 0 22px 22px;
+    background:rgba(3,33,76,.82);
+    color:#fff;
+  }
+  .app-shell.is-touch-layout .shipment-detail-mobile-screen > div:first-child h1,
+  .app-shell.is-touch-layout .shipment-detail-mobile-screen > div:first-child p { color:#fff !important; }
+  .app-shell.is-touch-layout .shipment-detail-maritime-hero {
+    position:relative;
+    display:grid;
+    grid-template-columns:112px minmax(0,1fr);
+    gap:12px;
+    align-items:center;
+    margin-bottom:14px;
+    padding:12px;
+    border:1px solid rgba(255,255,255,.88);
+    border-radius:20px;
+    background:rgba(255,255,255,.97);
+    color:#163656;
+    box-shadow:0 9px 22px rgba(9,58,108,.11);
+  }
+  .app-shell.is-touch-layout .shipment-detail-maritime-hero img {
+    width:112px;height:90px;object-fit:cover;border-radius:14px;
+  }
+  .app-shell.is-touch-layout .shipment-detail-maritime-hero h2 {
+    color:#143654;font-size:15px;font-weight:950;line-height:1.6;
+  }
+  .app-shell.is-touch-layout .shipment-detail-maritime-hero p {
+    color:#6b8096;font-size:11px;line-height:1.7;
+  }
+  .app-shell.is-touch-layout .shipment-detail-maritime-hero .status-pill {
+    display:inline-flex;margin-top:5px;padding:4px 9px;border-radius:99px;
+    background:#e8f5ef;color:#16815d;font-size:10px;font-weight:850;
+  }
+  .app-shell.is-touch-layout .shipment-detail-maritime-hero .detail-cta {
+    grid-column:1 / -1;
+    min-height:42px;display:flex;align-items:center;justify-content:center;
+    border-radius:13px;background:linear-gradient(110deg,#075fb7,#0789df);
+    color:#fff;font-size:12px;font-weight:900;
+  }
+  .app-shell.is-touch-layout .shipment-detail-mobile-screen .app-surface {
+    border:1px solid rgba(29,104,166,.12) !important;
+    border-radius:19px !important;
+    background:rgba(255,255,255,.97) !important;
+    color:#183956 !important;
+    box-shadow:0 7px 18px rgba(11,64,112,.08) !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-card {
+    border:1px solid rgba(29,104,166,.13) !important;
+    border-radius:19px !important;
+    background:rgba(255,255,255,.97) !important;
+    box-shadow:0 8px 21px rgba(9,58,108,.09) !important;
+  }
+}
+
+/* Preserve accessibility: no forced motion for users who opt out. */
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.is-touch-layout .shipment-premium-card,
+  .app-shell.is-touch-layout .customs-home *,
+  .app-shell.is-touch-layout .shipment-first-page * {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  .app-shell.is-touch-layout .shipment-detail-progress {
+    grid-column:1 / -1;
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:4px;
+    padding:12px 4px 6px;
+    border-top:1px solid #e7eff7;
+  }
+  .app-shell.is-touch-layout .shipment-detail-progress-step {
+    position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;
+    min-width:0;text-align:center;color:#71859b;font-size:9px;font-weight:800;
+  }
+  .app-shell.is-touch-layout .shipment-detail-progress-step:not(:last-child)::after {
+    content:"";position:absolute;top:12px;inset-inline-start:-35%;
+    width:70%;height:2px;background:#d8e6f2;
+  }
+  .app-shell.is-touch-layout .shipment-detail-progress-step i {
+    z-index:1;width:25px;height:25px;display:grid;place-items:center;
+    border-radius:50%;border:2px solid #d6e4f1;background:#fff;
+    color:#8298ad;font-size:10px;font-style:normal;font-weight:900;
+  }
+  .app-shell.is-touch-layout .shipment-detail-progress-step.is-done i {
+    color:#fff;background:#18ad78;border-color:#18ad78;
+  }
+  .app-shell.is-touch-layout .shipment-detail-progress-step.is-current i {
+    color:#fff;background:#087ee0;border-color:#087ee0;
+    box-shadow:0 0 0 4px rgba(8,126,224,.12);
+  }
+  .app-shell.is-touch-layout .shipment-detail-facts {
+    grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:7px;padding:10px 0;border-top:1px solid #e7eff7;
+  }
+  .app-shell.is-touch-layout .shipment-detail-facts > div {
+    min-width:0;display:flex;flex-direction:column;gap:5px;
+    padding:7px;border-radius:10px;background:#f4f8fd;
+  }
+  .app-shell.is-touch-layout .shipment-detail-facts small {
+    color:#74889d;font-size:9px;font-weight:750;
+  }
+  .app-shell.is-touch-layout .shipment-detail-facts b {
+    overflow-wrap:anywhere;color:#173856;font-size:11px;font-weight:900;
+  }
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-hero {
+    margin:-12px -12px 14px !important;
+    padding:calc(14px + env(safe-area-inset-top)) 14px 17px !important;
+    border:0 !important;border-radius:0 0 23px 23px !important;
+    background:rgba(3,34,77,.86) !important;color:#fff !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-hero h1,
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-hero p { color:#fff !important; }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-kpis {
+    display:grid !important;grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:7px !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-kpis article {
+    min-width:0;padding:10px 7px !important;border:1px solid rgba(20,103,164,.12) !important;
+    border-radius:14px !important;background:#fff !important;color:#183958 !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-kpis article strong { color:#12385b !important;font-size:21px !important; }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-toolbar {
+    display:flex;flex-direction:column;align-items:stretch;gap:10px;
+    margin:15px 0 11px !important;padding:13px !important;
+    border:1px solid rgba(20,103,164,.12) !important;border-radius:17px !important;
+    background:rgba(255,255,255,.97) !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-toolbar h2,
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-toolbar p { color:#183958 !important; }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-controls {
+    display:grid !important;grid-template-columns:minmax(0,1fr) 110px !important;gap:7px !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-ship-icon {
+    position:relative;display:block !important;width:64px;height:54px;flex:0 0 64px;
+    overflow:hidden;border-radius:13px;background:#dceeff;color:#fff !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-ship-icon img {
+    display:block;width:100%;height:100%;object-fit:cover;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-ship-icon svg {
+    position:absolute;inset:auto 5px 5px auto;padding:4px;width:24px;height:24px;
+    border-radius:8px;background:rgba(2,45,89,.76);
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-card h3 { color:#143756 !important; }
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  .app-shell.is-chat-route .app-mobile-viewport-dock {
+    border:1px solid rgba(117,191,237,.22) !important;
+    border-bottom:0 !important;
+    background:linear-gradient(120deg,rgba(3,26,66,.97),rgba(4,70,126,.96)) !important;
+    box-shadow:0 -8px 28px rgba(0,29,70,.20) !important;
+    -webkit-backdrop-filter:blur(24px) saturate(150%) !important;
+    backdrop-filter:blur(24px) saturate(150%) !important;
+  }
+  .app-shell.is-chat-route .app-mobile-viewport-dock > button {
+    color:#dceeff !important;
+  }
+  .app-shell.is-chat-route .app-mobile-viewport-dock > button.is-active {
+    background:linear-gradient(140deg,#087fe5,#0759b4) !important;
+    color:#fff !important;
+    box-shadow:0 5px 15px rgba(0,103,217,.3) !important;
+  }
+}

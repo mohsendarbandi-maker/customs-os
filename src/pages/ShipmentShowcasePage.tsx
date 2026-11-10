@@ -146,7 +146,7 @@ export const ShipmentShowcasePage: React.FC = () => {
           const tone = statusTone(status);
           const tasks = reminderByShipment.get(shipment.id) || [];
           return <article className={'showcase-card fm-showcase-card ' + tone} key={shipment.id}>
-            <div className="showcase-card-head"><span className="showcase-ship-icon"><Ship size={20} /></span><span className={'showcase-status ' + tone}>{status}</span></div>
+            <div className="showcase-card-head"><span className="showcase-ship-icon"><img src="/mobile-ocean-hero.svg" alt="" loading="lazy" /><Ship size={16} /></span><span className={'showcase-status ' + tone}>{status}</span></div>
             <h3>{shipment.display_name || 'محموله بدون عنوان'}</h3>
             <div className="showcase-identifiers"><span>بارنامه: {shipment.bill_of_lading_no || '—'}</span><span>{shipment.shipping_line || 'خط کشتیرانی نامشخص'}</span></div>
             <div className="showcase-facts">
