@@ -409,6 +409,11 @@ export const ChatPage:React.FC=()=>{
   const{data,error:e}=await supabase.from('profiles').select('id,full_name,phone,role').eq('organization_id',profile.organization_id).eq('is_active',true).order('full_name');
   if(e){setError(err(e));return}setPeople((data??[])as Person[]);setPersonQuery('');setPeopleMode(mode);setPeopleOpen(true);
  };
+ useEffect(() => {
+  const createFromShell = () => { void openPeople('direct'); };
+  window.addEventListener('customs-os:chat-create', createFromShell);
+  return () => window.removeEventListener('customs-os:chat-create', createFromShell);
+ }, [openPeople]);
  const newChat=async(id:string)=>{
   if(!id||id===user?.id)return;
   try{
