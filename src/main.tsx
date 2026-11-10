@@ -14,6 +14,7 @@ import './styles/ocean-pro-ui.css';
 import './styles/mobile-native-workspace.css';
 import './styles/mobile-reference-redesign.css';
 import './styles/mobile-app-premium.css';
+import './styles/mobile-reference-final.css';
 import { startOfflineQueue } from './lib/offlineQueue';
 import { registerSW } from 'virtual:pwa-register';
 
