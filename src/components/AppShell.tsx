@@ -7,7 +7,7 @@ import {
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
   Contact, Folder, ClipboardCheck, GitBranch, Receipt, Network, FileStack, FileSignature,
-  Home, CalendarDays, RefreshCw
+  Home, CalendarDays, RefreshCw, Plus
 } from 'lucide-react';
 import { useAuth, UserRole } from '../context/AuthContext';
 import { useAppearance } from '../context/AppearanceContext';
@@ -403,6 +403,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     location.pathname === '/' ||
     location.pathname === '/chat' ||
     location.pathname === '/reminders' ||
+    location.pathname === '/more' ||
     (location.pathname === '/operations' && !location.search);
   const showMobileBack = !isPrimaryMobileRoute;
 
@@ -418,7 +419,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   const currentPageLabel =
-    location.pathname === '/'
+    location.pathname === '/more'
+      ? 'بیشتر'
+      : location.pathname === '/'
       ? 'خانه'
       : location.pathname.startsWith('/settings')
         ? 'تنظیمات'
@@ -489,6 +492,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
       {/* Compact touch header: deliberately no hamburger and no theme toggle.
           Theme settings live in More > ظاهر و شخصی‌سازی. */}
+      {!isDesktop && <div className="app-mobile-status" aria-hidden="true" />}
       {!isDesktop && (
         <header className="app-mobilebar" aria-label="هدر موبایل">
           {showMobileBack ? (
@@ -508,11 +512,16 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           <button
             type="button"
             className="icon-btn app-mobile-settings"
-            aria-label="تنظیمات ظاهر"
-            title="تنظیمات ظاهر"
-            onClick={() => navigate('/settings/appearance')}
+            aria-label={location.pathname.startsWith('/reminders') ? 'یادآور جدید' : isChatRoute ? 'گفتگوی جدید' : location.pathname === '/more' ? 'پروفایل من' : 'تنظیمات ظاهر'}
+            title={location.pathname.startsWith('/reminders') ? 'یادآور جدید' : isChatRoute ? 'گفتگوی جدید' : location.pathname === '/more' ? 'پروفایل من' : 'تنظیمات ظاهر'}
+            onClick={() => {
+              if (location.pathname.startsWith('/reminders')) window.dispatchEvent(new Event('customs-os:reminder-create'));
+              else if (isChatRoute) window.dispatchEvent(new Event('customs-os:chat-create'));
+              else if (location.pathname === '/more') navigate('/settings/profile');
+              else navigate('/settings/appearance');
+            }}
           >
-            <Settings2 size={19} />
+            {location.pathname.startsWith('/reminders') || isChatRoute ? <Plus size={19} /> : location.pathname === '/more' ? <Users size={19} /> : <Settings2 size={19} />}
           </button>
         </header>
       )}
@@ -720,12 +729,22 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </button>
         </div>
       )}
-      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock" aria-label="پیمایش سریع">
-        <button ref={moreTriggerRef} type="button" className={mobileOpen?'is-active':''} aria-label="بیشتر" aria-haspopup="dialog" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}><Layers3 size={21}/><span>بیشتر</span></button>
-        <button type="button" className={location.pathname.startsWith('/chat')?'is-active':''} aria-current={location.pathname.startsWith('/chat')?'page':undefined} onClick={()=>go('/chat')}><MessageCircle size={21}/><span>چت</span></button>
-        <button type="button" className={location.pathname.startsWith('/operations')?'is-active':''} aria-current={location.pathname.startsWith('/operations')?'page':undefined} onClick={()=>go('/operations')}><ClipboardList size={21}/><span>عملیات</span></button>
-        <button type="button" className={location.pathname.startsWith('/reminders')?'is-active':''} aria-current={location.pathname.startsWith('/reminders')?'page':undefined} onClick={()=>go('/reminders')}><CalendarDays size={21}/><span>یادآورها</span></button>
-        <button type="button" className={isActive('/')?'is-active':''} aria-current={isActive('/')?'page':undefined} onClick={()=>go('/')}><Home size={21}/><span>خانه</span></button>
+      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock" aria-label="پیمایش اصلی" data-native-tabs="5">
+        <button type="button" className={isActive('/') ? 'is-active' : ''} aria-current={isActive('/') ? 'page' : undefined} onClick={() => navigate('/')}>
+          <Home size={21} strokeWidth={2.1}/><span>خانه</span>
+        </button>
+        <button type="button" className={location.pathname.startsWith('/reminders') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/reminders') ? 'page' : undefined} onClick={() => navigate('/reminders')}>
+          <CalendarDays size={21} strokeWidth={2.1}/><span>یادآورها</span>
+        </button>
+        <button type="button" className={location.pathname.startsWith('/operations') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/operations') ? 'page' : undefined} onClick={() => navigate('/operations')}>
+          <ClipboardList size={21} strokeWidth={2.1}/><span>عملیات</span>
+        </button>
+        <button type="button" className={isChatRoute ? 'is-active' : ''} aria-current={isChatRoute ? 'page' : undefined} onClick={() => navigate('/chat')}>
+          <MessageCircle size={21} strokeWidth={2.1}/><span>چت</span>
+        </button>
+        <button type="button" className={(location.pathname === '/more' || !['/', '/reminders', '/operations', '/chat'].includes(location.pathname)) ? 'is-active' : ''} aria-current={(location.pathname === '/more' || !['/', '/reminders', '/operations', '/chat'].includes(location.pathname)) ? 'page' : undefined} onClick={() => navigate('/more')}>
+          <Layers3 size={21} strokeWidth={2.1}/><span>بیشتر</span>
+        </button>
       </nav>, document.body)}
       {!location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />}
     </div>
