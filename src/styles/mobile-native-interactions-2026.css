@@ -1,0 +1,176 @@
+/*
+ * Customs OS — Phase 4 native interaction layer.
+ * Keeps keyboard, route transitions, tab re-selection and floating controls
+ * inside the one shared mobile viewport. Desktop styles are not affected.
+ */
+@media (max-width: 1023px), (pointer: coarse) {
+  /* The outgoing screen is a short-lived inert snapshot, not a second live page. */
+  .native-route-exit-snapshot {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1200 !important;
+    display: block !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    background: var(--cos-canvas, #f4f7fb) !important;
+    transform-origin: center;
+    animation: cosRouteExit .22s cubic-bezier(.2,.72,.25,1) both !important;
+    contain: layout paint style;
+  }
+  .native-route-exit-snapshot > .app-shell {
+    position: absolute !important;
+    inset: 0 !important;
+    display: flex !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+  .native-route-exit-snapshot :is(button,a,input,textarea,select,[tabindex]) {
+    pointer-events: none !important;
+  }
+
+  /* A tab pressed while already selected scrolls its root screen to the top.
+     Chat is intentionally excluded: it must retain its selected conversation. */
+  .app-mobile-dock.native-bottom-tabs > button {
+    position: relative;
+    isolation: isolate;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"]::after {
+    content: "";
+    position: absolute;
+    inset: 3px 5px;
+    z-index: -1;
+    border-radius: 13px;
+    background: transparent;
+    pointer-events: none;
+  }
+  .app-mobile-dock.native-bottom-tabs > button:focus-visible {
+    outline: 3px solid rgba(40,119,184,.22) !important;
+    outline-offset: -2px !important;
+  }
+
+  /* iOS Safari shrinks visualViewport when the software keyboard opens.
+     Resize the chat shell to that visible area and move the body-portal dock
+     to the same bottom edge. The composer stays in the final flex row above it. */
+  .app-shell.is-chat-route {
+    position: fixed !important;
+    inset-inline: 0 !important;
+    top: var(--chat-visible-top, 0px) !important;
+    bottom: auto !important;
+    width: 100% !important;
+    height: var(--chat-visible-height, 100dvh) !important;
+    min-height: 0 !important;
+    max-height: var(--chat-visible-height, 100dvh) !important;
+    overflow: hidden !important;
+  }
+  .app-shell.is-chat-route .app-main {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+  .app-shell.is-chat-route .app-content {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    flex-direction: column !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    box-sizing: border-box !important;
+    padding: 0 0 calc(var(--cos-tab-height) + env(safe-area-inset-bottom)) !important;
+    overflow: hidden !important;
+  }
+  .app-shell.is-chat-route .future-route-stage {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+  .app-shell.is-chat-route .chat-standalone {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+  .app-shell.is-chat-route .chat-conversation-view {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+  .app-shell.is-chat-route .chat-message-area {
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .app-shell.is-chat-route .chat-composer {
+    position: relative !important;
+    z-index: 5 !important;
+    display: block !important;
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 7px 9px max(8px, env(safe-area-inset-bottom)) !important;
+    border-top: 1px solid var(--cos-line) !important;
+    background: #fff !important;
+  }
+  .app-shell.is-chat-route .chat-composer [data-unsaved="true"] {
+    max-height: min(24dvh, 170px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+  }
+  html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock {
+    position: fixed !important;
+    bottom: var(--chat-visual-bottom-inset, 0px) !important;
+    z-index: 900 !important;
+  }
+  .app-shell.is-chat-route .app-mobile-dock.native-bottom-tabs {
+    display: grid !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  /* Calendar/composer overlays may cover the dock; their close/save controls
+     remain reachable within their own full-screen dialog scroll area. */
+  .app-shell.is-touch-layout .reminders-composebar.is-open {
+    z-index: 1200 !important;
+    overscroll-behavior: contain !important;
+  }
+  .app-shell.is-touch-layout .reminders-compose-sheet {
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .app-shell.is-touch-layout .reminders-mobile-fab {
+    z-index: 700 !important;
+    bottom: calc(var(--cos-tab-height) + env(safe-area-inset-bottom) + 14px) !important;
+  }
+
+  @keyframes cosRouteExit {
+    from { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+    to { opacity: 0; transform: translate3d(-10px,0,0) scale(.992); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .native-route-exit-snapshot { animation: none !important; }
+    .app-mobile-dock.native-bottom-tabs > button { transition: none !important; }
+  }
+}
