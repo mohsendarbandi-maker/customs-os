@@ -623,3 +623,48 @@
     transition-duration: .01ms !important;
   }
 }
+
+@media (max-width: 767px), (pointer: coarse) {
+  .app-shell.is-touch-layout .shipment-detail-progress {
+    grid-column:1 / -1;
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:4px;
+    padding:12px 4px 6px;
+    border-top:1px solid #e7eff7;
+  }
+  .app-shell.is-touch-layout .shipment-detail-progress-step {
+    position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;
+    min-width:0;text-align:center;color:#71859b;font-size:9px;font-weight:800;
+  }
+  .app-shell.is-touch-layout .shipment-detail-progress-step:not(:last-child)::after {
+    content:"";position:absolute;top:12px;inset-inline-start:-35%;
+    width:70%;height:2px;background:#d8e6f2;
+  }
+  .app-shell.is-touch-layout .shipment-detail-progress-step i {
+    z-index:1;width:25px;height:25px;display:grid;place-items:center;
+    border-radius:50%;border:2px solid #d6e4f1;background:#fff;
+    color:#8298ad;font-size:10px;font-style:normal;font-weight:900;
+  }
+  .app-shell.is-touch-layout .shipment-detail-progress-step.is-done i {
+    color:#fff;background:#18ad78;border-color:#18ad78;
+  }
+  .app-shell.is-touch-layout .shipment-detail-progress-step.is-current i {
+    color:#fff;background:#087ee0;border-color:#087ee0;
+    box-shadow:0 0 0 4px rgba(8,126,224,.12);
+  }
+  .app-shell.is-touch-layout .shipment-detail-facts {
+    grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:7px;padding:10px 0;border-top:1px solid #e7eff7;
+  }
+  .app-shell.is-touch-layout .shipment-detail-facts > div {
+    min-width:0;display:flex;flex-direction:column;gap:5px;
+    padding:7px;border-radius:10px;background:#f4f8fd;
+  }
+  .app-shell.is-touch-layout .shipment-detail-facts small {
+    color:#74889d;font-size:9px;font-weight:750;
+  }
+  .app-shell.is-touch-layout .shipment-detail-facts b {
+    overflow-wrap:anywhere;color:#173856;font-size:11px;font-weight:900;
+  }
+}
