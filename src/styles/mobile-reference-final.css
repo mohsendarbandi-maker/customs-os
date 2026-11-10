@@ -710,3 +710,22 @@
   }
   .app-shell.is-touch-layout .shipment-showcase-page .showcase-card h3 { color:#143756 !important; }
 }
+
+@media (max-width: 767px), (pointer: coarse) {
+  .app-shell.is-chat-route .app-mobile-viewport-dock {
+    border:1px solid rgba(117,191,237,.22) !important;
+    border-bottom:0 !important;
+    background:linear-gradient(120deg,rgba(3,26,66,.97),rgba(4,70,126,.96)) !important;
+    box-shadow:0 -8px 28px rgba(0,29,70,.20) !important;
+    -webkit-backdrop-filter:blur(24px) saturate(150%) !important;
+    backdrop-filter:blur(24px) saturate(150%) !important;
+  }
+  .app-shell.is-chat-route .app-mobile-viewport-dock > button {
+    color:#dceeff !important;
+  }
+  .app-shell.is-chat-route .app-mobile-viewport-dock > button.is-active {
+    background:linear-gradient(140deg,#087fe5,#0759b4) !important;
+    color:#fff !important;
+    box-shadow:0 5px 15px rgba(0,103,217,.3) !important;
+  }
+}
