@@ -668,3 +668,45 @@
     overflow-wrap:anywhere;color:#173856;font-size:11px;font-weight:900;
   }
 }
+
+@media (max-width: 767px), (pointer: coarse) {
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-hero {
+    margin:-12px -12px 14px !important;
+    padding:calc(14px + env(safe-area-inset-top)) 14px 17px !important;
+    border:0 !important;border-radius:0 0 23px 23px !important;
+    background:rgba(3,34,77,.86) !important;color:#fff !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-hero h1,
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-hero p { color:#fff !important; }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-kpis {
+    display:grid !important;grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:7px !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-kpis article {
+    min-width:0;padding:10px 7px !important;border:1px solid rgba(20,103,164,.12) !important;
+    border-radius:14px !important;background:#fff !important;color:#183958 !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-kpis article strong { color:#12385b !important;font-size:21px !important; }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-toolbar {
+    display:flex;flex-direction:column;align-items:stretch;gap:10px;
+    margin:15px 0 11px !important;padding:13px !important;
+    border:1px solid rgba(20,103,164,.12) !important;border-radius:17px !important;
+    background:rgba(255,255,255,.97) !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-toolbar h2,
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-toolbar p { color:#183958 !important; }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-controls {
+    display:grid !important;grid-template-columns:minmax(0,1fr) 110px !important;gap:7px !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-ship-icon {
+    position:relative;display:block !important;width:64px;height:54px;flex:0 0 64px;
+    overflow:hidden;border-radius:13px;background:#dceeff;color:#fff !important;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-ship-icon img {
+    display:block;width:100%;height:100%;object-fit:cover;
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-ship-icon svg {
+    position:absolute;inset:auto 5px 5px auto;padding:4px;width:24px;height:24px;
+    border-radius:8px;background:rgba(2,45,89,.76);
+  }
+  .app-shell.is-touch-layout .shipment-showcase-page .showcase-card h3 { color:#143756 !important; }
+}
