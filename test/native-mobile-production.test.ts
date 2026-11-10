@@ -57,7 +57,7 @@ describe('Customs OS production native mobile shell', () => {
   it('animates both exits and entries while preserving interactive route navigation', () => {
     expect(shell).toContain('captureNativeRouteExit');
     expect(shell).toContain('onClickCapture={handleNativeRouteLink}');
-    expect(shell).toContain('className="native-route-exit-snapshot"');
+    expect(shell).toContain("snapshot.className = 'native-route-exit-snapshot'");
     expect(css).toContain('@keyframes nativeProductionEnter');
     expect(css).toContain('@keyframes nativeProductionExit');
     expect(css).toContain('.native-route-exit-snapshot');
