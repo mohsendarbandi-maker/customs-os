@@ -19,6 +19,11 @@ describe('Customs OS Phase 4 native mobile interactions', () => {
     expect(shell).toContain('focusout');
     expect(css).toContain('height: var(--chat-visible-height, 100dvh) !important');
     expect(css).toContain('bottom: var(--chat-visual-bottom-inset, 0px) !important');
+    expect(css).toContain('height: calc(var(--cos-tab-height) + env(safe-area-inset-bottom)) !important');
+    expect(css).toContain('inset-block-end: var(--chat-visual-bottom-inset, 0px) !important');
+    expect(css).toContain('.app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content');
+    expect(css).toContain('.chat-standalone[data-chat-selected="true"] .chat-composer');
+    expect(css).toContain('margin-block-end: 0 !important');
   });
 
   it('keeps the composer in the final flex row and reserves the fixed dock height', () => {
