@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -214,6 +214,79 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return wideViewport && finePointer && !hasTouch;
   };
   const [isDesktop, setIsDesktop] = useState(getDesktopLayout);
+
+  const appShellRef = useRef<HTMLDivElement | null>(null);
+  const routeExitSnapshotRef = useRef<HTMLElement | null>(null);
+  const routeExitTimerRef = useRef<number | null>(null);
+
+  const clearRouteExitSnapshot = () => {
+    if (routeExitTimerRef.current !== null) {
+      window.clearTimeout(routeExitTimerRef.current);
+      routeExitTimerRef.current = null;
+    }
+    routeExitSnapshotRef.current?.remove();
+    routeExitSnapshotRef.current = null;
+  };
+
+  const captureNativeRouteExit = () => {
+    if (isDesktop || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const source = appShellRef.current;
+    if (!source) return;
+
+    clearRouteExitSnapshot();
+    const snapshot = document.createElement('div');
+    snapshot.className = 'native-route-exit-snapshot';
+    snapshot.setAttribute('aria-hidden', 'true');
+    snapshot.inert = true;
+
+    const clone = source.cloneNode(true) as HTMLDivElement;
+    clone.removeAttribute('id');
+    clone.setAttribute('aria-hidden', 'true');
+    clone.inert = true;
+    clone.querySelectorAll<HTMLElement>('[id]').forEach(element => element.removeAttribute('id'));
+    clone.querySelectorAll<HTMLElement>('[autofocus]').forEach(element => element.removeAttribute('autofocus'));
+
+    const originalControls = source.querySelectorAll('input, textarea, select');
+    const clonedControls = clone.querySelectorAll('input, textarea, select');
+    originalControls.forEach((control, index) => {
+      const copy = clonedControls[index];
+      if (control instanceof HTMLInputElement && copy instanceof HTMLInputElement && !['file', 'password', 'hidden'].includes(control.type)) {
+        copy.value = control.value;
+        copy.checked = control.checked;
+      } else if (control instanceof HTMLTextAreaElement && copy instanceof HTMLTextAreaElement) {
+        copy.value = control.value;
+      } else if (control instanceof HTMLSelectElement && copy instanceof HTMLSelectElement) {
+        copy.selectedIndex = control.selectedIndex;
+      }
+    });
+
+    const originalScrollers = source.querySelectorAll<HTMLElement>('.app-content, .chat-message-area, [data-native-scroll]');
+    const clonedScrollers = clone.querySelectorAll<HTMLElement>('.app-content, .chat-message-area, [data-native-scroll]');
+    originalScrollers.forEach((scroller, index) => {
+      const copy = clonedScrollers[index];
+      if (copy) {
+        copy.scrollTop = scroller.scrollTop;
+        copy.scrollLeft = scroller.scrollLeft;
+      }
+    });
+
+    snapshot.appendChild(clone);
+    document.body.appendChild(snapshot);
+    routeExitSnapshotRef.current = snapshot;
+
+    const cleanup = () => {
+      snapshot.remove();
+      if (routeExitSnapshotRef.current === snapshot) {
+        routeExitSnapshotRef.current = null;
+        if (routeExitTimerRef.current !== null) {
+          window.clearTimeout(routeExitTimerRef.current);
+          routeExitTimerRef.current = null;
+        }
+      }
+    };
+    snapshot.addEventListener('animationend', cleanup, { once: true });
+    routeExitTimerRef.current = window.setTimeout(cleanup, 320);
+  };
 
   // Keep the chat composer attached to the actually visible iOS viewport when the
   // browser chrome or the software keyboard changes the visual viewport.
@@ -433,7 +506,35 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   const go = (to: string) => {
+    captureNativeRouteExit();
     navigate(to);
+    closeMobile();
+  };
+
+  const handleNativeRouteLink = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (isDesktop || event.defaultPrevented || event.button !== 0 ||
+        event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest<HTMLAnchorElement>('a[href]');
+    if (!anchor || anchor.hasAttribute('download') ||
+        (anchor.target && anchor.target !== '_self') ||
+        anchor.hasAttribute('data-native-no-transition')) return;
+
+    let destination: URL;
+    try {
+      destination = new URL(anchor.href, window.location.href);
+    } catch {
+      return;
+    }
+    if (destination.origin !== window.location.origin ||
+        !['http:', 'https:'].includes(destination.protocol) ||
+        (destination.pathname === location.pathname &&
+         destination.search === location.search)) return;
+
+    event.preventDefault();
+    captureNativeRouteExit();
+    navigate(destination.pathname + destination.search + destination.hash);
     closeMobile();
   };
 
@@ -456,6 +557,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const goBack = () => {
     closeMobile();
     const historyState = window.history.state as BrowserHistoryState;
+    captureNativeRouteExit();
     if (typeof historyState?.idx === 'number' && historyState.idx > 0) {
       navigate(-1);
       return;
@@ -479,7 +581,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           ?.label || 'بیشتر';
 
   return (
-    <div data-route={location.pathname} className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''} ${isChatRoute ? 'is-chat-route' : ''}`} dir="rtl">
+    <div ref={appShellRef} onClickCapture={handleNativeRouteLink} data-route={location.pathname} className={`app-shell min-h-screen future-shell ${isDesktop ? 'is-desktop-layout' : 'is-touch-layout'} ${isNarrowDevice ? 'is-narrow-device' : ''} ${isChatRoute ? 'is-chat-route' : ''}`} dir="rtl">
       {/* Desktop navigation is mounted only at >=1024px. It is not merely hidden on phones. */}
       {isDesktop && (
         <aside className={`app-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
@@ -566,7 +668,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 } else if (location.pathname.startsWith('/chat')) {
                   window.dispatchEvent(new Event('customs-os:chat-new-message'));
                 } else {
-                  navigate('/settings/appearance');
+                  go('/settings/appearance');
                 }
               }}
             >
