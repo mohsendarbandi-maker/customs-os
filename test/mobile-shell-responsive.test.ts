@@ -41,7 +41,7 @@ describe('iOS touch-first application shell', () => {
     expect(shell).toContain('native-more-profile');
     expect(shell).toContain('native-more-search');
     expect(shell).toContain('native-more-grid');
-    expect(shell).toContain('{filteredNav.map((item) => {');
+    expect(shell).toContain('items.filter(item => item.group === group).map(item => {');
     expect(mobileCss).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
     expect(shell).not.toContain('mobile-menu-trigger');
   });
@@ -76,15 +76,15 @@ describe('iOS touch-first application shell', () => {
     expect(shell).toContain('aria-label="بازگشت"');
   });
 
-  it('adds Home Screen-only right-edge swipe back without hijacking editors or horizontal lists', () => {
+  it('adds Home Screen-only right-edge swipe back without hijacking editors or module scrollers', () => {
     expect(shell).toContain("!isStandalonePwa()");
     expect(shell).toContain('touch.clientX < window.innerWidth - 26');
+    expect(shell).toContain("'input'");
     expect(shell).toContain("'.overflow-x-auto'");
-    expect(shell).toContain("'.app-more-sheet'");
+    expect(shell).not.toContain("'.app-more-sheet'");
     expect(shell).toContain("'.chat-standalone'");
     expect(shell).toContain("'.reminders-app-standalone'");
-    expect(shell).toContain("event.key === 'Escape'");
-    expect(shell).toContain('focusableSelector');
-    expect(shell).toContain('moreSheetRef.current?.focus({ preventScroll: true })');
-  });
-});
+    expect(shell).toContain('event.changedTouches.length !== 1');
+    expect(shell).not.toContain('mobileOpen');
+    expect(shell).not.toContain('moreSheetRef');
+  });});
