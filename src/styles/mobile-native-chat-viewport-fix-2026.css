@@ -35,3 +35,84 @@
     overscroll-behavior-y: contain !important;
   }
 }
+
+
+/*
+ * Final flex-boundary correction.
+ * Percentage heights on the nested chat root resolved against an auto-height
+ * flex stage and allowed the composer to extend 62px past the dock reservation.
+ * Make every flex item in the chat vertical chain use a zero height basis and
+ * let flexbox distribute only the shell's remaining viewport above the dock.
+ */
+@media (max-width: 1023px), (pointer: coarse) {
+  .app-shell.is-touch-layout.is-chat-route .app-main.is-chat-main {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    box-sizing: border-box !important;
+    padding: 0 0 calc(var(--cos-tab-height) + env(safe-area-inset-bottom)) !important;
+    overflow: hidden !important;
+  }
+
+  .app-shell.is-touch-layout.is-chat-route .future-route-stage.is-chat-stage {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .app-shell.is-touch-layout.is-chat-route .chat-standalone {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .app-shell.is-touch-layout.is-chat-route .chat-conversation-view {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .app-shell.is-touch-layout.is-chat-route .chat-message-area {
+    flex: 1 1 0% !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .app-shell.is-touch-layout.is-chat-route .chat-composer {
+    position: relative !important;
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
