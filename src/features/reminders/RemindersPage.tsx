@@ -540,7 +540,7 @@ export const RemindersPage:React.FC=()=>{
                 </section>;
               })}
               {!homeOpenReminders.length&&<div className="reminders-hub-empty reminders-home-empty"><Check size={20}/><strong>{t('همه‌چیز مرتب است')}</strong></div>}
-            </div>
+            </div>}
     </section>
   </section> : isListsPage ? <section className="reminders-route-screen reminders-index-screen" key={currentSection}>
     <header className="reminders-subpage-heading"><button type="button" onClick={()=>goToSection('home')} aria-label={t('بازگشت')}><ChevronRight size={20}/></button><div><span>{t('یادآورها')}</span><h1>{t('فهرست‌های من')}</h1></div></header>
