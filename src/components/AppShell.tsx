@@ -291,28 +291,48 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   // Keep the chat composer attached to the actually visible iOS viewport when the
   // browser chrome or the software keyboard changes the visual viewport.
   useEffect(() => {
-    if (!isChatRoute) return;
+    if (!isChatRoute || isDesktop) return;
     const shell = document.querySelector<HTMLElement>('.app-shell.is-chat-route');
     if (!shell) return;
     const viewport = window.visualViewport;
+    const root = document.documentElement;
+    let syncFrame = 0;
     const syncVisibleViewport = () => {
-      shell.style.setProperty('--chat-visible-height', `${Math.round(viewport?.height ?? window.innerHeight)}px`);
-      shell.style.setProperty('--chat-visible-top', `${Math.round(viewport?.offsetTop ?? 0)}px`);
+      const visibleHeight = Math.max(1, Math.round(viewport?.height ?? window.innerHeight));
+      const visibleTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+      // The portal dock is rendered under document.body, so publish its keyboard
+      // offset on the root as well as the chat shell.
+      const visibleBottomInset = Math.max(0, Math.round(window.innerHeight - (visibleTop + visibleHeight)));
+      shell.style.setProperty('--chat-visible-height', `${visibleHeight}px`);
+      shell.style.setProperty('--chat-visible-top', `${visibleTop}px`);
+      shell.style.setProperty('--chat-visual-bottom-inset', `${visibleBottomInset}px`);
+      root.style.setProperty('--chat-visual-bottom-inset', `${visibleBottomInset}px`);
+    };
+    const scheduleSync = () => {
+      if (syncFrame) window.cancelAnimationFrame(syncFrame);
+      syncFrame = window.requestAnimationFrame(syncVisibleViewport);
     };
     syncVisibleViewport();
     viewport?.addEventListener('resize', syncVisibleViewport);
     viewport?.addEventListener('scroll', syncVisibleViewport);
     window.addEventListener('resize', syncVisibleViewport, { passive: true });
     window.addEventListener('orientationchange', syncVisibleViewport, { passive: true });
+    shell.addEventListener('focusin', scheduleSync);
+    shell.addEventListener('focusout', scheduleSync);
     return () => {
       viewport?.removeEventListener('resize', syncVisibleViewport);
       viewport?.removeEventListener('scroll', syncVisibleViewport);
       window.removeEventListener('resize', syncVisibleViewport);
       window.removeEventListener('orientationchange', syncVisibleViewport);
+      shell.removeEventListener('focusin', scheduleSync);
+      shell.removeEventListener('focusout', scheduleSync);
+      if (syncFrame) window.cancelAnimationFrame(syncFrame);
       shell.style.removeProperty('--chat-visible-height');
       shell.style.removeProperty('--chat-visible-top');
+      shell.style.removeProperty('--chat-visual-bottom-inset');
+      root.style.removeProperty('--chat-visual-bottom-inset');
     };
-  }, [isChatRoute]);
+  }, [isChatRoute, isDesktop]);
   const [isNarrowDevice, setIsNarrowDevice] = useState(getNarrowDevice);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState('');
@@ -506,9 +526,23 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   const go = (to: string) => {
-    captureNativeRouteExit();
-    navigate(to);
+    const destination = new URL(to, window.location.origin);
+    const sameRoute =
+      destination.pathname === location.pathname &&
+      destination.search === location.search &&
+      destination.hash === location.hash;
     closeMobile();
+    if (sameRoute) {
+      // Re-selecting the current root tab is a native "scroll to top" gesture,
+      // not a navigation. In an open chat, preserve the selected conversation.
+      if (!isChatRoute) {
+        const scroller = appShellRef.current?.querySelector<HTMLElement>('.app-content');
+        scroller?.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      }
+      return;
+    }
+    captureNativeRouteExit();
+    navigate(destination.pathname + destination.search + destination.hash);
   };
 
   const handleNativeRouteLink = (event: React.MouseEvent<HTMLDivElement>) => {
