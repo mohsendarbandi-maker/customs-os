@@ -16,6 +16,7 @@ import './styles/mobile-reference-redesign.css';
 import './styles/mobile-app-premium.css';
 import './styles/mobile-reference-final.css';
 import './styles/native-app-shell.css';
+import './styles/native-mobile-production.css';
 import { startOfflineQueue } from './lib/offlineQueue';
 import { registerSW } from 'virtual:pwa-register';
 
