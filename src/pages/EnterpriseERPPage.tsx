@@ -21,7 +21,7 @@ const money=(n:number)=>new Intl.NumberFormat('fa-IR').format(Math.round(n||0));
 export const EnterpriseERPPage:React.FC=()=>{const{profile}=useAuth();const[search,setSearch]=useState('');const[stats,setStats]=useState({shipments:0,clients:0,invoices:0,payments:0});
  useEffect(()=>{let alive=true;(async()=>{const[s,c,i,p]=await Promise.all([supabase.from('shipments').select('id',{count:'exact',head:true}),supabase.from('clients').select('id',{count:'exact',head:true}),supabase.from('finance_invoices').select('id',{count:'exact',head:true}),supabase.from('finance_payments').select('id',{count:'exact',head:true})]);if(alive)setStats({shipments:s.count||0,clients:c.count||0,invoices:i.count||0,payments:p.count||0})})();return()=>{alive=false}},[]);
  const filtered=useMemo(()=>modules.filter(m=>!search||`${m.title} ${m.subtitle} ${m.group}`.includes(search.trim())),[search]);
- return <div className="space-y-6" dir="rtl">
+ return <div className="enterprise-erp-page space-y-6" dir="rtl">
   <section className="rounded-3xl border app-border bg-[var(--surface)]/80 backdrop-blur-xl p-5 md:p-7">
    <div className="flex flex-col lg:flex-row lg:items-center gap-5 justify-between">
     <div><div className="text-xs app-muted mb-2">Enterprise Logistics ERP</div><h1 className="text-2xl md:text-3xl font-black">مرکز مدیریت سازمان</h1><p className="app-muted mt-2 max-w-2xl">لایه مدیریتی یکپارچه برای عملیات، اسناد، مالی و حسابداری؛ بدون تغییر در هسته فعلی عملیات، پرونده و محموله.</p></div>

@@ -528,6 +528,7 @@ jobs:
           set -euo pipefail
           npm install --no-save playwright@1.55.0
           npx playwright install chromium
+          mkdir -p artifacts/mobile-viewport-matrix
           cat > live-runtime-smoke.spec.mjs <<'EOF'
           import { test, expect } from 'playwright/test';
 
@@ -920,6 +921,46 @@ jobs:
                 throw new Error(`390px iPhone layout regression: ${JSON.stringify(phoneLayout)}`);
               }
 
+              // Verify six phone widths and save diagnostic screenshots as CI artifacts.
+              if (new URL(baseURL).hostname === 'mobile.darbandicommercial.ir') {
+                for (const width of [320, 360, 375, 390, 414, 430]) {
+                  const viewportPage = await remindersPage.context().newPage();
+                  try {
+                    await viewportPage.setViewportSize({ width, height: 844 });
+                    await viewportPage.goto(baseURL + '/reminders/login?__viewport_matrix=' + width + '-' + encodeURIComponent(smokeToken), { waitUntil: 'domcontentloaded', timeout: 30000 });
+                    await viewportPage.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => undefined);
+                    await expect(viewportPage.locator('.app-mobilebar')).toHaveCount(1);
+                    await expect(viewportPage.locator('.app-mobile-dock')).toHaveCount(1);
+                    const geometry = await viewportPage.evaluate(() => {
+                      const root = document.querySelector('#root');
+                      const content = document.querySelector('.app-content');
+                      const header = document.querySelector('.app-mobilebar');
+                      const dock = document.querySelector('.app-mobile-dock');
+                      const dockRect = dock?.getBoundingClientRect();
+                      return {
+                        viewportWidth: document.documentElement.clientWidth,
+                        rootClientWidth: root?.clientWidth || 0,
+                        rootScrollWidth: root?.scrollWidth || 0,
+                        contentClientWidth: content?.clientWidth || 0,
+                        contentScrollWidth: content?.scrollWidth || 0,
+                        headerDisplay: header ? getComputedStyle(header).display : 'missing',
+                        dockDisplay: dock ? getComputedStyle(dock).display : 'missing',
+                        dockPosition: dock ? getComputedStyle(dock).position : 'missing',
+                        dockLeft: dockRect ? Math.round(dockRect.left) : -1,
+                        dockRight: dockRect ? Math.round(dockRect.right) : -1,
+                      };
+                    });
+                    if (geometry.viewportWidth !== width || geometry.headerDisplay === 'none' || geometry.dockDisplay === 'none' || geometry.dockPosition !== 'fixed' || geometry.rootScrollWidth > geometry.rootClientWidth + 1 || geometry.contentScrollWidth > geometry.contentClientWidth + 1 || geometry.dockLeft < 0 || geometry.dockRight > width + 1) {
+                      throw new Error(width + 'px mobile viewport regression: ' + JSON.stringify(geometry));
+                    }
+                    await viewportPage.screenshot({ path: 'artifacts/mobile-viewport-matrix/viewport-' + width + '.png', fullPage: true });
+                    console.log('Mobile viewport ' + width + 'px passed:', JSON.stringify(geometry));
+                  } finally {
+                    await viewportPage.close();
+                  }
+                }
+              }
+
               // Simulate a touch-first device whose reported viewport is unusually wide.
               // The app must still present the compact shell rather than a desktop sidebar.
               const touchContext = await browser.newContext({
@@ -1140,3 +1181,12 @@ jobs:
           EOF
           npx playwright test live-runtime-smoke.spec.mjs --reporter=line
           rm -f live-runtime-smoke.spec.mjs
+
+      - name: Upload mobile viewport screenshots
+        if: always() && steps.freshness.outputs.is_latest == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-viewport-matrix-${{ github.run_id }}
+          path: artifacts/mobile-viewport-matrix/*.png
+          if-no-files-found: warn
+          retention-days: 14

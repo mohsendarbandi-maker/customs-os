@@ -603,7 +603,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
   };
 
   return (
-    <main dir="rtl" className="min-h-screen p-4 md:p-6" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+    <main dir="rtl" className="customs-document-manager-page min-h-screen p-4 md:p-6" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
       <div className="max-w-7xl mx-auto space-y-4">
         <header className="flex items-center justify-between gap-3">
           <div>

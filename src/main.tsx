@@ -21,6 +21,7 @@ import './styles/mobile-native-unified-2026.css';
 import './styles/mobile-native-screens-2026.css';
 import './styles/mobile-native-interactions-2026.css';
 import './styles/mobile-native-chat-viewport-fix-2026.css';
+import './styles/mobile-route-polish-2026.css';
 import { startOfflineQueue } from './lib/offlineQueue';
 import { registerSW } from 'virtual:pwa-register';
 

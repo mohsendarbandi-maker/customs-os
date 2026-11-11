@@ -217,7 +217,7 @@ export const RegistrationOrdersPage:React.FC=()=>{
    registered_value_amount:order.value_amount,currency:order.currency
   } as Reconciliation;
  };
- return <main dir="rtl" className="min-h-screen p-4 sm:p-6 lg:p-8" style={{background:'var(--bg)',color:'var(--text)'}}>
+ return <main dir="rtl" className="registration-orders-page min-h-screen p-4 sm:p-6 lg:p-8" style={{background:'var(--bg)',color:'var(--text)'}}>
   <div className="mx-auto max-w-7xl space-y-5">
    <header className="flex flex-wrap items-center justify-between gap-3">
     <div><div className="text-xs app-muted">مدیریت اطلاعات پایه واردات</div><h1 className="mt-1 text-2xl font-black">مدیریت ثبت سفارش‌ها</h1><p className="mt-1 text-sm app-muted">هر ثبت سفارش یک مشخصات بانکی و یک ابزار پرداخت مشترک دارد و می‌تواند چند محموله داشته باشد.</p></div>
