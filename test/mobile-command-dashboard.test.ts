@@ -30,12 +30,12 @@ describe('mobile command center and shared floating dock',()=>{
  });
  it('reserves safe-area-aware space using a shared floating dock token',()=>{
   expect(dock).toContain('--cos-tab-reserve:calc(var(--cos-tab-height) + var(--cos-tab-inset) + var(--cos-tab-clearance) + env(safe-area-inset-bottom))');
-  expect(dock).toContain('inset-inline:var(--cos-tab-inset)!important');expect(dock).toContain('padding:12px 12px var(--cos-tab-reserve)!important');
+  expect(dock).toContain('left:var(--cos-tab-inset)!important');expect(dock).toContain('right:var(--cos-tab-inset)!important');expect(dock).toContain('max-width:480px!important');expect(dock).toContain('padding:12px 12px var(--cos-tab-reserve)!important');
   expect(screens).toContain('padding-bottom: var(--cos-tab-reserve) !important');
  });
  it('keeps chat floating dock aligned with visual viewport and keyboard',()=>{
   expect(chat).toContain('padding: 0 0 var(--cos-tab-reserve) !important');
-  expect(chat).toContain('inset-inline:var(--cos-tab-inset)!important');
+  expect(chat).toContain('left:var(--cos-tab-inset)!important');expect(chat).toContain('right:var(--cos-tab-inset)!important');expect(chat).toContain('max-width:480px!important');
   expect(chat).toContain('var(--chat-visual-bottom-inset,0px) + var(--cos-tab-inset)');
  });
  it('contains long mixed-direction labels on compact screens',()=>{
