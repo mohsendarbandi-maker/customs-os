@@ -17,7 +17,9 @@ describe('mobile command center and shared floating dock',()=>{
   expect(dashboard).toContain("{key:'activeCases'");
   expect(dashboard).toContain('stats[key].toLocaleString');
  });
- it('connects quick access to established routes',()=>{
+ it('connects quick access and settings to established routes',()=>{
+  expect(dashboard).toContain('to="/settings"');
+  expect(dashboard).not.toContain('/settings/appearance');
   for(const route of ['/operations?tab=pre-declaration','/registration-orders','/file-manager','/finance','/shipment-showcase','/reminders'])expect(dashboard).toContain(route);
  });
  it('does not mark the final stage complete without confirmed exit data',()=>{
