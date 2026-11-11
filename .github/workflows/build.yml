@@ -602,6 +602,10 @@ jobs:
                   list.append(card);
                   appShell.append(list);
 
+                  const dashboard = document.createElement('div');
+                  dashboard.className = 'mobile-command-dashboard';
+                  const shipmentRegion = document.createElement('section');
+                  shipmentRegion.className = 'mobile-command-shipments';
                   const wrapper = document.createElement('div');
                   wrapper.className = 'customs-status-board';
                   const board = document.createElement('section');
@@ -610,16 +614,31 @@ jobs:
                   boardGrid.className = 'shipment-board-grid';
                   const premiumCard = document.createElement('article');
                   premiumCard.className = 'shipment-premium-card active';
+                  const identity = document.createElement('div');
+                  identity.className = 'shipment-premium-identity';
+                  const title = document.createElement('h3');
+                  title.textContent = 'محموله وارداتی · بارنامه COSU12345678901234567890 · قطعات صنعتی';
+                  const billOfLading = document.createElement('span');
+                  billOfLading.className = 'shipment-premium-bl';
+                  billOfLading.textContent = 'BL: COSU12345678901234567890 / 2026';
+                  identity.append(title, billOfLading);
+                  premiumCard.append(identity);
                   boardGrid.append(premiumCard);
                   board.append(boardGrid);
                   wrapper.append(board);
-                  appShell.append(wrapper);
+                  shipmentRegion.append(wrapper);
+                  dashboard.append(shipmentRegion);
+                  appShell.append(dashboard);
 
                   const dock = document.createElement('nav');
                   dock.className = 'app-mobile-dock app-mobile-viewport-dock native-bottom-tabs';
+                  const tabLabels = ['خانه', 'عملیات', 'یادآورها', 'چت', 'بیشتر'];
                   for (let index = 0; index < 5; index += 1) {
                     const tab = document.createElement('button');
                     tab.type = 'button';
+                    const label = document.createElement('span');
+                    label.textContent = tabLabels[index];
+                    tab.append(label);
                     dock.append(tab);
                   }
                   document.body.append(appShell, dock);
@@ -683,6 +702,68 @@ jobs:
                     composerClearance: Math.round(dockRect.top - composerRect.bottom),
                   };
                 });
+
+                // Sweep the actual production stylesheet at every requested phone width.
+                // The dashboard/card, long mixed RTL/LTR labels, floating dock, and chat
+                // composer are all measured from rendered DOM bounding boxes.
+                const viewportSweep = [];
+                for (const requestedWidth of [320, 360, 375, 390, 414, 430]) {
+                  await page.setViewportSize({ width: requestedWidth, height: 844 });
+                  const measurement = await page.evaluate(() => {
+                    const dashboard = document.querySelector('.mobile-command-dashboard');
+                    const card = document.querySelector('.mobile-command-shipments .shipment-premium-card');
+                    const title = document.querySelector('.mobile-command-shipments .shipment-premium-identity h3');
+                    const billOfLading = document.querySelector('.mobile-command-shipments .shipment-premium-bl');
+                    const dock = document.querySelector('.app-mobile-viewport-dock');
+                    const composer = document.querySelector('.chat-composer');
+                    const chatContent = document.querySelector('.app-content.is-chat-content');
+                    const rect = (element) => {
+                      if (!element) return null;
+                      const value = element.getBoundingClientRect();
+                      return { left: value.left, right: value.right, top: value.top, bottom: value.bottom, width: value.width, height: value.height };
+                    };
+                    const dockRect = rect(dock);
+                    const composerRect = rect(composer);
+                    const titleFits = Boolean(title && title.scrollWidth <= title.clientWidth + 1);
+                    const billOfLadingFits = Boolean(billOfLading && billOfLading.scrollWidth <= billOfLading.clientWidth + 1);
+                    const tabsFit = Boolean(dock) && Array.from(dock.querySelectorAll('button')).every((tab) => tab.scrollWidth <= tab.clientWidth + 1);
+                    return {
+                      requestedWidth: window.innerWidth,
+                      viewportWidth: document.documentElement.clientWidth,
+                      documentWidth: document.documentElement.scrollWidth,
+                      dashboard: rect(dashboard),
+                      card: rect(card),
+                      dock: dockRect,
+                      composer: composerRect,
+                      composerClearance: dockRect && composerRect ? Math.round(dockRect.top - composerRect.bottom) : -999,
+                      chatContentPaddingBottom: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
+                      titleFits,
+                      billOfLadingFits,
+                      tabsFit,
+                    };
+                  });
+                  viewportSweep.push(measurement);
+                }
+                await page.setViewportSize({ width: 390, height: 844 });
+                expect(viewportSweep).toHaveLength(6);
+                for (const measurement of viewportSweep) {
+                  expect(measurement.viewportWidth, JSON.stringify(measurement)).toBe(measurement.requestedWidth);
+                  expect(measurement.documentWidth, JSON.stringify(measurement)).toBeLessThanOrEqual(measurement.viewportWidth + 1);
+                  expect(measurement.dashboard?.left ?? -1, JSON.stringify(measurement)).toBeGreaterThanOrEqual(0);
+                  expect(measurement.dashboard?.right ?? Infinity, JSON.stringify(measurement)).toBeLessThanOrEqual(measurement.viewportWidth + 1);
+                  expect(measurement.card?.left ?? -1, JSON.stringify(measurement)).toBeGreaterThanOrEqual(0);
+                  expect(measurement.card?.right ?? Infinity, JSON.stringify(measurement)).toBeLessThanOrEqual(measurement.viewportWidth + 1);
+                  expect(measurement.dock?.left ?? -1, JSON.stringify(measurement)).toBeGreaterThanOrEqual(0);
+                  expect(measurement.dock?.right ?? Infinity, JSON.stringify(measurement)).toBeLessThanOrEqual(measurement.viewportWidth + 1);
+                  expect(measurement.dock?.bottom ?? Infinity, JSON.stringify(measurement)).toBeLessThanOrEqual(844);
+                  expect(measurement.composerClearance, JSON.stringify(measurement)).toBeGreaterThanOrEqual(0);
+                  expect(measurement.chatContentPaddingBottom, JSON.stringify(measurement)).toBeGreaterThanOrEqual(50);
+                  expect(measurement.titleFits, JSON.stringify(measurement)).toBe(true);
+                  expect(measurement.billOfLadingFits, JSON.stringify(measurement)).toBe(true);
+                  expect(measurement.tabsFit, JSON.stringify(measurement)).toBe(true);
+                }
+                console.log('Six-width mobile viewport sweep passed:', JSON.stringify(viewportSweep));
+
                 expect(layoutProbe.viewportWidth).toBeLessThanOrEqual(767);
                 expect(layoutProbe.rowMinWidth).toBe('0px');
                 expect(layoutProbe.legacyCardWidth).toBeLessThanOrEqual(layoutProbe.viewportWidth);

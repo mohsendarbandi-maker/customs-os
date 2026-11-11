@@ -10,7 +10,7 @@ const baseCss = read('src/index.css');
 const home = read('src/pages/DesktopHomePage.tsx');
 
 describe('iOS touch-first application shell', () => {
-  it.each([375, 390, 430])('keeps the touch shell contract at %i CSS pixels', (width) => {
+  it.each([320, 360, 375, 390, 414, 430])('keeps the touch shell contract at %i CSS pixels', (width) => {
     expect(width).toBeLessThan(768);
     expect(shell).toContain("window.matchMedia('(min-width: 1024px)')");
     expect(shell).toContain("(pointer: fine)");
