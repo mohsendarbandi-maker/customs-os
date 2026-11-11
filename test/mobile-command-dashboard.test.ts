@@ -12,6 +12,7 @@ describe('mobile command center and shared floating dock',()=>{
   expect(home).toContain('stats={stats}');
   expect(home).toContain('shipmentTracker={<LatestShipmentStatuses/>}');
   expect(home).toContain('reminders={<RemindersHomeCard/>}');
+  expect(home).toContain('setInterval(()=>setNow(new Date()),60_000)');
   expect(dashboard).toContain('stats.active.toLocaleString');
   expect(dashboard).toContain("{key:'activeCases'");
   expect(dashboard).toContain('stats[key].toLocaleString');
