@@ -21,7 +21,7 @@ export const MobileCommandDashboard:React.FC<Props>=({profileName,dateText,timeT
  <div className="mobile-command-dashboard" dir="rtl">
   <header className="mobile-command-greeting">
    <div className="mobile-command-brand"><span className="mobile-command-brand-mark" aria-hidden="true"><Ship size={21}/></span><span className="mobile-command-brand-copy"><small>DARBANDI · MARITIME OPERATIONS</small><b>میزکار عملیات</b></span></div>
-   <Link to="/settings/appearance" className="mobile-command-settings" aria-label="تنظیمات ظاهر"><Settings size={19}/></Link>
+   <Link to="/settings" className="mobile-command-settings" aria-label="تنظیمات ظاهر"><Settings size={19}/></Link>
   </header>
   <section className="mobile-command-hero" aria-labelledby="mobile-command-title">
    <span className="mobile-command-hero-orbit" aria-hidden="true"/>
