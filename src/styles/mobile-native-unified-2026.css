@@ -111,7 +111,6 @@
   }
   .app-mobile-dock.native-bottom-tabs>button svg {width:21px!important;height:21px!important;stroke-width:1.9!important}
   .app-mobile-dock.native-bottom-tabs>button.is-active {border-color:rgba(92,215,197,.22)!important;background:rgba(31,158,145,.19)!important;color:#fff!important;box-shadow:inset 0 0 0 1px rgba(92,215,197,.08)!important;}
-  }
   .app-mobile-dock.native-bottom-tabs>button:active {transform:scale(.95)}
   /* Neutralize the conflicting ocean/gradient overrides from previous mobile experiments. */
   .app-shell.is-touch-layout .customs-home,

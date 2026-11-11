@@ -52,7 +52,7 @@ const stageTarget = (shipment: any, stage: number) => {
     : '/operations';
 };
 
-const statusTone = (shipment: any, stage: number) => {
+const statusTone = (shipment: any) => {
   if (shipment.exitCompleted || shipment.finance_status === 'closed') return 'done';
   if (shipment.current_status === 'completed' && (
     shipment.transport_documents_status !== 'ready' ||
@@ -244,7 +244,7 @@ export const LatestShipmentStatuses: React.FC = () => {
           {filteredData.map((shipment: any) => {
             const current = stageIndex(shipment);
             const open = selected[shipment.id] ?? null;
-            const tone = statusTone(shipment, current);
+            const tone = statusTone(shipment);
             const warnings = [
               ...(shipment.current_status === 'completed' && shipment.transport_documents_status !== 'ready'
                 ? ['اسناد حمل و قبض انبار آماده نیست']
