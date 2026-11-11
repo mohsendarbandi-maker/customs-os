@@ -13,7 +13,8 @@ describe('mobile command center and shared floating dock',()=>{
   expect(home).toContain('shipmentTracker={<LatestShipmentStatuses/>}');
   expect(home).toContain('reminders={<RemindersHomeCard/>}');
   expect(dashboard).toContain('stats.active.toLocaleString');
-  expect(dashboard).toContain('stats.activeCases');
+  expect(dashboard).toContain("{key:'activeCases'");
+  expect(dashboard).toContain('stats[key].toLocaleString');
  });
  it('connects quick access to established routes',()=>{
   for(const route of ['/operations?tab=pre-declaration','/registration-orders','/file-manager','/finance','/shipment-showcase','/reminders'])expect(dashboard).toContain(route);
