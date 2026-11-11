@@ -91,12 +91,12 @@
   }
   /* Exactly five persistent navigation destinations, including opened chats. */
   .app-mobile-dock.native-bottom-tabs {
-    position:fixed!important;z-index:900!important;inset-inline:var(--cos-tab-inset)!important;
+    position:fixed!important;z-index:900!important;inset-inline:auto!important;
     inset-block-end:calc(var(--cos-tab-inset) + env(safe-area-inset-bottom))!important;
-    left:auto!important;right:auto!important;display:grid!important;
+    left:var(--cos-tab-inset)!important;right:var(--cos-tab-inset)!important;display:grid!important;
     grid-template-columns:repeat(5,minmax(0,1fr))!important;align-items:stretch!important;gap:3px!important;
-    width:auto!important;height:var(--cos-tab-height)!important;min-height:var(--cos-tab-height)!important;
-    margin:0!important;padding:6px 8px!important;border:1px solid rgba(255,255,255,.15)!important;
+    width:auto!important;max-width:480px!important;height:var(--cos-tab-height)!important;min-height:var(--cos-tab-height)!important;
+    margin-inline:auto!important;margin-block:0!important;padding:6px 8px!important;border:1px solid rgba(255,255,255,.15)!important;
     border-radius:24px!important;background:rgba(9,39,68,.96)!important;color:#c2d7e8!important;
     box-shadow:0 14px 38px rgba(7,28,48,.28),inset 0 1px 0 rgba(255,255,255,.08)!important;
     -webkit-backdrop-filter:blur(22px) saturate(150%)!important;backdrop-filter:blur(22px) saturate(150%)!important;
