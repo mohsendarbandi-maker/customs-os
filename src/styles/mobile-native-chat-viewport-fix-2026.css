@@ -61,7 +61,7 @@
     height: 0 !important;
     min-height: 0 !important;
     box-sizing: border-box !important;
-    padding: 0 0 calc(var(--cos-tab-height) + env(safe-area-inset-bottom)) !important;
+    padding: 0 0 var(--cos-tab-reserve) !important;
     overflow: hidden !important;
   }
 
@@ -115,4 +115,21 @@
     margin: 0 !important;
     box-sizing: border-box !important;
   }
+}
+
+/* Final authoritative geometry: the portal dock remains floating even while iOS resizes visualViewport for the keyboard. */
+@media (max-width:1023px),(pointer:coarse) {
+ html:has(.app-shell.is-touch-layout.is-chat-route) .app-mobile-viewport-dock {
+  position:fixed!important;inset-inline:auto!important;
+  inset-block-end:calc(var(--chat-visual-bottom-inset,0px) + var(--cos-tab-inset) + env(safe-area-inset-bottom))!important;
+  left:var(--cos-tab-inset)!important;right:var(--cos-tab-inset)!important;
+  bottom:calc(var(--chat-visual-bottom-inset,0px) + var(--cos-tab-inset) + env(safe-area-inset-bottom))!important;
+  width:auto!important;max-width:480px!important;height:var(--cos-tab-height)!important;min-height:var(--cos-tab-height)!important;
+  margin-inline:auto!important;margin-block:0!important;padding:6px 8px!important;box-sizing:border-box!important;
+  border:1px solid rgba(255,255,255,.15)!important;border-radius:24px!important;
+  background:rgba(9,39,68,.96)!important;
+  box-shadow:0 14px 38px rgba(7,28,48,.28),inset 0 1px 0 rgba(255,255,255,.08)!important;
+  -webkit-backdrop-filter:blur(22px) saturate(150%)!important;backdrop-filter:blur(22px) saturate(150%)!important;
+  z-index:900!important;
+ }
 }

@@ -77,7 +77,8 @@ describe('mobile visual cohesion regressions', () => {
   });
 
   it('renders shipment progress as a labeled five-step card on phones, not a clipped 740px row', () => {
-    expect(shipments).toContain("shortLabel: 'انبار'");
+    expect(shipments).toContain("shortLabel: 'اسناد'");
+    expect(shipments).toContain("label: 'اسناد حمل و قبض انبار'");
     expect(shipments).toContain('shipment-premium-step-dot');
     expect(shipments).toContain('shipment-premium-step-label');
     expect(read('src/styles/mobile-app-premium.css')).toContain('grid-template-columns: repeat(5,minmax(0,1fr))');
