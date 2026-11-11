@@ -74,7 +74,7 @@ export const ShipmentShowcasePage: React.FC = () => {
   useEffect(() => {
     const updateSize = () => {
       const deviceWidth = Math.min(window.innerWidth, window.screen?.width || window.innerWidth);
-      setPageSize(deviceWidth < 650 ? 500 : deviceWidth < 1100 ? 4 : 6);
+      setPageSize(deviceWidth < 650 ? 8 : deviceWidth < 1100 ? 4 : 6);
     };
     updateSize();
     window.addEventListener('resize', updateSize, { passive: true });

@@ -5,6 +5,7 @@ import {useAuth} from '../context/AuthContext';
 import {supabase} from '../lib/supabase';
 import {LatestShipmentStatuses} from '../components/LatestShipmentStatuses';
 import {RemindersHomeCard} from '../features/reminders/RemindersHomeCard';
+import {MobileCommandDashboard} from '../components/MobileCommandDashboard';
 
 const ports=[{name:'انزلی',lat:37.4727,lon:49.4587},{name:'آستارا',lat:38.429,lon:48.875},{name:'امیرآباد',lat:36.925,lon:53.420},{name:'نوشهر',lat:36.648,lon:51.496},{name:'فریدونکنار',lat:36.686,lon:52.523},{name:'ترکمن',lat:36.901,lon:54.071},{name:'بندر گز',lat:36.756,lon:53.947}];
 const faDate=new Intl.DateTimeFormat('fa-IR-u-ca-persian',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -49,6 +50,18 @@ const MotionWidget:React.FC<MotionWidgetProps>=({id,title,editing,order,span,onM
 
 export const DesktopHomePage:React.FC=()=>{
  const{profile}=useAuth();
+ const [isMobileDashboard,setIsMobileDashboard]=useState(()=>typeof window!=='undefined'&&(window.matchMedia('(max-width: 1023px)').matches||window.matchMedia('(pointer: coarse)').matches));
+ useEffect(()=>{
+  if(typeof window.matchMedia!=='function')return;
+  const widthQuery=window.matchMedia('(max-width: 1023px)');
+  const touchQuery=window.matchMedia('(pointer: coarse)');
+  const update=()=>setIsMobileDashboard(widthQuery.matches||touchQuery.matches);
+  update();
+  widthQuery.addEventListener?.('change',update);
+  touchQuery.addEventListener?.('change',update);
+  window.addEventListener('orientationchange',update,{passive:true});
+  return()=>{widthQuery.removeEventListener?.('change',update);touchQuery.removeEventListener?.('change',update);window.removeEventListener('orientationchange',update);};
+ },[]);
  const layoutStorageKey=`customs-os:motion-layout:v1:${profile?.organization_id||'unassigned'}:${profile?.id||'unassigned'}`;
  const[widgetOrder,setWidgetOrder]=useState<DashboardWidgetId[]>([...DASHBOARD_WIDGET_IDS]);
  const[widgetSpans,setWidgetSpans]=useState<Record<DashboardWidgetId,number>>({...DEFAULT_WIDGET_SPANS});
@@ -97,6 +110,7 @@ export const DesktopHomePage:React.FC=()=>{
  useEffect(()=>{let cancelled=false;setWeather(null);setMarine(null);setConditionsError(false);fetch(`/api/maritime/conditions?latitude=${port.lat}&longitude=${port.lon}`,{headers:{Accept:'application/json'},cache:'no-store',credentials:'same-origin'}).then(async r=>{const j=await r.json();if(!r.ok)throw new Error(j?.error||'conditions unavailable');if(cancelled)return;setWeather(j.weather?.current||null);setMarine(j.marine?.current||null);setConditionsUpdated(j.updated_at||'');setConditionsError(!j.weather?.current&&!j.marine?.current)}).catch(()=>{if(!cancelled){setWeather(null);setMarine(null);setConditionsError(true)}});return()=>{cancelled=true}},[port]);
  useEffect(()=>{let cancelled=false;(async()=>{const[sh,cl,cs]=await Promise.all([supabase.from('shipments').select('id,current_status'),supabase.from('clients').select('id'),supabase.from('cases').select('id,status')]);if(cancelled)return;const shipments=sh.data||[],cases=cs.data||[];setStats({shipments:shipments.length,clients:(cl.data||[]).length,cases:cases.length,active:shipments.filter((x:any)=>!['cleared','archived','closed'].includes(String(x.current_status||'').toLowerCase())).length,activeCases:cases.filter((x:any)=>!['closed','archived','completed','cancelled'].includes(String(x.status||'').toLowerCase())).length})})().catch(()=>{});return()=>{cancelled=true}},[]);
  const weatherText=useMemo(()=>{const c=weather?.weather_code;if(c===0)return'صاف';if([1,2,3].includes(c))return'نیمه‌ابری';if([45,48].includes(c))return'مه';if([51,53,55,61,63,65,80,81,82].includes(c))return'بارش';if([95,96,99].includes(c))return'رعدوبرق';return'—'},[weather]);
+ if(isMobileDashboard)return <MobileCommandDashboard profileName={profile?.full_name||'همکار گرامی'} dateText={faDate.format(now)} timeText={faTime.format(now)} stats={stats} shipmentTracker={<LatestShipmentStatuses/>} reminders={<RemindersHomeCard/>}/>;
  return <main dir="rtl" className="customs-home min-h-screen text-[var(--text)]" style={{background:'var(--bg)'}}>
   <div className="w-full mx-auto px-4 sm:px-6 xl:px-8 py-5 lg:py-7">
    <header className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-5 border-b border-[var(--border)]">

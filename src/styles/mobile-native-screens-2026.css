@@ -12,8 +12,8 @@
   }
   .app-shell.is-touch-layout .app-content {
     min-height: 0 !important;
-    padding-bottom: calc(var(--cos-tab-height) + env(safe-area-inset-bottom) + 16px) !important;
-    scroll-padding-bottom: calc(var(--cos-tab-height) + env(safe-area-inset-bottom) + 20px);
+    padding-bottom: var(--cos-tab-reserve) !important;
+    scroll-padding-bottom: calc(var(--cos-tab-reserve) + 12px);
   }
   .app-shell.is-touch-layout .future-route-stage > * {
     box-sizing: border-box;
@@ -317,7 +317,7 @@
   .app-shell.is-touch-layout .reminders-mobile-fab {
     position: fixed !important; z-index: 700 !important;
     inset-inline-end: 14px !important;
-    bottom: calc(var(--cos-tab-height) + env(safe-area-inset-bottom) + 14px) !important;
+    bottom: calc(var(--cos-tab-reserve) + 14px) !important;
     width: 52px !important; min-width: 52px !important; height: 52px !important; min-height: 52px !important;
     border: 0 !important; border-radius: 16px !important;
     background: var(--cos-navy) !important; color: #fff !important;
@@ -345,7 +345,7 @@
   .app-shell.is-chat-route:has(.chat-standalone[data-chat-selected="true"]) .app-content {
     display: flex !important; flex: 1 1 auto !important; flex-direction: column !important;
     min-height: 0 !important; height: auto !important;
-    padding: 0 0 calc(var(--cos-tab-height) + env(safe-area-inset-bottom)) !important;
+    padding: 0 0 var(--cos-tab-reserve) !important;
     overflow: hidden !important;
   }
   .app-shell.is-chat-route .app-content {
@@ -515,4 +515,114 @@
   @media (prefers-reduced-motion: reduce) {
     .app-shell.is-touch-layout .future-route-stage { animation: none !important; }
   }
+}
+
+/* Mobile Command Center: a separate data-driven operational layout, not a desktop widget grid. */
+@media (max-width:1023px),(pointer:coarse) {
+ .app-shell.is-touch-layout .mobile-command-dashboard {display:grid;gap:17px;width:100%;min-width:0;max-width:100%;padding:0 0 8px;color:var(--cos-ink)}
+ .mobile-command-dashboard,.mobile-command-dashboard * {box-sizing:border-box}
+ .mobile-command-dashboard :is(h1,h2,h3,p) {margin-block:0}
+ .mobile-command-greeting {display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+ .mobile-command-brand {display:flex;align-items:center;gap:10px;min-width:0}
+ .mobile-command-brand-mark {display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border:1px solid rgba(35,115,157,.18);border-radius:14px;background:linear-gradient(145deg,#e8f8f8,#e9f1fa);color:#087b87}
+ .mobile-command-brand-copy {display:flex;flex-direction:column;gap:3px;min-width:0}
+ .mobile-command-brand-copy small {color:#7890a7;font-size:8px;font-weight:850;letter-spacing:.11em}
+ .mobile-command-brand-copy b {color:#183650;font-size:13px;font-weight:950}
+ .mobile-command-settings {display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border:1px solid #dce7ef;border-radius:13px;background:#fff;color:#3f627b;text-decoration:none}
+ .mobile-command-hero {position:relative;isolation:isolate;display:grid;gap:14px;min-width:0;overflow:hidden;padding:18px 17px 14px;border:1px solid rgba(154,220,222,.16);border-radius:23px;color:#fff;background:linear-gradient(128deg,#092941,#103d5a 55%,#12566a);box-shadow:0 13px 30px rgba(7,42,65,.18)}
+ .mobile-command-hero-orbit {position:absolute;z-index:-1;inset-inline-start:-72px;top:-104px;width:225px;height:225px;border:1px solid rgba(114,224,212,.18);border-radius:50%;box-shadow:0 0 0 22px rgba(114,224,212,.035),0 0 0 48px rgba(114,224,212,.025);pointer-events:none}
+ .mobile-command-hero-copy {display:grid;gap:4px;min-width:0}
+ .mobile-command-eyebrow {color:#76d6ce;font-size:8px;font-weight:850;letter-spacing:.13em}
+ .mobile-command-hero h1 {color:#fff;font-size:19px;font-weight:950;line-height:1.65;overflow-wrap:anywhere}
+ .mobile-command-hero-copy p {color:rgba(224,240,247,.78);font-size:10px;line-height:1.7}
+ .mobile-command-active {display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;padding:13px 14px;border:1px solid rgba(207,239,241,.14);border-radius:17px;background:rgba(255,255,255,.075)}
+ .mobile-command-active>div {display:grid;gap:2px;min-width:0}
+ .mobile-command-active>div>span {color:#b8d8e2;font-size:10px;font-weight:750}
+ .mobile-command-active strong {color:#fff;font-size:33px;line-height:1.15;font-weight:950;font-variant-numeric:tabular-nums}
+ .mobile-command-active small {color:rgba(218,237,243,.72);font-size:9px}
+ .mobile-command-active-icon {display:grid;place-items:center;flex:0 0 45px;width:45px;height:45px;border:1px solid rgba(112,220,206,.25);border-radius:15px;background:rgba(28,158,150,.16);color:#7ce0d3}
+ .mobile-command-hero-footer {display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding-top:10px;border-top:1px solid rgba(255,255,255,.12)}
+ .mobile-command-hero-footer>span {display:flex;align-items:center;gap:6px;min-width:0;color:#bbd6e1;font-size:9px}
+ .mobile-command-hero-footer i {flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:#69d4b4}
+ .mobile-command-hero-footer a {display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;color:#8fe0d7;font-size:9px;font-weight:900;text-decoration:none;white-space:nowrap}
+ .mobile-command-metrics {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;min-width:0}
+ .mobile-command-metric {display:flex;align-items:center;gap:8px;min-width:0;min-height:70px;padding:10px;border:1px solid #e2eaf0;border-radius:16px;background:#fff;box-shadow:0 4px 13px rgba(16,47,80,.045);color:inherit;text-decoration:none}
+ .mobile-command-metric-icon {display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:11px;background:#edf5f8;color:#287c8a}
+ .mobile-command-metric-copy {display:flex;flex:1 1 auto;flex-direction:column;gap:2px;min-width:0}
+ .mobile-command-metric-copy small {color:#72869a;font-size:9px;font-weight:750;overflow-wrap:anywhere}
+ .mobile-command-metric-copy strong {color:#193a55;font-size:20px;font-weight:950;line-height:1.2;font-variant-numeric:tabular-nums}
+ .mobile-command-metric-arrow {flex:0 0 auto;color:#91a4b4}
+ .mobile-command-actions,.mobile-command-reminders {display:grid;gap:10px;min-width:0}
+ .mobile-command-section-heading {display:flex;align-items:end;justify-content:space-between;gap:8px;min-width:0}
+ .mobile-command-section-heading>div {display:grid;gap:2px;min-width:0}
+ .mobile-command-section-heading>div>span {color:#8195a7;font-size:8px;font-weight:850;letter-spacing:.12em}
+ .mobile-command-section-heading h2 {display:flex;align-items:center;gap:7px;color:#183750;font-size:14px;font-weight:950}
+ .mobile-command-section-heading h2 svg {color:#168d91}
+ .mobile-command-section-heading>a {display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;color:#247e88;font-size:9px;font-weight:900;text-decoration:none;white-space:nowrap}
+ .mobile-command-action-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .mobile-command-action {display:flex;align-items:center;gap:8px;min-width:0;min-height:66px;padding:9px 10px;border:1px solid #e1eaf0;border-radius:15px;background:#fff;color:#193a55;text-decoration:none;box-shadow:0 3px 12px rgba(16,47,80,.035)}
+ .mobile-command-action-icon {display:grid;place-items:center;flex:0 0 35px;width:35px;height:35px;border-radius:12px;background:#eef4f7;color:#387889}
+ .mobile-command-action.primary .mobile-command-action-icon {background:#e2f5f1;color:#078a7d}
+ .mobile-command-action.blue .mobile-command-action-icon {background:#eaf2fb;color:#347bb5}
+ .mobile-command-action.teal .mobile-command-action-icon {background:#e7f5f4;color:#158c86}
+ .mobile-command-action.slate .mobile-command-action-icon {background:#edf1f5;color:#526b82}
+ .mobile-command-action-copy {display:flex;flex:1 1 auto;flex-direction:column;gap:2px;min-width:0}
+ .mobile-command-action-copy b {color:#1b3b55;font-size:10px;font-weight:900}
+ .mobile-command-action-copy small {color:#8193a4;font-size:8px;overflow-wrap:anywhere}
+ .mobile-command-action-arrow {flex:0 0 auto;color:#9aabba}
+ .mobile-command-shipments {min-width:0}
+ .mobile-command-shipments .shipment-board {display:grid;gap:10px;min-width:0}
+ .mobile-command-shipments .shipment-board-header {display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:0 1px 3px}
+ .mobile-command-shipments .shipment-board-title {display:grid;gap:2px;min-width:0}
+ .mobile-command-shipments .shipment-board-eyebrow {color:#8195a7;font-size:8px;font-weight:850;letter-spacing:.12em}
+ .mobile-command-shipments .shipment-board-title h2 {display:flex;align-items:center;gap:6px;color:#183750;font-size:14px;font-weight:950}
+ .mobile-command-shipments .shipment-board-title h2 svg {color:#168d91}
+ .mobile-command-shipments .shipment-board-title small {color:#8295a5;font-size:9px}
+ .mobile-command-shipments .shipment-board-all {display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;color:#247e88;font-size:9px;font-weight:900;text-decoration:none}
+ .mobile-command-shipments .shipment-board-search {display:flex;align-items:center;gap:8px;min-width:0;min-height:43px;padding:0 11px;border:1px solid #e0e9ef;border-radius:13px;background:#fff;color:#6b8499}
+ .mobile-command-shipments .shipment-board-search input {width:100%;min-width:0;min-height:40px;border:0;outline:0;background:transparent;color:#1a3b55;font-size:12px}
+ .mobile-command-shipments .shipment-board-grid {display:grid;gap:10px;min-width:0}
+ .mobile-command-shipments .shipment-premium-card {display:grid;gap:11px;min-width:0;padding:13px;border:1px solid #e0e9ef;border-radius:18px;background:#fff;color:#173751;box-shadow:0 6px 17px rgba(14,53,78,.055)}
+ .mobile-command-shipments .shipment-premium-card:before {height:3px;background:linear-gradient(90deg,#167e9f,#14aa9a,#7bd8c7)}
+ .mobile-command-shipments .shipment-premium-identity {gap:8px}
+ .mobile-command-shipments .shipment-premium-thumb {display:grid;place-items:center;position:relative;flex:0 0 36px;width:36px;height:36px;overflow:hidden;border:1px solid #d9e8ed;border-radius:12px;background:#edf6f6}
+ .mobile-command-shipments .shipment-premium-thumb img {width:100%;height:100%;object-fit:cover;opacity:.24}
+ .mobile-command-shipments .shipment-premium-thumb>span {position:absolute;display:grid;place-items:center;color:#187c89}
+ .mobile-command-shipments .shipment-premium-identity h3 {color:#173751;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+ .mobile-command-shipments .shipment-premium-bl {color:#7b8fa0;font-size:9px;direction:ltr;unicode-bidi:plaintext;overflow-wrap:anywhere}
+ .mobile-command-shipments .shipment-premium-meta {gap:6px 11px;color:#657f92;font-size:9px;line-height:1.55}
+ .mobile-command-shipments .shipment-premium-progress-head {display:grid;grid-template-columns:1fr;gap:2px}
+ .mobile-command-shipments .shipment-premium-progress-head span {color:#8194a4;font-size:9px}
+ .mobile-command-shipments .shipment-premium-progress-head b {color:#1c5265;font-size:11px;text-align:right;overflow-wrap:anywhere}
+ .mobile-command-shipments .shipment-premium-steps {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:2px 0 0;--shipment-progress:0%}
+ .mobile-command-shipments .shipment-premium-steps:before {top:14px;inset-inline:10%;height:3px;background:linear-gradient(to left,#13a99a 0 var(--shipment-progress),#dce8ed var(--shipment-progress) 100%)}
+ .mobile-command-shipments .shipment-premium-step {gap:5px;min-height:43px;padding:0}
+ .mobile-command-shipments .shipment-premium-step-dot {width:27px;height:27px;flex-basis:27px;border-width:1.5px;border-color:#d5e1e8;color:#9aabb7;box-shadow:0 0 0 3px #fff}
+ .mobile-command-shipments .shipment-premium-step.done .shipment-premium-step-dot {border-color:#0e9d91;background:#0e9d91;color:#fff}
+ .mobile-command-shipments .shipment-premium-step.current .shipment-premium-step-dot {border:2px solid #0c9d91;background:#fff;color:#0c9d91;box-shadow:0 0 0 4px rgba(12,157,145,.12)}
+ .mobile-command-shipments .shipment-premium-step-label {color:#8093a2;font-size:8px;font-weight:850;line-height:1.4;white-space:normal;text-align:center;overflow-wrap:anywhere}
+ .mobile-command-shipments .shipment-premium-step.done,.mobile-command-shipments .shipment-premium-step.current {color:#28586c}
+ .mobile-command-shipments .shipment-premium-facts {grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:8px 7px;border-color:#e4edf1;background:#f4f8f9}
+ .mobile-command-shipments .shipment-premium-facts>div {grid-template-columns:13px minmax(0,1fr);gap:2px 4px}
+ .mobile-command-shipments .shipment-premium-facts span {font-size:8px}
+ .mobile-command-shipments .shipment-premium-facts b {color:#234d60;font-size:9px;line-height:1.5;overflow-wrap:anywhere}
+ .mobile-command-shipments .shipment-premium-actions {gap:7px}
+ .mobile-command-shipments .shipment-premium-details,.mobile-command-shipments .shipment-premium-enter {min-width:0;min-height:40px;padding:0 7px;font-size:9px}
+ .mobile-command-shipments .shipment-premium-enter {border-color:#087e88;background:linear-gradient(120deg,#138e94,#0a7084);box-shadow:0 5px 13px rgba(10,112,132,.16)}
+ .mobile-command-shipments .shipment-premium-expanded-title b {color:#1b415a}
+ .mobile-command-shipments .shipment-premium-detail-grid span {min-width:0;border-color:#e3ebef;background:#f8fafb;color:#788d9e;line-height:1.5;overflow-wrap:anywhere}
+ .mobile-command-shipments .shipment-premium-detail-grid b {color:#234e61}
+ .mobile-command-reminders>:not(.mobile-command-section-heading) {min-width:0}
+ .mobile-command-dashboard :is(a,button,input,select,textarea) {min-width:0;max-width:100%}
+ .mobile-command-dashboard :is(h1,h2,h3,p,small,b,strong,span) {overflow-wrap:anywhere}
+ .mobile-command-dashboard [dir="ltr"] {unicode-bidi:plaintext}
+ @media(max-width:359px) {
+  .mobile-command-hero {padding-inline:14px}
+  .mobile-command-metric {gap:6px;padding:8px}
+  .mobile-command-metric-icon {flex-basis:30px;width:30px;height:30px}
+  .mobile-command-action {gap:6px;padding:8px}
+  .mobile-command-action-icon {flex-basis:31px;width:31px;height:31px}
+  .mobile-command-shipments .shipment-premium-card {padding:11px}
+  .mobile-command-shipments .shipment-premium-facts {grid-template-columns:1fr}
+ }
 }

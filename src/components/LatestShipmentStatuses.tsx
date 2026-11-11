@@ -14,11 +14,11 @@ const EXIT_CHECKLIST = [
 ];
 
 const STAGES = [
-  { key: 'start', label: 'شروع عملیات', shortLabel: 'سفارش' },
-  { key: 'warehouse', label: 'ورود اطلاعات قبض انبار', shortLabel: 'انبار' },
-  { key: 'declaration', label: 'ثبت اظهار', shortLabel: 'اظهار' },
-  { key: 'customs', label: 'عملیات گمرکی', shortLabel: 'گمرک' },
-  { key: 'exit', label: 'درب خروج', shortLabel: 'خروج' },
+  { key: 'start', label: 'ثبت محموله', shortLabel: 'ثبت' },
+  { key: 'warehouse', label: 'اسناد حمل و قبض انبار', shortLabel: 'اسناد' },
+  { key: 'declaration', label: 'اظهار و دریافت کوتاژ', shortLabel: 'اظهار' },
+  { key: 'customs', label: 'کنترل و عملیات گمرکی', shortLabel: 'کنترل' },
+  { key: 'exit', label: 'امور مالی و خروج کالا', shortLabel: 'خروج' },
 ];
 
 const stageIndex = (shipment: any) => {
@@ -59,7 +59,9 @@ const statusTone = (shipment: any, stage: number) => {
     shipment.release_invoice_payment_status !== 'paid'
   )) return 'attention';
   if (shipment.transport_documents_status === 'ready' && !shipment.ship_passed) return 'attention';
-  return stage >= 5 ? 'done' : 'active';
+  // Reaching the final stage is not the same as a confirmed customs exit.
+  // Only an explicit exit checklist / closed finance status may mark completion.
+  return 'active';
 };
 
 const statusLabel = (shipment: any, stage: number) => {
@@ -256,7 +258,7 @@ export const LatestShipmentStatuses: React.FC = () => {
             ];
 
             return (
-              <article className={'shipment-premium-card ' + tone} key={shipment.id} data-shipment-id={shipment.id}>
+              <article className={'shipment-premium-card ' + tone} key={shipment.id} data-shipment-id={shipment.id} data-progress-current={current} data-progress-total={STAGES.length}>
                 <div className="shipment-premium-card-head">
                   <div className="shipment-premium-identity">
                     <span className="shipment-premium-thumb"><img src="/mobile-ocean-hero.svg" alt="" loading="lazy" /><span aria-hidden="true"><Ship size={15} /></span></span>
@@ -277,11 +279,11 @@ export const LatestShipmentStatuses: React.FC = () => {
                 </div>
 
                 <div className="shipment-premium-progress-head">
-                  <span>مسیر عملیات</span>
-                  <b>{STAGES[current - 1]?.label || 'شروع عملیات'}</b>
+                  <span>مسیر عملیات · مرحله {current.toLocaleString('fa-IR')} از {STAGES.length.toLocaleString('fa-IR')}</span>
+                  <b>{STAGES[current - 1]?.label || 'ثبت محموله'}</b>
                 </div>
 
-                <div className="shipment-premium-steps" role="list" aria-label="مراحل عملیات محموله">
+                <div className="shipment-premium-steps" role="list" aria-label="مراحل عملیات محموله" style={{ '--shipment-progress': `${Math.round(((current - 1) / (STAGES.length - 1)) * 100)}%` } as React.CSSProperties}>
                   {STAGES.map((stage, index) => {
                     const number = index + 1;
                     const done = number < current;
