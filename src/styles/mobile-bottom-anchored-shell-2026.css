@@ -123,4 +123,9 @@
   .app-shell.is-touch-layout .app-pwa-update-prompt {
     bottom: calc(var(--cos-tab-reserve) + 12px) !important;
   }
+  /* Match the chat flex viewport's reserved space to the dock in both states. */
+  .app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content {
+    padding-bottom: var(--cos-tab-reserve) !important;
+  }
+
 }
