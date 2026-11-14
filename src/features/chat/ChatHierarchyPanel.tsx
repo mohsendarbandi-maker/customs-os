@@ -1,5 +1,5 @@
-import React,{useMemo,useState}from'react';
-import{ChevronDown,ChevronLeft,MessageCircle,Package,Users}from'lucide-react';
+import React,{useEffect,useMemo,useRef,useState}from'react';
+import{Archive,BellOff,ChevronDown,ChevronLeft,MessageCircle,Package,RotateCcw,Users}from'lucide-react';
 import{normalizeFaText}from'../../lib/jalali';
 import{buildChatInboxRows,type ChatFolder}from'./conversationModel';
 import type{ChatConversation}from'./types';
@@ -9,6 +9,8 @@ type Props={
  onSelect:(id:string)=>void;
  conversations:ChatConversation[];
  folder?:ChatFolder;
+ loading?:boolean;
+ storageScope?:string;
 };
 
 const conversationTitle=(conversation:ChatConversation)=>normalizeFaText(conversation.display_name||conversation.title||'گفتگو');
@@ -19,10 +21,47 @@ const conversationKind=(conversation:ChatConversation)=>{
  return'گفتگوی مستقیم';
 };
 const unreadCount=(conversation:ChatConversation)=>Math.max(0,Number(conversation.unread_count)||0);
+const vibrate=()=>{if(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')navigator.vibrate(10)};
+const activityLabel=(conversation:ChatConversation)=>{
+ const value=conversation.last_message_created_at||conversation.updated_at;
+ if(!value)return'';
+ const date=new Date(value);
+ if(Number.isNaN(date.getTime()))return'';
+ const options={timeZone:'Asia/Tehran',calendar:'persian'} as const;
+ const sameDay=new Intl.DateTimeFormat('fa-IR',{...options,year:'numeric',month:'2-digit',day:'2-digit'}).format(date)===
+  new Intl.DateTimeFormat('fa-IR',{...options,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ return sameDay
+  ?new Intl.DateTimeFormat('fa-IR',{...options,hour:'2-digit',minute:'2-digit'}).format(date)
+  :new Intl.DateTimeFormat('fa-IR',{...options,day:'numeric',month:'short'}).format(date);
+};
+const avatarTone=(name:string)=>Array.from(name).reduce((total,character)=>total+(character.codePointAt(0)||0),0)%5;
 
-export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all'})=>{
+export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all',loading=false,storageScope='guest'})=>{
  const[open,setOpen]=useState<Record<string,boolean>>({});
+ const[swipedId,setSwipedId]=useState<string|null>(null);
+ const[archivedIds,setArchivedIds]=useState<string[]>([]);
+ const[mutedIds,setMutedIds]=useState<string[]>([]);
+ const[loadedStorageKey,setLoadedStorageKey]=useState('');
+ const[actionNotice,setActionNotice]=useState('');
+ const touchStart=useRef<{id:string;x:number;y:number}|null>(null);
+ const suppressClick=useRef(false);
  const rows=useMemo(()=>buildChatInboxRows(conversations,folder),[conversations,folder]);
+ const storageKey='customs-os:chat-list-ui:v1:'+storageScope;
+ useEffect(()=>{
+  try{
+   const parsed=JSON.parse(window.sessionStorage.getItem(storageKey)||'{}') as {archivedIds?:unknown;mutedIds?:unknown};
+   setArchivedIds(Array.isArray(parsed.archivedIds)?parsed.archivedIds.filter((id):id is string=>typeof id==='string'):[]);
+   setMutedIds(Array.isArray(parsed.mutedIds)?parsed.mutedIds.filter((id):id is string=>typeof id==='string'):[]);
+  }catch{
+   setArchivedIds([]);setMutedIds([]);
+  }
+  setLoadedStorageKey(storageKey);
+ },[storageKey]);
+ useEffect(()=>{
+  if(loadedStorageKey!==storageKey)return;
+  try{window.sessionStorage.setItem(storageKey,JSON.stringify({archivedIds,mutedIds}))}catch{/* private browsing */}
+ },[archivedIds,mutedIds,loadedStorageKey,storageKey]);
+ const visibleRows=useMemo(()=>rows.filter(row=>row.kind!=='conversation'||!archivedIds.includes(row.conversation.conversation_id)),[rows,archivedIds]);
 
  const emptyLabel=folder==='groups'?'گروهی پیدا نشد.':
   folder==='coworkers'?'گفتگوی مستقیمی پیدا نشد.':
@@ -34,32 +73,104 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
  const toggleOwner=(conversationId:string,defaultExpanded:boolean)=>{
   setOpen(previous=>({...previous,[conversationId]:!(previous[conversationId]??defaultExpanded)}));
  };
+ const handleTouchStart=(event:React.TouchEvent<HTMLDivElement>,id:string)=>{
+  if(event.touches.length!==1){touchStart.current=null;return}
+  const touch=event.touches[0];
+  touchStart.current={id,x:touch.clientX,y:touch.clientY};
+ };
+ const handleTouchEnd=(event:React.TouchEvent<HTMLDivElement>)=>{
+  const start=touchStart.current;touchStart.current=null;
+  if(!start||event.changedTouches.length!==1)return;
+  const touch=event.changedTouches[0];
+  const deltaX=touch.clientX-start.x;const deltaY=touch.clientY-start.y;
+  if(Math.abs(deltaX)<48||Math.abs(deltaX)<Math.abs(deltaY)*1.25)return;
+  suppressClick.current=true;
+  window.setTimeout(()=>{suppressClick.current=false},450);
+  setSwipedId(deltaX<0?start.id:null);
+  vibrate();
+ };
+ const selectConversation=(id:string)=>{
+  if(suppressClick.current){suppressClick.current=false;return}
+  setSwipedId(null);onSelect(id);
+ };
+ const archiveConversation=(id:string)=>{
+  setArchivedIds(current=>current.includes(id)?current.filter(item=>item!==id):[...current,id]);
+  setActionNotice('گفتگو از فهرست همین نشست پنهان شد؛ از گزینهٔ بازگردانی استفاده کنید.');
+  setSwipedId(null);vibrate();
+ };
+ const toggleMuted=(id:string)=>{
+  const wasMuted=mutedIds.includes(id);
+  setMutedIds(current=>wasMuted?current.filter(item=>item!==id):[...current,id]);
+  setActionNotice(wasMuted?'علامت بی‌صدا برای این گفتگو برداشته شد.':'گفتگو در این دستگاه با برچسب بی‌صدا مشخص شد.');
+  setSwipedId(null);vibrate();
+ };
+ const restoreArchived=()=>{
+  setArchivedIds([]);setActionNotice('گفتگوهای پنهان‌شده به فهرست برگشتند.');vibrate();
+ };
 
- return <div className="chat-hierarchy-panel flex-1 min-h-0 overflow-y-auto overscroll-contain">
-  {rows.length>0&&<div className="chat-conversation-list">
-   {rows.map(row=>{
+ return <div className="chat-hierarchy-panel flex-1 min-h-0 overflow-y-auto overscroll-contain" onClick={event=>{
+  if(swipedId&&!(event.target instanceof Element&&event.target.closest('.chat-row-swipe-actions')))setSwipedId(null);
+ }}>
+  {archivedIds.length>0&&<div className="chat-archive-restore" dir="rtl">
+   <span><Archive size={14}/>{archivedIds.length} گفتگوی پنهان‌شده در این نشست</span>
+   <button type="button" onClick={restoreArchived}><RotateCcw size={13}/>بازگردانی</button>
+  </div>}
+  {actionNotice&&<div className="chat-row-action-notice" role="status" aria-live="polite">{actionNotice}<button type="button" onClick={()=>setActionNotice('')} aria-label="بستن پیام">×</button></div>}
+  {loading&&<div className="chat-conversation-skeleton-list" role="status" aria-label="در حال بارگذاری گفتگوها">
+   {Array.from({length:5},(_,index)=><div className="chat-conversation-skeleton" key={index}>
+    <span className="chat-skeleton-avatar"/>
+    <span className="chat-skeleton-copy"><i/><i/><i/></span>
+    <span className="chat-skeleton-meta"><i/><i/></span>
+   </div>)}
+  </div>}
+  {!loading&&visibleRows.length>0&&<div className="chat-conversation-list">
+   {visibleRows.map(row=>{
     if(row.kind==='conversation'){
      const conversation=row.conversation;
      const selected=selectedId===conversation.conversation_id;
-     return <button
-      type="button"
+     const name=conversationTitle(conversation);
+     const initial=Array.from(name)[0]||'ک';
+     const tone=avatarTone(name);
+     const unread=row.unreadCount;
+     const muted=mutedIds.includes(conversation.conversation_id);
+     return <div
       key={conversation.conversation_id}
-      onClick={()=>onSelect(conversation.conversation_id)}
-      className={'chat-conversation-row '+(selected?'is-selected':'')}
-      aria-pressed={selected}
+      className={'chat-conversation-swipe '+(swipedId===conversation.conversation_id?'is-swipe-open':'')}
+      onTouchStart={event=>handleTouchStart(event,conversation.conversation_id)}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={()=>{touchStart.current=null}}
+      data-conversation-id={conversation.conversation_id}
      >
-      <span className="chat-conversation-avatar">
-       {conversation.type==='direct'?<span className="font-black text-sm">{(conversation.display_name||'ک').slice(0,1)}</span>:<Users size={19}/>}
-      </span>
-      <span className="chat-conversation-copy">
-       <span className="chat-conversation-titleline">
-        <b className="chat-conversation-title">{conversationTitle(conversation)}</b>
-        {folder==='groups'&&<small className="chat-conversation-kind">{conversationKind(conversation)}</small>}
+      <div className="chat-row-swipe-actions" aria-hidden={swipedId!==conversation.conversation_id}>
+       <button type="button" className="chat-row-action is-archive" tabIndex={swipedId===conversation.conversation_id?0:-1} onClick={()=>archiveConversation(conversation.conversation_id)} aria-label="پنهان‌کردن گفتگو از فهرست">
+        <Archive size={16}/><span>آرشیو محلی</span>
+       </button>
+       <button type="button" className={'chat-row-action is-mute '+(muted?'is-muted':'')} tabIndex={swipedId===conversation.conversation_id?0:-1} onClick={()=>toggleMuted(conversation.conversation_id)} aria-label={muted?'برداشتن برچسب بی‌صدا محلی':'علامت‌گذاری بی‌صدا محلی'}>
+        <BellOff size={16}/><span>{muted?'برداشتن':'بی‌صدا محلی'}</span>
+       </button>
+      </div>
+      <button
+       type="button"
+       onClick={()=>selectConversation(conversation.conversation_id)}
+       className={'chat-conversation-row '+(selected?'is-selected':'')}
+       aria-pressed={selected}
+       aria-label={name+(unread?'، '+unread+' پیام خوانده‌نشده':'')}
+      >
+       <span className="chat-conversation-avatar" data-avatar-tone={tone} aria-hidden="true">{initial}</span>
+       <span className="chat-conversation-copy">
+        <span className="chat-conversation-titleline">
+         <b className="chat-conversation-title">{name}</b>
+         {muted&&<BellOff size={12} className="chat-conversation-muted-icon" aria-label="برچسب بی‌صدا"/>}
+         {folder==='groups'&&<small className="chat-conversation-kind">{conversationKind(conversation)}</small>}
+        </span>
+        <span className="chat-conversation-meta">
+         <time dateTime={conversation.last_message_created_at||conversation.updated_at}>{activityLabel(conversation)}</time>
+         {unread>0&&<span className="chat-conversation-unread" aria-label={unread+' پیام خوانده‌نشده'}>{unread>99?'99+':unread}</span>}
+        </span>
+        <span className="chat-conversation-preview">{conversation.last_message_body||'بدون پیام'}</span>
        </span>
-       <span className="chat-conversation-preview">{conversation.last_message_body||'بدون پیام'}</span>
-      </span>
-      {row.unreadCount>0&&<span className="chat-conversation-unread" aria-label={row.unreadCount+' پیام خوانده‌نشده'}>{row.unreadCount}</span>}
-     </button>;
+      </button>
+     </div>;
     }
 
     const ownerRow=row;
@@ -83,6 +194,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
          {nestedUnread>0
           ?<span className="chat-owner-new-activity">{nestedUnread} محموله با پیام جدید</span>
           :<span>گروه صاحب کالا</span>}
+         <time dateTime={owner.last_message_created_at||owner.updated_at}>{activityLabel(owner)}</time>
         </span>
        </span>
       </button>
@@ -101,14 +213,14 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
          <span className="chat-shipment-name">{normalizeFaText(shipment.shipment_display_name||shipment.title||'محموله')}</span>
          <span className="chat-shipment-bl">{unread&&shipment.last_message_body?shipment.last_message_body:(shipment.shipment_bl_number||'بدون شماره بارنامه')}</span>
         </span>
-        {unread>0&&<span className="chat-shipment-unread" aria-label={unread+' پیام خوانده‌نشده'}>{unread}</span>}
+        <span className="chat-shipment-meta"><time dateTime={shipment.last_message_created_at||shipment.updated_at}>{activityLabel(shipment)}</time>{unread>0&&<span className="chat-shipment-unread" aria-label={unread+' پیام خوانده‌نشده'}>{unread}</span>}</span>
        </button>;
       })}
      </div>}
     </article>;
    })}
   </div>}
-
-  {rows.length===0&&<div className="chat-conversation-empty"><span className="chat-conversation-empty-icon"><Users size={23}/></span><b>{emptyLabel}</b><span>{folder==='unread'?'همهٔ گفتگوها به‌روز هستند.':'برای شروع، یک گفتگو یا گروه تازه بسازید.'}</span></div>}
+  {!loading&&visibleRows.length===0&&<div className="chat-conversation-empty"><span className="chat-conversation-empty-icon"><Users size={23}/></span><b>{emptyLabel}</b><span>{folder==='unread'?'همهٔ گفتگوها به‌روز هستند.':'برای شروع، یک گفتگو یا گروه تازه بسازید.'}</span></div>}
+  <div className="chat-row-action-footnote">آرشیو و برچسب بی‌صدا فقط روی همین دستگاه و تا پایان نشست ذخیره می‌شوند؛ اعلان سمت سرور تغییر نمی‌کند.</div>
  </div>;
 };

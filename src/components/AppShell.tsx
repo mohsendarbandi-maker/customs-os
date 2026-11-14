@@ -166,6 +166,29 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
   const [pwaUpdateAvailable, setPwaUpdateAvailable] = useState(false);
   const [pwaUpdating, setPwaUpdating] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(() => {
+    try {
+      const stored = Number(window.localStorage.getItem('customs-os:chat-unread-count') || 0);
+      return Number.isFinite(stored) ? Math.max(0, stored) : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  useEffect(() => {
+    const onChatUnreadCount = (event: Event) => {
+      const count = Number((event as CustomEvent<{ count?: number }>).detail?.count ?? 0);
+      const safeCount = Number.isFinite(count) ? Math.max(0, count) : 0;
+      setChatUnreadCount(safeCount);
+      try {
+        window.localStorage.setItem('customs-os:chat-unread-count', String(safeCount));
+      } catch {
+        // The badge still works for this mounted session when storage is unavailable.
+      }
+    };
+    window.addEventListener('customs-os:chat-unread-count', onChatUnreadCount);
+    return () => window.removeEventListener('customs-os:chat-unread-count', onChatUnreadCount);
+  }, []);
 
   useEffect(() => {
     const onUpdateReady = () => {
@@ -623,6 +646,18 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     location.pathname.startsWith('/chat')
   );
 
+  const mobileTabIndex = location.pathname === '/' ? 0
+    : location.pathname.startsWith('/reminders') ? 1
+    : location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 2
+    : location.pathname.startsWith('/chat') ? 3 : 4;
+
+  const goMobileTab = (to: string) => {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(10);
+    }
+    go(to);
+  };
+
   const goBack = () => {
     closeMobile();
     const historyState = window.history.state as BrowserHistoryState;
@@ -889,21 +924,23 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </button>
         </div>
       )}
-      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs" aria-label="پیمایش اصلی برنامه">
-        <button type="button" className={location.pathname === '/' ? 'is-active' : ''} aria-current={location.pathname === '/' ? 'page' : undefined} onClick={() => go('/')}>
-          <Home size={22} strokeWidth={1.9} /><span>خانه</span>
+      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs" aria-label="پیمایش اصلی برنامه" dir="rtl" style={{ '--active-tab-index': mobileTabIndex } as React.CSSProperties}>
+        <span className="native-tab-indicator" aria-hidden="true" />
+        <button type="button" className={location.pathname === '/' ? 'is-active' : ''} aria-current={location.pathname === '/' ? 'page' : undefined} onClick={() => goMobileTab('/')}>
+          <Home size={22} strokeWidth={1.75} /><span>خانه</span>
         </button>
-        <button type="button" className={location.pathname.startsWith('/reminders') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/reminders') ? 'page' : undefined} onClick={() => go('/reminders')}>
-          <CalendarDays size={22} strokeWidth={1.9} /><span>یادآورها</span>
+        <button type="button" className={location.pathname.startsWith('/reminders') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/reminders') ? 'page' : undefined} onClick={() => goMobileTab('/reminders')}>
+          <CalendarDays size={22} strokeWidth={1.75} /><span>یادآورها</span>
         </button>
-        <button type="button" className={location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 'page' : undefined} onClick={() => go('/operations')}>
-          <ClipboardList size={22} strokeWidth={1.9} /><span>عملیات</span>
+        <button type="button" className={location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 'page' : undefined} onClick={() => goMobileTab('/operations')}>
+          <ClipboardList size={22} strokeWidth={1.75} /><span>عملیات</span>
         </button>
-        <button type="button" className={location.pathname.startsWith('/chat') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/chat') ? 'page' : undefined} onClick={() => go('/chat')}>
-          <MessageCircle size={22} strokeWidth={1.9} /><span>چت</span>
+        <button type="button" className={location.pathname.startsWith('/chat') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/chat') ? 'page' : undefined} onClick={() => goMobileTab('/chat')}>
+          <MessageCircle size={22} strokeWidth={1.75} /><span>چت</span>
+          {chatUnreadCount > 0 && <span className="native-tab-badge" aria-label={`${chatUnreadCount} پیام خوانده‌نشده`}>{chatUnreadCount > 99 ? '99+' : chatUnreadCount}</span>}
         </button>
-        <button type="button" className={isMoreTab ? 'is-active' : ''} aria-current={isMoreTab ? 'page' : undefined} onClick={() => go('/more')}>
-          <Layers3 size={22} strokeWidth={1.9} /><span>بیشتر</span>
+        <button type="button" className={isMoreTab ? 'is-active' : ''} aria-current={isMoreTab ? 'page' : undefined} onClick={() => { if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10); go('/more'); }}>
+          <Layers3 size={22} strokeWidth={1.75} /><span>بیشتر</span>
         </button>
       </nav>, document.body)}
       {!location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />}
