@@ -34,7 +34,10 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).toContain('background-color: #092744 !important;');
     expect(layout).toContain('background: #092744 !important;');
     expect(layout).toContain('border-radius: 22px 22px 0 0 !important;');
-    expect(layout).toContain('padding: 6px 8px calc(5px + env(safe-area-inset-bottom)) !important;');
+    expect(layout).toContain('padding: 6px 8px 0 !important;');
+    expect(layout).toContain('height: 100% !important;');
+    expect(layout).toContain('align-self: stretch !important;');
+    expect(layout).toContain('height: var(--cos-tab-reserve) !important;');
     expect(layout).toContain('bottom: 0 !important;');
   });
 
