@@ -10,6 +10,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      VITE_SUPABASE_URL: https://bjngfgiecvihofemptub.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_pIh0yF6SQcQ-IAa_FkbjWA_qTSm83Sr
     steps:
       - name: Checkout
         uses: actions/checkout@v4
