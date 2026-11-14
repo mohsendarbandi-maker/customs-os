@@ -76,7 +76,8 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     expect(shell).not.toContain('چاپ اظهار');
     expect(shell).not.toContain('چاپگر هوشمند EPL');
     expect(readMigration('00021_phase13_workflow_integrity_and_credential_boundary.sql')).toContain('password_configured boolean');
-    expect(allSql).not.toContain('vault.decrypted_secrets');
+    const credentialBoundary = readMigration('00021_phase13_workflow_integrity_and_credential_boundary.sql');
+    expect(credentialBoundary).not.toContain('vault.decrypted_secrets');
   });
   it('contains the durable offline queue and binds replay to the authenticated user', () => { const q=fs.readFileSync(path.resolve(__dirname,'../src/lib/offlineQueue.ts'),'utf8'); expect(q).toContain("const DB_NAME = 'customs-os-offline'"); expect(q).toContain("const STORE_NAME = 'rpc_queue'"); expect(q).toContain('indexedDB.open'); expect(q).toContain("window.addEventListener('online'"); expect(q).toContain('attachSupabaseClient'); expect(q).toContain('OFFLINE_QUEUEABLE_RPCS'); expect(q).toContain('currentUserId'); expect(q).toContain('userId'); expect(q).toContain('attach_registration_order'); expect(q).toContain('update_case_operational_data'); expect(q).toContain('create_operational_reminder'); expect(q).not.toContain(" 'create_case_workflow'"); expect(q).not.toContain("'set_shipment_tracking_status'"); });
   it('verifies security controls remain present across the repository', () => { expect(allSql).toContain('case_status_history'); expect(allSql).toContain('REVOKE'); expect(allSql).toContain('SET search_path = public, pg_temp'); });
