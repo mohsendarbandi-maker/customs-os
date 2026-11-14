@@ -166,12 +166,25 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
   const [pwaUpdateAvailable, setPwaUpdateAvailable] = useState(false);
   const [pwaUpdating, setPwaUpdating] = useState(false);
-  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(() => {
+    try {
+      const stored = Number(window.localStorage.getItem('customs-os:chat-unread-count') || 0);
+      return Number.isFinite(stored) ? Math.max(0, stored) : 0;
+    } catch {
+      return 0;
+    }
+  });
 
   useEffect(() => {
     const onChatUnreadCount = (event: Event) => {
       const count = Number((event as CustomEvent<{ count?: number }>).detail?.count ?? 0);
-      setChatUnreadCount(Number.isFinite(count) ? Math.max(0, count) : 0);
+      const safeCount = Number.isFinite(count) ? Math.max(0, count) : 0;
+      setChatUnreadCount(safeCount);
+      try {
+        window.localStorage.setItem('customs-os:chat-unread-count', String(safeCount));
+      } catch {
+        // The badge still works for this mounted session when storage is unavailable.
+      }
     };
     window.addEventListener('customs-os:chat-unread-count', onChatUnreadCount);
     return () => window.removeEventListener('customs-os:chat-unread-count', onChatUnreadCount);
