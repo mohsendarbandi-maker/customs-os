@@ -428,3 +428,99 @@
     z-index:900!important;
   }
 }
+
+
+/* USER REQUEST — cut the visible tab row by 50%.
+   Keep the iPhone home-indicator safe area separate; do not count it as
+   navigation content or let older chat styles restore the 60px row. */
+@media (max-width:1023px),(pointer:coarse) {
+  :root {
+    --cos-tab-height:30px;
+    --cos-tab-reserve:calc(var(--cos-tab-height) + max(env(safe-area-inset-bottom,0px),8px));
+    --cos-bottom-nav-content-height:var(--cos-tab-height);
+    --cos-bottom-nav-reserve:var(--cos-tab-reserve);
+    --app-mobile-tabbar-height:var(--cos-tab-height);
+    --native-shell-tab-height:var(--cos-tab-height);
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs {
+    display:flex!important;
+    flex-direction:row!important;
+    align-items:center!important;
+    justify-content:space-around!important;
+    gap:0!important;
+    height:var(--cos-tab-reserve)!important;
+    min-height:var(--cos-tab-reserve)!important;
+    max-height:var(--cos-tab-reserve)!important;
+    padding:0 6px max(env(safe-area-inset-bottom,0px),8px)!important;
+    border-radius:17px 17px 0 0!important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button {
+    flex:1 1 20%!important;
+    width:20%!important;
+    min-height:30px!important;
+    height:30px!important;
+    max-height:30px!important;
+    padding:0 1px!important;
+    gap:0!important;
+    border-radius:9px!important;
+    font-size:8px!important;
+    line-height:1!important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button > svg,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button > svg {
+    width:16px!important;
+    height:16px!important;
+    flex:0 0 16px!important;
+    stroke-width:1.8!important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button > span:not(.native-tab-badge),
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button > span:not(.native-tab-badge) {
+    font-size:8px!important;
+    line-height:1!important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs .native-tab-indicator,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs .native-tab-indicator {
+    top:2px!important;
+    height:24px!important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs .native-tab-indicator::before,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs .native-tab-indicator::before {
+    width:36px!important;
+    height:22px!important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs .native-tab-badge,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs .native-tab-badge {
+    top:-1px!important;
+    left:calc(50% + 6px)!important;
+    min-width:14px!important;
+    height:14px!important;
+    font-size:8px!important;
+    border-width:1px!important;
+  }
+
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) {
+    --cos-tab-reserve:var(--cos-tab-height);
+  }
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock.native-bottom-tabs {
+    height:30px!important;
+    min-height:30px!important;
+    max-height:30px!important;
+    padding:0 6px!important;
+  }
+
+  .app-shell.is-touch-layout .app-content,
+  .app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content {
+    padding-bottom:var(--cos-tab-reserve)!important;
+    scroll-padding-bottom:var(--cos-tab-reserve)!important;
+  }
+}
