@@ -1319,10 +1319,4 @@ body {
     padding-bottom: calc(var(--app-mobile-tabbar-height, 62px) + env(safe-area-inset-bottom) + 8px) !important;
     box-sizing: border-box !important;
   }
-  html:has(.app-shell input:focus) .app-mobile-viewport-dock,
-  html:has(.app-shell textarea:focus) .app-mobile-viewport-dock,
-  html:has(.app-shell select:focus) .app-mobile-viewport-dock,
-  html:has(.app-shell [contenteditable="true"]:focus) .app-mobile-viewport-dock {
-    display: none !important;
-  }
 }
