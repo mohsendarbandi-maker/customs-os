@@ -71,6 +71,10 @@
   }
   html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock {
     position: fixed !important;
+    display: grid !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
     inset-block-end: calc(var(--mobile-keyboard-bottom-inset, 0px) + var(--cos-tab-inset, 10px) + env(safe-area-inset-bottom)) !important;
     bottom: calc(var(--mobile-keyboard-bottom-inset, 0px) + var(--cos-tab-inset, 10px) + env(safe-area-inset-bottom)) !important;
     z-index: 900 !important;
