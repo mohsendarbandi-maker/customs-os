@@ -133,3 +133,530 @@
   z-index:900!important;
  }
 }
+
+
+/* --------------------------------------------------------------------------
+   FINAL MOBILE NAV + CHAT INBOX POLISH
+   One physical bottom edge, one safe-area application, one scroll reservation.
+   -------------------------------------------------------------------------- */
+@media (max-width: 1023px), (pointer: coarse) {
+  :root {
+    --cos-bottom-nav-content-height: 64px;
+    --cos-bottom-nav-safe-area: max(env(safe-area-inset-bottom, 0px), 8px);
+    --cos-bottom-nav-reserve: calc(65px + var(--cos-bottom-nav-safe-area));
+    --cos-tab-height: var(--cos-bottom-nav-content-height);
+    --cos-tab-inset: 0px;
+    --cos-tab-reserve: var(--cos-bottom-nav-reserve);
+  }
+
+  html:has(.app-shell.is-touch-layout),
+  html:has(.app-shell.is-touch-layout) body,
+  html:has(.app-shell.is-touch-layout) #root {
+    height: 100%;
+    min-height: 100%;
+  }
+
+  .app-shell.is-touch-layout {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  /* .app-content is the single mobile scroller. Do not add the inset to body,
+     chat root and composer again: the fixed dock owns the physical safe area. */
+  .app-shell.is-touch-layout .app-content,
+  .app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content {
+    box-sizing: border-box !important;
+    padding-bottom: var(--cos-bottom-nav-reserve) !important;
+    scroll-padding-bottom: var(--cos-bottom-nav-reserve) !important;
+  }
+
+  .app-shell.is-touch-layout.is-chat-route .chat-standalone {
+    padding-bottom: 0 !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  .app-mobile-dock.native-bottom-tabs,
+  .app-mobile-viewport-dock.native-bottom-tabs {
+    position: fixed !important;
+    inset-inline: 0 !important;
+    inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-around !important;
+    direction: rtl !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: var(--cos-bottom-nav-reserve) !important;
+    min-height: var(--cos-bottom-nav-reserve) !important;
+    max-height: var(--cos-bottom-nav-reserve) !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 0 8px var(--cos-bottom-nav-safe-area) !important;
+    border: 0 !important;
+    border-top: 1px solid rgba(255, 255, 255, .08) !important;
+    border-radius: 24px 24px 0 0 !important;
+    background: rgba(7, 22, 43, .88) !important;
+    color: #f8fbff !important;
+    box-shadow: 0 -12px 34px rgba(0, 10, 26, .22) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    isolation: isolate !important;
+    overflow: visible !important;
+    z-index: 900 !important;
+  }
+
+  .app-mobile-dock.native-bottom-tabs > button {
+    position: relative !important;
+    z-index: 1 !important;
+    display: flex !important;
+    flex: 1 1 20% !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    width: 20% !important;
+    min-width: 0 !important;
+    height: 64px !important;
+    min-height: 64px !important;
+    max-height: 64px !important;
+    margin: 0 !important;
+    padding: 5px 2px 3px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: rgba(245, 249, 255, .92) !important;
+    opacity: .55 !important;
+    font: inherit !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    box-shadow: none !important;
+    transform: translateZ(0);
+    transition: opacity .2s ease, color .2s ease, transform .18s ease !important;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .app-mobile-dock.native-bottom-tabs > button.is-active,
+  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"] {
+    color: #fff !important;
+    opacity: 1 !important;
+  }
+
+  .app-mobile-dock.native-bottom-tabs > button > svg {
+    display: block !important;
+    width: 22px !important;
+    height: 22px !important;
+    flex: 0 0 22px !important;
+    stroke-width: 1.75 !important;
+    transition: transform .2s cubic-bezier(.4, 0, .2, 1) !important;
+  }
+
+  .app-mobile-dock.native-bottom-tabs > button.is-active > svg,
+  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"] > svg {
+    transform: translateY(-2px) !important;
+  }
+
+  .app-mobile-dock.native-bottom-tabs > button > span:not(.native-tab-badge) {
+    display: block !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    opacity: .72 !important;
+    transform: translateY(1px);
+    transition: opacity .2s ease, transform .2s ease !important;
+  }
+
+  .app-mobile-dock.native-bottom-tabs > button.is-active > span:not(.native-tab-badge),
+  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"] > span:not(.native-tab-badge) {
+    opacity: 1 !important;
+    transform: translateY(0);
+    animation: cos-nav-label-in .22s ease both;
+  }
+
+  .app-mobile-dock.native-bottom-tabs > button:active {
+    transform: scale(.92) !important;
+  }
+
+  .app-mobile-dock.native-bottom-tabs > button:focus-visible {
+    outline: 2px solid rgba(95, 223, 255, .95) !important;
+    outline-offset: -3px !important;
+    border-radius: 14px !important;
+  }
+
+  .app-mobile-dock.native-bottom-tabs .native-tab-indicator {
+    position: absolute !important;
+    z-index: 0 !important;
+    top: 8px !important;
+    inset-inline-start: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 20% !important;
+    height: 33px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    pointer-events: none !important;
+    transform: translateX(calc(var(--active-tab-index, 0) * -100%)) !important;
+    transform-origin: center !important;
+    transition: transform 300ms cubic-bezier(.4, 0, .2, 1) !important;
+  }
+
+  .app-mobile-dock.native-bottom-tabs .native-tab-indicator::before {
+    content: "" !important;
+    display: block !important;
+    width: 46px !important;
+    max-width: 72% !important;
+    height: 32px !important;
+    border-radius: 999px !important;
+    background: linear-gradient(135deg, #287bff 0%, #16cbd0 100%) !important;
+    box-shadow: 0 5px 20px rgba(27, 183, 229, .32), 0 0 12px rgba(32, 197, 223, .14) !important;
+  }
+
+  .app-mobile-dock.native-bottom-tabs .native-tab-badge {
+    position: absolute !important;
+    top: 3px !important;
+    left: calc(50% + 7px) !important;
+    z-index: 3 !important;
+    display: grid !important;
+    place-items: center !important;
+    min-width: 16px !important;
+    height: 16px !important;
+    padding: 0 4px !important;
+    border: 2px solid #0a1b32 !important;
+    border-radius: 999px !important;
+    background: #f04452 !important;
+    color: #fff !important;
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    opacity: 1 !important;
+    transform: none !important;
+    animation: cos-chat-badge-pulse 1.8s ease-in-out infinite !important;
+  }
+
+  /* When the iOS keyboard opens, keep the same dock just above the keyboard.
+     At rest, bottom is exactly zero and safe-area is applied only as padding. */
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock {
+    bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
+    inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
+  }
+
+  /* Chat list filter chips: a single snap-scrolling row, never clipped vertically. */
+  .chat-standalone .chat-folder-strip {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+    min-height: 52px !important;
+    height: auto !important;
+    padding: 6px 10px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scroll-snap-type: x mandatory !important;
+    scroll-padding-inline: 10px !important;
+    overscroll-behavior-inline: contain !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none !important;
+    direction: rtl !important;
+  }
+
+  .chat-standalone .chat-folder-strip::-webkit-scrollbar { display: none !important; }
+
+  .chat-standalone .chat-folder-strip > button {
+    flex: 0 0 auto !important;
+    min-width: max-content !important;
+    min-height: 40px !important;
+    height: 40px !important;
+    padding: 0 14px !important;
+    border-radius: 999px !important;
+    scroll-snap-align: start !important;
+    white-space: nowrap !important;
+    line-height: 1 !important;
+  }
+
+  /* Dense, calm inbox cards with an identity-driven gradient avatar. */
+  .chat-hierarchy-panel { overscroll-behavior-y: contain !important; }
+
+  .chat-conversation-list {
+    display: grid !important;
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+
+  .chat-conversation-swipe {
+    position: relative !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    border-radius: 17px !important;
+    isolation: isolate;
+    touch-action: pan-y !important;
+  }
+
+  .chat-conversation-row {
+    position: relative !important;
+    z-index: 1 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 11px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 72px !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 10px 12px !important;
+    border: 1px solid rgba(100, 116, 139, .13) !important;
+    border-radius: 17px !important;
+    background: var(--surface, #fff) !important;
+    color: inherit !important;
+    text-align: start !important;
+    direction: rtl !important;
+    box-shadow: 0 4px 15px rgba(15, 35, 60, .055), 0 1px 3px rgba(15, 35, 60, .035) !important;
+    transition: transform 220ms cubic-bezier(.2, .75, .25, 1), border-color .2s ease, box-shadow .2s ease !important;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: pan-y !important;
+  }
+
+  .chat-conversation-swipe.is-swipe-open .chat-conversation-row {
+    transform: translateX(-148px) !important;
+  }
+
+  .chat-conversation-row.is-selected {
+    border-color: rgba(45, 151, 230, .42) !important;
+    box-shadow: 0 5px 18px rgba(29, 135, 213, .11) !important;
+  }
+
+  .chat-conversation-avatar,
+  .chat-owner-avatar {
+    display: grid !important;
+    place-items: center !important;
+    flex: 0 0 46px !important;
+    width: 46px !important;
+    height: 46px !important;
+    border: 1px solid rgba(255,255,255,.42) !important;
+    border-radius: 50% !important;
+    color: #fff !important;
+    font-size: 17px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 4px 10px rgba(20, 80, 130, .12) !important;
+  }
+
+  .chat-conversation-avatar[data-avatar-tone="0"] { background: linear-gradient(145deg, #2879d8, #43c6d5) !important; }
+  .chat-conversation-avatar[data-avatar-tone="1"] { background: linear-gradient(145deg, #6654c8, #a98bea) !important; }
+  .chat-conversation-avatar[data-avatar-tone="2"] { background: linear-gradient(145deg, #087f82, #52c6a8) !important; }
+  .chat-conversation-avatar[data-avatar-tone="3"] { background: linear-gradient(145deg, #b45c45, #e9a45d) !important; }
+  .chat-conversation-avatar[data-avatar-tone="4"] { background: linear-gradient(145deg, #32628d, #79a9d0) !important; }
+
+  .chat-conversation-copy {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto auto !important;
+    align-items: center !important;
+    gap: 4px 8px !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    text-align: start !important;
+  }
+
+  .chat-conversation-titleline {
+    display: flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    grid-column: 1 / -1 !important;
+    min-width: 0 !important;
+  }
+
+  .chat-conversation-title {
+    display: block !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    color: var(--text, inherit) !important;
+    font-size: 13px !important;
+    font-weight: 850 !important;
+    line-height: 1.45 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .chat-conversation-kind {
+    flex: 0 0 auto !important;
+    padding: 3px 7px !important;
+    border-radius: 999px !important;
+    background: var(--surface-2, rgba(100,116,139,.1)) !important;
+    color: var(--muted, #64748b) !important;
+    font-size: 9px !important;
+    white-space: nowrap !important;
+  }
+
+  .chat-conversation-meta {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    color: var(--muted, #718096) !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  .chat-conversation-meta time,
+  .chat-owner-meta time,
+  .chat-shipment-meta time {
+    direction: ltr !important;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap !important;
+  }
+
+  .chat-conversation-preview {
+    display: block !important;
+    grid-column: 1 / -1 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    color: var(--muted, #718096) !important;
+    font-size: 11px !important;
+    line-height: 1.5 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .chat-conversation-unread,
+  .chat-owner-unread,
+  .chat-shipment-unread {
+    display: inline-grid !important;
+    flex: 0 0 auto !important;
+    place-items: center !important;
+    min-width: 18px !important;
+    height: 18px !important;
+    padding: 0 5px !important;
+    border-radius: 999px !important;
+    background: #e84955 !important;
+    color: #fff !important;
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    box-shadow: 0 2px 7px rgba(232, 73, 85, .18) !important;
+  }
+
+  .chat-row-swipe-actions {
+    position: absolute !important;
+    inset-block: 0 !important;
+    left: 0 !important;
+    z-index: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 7px !important;
+    width: 148px !important;
+    padding: 6px 8px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    direction: ltr !important;
+  }
+
+  .chat-conversation-swipe.is-swipe-open .chat-row-swipe-actions {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .chat-row-action {
+    display: flex !important;
+    flex: 1 1 0 !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    min-width: 0 !important;
+    height: 54px !important;
+    padding: 4px 2px !important;
+    border: 1px solid rgba(255,255,255,.18) !important;
+    border-radius: 12px !important;
+    background: #173b63 !important;
+    color: #fff !important;
+    font-size: 9px !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+  }
+
+  .chat-row-action.is-archive { background: linear-gradient(145deg, #28659a, #17476e) !important; }
+  .chat-row-action.is-mute { background: linear-gradient(145deg, #52647b, #34475f) !important; }
+
+  .chat-owner-card {
+    overflow: hidden !important;
+    border: 1px solid rgba(100,116,139,.14) !important;
+    border-radius: 17px !important;
+    background: var(--surface, #fff) !important;
+    box-shadow: 0 4px 15px rgba(15,35,60,.05) !important;
+  }
+
+  .chat-owner-row { min-height: 68px !important; padding: 7px 8px !important; gap: 6px !important; }
+  .chat-owner-avatar { flex-basis: 42px !important; width: 42px !important; height: 42px !important; background: linear-gradient(145deg,#2879d8,#43c6d5) !important; }
+  .chat-owner-meta { display:flex !important; flex-wrap:wrap !important; align-items:center !important; gap:5px 8px !important; }
+  .chat-owner-toggle .lucide-chevron-left { transform: rotate(180deg) !important; }
+  .chat-shipment-row { min-height: 60px !important; padding: 7px 12px !important; }
+  .chat-shipment-meta { display:flex !important; flex-direction:column !important; align-items:flex-end !important; justify-content:center !important; gap:4px !important; font-size:10px !important; }
+
+  .chat-conversation-skeleton-list { display:grid !important; gap:8px !important; padding:10px !important; }
+  .chat-conversation-skeleton {
+    display:flex !important;
+    align-items:center !important;
+    gap:11px !important;
+    min-height:72px !important;
+    padding:10px 12px !important;
+    border:1px solid rgba(100,116,139,.11) !important;
+    border-radius:17px !important;
+    background:var(--surface,#fff) !important;
+    box-shadow:0 4px 15px rgba(15,35,60,.04) !important;
+  }
+  .chat-skeleton-avatar,
+  .chat-skeleton-copy i,
+  .chat-skeleton-meta i {
+    display:block !important;
+    border-radius:999px !important;
+    background:linear-gradient(90deg,rgba(148,163,184,.13),rgba(148,163,184,.30),rgba(148,163,184,.13)) !important;
+    background-size:200% 100% !important;
+    animation:cos-chat-skeleton-shimmer 1.3s ease-in-out infinite !important;
+  }
+  .chat-skeleton-avatar { width:46px !important;height:46px !important;flex:0 0 46px !important; }
+  .chat-skeleton-copy { display:grid !important;flex:1 !important;gap:7px !important; }
+  .chat-skeleton-copy i:first-child { width:53% !important;height:10px !important; }
+  .chat-skeleton-copy i:nth-child(2) { width:82% !important;height:8px !important; }
+  .chat-skeleton-copy i:nth-child(3) { width:37% !important;height:7px !important; }
+  .chat-skeleton-meta { display:grid !important;gap:7px !important; }
+  .chat-skeleton-meta i { width:22px !important;height:8px !important; }
+
+  .chat-conversation-empty { min-height:180px !important;padding:28px 18px !important; }
+  .dark .chat-conversation-row,
+  [data-theme="dark"] .chat-conversation-row { border-color:rgba(148,163,184,.14) !important; }
+}
+
+/* Use existing theme surfaces in both schemes; the dock intentionally stays navy. */
+@keyframes cos-nav-label-in {
+  from { opacity: .45; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes cos-chat-badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(240,68,82,.42); }
+  55% { box-shadow: 0 0 0 5px rgba(240,68,82,0); }
+}
+@keyframes cos-chat-skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-mobile-dock.native-bottom-tabs *,
+  .chat-conversation-row,
+  .chat-skeleton-avatar,
+  .chat-skeleton-copy i,
+  .chat-skeleton-meta i {
+    animation: none !important;
+    transition: none !important;
+  }
+}
