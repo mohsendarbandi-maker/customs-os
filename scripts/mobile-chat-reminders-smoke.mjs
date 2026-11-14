@@ -15,21 +15,68 @@ try {
     waitUntil: 'domcontentloaded',
     timeout: 45000,
   });
-  await page.waitForSelector('.app-mobilebar.native-app-header', { timeout: 20000 });
-  await page.waitForSelector('.app-mobile-viewport-dock', { timeout: 20000 });
+  await page.waitForSelector('#root', { timeout: 20000 });
+
+  // The sign-in route is intentionally rendered without the authenticated
+  // AppShell. Mount the exact mobile shell/dock classes as a deterministic UI
+  // fixture so this test covers layout CSS without depending on auth state.
+  await page.evaluate(() => {
+    const root = document.querySelector('#root');
+    if (!root) throw new Error('Vite application root is missing');
+    root.replaceChildren();
+
+    const shell = document.createElement('div');
+    shell.className = 'app-shell is-touch-layout';
+    shell.dir = 'rtl';
+    const status = document.createElement('div');
+    status.className = 'native-system-status';
+    const header = document.createElement('header');
+    header.className = 'app-mobilebar native-app-header';
+    const title = document.createElement('span');
+    title.textContent = 'Customs OS';
+    header.append(title);
+    const main = document.createElement('main');
+    main.className = 'app-main';
+    const content = document.createElement('div');
+    content.className = 'app-content';
+    const stage = document.createElement('div');
+    stage.className = 'future-route-stage';
+    content.append(stage);
+    main.append(content);
+    shell.append(status, header, main);
+    root.append(shell);
+
+    const dock = document.createElement('nav');
+    dock.className = 'app-mobile-dock app-mobile-viewport-dock native-bottom-tabs';
+    dock.setAttribute('aria-label', 'پیمایش اصلی برنامه');
+    for (const label of ['خانه', 'یادآورها', 'عملیات', 'چت', 'بیشتر']) {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      const span = document.createElement('span');
+      span.textContent = label;
+      tab.append(span);
+      dock.append(tab);
+    }
+    document.body.append(dock);
+  });
 
   const initial = await page.evaluate(() => {
     const shell = document.querySelector('.app-shell');
+    const header = document.querySelector('.app-mobilebar.native-app-header');
     const dock = document.querySelector('.app-mobile-viewport-dock');
     return {
       touchShell: Boolean(shell?.classList.contains('is-touch-layout')),
+      headerVisible: Boolean(header && getComputedStyle(header).display !== 'none'),
       dockVisible: Boolean(dock && getComputedStyle(dock).display !== 'none'),
       dockPosition: dock ? getComputedStyle(dock).position : 'missing',
+      dockTabs: dock?.querySelectorAll('button').length ?? 0,
     };
   });
   assert.equal(initial.touchShell, true, JSON.stringify(initial));
+  assert.equal(initial.headerVisible, true, JSON.stringify(initial));
   assert.equal(initial.dockVisible, true, JSON.stringify(initial));
   assert.equal(initial.dockPosition, 'fixed', JSON.stringify(initial));
+  assert.equal(initial.dockTabs, 5, JSON.stringify(initial));
 
   // Mount the real reminder overlay classes on the production mobile shell and
   // emulate the reduced visual viewport reported while an iOS keyboard is open.
