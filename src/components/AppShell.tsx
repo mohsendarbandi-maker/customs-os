@@ -5,7 +5,7 @@ import {
   Activity, MessageCircle, Landmark, ChevronLeft, ChevronRight,
   FileText, FileSearch, History, LayoutDashboard, Palette, Printer,
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
-  ClipboardList, LibraryBig, Briefcase, ShieldCheck, Layers3, Search,
+  ClipboardList, LibraryBig, ShieldCheck, Layers3, Search,
   Contact, Folder, ClipboardCheck, GitBranch, Receipt, Network, FileStack, FileSignature,
   Home, CalendarDays, RefreshCw
 } from 'lucide-react';
@@ -43,7 +43,6 @@ const finance: UserRole[] = ['owner', 'admin', 'accountant'];
 
 const nav: NavItem[] = [
   { label: 'چت سازمانی', en: 'Chat', to: '/chat', icon: MessageCircle, group: 'ارتباطات' },
-  { label: 'CRM سازمانی', en: 'CRM', to: '/crm', icon: Briefcase, group: 'ارتباطات', roles: management },
   { label: 'داشبورد', en: 'Dashboard', to: '/', icon: LayoutDashboard, group: 'عملیات' },
   { label: 'مرکز کنترل', en: 'Control Center', to: '/control', icon: Activity, group: 'عملیات', roles: management },
   { label: 'عملیات پرونده', en: 'Cases & Operations', to: '/operations', icon: ClipboardCheck, group: 'عملیات', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
