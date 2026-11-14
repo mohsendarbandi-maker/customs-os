@@ -545,3 +545,24 @@
     bottom:var(--mobile-keyboard-bottom-inset,0px)!important;
   }
 }
+
+
+/* Chat-specific legacy selector has greater specificity; mirror the same
+   safe-area positioning for the chat portal at rest, and keyboard offset when open. */
+@media (max-width:1023px),(pointer:coarse) {
+  html:has(.app-shell.is-touch-layout.is-chat-route) :is(.app-mobile-dock,.app-mobile-viewport-dock).native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock.native-bottom-tabs {
+    inset-block-end:env(safe-area-inset-bottom,0px)!important;
+    bottom:env(safe-area-inset-bottom,0px)!important;
+    height:30px!important;
+    min-height:30px!important;
+    max-height:30px!important;
+    padding:0 6px!important;
+  }
+
+  html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock,.app-mobile-viewport-dock).native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock.native-bottom-tabs {
+    inset-block-end:var(--mobile-keyboard-bottom-inset,0px)!important;
+    bottom:var(--mobile-keyboard-bottom-inset,0px)!important;
+  }
+}
