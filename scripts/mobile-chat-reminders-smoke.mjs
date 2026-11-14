@@ -81,8 +81,8 @@ try {
   // Mount the real reminder overlay classes on the production mobile shell and
   // emulate the reduced visual viewport reported while an iOS keyboard is open.
   await page.evaluate(() => {
-    const content = document.querySelector('.app-content');
-    if (!content) throw new Error('Mobile shell content viewport is missing');
+    const stage = document.querySelector('.future-route-stage');
+    if (!stage) throw new Error('Mobile route stage is missing');
     const reminderPage = document.createElement('main');
     reminderPage.className = 'reminders-page reminders-app-standalone';
     reminderPage.dir = 'rtl';
@@ -126,7 +126,7 @@ try {
     overlay.append(sheet);
     reminderHub.append(reminderHeader);
     reminderPage.append(reminderHub, overlay);
-    content.append(reminderPage);
+    stage.append(reminderPage);
 
     document.documentElement.style.setProperty('--reminder-visual-top', '18px');
     document.documentElement.style.setProperty('--reminder-visual-height', '360px');
