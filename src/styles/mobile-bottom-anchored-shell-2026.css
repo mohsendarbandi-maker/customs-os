@@ -26,7 +26,9 @@
     --app-mobile-tabbar-height: 44px !important;
     --cos-tab-inset: 0px !important;
     --cos-tab-clearance: 0px !important;
-    --cos-tab-reserve: calc(44px + env(safe-area-inset-bottom)) !important;
+    /* Fixed compact total: 44px controls + 20px bottom gesture/background zone.
+       Do not let a misreported iOS safe-area value inflate the entire dock. */
+    --cos-tab-reserve: 64px !important;
   }
 
   /* The app content occupies the complete space above the persistent dock. */
@@ -60,16 +62,18 @@
     bottom: 0 !important;
     display: grid !important;
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-rows: 44px !important;
     align-items: stretch !important;
     gap: 3px !important;
     width: 100% !important;
     max-width: none !important;
-    height: var(--cos-tab-reserve) !important;
-    min-height: var(--cos-tab-reserve) !important;
+    height: 64px !important;
+    min-height: 64px !important;
+    max-height: 64px !important;
     margin: 0 !important;
     /* The bar reaches the physical bottom edge. Reserve the home-indicator
        zone for the OS and use the 44px row above it for the actual controls. */
-    padding: 0 8px env(safe-area-inset-bottom) !important;
+    padding: 0 8px 20px !important;
     box-sizing: border-box !important;
     border: 0 !important;
     border-top: 1px solid rgba(255, 255, 255, .12) !important;
@@ -89,7 +93,8 @@
   html:has(.app-shell.is-touch-layout) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs > button {
     min-width: 0 !important;
     min-height: 44px !important;
-    height: 100% !important;
+    height: 44px !important;
+    max-height: 44px !important;
     align-self: stretch !important;
     justify-content: flex-end !important;
     margin: 0 !important;
@@ -122,6 +127,8 @@
     bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
     height: 44px !important;
     min-height: 44px !important;
+    max-height: 44px !important;
+    grid-template-rows: 44px !important;
     padding: 0 8px 0 !important;
     border-radius: 22px 22px 0 0 !important;
   }
@@ -146,6 +153,8 @@
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
     height: 44px !important;
     min-height: 44px !important;
+    max-height: 44px !important;
+    grid-template-rows: 44px !important;
     padding: 0 8px 0 !important;
     border-radius: 22px 22px 0 0 !important;
   }
