@@ -9,6 +9,7 @@ type Props={
  onSelect:(id:string)=>void;
  conversations:ChatConversation[];
  folder?:ChatFolder;
+ loading?:boolean;
 };
 
 const conversationTitle=(conversation:ChatConversation)=>normalizeFaText(conversation.display_name||conversation.title||'گفتگو');
@@ -20,7 +21,7 @@ const conversationKind=(conversation:ChatConversation)=>{
 };
 const unreadCount=(conversation:ChatConversation)=>Math.max(0,Number(conversation.unread_count)||0);
 
-export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all'})=>{
+export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all',loading=false})=>{
  const[open,setOpen]=useState<Record<string,boolean>>({});
  const rows=useMemo(()=>buildChatInboxRows(conversations,folder),[conversations,folder]);
 
@@ -36,6 +37,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
  };
 
  return <div className="chat-hierarchy-panel flex-1 min-h-0 overflow-y-auto overscroll-contain">
+  {loading&&rows.length===0&&<div className="chat-inbox-skeleton" aria-label="در حال بارگذاری گفتگوها" aria-busy="true">{Array.from({length:5},(_,index)=><div className="chat-inbox-skeleton-row" key={index}><span className="chat-inbox-skeleton-avatar"/><span className="chat-inbox-skeleton-copy"><i/><i/></span></div>)}</div>}
   {rows.length>0&&<div className="chat-conversation-list">
    {rows.map(row=>{
     if(row.kind==='conversation'){
