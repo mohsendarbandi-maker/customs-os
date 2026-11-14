@@ -6,6 +6,7 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 const responsive = read('src/responsive.css');
 const mobileStyles = read('src/styles/mobile-workspace-cohesion.css');
 const mobilePolish = read('src/styles/mobile-polish.css');
+const mobileInteractions = read('src/styles/mobile-native-interactions-2026.css');
 const remindersCohesion = read('src/styles/chat-reminders-cohesion.css');
 const fileManager = read('src/pages/FileManagerPage.tsx');
 const shipments = read('src/components/LatestShipmentStatuses.tsx');
@@ -36,7 +37,9 @@ describe('mobile visual cohesion regressions', () => {
     expect(appShell).toContain('document.body');
     expect(mobilePolish).toContain('.app-mobile-viewport-dock {');
     expect(mobilePolish).toContain('position: fixed !important');
-    expect(mobilePolish).toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
+    expect(mobilePolish).not.toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
+    expect(mobileInteractions).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock');
+    expect(mobileInteractions).toContain('display: grid !important');
     expect(appearanceContext).toContain('type VisualStyle=');
     expect(appearanceContext).toContain('document.documentElement.dataset.visualStyle=appearance.visualStyle');
     expect(appearanceSettings).toContain('visual-theme-options');
