@@ -524,3 +524,24 @@
     scroll-padding-bottom:var(--cos-tab-reserve)!important;
   }
 }
+
+
+/* Keep the physical dock itself 30px tall. The home-indicator inset is
+   outside the dock; the app canvas fills that strip in the same navy tone. */
+@media (max-width:1023px),(pointer:coarse) {
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs {
+    inset-block-end:env(safe-area-inset-bottom,0px)!important;
+    bottom:env(safe-area-inset-bottom,0px)!important;
+    height:30px!important;
+    min-height:30px!important;
+    max-height:30px!important;
+    padding:0 6px!important;
+  }
+
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock.native-bottom-tabs {
+    inset-block-end:var(--mobile-keyboard-bottom-inset,0px)!important;
+    bottom:var(--mobile-keyboard-bottom-inset,0px)!important;
+  }
+}
