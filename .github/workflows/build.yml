@@ -114,7 +114,7 @@ jobs:
                 const rect = element => {
                   if (!element) return null;
                   const r = element.getBoundingClientRect();
-                  return { top: Math.round(r.top), bottom: Math.round(r.bottom), width: Math.round(r.width), height: Math.round(r.height) };
+                  return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), width: Math.round(r.width), height: Math.round(r.height) };
                 };
                 const dockRect = rect(dock);
                 const composerRect = rect(composer);
@@ -135,7 +135,10 @@ jobs:
               assert.equal(m.dockPosition, 'fixed', JSON.stringify(m));
               assert.notEqual(m.dockDisplay, 'none', JSON.stringify(m));
               assert.equal(m.dock?.height, m.dockToken, JSON.stringify(m));
-              assert.ok(m.contentReserve >= m.dockToken + 20, JSON.stringify(m));
+              assert.equal(m.dock?.left, 0, JSON.stringify(m));
+              assert.equal(m.dock?.right, width, JSON.stringify(m));
+              assert.equal(m.dock?.bottom, 844, JSON.stringify(m));
+              assert.ok(m.contentReserve >= m.dockToken, JSON.stringify(m));
               assert.ok(m.composerClearance >= 0, JSON.stringify(m));
               assert.equal(m.header?.height, 62, JSON.stringify(m));
               results.push(m);
@@ -151,6 +154,9 @@ jobs:
               const composerRect = composer?.getBoundingClientRect();
               return {
                 dockHeight: dockRect ? Math.round(dockRect.height) : -1,
+                dockLeft: dockRect ? Math.round(dockRect.left) : -1,
+                dockRight: dockRect ? Math.round(dockRect.right) : -1,
+                dockBottom: dockRect ? Math.round(dockRect.bottom) : -1,
                 dockToken: parseFloat(rootStyle.getPropertyValue('--cos-tab-height')) || -1,
                 contentReserve: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
                 composerClearance: dockRect && composerRect ? Math.round(dockRect.top - composerRect.bottom) : -999,
@@ -158,7 +164,10 @@ jobs:
             });
             assert.equal(compact.dockHeight, 64, JSON.stringify(compact));
             assert.equal(compact.dockToken, 64, JSON.stringify(compact));
-            assert.ok(compact.contentReserve >= 84, JSON.stringify(compact));
+            assert.equal(compact.dockLeft, 0, JSON.stringify(compact));
+            assert.equal(compact.dockRight, 390, JSON.stringify(compact));
+            assert.equal(compact.dockBottom, 600, JSON.stringify(compact));
+            assert.ok(compact.contentReserve >= compact.dockHeight, JSON.stringify(compact));
             assert.ok(compact.composerClearance >= 0, JSON.stringify(compact));
             // Simulate the iOS visual viewport shrinking after an editable field
             // receives focus. This verifies the dock remains visible on a non-chat
@@ -984,7 +993,7 @@ jobs:
                       composer: composerRect,
                       dockHeight: dockRect ? Math.round(dockRect.height) : -1,
                       sharedDockHeight: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cos-tab-height')) || -1,
-                      sharedDockReserve: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cos-tab-reserve')) || -1,
+                      sharedDockReserve: dockRect ? Math.round(dockRect.height) : -1,
                       composerClearance: dockRect && composerRect ? Math.round(dockRect.top - composerRect.bottom) : -999,
                       chatContentPaddingBottom: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
                       titleFits,
@@ -1003,12 +1012,12 @@ jobs:
                   expect(measurement.dashboard?.right ?? Infinity, JSON.stringify(measurement)).toBeLessThanOrEqual(measurement.viewportWidth + 1);
                   expect(measurement.card?.left ?? -1, JSON.stringify(measurement)).toBeGreaterThanOrEqual(0);
                   expect(measurement.card?.right ?? Infinity, JSON.stringify(measurement)).toBeLessThanOrEqual(measurement.viewportWidth + 1);
-                  expect(measurement.dock?.left ?? -1, JSON.stringify(measurement)).toBeGreaterThanOrEqual(0);
-                  expect(measurement.dock?.right ?? Infinity, JSON.stringify(measurement)).toBeLessThanOrEqual(measurement.viewportWidth + 1);
-                  expect(measurement.dock?.bottom ?? Infinity, JSON.stringify(measurement)).toBeLessThanOrEqual(844);
+                  expect(measurement.dock?.left ?? -1, JSON.stringify(measurement)).toBe(0);
+                  expect(measurement.dock?.right ?? -1, JSON.stringify(measurement)).toBe(measurement.viewportWidth);
+                  expect(measurement.dock?.bottom ?? -1, JSON.stringify(measurement)).toBeCloseTo(844, 0);
                   expect(measurement.dockHeight, JSON.stringify(measurement)).toBe(measurement.sharedDockHeight);
                   expect(measurement.chatContentPaddingBottom, JSON.stringify(measurement)).toBeGreaterThanOrEqual(measurement.sharedDockReserve);
-                  expect(measurement.chatContentPaddingBottom, JSON.stringify(measurement)).toBeGreaterThanOrEqual(measurement.dockHeight + 20);
+                  expect(measurement.chatContentPaddingBottom, JSON.stringify(measurement)).toBeGreaterThanOrEqual(measurement.dockHeight);
                   expect(measurement.composerClearance, JSON.stringify(measurement)).toBeGreaterThanOrEqual(0);
                   expect(measurement.titleFits, JSON.stringify(measurement)).toBe(true);
                   expect(measurement.billOfLadingFits, JSON.stringify(measurement)).toBe(true);
@@ -1025,15 +1034,20 @@ jobs:
                   const chatContent = document.querySelector('.app-content.is-chat-content');
                   return {
                     dockHeight: dock ? Math.round(dock.getBoundingClientRect().height) : -1,
+                    dockLeft: dock ? Math.round(dock.getBoundingClientRect().left) : -1,
+                    dockRight: dock ? Math.round(dock.getBoundingClientRect().right) : -1,
+                    dockBottom: dock ? Math.round(dock.getBoundingClientRect().bottom) : -1,
                     sharedDockHeight: parseFloat(rootStyle.getPropertyValue('--cos-tab-height')) || -1,
-                    sharedDockReserve: parseFloat(rootStyle.getPropertyValue('--cos-tab-reserve')) || -1,
+                    sharedDockReserve: dock ? Math.round(dock.getBoundingClientRect().height) : -1,
                     contentReserve: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
                   };
                 });
                 expect(compactViewport.dockHeight, JSON.stringify(compactViewport)).toBe(64);
                 expect(compactViewport.sharedDockHeight, JSON.stringify(compactViewport)).toBe(64);
-                expect(compactViewport.contentReserve, JSON.stringify(compactViewport)).toBeGreaterThanOrEqual(compactViewport.sharedDockReserve);
-                expect(compactViewport.contentReserve, JSON.stringify(compactViewport)).toBeGreaterThanOrEqual(84);
+                expect(compactViewport.dockLeft, JSON.stringify(compactViewport)).toBe(0);
+                expect(compactViewport.dockRight, JSON.stringify(compactViewport)).toBe(390);
+                expect(compactViewport.dockBottom, JSON.stringify(compactViewport)).toBe(600);
+                expect(compactViewport.contentReserve, JSON.stringify(compactViewport)).toBeGreaterThanOrEqual(compactViewport.dockHeight);
                 await page.setViewportSize({ width: 390, height: 844 });
 
                 expect(layoutProbe.viewportWidth).toBeLessThanOrEqual(767);
