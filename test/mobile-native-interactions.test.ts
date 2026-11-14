@@ -9,6 +9,7 @@ describe('Customs OS Phase 4 native mobile interactions', () => {
   const shell = read('src/components/AppShell.tsx');
   const css = read('src/styles/mobile-native-interactions-2026.css');
   const main = read('src/main.tsx');
+  const legacyMobileCss = read('src/styles/mobile-polish.css');
 
   it('tracks the keyboard-adjusted visual viewport and publishes the dock inset', () => {
     expect(shell).toContain('window.visualViewport');
@@ -39,6 +40,9 @@ describe('Customs OS Phase 4 native mobile interactions', () => {
     expect(css).toContain('--mobile-keyboard-bottom-inset');
     expect(css).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock');
     expect(css).toContain('inset-block-end: calc(var(--mobile-keyboard-bottom-inset, 0px)');
+    expect(css).toContain('display: grid !important');
+    expect(css).toContain('visibility: visible !important');
+    expect(legacyMobileCss).not.toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
     expect(css).not.toContain('is-mobile-keyboard-open .app-mobile-viewport-dock { display: none');
   });
 
