@@ -55,6 +55,46 @@
     outline-offset: -2px !important;
   }
 
+  /* Shared keyboard viewport for every mobile route. The shell's content
+     scroller shrinks to the visible area and the single body-portal dock moves
+     to the keyboard edge; navigation stays visible instead of being hidden. */
+  .app-shell.is-touch-layout.is-mobile-keyboard-open {
+    position: fixed !important;
+    inset-inline: 0 !important;
+    top: var(--mobile-visible-viewport-top, 0px) !important;
+    bottom: auto !important;
+    width: 100% !important;
+    height: var(--mobile-visible-viewport-height, 100dvh) !important;
+    min-height: 0 !important;
+    max-height: var(--mobile-visible-viewport-height, 100dvh) !important;
+    overflow: hidden !important;
+  }
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock {
+    position: fixed !important;
+    inset-block-end: calc(var(--mobile-keyboard-bottom-inset, 0px) + var(--cos-tab-inset, 10px) + env(safe-area-inset-bottom)) !important;
+    bottom: calc(var(--mobile-keyboard-bottom-inset, 0px) + var(--cos-tab-inset, 10px) + env(safe-area-inset-bottom)) !important;
+    z-index: 900 !important;
+  }
+  .app-shell.is-touch-layout.is-mobile-keyboard-open .app-content {
+    min-height: 0 !important;
+    scroll-padding-block-end: var(--cos-tab-reserve, 90px) !important;
+  }
+  .app-shell.is-touch-layout .app-content {
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .app-shell.is-touch-layout .app-content :is(.overflow-x-auto, [data-horizontal-scroll]) {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-x: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y;
+  }
+  .app-shell.is-touch-layout .app-content :is(input, textarea, select, [contenteditable="true"]) {
+    scroll-margin-block: 18px;
+  }
+
   /* iOS Safari shrinks visualViewport when the software keyboard opens.
      Resize the chat shell to that visible area and move the body-portal dock
      to the same bottom edge. The composer stays in the final flex row above it. */
