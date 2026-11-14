@@ -62,7 +62,10 @@
     height: var(--cos-tab-reserve) !important;
     min-height: var(--cos-tab-reserve) !important;
     margin: 0 !important;
-    padding: 6px 8px calc(5px + env(safe-area-inset-bottom)) !important;
+    /* Let the tab buttons use the entire dock, including the iPhone safe-area
+       extension. This moves icons and labels down with the background instead
+       of leaving them stranded above an empty safe-area strip. */
+    padding: 6px 8px 0 !important;
     box-sizing: border-box !important;
     border: 0 !important;
     border-top: 1px solid rgba(255, 255, 255, .12) !important;
@@ -83,6 +86,7 @@
     min-width: 0 !important;
     min-height: 54px !important;
     height: 100% !important;
+    align-self: stretch !important;
     margin: 0 !important;
     padding: 3px 1px !important;
   }
