@@ -87,9 +87,17 @@ try {
     reminderPage.className = 'reminders-page reminders-app-standalone';
     reminderPage.dir = 'rtl';
 
-    const fab = document.createElement('button');
-    fab.className = 'reminders-mobile-fab';
-    fab.textContent = '+';
+    const reminderHeader = document.createElement('header');
+    reminderHeader.className = 'reminders-hub-header';
+    const headerActions = document.createElement('div');
+    headerActions.className = 'reminders-hub-actions';
+    const addAction = document.createElement('button');
+    addAction.type = 'button';
+    addAction.className = 'reminders-hub-add';
+    addAction.setAttribute('aria-label', 'یادآور جدید');
+    addAction.textContent = '+';
+    headerActions.append(addAction);
+    reminderHeader.append(headerActions);
 
     const overlay = document.createElement('form');
     overlay.className = 'reminders-composebar is-open';
@@ -114,7 +122,7 @@ try {
     actions.append(submit);
     sheet.append(heading, input, details, actions);
     overlay.append(sheet);
-    reminderPage.append(fab, overlay);
+    reminderPage.append(reminderHeader, overlay);
     content.append(reminderPage);
 
     document.documentElement.style.setProperty('--reminder-visual-top', '18px');
@@ -125,7 +133,7 @@ try {
     const overlay = document.querySelector('.reminders-composebar.is-open');
     const sheet = document.querySelector('.reminders-compose-sheet');
     const submit = document.querySelector('.reminders-submit-button');
-    const fab = document.querySelector('.reminders-mobile-fab');
+    const addAction = document.querySelector('.reminders-hub-add');
     const dock = document.querySelector('.app-mobile-viewport-dock');
     const rect = element => {
       if (!element) return null;
@@ -133,16 +141,17 @@ try {
       return { top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) };
     };
     const dockRect = rect(dock);
-    const fabRect = rect(fab);
+    const addActionRect = rect(addAction);
     return {
       overlay: rect(overlay),
       sheet: rect(sheet),
       sheetMaxHeight: parseFloat(getComputedStyle(sheet).maxHeight) || 0,
       sheetOverflowY: getComputedStyle(sheet).overflowY,
       submit: rect(submit),
+      addAction: addActionRect,
+      addActionDisplay: addAction ? getComputedStyle(addAction).display : 'missing',
       dock: dockRect,
-      fab: fabRect,
-      fabDockGap: dockRect && fabRect ? Math.round(dockRect.top - fabRect.bottom) : -999,
+      addActionDockClearance: dockRect && addActionRect ? Math.round(dockRect.top - addActionRect.bottom) : -999,
     };
   });
 
@@ -151,7 +160,9 @@ try {
   assert.equal(first.overlay?.height, 360, JSON.stringify(first));
   assert.ok(first.sheet?.height <= 342, JSON.stringify(first));
   assert.equal(first.sheetOverflowY, 'auto', JSON.stringify(first));
-  assert.ok(first.fabDockGap >= 8, JSON.stringify(first));
+  assert.ok(first.addAction?.height >= 40, JSON.stringify(first));
+  assert.notEqual(first.addActionDisplay, 'none', JSON.stringify(first));
+  assert.ok(first.addActionDockClearance > 0, JSON.stringify(first));
 
   await page.evaluate(() => {
     document.documentElement.style.setProperty('--reminder-visual-top', '24px');
@@ -164,6 +175,7 @@ try {
   assert.equal(compact.overlay?.height, 260, JSON.stringify(compact));
   assert.ok(compact.sheet?.height <= 242, JSON.stringify(compact));
   assert.ok(compact.submit?.bottom <= (compact.sheet?.bottom ?? -1) + 1, JSON.stringify(compact));
+  assert.ok(compact.addActionDockClearance > 0, JSON.stringify(compact));
 
   // Recreate the chat flex chain; the body-portal dock must stay below the
   // message composer, and large attachment previews must remain bounded.
