@@ -645,6 +645,11 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     go(to);
   };
 
+  const goMoreTab = () => {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10);
+    go('/more');
+  };
+
   const goBack = () => {
     closeMobile();
     const historyState = window.history.state as BrowserHistoryState;
@@ -911,12 +916,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </button>
         </div>
       )}
-      {!isDesktop && createPortal(<nav
-        className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs"
-        aria-label="پیمایش اصلی برنامه"
-        dir="rtl"
-        style={{ '--active-tab-index': mobileTabIndex } as React.CSSProperties}
-      >
+      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs" aria-label="پیمایش اصلی برنامه" dir="rtl" style={{ '--active-tab-index': mobileTabIndex } as React.CSSProperties}>
         <span className="native-tab-indicator" aria-hidden="true" />
         <button type="button" className={location.pathname === '/' ? 'is-active' : ''} aria-current={location.pathname === '/' ? 'page' : undefined} onClick={() => goMobileTab('/')}>
           <Home size={22} strokeWidth={1.75} /><span>خانه</span>
@@ -931,7 +931,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           <MessageCircle size={22} strokeWidth={1.75} /><span>چت</span>
           {chatUnreadCount > 0 && <span className="native-tab-badge" aria-label={`${chatUnreadCount} پیام خوانده‌نشده`}>{chatUnreadCount > 99 ? '99+' : chatUnreadCount}</span>}
         </button>
-        <button type="button" className={isMoreTab ? 'is-active' : ''} aria-current={isMoreTab ? 'page' : undefined} onClick={() => goMobileTab('/more')}>
+        <button type="button" className={isMoreTab ? 'is-active' : ''} aria-current={isMoreTab ? 'page' : undefined} onClick={goMoreTab}>
           <Layers3 size={22} strokeWidth={1.75} /><span>بیشتر</span>
         </button>
       </nav>, document.body)}
