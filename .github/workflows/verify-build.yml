@@ -33,6 +33,27 @@ jobs:
 
       - name: Production build (final messenger)
         run: npm run build
+      - name: Mobile chat and reminders keyboard viewport smoke
+        if: github.head_ref == 'ui/mobile-phase2-chat-reminders-2026-11-14'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/customs-os-preview-phase2.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:4173/reminders/login -o /dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != 1 ]; then
+            cat /tmp/customs-os-preview-phase2.log
+            echo "Local Vite preview did not become ready."
+            exit 1
+          fi
+          node scripts/mobile-chat-reminders-smoke.mjs
       - name: Messenger gateway Deno check
         uses: denoland/setup-deno@v2
         with:
