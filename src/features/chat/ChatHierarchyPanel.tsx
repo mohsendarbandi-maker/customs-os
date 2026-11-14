@@ -1,4 +1,4 @@
-import React,{useMemo,useRef,useState}from'react';
+import React,{useEffect,useMemo,useRef,useState}from'react';
 import{Archive,BellOff,ChevronDown,ChevronLeft,MessageCircle,Package,RotateCcw,Users}from'lucide-react';
 import{normalizeFaText}from'../../lib/jalali';
 import{buildChatInboxRows,type ChatFolder}from'./conversationModel';
@@ -10,6 +10,7 @@ type Props={
  conversations:ChatConversation[];
  folder?:ChatFolder;
  loading?:boolean;
+ storageScope?:string;
 };
 
 const conversationTitle=(conversation:ChatConversation)=>normalizeFaText(conversation.display_name||conversation.title||'گفتگو');
@@ -35,15 +36,31 @@ const activityLabel=(conversation:ChatConversation)=>{
 };
 const avatarTone=(name:string)=>Array.from(name).reduce((total,character)=>total+(character.codePointAt(0)||0),0)%5;
 
-export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all',loading=false})=>{
+export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all',loading=false,storageScope='guest'})=>{
  const[open,setOpen]=useState<Record<string,boolean>>({});
  const[swipedId,setSwipedId]=useState<string|null>(null);
  const[archivedIds,setArchivedIds]=useState<string[]>([]);
  const[mutedIds,setMutedIds]=useState<string[]>([]);
+ const[loadedStorageKey,setLoadedStorageKey]=useState('');
  const[actionNotice,setActionNotice]=useState('');
  const touchStart=useRef<{id:string;x:number;y:number}|null>(null);
  const suppressClick=useRef(false);
  const rows=useMemo(()=>buildChatInboxRows(conversations,folder),[conversations,folder]);
+ const storageKey='customs-os:chat-list-ui:v1:'+storageScope;
+ useEffect(()=>{
+  try{
+   const parsed=JSON.parse(window.sessionStorage.getItem(storageKey)||'{}') as {archivedIds?:unknown;mutedIds?:unknown};
+   setArchivedIds(Array.isArray(parsed.archivedIds)?parsed.archivedIds.filter((id):id is string=>typeof id==='string'):[]);
+   setMutedIds(Array.isArray(parsed.mutedIds)?parsed.mutedIds.filter((id):id is string=>typeof id==='string'):[]);
+  }catch{
+   setArchivedIds([]);setMutedIds([]);
+  }
+  setLoadedStorageKey(storageKey);
+ },[storageKey]);
+ useEffect(()=>{
+  if(loadedStorageKey!==storageKey)return;
+  try{window.sessionStorage.setItem(storageKey,JSON.stringify({archivedIds,mutedIds}))}catch{/* private browsing */}
+ },[archivedIds,mutedIds,loadedStorageKey,storageKey]);
  const visibleRows=useMemo(()=>rows.filter(row=>row.kind!=='conversation'||!archivedIds.includes(row.conversation.conversation_id)),[rows,archivedIds]);
 
  const emptyLabel=folder==='groups'?'گروهی پیدا نشد.':
@@ -78,7 +95,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
  };
  const archiveConversation=(id:string)=>{
   setArchivedIds(current=>current.includes(id)?current.filter(item=>item!==id):[...current,id]);
-  setActionNotice('گفتگو از این فهرست پنهان شد؛ برای بازگردانی از گزینهٔ بالای فهرست استفاده کنید.');
+  setActionNotice('گفتگو از فهرست همین نشست پنهان شد؛ از گزینهٔ بازگردانی استفاده کنید.');
   setSwipedId(null);vibrate();
  };
  const toggleMuted=(id:string)=>{
@@ -128,8 +145,8 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
        <button type="button" className="chat-row-action is-archive" tabIndex={swipedId===conversation.conversation_id?0:-1} onClick={()=>archiveConversation(conversation.conversation_id)} aria-label="پنهان‌کردن گفتگو از فهرست">
         <Archive size={16}/><span>آرشیو محلی</span>
        </button>
-       <button type="button" className={'chat-row-action is-mute '+(muted?'is-muted':'')} tabIndex={swipedId===conversation.conversation_id?0:-1} onClick={()=>toggleMuted(conversation.conversation_id)} aria-label={muted?'برداشتن برچسب بی‌صدا':'علامت‌گذاری بی‌صدا'}>
-        <BellOff size={16}/><span>{muted?'با‌صدا؟':'بی‌صدا'}</span>
+       <button type="button" className={'chat-row-action is-mute '+(muted?'is-muted':'')} tabIndex={swipedId===conversation.conversation_id?0:-1} onClick={()=>toggleMuted(conversation.conversation_id)} aria-label={muted?'برداشتن برچسب بی‌صدا محلی':'علامت‌گذاری بی‌صدا محلی'}>
+        <BellOff size={16}/><span>{muted?'برداشتن':'بی‌صدا محلی'}</span>
        </button>
       </div>
       <button
@@ -204,6 +221,6 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
    })}
   </div>}
   {!loading&&visibleRows.length===0&&<div className="chat-conversation-empty"><span className="chat-conversation-empty-icon"><Users size={23}/></span><b>{emptyLabel}</b><span>{folder==='unread'?'همهٔ گفتگوها به‌روز هستند.':'برای شروع، یک گفتگو یا گروه تازه بسازید.'}</span></div>}
-  <div className="chat-row-action-footnote">آرشیو و برچسب بی‌صدا در این نسخه فقط نمایشی و مختص همین نشست هستند؛ وضعیت اعلان سمت سرور تغییر نمی‌کند.</div>
+  <div className="chat-row-action-footnote">آرشیو و برچسب بی‌صدا فقط روی همین دستگاه و تا پایان نشست ذخیره می‌شوند؛ اعلان سمت سرور تغییر نمی‌کند.</div>
  </div>;
 };
