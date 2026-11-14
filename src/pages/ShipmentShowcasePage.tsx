@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bell, ChevronLeft, ChevronRight, Clock3, FileText, RefreshCw, Search, Ship, Truck } from 'lucide-react';
+import { AlertCircle, Bell, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Clock3, FileText, RefreshCw, Search, Ship, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -119,7 +119,10 @@ export const ShipmentShowcasePage: React.FC = () => {
   return <main className="shipment-showcase-page fm-showcase-screen" dir="rtl">
     <header className="showcase-hero">
       <div><span className="showcase-kicker">DAR BANDI · LIVE OPERATIONS</span><h1>ویترین محموله‌ها</h1><p>تابلوی زندهٔ وضعیت محموله‌ها؛ هر کارت یک پرونده و مسیرهای دسترسی مستقل دارد.</p></div>
-      <button onClick={() => void load()} disabled={loading}><RefreshCw size={16} /> تازه‌سازی</button>
+      <div className="showcase-hero-actions">
+        <Link to="/shipment-reports"><ClipboardList size={16} /> همه گزارش‌ها</Link>
+        <button onClick={() => void load()} disabled={loading}><RefreshCw size={16} /> تازه‌سازی</button>
+      </div>
     </header>
 
     <section className="showcase-kpis" aria-label="خلاصه وضعیت محموله‌ها">
@@ -160,6 +163,7 @@ export const ShipmentShowcasePage: React.FC = () => {
               {tasks.length ? tasks.map(task => <div className="showcase-task" key={task.id}><Clock3 size={13} /><span>{task.title}</span><small>{faDate(task.due_at)}</small></div>) : <p className="showcase-no-task">پیگیری بازی برای این محموله ثبت نشده است.</p>}
             </div>
             <footer>
+              <Link to={'/operations?shipmentId=' + encodeURIComponent(shipment.id)}><ClipboardCheck size={14} /> عملیات محموله</Link>
               <Link to={'/file-manager?shipmentId=' + encodeURIComponent(shipment.id)}><FileText size={14} /> پرونده</Link>
               <Link to={'/shipment-reports?shipmentId=' + encodeURIComponent(shipment.id)}><Truck size={14} /> گزارش محموله</Link>
             </footer>
