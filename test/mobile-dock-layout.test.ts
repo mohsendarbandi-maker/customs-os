@@ -9,6 +9,7 @@ const read = (relativePath: string) => fs.readFileSync(path.resolve(testDir, rel
 describe('mobile full-height shell and bottom navigation geometry', () => {
   const entry = read('../src/main.tsx');
   const layout = read('../src/styles/mobile-bottom-anchored-shell-2026.css');
+  const buildWorkflow = read('../.github/workflows/build.yml');
 
   it('loads the authoritative dock geometry after all legacy mobile styles', () => {
     expect(entry).toContain("import './styles/mobile-route-polish-2026.css';");
@@ -40,6 +41,15 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).toContain('.app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content');
     expect(layout).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
     expect(layout).toContain('--cos-tab-reserve: var(--cos-tab-height, 70px);');
+  });
+
+  it('tests edge-to-edge dock placement and does not require floating-dock clearance', () => {
+    expect(buildWorkflow).toContain("expect(measurement.dock?.bottom ?? -1, JSON.stringify(measurement)).toBeCloseTo(844, 0);");
+    expect(buildWorkflow).toContain("expect(measurement.dock?.left ?? -1, JSON.stringify(measurement)).toBe(0);");
+    expect(buildWorkflow).toContain("expect(measurement.dock?.right ?? -1, JSON.stringify(measurement)).toBe(measurement.viewportWidth);");
+    expect(buildWorkflow).toContain("toBeGreaterThanOrEqual(measurement.dockHeight);");
+    expect(buildWorkflow).not.toContain("dockHeight + 20");
+    expect(buildWorkflow).not.toContain("contentReserve >= 84");
   });
 
 });
