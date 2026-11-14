@@ -1,5 +1,5 @@
 import React,{useMemo,useState}from'react';
-import{ChevronDown,ChevronLeft,MessageCircle,Package,Users}from'lucide-react';
+import{ChevronDown,ChevronLeft,MessageCircle,Package}from'lucide-react';
 import{normalizeFaText}from'../../lib/jalali';
 import{buildChatInboxRows,type ChatFolder}from'./conversationModel';
 import type{ChatConversation}from'./types';
@@ -9,6 +9,7 @@ type Props={
  onSelect:(id:string)=>void;
  conversations:ChatConversation[];
  folder?:ChatFolder;
+ loading?:boolean;
 };
 
 const conversationTitle=(conversation:ChatConversation)=>normalizeFaText(conversation.display_name||conversation.title||'گفتگو');
@@ -19,8 +20,9 @@ const conversationKind=(conversation:ChatConversation)=>{
  return'گفتگوی مستقیم';
 };
 const unreadCount=(conversation:ChatConversation)=>Math.max(0,Number(conversation.unread_count)||0);
+const lastActivity=(conversation:ChatConversation)=>{const value=conversation.last_message_created_at||conversation.updated_at;return value?new Intl.DateTimeFormat('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran',hour:'2-digit',minute:'2-digit'}).format(new Date(value)):''};
 
-export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all'})=>{
+export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all',loading=false})=>{
  const[open,setOpen]=useState<Record<string,boolean>>({});
  const rows=useMemo(()=>buildChatInboxRows(conversations,folder),[conversations,folder]);
 
@@ -36,6 +38,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
  };
 
  return <div className="chat-hierarchy-panel flex-1 min-h-0 overflow-y-auto overscroll-contain">
+  {loading&&rows.length===0&&<div className="chat-inbox-skeleton" aria-label="در حال بارگذاری گفتگوها" aria-busy="true">{Array.from({length:5},(_,index)=><div className="chat-inbox-skeleton-row" key={index}><span className="chat-inbox-skeleton-avatar"/><span className="chat-inbox-skeleton-copy"><i/><i/></span></div>)}</div>}
   {rows.length>0&&<div className="chat-conversation-list">
    {rows.map(row=>{
     if(row.kind==='conversation'){
@@ -48,8 +51,8 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
       className={'chat-conversation-row '+(selected?'is-selected':'')}
       aria-pressed={selected}
      >
-      <span className="chat-conversation-avatar">
-       {conversation.type==='direct'?<span className="font-black text-sm">{(conversation.display_name||'ک').slice(0,1)}</span>:<Users size={19}/>}
+      <span className="chat-conversation-avatar" aria-hidden="true">
+       <span className="chat-conversation-avatar-initial">{(conversation.display_name||conversation.title||'گ').trim().slice(0,1)||'گ'}</span>
       </span>
       <span className="chat-conversation-copy">
        <span className="chat-conversation-titleline">
@@ -57,6 +60,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
         {folder==='groups'&&<small className="chat-conversation-kind">{conversationKind(conversation)}</small>}
        </span>
        <span className="chat-conversation-preview">{conversation.last_message_body||'بدون پیام'}</span>
+       <span className="chat-conversation-time">{lastActivity(conversation)}</span>
       </span>
       {row.unreadCount>0&&<span className="chat-conversation-unread" aria-label={row.unreadCount+' پیام خوانده‌نشده'}>{row.unreadCount}</span>}
      </button>;
@@ -75,7 +79,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
        {expanded?<ChevronDown size={16}/>:<ChevronLeft size={16}/>}
       </button>
       <button type="button" className="chat-owner-select" onClick={()=>toggleOwner(owner.conversation_id,defaultExpanded)} aria-expanded={expanded} aria-label={(expanded?'بستن':'نمایش')+' محموله‌های '+normalizeFaText(owner.title||'صاحب کالا')}>
-       <span className="chat-owner-avatar"><Users size={18}/></span>
+       <span className="chat-owner-avatar"><span className="chat-conversation-avatar-initial">{(owner.title||'ص').trim().slice(0,1)}</span></span>
        <span className="chat-owner-copy">
         <span className="chat-owner-name">{normalizeFaText(owner.title||'صاحب کالا')}</span>
         <span className="chat-owner-meta">

@@ -631,6 +631,7 @@ export const ChatPage:React.FC=()=>{
  useEffect(()=>{if(voice.error)setError(voice.error)},[voice.error]);
 
  const unread=useMemo(()=>conversations.reduce((n,c)=>n+Number(c.unread_count??0),0),[conversations]);
+ useEffect(()=>{window.dispatchEvent(new CustomEvent('customs-os:chat-unread-count',{detail:{count:unread}}))},[unread]);
  const filteredPeople=useMemo(()=>{const q=normalizeFaText(personQuery).toLowerCase();return people.filter(person=>person.id!==user?.id&&(!q||normalizeFaText(person.full_name).toLowerCase().includes(q)||(person.phone??'').includes(q)))},[people,personQuery,user?.id]);
  const folderLabels:Partial<Record<ChatFolder,string>>={all:'همه',coworkers:'مستقیم',groups:'گروه‌ها',unread:'خوانده‌نشده'};
  const statusView=(m:ChatMessage)=>{
@@ -679,7 +680,7 @@ export const ChatPage:React.FC=()=>{
     <div className="chat-folder-strip px-2 py-1 border-b app-border overflow-x-auto flex gap-2">{Object.entries(folderLabels).map(([key,label])=><button type="button" key={key} onClick={()=>setFolder(key as ChatFolder)} className={"shrink-0 min-h-9 px-2.5 rounded-lg text-[11px] font-bold border app-border "+(folder===key?'bg-[var(--primary)] text-white':'bg-[var(--surface-2)]')} aria-pressed={folder===key}>{label}{key==='unread'&&unread>0?<span className="mr-1">({unread})</span>:null}</button>)}</div>
     {results.length>0&&<div className="border-b app-border max-h-48 overflow-y-auto">{results.map(r=><button type="button" key={r.id} onClick={()=>jumpToSearchResult(r)} className="w-full text-right px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5"><b className="text-xs block truncate">{r.title}</b><span className="text-[10px] app-muted block truncate mt-1">{r.snippet}</span></button>)}</div>}
     {pendingFiles.length>0&&<div className="mx-3 mt-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 text-xs leading-5"><b>{pendingFiles.length} فایل آماده ارسال</b><div className="app-muted">فایل از فایل‌منیجر یا بخش دیگری آمده است. یک گفتگو را باز کنید تا فایل‌ها را ارسال کنید.</div></div>}
-   <ChatHierarchyPanel selectedId={selectedId} onSelect={id=>{setSelectedId(id);setMessages([]);setResults([]);closeMessageMenu()}} conversations={conversations} folder={folder}/>
+   <ChatHierarchyPanel selectedId={selectedId} onSelect={id=>{setSelectedId(id);setMessages([]);setResults([]);closeMessageMenu()}} conversations={conversations} folder={folder} loading={loading}/>
    </section>
   </div>}
 
