@@ -34,7 +34,7 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).toContain('background-color: #092744 !important;');
     expect(layout).toContain('background: #092744 !important;');
     expect(layout).toContain('border-radius: 22px 22px 0 0 !important;');
-    expect(layout).toContain('padding: 0 8px env(safe-area-inset-bottom) !important;');
+    expect(layout).toContain('padding: 0 8px 20px !important;');
     expect(layout).toContain('height: 100% !important;');
     expect(layout).toContain('align-self: stretch !important;');
     expect(layout).toContain('height: var(--cos-tab-reserve) !important;');
@@ -43,7 +43,10 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
 
   it('uses a minimum 44px tab row, overrides legacy 70px sizing, and lowers controls to the row edge', () => {
     expect(layout).toContain('--cos-tab-height: 44px !important;');
-    expect(layout).toContain('--cos-tab-reserve: calc(44px + env(safe-area-inset-bottom)) !important;');
+    expect(layout).toContain('--cos-tab-reserve: 64px !important;');
+    expect(layout).toContain('grid-template-rows: 44px !important;');
+    expect(layout).toContain('height: 64px !important;');
+    expect(layout).toContain('max-height: 44px !important;');
     expect(layout).toContain('min-height: 44px !important;');
     expect(layout).toContain('width: 18px !important;');
     expect(layout).toContain('font-size: 9px !important;');
