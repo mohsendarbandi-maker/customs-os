@@ -178,8 +178,8 @@
     max-height: none !important;
   }
 
-  .app-mobile-dock.native-bottom-tabs,
-  .app-mobile-viewport-dock.native-bottom-tabs {
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs {
     position: fixed !important;
     inset-inline: 0 !important;
     inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
