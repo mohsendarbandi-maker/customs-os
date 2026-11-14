@@ -21,7 +21,7 @@
   :root {
     --cos-tab-inset: 0px;
     --cos-tab-clearance: 0px;
-    --cos-tab-reserve: calc(var(--cos-tab-height, 70px) + env(safe-area-inset-bottom));
+    --cos-tab-reserve: calc(46px + env(safe-area-inset-bottom));
   }
 
   /* The app content occupies the complete space above the persistent dock. */
@@ -56,7 +56,7 @@
     display: grid !important;
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
     align-items: stretch !important;
-    gap: 3px !important;
+    gap: 0 !important;
     width: 100% !important;
     max-width: none !important;
     height: var(--cos-tab-reserve) !important;
@@ -65,7 +65,7 @@
     /* Let the tab buttons use the entire dock, including the iPhone safe-area
        extension. This moves icons and labels down with the background instead
        of leaving them stranded above an empty safe-area strip. */
-    padding: 6px 8px 0 !important;
+    padding: 0 !important;
     box-sizing: border-box !important;
     border: 0 !important;
     border-top: 1px solid rgba(255, 255, 255, .12) !important;
@@ -84,25 +84,25 @@
 
   html:has(.app-shell.is-touch-layout) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs > button {
     min-width: 0 !important;
-    min-height: 54px !important;
+    min-height: 0 !important;
     height: 100% !important;
     align-self: stretch !important;
     margin: 0 !important;
-    padding: 3px 1px !important;
+    padding: 0 !important;
   }
 
   /* While the software keyboard is open, move the bar to its top edge and
      remove the now-hidden home-indicator area from both height reservations. */
   html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) {
-    --cos-tab-reserve: var(--cos-tab-height, 70px);
+    --cos-tab-reserve: 46px;
   }
 
   html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
     inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
     bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
-    height: var(--cos-tab-height, 70px) !important;
-    min-height: var(--cos-tab-height, 70px) !important;
-    padding-bottom: 5px !important;
+    height: 46px !important;
+    min-height: 46px !important;
+    padding-bottom: 0 !important;
     border-radius: 22px 22px 0 0 !important;
   }
 
@@ -124,9 +124,9 @@
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
-    height: var(--cos-tab-height, 70px) !important;
-    min-height: var(--cos-tab-height, 70px) !important;
-    padding-bottom: 5px !important;
+    height: 46px !important;
+    min-height: 46px !important;
+    padding-bottom: 0 !important;
     border-radius: 22px 22px 0 0 !important;
   }
 
