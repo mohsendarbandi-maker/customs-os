@@ -761,3 +761,10 @@
     text-align:center!important;
   }
 }
+
+
+@media (max-width:1023px),(pointer:coarse) {
+  .app-mobile-dock.native-bottom-tabs > button > span:not(.native-tab-badge) {
+    opacity:1!important;
+  }
+}
