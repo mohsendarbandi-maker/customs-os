@@ -9,6 +9,15 @@
  * floating-dock experiment can override the final layout.
  */
 @media (max-width: 1023px), (pointer: coarse) {
+  /* The app background must continue beneath the iOS home-indicator safe area.
+     iOS then clips these pixels to the device's native rounded display corners. */
+  html,
+  body,
+  #root,
+  .app-shell.is-touch-layout {
+    background-color: #092744 !important;
+  }
+
   :root {
     --cos-tab-inset: 0px;
     --cos-tab-clearance: 0px;
@@ -57,8 +66,9 @@
     box-sizing: border-box !important;
     border: 0 !important;
     border-top: 1px solid rgba(255, 255, 255, .12) !important;
-    border-radius: 18px 18px 0 0 !important;
-    background: rgba(9, 39, 68, .98) !important;
+    border-radius: 22px 22px 0 0 !important;
+    background: #092744 !important;
+    background-clip: border-box !important;
     box-shadow: 0 -8px 26px rgba(7, 28, 48, .18), inset 0 1px 0 rgba(255, 255, 255, .06) !important;
     -webkit-backdrop-filter: blur(22px) saturate(150%) !important;
     backdrop-filter: blur(22px) saturate(150%) !important;
@@ -89,6 +99,7 @@
     height: var(--cos-tab-height, 70px) !important;
     min-height: var(--cos-tab-height, 70px) !important;
     padding-bottom: 5px !important;
+    border-radius: 22px 22px 0 0 !important;
   }
 
   /* Chat tracks visualViewport independently; keep the same full-width bar
@@ -101,7 +112,7 @@
     bottom: var(--chat-visual-bottom-inset, 0px) !important;
     width: 100% !important;
     max-width: none !important;
-    border-radius: 18px 18px 0 0 !important;
+    border-radius: 22px 22px 0 0 !important;
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) {
@@ -112,6 +123,7 @@
     height: var(--cos-tab-height, 70px) !important;
     min-height: var(--cos-tab-height, 70px) !important;
     padding-bottom: 5px !important;
+    border-radius: 22px 22px 0 0 !important;
   }
 
   /* Floating controls and update prompts remain above the full-width bar. */
