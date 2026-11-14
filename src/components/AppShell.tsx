@@ -288,48 +288,86 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     routeExitTimerRef.current = window.setTimeout(cleanup, 320);
   };
 
-  // Keep the chat composer attached to the actually visible iOS viewport when the
-  // browser chrome or the software keyboard changes the visual viewport.
+  // Track the visible mobile viewport for every route, not only chat. iOS Safari
+  // keeps the layout viewport behind its software keyboard; without this shared
+  // contract, forms lose their final controls and the body-portal dock stays hidden
+  // underneath the keyboard. Chat keeps its legacy variables for its composer.
   useEffect(() => {
-    if (!isChatRoute || isDesktop) return;
-    const shell = document.querySelector<HTMLElement>('.app-shell.is-chat-route');
+    if (isDesktop) return;
+    const shell = appShellRef.current;
     if (!shell) return;
+
     const viewport = window.visualViewport;
     const root = document.documentElement;
+    const editableSelector = 'input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]), textarea, select, [contenteditable="true"]';
     let syncFrame = 0;
+
+    const hasEditableFocus = () => {
+      const active = document.activeElement;
+      return active instanceof HTMLElement &&
+        (active.matches(editableSelector) || Boolean(active.closest('[contenteditable="true"]')));
+    };
+
     const syncVisibleViewport = () => {
       const visibleHeight = Math.max(1, Math.round(viewport?.height ?? window.innerHeight));
       const visibleTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
-      // The portal dock is rendered under document.body, so publish its keyboard
-      // offset on the root as well as the chat shell.
       const visibleBottomInset = Math.max(0, Math.round(window.innerHeight - (visibleTop + visibleHeight)));
-      shell.style.setProperty('--chat-visible-height', `${visibleHeight}px`);
-      shell.style.setProperty('--chat-visible-top', `${visibleTop}px`);
-      shell.style.setProperty('--chat-visual-bottom-inset', `${visibleBottomInset}px`);
-      root.style.setProperty('--chat-visual-bottom-inset', `${visibleBottomInset}px`);
+      // Require both an editable focus and a substantial viewport reduction.
+      // Browser chrome / rotation alone must not be mistaken for the keyboard.
+      const keyboardOpen = hasEditableFocus() &&
+        visibleBottomInset >= 120 &&
+        visibleHeight <= window.innerHeight - 120;
+      const keyboardBottomInset = keyboardOpen ? visibleBottomInset : 0;
+
+      root.style.setProperty('--mobile-visible-viewport-height', `${visibleHeight}px`);
+      root.style.setProperty('--mobile-visible-viewport-top', `${visibleTop}px`);
+      root.style.setProperty('--mobile-keyboard-bottom-inset', `${keyboardBottomInset}px`);
+      shell.classList.toggle('is-mobile-keyboard-open', keyboardOpen);
+
+      if (isChatRoute) {
+        // The chat shell and its body-portal dock use the same measured geometry.
+        shell.style.setProperty('--chat-visible-height', `${visibleHeight}px`);
+        shell.style.setProperty('--chat-visible-top', `${visibleTop}px`);
+        shell.style.setProperty('--chat-visual-bottom-inset', `${visibleBottomInset}px`);
+        root.style.setProperty('--chat-visual-bottom-inset', `${visibleBottomInset}px`);
+      } else {
+        shell.style.removeProperty('--chat-visible-height');
+        shell.style.removeProperty('--chat-visible-top');
+        shell.style.removeProperty('--chat-visual-bottom-inset');
+        root.style.removeProperty('--chat-visual-bottom-inset');
+      }
     };
+
     const scheduleSync = () => {
       if (syncFrame) window.cancelAnimationFrame(syncFrame);
       syncFrame = window.requestAnimationFrame(syncVisibleViewport);
     };
+
     syncVisibleViewport();
-    viewport?.addEventListener('resize', syncVisibleViewport);
-    viewport?.addEventListener('scroll', syncVisibleViewport);
-    window.addEventListener('resize', syncVisibleViewport, { passive: true });
-    window.addEventListener('orientationchange', syncVisibleViewport, { passive: true });
-    shell.addEventListener('focusin', scheduleSync);
-    shell.addEventListener('focusout', scheduleSync);
+    viewport?.addEventListener('resize', scheduleSync, { passive: true });
+    viewport?.addEventListener('scroll', scheduleSync, { passive: true });
+    window.addEventListener('resize', scheduleSync, { passive: true });
+    window.addEventListener('orientationchange', scheduleSync, { passive: true });
+    document.addEventListener('focusin', scheduleSync, true);
+    document.addEventListener('focusout', scheduleSync, true);
+
     return () => {
-      viewport?.removeEventListener('resize', syncVisibleViewport);
-      viewport?.removeEventListener('scroll', syncVisibleViewport);
-      window.removeEventListener('resize', syncVisibleViewport);
-      window.removeEventListener('orientationchange', syncVisibleViewport);
-      shell.removeEventListener('focusin', scheduleSync);
-      shell.removeEventListener('focusout', scheduleSync);
+      viewport?.removeEventListener('resize', scheduleSync);
+      viewport?.removeEventListener('scroll', scheduleSync);
+      window.removeEventListener('resize', scheduleSync);
+      window.removeEventListener('orientationchange', scheduleSync);
+      document.removeEventListener('focusin', scheduleSync, true);
+      document.removeEventListener('focusout', scheduleSync, true);
       if (syncFrame) window.cancelAnimationFrame(syncFrame);
+      shell.classList.remove('is-mobile-keyboard-open');
+      shell.style.removeProperty('--mobile-visible-viewport-height');
+      shell.style.removeProperty('--mobile-visible-viewport-top');
       shell.style.removeProperty('--chat-visible-height');
       shell.style.removeProperty('--chat-visible-top');
       shell.style.removeProperty('--chat-visual-bottom-inset');
+      root.style.removeProperty('--mobile-visible-viewport-height');
+      root.style.removeProperty('--mobile-visible-viewport-top');
+      root.style.removeProperty('--mobile-keyboard-bottom-inset');
       root.style.removeProperty('--chat-visual-bottom-inset');
     };
   }, [isChatRoute, isDesktop]);
