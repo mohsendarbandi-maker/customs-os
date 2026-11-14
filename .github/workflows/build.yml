@@ -27,6 +27,146 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+      - name: Local Playwright mobile shell geometry smoke test
+        if: github.ref == 'refs/heads/fix/mobile-phase1-shell-consistency-2026-11-14'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/customs-os-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:4173/reminders/login -o /dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != 1 ]; then
+            cat /tmp/customs-os-preview.log
+            echo "Local Vite preview did not become ready."
+            exit 1
+          fi
+          cat > mobile-shell-local-smoke.mjs <<'EOF'
+          import assert from 'node:assert/strict';
+          import { chromium } from 'playwright';
+
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const page = await browser.newPage({
+              viewport: { width: 390, height: 844 },
+              deviceScaleFactor: 3,
+              isMobile: true,
+              hasTouch: true,
+            });
+            const pageErrors = [];
+            page.on('pageerror', error => pageErrors.push(error.message));
+            await page.goto('http://127.0.0.1:4173/reminders/login?__local_mobile_shell_smoke=1', {
+              waitUntil: 'domcontentloaded',
+              timeout: 45000,
+            });
+            await page.waitForSelector('.app-mobilebar.native-app-header', { timeout: 20000 });
+            await page.waitForSelector('.app-mobile-viewport-dock', { timeout: 20000 });
+
+            await page.evaluate(() => {
+              const shell = document.createElement('div');
+              shell.className = 'app-shell is-touch-layout is-chat-route';
+              const status = document.createElement('div');
+              status.className = 'native-system-status';
+              const header = document.createElement('header');
+              header.className = 'app-mobilebar native-app-header';
+              const main = document.createElement('main');
+              main.className = 'app-main is-chat-main';
+              const content = document.createElement('div');
+              content.className = 'app-content is-chat-content';
+              const stage = document.createElement('div');
+              stage.className = 'future-route-stage is-chat-stage';
+              const chat = document.createElement('div');
+              chat.className = 'chat-standalone';
+              chat.dataset.chatSelected = 'true';
+              const conversation = document.createElement('section');
+              conversation.className = 'chat-conversation-view';
+              const conversationHeader = document.createElement('header');
+              conversationHeader.className = 'chat-conversation-header';
+              const messages = document.createElement('div');
+              messages.className = 'chat-message-area';
+              const composer = document.createElement('div');
+              composer.className = 'chat-composer';
+              composer.style.height = '58px';
+              conversation.append(conversationHeader, messages, composer);
+              chat.append(conversation);
+              stage.append(chat);
+              content.append(stage);
+              main.append(content);
+              shell.append(status, header, main);
+              document.body.append(shell);
+            });
+
+            const results = [];
+            for (const width of [320, 360, 375, 390, 414, 430]) {
+              await page.setViewportSize({ width, height: 844 });
+              const m = await page.evaluate(() => {
+                const rootStyle = getComputedStyle(document.documentElement);
+                const dock = document.querySelector('.app-mobile-viewport-dock');
+                const header = document.querySelector('.app-shell:not(.is-chat-route) .app-mobilebar');
+                const chatContent = document.querySelector('.app-content.is-chat-content');
+                const composer = document.querySelector('.chat-composer');
+                const rect = element => {
+                  if (!element) return null;
+                  const r = element.getBoundingClientRect();
+                  return { top: Math.round(r.top), bottom: Math.round(r.bottom), width: Math.round(r.width), height: Math.round(r.height) };
+                };
+                const dockRect = rect(dock);
+                const composerRect = rect(composer);
+                return {
+                  width: window.innerWidth,
+                  documentWidth: document.documentElement.scrollWidth,
+                  dock: dockRect,
+                  header: rect(header),
+                  dockToken: parseFloat(rootStyle.getPropertyValue('--cos-tab-height')) || -1,
+                  contentReserve: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
+                  composerClearance: dockRect && composerRect ? dockRect.top - composerRect.bottom : -999,
+                  dockPosition: dock ? getComputedStyle(dock).position : 'missing',
+                  dockDisplay: dock ? getComputedStyle(dock).display : 'missing',
+                };
+              });
+              assert.equal(m.width, width, JSON.stringify(m));
+              assert.ok(m.documentWidth <= width + 1, JSON.stringify(m));
+              assert.equal(m.dockPosition, 'fixed', JSON.stringify(m));
+              assert.notEqual(m.dockDisplay, 'none', JSON.stringify(m));
+              assert.equal(m.dock?.height, m.dockToken, JSON.stringify(m));
+              assert.ok(m.contentReserve >= m.dockToken + 20, JSON.stringify(m));
+              assert.ok(m.composerClearance >= 0, JSON.stringify(m));
+              assert.equal(m.header?.height, 62, JSON.stringify(m));
+              results.push(m);
+            }
+
+            await page.setViewportSize({ width: 390, height: 600 });
+            const compact = await page.evaluate(() => {
+              const rootStyle = getComputedStyle(document.documentElement);
+              const dock = document.querySelector('.app-mobile-viewport-dock');
+              const chatContent = document.querySelector('.app-content.is-chat-content');
+              const composer = document.querySelector('.chat-composer');
+              const dockRect = dock?.getBoundingClientRect();
+              const composerRect = composer?.getBoundingClientRect();
+              return {
+                dockHeight: dockRect ? Math.round(dockRect.height) : -1,
+                dockToken: parseFloat(rootStyle.getPropertyValue('--cos-tab-height')) || -1,
+                contentReserve: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
+                composerClearance: dockRect && composerRect ? Math.round(dockRect.top - composerRect.bottom) : -999,
+              };
+            });
+            assert.equal(compact.dockHeight, 64, JSON.stringify(compact));
+            assert.equal(compact.dockToken, 64, JSON.stringify(compact));
+            assert.ok(compact.contentReserve >= 84, JSON.stringify(compact));
+            assert.ok(compact.composerClearance >= 0, JSON.stringify(compact));
+            assert.equal(pageErrors.length, 0, pageErrors.join(' | '));
+            console.log('Local mobile shell geometry passed:', JSON.stringify({ widths: results, compact }));
+          } finally {
+            await browser.close();
+          }
+          EOF
+          node mobile-shell-local-smoke.mjs
       - name: Prevent browser-side weather and map provider requests
         shell: bash
         run: |
