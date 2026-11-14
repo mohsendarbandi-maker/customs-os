@@ -8,6 +8,8 @@ const shell = read('src/components/AppShell.tsx');
 const mobileCss = read('src/styles/mobile-polish.css');
 const baseCss = read('src/index.css');
 const home = read('src/pages/DesktopHomePage.tsx');
+const unifiedCss = read('src/styles/mobile-native-unified-2026.css');
+const productionCss = read('src/styles/native-mobile-production.css');
 
 describe('iOS touch-first application shell', () => {
   it.each([320, 360, 375, 390, 414, 430])('keeps the touch shell contract at %i CSS pixels', (width) => {
@@ -47,8 +49,11 @@ describe('iOS touch-first application shell', () => {
   });
 
   it('protects content from sidebar, Safari safe-area and tab-bar overlap', () => {
-    expect(mobileCss).toContain('--app-mobile-tabbar-height: 70px');
-    expect(mobileCss).toContain('--app-mobile-header-height: 56px');
+    expect(unifiedCss).toContain('--app-mobile-tabbar-height:var(--cos-tab-height)');
+    expect(unifiedCss).toContain('--native-shell-tab-height:var(--cos-tab-height)');
+    expect(unifiedCss).toContain('--app-mobile-header-height:var(--cos-header-height)');
+    expect(mobileCss).toContain('--app-mobile-tabbar-height: var(--cos-tab-height, 70px)');
+    expect(mobileCss).toContain('--app-mobile-header-height: var(--cos-header-height, 62px)');
     expect(mobileCss).toContain('min-height: 100dvh');
     expect(mobileCss).toContain('env(safe-area-inset-top)');
     expect(mobileCss).toContain('env(safe-area-inset-bottom)');
@@ -58,6 +63,19 @@ describe('iOS touch-first application shell', () => {
     expect(mobileCss).toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
     expect(mobileCss).toContain('.app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone');
     expect(baseCss).toContain('*{box-sizing:border-box;min-width:0}');
+  });
+
+  it('uses one authoritative token set for header, floating dock and content clearance', () => {
+    expect(unifiedCss).toContain('--cos-header-height:62px');
+    expect(unifiedCss).toContain('--cos-tab-height:70px');
+    expect(unifiedCss).toContain('--cos-tab-inset:10px');
+    expect(unifiedCss).toContain('--cos-tab-clearance:10px');
+    expect(unifiedCss).toContain('--cos-tab-reserve:calc(var(--cos-tab-height) + var(--cos-tab-inset) + var(--cos-tab-clearance) + env(safe-area-inset-bottom))');
+    expect(unifiedCss).toContain('height:var(--cos-tab-height)!important');
+    expect(unifiedCss).toContain('padding:12px 12px var(--cos-tab-reserve)!important');
+    expect(unifiedCss).toContain(':root { --cos-tab-height:64px; }');
+    expect(productionCss).not.toContain('--native-shell-tab-height: 64px');
+    expect(productionCss).not.toContain('padding-bottom: calc(64px + env(safe-area-inset-bottom))');
   });
 
   it('keeps dashboard cards readable and uses Persian date formatting', () => {

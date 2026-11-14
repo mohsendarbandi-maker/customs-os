@@ -401,8 +401,8 @@
    the DOM on phones. The shell now mounts the sidebar only above 1023px, and
    this final layer intentionally supersedes older stacked responsive rules. */
 :root {
-  --app-mobile-tabbar-height: 70px;
-  --app-mobile-header-height: 56px;
+  --app-mobile-tabbar-height: var(--cos-tab-height, 70px);
+  --app-mobile-header-height: var(--cos-header-height, 62px);
 }
 @media (max-width: 1023px), (pointer: coarse) {
   html, body, #root {
@@ -1014,8 +1014,8 @@
    in several places, so later selectors could reintroduce competing dock offsets.
    Keep one final source of truth for mobile shell geometry. */
 :root {
-  --app-mobile-tabbar-height: 68px;
-  --app-mobile-header-height: 56px;
+  --app-mobile-tabbar-height: var(--cos-tab-height, 70px);
+  --app-mobile-header-height: var(--cos-header-height, 62px);
 }
 html, body, #root {
   min-width: 0;
