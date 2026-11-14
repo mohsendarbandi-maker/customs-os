@@ -383,3 +383,48 @@
     padding-bottom:8px!important;
   }
 }
+
+
+/* CHAT ROUTE CASCADE GUARD
+   Older selected-conversation rules re-enable grid display and position the
+   dock using visualViewport's raw bottom gap (which also changes with Safari
+   browser chrome). The canonical dock uses the same flex row on every route
+   and moves only for a positively detected software keyboard. */
+@media (max-width:1023px),(pointer:coarse) {
+  html:has(.app-shell.is-touch-layout.is-chat-route) :is(.app-mobile-dock,.app-mobile-viewport-dock).native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock.native-bottom-tabs {
+    position:fixed!important;
+    inset-inline:0!important;
+    inset-block-end:var(--mobile-keyboard-bottom-inset,0px)!important;
+    top:auto!important;
+    left:0!important;
+    right:0!important;
+    bottom:var(--mobile-keyboard-bottom-inset,0px)!important;
+    display:flex!important;
+    flex-direction:row!important;
+    grid-template-columns:none!important;
+    align-items:center!important;
+    justify-content:space-around!important;
+    gap:0!important;
+    width:100%!important;
+    max-width:none!important;
+    height:var(--cos-tab-reserve)!important;
+    min-height:var(--cos-tab-reserve)!important;
+    max-height:var(--cos-tab-reserve)!important;
+    margin:0!important;
+    padding:0 8px var(--cos-bottom-nav-safe-area)!important;
+    box-sizing:border-box!important;
+    border:0!important;
+    border-top:1px solid rgba(255,255,255,.08)!important;
+    border-radius:24px 24px 0 0!important;
+    background:rgba(7,22,43,.88)!important;
+    background-clip:border-box!important;
+    box-shadow:0 -12px 34px rgba(0,10,26,.22)!important;
+    -webkit-backdrop-filter:blur(20px) saturate(180%)!important;
+    backdrop-filter:blur(20px) saturate(180%)!important;
+    visibility:visible!important;
+    opacity:1!important;
+    pointer-events:auto!important;
+    z-index:900!important;
+  }
+}
