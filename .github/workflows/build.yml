@@ -736,6 +736,9 @@ jobs:
                       card: rect(card),
                       dock: dockRect,
                       composer: composerRect,
+                      dockHeight: dockRect ? Math.round(dockRect.height) : -1,
+                      sharedDockHeight: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cos-tab-height')) || -1,
+                      sharedDockReserve: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cos-tab-reserve')) || -1,
                       composerClearance: dockRect && composerRect ? Math.round(dockRect.top - composerRect.bottom) : -999,
                       chatContentPaddingBottom: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
                       titleFits,
@@ -757,13 +760,35 @@ jobs:
                   expect(measurement.dock?.left ?? -1, JSON.stringify(measurement)).toBeGreaterThanOrEqual(0);
                   expect(measurement.dock?.right ?? Infinity, JSON.stringify(measurement)).toBeLessThanOrEqual(measurement.viewportWidth + 1);
                   expect(measurement.dock?.bottom ?? Infinity, JSON.stringify(measurement)).toBeLessThanOrEqual(844);
+                  expect(measurement.dockHeight, JSON.stringify(measurement)).toBe(measurement.sharedDockHeight);
+                  expect(measurement.chatContentPaddingBottom, JSON.stringify(measurement)).toBeGreaterThanOrEqual(measurement.sharedDockReserve);
+                  expect(measurement.chatContentPaddingBottom, JSON.stringify(measurement)).toBeGreaterThanOrEqual(measurement.dockHeight + 20);
                   expect(measurement.composerClearance, JSON.stringify(measurement)).toBeGreaterThanOrEqual(0);
-                  expect(measurement.chatContentPaddingBottom, JSON.stringify(measurement)).toBeGreaterThanOrEqual(50);
                   expect(measurement.titleFits, JSON.stringify(measurement)).toBe(true);
                   expect(measurement.billOfLadingFits, JSON.stringify(measurement)).toBe(true);
                   expect(measurement.tabsFit, JSON.stringify(measurement)).toBe(true);
                 }
                 console.log('Six-width mobile viewport sweep passed:', JSON.stringify(viewportSweep));
+
+                // Short phones reduce the same shared dock token; reserve space
+                // must follow that token instead of a separate hard-coded offset.
+                await page.setViewportSize({ width: 390, height: 600 });
+                const compactViewport = await page.evaluate(() => {
+                  const rootStyle = getComputedStyle(document.documentElement);
+                  const dock = document.querySelector('.app-mobile-viewport-dock');
+                  const chatContent = document.querySelector('.app-content.is-chat-content');
+                  return {
+                    dockHeight: dock ? Math.round(dock.getBoundingClientRect().height) : -1,
+                    sharedDockHeight: parseFloat(rootStyle.getPropertyValue('--cos-tab-height')) || -1,
+                    sharedDockReserve: parseFloat(rootStyle.getPropertyValue('--cos-tab-reserve')) || -1,
+                    contentReserve: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
+                  };
+                });
+                expect(compactViewport.dockHeight, JSON.stringify(compactViewport)).toBe(64);
+                expect(compactViewport.sharedDockHeight, JSON.stringify(compactViewport)).toBe(64);
+                expect(compactViewport.contentReserve, JSON.stringify(compactViewport)).toBeGreaterThanOrEqual(compactViewport.sharedDockReserve);
+                expect(compactViewport.contentReserve, JSON.stringify(compactViewport)).toBeGreaterThanOrEqual(84);
+                await page.setViewportSize({ width: 390, height: 844 });
 
                 expect(layoutProbe.viewportWidth).toBeLessThanOrEqual(767);
                 expect(layoutProbe.rowMinWidth).toBe('0px');
