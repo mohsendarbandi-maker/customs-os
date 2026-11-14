@@ -51,8 +51,8 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
       className={'chat-conversation-row '+(selected?'is-selected':'')}
       aria-pressed={selected}
      >
-      <span className="chat-conversation-avatar">
-       {conversation.type==='direct'?<span className="font-black text-sm">{(conversation.display_name||'ک').slice(0,1)}</span>:<Users size={19}/>}
+      <span className="chat-conversation-avatar" aria-hidden="true">
+       <span className="chat-conversation-avatar-initial">{(conversation.display_name||conversation.title||'گ').trim().slice(0,1)||'گ'}</span>
       </span>
       <span className="chat-conversation-copy">
        <span className="chat-conversation-titleline">
@@ -60,6 +60,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
         {folder==='groups'&&<small className="chat-conversation-kind">{conversationKind(conversation)}</small>}
        </span>
        <span className="chat-conversation-preview">{conversation.last_message_body||'بدون پیام'}</span>
+       <span className="chat-conversation-time">{lastActivity(conversation)}</span>
       </span>
       {row.unreadCount>0&&<span className="chat-conversation-unread" aria-label={row.unreadCount+' پیام خوانده‌نشده'}>{row.unreadCount}</span>}
      </button>;
