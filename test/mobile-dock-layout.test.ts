@@ -34,15 +34,22 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).toContain('background-color: #092744 !important;');
     expect(layout).toContain('background: #092744 !important;');
     expect(layout).toContain('border-radius: 22px 22px 0 0 !important;');
-    expect(layout).toContain('padding: 6px 8px 0 !important;');
+    expect(layout).toContain('padding: 0 8px 0 !important;');
     expect(layout).toContain('height: 100% !important;');
     expect(layout).toContain('align-self: stretch !important;');
     expect(layout).toContain('height: var(--cos-tab-reserve) !important;');
     expect(layout).toContain('bottom: 0 !important;');
   });
 
+  it('uses a compact 48px tab row while preserving the iPhone safe-area extension', () => {
+    expect(layout).toContain('--cos-tab-height, 48px');
+    expect(layout).toContain('min-height: 0 !important;');
+    expect(layout).toContain('width: 19px !important;');
+    expect(layout).toContain('font-size: 9px !important;');
+  });
+
   it('reserves exactly the visible dock height in the scrollable page area', () => {
-    expect(layout).toContain('--cos-tab-reserve: calc(var(--cos-tab-height, 70px) + env(safe-area-inset-bottom));');
+    expect(layout).toContain('--cos-tab-reserve: calc(var(--cos-tab-height, 48px) + env(safe-area-inset-bottom));');
     expect(layout).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
     expect(layout).toContain('.app-shell.is-touch-layout:has(.reminders-app-standalone) .app-content');
     expect(layout).toContain('overflow-y: auto !important;');
@@ -57,7 +64,7 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
   it('keeps chat scroll clearance synchronized with the dock while the keyboard opens', () => {
     expect(layout).toContain('.app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content');
     expect(layout).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
-    expect(layout).toContain('--cos-tab-reserve: var(--cos-tab-height, 70px);');
+    expect(layout).toContain('--cos-tab-reserve: var(--cos-tab-height, 48px);');
   });
 
   it('tests edge-to-edge dock placement and does not require floating-dock clearance', () => {
