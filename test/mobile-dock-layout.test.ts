@@ -28,6 +28,15 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).toContain('height: var(--cos-tab-reserve) !important;');
   });
 
+  it('keeps the iPhone bottom safe area navy so the dock visually reaches the rounded device edge', () => {
+    expect(layout).toContain('html,\\n  body,\\n  #root,\\n  .app-shell.is-touch-layout');
+    expect(layout).toContain('background-color: #092744 !important;');
+    expect(layout).toContain('background: #092744 !important;');
+    expect(layout).toContain('border-radius: 22px 22px 0 0 !important;');
+    expect(layout).toContain('padding: 6px 8px calc(5px + env(safe-area-inset-bottom)) !important;');
+    expect(layout).toContain('bottom: 0 !important;');
+  });
+
   it('reserves exactly the visible dock height in the scrollable page area', () => {
     expect(layout).toContain('--cos-tab-reserve: calc(var(--cos-tab-height, 70px) + env(safe-area-inset-bottom));');
     expect(layout).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
