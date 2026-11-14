@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity, MessageCircle, Landmark, ChevronLeft, ChevronRight,
-  FileText, FileSearch, History, LayoutDashboard, Palette, Printer,
+  FileText, FileSearch, History, LayoutDashboard, Palette,
   Settings2, Ship, Waves, Users, X, LogOut, Sun, Moon, BookOpen, Wallet,
   ClipboardList, LibraryBig, ShieldCheck, Layers3, Search,
   Contact, Folder, ClipboardCheck, GitBranch, Receipt, Network, FileStack, FileSignature,
@@ -57,7 +57,6 @@ const nav: NavItem[] = [
 { label: 'صاحب کالا', en: 'Clients', to: '/clients', icon: Contact, group: 'حمل و اسناد', roles: management },
   { label: 'مدیریت فایل', en: 'File Management', to: '/file-manager', icon: Folder, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'PDF Studio', en: 'PDF Studio', to: '/pdf-studio', icon: FileStack, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
-  { label: 'چاپگر هوشمند EPL', en: 'EPL Print Assistant', to: '/epl-print', icon: Printer, group: 'حمل و اسناد', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'دبیرخانه و مکاتبات', en: 'Office Automation', to: '/office', icon: FileSignature, group: 'سیستم', roles: ['owner', 'admin', 'broker', 'accountant', 'warehouse', 'client'] },
   { label: 'اسناد و مجوزها', en: 'Documents & Permits', to: '/documents', icon: FileText, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'استخراج هوشمند اسناد', en: 'Document Intelligence', to: '/documents/extract', icon: FileSearch, group: 'ترخیص', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
@@ -67,7 +66,6 @@ const nav: NavItem[] = [
   { label: 'اسناد حسابداری', en: 'Accounting Vouchers', to: '/finance/accounting-vouchers', icon: Receipt, group: 'مالی و خروج', roles: ['owner', 'admin', 'accountant', 'client'] },
   { label: 'مراحل پرونده', en: 'Case Stages', to: '/stage', icon: GitBranch, group: 'کنترل', roles: management },
   { label: 'تاریخچه و Audit', en: 'History & Audit', to: '/history', icon: History, group: 'کنترل', roles: allStaff },
-  { label: 'چاپ اظهار', en: 'Declaration Print', to: '/print-declaration', icon: Printer, group: 'کنترل', roles: management },
   { label: 'دانشنامه گمرکی', en: 'Customs Knowledge Center', to: '/knowledge', icon: LibraryBig, group: 'دانش و منابع', roles: management },
   { label: 'اتصال سازمان‌ها', en: 'Organization Connections', to: '/settings/connections', icon: Network, group: 'سیستم', roles: ['owner', 'admin'] },
   { label: 'تنظیمات', en: 'Settings', to: '/settings', icon: Settings2, group: 'سیستم' },
