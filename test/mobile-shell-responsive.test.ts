@@ -9,6 +9,7 @@ const mobileCss = read('src/styles/mobile-polish.css');
 const baseCss = read('src/index.css');
 const home = read('src/pages/DesktopHomePage.tsx');
 const unifiedCss = read('src/styles/mobile-native-unified-2026.css');
+const interactionsCss = read('src/styles/mobile-native-interactions-2026.css');
 const productionCss = read('src/styles/native-mobile-production.css');
 
 describe('iOS touch-first application shell', () => {
@@ -60,7 +61,9 @@ describe('iOS touch-first application shell', () => {
     expect(mobileCss).toContain('padding: 10px 12px calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important');
     expect(mobileCss).toContain('bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important');
     expect(mobileCss).toContain('.shipment-status-search { position: relative !important; inset: auto !important; }');
-    expect(mobileCss).toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
+    expect(mobileCss).not.toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
+    expect(interactionsCss).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock');
+    expect(interactionsCss).toContain('display: grid !important');
     expect(mobileCss).toContain('.app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone');
     expect(baseCss).toContain('*{box-sizing:border-box;min-width:0}');
   });

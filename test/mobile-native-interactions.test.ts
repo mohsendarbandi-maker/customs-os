@@ -9,6 +9,7 @@ describe('Customs OS Phase 4 native mobile interactions', () => {
   const shell = read('src/components/AppShell.tsx');
   const css = read('src/styles/mobile-native-interactions-2026.css');
   const main = read('src/main.tsx');
+  const legacyMobileCss = read('src/styles/mobile-polish.css');
 
   it('tracks the keyboard-adjusted visual viewport and publishes the dock inset', () => {
     expect(shell).toContain('window.visualViewport');
@@ -24,6 +25,36 @@ describe('Customs OS Phase 4 native mobile interactions', () => {
     expect(css).toContain('.app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content');
     expect(css).toContain('.chat-standalone[data-chat-selected="true"] .chat-composer');
     expect(css).toContain('margin-block-end: 0 !important');
+  });
+
+  it('tracks the visible keyboard viewport for every mobile route without hiding the dock', () => {
+    expect(shell).toContain('if (isDesktop) return;');
+    expect(shell).toContain('const shell = appShellRef.current;');
+    expect(shell).toContain('const keyboardOpen = hasEditableFocus()');
+    expect(shell).toContain('keyboardBottomInset = keyboardOpen ? visibleBottomInset : 0');
+    expect(shell).toContain("document.addEventListener('focusin', scheduleSync, true)");
+    expect(shell).toContain("document.addEventListener('focusout', scheduleSync, true)");
+    expect(shell).toContain("shell.classList.toggle('is-mobile-keyboard-open', keyboardOpen)");
+    expect(css).toContain('.app-shell.is-touch-layout.is-mobile-keyboard-open');
+    expect(css).toContain('--mobile-visible-viewport-height');
+    expect(css).toContain('--mobile-keyboard-bottom-inset');
+    expect(css).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock');
+    expect(css).toContain('inset-block-end: calc(var(--mobile-keyboard-bottom-inset, 0px)');
+    expect(css).toContain('display: grid !important');
+    expect(css).toContain('visibility: visible !important');
+    expect(legacyMobileCss).not.toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
+    expect(css).not.toContain('is-mobile-keyboard-open .app-mobile-viewport-dock { display: none');
+  });
+
+  it('keeps one vertical page scroller and allows intentional horizontal touch regions', () => {
+    expect(css).toContain('.app-shell.is-touch-layout .app-content {');
+    expect(css).toContain('overscroll-behavior-y: contain');
+    expect(css).toContain('-webkit-overflow-scrolling: touch');
+    expect(css).toContain('.app-content :is(.overflow-x-auto, [data-horizontal-scroll])');
+    expect(css).toContain('overflow-x: auto !important');
+    expect(css).toContain('overscroll-behavior-x: contain !important');
+    expect(css).toContain('touch-action: pan-x pan-y');
+    expect(css).toContain('scroll-margin-block: 18px');
   });
 
   it('keeps the composer in the final flex row and reserves the fixed dock height', () => {

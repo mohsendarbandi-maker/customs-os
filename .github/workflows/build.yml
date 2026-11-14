@@ -28,7 +28,7 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - name: Local Playwright mobile shell geometry smoke test
-        if: github.ref == 'refs/heads/fix/mobile-phase1-shell-consistency-2026-11-14'
+        if: github.ref == 'refs/heads/fix/mobile-phase1-shell-consistency-2026-11-14' || github.ref == 'refs/heads/fix/mobile-phase2-keyboard-scroll-2026-11-14'
         shell: bash
         run: |
           set -euo pipefail
@@ -160,8 +160,114 @@ jobs:
             assert.equal(compact.dockToken, 64, JSON.stringify(compact));
             assert.ok(compact.contentReserve >= 84, JSON.stringify(compact));
             assert.ok(compact.composerClearance >= 0, JSON.stringify(compact));
+            // Simulate the iOS visual viewport shrinking after an editable field
+            // receives focus. This verifies the dock remains visible on a non-chat
+            // route, and that the app-content scroller keeps its reserved clearance.
+            const keyboardPage = await browser.newPage({
+              viewport: { width: 390, height: 844 },
+              deviceScaleFactor: 3,
+              isMobile: true,
+              hasTouch: true,
+            });
+            await keyboardPage.addInitScript(() => {
+              const listeners = new Map();
+              const fakeViewport = {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                offsetTop: 0,
+                offsetLeft: 0,
+                scale: 1,
+                addEventListener(type, listener) {
+                  const entries = listeners.get(type) || [];
+                  entries.push(listener);
+                  listeners.set(type, entries);
+                },
+                removeEventListener(type, listener) {
+                  listeners.set(type, (listeners.get(type) || []).filter(entry => entry !== listener));
+                },
+                dispatchEvent(event) {
+                  for (const listener of listeners.get(event.type) || []) listener.call(fakeViewport, event);
+                  return true;
+                },
+              };
+              Object.defineProperty(window, 'visualViewport', {
+                configurable: true,
+                get: () => fakeViewport,
+              });
+              Object.defineProperty(window, '__setFakeVisualViewportHeight', {
+                configurable: true,
+                value(height) {
+                  fakeViewport.height = height;
+                  fakeViewport.dispatchEvent(new Event('resize'));
+                },
+              });
+            });
+            await keyboardPage.goto('http://127.0.0.1:4173/reminders/login?__keyboard_viewport_smoke=1', {
+              waitUntil: 'domcontentloaded',
+              timeout: 45000,
+            });
+            await keyboardPage.waitForSelector('.app-mobile-viewport-dock', { timeout: 20000 });
+            const keyboard = await keyboardPage.evaluate(async () => {
+              const shell = document.querySelector('.app-shell.is-touch-layout');
+              const input = document.querySelector('input[type="email"], input[type="text"], input:not([type="hidden"])');
+              const dock = document.querySelector('.app-mobile-viewport-dock');
+              const content = shell?.querySelector('.app-content');
+              if (!shell || !input || !dock || !content) throw new Error('Mobile login viewport elements are missing');
+
+              const horizontal = document.createElement('div');
+              horizontal.className = 'overflow-x-auto';
+              horizontal.style.width = '100%';
+              horizontal.style.height = '32px';
+              const wideContent = document.createElement('div');
+              wideContent.style.width = '780px';
+              wideContent.style.height = '24px';
+              horizontal.append(wideContent);
+              content.append(horizontal);
+
+              input.focus();
+              window.__setFakeVisualViewportHeight(500);
+              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+              const dockRect = dock.getBoundingClientRect();
+              const shellRect = shell.getBoundingClientRect();
+              const horizontalStyle = getComputedStyle(horizontal);
+              const keyboardState = {
+                active: shell.classList.contains('is-mobile-keyboard-open'),
+                shellHeight: Math.round(shellRect.height),
+                shellBottom: Math.round(shellRect.bottom),
+                dockTop: Math.round(dockRect.top),
+                dockBottom: Math.round(dockRect.bottom),
+                dockHeight: Math.round(dockRect.height),
+                contentOverflowY: getComputedStyle(content).overflowY,
+                horizontalOverflowX: horizontalStyle.overflowX,
+                horizontalOverflowY: horizontalStyle.overflowY,
+                horizontalTouchAction: horizontalStyle.touchAction,
+                documentWidth: document.documentElement.scrollWidth,
+                viewportWidth: window.innerWidth,
+              };
+
+              input.blur();
+              window.__setFakeVisualViewportHeight(844);
+              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+              keyboardState.restored = !shell.classList.contains('is-mobile-keyboard-open');
+              keyboardState.restoredDockBottom = Math.round(dock.getBoundingClientRect().bottom);
+              return keyboardState;
+            });
+            assert.equal(keyboard.active, true, JSON.stringify(keyboard));
+            assert.equal(keyboard.shellHeight, 500, JSON.stringify(keyboard));
+            assert.equal(keyboard.shellBottom, 500, JSON.stringify(keyboard));
+            assert.ok(keyboard.dockTop >= 0 && keyboard.dockBottom <= 500, JSON.stringify(keyboard));
+            assert.equal(keyboard.dockHeight, 70, JSON.stringify(keyboard));
+            assert.equal(keyboard.contentOverflowY, 'auto', JSON.stringify(keyboard));
+            assert.equal(keyboard.horizontalOverflowX, 'auto', JSON.stringify(keyboard));
+            assert.equal(keyboard.horizontalOverflowY, 'hidden', JSON.stringify(keyboard));
+            assert.equal(keyboard.horizontalTouchAction, 'pan-x pan-y', JSON.stringify(keyboard));
+            assert.ok(keyboard.documentWidth <= keyboard.viewportWidth + 1, JSON.stringify(keyboard));
+            assert.equal(keyboard.restored, true, JSON.stringify(keyboard));
+            assert.ok(keyboard.restoredDockBottom <= 844, JSON.stringify(keyboard));
+            await keyboardPage.close();
+
             assert.equal(pageErrors.length, 0, pageErrors.join(' | '));
-            console.log('Local mobile shell geometry passed:', JSON.stringify({ widths: results, compact }));
+            console.log('Local mobile shell and keyboard geometry passed:', JSON.stringify({ widths: results, compact, keyboard }));
           } finally {
             await browser.close();
           }
