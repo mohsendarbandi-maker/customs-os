@@ -41,6 +41,8 @@ try {
     content.className = 'app-content';
     const stage = document.createElement('div');
     stage.className = 'future-route-stage';
+    // Simulate the route-entry transform that normally wraps a newly opened screen.
+    stage.style.transform = 'translateY(79px)';
     content.append(stage);
     main.append(content);
     shell.append(status, header, main);
@@ -138,6 +140,7 @@ try {
     const submit = document.querySelector('.reminders-submit-button');
     const addAction = document.querySelector('.reminders-hub-add');
     const dock = document.querySelector('.app-mobile-viewport-dock');
+    const stage = document.querySelector('.future-route-stage');
     const rect = element => {
       if (!element) return null;
       const r = element.getBoundingClientRect();
@@ -154,11 +157,13 @@ try {
       addAction: addActionRect,
       addActionDisplay: addAction ? getComputedStyle(addAction).display : 'missing',
       dock: dockRect,
+      stageTransform: stage ? getComputedStyle(stage).transform : 'missing',
       addActionDockClearance: dockRect && addActionRect ? Math.round(dockRect.top - addActionRect.bottom) : -999,
     };
   });
 
   const first = await measureReminder();
+  assert.equal(first.stageTransform, 'none', JSON.stringify(first));
   assert.equal(first.overlay?.top, 18, JSON.stringify(first));
   assert.equal(first.overlay?.height, 360, JSON.stringify(first));
   assert.ok(first.sheet?.height <= 342, JSON.stringify(first));
