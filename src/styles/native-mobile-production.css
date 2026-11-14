@@ -5,8 +5,8 @@
  */
 @media (max-width: 1023px), (pointer: coarse) {
   :root {
-    --native-shell-header-height: 62px;
-    --native-shell-tab-height: 72px;
+    --native-shell-header-height: var(--cos-header-height, 62px);
+    --native-shell-tab-height: var(--cos-tab-height, 70px);
     --native-shell-canvas: #f3f6fa;
     --native-shell-paper: #fff;
     --native-shell-navy: #09294d;
@@ -441,15 +441,8 @@
   }
 }
 
-/* Keyboard, reduced-motion and short-screen guard rails. */
-@media (max-width: 767px) and (max-height: 620px) {
-  .app-shell.is-touch-layout .app-mobile-dock.native-bottom-tabs {
-    --native-shell-tab-height: 64px;
-  }
-  .app-shell.is-touch-layout .app-content {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom)) !important;
-  }
-}
+/* Short-screen sizing is centralized in mobile-native-unified-2026.css.
+   This file retains only the reduced-motion guard rail. */
 @media (prefers-reduced-motion: reduce) {
   .app-shell.is-touch-layout .future-route-stage,
   .native-route-exit-snapshot {
