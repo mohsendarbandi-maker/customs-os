@@ -19,9 +19,14 @@
   }
 
   :root {
-    --cos-tab-inset: 0px;
-    --cos-tab-clearance: 0px;
-    --cos-tab-reserve: calc(var(--cos-tab-height, 48px) + env(safe-area-inset-bottom));
+    /* Override the earlier 70px native layer value, not merely its fallback. */
+    --cos-tab-height: 44px !important;
+    --native-tab-height: 44px !important;
+    --native-shell-tab-height: 44px !important;
+    --app-mobile-tabbar-height: 44px !important;
+    --cos-tab-inset: 0px !important;
+    --cos-tab-clearance: 0px !important;
+    --cos-tab-reserve: calc(44px + env(safe-area-inset-bottom)) !important;
   }
 
   /* The app content occupies the complete space above the persistent dock. */
@@ -62,10 +67,9 @@
     height: var(--cos-tab-reserve) !important;
     min-height: var(--cos-tab-reserve) !important;
     margin: 0 !important;
-    /* Let the tab buttons use the entire dock, including the iPhone safe-area
-       extension. This moves icons and labels down with the background instead
-       of leaving them stranded above an empty safe-area strip. */
-    padding: 0 8px 0 !important;
+    /* The bar reaches the physical bottom edge. Reserve the home-indicator
+       zone for the OS and use the 44px row above it for the actual controls. */
+    padding: 0 8px env(safe-area-inset-bottom) !important;
     box-sizing: border-box !important;
     border: 0 !important;
     border-top: 1px solid rgba(255, 255, 255, .12) !important;
@@ -84,40 +88,41 @@
 
   html:has(.app-shell.is-touch-layout) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs > button {
     min-width: 0 !important;
-    min-height: 0 !important;
+    min-height: 44px !important;
     height: 100% !important;
     align-self: stretch !important;
+    justify-content: flex-end !important;
     margin: 0 !important;
-    padding: 0 1px !important;
+    padding: 0 1px 2px !important;
   }
 
 
   /* Compact dock: keep the home-indicator safe area, but spend fewer pixels
      on the actual five-tab controls so the page gets more vertical space. */
   html:has(.app-shell.is-touch-layout) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs > button > svg {
-    width: 19px !important;
-    height: 19px !important;
-    flex: 0 0 19px !important;
+    width: 18px !important;
+    height: 18px !important;
+    flex: 0 0 18px !important;
   }
 
   html:has(.app-shell.is-touch-layout) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs > button > span {
     font-size: 9px !important;
     line-height: 1.1 !important;
-    margin-top: 1px !important;
+    margin-top: 0 !important;
   }
 
   /* While the software keyboard is open, move the bar to its top edge and
      remove the now-hidden home-indicator area from both height reservations. */
   html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) {
-    --cos-tab-reserve: var(--cos-tab-height, 48px);
+    --cos-tab-reserve: 44px;
   }
 
   html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
     inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
     bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
-    height: var(--cos-tab-height, 48px) !important;
-    min-height: var(--cos-tab-height, 48px) !important;
-    padding-bottom: 5px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    padding: 0 8px 0 !important;
     border-radius: 22px 22px 0 0 !important;
   }
 
@@ -135,12 +140,12 @@
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) {
-    --cos-tab-reserve: var(--cos-tab-height, 48px);
+    --cos-tab-reserve: 44px;
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
-    height: var(--cos-tab-height, 48px) !important;
-    min-height: var(--cos-tab-height, 48px) !important;
+    height: 44px !important;
+    min-height: 44px !important;
     padding-bottom: 5px !important;
     border-radius: 22px 22px 0 0 !important;
   }
