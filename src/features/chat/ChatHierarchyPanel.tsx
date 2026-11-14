@@ -34,17 +34,20 @@ const activityLabel=(conversation:ChatConversation)=>{
   :new Intl.DateTimeFormat('fa-IR',{...options,day:'numeric',month:'short'}).format(date);
 };
 const avatarTone=(name:string)=>Array.from(name).reduce((total,character)=>total+(character.codePointAt(0)||0),0)%5;
-const emitRowAction=(conversationId:string,action:'archive'|'mute')=>{
- if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('customs-os:chat-row-action',{detail:{conversationId,action}}));
+const emitRowAction=(conversationId:string,action:'archive'|'mute',muted?:boolean)=>{
+ if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('customs-os:chat-row-action',{detail:{conversationId,action,muted}}));
  vibrate();
 };
 
 export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all',loading=false})=>{
  const[open,setOpen]=useState<Record<string,boolean>>({});
  const[swipedId,setSwipedId]=useState<string|null>(null);
+ const[archivedIds,setArchivedIds]=useState<Set<string>>(()=>new Set());
+ const[mutedIds,setMutedIds]=useState<Set<string>>(()=>new Set());
  const touchStart=useRef<{id:string;x:number;y:number}|null>(null);
  const suppressClick=useRef(false);
  const rows=useMemo(()=>buildChatInboxRows(conversations,folder),[conversations,folder]);
+ const visibleRows=useMemo(()=>rows.filter(row=>row.kind!=='conversation'||!archivedIds.has(row.conversation.conversation_id)),[rows,archivedIds]);
 
  const emptyLabel=folder==='groups'?'گروهی پیدا نشد.':
   folder==='coworkers'?'گفتگوی مستقیمی پیدا نشد.':
@@ -76,7 +79,10 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
   setSwipedId(null);onSelect(id);
  };
  const runRowAction=(id:string,action:'archive'|'mute')=>{
-  emitRowAction(id,action);setSwipedId(null);
+  if(action==='archive')setArchivedIds(previous=>new Set(previous).add(id));
+  else setMutedIds(previous=>{const next=new Set(previous);if(next.has(id))next.delete(id);else next.add(id);return next});
+  emitRowAction(id,action,action==='mute'?!mutedIds.has(id):undefined);
+  setSwipedId(null);
  };
 
  return <div className="chat-hierarchy-panel flex-1 min-h-0 overflow-y-auto overscroll-contain" onClick={event=>{
@@ -89,8 +95,8 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
     <span className="chat-skeleton-meta"><i/><i/></span>
    </div>)}
   </div>}
-  {!loading&&rows.length>0&&<div className="chat-conversation-list">
-   {rows.map(row=>{
+  {!loading&&visibleRows.length>0&&<div className="chat-conversation-list">
+   {visibleRows.map(row=>{
     if(row.kind==='conversation'){
      const conversation=row.conversation;
      const selected=selectedId===conversation.conversation_id;
@@ -98,6 +104,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
      const initial=Array.from(name)[0]||'ک';
      const tone=avatarTone(name);
      const unread=row.unreadCount;
+     const muted=mutedIds.has(conversation.conversation_id);
      return <div
       key={conversation.conversation_id}
       className={'chat-conversation-swipe '+(swipedId===conversation.conversation_id?'is-swipe-open':'')}
@@ -110,8 +117,8 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
        <button type="button" className="chat-row-action is-archive" tabIndex={swipedId===conversation.conversation_id?0:-1} onClick={()=>runRowAction(conversation.conversation_id,'archive')} aria-label="بایگانی گفتگو">
         <Archive size={16}/><span>بایگانی</span>
        </button>
-       <button type="button" className="chat-row-action is-mute" tabIndex={swipedId===conversation.conversation_id?0:-1} onClick={()=>runRowAction(conversation.conversation_id,'mute')} aria-label="بی‌صدا کردن گفتگو">
-        <BellOff size={16}/><span>بی‌صدا</span>
+       <button type="button" className="chat-row-action is-mute" tabIndex={swipedId===conversation.conversation_id?0:-1} onClick={()=>runRowAction(conversation.conversation_id,'mute')} aria-label={muted?'فعال‌کردن صدای گفتگو':'بی‌صدا کردن گفتگو'}>
+        <BellOff size={16}/><span>{muted?'فعال‌کردن صدا':'بی‌صدا'}</span>
        </button>
       </div>
       <button
@@ -128,6 +135,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
          {folder==='groups'&&<small className="chat-conversation-kind">{conversationKind(conversation)}</small>}
         </span>
         <span className="chat-conversation-meta">
+         {muted&&<BellOff size={12} aria-label="گفتگو بی‌صدا است"/>}
          <time dateTime={conversation.last_message_created_at||conversation.updated_at}>{activityLabel(conversation)}</time>
          {unread>0&&<span className="chat-conversation-unread" aria-label={unread+' پیام خوانده‌نشده'}>{unread>99?'99+':unread}</span>}
         </span>
@@ -184,6 +192,6 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
     </article>;
    })}
   </div>}
-  {!loading&&rows.length===0&&<div className="chat-conversation-empty"><span className="chat-conversation-empty-icon"><Users size={23}/></span><b>{emptyLabel}</b><span>{folder==='unread'?'همهٔ گفتگوها به‌روز هستند.':'برای شروع، یک گفتگو یا گروه تازه بسازید.'}</span></div>}
+  {!loading&&visibleRows.length===0&&<div className="chat-conversation-empty"><span className="chat-conversation-empty-icon"><Users size={23}/></span><b>{emptyLabel}</b><span>{folder==='unread'?'همهٔ گفتگوها به‌روز هستند.':'برای شروع، یک گفتگو یا گروه تازه بسازید.'}</span></div>}
  </div>;
 };
