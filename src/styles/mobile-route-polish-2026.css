@@ -207,21 +207,6 @@
 /* Phase 2 — keyboard-aware chat and reminder workspaces.
    This is the existing final mobile cascade, not another competing stylesheet. */
 @media (max-width: 1023px), (pointer: coarse) {
-  /* Keep the reminder action aligned to the same dock reservation used by
-     the shared shell, regardless of the phone height or safe-area inset. */
-  .app-shell.is-touch-layout .reminders-page .reminders-mobile-fab {
-    position: fixed !important;
-    z-index: 850 !important;
-    right: max(14px, env(safe-area-inset-right)) !important;
-    left: auto !important;
-    bottom: calc(var(--cos-tab-reserve) + 14px) !important;
-    width: 54px !important;
-    min-width: 54px !important;
-    height: 54px !important;
-    min-height: 54px !important;
-    border-radius: 17px !important;
-  }
-
   /* iOS visualViewport values are supplied only while quick-create is open.
      The sheet scrolls internally; the underlying reminders list stays still. */
   .app-shell.is-touch-layout .reminders-page .reminders-composebar.is-open {
