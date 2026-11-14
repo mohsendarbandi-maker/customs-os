@@ -24,12 +24,16 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).toContain('bottom: 0 !important;');
     expect(layout).toContain('width: 100% !important;');
     expect(layout).toContain('max-width: none !important;');
+    expect(layout).toContain(':is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs');
     expect(layout).toContain('height: var(--cos-tab-reserve) !important;');
   });
 
   it('reserves exactly the visible dock height in the scrollable page area', () => {
     expect(layout).toContain('--cos-tab-reserve: calc(var(--cos-tab-height, 70px) + env(safe-area-inset-bottom));');
     expect(layout).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
+    expect(layout).toContain('.app-shell.is-touch-layout:has(.reminders-app-standalone) .app-content');
+    expect(layout).toContain('overflow-y: auto !important;');
+    expect(layout).toContain('scroll-padding-block-end: var(--cos-tab-reserve) !important;');
   });
 
   it('keeps the dock flush above the keyboard without a stale floating inset', () => {
