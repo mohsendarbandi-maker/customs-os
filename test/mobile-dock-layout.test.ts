@@ -36,4 +36,10 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).toContain('bottom: var(--chat-visual-bottom-inset, 0px) !important;');
     expect(layout).not.toContain('bottom: calc(var(--chat-visual-bottom-inset,0px) + var(--cos-tab-inset)');
   });
+  it('keeps chat scroll clearance synchronized with the dock while the keyboard opens', () => {
+    expect(layout).toContain('.app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content');
+    expect(layout).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
+    expect(layout).toContain('--cos-tab-reserve: var(--cos-tab-height, 70px);');
+  });
+
 });
