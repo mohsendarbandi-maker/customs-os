@@ -207,6 +207,19 @@
 /* Phase 2 — keyboard-aware chat and reminder workspaces.
    This is the existing final mobile cascade, not another competing stylesheet. */
 @media (max-width: 1023px), (pointer: coarse) {
+  /* Route-entry animation applies a transform to the stage. A fixed modal inside
+     that transformed containing block is positioned relative to the stage, not
+     the visual viewport. Suspend only the route transform while quick-create is
+     open so the keyboard-aware sheet is anchored to the actual visible screen. */
+  .app-shell.is-touch-layout:has(.reminders-composebar.is-open) .future-route-stage {
+    animation: none !important;
+    transform: none !important;
+    filter: none !important;
+    perspective: none !important;
+    contain: none !important;
+    will-change: auto !important;
+  }
+
   /* iOS visualViewport values are supplied only while quick-create is open.
      The sheet scrolls internally; the underlying reminders list stays still. */
   .app-shell.is-touch-layout .reminders-page .reminders-composebar.is-open {
