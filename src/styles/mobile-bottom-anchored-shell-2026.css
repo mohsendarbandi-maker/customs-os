@@ -185,17 +185,17 @@
     -webkit-backdrop-filter:blur(20px) saturate(180%) !important; backdrop-filter:blur(20px) saturate(180%) !important;
     transform:translateZ(0) !important; z-index:999 !important;
   }
-  .app-mobile-dock.native-bottom-tabs > button {
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button {
     position:relative !important; z-index:2 !important; display:flex !important; flex-direction:column !important; align-items:center !important; justify-content:center !important;
     gap:3px !important; width:100% !important; min-width:0 !important; min-height:52px !important; height:52px !important; max-height:52px !important;
     margin:0 !important; padding:4px 1px !important; border:0 !important; border-radius:18px !important; background:transparent !important;
     color:rgba(205,224,239,.55) !important; font-size:10px !important; font-weight:750 !important; line-height:1.15 !important; white-space:nowrap !important;
     opacity:.82 !important; transition:color .2s ease,opacity .2s ease,transform .16s ease !important; -webkit-tap-highlight-color:transparent; touch-action:manipulation;
   }
-  .app-mobile-dock.native-bottom-tabs > button svg { width:22px !important; height:22px !important; stroke-width:1.75 !important; transition:transform .2s cubic-bezier(.4,0,.2,1) !important; }
-  .app-mobile-dock.native-bottom-tabs > button.is-active { color:#eafaff !important; opacity:1 !important; background:transparent !important; box-shadow:none !important; }
-  .app-mobile-dock.native-bottom-tabs > button.is-active svg { transform:translateY(-2px) !important; }
-  .app-mobile-dock.native-bottom-tabs > button:active { transform:scale(.92) !important; }
+  html:has(.app-shell.is-touch-layout) html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button svg { width:22px !important; height:22px !important; stroke-width:1.75 !important; transition:transform .2s cubic-bezier(.4,0,.2,1) !important; }
+  html:has(.app-shell.is-touch-layout) html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button.is-active { color:#eafaff !important; opacity:1 !important; background:transparent !important; box-shadow:none !important; }
+  html:has(.app-shell.is-touch-layout) html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button.is-active svg { transform:translateY(-2px) !important; }
+  html:has(.app-shell.is-touch-layout) html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button:active { transform:scale(.92) !important; }
   .app-mobile-dock-indicator {
     position:absolute !important; z-index:1 !important; top:7px !important; right:8px !important; width:calc((100% - 16px)/5) !important; height:48px !important;
     border:1px solid rgba(120,239,235,.3) !important; border-radius:17px !important;
@@ -203,12 +203,12 @@
     box-shadow:0 0 18px rgba(38,190,211,.2),inset 0 1px 0 rgba(255,255,255,.22) !important;
     transform:translateX(calc(var(--active-index,0)*-100%)) !important; transition:transform 300ms cubic-bezier(.4,0,.2,1) !important; pointer-events:none !important;
   }
-  .app-mobile-dock.native-bottom-tabs[data-active-index="0"] { --active-index:0; }
-  .app-mobile-dock.native-bottom-tabs[data-active-index="1"] { --active-index:1; }
-  .app-mobile-dock.native-bottom-tabs[data-active-index="2"] { --active-index:2; }
-  .app-mobile-dock.native-bottom-tabs[data-active-index="3"] { --active-index:3; }
-  .app-mobile-dock.native-bottom-tabs[data-active-index="4"] { --active-index:4; }
-  .app-mobile-dock.native-bottom-tabs > button.is-active > span:not(.app-mobile-dock-chat-icon) { animation:cosDockLabelIn .22s ease both; }
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs[data-active-index="0"] { --active-index:0; }
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs[data-active-index="1"] { --active-index:1; }
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs[data-active-index="2"] { --active-index:2; }
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs[data-active-index="3"] { --active-index:3; }
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs[data-active-index="4"] { --active-index:4; }
+  html:has(.app-shell.is-touch-layout) html:has(.app-shell.is-touch-layout) html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button.is-active > span:not(.app-mobile-dock-chat-icon) { animation:cosDockLabelIn .22s ease both; }
   @keyframes cosDockLabelIn { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:translateY(0)} }
   .app-mobile-dock-chat-icon { position:relative;display:inline-flex; }
   .app-mobile-dock-unread { position:absolute;top:-2px;right:-4px;width:8px;height:8px;border:1.5px solid #071d32;border-radius:50%;background:#f04452;animation:cosUnreadPulse 1.8s ease-out infinite; }
