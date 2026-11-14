@@ -1,5 +1,5 @@
-import React,{useMemo,useState}from'react';
-import{ChevronDown,ChevronLeft,MessageCircle,Package,Users}from'lucide-react';
+import React,{useMemo,useRef,useState}from'react';
+import{Archive,BellOff,ChevronDown,ChevronLeft,MessageCircle,Package,Users}from'lucide-react';
 import{normalizeFaText}from'../../lib/jalali';
 import{buildChatInboxRows,type ChatFolder}from'./conversationModel';
 import type{ChatConversation}from'./types';
@@ -9,6 +9,7 @@ type Props={
  onSelect:(id:string)=>void;
  conversations:ChatConversation[];
  folder?:ChatFolder;
+ loading?:boolean;
 };
 
 const conversationTitle=(conversation:ChatConversation)=>normalizeFaText(conversation.display_name||conversation.title||'گفتگو');
@@ -19,9 +20,30 @@ const conversationKind=(conversation:ChatConversation)=>{
  return'گفتگوی مستقیم';
 };
 const unreadCount=(conversation:ChatConversation)=>Math.max(0,Number(conversation.unread_count)||0);
+const vibrate=()=>{if(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')navigator.vibrate(10)};
+const activityLabel=(conversation:ChatConversation)=>{
+ const value=conversation.last_message_created_at||conversation.updated_at;
+ if(!value)return'';
+ const date=new Date(value);
+ if(Number.isNaN(date.getTime()))return'';
+ const options={timeZone:'Asia/Tehran',calendar:'persian'} as const;
+ const sameDay=new Intl.DateTimeFormat('fa-IR',{...options,year:'numeric',month:'2-digit',day:'2-digit'}).format(date)===
+  new Intl.DateTimeFormat('fa-IR',{...options,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ return sameDay
+  ?new Intl.DateTimeFormat('fa-IR',{...options,hour:'2-digit',minute:'2-digit'}).format(date)
+  :new Intl.DateTimeFormat('fa-IR',{...options,day:'numeric',month:'short'}).format(date);
+};
+const avatarTone=(name:string)=>Array.from(name).reduce((total,character)=>total+(character.codePointAt(0)||0),0)%5;
+const emitRowAction=(conversationId:string,action:'archive'|'mute')=>{
+ if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('customs-os:chat-row-action',{detail:{conversationId,action}}));
+ vibrate();
+};
 
-export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all'})=>{
+export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all',loading=false})=>{
  const[open,setOpen]=useState<Record<string,boolean>>({});
+ const[swipedId,setSwipedId]=useState<string|null>(null);
+ const touchStart=useRef<{id:string;x:number;y:number}|null>(null);
+ const suppressClick=useRef(false);
  const rows=useMemo(()=>buildChatInboxRows(conversations,folder),[conversations,folder]);
 
  const emptyLabel=folder==='groups'?'گروهی پیدا نشد.':
@@ -34,32 +56,85 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
  const toggleOwner=(conversationId:string,defaultExpanded:boolean)=>{
   setOpen(previous=>({...previous,[conversationId]:!(previous[conversationId]??defaultExpanded)}));
  };
+ const handleTouchStart=(event:React.TouchEvent<HTMLDivElement>,id:string)=>{
+  if(event.touches.length!==1){touchStart.current=null;return}
+  const touch=event.touches[0];
+  touchStart.current={id,x:touch.clientX,y:touch.clientY};
+ };
+ const handleTouchEnd=(event:React.TouchEvent<HTMLDivElement>)=>{
+  const start=touchStart.current;touchStart.current=null;
+  if(!start||event.changedTouches.length!==1)return;
+  const touch=event.changedTouches[0];
+  const deltaX=touch.clientX-start.x;const deltaY=touch.clientY-start.y;
+  if(Math.abs(deltaX)<48||Math.abs(deltaX)<Math.abs(deltaY)*1.25)return;
+  suppressClick.current=true;
+  setSwipedId(deltaX<0?start.id:null);
+  vibrate();
+ };
+ const selectConversation=(id:string)=>{
+  if(suppressClick.current){suppressClick.current=false;return}
+  setSwipedId(null);onSelect(id);
+ };
+ const runRowAction=(id:string,action:'archive'|'mute')=>{
+  emitRowAction(id,action);setSwipedId(null);
+ };
 
- return <div className="chat-hierarchy-panel flex-1 min-h-0 overflow-y-auto overscroll-contain">
-  {rows.length>0&&<div className="chat-conversation-list">
+ return <div className="chat-hierarchy-panel flex-1 min-h-0 overflow-y-auto overscroll-contain" onClick={event=>{
+  if(swipedId&&!(event.target instanceof Element&&event.target.closest('.chat-row-swipe-actions')))setSwipedId(null);
+ }}>
+  {loading&&<div className="chat-conversation-skeleton-list" role="status" aria-label="در حال بارگذاری گفتگوها">
+   {Array.from({length:5},(_,index)=><div className="chat-conversation-skeleton" key={index}>
+    <span className="chat-skeleton-avatar"/>
+    <span className="chat-skeleton-copy"><i/><i/><i/></span>
+    <span className="chat-skeleton-meta"><i/><i/></span>
+   </div>)}
+  </div>}
+  {!loading&&rows.length>0&&<div className="chat-conversation-list">
    {rows.map(row=>{
     if(row.kind==='conversation'){
      const conversation=row.conversation;
      const selected=selectedId===conversation.conversation_id;
-     return <button
-      type="button"
+     const name=conversationTitle(conversation);
+     const initial=Array.from(name)[0]||'ک';
+     const tone=avatarTone(name);
+     const unread=row.unreadCount;
+     return <div
       key={conversation.conversation_id}
-      onClick={()=>onSelect(conversation.conversation_id)}
-      className={'chat-conversation-row '+(selected?'is-selected':'')}
-      aria-pressed={selected}
+      className={'chat-conversation-swipe '+(swipedId===conversation.conversation_id?'is-swipe-open':'')}
+      onTouchStart={event=>handleTouchStart(event,conversation.conversation_id)}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={()=>{touchStart.current=null}}
+      data-conversation-id={conversation.conversation_id}
      >
-      <span className="chat-conversation-avatar">
-       {conversation.type==='direct'?<span className="font-black text-sm">{(conversation.display_name||'ک').slice(0,1)}</span>:<Users size={19}/>}
-      </span>
-      <span className="chat-conversation-copy">
-       <span className="chat-conversation-titleline">
-        <b className="chat-conversation-title">{conversationTitle(conversation)}</b>
-        {folder==='groups'&&<small className="chat-conversation-kind">{conversationKind(conversation)}</small>}
+      <div className="chat-row-swipe-actions" aria-hidden={swipedId!==conversation.conversation_id}>
+       <button type="button" className="chat-row-action is-archive" tabIndex={swipedId===conversation.conversation_id?0:-1} onClick={()=>runRowAction(conversation.conversation_id,'archive')} aria-label="بایگانی گفتگو">
+        <Archive size={16}/><span>بایگانی</span>
+       </button>
+       <button type="button" className="chat-row-action is-mute" tabIndex={swipedId===conversation.conversation_id?0:-1} onClick={()=>runRowAction(conversation.conversation_id,'mute')} aria-label="بی‌صدا کردن گفتگو">
+        <BellOff size={16}/><span>بی‌صدا</span>
+       </button>
+      </div>
+      <button
+       type="button"
+       onClick={()=>selectConversation(conversation.conversation_id)}
+       className={'chat-conversation-row '+(selected?'is-selected':'')}
+       aria-pressed={selected}
+       aria-label={name+(unread?'، '+unread+' پیام خوانده‌نشده':'')}
+      >
+       <span className="chat-conversation-avatar" data-avatar-tone={tone} aria-hidden="true">{initial}</span>
+       <span className="chat-conversation-copy">
+        <span className="chat-conversation-titleline">
+         <b className="chat-conversation-title">{name}</b>
+         {folder==='groups'&&<small className="chat-conversation-kind">{conversationKind(conversation)}</small>}
+        </span>
+        <span className="chat-conversation-meta">
+         <time dateTime={conversation.last_message_created_at||conversation.updated_at}>{activityLabel(conversation)}</time>
+         {unread>0&&<span className="chat-conversation-unread" aria-label={unread+' پیام خوانده‌نشده'}>{unread>99?'99+':unread}</span>}
+        </span>
+        <span className="chat-conversation-preview">{conversation.last_message_body||'بدون پیام'}</span>
        </span>
-       <span className="chat-conversation-preview">{conversation.last_message_body||'بدون پیام'}</span>
-      </span>
-      {row.unreadCount>0&&<span className="chat-conversation-unread" aria-label={row.unreadCount+' پیام خوانده‌نشده'}>{row.unreadCount}</span>}
-     </button>;
+      </button>
+     </div>;
     }
 
     const ownerRow=row;
@@ -83,6 +158,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
          {nestedUnread>0
           ?<span className="chat-owner-new-activity">{nestedUnread} محموله با پیام جدید</span>
           :<span>گروه صاحب کالا</span>}
+         <time dateTime={owner.last_message_created_at||owner.updated_at}>{activityLabel(owner)}</time>
         </span>
        </span>
       </button>
@@ -101,14 +177,13 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
          <span className="chat-shipment-name">{normalizeFaText(shipment.shipment_display_name||shipment.title||'محموله')}</span>
          <span className="chat-shipment-bl">{unread&&shipment.last_message_body?shipment.last_message_body:(shipment.shipment_bl_number||'بدون شماره بارنامه')}</span>
         </span>
-        {unread>0&&<span className="chat-shipment-unread" aria-label={unread+' پیام خوانده‌نشده'}>{unread}</span>}
+        <span className="chat-shipment-meta"><time dateTime={shipment.last_message_created_at||shipment.updated_at}>{activityLabel(shipment)}</time>{unread>0&&<span className="chat-shipment-unread" aria-label={unread+' پیام خوانده‌نشده'}>{unread}</span>}</span>
        </button>;
       })}
      </div>}
     </article>;
    })}
   </div>}
-
-  {rows.length===0&&<div className="chat-conversation-empty"><span className="chat-conversation-empty-icon"><Users size={23}/></span><b>{emptyLabel}</b><span>{folder==='unread'?'همهٔ گفتگوها به‌روز هستند.':'برای شروع، یک گفتگو یا گروه تازه بسازید.'}</span></div>}
+  {!loading&&rows.length===0&&<div className="chat-conversation-empty"><span className="chat-conversation-empty-icon"><Users size={23}/></span><b>{emptyLabel}</b><span>{folder==='unread'?'همهٔ گفتگوها به‌روز هستند.':'برای شروع، یک گفتگو یا گروه تازه بسازید.'}</span></div>}
  </div>;
 };
