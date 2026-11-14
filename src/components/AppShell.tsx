@@ -166,6 +166,16 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
   const [pwaUpdateAvailable, setPwaUpdateAvailable] = useState(false);
   const [pwaUpdating, setPwaUpdating] = useState(false);
+  const [chatUnreadBadge, setChatUnreadBadge] = useState(0);
+
+  useEffect(() => {
+    const onUnreadCount = (event: Event) => {
+      const detail = (event as CustomEvent<{ count?: number }>).detail;
+      setChatUnreadBadge(Math.max(0, Number(detail?.count) || 0));
+    };
+    window.addEventListener('customs-os:chat-unread-count', onUnreadCount);
+    return () => window.removeEventListener('customs-os:chat-unread-count', onUnreadCount);
+  }, []);
 
   useEffect(() => {
     const onUpdateReady = () => {
@@ -561,6 +571,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   const go = (to: string) => {
+    try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(10); } catch { /* haptics are optional */ }
     const destination = new URL(to, window.location.origin);
     const sameRoute =
       destination.pathname === location.pathname &&
@@ -889,21 +900,27 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </button>
         </div>
       )}
-      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs" aria-label="پیمایش اصلی برنامه">
+      {!isDesktop && createPortal(<nav
+        className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs"
+        aria-label="پیمایش اصلی برنامه"
+        dir="rtl"
+        data-active-index={location.pathname.startsWith('/chat') ? 3 : location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 2 : location.pathname.startsWith('/reminders') ? 1 : isMoreTab ? 4 : 0}
+      >
+        <span className="app-mobile-dock-indicator" aria-hidden="true" />
         <button type="button" className={location.pathname === '/' ? 'is-active' : ''} aria-current={location.pathname === '/' ? 'page' : undefined} onClick={() => go('/')}>
-          <Home size={22} strokeWidth={1.9} /><span>خانه</span>
+          <Home size={22} strokeWidth={1.75} /><span>خانه</span>
         </button>
         <button type="button" className={location.pathname.startsWith('/reminders') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/reminders') ? 'page' : undefined} onClick={() => go('/reminders')}>
-          <CalendarDays size={22} strokeWidth={1.9} /><span>یادآورها</span>
+          <CalendarDays size={22} strokeWidth={1.75} /><span>یادآورها</span>
         </button>
         <button type="button" className={location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 'page' : undefined} onClick={() => go('/operations')}>
-          <ClipboardList size={22} strokeWidth={1.9} /><span>عملیات</span>
+          <ClipboardList size={22} strokeWidth={1.75} /><span>عملیات</span>
         </button>
         <button type="button" className={location.pathname.startsWith('/chat') ? 'is-active' : ''} aria-current={location.pathname.startsWith('/chat') ? 'page' : undefined} onClick={() => go('/chat')}>
-          <MessageCircle size={22} strokeWidth={1.9} /><span>چت</span>
+          <span className="app-mobile-dock-chat-icon"><MessageCircle size={22} strokeWidth={1.75} />{chatUnreadBadge > 0 && <i className="app-mobile-dock-unread" aria-label={chatUnreadBadge + ' پیام خوانده‌نشده'} />}</span><span>چت</span>
         </button>
         <button type="button" className={isMoreTab ? 'is-active' : ''} aria-current={isMoreTab ? 'page' : undefined} onClick={() => go('/more')}>
-          <Layers3 size={22} strokeWidth={1.9} /><span>بیشتر</span>
+          <Layers3 size={22} strokeWidth={1.75} /><span>بیشتر</span>
         </button>
       </nav>, document.body)}
       {!location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />}
