@@ -59,7 +59,25 @@ describe('STATIC TESTS -- Database Invariant Verification', () => {
     const phase26=readMigration('00026_completion_requires_release.sql'); expect(phase26).toContain('release_status'); expect(phase26).toContain("<> 'released'"); expect(phase26).toContain('Gross weight'); expect(allSql).toContain('SET search_path = public, pg_temp'); expect(allSql).toContain('REVOKE');
   });
   it('verifies Operations preserves registration-order ownership and exact shipment linking', () => { const ui=fs.readFileSync(path.resolve(__dirname,'../src/pages/OperationsPage.tsx'),'utf8'); expect(ui).toContain("select('id,client_id,case_id,order_number"); expect(ui).toContain('client_id:clientId'); expect(ui).toContain('const s=shipments.find(x=>x.case_id===id);'); });
-  it('prevents browser-side EPL password retrieval or printing', () => { const clientUi=fs.readFileSync(path.resolve(__dirname,'../src/pages/ClientRegistryPage.tsx'),'utf8'); const printUi=fs.readFileSync(path.resolve(__dirname,'../src/pages/DeclarationPrintPage.tsx'),'utf8'); expect(clientUi).not.toContain('vault.decrypted_secrets'); expect(clientUi).not.toContain('save_client_epl_credentials'); expect(clientUi).not.toContain('get_client_epl_credentials'); expect(clientUi).not.toContain('eplPassword'); expect(printUi).not.toContain('vault.decrypted_secrets'); expect(printUi).not.toContain('eplPassword'); expect(printUi).toContain('password_configured'); });
+  it('removes browser-side EPL password handoff pages and keeps credentials server-only', () => {
+    const clientUi = fs.readFileSync(path.resolve(__dirname, '../src/pages/ClientRegistryPage.tsx'), 'utf8');
+    const app = fs.readFileSync(path.resolve(__dirname, '../src/App.tsx'), 'utf8');
+    const shell = fs.readFileSync(path.resolve(__dirname, '../src/components/AppShell.tsx'), 'utf8');
+    expect(clientUi).not.toContain('vault.decrypted_secrets');
+    expect(clientUi).not.toContain('save_client_epl_credentials');
+    expect(clientUi).not.toContain('get_client_epl_credentials');
+    expect(clientUi).not.toContain('eplPassword');
+    expect(fs.existsSync(path.resolve(__dirname, '../src/pages/DeclarationPrintPage.tsx'))).toBe(false);
+    expect(fs.existsSync(path.resolve(__dirname, '../src/pages/EplPrintAssistantPage.tsx'))).toBe(false);
+    for (const removedRoute of ['/print-declaration', '/declaration-print', '/epl-print']) {
+      expect(app).not.toContain(removedRoute);
+      expect(shell).not.toContain(removedRoute);
+    }
+    expect(shell).not.toContain('چاپ اظهار');
+    expect(shell).not.toContain('چاپگر هوشمند EPL');
+    expect(readMigration('00021_phase13_workflow_integrity_and_credential_boundary.sql')).toContain('password_configured boolean');
+    expect(allSql).not.toContain('vault.decrypted_secrets');
+  });
   it('contains the durable offline queue and binds replay to the authenticated user', () => { const q=fs.readFileSync(path.resolve(__dirname,'../src/lib/offlineQueue.ts'),'utf8'); expect(q).toContain("const DB_NAME = 'customs-os-offline'"); expect(q).toContain("const STORE_NAME = 'rpc_queue'"); expect(q).toContain('indexedDB.open'); expect(q).toContain("window.addEventListener('online'"); expect(q).toContain('attachSupabaseClient'); expect(q).toContain('OFFLINE_QUEUEABLE_RPCS'); expect(q).toContain('currentUserId'); expect(q).toContain('userId'); expect(q).toContain('attach_registration_order'); expect(q).toContain('update_case_operational_data'); expect(q).toContain('create_operational_reminder'); expect(q).not.toContain(" 'create_case_workflow'"); expect(q).not.toContain("'set_shipment_tracking_status'"); });
   it('verifies security controls remain present across the repository', () => { expect(allSql).toContain('case_status_history'); expect(allSql).toContain('REVOKE'); expect(allSql).toContain('SET search_path = public, pg_temp'); });
   it('verifies reminder migration RLS and idempotency',()=>{const m=readMigration('20261002010000_reminders_full_model.sql');expect(m).toContain('create table if not exists public.push_subscriptions');expect(m).toContain('create table if not exists public.reminder_deliveries');expect(m).toContain("public.user_role()<>'client'");expect(m).toContain('on conflict(created_by,client_uuid)');expect(m).toContain('for update');expect(m).toContain('skip locked');});
