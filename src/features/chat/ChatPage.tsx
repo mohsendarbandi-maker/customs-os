@@ -631,6 +631,7 @@ export const ChatPage:React.FC=()=>{
  useEffect(()=>{if(voice.error)setError(voice.error)},[voice.error]);
 
  const unread=useMemo(()=>conversations.reduce((n,c)=>n+Number(c.unread_count??0),0),[conversations]);
+ useEffect(()=>{window.dispatchEvent(new CustomEvent('customs-os:chat-unread-count',{detail:{count:unread}}))},[unread]);
  const filteredPeople=useMemo(()=>{const q=normalizeFaText(personQuery).toLowerCase();return people.filter(person=>person.id!==user?.id&&(!q||normalizeFaText(person.full_name).toLowerCase().includes(q)||(person.phone??'').includes(q)))},[people,personQuery,user?.id]);
  const folderLabels:Partial<Record<ChatFolder,string>>={all:'همه',coworkers:'مستقیم',groups:'گروه‌ها',unread:'خوانده‌نشده'};
  const statusView=(m:ChatMessage)=>{
