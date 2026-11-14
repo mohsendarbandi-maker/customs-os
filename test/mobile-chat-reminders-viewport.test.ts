@@ -28,6 +28,9 @@ describe('Phase 2 — keyboard-aware chat and reminder workspaces', () => {
 
   it('constrains the create sheet to the visible viewport and makes its own content scrollable', () => {
     expect(finalMobileLayer).toContain('.reminders-page .reminders-composebar.is-open');
+    expect(finalMobileLayer).toContain(':has(.reminders-composebar.is-open) .future-route-stage');
+    expect(finalMobileLayer).toContain('animation: none !important;');
+    expect(finalMobileLayer).toContain('transform: none !important;');
     expect(finalMobileLayer).toContain('var(--reminder-visual-top, 0px)');
     expect(finalMobileLayer).toContain('height: var(--reminder-visual-height, 100dvh)');
     expect(finalMobileLayer).toContain('max-height: var(--reminder-visual-height, 100dvh)');
