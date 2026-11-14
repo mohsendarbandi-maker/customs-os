@@ -23,6 +23,10 @@
   }
 
   .app-shell.is-touch-layout .app-content {
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
     flex: 1 1 0% !important;
     min-width: 0 !important;
     min-height: 0 !important;
@@ -31,7 +35,7 @@
   }
 
   /* One edge-to-edge bar, flush with the physical bottom of the phone. */
-  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs {
+  html:has(.app-shell.is-touch-layout) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
     position: fixed !important;
     inset-inline: 0 !important;
     inset-block-start: auto !important;
@@ -65,7 +69,7 @@
     z-index: 900 !important;
   }
 
-  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button {
+  html:has(.app-shell.is-touch-layout) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs > button {
     min-width: 0 !important;
     min-height: 54px !important;
     height: 100% !important;
@@ -79,7 +83,7 @@
     --cos-tab-reserve: var(--cos-tab-height, 70px);
   }
 
-  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock.native-bottom-tabs {
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
     inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
     bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
     height: var(--cos-tab-height, 70px) !important;
@@ -89,7 +93,7 @@
 
   /* Chat tracks visualViewport independently; keep the same full-width bar
      exactly at the visible viewport edge, including above the keyboard. */
-  html:has(.app-shell.is-touch-layout.is-chat-route) .app-mobile-viewport-dock.native-bottom-tabs {
+  html:has(.app-shell.is-touch-layout.is-chat-route) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
     inset-inline: 0 !important;
     left: 0 !important;
     right: 0 !important;
@@ -104,7 +108,7 @@
     --cos-tab-reserve: var(--cos-tab-height, 70px);
   }
 
-  html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) .app-mobile-viewport-dock.native-bottom-tabs {
+  html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
     height: var(--cos-tab-height, 70px) !important;
     min-height: var(--cos-tab-height, 70px) !important;
     padding-bottom: 5px !important;
@@ -123,6 +127,25 @@
   .app-shell.is-touch-layout .app-pwa-update-prompt {
     bottom: calc(var(--cos-tab-reserve) + 12px) !important;
   }
+  /* Reminders use the app-content as the only vertical scroll container.
+     Keep their full task list above the dock instead of clipping it in a nested page. */
+  .app-shell.is-touch-layout:has(.reminders-app-standalone) .app-content {
+    box-sizing: border-box !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding-bottom: var(--cos-tab-reserve) !important;
+    scroll-padding-block-end: var(--cos-tab-reserve) !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .app-shell.is-touch-layout:has(.reminders-app-standalone) .reminders-page.reminders-app-standalone,
+  .app-shell.is-touch-layout:has(.reminders-app-standalone) .reminders-route-screen,
+  .app-shell.is-touch-layout:has(.reminders-app-standalone) .future-route-stage {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
   /* Match the chat flex viewport's reserved space to the dock in both states. */
   .app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content {
     padding-bottom: var(--cos-tab-reserve) !important;
