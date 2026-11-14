@@ -202,3 +202,108 @@
     }
   }
 }
+
+
+/* Phase 2 — keyboard-aware chat and reminder workspaces.
+   This is the existing final mobile cascade, not another competing stylesheet. */
+@media (max-width: 1023px), (pointer: coarse) {
+  /* Keep the reminder action aligned to the same dock reservation used by
+     the shared shell, regardless of the phone height or safe-area inset. */
+  .app-shell.is-touch-layout .reminders-page .reminders-mobile-fab {
+    position: fixed !important;
+    z-index: 850 !important;
+    right: max(14px, env(safe-area-inset-right)) !important;
+    left: auto !important;
+    bottom: calc(var(--cos-tab-reserve) + 14px) !important;
+    width: 54px !important;
+    min-width: 54px !important;
+    height: 54px !important;
+    min-height: 54px !important;
+    border-radius: 17px !important;
+  }
+
+  /* iOS visualViewport values are supplied only while quick-create is open.
+     The sheet scrolls internally; the underlying reminders list stays still. */
+  .app-shell.is-touch-layout .reminders-page .reminders-composebar.is-open {
+    position: fixed !important;
+    inset-inline: 0 !important;
+    inset-block-start: var(--reminder-visual-top, 0px) !important;
+    inset-block-end: auto !important;
+    width: 100% !important;
+    height: var(--reminder-visual-height, 100dvh) !important;
+    max-height: var(--reminder-visual-height, 100dvh) !important;
+    min-height: 0 !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .app-shell.is-touch-layout .reminders-page .reminders-compose-sheet {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-width: 620px !important;
+    max-height: calc(var(--reminder-visual-height, 100dvh) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 18px) !important;
+    margin: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+    scroll-padding-block: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  }
+  .app-shell.is-touch-layout .reminders-page .reminders-smart-input {
+    min-height: 72px !important;
+    max-height: min(18dvh, 116px) !important;
+    font-size: 16px !important;
+  }
+  .app-shell.is-touch-layout .reminders-page .reminders-compose-actions {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 2 !important;
+    margin-top: 8px !important;
+    padding-block: 8px 3px !important;
+    background: var(--surface) !important;
+    box-shadow: 0 -8px 16px color-mix(in srgb, var(--surface) 86%, transparent) !important;
+  }
+  .app-shell.is-touch-layout .reminders-page .reminders-compose-actions .reminders-submit-button {
+    min-height: 46px !important;
+  }
+
+  /* The message history remains the only chat scroll owner. Attachment previews
+     are bounded so they cannot consume the viewport reserved for the composer. */
+  .app-shell.is-chat-route .chat-message-area {
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+    scroll-padding-block-end: var(--cos-tab-reserve) !important;
+  }
+  .app-shell.is-chat-route .chat-composer {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  }
+  .app-shell.is-chat-route .chat-composer [data-unsaved="true"] {
+    max-height: min(20dvh, 140px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .app-shell.is-chat-route .chat-composer textarea {
+    min-height: 44px !important;
+    max-height: min(18dvh, 112px) !important;
+    font-size: 16px !important;
+  }
+  .app-shell.is-chat-route .chat-composer :is(button,[role="button"]) {
+    min-width: 42px;
+    min-height: 42px;
+    touch-action: manipulation;
+  }
+}
