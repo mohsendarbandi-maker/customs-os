@@ -87,6 +87,8 @@ try {
     reminderPage.className = 'reminders-page reminders-app-standalone';
     reminderPage.dir = 'rtl';
 
+    const reminderHub = document.createElement('section');
+    reminderHub.className = 'reminders-route-screen reminders-hub-screen';
     const reminderHeader = document.createElement('header');
     reminderHeader.className = 'reminders-hub-header';
     const headerActions = document.createElement('div');
@@ -122,7 +124,8 @@ try {
     actions.append(submit);
     sheet.append(heading, input, details, actions);
     overlay.append(sheet);
-    reminderPage.append(reminderHeader, overlay);
+    reminderHub.append(reminderHeader);
+    reminderPage.append(reminderHub, overlay);
     content.append(reminderPage);
 
     document.documentElement.style.setProperty('--reminder-visual-top', '18px');
