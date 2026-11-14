@@ -1,0 +1,131 @@
+/*
+ * Customs OS — final mobile viewport and bottom dock geometry.
+ *
+ * The five-tab navigation is a full-width, fixed bottom bar on every touch
+ * screen. Its box includes the iOS home-indicator safe area, while the current
+ * module keeps an exactly matching scroll clearance above it.
+ *
+ * This file is imported after legacy mobile layers intentionally so no older
+ * floating-dock experiment can override the final layout.
+ */
+@media (max-width: 1023px), (pointer: coarse) {
+  :root {
+    --cos-tab-inset: 0px;
+    --cos-tab-clearance: 0px;
+    --cos-tab-reserve: calc(var(--cos-tab-height, 70px) + env(safe-area-inset-bottom));
+  }
+
+  /* The app content occupies the complete space above the persistent dock. */
+  .app-shell.is-touch-layout .app-main {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+  }
+
+  .app-shell.is-touch-layout .app-content {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding-bottom: var(--cos-tab-reserve) !important;
+    scroll-padding-block-end: var(--cos-tab-reserve) !important;
+  }
+
+  /* One edge-to-edge bar, flush with the physical bottom of the phone. */
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs {
+    position: fixed !important;
+    inset-inline: 0 !important;
+    inset-block-start: auto !important;
+    inset-block-end: 0 !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 3px !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: var(--cos-tab-reserve) !important;
+    min-height: var(--cos-tab-reserve) !important;
+    margin: 0 !important;
+    padding: 6px 8px calc(5px + env(safe-area-inset-bottom)) !important;
+    box-sizing: border-box !important;
+    border: 0 !important;
+    border-top: 1px solid rgba(255, 255, 255, .12) !important;
+    border-radius: 18px 18px 0 0 !important;
+    background: rgba(9, 39, 68, .98) !important;
+    box-shadow: 0 -8px 26px rgba(7, 28, 48, .18), inset 0 1px 0 rgba(255, 255, 255, .06) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(150%) !important;
+    backdrop-filter: blur(22px) saturate(150%) !important;
+    transform: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 900 !important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button {
+    min-width: 0 !important;
+    min-height: 54px !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 3px 1px !important;
+  }
+
+  /* While the software keyboard is open, move the bar to its top edge and
+     remove the now-hidden home-indicator area from both height reservations. */
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) {
+    --cos-tab-reserve: var(--cos-tab-height, 70px);
+  }
+
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock.native-bottom-tabs {
+    inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
+    bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
+    height: var(--cos-tab-height, 70px) !important;
+    min-height: var(--cos-tab-height, 70px) !important;
+    padding-bottom: 5px !important;
+  }
+
+  /* Chat tracks visualViewport independently; keep the same full-width bar
+     exactly at the visible viewport edge, including above the keyboard. */
+  html:has(.app-shell.is-touch-layout.is-chat-route) .app-mobile-viewport-dock.native-bottom-tabs {
+    inset-inline: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    inset-block-end: var(--chat-visual-bottom-inset, 0px) !important;
+    bottom: var(--chat-visual-bottom-inset, 0px) !important;
+    width: 100% !important;
+    max-width: none !important;
+    border-radius: 18px 18px 0 0 !important;
+  }
+
+  html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) {
+    --cos-tab-reserve: var(--cos-tab-height, 70px);
+  }
+
+  html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) .app-mobile-viewport-dock.native-bottom-tabs {
+    height: var(--cos-tab-height, 70px) !important;
+    min-height: var(--cos-tab-height, 70px) !important;
+    padding-bottom: 5px !important;
+  }
+
+  /* Floating controls and update prompts remain above the full-width bar. */
+  .app-shell.is-touch-layout .ai-launcher {
+    bottom: calc(var(--cos-tab-reserve) + 14px) !important;
+  }
+
+  .app-shell.is-touch-layout .ai-chat-panel {
+    bottom: calc(var(--cos-tab-reserve) + 64px) !important;
+    max-height: calc(100dvh - var(--cos-tab-reserve) - 84px) !important;
+  }
+
+  .app-shell.is-touch-layout .app-pwa-update-prompt {
+    bottom: calc(var(--cos-tab-reserve) + 12px) !important;
+  }
+  /* Match the chat flex viewport's reserved space to the dock in both states. */
+  .app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content {
+    padding-bottom: var(--cos-tab-reserve) !important;
+  }
+
+}
