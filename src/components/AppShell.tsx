@@ -645,11 +645,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     go(to);
   };
 
-  const goMoreTab = () => {
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10);
-    go('/more');
-  };
-
   const goBack = () => {
     closeMobile();
     const historyState = window.history.state as BrowserHistoryState;
@@ -931,7 +926,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           <MessageCircle size={22} strokeWidth={1.75} /><span>چت</span>
           {chatUnreadCount > 0 && <span className="native-tab-badge" aria-label={`${chatUnreadCount} پیام خوانده‌نشده`}>{chatUnreadCount > 99 ? '99+' : chatUnreadCount}</span>}
         </button>
-        <button type="button" className={isMoreTab ? 'is-active' : ''} aria-current={isMoreTab ? 'page' : undefined} onClick={goMoreTab}>
+        <button type="button" className={isMoreTab ? 'is-active' : ''} aria-current={isMoreTab ? 'page' : undefined} onClick={() => { if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10); go('/more'); }}>
           <Layers3 size={22} strokeWidth={1.75} /><span>بیشتر</span>
         </button>
       </nav>, document.body)}
