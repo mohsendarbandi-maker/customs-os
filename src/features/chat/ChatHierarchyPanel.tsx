@@ -1,5 +1,5 @@
 import React,{useMemo,useState}from'react';
-import{ChevronDown,ChevronLeft,MessageCircle,Package,Users}from'lucide-react';
+import{ChevronDown,ChevronLeft,MessageCircle,Package}from'lucide-react';
 import{normalizeFaText}from'../../lib/jalali';
 import{buildChatInboxRows,type ChatFolder}from'./conversationModel';
 import type{ChatConversation}from'./types';
