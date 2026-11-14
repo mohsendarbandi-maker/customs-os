@@ -60,6 +60,26 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).toContain('--cos-tab-reserve: var(--cos-tab-height, 70px);');
   });
 
+  it('uses a 64px content row plus one safe-area extension with glass styling', () => {
+    expect(layout).toContain('--cos-tab-content-height:64px;');
+    expect(layout).toContain('--cos-tab-safe-area:max(env(safe-area-inset-bottom),8px);');
+    expect(layout).toContain('height:calc(64px + var(--cos-tab-safe-area)) !important;');
+    expect(layout).toContain('padding:0 8px var(--cos-tab-safe-area) !important;');
+    expect(layout).toContain('backdrop-filter:blur(20px) saturate(180%) !important;');
+    expect(layout).toContain('border-radius:24px 24px 0 0 !important;');
+    expect(layout).toContain('grid-template-rows:64px !important;');
+    expect(layout).toContain('cubic-bezier(.4,0,.2,1)');
+    expect(layout).toContain('scale(.92)');
+    expect(layout).toContain('100dvh');
+  });
+
+  it('styles the chat inbox with horizontal filters, compact cards, and skeleton loading', () => {
+    expect(layout).toContain('scroll-snap-type:x mandatory;');
+    expect(layout).toContain('.chat-inbox-skeleton');
+    expect(layout).toContain('.chat-conversation-time');
+    expect(layout).toContain('.chat-conversation-avatar-initial');
+  });
+
   it('tests edge-to-edge dock placement and does not require floating-dock clearance', () => {
     expect(buildWorkflow).toContain("expect(measurement.dock?.bottom ?? -1, JSON.stringify(measurement)).toBeCloseTo(844, 0);");
     expect(buildWorkflow).toContain("expect(measurement.dock?.left ?? -1, JSON.stringify(measurement)).toBe(0);");
