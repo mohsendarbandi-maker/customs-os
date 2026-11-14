@@ -38,9 +38,10 @@ describe('Phase 2 — keyboard-aware chat and reminder workspaces', () => {
     expect(finalMobileLayer).toContain('.reminders-compose-actions .reminders-submit-button');
   });
 
-  it('positions the reminder action from the shared navigation reserve rather than a second hard-coded dock height', () => {
-    expect(finalMobileLayer).toContain('.reminders-page .reminders-mobile-fab');
-    expect(finalMobileLayer).toContain('bottom: calc(var(--cos-tab-reserve) + 14px)');
+  it('keeps reminder creation in the visible page header without adding a duplicate floating action', () => {
+    expect(reminders).toContain('className="reminders-hub-add"');
+    expect(reminders).toContain('onClick={openComposer}');
+    expect(finalMobileLayer).not.toContain('.reminders-page .reminders-mobile-fab');
     expect(finalMobileLayer).not.toContain('bottom: calc(92px + env(safe-area-inset-bottom))');
   });
 
