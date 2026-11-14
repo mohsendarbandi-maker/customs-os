@@ -70,3 +70,14 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
   });
 
 });
+
+
+describe('compact iPhone mobile dock', () => {
+  it('uses a 46px tab strip and reserves only the iOS safe area below it', () => {
+    const layout = readFileSync(new URL('../src/styles/mobile-bottom-anchored-shell-2026.css', import.meta.url), 'utf8');
+    expect(layout).toContain('--cos-tab-reserve: calc(46px + env(safe-area-inset-bottom));');
+    expect(layout).toContain('height: 46px !important;');
+    expect(layout).toContain('padding: 0 !important;');
+    expect(layout).toContain('min-height: 0 !important;');
+  });
+});
