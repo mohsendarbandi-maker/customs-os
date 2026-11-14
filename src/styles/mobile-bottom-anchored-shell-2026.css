@@ -114,7 +114,7 @@
   /* While the software keyboard is open, move the bar to its top edge and
      remove the now-hidden home-indicator area from both height reservations. */
   html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) {
-    --cos-tab-reserve: 44px;
+    --cos-tab-reserve: 44px !important;
   }
 
   html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
@@ -140,13 +140,13 @@
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) {
-    --cos-tab-reserve: 44px;
+    --cos-tab-reserve: 44px !important;
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
     height: 44px !important;
     min-height: 44px !important;
-    padding-bottom: 5px !important;
+    padding: 0 8px 0 !important;
     border-radius: 22px 22px 0 0 !important;
   }
 
