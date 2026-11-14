@@ -69,7 +69,46 @@ export const RemindersPage:React.FC=()=>{
  const isHome=currentSection==='home',isSearchPage=currentSection==='search',isListsPage=currentSection==='lists',isCalendarPage=currentSection==='calendar',isSettingsPage=currentSection==='settings';
  const dayKey=params.get('day');const calendarMonth=readJalaliMonth(params.get('month'));const [filter,setFilter]=useState<Filter>(SECTION_FILTER[currentSection]??'all');const [kind,setKind]=useState<ReminderKind|null>(SECTION_KIND[currentSection]??null);const [search,setSearch]=useState('');const [page,setPage]=useState(0);const [composer,setComposer]=useState('');const [selected,setSelected]=useState<string[]>([]);const [bulkAction,setBulkAction]=useState<ReminderBulkAction|null>(null);const [editor,setEditor]=useState<Reminder|null>(null);const [showPicker,setShowPicker]=useState(false);const [toast,setToast]=useState<{text:string;undo?:()=>void}|null>(null);const [pushOpen,setPushOpen]=useState(false);const [pushDevices,setPushDevices]=useState<Array<{id:string;platform:string|null;user_agent:string|null;last_seen_at:string;is_active:boolean;failure_count:number}>>([]);const [pushBusy,setPushBusy]=useState(false);const [offlineQueue,setOfflineQueue]=useState<QueuedRpc[]>([]);const [online,setOnline]=useState(()=>typeof navigator==='undefined'||navigator.onLine);const previousQueueRef=useRef<QueuedRpc[]>([]);
  const pushAllowed=profile?.role!=='client';
- const [recording,setRecording]=useState(false);const speechRecognitionRef=useRef<SpeechRecognitionLike|null>(null);const speechRestartTimerRef=useRef<number|null>(null);const speechShouldContinueRef=useRef(false);const speechBaseTextRef=useRef('');const speechCapturedSegmentsRef=useRef<string[]>([]);const speechSessionTextRef=useRef('');const [composerOpen,setComposerOpen]=useState(false);const [expandedReminderId,setExpandedReminderId]=useState<string|null>(null);const [speechMessage,setSpeechMessage]=useState('');const [selectedCalendarDay,setSelectedCalendarDay]=useState(()=>{const today=toJalali(new Date());return `${today.year}-${String(today.month).padStart(2,'0')}-${String(today.day).padStart(2,'0')}`;});const [calendarDayPopupOpen,setCalendarDayPopupOpen]=useState(false);
+ const [recording,setRecording]=useState(false);const speechRecognitionRef=useRef<SpeechRecognitionLike|null>(null);
+const speechRestartTimerRef=useRef<number|null>(null);const speechShouldContinueRef=useRef(false);const speechBaseTextRef=useRef('');const speechCapturedSegmentsRef=useRef<string[]>([]);const speechSessionTextRef=useRef('');const [composerOpen,setComposerOpen]=useState(false);const [expandedReminderId,setExpandedReminderId]=useState<string|null>(null);const [speechMessage,setSpeechMessage]=useState('');const [selectedCalendarDay,setSelectedCalendarDay]=useState(()=>{const today=toJalali(new Date());return `${today.year}-${String(today.month).padStart(2,'0')}-${String(today.day).padStart(2,'0')}`;});const [calendarDayPopupOpen,setCalendarDayPopupOpen]=useState(false);
+// iOS Safari keeps the layout viewport taller than the visible area when the
+ // software keyboard opens. Keep the quick-create sheet inside visualViewport
+ // so its text field and submit action remain reachable without scrolling the page.
+ useEffect(()=>{
+  if(!composerOpen)return;
+  const mobileQuery=window.matchMedia('(max-width: 1023px), (pointer: coarse)');
+  if(!mobileQuery.matches)return;
+  const viewport=window.visualViewport;
+  const root=document.documentElement;
+  let frame=0;
+  const syncVisibleViewport=()=>{
+   const visibleHeight=Math.max(1,Math.round(viewport?.height??window.innerHeight));
+   const visibleTop=Math.max(0,Math.round(viewport?.offsetTop??0));
+   const visibleBottomInset=Math.max(0,Math.round(window.innerHeight-(visibleTop+visibleHeight)));
+   root.style.setProperty('--reminder-visual-height',visibleHeight+'px');
+   root.style.setProperty('--reminder-visual-top',visibleTop+'px');
+   root.style.setProperty('--reminder-visual-bottom-inset',visibleBottomInset+'px');
+  };
+  const scheduleSync=()=>{
+   if(frame)window.cancelAnimationFrame(frame);
+   frame=window.requestAnimationFrame(syncVisibleViewport);
+  };
+  syncVisibleViewport();
+  viewport?.addEventListener('resize',scheduleSync);
+  viewport?.addEventListener('scroll',scheduleSync);
+  window.addEventListener('resize',scheduleSync,{passive:true});
+  window.addEventListener('orientationchange',scheduleSync,{passive:true});
+  return()=>{
+   viewport?.removeEventListener('resize',scheduleSync);
+   viewport?.removeEventListener('scroll',scheduleSync);
+   window.removeEventListener('resize',scheduleSync);
+   window.removeEventListener('orientationchange',scheduleSync);
+   if(frame)window.cancelAnimationFrame(frame);
+   root.style.removeProperty('--reminder-visual-height');
+   root.style.removeProperty('--reminder-visual-top');
+   root.style.removeProperty('--reminder-visual-bottom-inset');
+  };
+ },[composerOpen]);
  useEffect(()=>{const unsubscribe=subscribeOfflineQueue(setOfflineQueue);return()=>{unsubscribe();};},[]);
  useEffect(()=>{const update=()=>setOnline(navigator.onLine);window.addEventListener('online',update);window.addEventListener('offline',update);return()=>{window.removeEventListener('online',update);window.removeEventListener('offline',update);};},[]);
  useEffect(()=>()=>{speechShouldContinueRef.current=false;if(speechRestartTimerRef.current!==null)window.clearTimeout(speechRestartTimerRef.current);const activeRecognition=speechRecognitionRef.current;speechRecognitionRef.current=null;try{activeRecognition?.stop();}catch{}},[]);
