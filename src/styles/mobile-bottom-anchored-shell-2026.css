@@ -120,7 +120,7 @@
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) {
-    --cos-tab-reserve: var(--cos-tab-height, 70px);
+    --cos-tab-reserve: 46px;
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
