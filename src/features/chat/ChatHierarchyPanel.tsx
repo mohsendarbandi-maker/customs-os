@@ -20,6 +20,7 @@ const conversationKind=(conversation:ChatConversation)=>{
  return'گفتگوی مستقیم';
 };
 const unreadCount=(conversation:ChatConversation)=>Math.max(0,Number(conversation.unread_count)||0);
+const lastActivity=(conversation:ChatConversation)=>{const value=conversation.last_message_created_at||conversation.updated_at;return value?new Intl.DateTimeFormat('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran',hour:'2-digit',minute:'2-digit'}).format(new Date(value)):''};
 
 export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversations,folder='all',loading=false})=>{
  const[open,setOpen]=useState<Record<string,boolean>>({});
@@ -77,7 +78,7 @@ export const ChatHierarchyPanel:React.FC<Props>=({selectedId,onSelect,conversati
        {expanded?<ChevronDown size={16}/>:<ChevronLeft size={16}/>}
       </button>
       <button type="button" className="chat-owner-select" onClick={()=>toggleOwner(owner.conversation_id,defaultExpanded)} aria-expanded={expanded} aria-label={(expanded?'بستن':'نمایش')+' محموله‌های '+normalizeFaText(owner.title||'صاحب کالا')}>
-       <span className="chat-owner-avatar"><Users size={18}/></span>
+       <span className="chat-owner-avatar"><span className="chat-conversation-avatar-initial">{(owner.title||'ص').trim().slice(0,1)}</span></span>
        <span className="chat-owner-copy">
         <span className="chat-owner-name">{normalizeFaText(owner.title||'صاحب کالا')}</span>
         <span className="chat-owner-meta">
