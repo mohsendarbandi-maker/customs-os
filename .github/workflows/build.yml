@@ -1025,9 +1025,12 @@ jobs:
                 }
                 console.log('Six-width mobile viewport sweep passed:', JSON.stringify(viewportSweep));
 
-                // Short phones keep the same compact 30px dock token; reserve space
-                // must follow that token instead of a separate hard-coded offset.
+                // Simulate the iPhone 34px bottom safe area on a short viewport.
+                // Keep 30px controls bottom-aligned inside that inset and reserve the full dock.
                 await page.setViewportSize({ width: 390, height: 600 });
+                await page.evaluate(() => {
+                  document.documentElement.style.setProperty('--cos-tab-safe-area', '34px');
+                });
                 const compactViewport = await page.evaluate(() => {
                   const rootStyle = getComputedStyle(document.documentElement);
                   const dock = document.querySelector('.app-mobile-viewport-dock');
@@ -1037,13 +1040,23 @@ jobs:
                     dockLeft: dock ? Math.round(dock.getBoundingClientRect().left) : -1,
                     dockRight: dock ? Math.round(dock.getBoundingClientRect().right) : -1,
                     dockBottom: dock ? Math.round(dock.getBoundingClientRect().bottom) : -1,
+                    tabs: dock ? Array.from(dock.querySelectorAll('button')).map((tab) => {
+                      const rect = tab.getBoundingClientRect();
+                      return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), height: Math.round(rect.height) };
+                    }) : [],
                     sharedDockHeight: parseFloat(rootStyle.getPropertyValue('--cos-tab-height')) || -1,
                     sharedDockReserve: dock ? Math.round(dock.getBoundingClientRect().height) : -1,
                     contentReserve: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
                   };
                 });
-                expect(compactViewport.dockHeight, JSON.stringify(compactViewport)).toBe(64);
-                expect(compactViewport.sharedDockHeight, JSON.stringify(compactViewport)).toBe(64);
+                expect(compactViewport.dockHeight, JSON.stringify(compactViewport)).toBe(34);
+                expect(compactViewport.sharedDockHeight, JSON.stringify(compactViewport)).toBe(30);
+                expect(compactViewport.tabs, JSON.stringify(compactViewport)).toHaveLength(5);
+                for (const tab of compactViewport.tabs) {
+                  expect(tab.height, JSON.stringify({ compactViewport, tab })).toBe(30);
+                  expect(tab.top, JSON.stringify({ compactViewport, tab })).toBeGreaterThanOrEqual(compactViewport.dockBottom - compactViewport.dockHeight);
+                  expect(tab.bottom, JSON.stringify({ compactViewport, tab })).toBe(compactViewport.dockBottom);
+                }
                 expect(compactViewport.dockLeft, JSON.stringify(compactViewport)).toBe(0);
                 expect(compactViewport.dockRight, JSON.stringify(compactViewport)).toBe(390);
                 expect(compactViewport.dockBottom, JSON.stringify(compactViewport)).toBe(600);
