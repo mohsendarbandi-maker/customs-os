@@ -54,7 +54,8 @@ describe('iOS touch-first application shell', () => {
     expect(unifiedCss).toContain('--app-mobile-tabbar-height:var(--cos-tab-height)');
     expect(unifiedCss).toContain('--native-shell-tab-height:var(--cos-tab-height)');
     expect(unifiedCss).toContain('--app-mobile-header-height:var(--cos-header-height)');
-    expect(mobileCss).toContain('--app-mobile-tabbar-height: var(--cos-tab-height, 70px)');
+    expect(mobileCss).not.toContain('--app-mobile-tabbar-height');
+    expect(canonicalDock).toContain('--app-mobile-tabbar-height: var(--cos-tab-height);');
     expect(mobileCss).toContain('--app-mobile-header-height: var(--cos-header-height, 62px)');
     expect(mobileCss).toContain('min-height: 100dvh');
     expect(mobileCss).toContain('env(safe-area-inset-top)');
@@ -76,7 +77,8 @@ describe('iOS touch-first application shell', () => {
     expect(canonicalDock).toContain('--cos-tab-safe-area: env(safe-area-inset-bottom, 0px);');
     expect(canonicalDock).toContain('--cos-tab-reserve: calc(var(--cos-tab-height) + var(--cos-tab-safe-area));');
     expect(canonicalDock).toContain('height: var(--cos-tab-reserve);');
-    expect(unifiedCss).toContain('padding:12px 12px var(--cos-tab-reserve)!important');
+    expect(unifiedCss).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
     expect(canonicalDock).not.toContain('--cos-tab-height:64px');
     expect(productionCss).not.toContain('--native-shell-tab-height: 64px');
     expect(productionCss).not.toContain('padding-bottom: calc(64px + env(safe-area-inset-bottom))');
