@@ -72,7 +72,8 @@ describe('single mobile shell navigation regressions', () => {
     expect(mobileCss).toContain('100dvh');
     expect(mobileCss).toContain('env(safe-area-inset-top)');
     expect(mobileCss).toContain('env(safe-area-inset-bottom)');
-    expect(mobileCss).toContain('padding: 10px 12px calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px)');
+    expect(mobileCss).not.toContain('--app-mobile-tabbar-height');
+    expect(canonicalDock).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
   });
 
   it('keeps Chat/Reminders in the shell and removes the duplicate reminders tab bar', () => {
