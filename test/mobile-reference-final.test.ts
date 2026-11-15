@@ -63,7 +63,13 @@ describe('maritime six-screen mobile reference', () => {
     expect(reminders).toContain("if(card.dataset.longPressMenu==='true')delete card.dataset.longPressMenu;");
     expect(reminders).not.toContain("if(card.dataset.longPressMenu==='true'){delete card.dataset.longPressMenu;closeCardMenu();}");
     expect(reminders).toContain('onPointerCancel={onCardPointerCancel}');
-    expect(reminderTimeline).toContain('-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:pan-y;');
+    expect(reminders).toContain('onPointerMove={onCardPointerMove}');
+    expect(reminders).toContain('onContextMenu={event=>event.preventDefault()}');
+    expect(reminders.match(/onPointerMove={onCardPointerMove}/g)?.length).toBe(2);
+    expect(reminders).toContain("Math.hypot(dx,dy)>12");
+    expect(reminders).toContain("Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.3");
+    expect(reminderTimeline).toContain('.reminders-app-standalone .reminder-card{-webkit-user-select:none!important;user-select:none;-webkit-touch-callout:none;touch-action:pan-y}');
+    expect(reminders).not.toContain('pointerStart');
   });
 
   it('keeps the reminder search panel animated, keyboard-accessible, and explicitly clearable/closable', () => {
