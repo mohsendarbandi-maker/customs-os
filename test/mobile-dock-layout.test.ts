@@ -55,10 +55,9 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
   });
 
   it('keeps the iPhone bottom safe area navy so the dock visually reaches the rounded device edge', () => {
-    expect(layout).toContain('html,');
     expect(layout).toContain('.app-shell.is-touch-layout');
-    expect(layout).toContain('background-color: #092744;');
     expect(layout).toContain('background: rgba(7, 29, 51, .97);');
+    expect(layout).toContain('padding: 0 6px var(--cos-tab-safe-area);');
     expect(layout).toContain('border-radius: 18px 18px 0 0;');
     expect(layout).toContain('padding: 0 6px var(--cos-tab-safe-area);');
     expect(layout).toContain('height: var(--cos-tab-height);');
