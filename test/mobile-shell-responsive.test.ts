@@ -51,8 +51,8 @@ describe('iOS touch-first application shell', () => {
   });
 
   it('protects content from sidebar, Safari safe-area and tab-bar overlap', () => {
-    expect(unifiedCss).toContain('--app-mobile-tabbar-height:var(--cos-tab-height)');
-    expect(unifiedCss).toContain('--native-shell-tab-height:var(--cos-tab-height)');
+    expect(canonicalDock).toContain('--app-mobile-tabbar-height: var(--cos-tab-height);');
+    expect(canonicalDock).toContain('--native-shell-tab-height: var(--cos-tab-height);');
     expect(unifiedCss).toContain('--app-mobile-header-height:var(--cos-header-height)');
     expect(mobileCss).not.toContain('--app-mobile-tabbar-height');
     expect(canonicalDock).toContain('--app-mobile-tabbar-height: var(--cos-tab-height);');
