@@ -173,7 +173,7 @@ html[data-visual-style] .app-shell .customs-shortcut > svg:first-child { color:v
 @media (max-width: 767px), (pointer: coarse) {
   html[data-visual-style] .app-shell .customs-home { min-height:100dvh; }
   html[data-visual-style] .app-shell .customs-home > div {
-    padding:12px 11px calc(var(--app-mobile-tabbar-height,70px) + env(safe-area-inset-bottom) + 28px)!important;
+    padding:12px 11px calc(var(--cos-tab-reserve) + 28px)!important;
   }
   html[data-visual-style] .app-shell .customs-home header {
     display:flex!important; align-items:center!important; flex-wrap:wrap!important;
