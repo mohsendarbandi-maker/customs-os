@@ -162,8 +162,8 @@ jobs:
                 composerClearance: dockRect && composerRect ? Math.round(dockRect.top - composerRect.bottom) : -999,
               };
             });
-            assert.equal(compact.dockHeight, 30, JSON.stringify(compact));
-            assert.equal(compact.dockToken, 30, JSON.stringify(compact));
+            assert.equal(compact.dockHeight, 70, JSON.stringify(compact));
+            assert.equal(compact.dockToken, 70, JSON.stringify(compact));
             assert.equal(compact.dockLeft, 0, JSON.stringify(compact));
             assert.equal(compact.dockRight, 390, JSON.stringify(compact));
             assert.equal(compact.dockBottom, 600, JSON.stringify(compact));
@@ -265,7 +265,7 @@ jobs:
             assert.equal(keyboard.shellHeight, 500, JSON.stringify(keyboard));
             assert.equal(keyboard.shellBottom, 500, JSON.stringify(keyboard));
             assert.ok(keyboard.dockTop >= 0 && keyboard.dockBottom <= 500, JSON.stringify(keyboard));
-            assert.equal(keyboard.dockHeight, 30, JSON.stringify(keyboard));
+            assert.equal(keyboard.dockHeight, 70, JSON.stringify(keyboard));
             assert.equal(keyboard.contentOverflowY, 'auto', JSON.stringify(keyboard));
             assert.equal(keyboard.horizontalOverflowX, 'auto', JSON.stringify(keyboard));
             assert.equal(keyboard.horizontalOverflowY, 'hidden', JSON.stringify(keyboard));
@@ -1042,8 +1042,8 @@ jobs:
                     contentReserve: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
                   };
                 });
-                expect(compactViewport.dockHeight, JSON.stringify(compactViewport)).toBe(30);
-                expect(compactViewport.sharedDockHeight, JSON.stringify(compactViewport)).toBe(30);
+                expect(compactViewport.dockHeight, JSON.stringify(compactViewport)).toBe(70);
+                expect(compactViewport.sharedDockHeight, JSON.stringify(compactViewport)).toBe(70);
                 expect(compactViewport.dockLeft, JSON.stringify(compactViewport)).toBe(0);
                 expect(compactViewport.dockRight, JSON.stringify(compactViewport)).toBe(390);
                 expect(compactViewport.dockBottom, JSON.stringify(compactViewport)).toBe(600);
