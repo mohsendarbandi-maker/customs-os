@@ -645,7 +645,7 @@
     height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
     min-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
     max-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
-    padding: 0 6px !important;
+    padding: 0 6px var(--cos-tab-safe-area) !important;
   }
 
   /* Hit areas fill the dock, while bottom padding keeps captions above safe-area. */
@@ -706,7 +706,7 @@
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
     opacity: 1 !important;
-    font-size: 12px !important;
+    font-size: 11px !important;
     line-height: 1.2 !important;
   }
 
@@ -762,6 +762,7 @@
 
   /* The keyboard removes the Home Indicator inset; retain compact tab geometry. */
   html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) {
+    --cos-tab-safe-area: 0px;
     --cos-tab-reserve: var(--cos-tab-height);
   }
 
@@ -782,7 +783,7 @@
     height: var(--cos-tab-height) !important;
     min-height: var(--cos-tab-height) !important;
     max-height: var(--cos-tab-height) !important;
-    padding: 0 6px !important;
+    padding: 0 6px 8px !important;
   }
 
   .app-shell.is-touch-layout.is-chat-route .chat-composer {
