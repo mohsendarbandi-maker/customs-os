@@ -9,6 +9,7 @@ const main = read('src/main.tsx');
 const shell = read('src/components/AppShell.tsx');
 const detail = read('src/pages/CaseStagePage.tsx');
 const shipment = read('src/pages/ShipmentFirstPage.tsx');
+const canonicalDock = read('src/styles/mobile-bottom-anchored-shell-2026.css');
 
 describe('reference-led ocean mobile redesign', () => {
   it('loads the reference layer after the native mobile foundation', () => {
@@ -32,7 +33,8 @@ describe('reference-led ocean mobile redesign', () => {
   it('defines the ocean hero, light cards, safe-area dock and reference page treatments', () => {
     expect(referenceCss).toContain('.customs-home::before');
     expect(referenceCss).toContain('var(--mobile-paper)');
-    expect(referenceCss).toContain('.app-mobile-viewport-dock');
+    expect(referenceCss).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs');
     expect(referenceCss).toContain('.reminders-app-standalone');
     expect(referenceCss).toContain('.chat-standalone');
     expect(referenceCss).toContain('.visual-theme-options');

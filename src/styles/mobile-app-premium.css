@@ -117,64 +117,6 @@
     overflow: hidden;
   }
 
-  .app-shell.is-touch-layout .app-mobile-viewport-dock {
-    position: fixed !important;
-    z-index: 500 !important;
-    inset-inline: 12px !important;
-    inset-block-end: calc(8px + env(safe-area-inset-bottom)) !important;
-    width: auto !important;
-    height: 66px !important;
-    min-height: 66px !important;
-    padding: 6px !important;
-    display: grid !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-    align-items: center !important;
-    gap: 4px !important;
-    border: 1px solid rgba(255,255,255,.88) !important;
-    border-radius: 23px !important;
-    background: rgba(250,252,255,.91) !important;
-    box-shadow: 0 8px 28px rgba(19, 50, 82, .14), inset 0 1px 0 #fff !important;
-    -webkit-backdrop-filter: blur(24px) saturate(165%) !important;
-    backdrop-filter: blur(24px) saturate(165%) !important;
-    transform: translateZ(0);
-  }
-
-  .app-shell.is-touch-layout .app-mobile-viewport-dock > button {
-    display: flex !important;
-    min-width: 0 !important;
-    min-height: 52px !important;
-    height: 52px !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 3px !important;
-    padding: 4px 2px !important;
-    border: 1px solid transparent !important;
-    border-radius: 16px !important;
-    background: transparent !important;
-    color: #788ba0 !important;
-    font-size: 10px !important;
-    font-weight: 750 !important;
-    line-height: 1.15 !important;
-    transition: color .2s ease, background .2s ease, transform .2s cubic-bezier(.2,.8,.2,1);
-  }
-
-  .app-shell.is-touch-layout .app-mobile-viewport-dock > button svg {
-    width: 22px !important;
-    height: 22px !important;
-    stroke-width: 1.9 !important;
-  }
-
-  .app-shell.is-touch-layout .app-mobile-viewport-dock > button.is-active {
-    border-color: rgba(8,120,201,.10) !important;
-    background: #e8f3fc !important;
-    color: #086fb5 !important;
-  }
-
-  .app-shell.is-touch-layout .app-mobile-viewport-dock > button:active {
-    transform: scale(.94);
-  }
-
   .app-shell.is-touch-layout :is(button, a, [role="button"]) {
     -webkit-tap-highlight-color: transparent;
     transition-property: color, background-color, border-color, box-shadow, transform, opacity;
@@ -310,12 +252,6 @@
 
   .app-shell.is-chat-route .chat-standalone[data-chat-selected="true"] {
     padding-bottom: 0 !important;
-  }
-
-  html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock {
-    display: none !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
   }
 
   .app-shell.is-chat-route .chat-standalone[data-chat-selected="true"] .chat-composer {
@@ -709,8 +645,7 @@
 @media (prefers-reduced-motion: reduce) {
   .app-shell.is-touch-layout .future-route-stage,
   .app-shell.is-touch-layout .shipment-item-card,
-  .app-shell.is-touch-layout .shipment-expanded,
-  .app-shell.is-touch-layout .app-mobile-viewport-dock > button {
+  .app-shell.is-touch-layout .shipment-expanded{
     animation: none !important;
     transition: none !important;
   }
@@ -1177,69 +1112,6 @@
 
 /* The dock is portalled to document.body, not nested inside .app-shell. */
 @media (max-width: 1023px), (pointer: coarse) {
-  body .app-mobile-viewport-dock {
-    position: fixed !important;
-    z-index: 500 !important;
-    inset-inline: 12px !important;
-    inset-block-end: calc(8px + env(safe-area-inset-bottom)) !important;
-    display: grid !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-    align-items: center !important;
-    gap: 4px !important;
-    width: auto !important;
-    height: 66px !important;
-    min-height: 66px !important;
-    padding: 6px !important;
-    border: 1px solid rgba(255,255,255,.9) !important;
-    border-radius: 23px !important;
-    background: rgba(250,252,255,.93) !important;
-    box-shadow: 0 8px 28px rgba(19,50,82,.14), inset 0 1px 0 #fff !important;
-    -webkit-backdrop-filter: blur(24px) saturate(165%) !important;
-    backdrop-filter: blur(24px) saturate(165%) !important;
-  }
-
-  body .app-mobile-viewport-dock > button {
-    display: flex !important;
-    min-width: 0 !important;
-    min-height: 52px !important;
-    height: 52px !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 3px !important;
-    padding: 4px 2px !important;
-    border: 1px solid transparent !important;
-    border-radius: 16px !important;
-    background: transparent !important;
-    color: #788ba0 !important;
-    font-size: 10px !important;
-    font-weight: 750 !important;
-    line-height: 1.15 !important;
-    transition: color .2s ease, background .2s ease, transform .2s ease !important;
-  }
-
-  body .app-mobile-viewport-dock > button svg {
-    width: 22px !important;
-    height: 22px !important;
-    stroke-width: 1.9 !important;
-  }
-
-  body .app-mobile-viewport-dock > button.is-active {
-    border-color: rgba(8,120,201,.12) !important;
-    background: #e8f3fc !important;
-    color: #086fb5 !important;
-  }
-
-  body .app-mobile-viewport-dock > button:active {
-    transform: scale(.94) !important;
-  }
-
-  /* A conversation owns the entire chat viewport. Never place navigation over its composer. */
-  html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock {
-    display: none !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-  }
 
   .app-shell.is-chat-route .chat-standalone[data-chat-selected="false"] {
     padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important;

@@ -401,7 +401,7 @@
    the DOM on phones. The shell now mounts the sidebar only above 1023px, and
    this final layer intentionally supersedes older stacked responsive rules. */
 :root {
-  --app-mobile-tabbar-height: var(--cos-tab-height, 70px);
+  
   --app-mobile-header-height: var(--cos-header-height, 62px);
 }
 @media (max-width: 1023px), (pointer: coarse) {
@@ -525,7 +525,7 @@
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0;
-    padding: 10px 12px calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important;
+    padding: 10px 12px var(--cos-tab-reserve) !important;
     overflow-x: clip !important;
     overflow-y: visible !important;
     overscroll-behavior-x: none;
@@ -542,59 +542,6 @@
   .app-content input, .app-content textarea, .app-content select {
     min-width: 0;
     font-size: 16px !important;
-  }
-  .app-mobile-dock {
-    position: fixed !important;
-    inset-inline: 10px;
-    inset-block-end: calc(env(safe-area-inset-bottom) + 8px) !important;
-    z-index: 120;
-    display: grid !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    align-items: stretch;
-    gap: 3px;
-    min-width: 0;
-    padding: 6px;
-    padding-bottom: 6px;
-    border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
-    border-radius: 21px;
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    -webkit-backdrop-filter: blur(22px) saturate(1.25);
-    backdrop-filter: blur(22px) saturate(1.25);
-    box-shadow: 0 10px 30px rgba(4, 18, 38, .18), inset 0 1px 0 rgba(255,255,255,.1);
-    transform: translateZ(0);
-  }
-  .app-mobile-dock > button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-    min-height: 54px;
-    max-width: 100%;
-    padding: 4px 1px;
-    border: 0;
-    border-radius: 14px;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 10px;
-    font-weight: 800;
-    line-height: 1.15;
-    white-space: nowrap;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .app-mobile-dock > button svg { flex: 0 0 auto; width: 21px; height: 21px; }
-  .app-mobile-dock > button span {
-    display: block;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .app-mobile-dock > button.is-active {
-    color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 12%, var(--surface));
   }
   .app-more-scrim {
     position: fixed;
@@ -748,7 +695,7 @@
   .app-shell:has(.chat-standalone) .app-content {
     height: 100dvh;
     min-height: 0;
-    padding: 0 0 calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
+    padding: 0 0 var(--cos-tab-reserve) !important;
     overflow: hidden !important;
   }
   .app-shell:has(.chat-standalone) .future-route-stage { height: 100%; min-height: 0; }
@@ -758,7 +705,7 @@
   }
   /* The inbox reserves tab-bar space; the open chat takes the full viewport because its dock is removed. */
   .app-shell:has(.chat-standalone[data-chat-selected="false"]) .chat-standalone {
-    height: calc(100dvh - var(--app-mobile-tabbar-height) - env(safe-area-inset-bottom)) !important;
+    height: calc(100dvh - var(--cos-tab-reserve)) !important;
   }
   .app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-content {
     padding-bottom: 0 !important;
@@ -792,7 +739,7 @@
     max-height: none !important;
     overflow-x: clip !important;
     overflow-y: visible !important;
-    padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important;
+    padding-bottom: var(--cos-tab-reserve) !important;
   }
   .app-shell:has(.reminders-app-standalone) .reminders-mobile-nav { display: none !important; }
 
@@ -847,7 +794,7 @@
   .shipment-status-search { position: relative !important; inset: auto !important; }
 }
 @media (min-width: 1024px) and (pointer: fine) {
-  .app-mobilebar, .app-mobile-dock, .app-more-scrim { display: none !important; }
+  .app-mobilebar, .app-more-scrim { display: none !important; }
   .app-sidebar {
     display: flex !important;
     position: fixed;
@@ -863,7 +810,6 @@
 }
 @media (min-width: 768px) and (max-width: 1023px) {
   .app-mobilebar { display: grid !important; }
-  .app-mobile-dock { display: grid !important; }
   .app-main, .app-main.sidebar-compact { margin: 0 !important; width: 100% !important; }
 }
 @media (max-width: 390px) {
@@ -890,20 +836,12 @@
   }
   /* Toasts and other fixed actions must sit above—not on top of—the shared tab bar. */
   .app-shell .fixed[class~="bottom-24"] {
-    bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    bottom: calc(var(--cos-tab-reserve) + 12px) !important;
   }
   .customs-home header p { font-variant-numeric: lining-nums; }
 }
 
 @media (max-width: 1023px), (pointer: coarse) {
-  /* iOS opens the keyboard when a real text field receives focus; hiding the
-     dock and releasing its reserved space prevents the keyboard/composer overlap. */
-  .app-shell:has(input:focus) .app-mobile-dock,
-  .app-shell:has(textarea:focus) .app-mobile-dock,
-  .app-shell:has(select:focus) .app-mobile-dock,
-  .app-shell:has([contenteditable="true"]:focus) .app-mobile-dock {
-    display: none !important;
-  }
   .app-shell:has(input:focus) .app-content,
   .app-shell:has(textarea:focus) .app-content,
   .app-shell:has(select:focus) .app-content,
@@ -925,7 +863,7 @@
   .pwa-install-prompt,
   .pwa-ios-install-guide,
   .pwa-version-notice {
-    bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    bottom: calc(var(--cos-tab-reserve) + 12px) !important;
   }
 }
 
@@ -959,45 +897,6 @@
     justify-content: space-between;
     gap: 12px;
   }
-  .app-mobile-dock {
-    position: fixed;
-    z-index: 105;
-    inset-inline: 10px;
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    display: grid !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 4px;
-    padding: 7px 6px;
-    border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
-    border-radius: 23px;
-    background: color-mix(in srgb, var(--surface) 88%, transparent);
-    -webkit-backdrop-filter: blur(24px) saturate(1.35);
-    backdrop-filter: blur(24px) saturate(1.35);
-    box-shadow: 0 12px 35px rgba(8,22,42,.2), inset 0 1px 0 rgba(255,255,255,.08);
-  }
-  .app-mobile-dock > button {
-    display: flex;
-    min-width: 0;
-    min-height: 54px;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 4px;
-    padding: 5px 2px;
-    border: 0;
-    border-radius: 16px;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 10px;
-    font-weight: 800;
-    line-height: 1.1;
-    touch-action: manipulation;
-  }
-  .app-mobile-dock > button.is-active {
-    background: color-mix(in srgb, var(--primary) 15%, var(--surface));
-    color: var(--primary);
-  }
-  .app-mobile-dock > button svg { flex: 0 0 auto; }
   .app-main,
   .app-main.sidebar-compact {
     width: 100% !important;
@@ -1014,7 +913,7 @@
    in several places, so later selectors could reintroduce competing dock offsets.
    Keep one final source of truth for mobile shell geometry. */
 :root {
-  --app-mobile-tabbar-height: var(--cos-tab-height, 70px);
+  
   --app-mobile-header-height: var(--cos-header-height, 62px);
 }
 html, body, #root {
@@ -1068,28 +967,8 @@ body {
     min-height: 40px !important;
     flex: 0 0 40px !important;
   }
-  .app-mobile-dock {
-    position: fixed !important;
-    z-index: 110 !important;
-    inset-inline: 0 !important;
-    inset-block-end: 0 !important;
-    display: grid !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-    gap: 2px !important;
-    min-height: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
-    padding: 5px 6px calc(5px + env(safe-area-inset-bottom)) !important;
-    border-radius: 18px 18px 0 0 !important;
-    box-sizing: border-box !important;
-  }
-  .app-mobile-dock > button {
-    min-width: 0 !important;
-    min-height: 44px !important;
-    padding-inline: 1px !important;
-    font-size: 11px !important;
-    white-space: nowrap;
-  }
   .app-content {
-    padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    padding-bottom: calc(var(--cos-tab-reserve) + 12px) !important;
     min-width: 0 !important;
     overflow-wrap: anywhere;
   }
@@ -1117,12 +996,6 @@ body {
     overflow-wrap: normal;
     white-space: nowrap;
   }
-  .app-shell:has(input:focus) .app-mobile-dock,
-  .app-shell:has(textarea:focus) .app-mobile-dock,
-  .app-shell:has(select:focus) .app-mobile-dock,
-  .app-shell:has([contenteditable="true"]:focus) .app-mobile-dock {
-    display: none !important;
-  }
   .app-shell:has(input:focus) .app-content,
   .app-shell:has(textarea:focus) .app-content,
   .app-shell:has(select:focus) .app-content,
@@ -1134,7 +1007,6 @@ body {
   .app-sidebar, .app-topbar { display: none !important; }
   /* The header is a flex row; only the five-tab dock uses CSS Grid. */
   .app-mobilebar { display: flex !important; }
-  .app-mobile-dock { display: grid !important; }
   .app-main, .app-main.sidebar-compact {
     width: 100% !important;
     max-width: 100% !important;
@@ -1143,7 +1015,7 @@ body {
 }
 @media (min-width: 1024px) and (pointer: fine) {
   .app-sidebar { display: flex !important; }
-  .app-mobilebar, .app-mobile-dock, .app-more-scrim { display: none !important; }
+  .app-mobilebar, .app-more-scrim { display: none !important; }
 }
 /* iOS tap targets and input zoom: cover legacy route forms as well as ds-* controls. */
 @media (max-width: 1023px), (pointer: coarse) {
@@ -1189,16 +1061,6 @@ body {
   justify-content: space-between;
   gap: 8px;
 }
-.app-shell.is-touch-layout .app-mobile-dock {
-  display: grid !important;
-  position: fixed !important;
-  z-index: 110 !important;
-  inset-inline: 0 !important;
-  inset-block-end: 0 !important;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  min-height: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
-  padding: 5px 6px calc(5px + env(safe-area-inset-bottom)) !important;
-}
 .app-shell.is-touch-layout .app-main,
 .app-shell.is-touch-layout .app-main.sidebar-compact {
   width: 100% !important;
@@ -1208,71 +1070,13 @@ body {
 }
 .app-shell.is-touch-layout .app-content {
   min-width: 0 !important;
-  padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
-}
-
-
-/* Viewport-owned mobile dock: rendered through a body portal so transformed,
-   clipped, or scrollable app shells can never move navigation off-screen. */
-.app-mobile-viewport-dock {
-  position: fixed !important;
-  inset-inline: 10px !important;
-  inset-block-end: calc(8px + env(safe-area-inset-bottom)) !important;
-  z-index: 120 !important;
-  display: grid !important;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  align-items: stretch !important;
-  gap: 5px !important;
-  min-height: calc(62px + env(safe-area-inset-bottom)) !important;
-  padding: 6px 7px calc(6px + env(safe-area-inset-bottom)) !important;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, var(--primary)) !important;
-  border-radius: 22px !important;
-  background: color-mix(in srgb, var(--surface) 90%, transparent) !important;
-  color: var(--text) !important;
-  box-shadow: 0 14px 42px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.10) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.4) !important;
-  backdrop-filter: blur(24px) saturate(1.4) !important;
-  transform: none !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-}
-.app-mobile-viewport-dock > button {
-  display: flex !important;
-  min-width: 0 !important;
-  min-height: 48px !important;
-  align-items: center !important;
-  justify-content: center !important;
-  flex-direction: column !important;
-  gap: 4px !important;
-  padding: 4px 1px !important;
-  border: 0 !important;
-  border-radius: 15px !important;
-  background: transparent !important;
-  color: var(--text-muted) !important;
-  font-size: 10px !important;
-  font-weight: 800 !important;
-  line-height: 1.2 !important;
-  touch-action: manipulation !important;
-  -webkit-tap-highlight-color: transparent !important;
-}
-.app-mobile-viewport-dock > button svg { width: 21px !important; height: 21px !important; flex: 0 0 auto !important; }
-.app-mobile-viewport-dock > button span { display: block !important; max-width: 100% !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
-.app-mobile-viewport-dock > button.is-active {
-  color: var(--primary) !important;
-  background: color-mix(in srgb, var(--primary) 16%, var(--surface)) !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 25%, transparent) !important;
+  padding-bottom: calc(var(--cos-tab-reserve) + 12px) !important;
 }
 @media (min-width: 1024px) and (pointer: fine) {
-  .app-mobile-viewport-dock { display: none !important; }
 }
 @media (max-width: 380px) {
-  .app-mobile-viewport-dock { inset-inline: 5px !important; gap: 2px !important; padding-inline: 4px !important; border-radius: 18px !important; }
-  .app-mobile-viewport-dock > button { font-size: 9px !important; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .app-mobile-viewport-dock > button { transition: background .18s ease, color .18s ease, transform .18s ease; }
-  .app-mobile-viewport-dock > button:active { transform: scale(.96); }
 }
 
 /* Complete visual systems selected from Settings > Appearance. */
@@ -1316,7 +1120,7 @@ body {
 /* Reserve room for the always-reachable dock in the open conversation view. */
 @media (max-width: 1023px), (pointer: coarse) {
   .app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone {
-    padding-bottom: calc(var(--app-mobile-tabbar-height, 62px) + env(safe-area-inset-bottom) + 8px) !important;
+    padding-bottom: calc(var(--cos-tab-reserve) + 8px) !important;
     box-sizing: border-box !important;
   }
 }

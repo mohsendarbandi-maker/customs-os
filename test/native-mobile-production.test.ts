@@ -11,6 +11,7 @@ describe('Customs OS production native mobile shell', () => {
   const css = read('src/styles/native-mobile-production.css');
   const reminders = read('src/features/reminders/RemindersPage.tsx');
   const chat = read('src/features/chat/ChatPage.tsx');
+  const canonicalDock = read('src/styles/mobile-bottom-anchored-shell-2026.css');
 
   it('loads the production hardening layer after every legacy mobile layer', () => {
     expect(main.indexOf("import './styles/native-mobile-production.css';"))
@@ -24,8 +25,9 @@ describe('Customs OS production native mobile shell', () => {
     expect(css).toContain('.app-shell.is-touch-layout .app-content');
     expect(css).toContain('overflow-y: auto !important');
     expect(css).toContain('overscroll-behavior-y: contain !important');
-    expect(css).toContain('.app-mobile-dock.native-bottom-tabs');
-    expect(css).toContain('grid-template-columns: repeat(5,minmax(0,1fr)) !important');
+    expect(css).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs');
+    expect(canonicalDock).toContain('grid-template-columns: repeat(5, minmax(0, 1fr));');
   });
 
   it('overrides the legacy full-document reminders exception without changing reminder data logic', () => {
@@ -41,8 +43,9 @@ describe('Customs OS production native mobile shell', () => {
     expect(chat).toContain('className={chatRootClass}');
     expect(shell).toContain('app-mobilebar native-app-header');
     expect(css).toContain('.app-shell.is-chat-route .app-mobilebar.native-app-header');
-    expect(css).toContain('.app-shell.is-chat-route .app-mobile-dock.native-bottom-tabs');
-    expect(css).toContain('visibility: visible !important');
+    expect(css).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs');
+    expect(canonicalDock).toContain('display: grid;');
     expect(css).toContain('.app-shell.is-chat-route .chat-composer');
     expect(css).toContain('--chat-visible-height');
     expect(css).toContain('--chat-visible-top');
@@ -51,7 +54,7 @@ describe('Customs OS production native mobile shell', () => {
   it('uses the composer above the global dock and avoids a second safe-area spacer', () => {
     expect(css).toContain('padding-bottom: 8px !important');
     expect(css).not.toContain('padding-bottom: max(8px, env(safe-area-inset-bottom)) !important');
-    expect(css).toContain('padding: 0 0 calc(var(--native-shell-tab-height) + env(safe-area-inset-bottom))');
+    expect(canonicalDock).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
   });
 
   it('animates both exits and entries while preserving interactive route navigation', () => {

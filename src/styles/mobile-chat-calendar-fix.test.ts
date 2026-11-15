@@ -7,6 +7,7 @@ const shell = read('src/components/AppShell.tsx');
 const css = read('src/styles/mobile-chat-calendar-fix.css');
 const main = read('src/main.tsx');
 const chat = read('src/features/chat/ChatPage.tsx');
+const canonicalDock = read('src/styles/mobile-bottom-anchored-shell-2026.css');
 
 describe('mobile chat viewport and calendar legibility', () => {
   it('marks chat as a dedicated viewport and removes competing shell chrome', () => {
@@ -22,7 +23,8 @@ describe('mobile chat viewport and calendar legibility', () => {
     expect(css).not.toContain('html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock');
     expect(css).toContain('.app-shell.is-touch-layout.is-chat-route .chat-standalone');
     const mobilePolish = read('src/styles/mobile-polish.css');
-    expect(mobilePolish).toContain('.app-mobile-viewport-dock {');
+    expect(mobilePolish).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs');
     expect(css).toContain('.app-shell.is-chat-route .app-topbar');
     expect(main).toContain("import './styles/mobile-chat-calendar-fix.css';");
   });

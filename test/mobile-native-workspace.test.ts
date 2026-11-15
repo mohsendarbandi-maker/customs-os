@@ -5,6 +5,7 @@ import path from 'node:path';
 const root = path.resolve(__dirname, '..');
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), 'utf8');
 const nativeCss = read('src/styles/mobile-native-workspace.css');
+const canonicalDock = read('src/styles/mobile-bottom-anchored-shell-2026.css');
 const main = read('src/main.tsx');
 const shell = read('src/components/AppShell.tsx');
 const dashboard = read('src/pages/DesktopHomePage.tsx');
@@ -24,9 +25,11 @@ describe('native mobile workspace screens', () => {
   it('uses a safe-area-aware, fixed iPhone bottom tab bar and a sticky app header', () => {
     expect(nativeCss).toContain('.app-shell.is-touch-layout .app-mobilebar');
     expect(nativeCss).toContain('position: sticky !important');
-    expect(nativeCss).toContain('.app-mobile-viewport-dock');
-    expect(nativeCss).toContain('inset-block-end: 0 !important');
-    expect(nativeCss).toContain('env(safe-area-inset-bottom)');
+    expect(nativeCss).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs');
+    expect(canonicalDock).toContain('position: fixed;');
+    expect(canonicalDock).toContain('inset-block-end: 0;');
+    expect(canonicalDock).toContain('env(safe-area-inset-bottom, 0px)');
     expect(shell).toContain('aria-label="پیمایش اصلی برنامه"');
     expect(shell).toContain('native-bottom-tabs');
     expect(shell).toContain('<span>چت</span>');

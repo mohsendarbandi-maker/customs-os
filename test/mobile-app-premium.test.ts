@@ -11,6 +11,7 @@ const chat = read('src/features/chat/ChatPage.tsx');
 const shipments = read('src/components/LatestShipmentStatuses.tsx');
 const showcase = read('src/pages/ShipmentShowcasePage.tsx');
 const worker = read('worker/index.ts');
+const canonicalDock = read('src/styles/mobile-bottom-anchored-shell-2026.css');
 
 describe('premium native mobile workspace', () => {
   it('loads the final mobile layer after all legacy visual layers', () => {
@@ -21,7 +22,9 @@ describe('premium native mobile workspace', () => {
 
   it('keeps the chat composer above the keyboard and away from the global dock', () => {
     expect(chat).toContain('data-chat-selected={selectedId?\'true\':\'false\'}');
-    expect(css).toContain('html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock');
+    expect(css).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs');
+    expect(canonicalDock).toContain('--cos-tab-safe-area: env(safe-area-inset-bottom, 0px);');
     expect(css).toContain('.chat-composer textarea');
     expect(css).toContain('env(safe-area-inset-bottom)');
     expect(shell).toContain('aria-label="پیمایش اصلی برنامه"');

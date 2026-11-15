@@ -646,11 +646,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     location.pathname.startsWith('/chat')
   );
 
-  const mobileTabIndex = location.pathname === '/' ? 0
-    : location.pathname.startsWith('/reminders') ? 1
-    : location.pathname.startsWith('/operations') || location.pathname.startsWith('/finance/shipments/') ? 2
-    : location.pathname.startsWith('/chat') ? 3 : 4;
-
   const goMobileTab = (to: string) => {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       navigator.vibrate(10);
@@ -924,8 +919,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </button>
         </div>
       )}
-      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs" aria-label="پیمایش اصلی برنامه" dir="rtl" style={{ '--active-tab-index': mobileTabIndex } as React.CSSProperties}>
-        <span className="native-tab-indicator" aria-hidden="true" />
+      {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs" aria-label="پیمایش اصلی برنامه" dir="rtl">
         <button type="button" className={location.pathname === '/' ? 'is-active' : ''} aria-current={location.pathname === '/' ? 'page' : undefined} onClick={() => goMobileTab('/')}>
           <Home size={22} strokeWidth={1.75} /><span>خانه</span>
         </button>

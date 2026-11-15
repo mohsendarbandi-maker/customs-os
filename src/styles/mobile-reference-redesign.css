@@ -183,35 +183,6 @@
     background: rgba(255,255,255,.82);
   }
 
-  /* Five equal native tabs; white translucent dock and blue active state. */
-  .app-mobile-viewport-dock {
-    grid-template-columns: repeat(5, minmax(0,1fr)) !important;
-    height: calc(72px + env(safe-area-inset-bottom)) !important;
-    min-height: calc(72px + env(safe-area-inset-bottom)) !important;
-    padding: 5px 9px calc(7px + env(safe-area-inset-bottom)) !important;
-    border: 1px solid rgba(255,255,255,.82) !important;
-    border-bottom: 0 !important;
-    border-radius: 23px 23px 0 0 !important;
-    background: rgba(249,252,255,.94) !important;
-    box-shadow: 0 -9px 32px rgba(0,42,89,.20) !important;
-    -webkit-backdrop-filter: blur(24px) saturate(170%) !important;
-    backdrop-filter: blur(24px) saturate(170%) !important;
-  }
-  .app-mobile-viewport-dock > button {
-    min-height: 58px !important;
-    color: #234b76 !important;
-    font-size: 10px !important;
-    font-weight: 800 !important;
-  }
-  .app-mobile-viewport-dock > button svg { width: 22px !important; height: 22px !important; }
-  .app-mobile-viewport-dock > button.is-active {
-    color: #fff !important;
-    background: linear-gradient(145deg,#168bff,#0058d8) !important;
-    box-shadow: 0 7px 17px rgba(0,100,235,.32) !important;
-    border-radius: 15px !important;
-  }
-  .app-mobile-viewport-dock > button.is-active::before { display: none !important; }
-
   /* New shipment form: white app sheet, stage marker, large controls. */
   .shipment-first-page {
     color: var(--mobile-ink) !important;

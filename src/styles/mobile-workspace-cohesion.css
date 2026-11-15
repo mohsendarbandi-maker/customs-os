@@ -321,32 +321,6 @@
 /* Mobile UI review refinements.
    These selectors require the app shell, so sign-in/onboarding remain untouched. */
 @media (max-width: 1023px), (pointer: coarse) {
-  .app-shell .app-mobile-dock > button {
-    min-height: 52px !important;
-    padding-inline: 2px !important;
-    font-size: 12px !important;
-    line-height: 1.25;
-    white-space: normal !important;
-  }
-
-  .app-shell .app-mobile-dock > button > span {
-    display: -webkit-box;
-    max-width: 100%;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    text-align: center;
-    text-overflow: clip;
-    white-space: normal !important;
-    overflow-wrap: normal;
-    line-height: 1.25;
-  }
-
-  .app-shell .app-mobile-dock > button svg {
-    flex: 0 0 auto;
-    width: 21px;
-    height: 21px;
-  }
 
   .app-shell .app-content .future-route-stage .overflow-x-auto {
     max-width: 100%;
@@ -444,7 +418,7 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding: 12px 10px calc(var(--app-mobile-tabbar-height, 68px) + env(safe-area-inset-bottom) + 18px) !important;
+  padding: 12px 10px var(--cos-tab-reserve) !important;
   overflow-x: clip;
 }
 .app-shell.is-narrow-device .app-content > .future-route-stage {
@@ -499,36 +473,6 @@
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
 }
-.app-shell.is-narrow-device .app-mobile-dock {
-  display: grid !important;
-  position: fixed !important;
-  z-index: 110 !important;
-  inset-inline: 0 !important;
-  inset-block-end: 0 !important;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  min-height: calc(var(--app-mobile-tabbar-height, 68px) + env(safe-area-inset-bottom)) !important;
-  padding: 5px 6px calc(5px + env(safe-area-inset-bottom)) !important;
-  gap: 2px !important;
-  border-radius: 18px 18px 0 0 !important;
-  box-sizing: border-box !important;
-}
-.app-shell.is-narrow-device .app-mobile-dock > button {
-  min-width: 0 !important;
-  min-height: 44px !important;
-  padding-inline: 1px !important;
-  font-size: 11px !important;
-  white-space: normal !important;
-}
-.app-shell.is-narrow-device .app-mobile-dock > button > span {
-  display: -webkit-box;
-  max-width: 100%;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  text-align: center;
-  overflow-wrap: normal;
-  white-space: normal !important;
-}
 
 
 .app-shell.is-narrow-device .app-content .future-route-stage .layout-preset-options {
@@ -541,13 +485,13 @@
   width: 50px;
   height: 50px;
   inset-inline-end: 12px;
-  bottom: calc(var(--app-mobile-tabbar-height, 68px) + 24px + env(safe-area-inset-bottom));
+  bottom: calc(var(--cos-tab-reserve) + 24px);
   z-index: 130;
   border-radius: 16px;
 }
 .app-shell.is-narrow-device .ai-chat-panel {
   inset-inline: 10px;
-  bottom: calc(var(--app-mobile-tabbar-height, 68px) + 14px + env(safe-area-inset-bottom));
+  bottom: calc(var(--cos-tab-reserve) + 14px);
   width: auto;
   height: min(650px, calc(100dvh - 110px - env(safe-area-inset-top)));
   min-height: min(320px, calc(100dvh - 110px));
@@ -928,32 +872,6 @@ html[data-layout-preset="compact"] .app-shell .app-content .future-route-stage .
   .app-shell .app-content {
     padding: 10px 10px calc(78px + env(safe-area-inset-bottom)) !important;
   }
-  .app-shell .app-mobile-dock {
-    inset-inline: 12px !important;
-    bottom: calc(6px + env(safe-area-inset-bottom)) !important;
-    min-height: 0 !important;
-    padding: 4px 5px !important;
-    gap: 3px !important;
-    border-radius: 17px !important;
-    box-shadow: 0 6px 20px rgba(8,22,42,.14), inset 0 1px 0 rgba(255,255,255,.08) !important;
-  }
-  .app-shell .app-mobile-dock > button {
-    min-height: 43px !important;
-    padding: 3px 1px !important;
-    gap: 2px !important;
-    border-radius: 12px !important;
-    font-size: 10px !important;
-    line-height: 1.1 !important;
-  }
-  .app-shell .app-mobile-dock > button > span {
-    -webkit-line-clamp: 1 !important;
-    white-space: nowrap !important;
-    font-size: 10px !important;
-  }
-  .app-shell .app-mobile-dock > button svg {
-    width: 19px !important;
-    height: 19px !important;
-  }
 
   .app-shell .customs-home {
     padding-bottom: calc(82px + env(safe-area-inset-bottom)) !important;
@@ -1114,17 +1032,6 @@ html[data-layout-preset="compact"] .app-shell .app-content .future-route-stage .
 .app-shell.is-narrow-device .app-content {
   padding: 10px 10px calc(78px + env(safe-area-inset-bottom)) !important;
 }
-.app-shell.is-narrow-device .app-mobile-dock {
-  inset-inline: 12px !important;
-  bottom: calc(6px + env(safe-area-inset-bottom)) !important;
-  min-height: 0 !important;
-  padding: 4px 5px !important;
-  border-radius: 17px !important;
-}
-.app-shell.is-narrow-device .app-mobile-dock > button {
-  min-height: 43px !important;
-  font-size: 10px !important;
-}
 .app-shell.is-narrow-device .customs-home .customs-stat {
   min-height: 66px !important;
   height: 66px !important;
@@ -1151,7 +1058,6 @@ html[data-layout-preset="compact"] .app-shell .app-content .future-route-stage .
   --ocean-glow: rgba(56, 189, 248, .2);
 }
 .app-shell .app-mobilebar,
-.app-shell .app-mobile-dock,
 .app-shell .app-more-sheet,
 .app-shell .customs-home .customs-widget-body > section,
 .app-shell .customs-home .customs-widget-body > .customs-shipments-section {
@@ -1161,15 +1067,6 @@ html[data-layout-preset="compact"] .app-shell .app-content .future-route-stage .
 .app-shell .app-mobilebar {
   background: color-mix(in srgb, var(--surface-glass, var(--surface)) 90%, transparent) !important;
   border-bottom: 1px solid color-mix(in srgb, var(--primary) 17%, var(--border)) !important;
-}
-.app-shell .app-mobile-dock {
-  background: color-mix(in srgb, var(--surface-glass-strong, var(--surface)) 91%, transparent) !important;
-  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border)) !important;
-  box-shadow: 0 14px 38px rgba(1, 12, 25, .25), inset 0 1px 0 rgba(255,255,255,.1) !important;
-}
-.app-shell .app-mobile-dock > button.is-active {
-  background: color-mix(in srgb, var(--primary) 17%, var(--surface)) !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent) !important;
 }
 .app-shell .customs-home .customs-widget-frame {
   min-width: 0;
@@ -1336,6 +1233,5 @@ html[data-layout-preset="compact"] .app-shell .app-content .future-route-stage .
 }
 @media (prefers-reduced-motion: reduce) {
   .app-shell .customs-home .customs-stat,
-  .app-shell .customs-home .customs-widget-toolbar,
-  .app-shell .app-mobile-dock { transition: none !important; }
+  .app-shell .customs-home .customs-widget-toolbar{ transition: none !important; }
 }

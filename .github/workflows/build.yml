@@ -162,8 +162,8 @@ jobs:
                 composerClearance: dockRect && composerRect ? Math.round(dockRect.top - composerRect.bottom) : -999,
               };
             });
-            assert.equal(compact.dockHeight, 64, JSON.stringify(compact));
-            assert.equal(compact.dockToken, 64, JSON.stringify(compact));
+            assert.equal(compact.dockHeight, 52, JSON.stringify(compact));
+            assert.equal(compact.dockToken, 52, JSON.stringify(compact));
             assert.equal(compact.dockLeft, 0, JSON.stringify(compact));
             assert.equal(compact.dockRight, 390, JSON.stringify(compact));
             assert.equal(compact.dockBottom, 600, JSON.stringify(compact));
@@ -265,7 +265,7 @@ jobs:
             assert.equal(keyboard.shellHeight, 500, JSON.stringify(keyboard));
             assert.equal(keyboard.shellBottom, 500, JSON.stringify(keyboard));
             assert.ok(keyboard.dockTop >= 0 && keyboard.dockBottom <= 500, JSON.stringify(keyboard));
-            assert.equal(keyboard.dockHeight, 64, JSON.stringify(keyboard));
+            assert.equal(keyboard.dockHeight, 52, JSON.stringify(keyboard));
             assert.equal(keyboard.contentOverflowY, 'auto', JSON.stringify(keyboard));
             assert.equal(keyboard.horizontalOverflowX, 'auto', JSON.stringify(keyboard));
             assert.equal(keyboard.horizontalOverflowY, 'hidden', JSON.stringify(keyboard));
@@ -1026,7 +1026,7 @@ jobs:
                 console.log('Six-width mobile viewport sweep passed:', JSON.stringify(viewportSweep));
 
                 // Simulate the iPhone 34px bottom safe area on a short viewport.
-                // Keep 30px controls bottom-aligned inside that inset and reserve the full dock.
+                // Keep the 52px accessible tab row above the 34px safe-area inset.
                 await page.setViewportSize({ width: 390, height: 600 });
                 await page.evaluate(() => {
                   document.documentElement.style.setProperty('--cos-tab-safe-area', '34px');
@@ -1049,13 +1049,13 @@ jobs:
                     contentReserve: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
                   };
                 });
-                expect(compactViewport.dockHeight, JSON.stringify(compactViewport)).toBe(34);
-                expect(compactViewport.sharedDockHeight, JSON.stringify(compactViewport)).toBe(30);
+                expect(compactViewport.dockHeight, JSON.stringify(compactViewport)).toBe(86);
+                expect(compactViewport.sharedDockHeight, JSON.stringify(compactViewport)).toBe(52);
                 expect(compactViewport.tabs, JSON.stringify(compactViewport)).toHaveLength(5);
                 for (const tab of compactViewport.tabs) {
-                  expect(tab.height, JSON.stringify({ compactViewport, tab })).toBe(30);
-                  expect(tab.top, JSON.stringify({ compactViewport, tab })).toBeGreaterThanOrEqual(compactViewport.dockBottom - compactViewport.dockHeight);
-                  expect(tab.bottom, JSON.stringify({ compactViewport, tab })).toBe(compactViewport.dockBottom);
+                  expect(tab.height, JSON.stringify({ compactViewport, tab })).toBe(52);
+                  expect(tab.top, JSON.stringify({ compactViewport, tab })).toBe(compactViewport.dockBottom - compactViewport.dockHeight);
+                  expect(tab.bottom, JSON.stringify({ compactViewport, tab })).toBe(compactViewport.dockBottom - 34);
                 }
                 expect(compactViewport.dockLeft, JSON.stringify(compactViewport)).toBe(0);
                 expect(compactViewport.dockRight, JSON.stringify(compactViewport)).toBe(390);

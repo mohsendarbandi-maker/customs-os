@@ -11,12 +11,12 @@
     --cos-shadow:0 5px 18px rgba(17,45,75,.065);
     /* One geometry contract for every legacy and current mobile layer. */
     --cos-header-height:62px;
-    --cos-tab-height:70px; --cos-tab-inset:10px; --cos-tab-clearance:10px;
-    --cos-tab-reserve:calc(var(--cos-tab-height) + var(--cos-tab-inset) + var(--cos-tab-clearance) + env(safe-area-inset-bottom));
+      
+    
     --app-mobile-header-height:var(--cos-header-height);
     --native-shell-header-height:var(--cos-header-height);
-    --app-mobile-tabbar-height:var(--cos-tab-height);
-    --native-shell-tab-height:var(--cos-tab-height);
+    
+    
     color-scheme:light;
   }
   html,body,#root {
@@ -96,29 +96,6 @@
     min-width:0!important;min-height:100%!important;margin:0!important;padding:0!important;
     overflow:visible!important;animation:cosNativeEnter .22s cubic-bezier(.2,.72,.25,1) both!important;
   }
-  /* Exactly five persistent navigation destinations, including opened chats. */
-  .app-mobile-dock.native-bottom-tabs {
-    position:fixed!important;z-index:900!important;inset-inline:auto!important;
-    inset-block-end:calc(var(--cos-tab-inset) + env(safe-area-inset-bottom))!important;
-    left:var(--cos-tab-inset)!important;right:var(--cos-tab-inset)!important;display:grid!important;
-    grid-template-columns:repeat(5,minmax(0,1fr))!important;align-items:stretch!important;gap:3px!important;
-    width:auto!important;max-width:480px!important;height:var(--cos-tab-height)!important;min-height:var(--cos-tab-height)!important;
-    margin-inline:auto!important;margin-block:0!important;padding:6px 8px!important;border:1px solid rgba(255,255,255,.15)!important;
-    border-radius:24px!important;background:rgba(9,39,68,.96)!important;color:#c2d7e8!important;
-    box-shadow:0 14px 38px rgba(7,28,48,.28),inset 0 1px 0 rgba(255,255,255,.08)!important;
-    -webkit-backdrop-filter:blur(22px) saturate(150%)!important;backdrop-filter:blur(22px) saturate(150%)!important;
-    transform:translateZ(0);
-  }
-  .app-mobile-dock.native-bottom-tabs>button {
-    display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;
-    gap:3px!important;min-width:0!important;min-height:54px!important;height:54px!important;margin:0!important;
-    padding:3px 1px!important;border:1px solid transparent!important;border-radius:16px!important;
-    background:transparent!important;color:rgba(215,231,244,.76)!important;font-size:10px!important;font-weight:800!important;
-    line-height:1.2!important;white-space:normal!important;transition:background .18s ease,color .18s ease,transform .18s ease!important;
-  }
-  .app-mobile-dock.native-bottom-tabs>button svg {width:21px!important;height:21px!important;stroke-width:1.9!important}
-  .app-mobile-dock.native-bottom-tabs>button.is-active {border-color:rgba(92,215,197,.22)!important;background:rgba(31,158,145,.19)!important;color:#fff!important;box-shadow:inset 0 0 0 1px rgba(92,215,197,.08)!important;}
-  .app-mobile-dock.native-bottom-tabs>button:active {transform:scale(.95)}
   /* Neutralize the conflicting ocean/gradient overrides from previous mobile experiments. */
   .app-shell.is-touch-layout .customs-home,
   .app-shell.is-touch-layout .reminders-page,
@@ -318,7 +295,6 @@
     .app-shell.is-touch-layout .reminders-open-check {width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important}
     .app-shell.is-touch-layout .reminders-open-status {grid-column:2;justify-self:start}
     .app-shell.is-touch-layout .shipment-premium-facts {grid-template-columns:repeat(2,minmax(0,1fr))!important}
-    .app-mobile-dock.native-bottom-tabs>button {font-size:9px!important}
   }
   @media(max-width:350px) {
     .app-shell.is-touch-layout .native-more-grid {grid-template-columns:minmax(0,1fr)!important}
@@ -335,14 +311,6 @@
 /* Dock must remain visible even while a conversation is open.
    Older premium-chat rules hid the dock with a higher-specificity :has() selector. */
 @media (max-width: 1023px), (pointer: coarse) {
-  html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock {
-    display:grid!important;visibility:visible!important;opacity:1!important;
-    pointer-events:auto!important;z-index:900!important;
-  }
-  .app-shell.is-chat-route .app-mobile-dock.native-bottom-tabs {
-    display:grid!important;visibility:visible!important;opacity:1!important;
-    pointer-events:auto!important;z-index:900!important;
-  }
   /* The AI launcher sits above, not on top of, the five-tab dock. */
   .app-shell.is-touch-layout .ai-launcher {
     bottom:calc(var(--cos-tab-reserve) + 14px)!important;
@@ -397,11 +365,10 @@
  html[data-theme="dark"] .mobile-command-shipments .shipment-premium-steps:before {background:linear-gradient(to left,#13a99a 0 var(--shipment-progress),#315065 var(--shipment-progress) 100%)}
  html[data-theme="dark"] .mobile-command-shipments .shipment-premium-step-dot {border-color:#456275;background:#102a3d;box-shadow:0 0 0 3px #102a3d;color:#a3bac8}
  html[data-theme="dark"] .mobile-command-shipments .shipment-premium-step.current .shipment-premium-step-dot {background:#102a3d;border-color:#46c7b5;color:#7be0d2}
- html[data-theme="dark"] .app-mobile-dock.native-bottom-tabs {border-color:rgba(160,221,224,.2)!important;background:rgba(5,24,40,.97)!important}
 }
 
 /* Compact phones use the same shared token, so the dock and every clearance
    calculation shrink together rather than receiving independent 64px fixes. */
 @media (max-width:767px) and (max-height:620px), (pointer:coarse) and (max-height:620px) {
-  :root { --cos-tab-height:64px; }
+  :root {  }
 }
