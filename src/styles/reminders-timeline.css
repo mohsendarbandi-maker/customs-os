@@ -114,7 +114,7 @@
  .reminders-app-standalone .reminders-timeline-bulk-actions{gap:4px}
  .reminders-app-standalone .reminders-timeline-bulk-actions>button{min-height:30px;padding-inline:7px;font-size:9px}
  body:has(.reminders-timeline-screen) .ai-launcher{bottom:calc(154px + env(safe-area-inset-bottom))!important}
- .reminders-app-standalone .reminders-mobile-fab{bottom:calc(88px + env(safe-area-inset-bottom))!important;width:48px!important;min-width:48px!important;height:48px!important;min-height:48px!important;border-radius:15px!important}
+ body:has(.reminders-timeline-screen) .reminders-mobile-fab{display:none!important}
 }
 @media(prefers-reduced-motion:reduce){
  .reminders-app-standalone .reminders-timeline-screen *, .reminders-app-standalone .reminders-timeline-screen *:before, .reminders-app-standalone .reminders-timeline-screen *:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
