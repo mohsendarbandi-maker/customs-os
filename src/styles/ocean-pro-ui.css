@@ -65,18 +65,6 @@ html[data-visual-style] .layout-preset-option {
   border-color:var(--border);
   color:var(--text);
 }
-html[data-visual-style] .app-mobile-viewport-dock {
-  background:color-mix(in srgb,var(--surface) 82%,transparent)!important;
-  border-color:color-mix(in srgb,var(--primary-2) 28%,var(--border))!important;
-  box-shadow:0 16px 42px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.10)!important;
-  -webkit-backdrop-filter:blur(26px) saturate(170%)!important;
-  backdrop-filter:blur(26px) saturate(170%)!important;
-}
-html[data-visual-style] .app-mobile-viewport-dock > button.is-active {
-  background:linear-gradient(140deg,color-mix(in srgb,var(--primary) 24%,var(--surface)),color-mix(in srgb,var(--primary-2) 12%,var(--surface)))!important;
-  color:var(--text)!important;
-}
-html[data-visual-style] .app-mobile-viewport-dock > button { color:var(--text-muted)!important; }
 
 /* A deliberately redesigned operational home, not a scaled desktop table. */
 html[data-visual-style] .app-shell .customs-home {
@@ -280,8 +268,7 @@ html[data-visual-style] .app-shell .customs-shortcut > svg:first-child { color:v
 }
 @media (prefers-reduced-motion:reduce) {
   html[data-visual-style] .app-shell .customs-stat,
-  html[data-visual-style] .app-shell .customs-shortcut,
-  html[data-visual-style] .app-mobile-viewport-dock > button { transition:none!important; }
+  html[data-visual-style] .app-shell .customs-shortcut{ transition:none!important; }
 }
 
 
@@ -293,21 +280,6 @@ html[data-visual-style] .app-shell .customs-shortcut > svg:first-child { color:v
     position:sticky; top:0; z-index:60; min-height:58px; padding:8px 13px;
     border-bottom:1px solid var(--border); box-shadow:0 6px 22px rgba(0,0,0,.12);
   }
-  html[data-visual-style] .app-mobile-viewport-dock {
-    position:fixed!important; z-index:90!important; inset-inline:10px!important;
-    bottom:calc(8px + env(safe-area-inset-bottom))!important; width:auto!important;
-    min-height:66px!important; display:grid!important; grid-auto-flow:column;
-    grid-auto-columns:minmax(0,1fr); align-items:center; gap:4px!important;
-    padding:7px 8px!important; border:1px solid var(--border)!important;
-    border-radius:23px!important;
-  }
-  html[data-visual-style] .app-mobile-viewport-dock > button {
-    min-width:0!important; min-height:50px!important; border-radius:15px!important;
-    display:flex!important; flex-direction:column!important; justify-content:center!important;
-    align-items:center!important; gap:3px!important; padding:4px 2px!important;
-    font-size:10px!important; line-height:1.2!important; white-space:nowrap;
-  }
-  html[data-visual-style] .app-mobile-viewport-dock > button svg { width:20px!important; height:20px!important; }
   html[data-visual-style] .app-more-sheet {
     position:fixed!important; inset-inline:0!important; bottom:0!important; top:auto!important;
     width:100%!important; max-height:min(82dvh,760px)!important; overflow:auto!important;
@@ -381,28 +353,4 @@ html[data-layout-preset="adaptive"] .app-shell .customs-stat { min-height:100px;
   html[data-layout-preset="adaptive"] .app-shell .customs-stat-line {
     grid-template-columns:repeat(2,minmax(0,1fr))!important;
   }
-}
-
-/* The body-portal dock is deliberately unscoped: it is not a child of .app-shell. */
-html[data-visual-style] .app-mobile-viewport-dock {
-  z-index:90!important;
-  min-height:70px!important;
-  padding:7px 9px!important;
-  border-radius:24px!important;
-  gap:5px!important;
-}
-html[data-visual-style] .app-mobile-viewport-dock > button {
-  min-height:55px!important;
-  gap:4px!important;
-  font-size:11px!important;
-  font-weight:800!important;
-}
-html[data-visual-style] .app-mobile-viewport-dock > button svg { width:22px!important; height:22px!important; }
-html[data-visual-style] .app-mobile-viewport-dock > button > span {
-  font-size:11px!important;
-  line-height:1.15!important;
-}
-html[data-visual-style] .app-mobile-viewport-dock > button.is-active {
-  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--primary-2) 34%,transparent),
-    0 5px 16px color-mix(in srgb,var(--primary) 12%,transparent)!important;
 }
