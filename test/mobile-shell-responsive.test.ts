@@ -24,7 +24,8 @@ describe('iOS touch-first application shell', () => {
     expect(shell).toContain("getDesktopLayout");
     expect(shell).toContain("window.location.hostname.toLowerCase() === 'mobile.darbandicommercial.ir'");
     expect(shell).toContain('{isDesktop && (');
-    expect(shell).toContain('{!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs"');
+    expect(shell).toContain('{!isDesktop && createPortal(<nav');
+    expect(shell).toContain('className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs"');
     expect(mobileCss).toContain('@media (max-width: 1023px), (pointer: coarse)');
     expect(mobileCss).toContain('.app-sidebar, .app-topbar, .app-scrim, .app-mobile-drawer');
     expect(mobileCss).toContain('Desktop navigation is also removed from the React tree');
