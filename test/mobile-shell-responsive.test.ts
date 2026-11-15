@@ -11,6 +11,7 @@ const home = read('src/pages/DesktopHomePage.tsx');
 const unifiedCss = read('src/styles/mobile-native-unified-2026.css');
 const interactionsCss = read('src/styles/mobile-native-interactions-2026.css');
 const productionCss = read('src/styles/native-mobile-production.css');
+const canonicalDock = read('src/styles/mobile-bottom-anchored-shell-2026.css');
 
 describe('iOS touch-first application shell', () => {
   it.each([320, 360, 375, 390, 414, 430])('keeps the touch shell contract at %i CSS pixels', (width) => {
@@ -58,25 +59,25 @@ describe('iOS touch-first application shell', () => {
     expect(mobileCss).toContain('min-height: 100dvh');
     expect(mobileCss).toContain('env(safe-area-inset-top)');
     expect(mobileCss).toContain('env(safe-area-inset-bottom)');
-    expect(mobileCss).toContain('padding: 10px 12px calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important');
-    expect(mobileCss).toContain('bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important');
+    expect(canonicalDock).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
+    expect(canonicalDock).toContain('bottom: calc(var(--cos-tab-reserve) + 14px);');
     expect(mobileCss).toContain('.shipment-status-search { position: relative !important; inset: auto !important; }');
     expect(mobileCss).not.toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
-    expect(interactionsCss).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock');
-    expect(interactionsCss).toContain('display: grid !important');
+    expect(interactionsCss).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-dock.native-bottom-tabs');
+    expect(canonicalDock).toContain('display: grid;');
     expect(mobileCss).toContain('.app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone');
     expect(baseCss).toContain('*{box-sizing:border-box;min-width:0}');
   });
 
   it('uses one authoritative token set for header, floating dock and content clearance', () => {
     expect(unifiedCss).toContain('--cos-header-height:62px');
-    expect(unifiedCss).toContain('--cos-tab-height:70px');
-    expect(unifiedCss).toContain('--cos-tab-inset:10px');
-    expect(unifiedCss).toContain('--cos-tab-clearance:10px');
-    expect(unifiedCss).toContain('--cos-tab-reserve:calc(var(--cos-tab-height) + var(--cos-tab-inset) + var(--cos-tab-clearance) + env(safe-area-inset-bottom))');
-    expect(unifiedCss).toContain('height:var(--cos-tab-height)!important');
+    expect(canonicalDock).toContain('--cos-tab-height: 52px;');
+    expect(canonicalDock).toContain('--cos-tab-safe-area: env(safe-area-inset-bottom, 0px);');
+    expect(canonicalDock).toContain('--cos-tab-reserve: calc(var(--cos-tab-height) + var(--cos-tab-safe-area));');
+    expect(canonicalDock).toContain('height: var(--cos-tab-reserve);');
     expect(unifiedCss).toContain('padding:12px 12px var(--cos-tab-reserve)!important');
-    expect(unifiedCss).toContain(':root { --cos-tab-height:64px; }');
+    expect(canonicalDock).not.toContain('--cos-tab-height:64px');
     expect(productionCss).not.toContain('--native-shell-tab-height: 64px');
     expect(productionCss).not.toContain('padding-bottom: calc(64px + env(safe-area-inset-bottom))');
   });
