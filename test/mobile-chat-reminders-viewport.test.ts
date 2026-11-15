@@ -42,8 +42,9 @@ describe('Phase 2 — keyboard-aware chat and reminder workspaces', () => {
   });
 
   it('keeps reminder creation in the visible page header without adding a duplicate floating action', () => {
-    expect(reminders).toContain('className="reminders-hub-add"');
-    expect(reminders).toContain('onClick={openComposer}');
+    expect(reminders).toContain('className="reminders-timeline-actions"');
+    expect(reminders).toContain('className="is-primary" onClick={openComposer}');
+    expect(reminders).toContain('reminders-timeline-screen');
     expect(finalMobileLayer).not.toContain('.reminders-page .reminders-mobile-fab');
     expect(finalMobileLayer).not.toContain('bottom: calc(92px + env(safe-area-inset-bottom))');
   });
