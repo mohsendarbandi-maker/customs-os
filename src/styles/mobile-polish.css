@@ -525,7 +525,7 @@
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0;
-    padding: 10px 12px calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important;
+    padding: 10px 12px var(--cos-tab-reserve) !important;
     overflow-x: clip !important;
     overflow-y: visible !important;
     overscroll-behavior-x: none;
@@ -695,7 +695,7 @@
   .app-shell:has(.chat-standalone) .app-content {
     height: 100dvh;
     min-height: 0;
-    padding: 0 0 calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
+    padding: 0 0 var(--cos-tab-reserve) !important;
     overflow: hidden !important;
   }
   .app-shell:has(.chat-standalone) .future-route-stage { height: 100%; min-height: 0; }
@@ -705,7 +705,7 @@
   }
   /* The inbox reserves tab-bar space; the open chat takes the full viewport because its dock is removed. */
   .app-shell:has(.chat-standalone[data-chat-selected="false"]) .chat-standalone {
-    height: calc(100dvh - var(--app-mobile-tabbar-height) - env(safe-area-inset-bottom)) !important;
+    height: calc(100dvh - var(--cos-tab-reserve)) !important;
   }
   .app-shell:has(.chat-standalone[data-chat-selected="true"]) .app-content {
     padding-bottom: 0 !important;
@@ -739,7 +739,7 @@
     max-height: none !important;
     overflow-x: clip !important;
     overflow-y: visible !important;
-    padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important;
+    padding-bottom: var(--cos-tab-reserve) !important;
   }
   .app-shell:has(.reminders-app-standalone) .reminders-mobile-nav { display: none !important; }
 
@@ -836,7 +836,7 @@
   }
   /* Toasts and other fixed actions must sit above—not on top of—the shared tab bar. */
   .app-shell .fixed[class~="bottom-24"] {
-    bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    bottom: calc(var(--cos-tab-reserve) + 12px) !important;
   }
   .customs-home header p { font-variant-numeric: lining-nums; }
 }
@@ -863,7 +863,7 @@
   .pwa-install-prompt,
   .pwa-ios-install-guide,
   .pwa-version-notice {
-    bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    bottom: calc(var(--cos-tab-reserve) + 12px) !important;
   }
 }
 
@@ -968,7 +968,7 @@ body {
     flex: 0 0 40px !important;
   }
   .app-content {
-    padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    padding-bottom: calc(var(--cos-tab-reserve) + 12px) !important;
     min-width: 0 !important;
     overflow-wrap: anywhere;
   }
@@ -1070,7 +1070,7 @@ body {
 }
 .app-shell.is-touch-layout .app-content {
   min-width: 0 !important;
-  padding-bottom: calc(var(--app-mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+  padding-bottom: calc(var(--cos-tab-reserve) + 12px) !important;
 }
 @media (min-width: 1024px) and (pointer: fine) {
 }
@@ -1120,7 +1120,7 @@ body {
 /* Reserve room for the always-reachable dock in the open conversation view. */
 @media (max-width: 1023px), (pointer: coarse) {
   .app-shell:has(.chat-standalone[data-chat-selected="true"]) .chat-standalone {
-    padding-bottom: calc(var(--app-mobile-tabbar-height, 62px) + env(safe-area-inset-bottom) + 8px) !important;
+    padding-bottom: calc(var(--cos-tab-reserve) + 8px) !important;
     box-sizing: border-box !important;
   }
 }
