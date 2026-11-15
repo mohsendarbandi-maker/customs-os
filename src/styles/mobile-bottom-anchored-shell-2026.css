@@ -789,3 +789,196 @@
     padding-bottom: 8px !important;
   }
 }
+
+
+/*
+ * FINAL FIX — put the compact tab controls INSIDE the iPhone bottom safe area.
+ * The dock itself is only as tall as the safe area (minimum 30px), not
+ * 30px + safe area. Its background reaches the physical bottom edge, while
+ * the five 30px controls sit at the top of that safe-area strip.
+ */
+@media (max-width: 1023px), (pointer: coarse) {
+  :root {
+    --cos-tab-height: 30px;
+    --cos-tab-safe-area: env(safe-area-inset-bottom, 0px);
+    --cos-tab-reserve: max(var(--cos-tab-height), var(--cos-tab-safe-area));
+    --cos-bottom-nav-content-height: var(--cos-tab-height);
+    --cos-bottom-nav-safe-area: var(--cos-tab-safe-area);
+    --cos-bottom-nav-reserve: var(--cos-tab-reserve);
+    --app-mobile-tabbar-height: var(--cos-tab-height);
+    --native-shell-tab-height: var(--cos-tab-height);
+  }
+
+  .app-shell.is-touch-layout .app-content,
+  .app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content,
+  .app-shell.is-touch-layout:has(.reminders-app-standalone) .app-content {
+    padding-bottom: var(--cos-tab-reserve) !important;
+    scroll-padding-bottom: var(--cos-tab-reserve) !important;
+    scroll-padding-block-end: var(--cos-tab-reserve) !important;
+  }
+
+  html:has(.app-shell.is-touch-layout) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
+    position: fixed !important;
+    inset-inline: 0 !important;
+    inset-block-start: auto !important;
+    inset-block-end: 0 !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    justify-content: space-around !important;
+    gap: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: var(--cos-tab-reserve) !important;
+    min-height: var(--cos-tab-reserve) !important;
+    max-height: var(--cos-tab-reserve) !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 0 6px !important;
+    border: 0 !important;
+    border-top: 1px solid rgba(255, 255, 255, .09) !important;
+    border-radius: 17px 17px 0 0 !important;
+    background: rgba(7, 22, 43, .97) !important;
+    background-clip: border-box !important;
+    color: #f8fbff !important;
+    box-shadow: 0 -8px 24px rgba(0, 10, 26, .2) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    isolation: isolate !important;
+    overflow: visible !important;
+    transform: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 900 !important;
+  }
+
+  /* The chat portal must use the exact same bottom edge and safe-area height. */
+  html:has(.app-shell.is-touch-layout.is-chat-route) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock.native-bottom-tabs {
+    inset-block-end: 0 !important;
+    bottom: 0 !important;
+    height: var(--cos-tab-reserve) !important;
+    min-height: var(--cos-tab-reserve) !important;
+    max-height: var(--cos-tab-reserve) !important;
+    padding: 0 6px !important;
+    align-items: flex-start !important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button,
+  html:has(.app-shell.is-touch-layout.is-chat-route) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs > button,
+  html:has(.app-shell.is-touch-layout.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock.native-bottom-tabs > button {
+    position: relative !important;
+    z-index: 1 !important;
+    display: flex !important;
+    flex: 1 1 20% !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    width: 20% !important;
+    min-width: 0 !important;
+    min-height: var(--cos-tab-height) !important;
+    height: var(--cos-tab-height) !important;
+    max-height: var(--cos-tab-height) !important;
+    align-self: flex-start !important;
+    margin: 0 !important;
+    padding: 0 1px !important;
+    border: 0 !important;
+    border-radius: 9px !important;
+    background: transparent !important;
+    color: rgba(245, 249, 255, .78) !important;
+    opacity: 1 !important;
+    font-size: 8px !important;
+    line-height: 1 !important;
+    box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button.is-active,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button.is-active,
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button[aria-current="page"],
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button[aria-current="page"] {
+    color: #fff !important;
+    opacity: 1 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button > svg,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button > svg {
+    display: block !important;
+    flex: 0 0 16px !important;
+    width: 16px !important;
+    height: 16px !important;
+    stroke-width: 1.8 !important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button > span:not(.native-tab-badge),
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button > span:not(.native-tab-badge) {
+    display: block !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    opacity: 1 !important;
+    font-size: 8px !important;
+    line-height: 1 !important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs .native-tab-indicator,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs .native-tab-indicator {
+    top: 1px !important;
+    height: 22px !important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs .native-tab-indicator::before,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs .native-tab-indicator::before {
+    width: 36px !important;
+    height: 20px !important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs .native-tab-badge,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs .native-tab-badge {
+    top: 0 !important;
+    left: calc(50% + 6px) !important;
+    min-width: 14px !important;
+    height: 14px !important;
+    font-size: 8px !important;
+    border-width: 1px !important;
+  }
+
+  /* A keyboard-open viewport has no bottom home-indicator inset. */
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) {
+    --cos-tab-safe-area: 0px;
+    --cos-tab-reserve: var(--cos-tab-height);
+  }
+
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs {
+    inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
+    bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
+    height: var(--cos-tab-height) !important;
+    min-height: var(--cos-tab-height) !important;
+    max-height: var(--cos-tab-height) !important;
+    padding: 0 6px !important;
+    align-items: flex-start !important;
+  }
+
+  html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock.native-bottom-tabs {
+    inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
+    bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
+    height: var(--cos-tab-height) !important;
+    min-height: var(--cos-tab-height) !important;
+    max-height: var(--cos-tab-height) !important;
+    padding: 0 6px !important;
+  }
+}
