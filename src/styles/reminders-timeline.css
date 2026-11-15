@@ -1,0 +1,121 @@
+/* Unified reminders timeline — intentionally loaded after the legacy CSS layers. */
+.reminders-app-standalone .reminders-timeline-screen{width:min(100%,1120px);margin:auto;padding:8px 12px 120px;display:flex;flex-direction:column;gap:15px;color:var(--text)}
+.reminders-app-standalone .reminders-timeline-header{position:sticky;top:0;z-index:70;display:flex;flex-direction:column;gap:9px;margin:-2px -4px 0;padding:10px;border:1px solid var(--border);border-radius:0 0 21px 21px;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:0 9px 28px rgba(15,23,42,.07);-webkit-backdrop-filter:blur(20px) saturate(1.35);backdrop-filter:blur(20px) saturate(1.35)}
+.reminders-app-standalone .reminders-timeline-toolbar{min-height:52px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.reminders-app-standalone .reminders-timeline-identity{display:flex;align-items:center;min-width:0;gap:10px}
+.reminders-app-standalone .reminders-timeline-identity .reminders-brand-icon{width:40px;height:40px;flex:0 0 40px;border-radius:13px;box-shadow:0 4px 12px rgba(15,23,42,.12)}
+.reminders-app-standalone .reminders-timeline-identity h1{margin:0;color:var(--text);font-size:clamp(17px,2vw,22px);font-weight:950;line-height:1.35;letter-spacing:-.03em}
+.reminders-app-standalone .reminders-timeline-identity p{margin:3px 0 0;color:var(--text-muted);font-size:10px;font-weight:650;line-height:1.4}
+.reminders-app-standalone .reminders-timeline-actions{display:flex;align-items:center;flex:0 0 auto;gap:5px}
+.reminders-app-standalone .reminders-timeline-actions>button{display:grid;width:37px;min-width:37px;height:37px;min-height:37px;place-items:center;padding:0;border:1px solid var(--border);border-radius:11px;background:var(--surface-2);color:var(--text);transition:transform .18s ease,background .18s ease}
+.reminders-app-standalone .reminders-timeline-actions>button:active{transform:scale(.94)}
+.reminders-app-standalone .reminders-timeline-actions>button.is-active{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 10%,var(--surface));color:var(--primary)}
+.reminders-app-standalone .reminders-timeline-actions>button.is-primary{border-color:var(--primary);background:var(--primary);color:#fff;box-shadow:0 5px 14px color-mix(in srgb,var(--primary) 25%,transparent)}
+.reminders-app-standalone .reminders-timeline-tabs{display:flex;align-items:stretch;gap:5px;min-width:0;padding:4px;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:none;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);-webkit-overflow-scrolling:touch}
+.reminders-app-standalone .reminders-timeline-tabs::-webkit-scrollbar,.reminders-app-standalone .reminders-timeline-categories::-webkit-scrollbar{display:none}
+.reminders-app-standalone .reminders-timeline-tabs>button{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:1 0 auto;min-width:max-content;min-height:36px;padding:0 11px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--text-muted);font-size:11px;font-weight:850;white-space:nowrap}
+.reminders-app-standalone .reminders-timeline-tabs>button small{display:inline-grid;min-width:18px;height:18px;place-items:center;padding-inline:4px;border-radius:7px;background:color-mix(in srgb,currentColor 10%,transparent);font-size:9px;font-weight:900;font-variant-numeric:tabular-nums}
+.reminders-app-standalone .reminders-timeline-tabs>button.is-active{border-color:color-mix(in srgb,var(--primary) 22%,transparent);background:var(--surface);color:var(--primary);box-shadow:0 2px 8px rgba(15,23,42,.08)}
+.reminders-app-standalone .reminders-timeline-search-launcher,.reminders-app-standalone .reminders-timeline-search{display:flex;align-items:center;gap:10px;min-height:40px;width:100%;padding:0 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text-muted);text-align:start;font-size:12px}
+.reminders-app-standalone .reminders-timeline-search-launcher kbd{margin-inline-start:auto;border:1px solid var(--border);border-radius:6px;padding:1px 6px;font:700 10px/1.5 ui-monospace,monospace}
+.reminders-app-standalone .reminders-timeline-search{animation:reminders-search-enter .22s ease both;color:var(--primary)}
+.reminders-app-standalone .reminders-timeline-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-size:13px}
+.reminders-app-standalone .reminders-timeline-search input::placeholder{color:var(--text-muted);opacity:.85}
+.reminders-app-standalone .reminders-timeline-search>button{display:grid;width:29px;height:29px;flex:0 0 29px;place-items:center;border-radius:9px;background:var(--surface);color:var(--text-muted)}
+.reminders-app-standalone .reminders-timeline-categories{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
+.reminders-app-standalone .reminders-timeline-categories>button{min-height:27px;flex:0 0 auto;padding:0 10px;border:1px solid var(--border);border-radius:99px;background:transparent;color:var(--text-muted);font-size:10px;font-weight:750}
+.reminders-app-standalone .reminders-timeline-categories>button.is-active{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 9%,var(--surface));color:var(--primary)}
+.reminders-app-standalone .reminders-timeline-list{display:flex;flex-direction:column;gap:17px;padding:2px 2px 16px}
+.reminders-app-standalone .reminders-timeline-group{position:relative;min-width:0}
+.reminders-app-standalone .reminders-timeline-group-heading{position:sticky;top:205px;z-index:5;display:flex;align-items:center;gap:8px;width:fit-content;min-height:29px;margin:0 0 8px;padding:4px 11px;border:1px solid var(--border);border-radius:99px;background:color-mix(in srgb,var(--surface) 94%,transparent);color:var(--text);box-shadow:0 3px 12px rgba(15,23,42,.06);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.reminders-app-standalone .reminders-timeline-group-heading strong{font-size:11px;font-weight:950}
+.reminders-app-standalone .reminders-timeline-group-heading span{display:grid;min-width:18px;height:18px;place-items:center;padding-inline:5px;border-radius:7px;background:var(--surface-2);color:var(--text-muted);font-size:9px;font-weight:900;font-variant-numeric:tabular-nums}
+.reminders-app-standalone .reminders-timeline-items{position:relative;display:flex;flex-direction:column;gap:8px}
+.reminders-app-standalone .reminders-timeline-items:before{content:"";position:absolute;z-index:2;inset-block:9px;width:2px;inset-inline-start:28px;border-radius:4px;background:linear-gradient(to bottom,color-mix(in srgb,var(--primary) 42%,var(--border)),var(--border) 80%,transparent)}
+.reminders-app-standalone .reminders-timeline-card{position:relative;z-index:1;display:flex;align-items:flex-start;gap:10px;min-width:0;min-height:82px;padding:12px 11px;border:1px solid var(--border);border-radius:17px;background:var(--surface);box-shadow:0 4px 15px rgba(15,23,42,.045);transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease}
+.reminders-app-standalone .reminders-timeline-card:before{display:none}
+.reminders-app-standalone .reminders-timeline-card.is-selected{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 4%,var(--surface));box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 15%,transparent),0 8px 22px rgba(15,23,42,.07)}
+.reminders-app-standalone .reminders-timeline-card.is-notification-focus{border-color:color-mix(in srgb,var(--primary) 65%,var(--border));box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 18%,transparent),0 12px 30px rgba(15,23,42,.12);animation:reminders-notification-glow 2.8s ease both}
+.reminders-app-standalone .reminders-complete-trigger{position:relative;z-index:3;display:grid;flex:0 0 35px;width:35px;height:35px;min-width:35px;min-height:35px;place-items:center;margin-top:1px;border:1.5px solid color-mix(in srgb,var(--text-muted) 48%,var(--border));border-radius:50%;background:var(--surface-2);color:var(--text-muted);transition:transform .18s ease,background .18s ease}
+.reminders-app-standalone .reminders-complete-trigger>span{width:12px;height:12px;border:1.7px solid currentColor;border-radius:50%}
+.reminders-app-standalone .reminders-complete-trigger:active{transform:scale(.9)}
+.reminders-app-standalone .reminders-complete-trigger.is-done{border-color:#159b6d;background:#159b6d;color:#fff}
+.reminders-app-standalone .reminders-timeline-card-content{flex:1 1 auto;min-width:0}
+.reminders-app-standalone .reminders-timeline-title{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;width:100%;padding:0;color:var(--text);text-align:start;font-size:13px;font-weight:900;line-height:1.72}
+.reminders-app-standalone .reminders-timeline-title>span{min-width:0;overflow-wrap:anywhere}
+.reminders-app-standalone .reminders-timeline-title>svg{flex:0 0 auto;margin-top:4px;color:var(--text-muted);transition:transform .2s ease}
+.reminders-app-standalone .reminders-timeline-title>svg.is-expanded{transform:rotate(180deg)}
+.reminders-app-standalone .reminders-timeline-title.is-done>span{color:var(--text-muted);text-decoration:line-through}
+.reminders-app-standalone .reminders-timeline-meta{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin-top:5px;color:var(--text-muted);font-size:10px;font-weight:650;line-height:1.55}
+.reminders-app-standalone .reminders-timeline-meta>span{display:inline-flex;align-items:center;gap:4px}
+.reminders-app-standalone .reminders-timeline-priority{padding:1px 7px;border-radius:99px;background:var(--surface-2)}
+.reminders-app-standalone .reminders-timeline-priority.is-urgent,.reminders-app-standalone .reminders-timeline-priority.is-high{background:color-mix(in srgb,#dc663f 12%,var(--surface));color:#c35430}
+.reminders-app-standalone .reminders-timeline-meta .is-done-status{color:#159b6d}
+.reminders-app-standalone .reminders-timeline-links{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-top:7px}
+.reminders-app-standalone .reminders-timeline-links:empty{display:none}
+.reminders-app-standalone .reminders-timeline-links>button{display:inline-flex;align-items:center;gap:5px;max-width:100%;min-height:26px;padding:3px 8px;border:1px solid color-mix(in srgb,var(--primary) 22%,var(--border));border-radius:9px;background:color-mix(in srgb,var(--primary) 5%,var(--surface));color:var(--primary);font-size:10px;font-weight:750}
+.reminders-app-standalone .reminders-timeline-links>button span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reminders-app-standalone .reminders-timeline-links>button small{max-width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.8;font-size:9px}
+.reminders-app-standalone .reminders-timeline-notes{margin-top:8px;padding:8px 10px;border-inline-start:2px solid var(--primary);border-radius:8px;background:var(--surface-2);color:var(--text-muted);font-size:11px;line-height:1.8;overflow-wrap:anywhere}
+.reminders-app-standalone .reminders-timeline-card-actions{display:flex;flex:0 0 auto;align-items:center;gap:4px;margin-inline-start:1px}
+.reminders-app-standalone .reminder-select-trigger,.reminders-app-standalone .reminder-overflow-trigger{display:grid;width:33px;height:33px;min-width:33px;min-height:33px;place-items:center;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text-muted)}
+.reminders-app-standalone .reminder-select-trigger.is-active{border-color:var(--primary);background:var(--primary);color:#fff}
+.reminders-app-standalone .reminders-timeline-screen:not([data-selection-mode=true]) .reminder-select-trigger{display:none}
+.reminders-app-standalone .reminders-timeline-bulk{position:sticky;top:158px;z-index:20;margin:0;padding:11px;border:1px solid var(--border);border-radius:16px;background:color-mix(in srgb,var(--surface) 96%,transparent);box-shadow:0 8px 22px rgba(15,23,42,.08)}
+.reminders-app-standalone .reminders-timeline-bulk-heading,.reminders-app-standalone .reminders-timeline-bulk-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.reminders-app-standalone .reminders-timeline-bulk-heading{justify-content:space-between;margin-bottom:8px;font-size:12px}
+.reminders-app-standalone .reminders-timeline-bulk-heading>button,.reminders-app-standalone .reminders-timeline-bulk-actions>button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:0 9px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-size:10px;font-weight:800}
+.reminders-app-standalone .reminders-timeline-bulk-actions>button.is-complete{border-color:#159b6d;background:#159b6d;color:#fff}
+.reminders-app-standalone .reminders-timeline-bulk-actions>button.is-danger{border-color:color-mix(in srgb,#dc6262 36%,var(--border));color:#c24646}
+.reminders-app-standalone .reminders-timeline-error,.reminders-app-standalone .reminders-timeline-offline{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text-muted);font-size:11px;line-height:1.8}
+.reminders-app-standalone .reminders-timeline-error{border-color:color-mix(in srgb,#dc6262 34%,var(--border));background:color-mix(in srgb,#dc6262 7%,var(--surface))}
+.reminders-app-standalone .reminders-timeline-error button{flex:0 0 auto;min-height:33px;padding:0 10px;border-radius:9px;background:var(--primary);color:#fff;font-weight:800}
+.reminders-app-standalone .reminders-timeline-skeletons{display:flex;flex-direction:column;gap:8px}
+.reminders-app-standalone .reminders-timeline-skeletons>div{min-height:86px;border:1px solid var(--border);border-radius:17px;background:linear-gradient(100deg,var(--surface-2) 25%,color-mix(in srgb,var(--surface) 70%,var(--surface-2)) 48%,var(--surface-2) 70%);background-size:220% 100%;animation:reminders-timeline-shimmer 1.5s ease-in-out infinite}
+.reminders-app-standalone .reminders-timeline-empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:32px 18px;border:1px dashed var(--border);border-radius:21px;background:var(--surface);color:var(--text-muted);text-align:center}
+.reminders-app-standalone .reminders-timeline-empty>span{display:grid;width:46px;height:46px;place-items:center;border-radius:14px;background:var(--surface-2)}
+.reminders-app-standalone .reminders-timeline-empty strong{color:var(--text);font-size:13px}
+.reminders-app-standalone .reminders-timeline-empty>button{min-height:37px;padding:0 13px;border-radius:10px;background:var(--primary);color:#fff;font-size:11px;font-weight:850}
+.reminders-app-standalone .reminders-timeline-pagination{display:flex;align-items:center;justify-content:center;gap:17px;padding:4px 0 18px;color:var(--text-muted);font-size:11px}
+.reminders-app-standalone .reminders-timeline-pagination>button{display:grid;width:37px;height:37px;place-items:center;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text)}
+.reminders-app-standalone .reminders-timeline-pagination>button:disabled{opacity:.35}
+@keyframes reminders-search-enter{from{opacity:0;transform:translateY(-5px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes reminders-timeline-shimmer{from{background-position:100% 0}to{background-position:-120% 0}}
+@keyframes reminders-notification-glow{0%,100%{background:var(--surface)}18%,55%{background:color-mix(in srgb,var(--primary) 10%,var(--surface))}}
+@media(max-width:767px){
+ .reminders-app-standalone .reminders-timeline-screen{gap:12px;padding:4px 8px calc(126px + env(safe-area-inset-bottom))}
+ .reminders-app-standalone .reminders-timeline-header{gap:7px;margin:-4px -4px 0;padding:7px 8px 8px;border-radius:0 0 17px 17px}
+ .reminders-app-standalone .reminders-timeline-toolbar{min-height:45px;gap:5px}
+ .reminders-app-standalone .reminders-timeline-identity{gap:8px}
+ .reminders-app-standalone .reminders-timeline-identity .reminders-brand-icon{width:34px;height:34px;flex-basis:34px;border-radius:10px}
+ .reminders-app-standalone .reminders-timeline-identity h1{font-size:15px}
+ .reminders-app-standalone .reminders-timeline-identity p{margin-top:1px;font-size:9px}
+ .reminders-app-standalone .reminders-timeline-actions{gap:3px}
+ .reminders-app-standalone .reminders-timeline-actions>button{width:31px;min-width:31px;height:31px;min-height:31px;border-radius:9px}
+ .reminders-app-standalone .reminders-timeline-tabs{gap:3px;border-radius:11px}
+ .reminders-app-standalone .reminders-timeline-tabs>button{min-height:32px;gap:4px;padding-inline:8px;font-size:10px}
+ .reminders-app-standalone .reminders-timeline-tabs>button small{min-width:16px;height:16px;font-size:8px}
+ .reminders-app-standalone .reminders-timeline-search-launcher,.reminders-app-standalone .reminders-timeline-search{min-height:37px}
+ .reminders-app-standalone .reminders-timeline-categories{gap:5px}
+ .reminders-app-standalone .reminders-timeline-categories>button{min-height:25px;padding-inline:8px;font-size:9px}
+ .reminders-app-standalone .reminders-timeline-group-heading{top:184px;min-height:26px;margin-bottom:6px}
+ .reminders-app-standalone .reminders-timeline-items{gap:7px}
+ .reminders-app-standalone .reminders-timeline-items:before{inset-inline-start:23px}
+ .reminders-app-standalone .reminders-timeline-card{gap:8px;min-height:76px;padding:10px 8px;border-radius:15px}
+ .reminders-app-standalone .reminders-timeline-card:before{inset-inline-start:8px;top:19px;width:13px;height:13px}
+ .reminders-app-standalone .reminders-complete-trigger{flex-basis:31px;width:31px;height:31px;min-width:31px;min-height:31px}
+ .reminders-app-standalone .reminders-timeline-title{font-size:12px;line-height:1.68}
+ .reminders-app-standalone .reminders-timeline-meta{gap:4px 7px;margin-top:4px;font-size:9px}
+ .reminders-app-standalone .reminders-timeline-links{gap:4px;margin-top:6px}
+ .reminders-app-standalone .reminders-timeline-links>button{min-height:24px;padding-inline:6px;font-size:9px}
+ .reminders-app-standalone .reminders-timeline-card-actions{gap:3px}
+ .reminders-app-standalone .reminder-select-trigger,.reminders-app-standalone .reminder-overflow-trigger{width:29px;min-width:29px;height:29px;min-height:29px;border-radius:8px}
+ .reminders-app-standalone .reminders-timeline-bulk{top:184px;padding:9px}
+ .reminders-app-standalone .reminders-timeline-bulk-actions{gap:4px}
+ .reminders-app-standalone .reminders-timeline-bulk-actions>button{min-height:30px;padding-inline:7px;font-size:9px}
+ body:has(.reminders-timeline-screen) .ai-launcher{bottom:calc(154px + env(safe-area-inset-bottom))!important}
+ body:has(.reminders-timeline-screen) .reminders-mobile-fab{display:none!important}
+}
+@media(prefers-reduced-motion:reduce){
+ .reminders-app-standalone .reminders-timeline-screen *, .reminders-app-standalone .reminders-timeline-screen *:before, .reminders-app-standalone .reminders-timeline-screen *:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+}
