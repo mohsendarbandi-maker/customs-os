@@ -10,6 +10,7 @@ describe('Customs OS native unified mobile shell', () => {
   const app = read('src/App.tsx');
   const main = read('src/main.tsx');
   const styles = read('src/styles/native-app-shell.css');
+  const canonicalDock = read('src/styles/mobile-bottom-anchored-shell-2026.css');
 
   it('keeps a single contextual mobile header and a distinct system safe-area strip', () => {
     expect(shell).toContain('native-system-status');
@@ -44,14 +45,16 @@ describe('Customs OS native unified mobile shell', () => {
     expect(shell).toContain('key={location.pathname + location.search}');
     expect(styles).toContain('.app-content');
     expect(styles).toContain('.future-route-stage');
-    expect(styles).toContain('.native-bottom-tabs');
+    expect(styles).not.toContain('.native-bottom-tabs');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs');
     expect(styles).toContain('height: 100dvh');
   });
 
   it('prevents the chat module from creating a second global header or hiding the primary tabs', () => {
     expect(styles).toContain('.chat-app-header { display: none !important; }');
     expect(styles).toContain('.app-shell.is-chat-route .chat-composer');
-    expect(styles).toContain('.app-shell.is-chat-route .app-mobile-dock.native-bottom-tabs');
+    expect(styles).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs');
   });
 
   it('routes contextual header actions into real module workflows', () => {
