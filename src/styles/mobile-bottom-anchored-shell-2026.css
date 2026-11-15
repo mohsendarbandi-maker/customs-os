@@ -828,7 +828,7 @@
     bottom: 0 !important;
     display: flex !important;
     flex-direction: row !important;
-    align-items: flex-start !important;
+    align-items: flex-end !important;
     justify-content: space-around !important;
     gap: 0 !important;
     width: 100% !important;
@@ -866,7 +866,7 @@
     min-height: var(--cos-tab-reserve) !important;
     max-height: var(--cos-tab-reserve) !important;
     padding: 0 6px !important;
-    align-items: flex-start !important;
+    align-items: flex-end !important;
   }
 
   html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button,
@@ -886,7 +886,7 @@
     min-height: var(--cos-tab-height) !important;
     height: var(--cos-tab-height) !important;
     max-height: var(--cos-tab-height) !important;
-    align-self: flex-start !important;
+    align-self: flex-end !important;
     margin: 0 !important;
     padding: 0 1px !important;
     border: 0 !important;
@@ -969,7 +969,7 @@
     min-height: var(--cos-tab-height) !important;
     max-height: var(--cos-tab-height) !important;
     padding: 0 6px !important;
-    align-items: flex-start !important;
+    align-items: flex-end !important;
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs,
