@@ -7,6 +7,7 @@ const responsive = read('src/responsive.css');
 const mobileStyles = read('src/styles/mobile-workspace-cohesion.css');
 const mobilePolish = read('src/styles/mobile-polish.css');
 const mobileInteractions = read('src/styles/mobile-native-interactions-2026.css');
+const canonicalDock = read('src/styles/mobile-bottom-anchored-shell-2026.css');
 const remindersCohesion = read('src/styles/chat-reminders-cohesion.css');
 const fileManager = read('src/pages/FileManagerPage.tsx');
 const shipments = read('src/components/LatestShipmentStatuses.tsx');
@@ -28,18 +29,20 @@ describe('mobile visual cohesion regressions', () => {
     expect(oceanCss).toContain('.customs-stat-line');
     expect(oceanCss).toContain('.customs-widget-frame');
     expect(oceanCss).toContain('.shipment-compact-row');
-    expect(oceanCss).toContain('.app-mobile-viewport-dock');
+    expect(oceanCss).not.toContain('.app-mobile-viewport-dock');
     expect(oceanCss).toContain('@media (min-width:768px) and (max-width:1023px)');
   });
 
   it('keeps the mobile navigation dock attached to the viewport and exposes full visual themes', () => {
     expect(appShell).toContain('createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs"');
     expect(appShell).toContain('document.body');
-    expect(mobilePolish).toContain('.app-mobile-viewport-dock {');
-    expect(mobilePolish).toContain('position: fixed !important');
+    expect(mobilePolish).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs {');
+    expect(canonicalDock).toContain('position: fixed;');
     expect(mobilePolish).not.toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
-    expect(mobileInteractions).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock');
-    expect(mobileInteractions).toContain('display: grid !important');
+    expect(mobileInteractions).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-dock.native-bottom-tabs');
+    expect(canonicalDock).toContain('display: grid;');
     expect(appearanceContext).toContain('type VisualStyle=');
     expect(appearanceContext).toContain('document.documentElement.dataset.visualStyle=appearance.visualStyle');
     expect(appearanceSettings).toContain('visual-theme-options');
@@ -54,7 +57,7 @@ describe('mobile visual cohesion regressions', () => {
     expect(oceanCss).toContain('html[data-layout-preset="adaptive"] .app-shell .customs-widget-grid');
     expect(oceanCss).toContain('@media (max-width: 767px), (pointer: coarse)');
     expect(oceanCss).toContain('@media (min-width:768px) and (max-width:1023px)');
-    expect(oceanCss).toContain('html[data-visual-style] .app-mobile-viewport-dock > button svg');
+    expect(oceanCss).not.toContain('.app-mobile-viewport-dock');
   });
 
   it('lets reminders inherit the same global site palette and background', () => {
@@ -100,8 +103,9 @@ describe('mobile visual cohesion regressions', () => {
 
 describe('non-auth mobile UI review fixes', () => {
   it('keeps primary mobile navigation labels readable and wrap-safe', () => {
-    expect(mobileStyles).toContain('.app-shell .app-mobile-dock > button');
-    expect(mobileStyles).toContain('font-size: 12px !important;');
+    expect(mobileStyles).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs > button');
+    expect(canonicalDock).toContain('font-size: 10px;');
     expect(mobileStyles).toContain('-webkit-line-clamp: 2;');
   });
 
@@ -160,10 +164,10 @@ describe('primary-domain mobile viewport and selectable UI presets', () => {
   it('applies narrow-device responsive content rules independently of CSS viewport media queries', () => {
     expect(mobileStyles).toContain('.app-shell.is-narrow-device .app-content');
     expect(mobileStyles).toContain('.app-shell.is-narrow-device .customs-home .customs-widget-grid');
-    expect(mobileStyles).toContain('.app-shell.is-narrow-device .app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs');
     expect(mobileStyles).toContain('.layout-preset-options');
     expect(mobileStyles).toContain('.app-shell.is-narrow-device .ai-launcher');
-    expect(mobileStyles).toContain('var(--app-mobile-tabbar-height, 68px) + 24px');
+    expect(canonicalDock).toContain('bottom: calc(var(--cos-tab-reserve) + 64px);');
     expect(mobileStyles).toContain('.app-shell.is-narrow-device .shipment-compact-row');
     expect(mobileStyles).toContain('.app-shell.is-narrow-device .shipment-stages');
     expect(mobileStyles).toContain('.app-shell.is-narrow-device .shipment-stage-label');
@@ -182,8 +186,8 @@ describe('primary-domain mobile viewport and selectable UI presets', () => {
 describe('compact mobile density regressions', () => {
   it('reduces dashboard statistics, shell navigation and mobile header dimensions', () => {
     expect(mobileStyles).toContain('min-height: calc(56px + env(safe-area-inset-top)) !important;');
-    expect(mobileStyles).toContain('.app-shell .app-mobile-dock > button');
-    expect(mobileStyles).toContain('min-height: 43px !important;');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs > button');
+    expect(canonicalDock).toContain('min-height: 44px;');
     expect(mobileStyles).toContain('.app-shell .customs-home .customs-stat');
     expect(mobileStyles).toContain('height: 66px !important;');
   });
@@ -200,6 +204,6 @@ describe('compact mobile density regressions', () => {
   it('keeps the AI launcher compact and above the bottom navigation without covering content', () => {
     expect(mobileStyles).toContain('.app-shell .ai-launcher');
     expect(mobileStyles).toContain('width: 44px !important;');
-    expect(mobileStyles).toContain('bottom: calc(64px + env(safe-area-inset-bottom)) !important;');
+    expect(canonicalDock).toContain('bottom: calc(var(--cos-tab-reserve) + 14px);');
   });
 });
