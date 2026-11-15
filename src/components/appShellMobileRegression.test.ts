@@ -9,6 +9,7 @@ const premiumMobileCss = read('src/styles/mobile-app-premium.css');
 const reminders = read('src/features/reminders/RemindersPage.tsx');
 const appSource = read('src/App.tsx');
 const mainSource = read('src/main.tsx');
+const canonicalDock = read('src/styles/mobile-bottom-anchored-shell-2026.css');
 
 describe('safe stale-chunk recovery', () => {
   it('does not automatically reload a page when a lazy route chunk fails', () => {
@@ -42,7 +43,8 @@ describe('single mobile shell navigation regressions', () => {
   it('keeps touch-first navigation when a mobile browser reports a wide viewport', () => {
     expect(shell).toContain("window.matchMedia('(min-width: 1024px)')");
     expect(shell).toContain('getDesktopLayout');
-    expect(mobileCss).toContain('.app-shell.is-touch-layout .app-mobile-dock');
+    expect(mobileCss).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('.app-mobile-dock.native-bottom-tabs');
     expect(mobileCss).toContain("@media (max-width: 1023px), (pointer: coarse)");
     expect(mobileCss).toContain("@media (min-width: 1024px) and (pointer: fine)");
     expect(mobileCss).not.toContain("@media (min-width: 1024px) {");
@@ -84,8 +86,9 @@ describe('single mobile shell navigation regressions', () => {
 
   it('keeps the tablet header flex-based and the dock grid-based', () => {
     expect(mobileCss).toContain('.app-mobilebar { display: flex !important; }');
-    expect(mobileCss).toContain('.app-mobile-dock { display: grid !important; }');
-    expect(mobileCss).not.toContain('.app-mobilebar, .app-mobile-dock { display: grid !important; }');
+    expect(mobileCss).toContain('.app-mobilebar { display: flex !important; }');
+    expect(canonicalDock).toContain('display: grid;');
+    expect(mobileCss).not.toContain('.app-mobilebar, .app-mobile-dock');
   });
 
   it('applies phone layout rules to 375px, 390px, and 430px viewports', () => {
@@ -94,7 +97,7 @@ describe('single mobile shell navigation regressions', () => {
     expect(mobileCss).toContain('@media (max-width: 767px)');
     expect(mobileCss).toContain('min-width: 0 !important');
     expect(mobileCss).toContain('overflow-x: clip');
-    expect(mobileCss).toContain('grid-template-columns: repeat(5, minmax(0, 1fr)) !important');
+    expect(canonicalDock).toContain('grid-template-columns: repeat(5, minmax(0, 1fr));');
     expect(mobileCss).toContain('font-size: 16px !important');
     expect(mobileCss).toContain('touch-action: manipulation');
   });
