@@ -60,7 +60,7 @@ describe('maritime six-screen mobile reference', () => {
   it('opens reminder actions on touch-and-hold and keeps the menu open after finger release', () => {
     expect(reminders).toContain("const timer=window.setTimeout(()=>{if(card.dataset.touchMoved==='true')return;const trigger=card.querySelector('.reminder-overflow-trigger')");
     expect(reminders).toContain("card.dataset.longPressMenu='true'");
-    expect(reminders).toContain("if(card.dataset.longPressMenu==='true')delete card.dataset.longPressMenu;");
+    expect(reminders).toContain("const longPressed=card.dataset.longPressMenu==='true';delete card.dataset.longPressMenu;if(longPressed){");
     expect(reminders).not.toContain("if(card.dataset.longPressMenu==='true'){delete card.dataset.longPressMenu;closeCardMenu();}");
     expect(reminders).toContain('onPointerCancel={onCardPointerCancel}');
     expect(reminders).toContain('onPointerMove={onCardPointerMove}');
