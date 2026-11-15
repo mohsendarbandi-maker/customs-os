@@ -52,6 +52,8 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).toContain('max-width: none;');
     expect(layout).toContain('.app-mobile-dock.native-bottom-tabs');
     expect(layout).toContain('height: var(--cos-tab-reserve);');
+    expect(layout).not.toContain('border-top: 1px solid');
+    expect(layout).toContain('inset 0 1px 0 rgba(255, 255, 255, .12)');
   });
 
   it('keeps the iPhone bottom safe area navy so the dock visually reaches the rounded device edge', () => {
