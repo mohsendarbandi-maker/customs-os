@@ -37,7 +37,7 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     ];
     for (const file of legacyStyles) {
       const css = read(file);
-      expect(css, file).not.toMatch(/\\.app-mobile-dock\\b|\\.app-mobile-viewport-dock\\b|\\.native-bottom-tabs\\b/);
+      expect(css, file).not.toMatch(/\.app-mobile-dock\b|\.app-mobile-viewport-dock\b|\.native-bottom-tabs\b/);
     }
     expect((layout.match(/--cos-tab-height\\s*:/g) || [])).toHaveLength(1);
     expect((layout.match(/--cos-tab-safe-area\\s*:/g) || [])).toHaveLength(1);
