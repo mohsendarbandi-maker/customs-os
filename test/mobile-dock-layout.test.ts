@@ -44,6 +44,16 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).not.toContain('--mobile-tabbar-height:');
   });
 
+  it('extends the clipped iOS document viewport through the bottom safe area', () => {
+    const nativeProduction = read('../src/styles/native-mobile-production.css');
+    expect(layout).toContain('html,\n  body,\n  #root {');
+    expect(layout).toContain('height: calc(100dvh + var(--cos-tab-safe-area)) !important;');
+    expect(layout).toContain('min-height: calc(100dvh + var(--cos-tab-safe-area)) !important;');
+    expect(layout).toContain('max-height: calc(100dvh + var(--cos-tab-safe-area)) !important;');
+    expect(nativeProduction).not.toMatch(/html,\s*body,\s*#root\s*\{[^}]*height:\s*100dvh/s);
+    expect(nativeProduction).not.toMatch(/html,\s*body,\s*#root\s*\{[^}]*max-height:\s*100dvh/s);
+  });
+
   it('pins the five-tab dock flush to both side edges and the bottom edge', () => {
     expect(layout).toContain('left: 0;');
     expect(layout).toContain('right: 0;');
