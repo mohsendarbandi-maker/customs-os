@@ -418,7 +418,7 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding: 12px 10px calc(var(--app-mobile-tabbar-height, 68px) + env(safe-area-inset-bottom) + 18px) !important;
+  padding: 12px 10px var(--cos-tab-reserve) !important;
   overflow-x: clip;
 }
 .app-shell.is-narrow-device .app-content > .future-route-stage {
@@ -485,13 +485,13 @@
   width: 50px;
   height: 50px;
   inset-inline-end: 12px;
-  bottom: calc(var(--app-mobile-tabbar-height, 68px) + 24px + env(safe-area-inset-bottom));
+  bottom: calc(var(--cos-tab-reserve) + 24px);
   z-index: 130;
   border-radius: 16px;
 }
 .app-shell.is-narrow-device .ai-chat-panel {
   inset-inline: 10px;
-  bottom: calc(var(--app-mobile-tabbar-height, 68px) + 14px + env(safe-area-inset-bottom));
+  bottom: calc(var(--cos-tab-reserve) + 14px);
   width: auto;
   height: min(650px, calc(100dvh - 110px - env(safe-area-inset-top)));
   min-height: min(320px, calc(100dvh - 110px));
