@@ -76,6 +76,7 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
 
     expect(canonicalStart).toBeGreaterThanOrEqual(0);
     expect(canonical).toContain('--cos-tab-height: 30px;');
+    expect(canonical).toContain('--cos-bottom-nav-safe-area: env(safe-area-inset-bottom, 0px);');
     expect(canonical).toContain('--cos-tab-reserve: calc(var(--cos-tab-height) + var(--cos-bottom-nav-safe-area));');
     expect(canonical).toContain('bottom: 0 !important;');
     expect(canonical).toContain('padding: 0 6px var(--cos-bottom-nav-safe-area) !important;');
