@@ -569,15 +569,14 @@
 
 
 /*
- * FINAL MOBILE DOCK GEOMETRY — reference-sized tabs inside the full safe-area.
+ * FINAL MOBILE DOCK GEOMETRY — reference-sized tabs inside the compact safe-area layout.
  *
- * The dock is a 70px total-height region attached to the physical bottom edge.
- * Its buttons use that entire height (including the iOS safe-area portion), so
- * icons and labels—not just the background—extend into the lower safe area.
+ * The visible tab row is 58px; the iOS safe-area is added only as background
+ * below it. Labels and icons stay fully above the Home Indicator.
  */
 @media (max-width: 1023px), (pointer: coarse) {
   :root {
-    --cos-tab-height: 70px;
+    --cos-tab-height: 58px;
     --cos-tab-safe-area: env(safe-area-inset-bottom, 0px);
     --cos-tab-inset: 0px;
     --cos-tab-clearance: 0px;
@@ -618,8 +617,8 @@
     max-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
     box-sizing: border-box !important;
     margin: 0 !important;
-    /* No safe-area bottom padding here: buttons must occupy that space too. */
-    padding: 0 6px !important;
+    /* The dock background fills the safe area; controls do not. */
+    padding: 0 6px var(--cos-tab-safe-area) !important;
     border: 0 !important;
     border-top: 1px solid rgba(255, 255, 255, .09) !important;
     border-radius: 17px 17px 0 0 !important;
@@ -649,7 +648,7 @@
     padding: 0 6px !important;
   }
 
-  /* Full-height hit areas let the whole tab—including its caption—enter safe-area. */
+  /* Hit areas fill the dock, while bottom padding keeps captions above safe-area. */
   html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button,
   html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button {
     position: relative !important;
@@ -667,13 +666,13 @@
     max-height: 100% !important;
     align-self: stretch !important;
     margin: 0 !important;
-    padding: 0 1px 16px !important;
+    padding: 0 1px calc(var(--cos-tab-safe-area) + 8px) !important;
     border: 0 !important;
     border-radius: 9px !important;
     background: transparent !important;
     color: rgba(245, 249, 255, .72) !important;
     opacity: 1 !important;
-    font-size: 12px !important;
+    font-size: 11px !important;
     line-height: 1.2 !important;
     box-shadow: none !important;
     -webkit-tap-highlight-color: transparent;
@@ -693,9 +692,9 @@
   html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button > svg,
   html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button > svg {
     display: block !important;
-    flex: 0 0 24px !important;
-    width: 24px !important;
-    height: 24px !important;
+    flex: 0 0 22px !important;
+    width: 22px !important;
+    height: 22px !important;
     stroke-width: 1.8 !important;
   }
 
@@ -715,7 +714,7 @@
   html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs .native-tab-indicator {
     position: absolute !important;
     z-index: 0 !important;
-    top: calc(var(--cos-tab-safe-area) + 8px) !important;
+    top: 8px !important;
     inset-inline-start: 0 !important;
     display: flex !important;
     align-items: center !important;
@@ -761,7 +760,7 @@
     opacity: 1 !important;
   }
 
-  /* The keyboard removes the Home Indicator area, but keeps the same tab scale. */
+  /* The keyboard removes the Home Indicator inset; retain compact tab geometry. */
   html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) {
     --cos-tab-reserve: var(--cos-tab-height);
   }
@@ -773,7 +772,7 @@
     height: var(--cos-tab-height) !important;
     min-height: var(--cos-tab-height) !important;
     max-height: var(--cos-tab-height) !important;
-    padding: 0 6px !important;
+    padding: 0 6px 8px !important;
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs,
