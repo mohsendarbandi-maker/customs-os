@@ -7,6 +7,7 @@ describe('mobile command center and shared floating dock',()=>{
  const tracker=read('src/components/LatestShipmentStatuses.tsx'),showcase=read('src/pages/ShipmentShowcasePage.tsx');
  const dock=read('src/styles/mobile-native-unified-2026.css'),screens=read('src/styles/mobile-native-screens-2026.css');
  const chat=read('src/styles/mobile-native-chat-viewport-fix-2026.css');
+ const canonical=read('src/styles/mobile-bottom-anchored-shell-2026.css');
  it('uses live metrics and existing operational widgets',()=>{
   expect(home).toContain('if(isMobileDashboard)');
   expect(home).toContain('stats={stats}');
@@ -30,15 +31,20 @@ describe('mobile command center and shared floating dock',()=>{
   expect(showcase).toContain('setPageSize(deviceWidth < 650 ? 8 : deviceWidth < 1100 ? 4 : 6);');
   expect(showcase).not.toContain('deviceWidth < 650 ? 500');
  });
- it('reserves safe-area-aware space using a shared floating dock token',()=>{
-  expect(dock).toContain('--cos-tab-reserve:calc(var(--cos-tab-height) + var(--cos-tab-inset) + var(--cos-tab-clearance) + env(safe-area-inset-bottom))');
-  expect(dock).toContain('left:var(--cos-tab-inset)!important');expect(dock).toContain('right:var(--cos-tab-inset)!important');expect(dock).toContain('max-width:480px!important');expect(dock).toContain('padding:12px 12px var(--cos-tab-reserve)!important');
-  expect(screens).toContain('padding-bottom: var(--cos-tab-reserve) !important');
+ it('reserves the actual iPhone safe area for one edge-to-edge dock',()=>{
+  expect(dock).not.toContain('.app-mobile-dock');
+  expect(canonical).toContain('--cos-tab-height: 52px;');
+  expect(canonical).toContain('--cos-tab-safe-area: env(safe-area-inset-bottom, 0px);');
+  expect(canonical).toContain('--cos-tab-reserve: calc(var(--cos-tab-height) + var(--cos-tab-safe-area));');
+  expect(canonical).toContain('left: 0;');expect(canonical).toContain('right: 0;');expect(canonical).toContain('bottom: 0;');expect(canonical).toContain('width: 100%;');
+  expect(canonical).toContain('padding: 0 6px var(--cos-tab-safe-area);');
+  expect(canonical).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
  });
- it('keeps chat floating dock aligned with visual viewport and keyboard',()=>{
-  expect(chat).toContain('padding: 0 0 var(--cos-tab-reserve) !important');
-  expect(chat).toContain('left:var(--cos-tab-inset)!important');expect(chat).toContain('right:var(--cos-tab-inset)!important');expect(chat).toContain('max-width:480px!important');
-  expect(chat).toContain('var(--chat-visual-bottom-inset,0px) + var(--cos-tab-inset)');
+ it('uses the same dock geometry and keyboard offset on the chat route',()=>{
+  expect(chat).not.toContain('.app-mobile-dock');
+  expect(canonical).toContain('.app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content');
+  expect(canonical).toContain('bottom: var(--mobile-keyboard-bottom-inset, 0px);');
+  expect(canonical).not.toContain('--chat-visual-bottom-inset');
  });
  it('contains long mixed-direction labels on compact screens',()=>{
   expect(screens).toContain('unicode-bidi:plaintext');expect(screens).toContain('@media(max-width:359px)');
