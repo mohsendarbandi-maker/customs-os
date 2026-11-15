@@ -13,6 +13,20 @@
 }
 
 @media (max-width: 1023px), (pointer: coarse) {
+  /*
+   * iOS standalone PWA: 100dvh can stop at the edge of the content viewport,
+   * while the bottom safe area remains outside it. The dock is portaled to body;
+   * extend the clipped document boxes through that safe area so the dock is not
+   * cut off before the physical bottom edge.
+   */
+  html,
+  body,
+  #root {
+    height: calc(100dvh + var(--cos-tab-safe-area)) !important;
+    min-height: calc(100dvh + var(--cos-tab-safe-area)) !important;
+    max-height: calc(100dvh + var(--cos-tab-safe-area)) !important;
+  }
+
   .app-shell.is-touch-layout .app-main {
     flex: 1 1 0%;
     min-width: 0;
