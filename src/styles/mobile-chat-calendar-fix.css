@@ -93,7 +93,7 @@
 /* Keep the shared iPhone-style dock reachable on the chat screen. The chat root
    is a flex column, so this reserved bottom area keeps the composer above the dock. */
 .app-shell.is-touch-layout.is-chat-route .chat-standalone {
-  padding-bottom: calc(var(--app-mobile-tabbar-height, 70px) + env(safe-area-inset-bottom) + 8px) !important;
+  padding-bottom: calc(var(--cos-tab-reserve) + 8px) !important;
   box-sizing: border-box !important;
 }
 
