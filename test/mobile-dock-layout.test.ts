@@ -46,9 +46,7 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
 
   it('extends the clipped iOS document viewport through the bottom safe area', () => {
     const nativeProduction = read('../src/styles/native-mobile-production.css');
-    for (const element of ['html', 'body', '#root']) {
-      expect(layout).toContain(`${element},`);
-    }
+    expect(layout).toContain('html,\n  body,\n  #root {');
     expect(layout).toContain('height: calc(100dvh + var(--cos-tab-safe-area)) !important;');
     expect(layout).toContain('min-height: calc(100dvh + var(--cos-tab-safe-area)) !important;');
     expect(layout).toContain('max-height: calc(100dvh + var(--cos-tab-safe-area)) !important;');
