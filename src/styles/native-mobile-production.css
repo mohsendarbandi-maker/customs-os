@@ -23,9 +23,6 @@
   /* The document itself never scrolls; only the current module viewport does. */
   html, body, #root {
     width: 100% !important;
-    height: 100dvh !important;
-    min-height: 100dvh !important;
-    max-height: 100dvh !important;
     overflow: hidden !important;
     overscroll-behavior: none !important;
   }
