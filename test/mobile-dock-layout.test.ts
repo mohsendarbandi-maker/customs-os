@@ -42,7 +42,7 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
   });
 
   it('reserves exactly the visible dock height in the scrollable page area', () => {
-    expect(layout).toContain('--cos-tab-reserve: calc(var(--cos-tab-height, 70px) + env(safe-area-inset-bottom));');
+    expect(layout).toContain('--cos-tab-reserve: var(--cos-tab-height);');
     expect(layout).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
     expect(layout).toContain('.app-shell.is-touch-layout:has(.reminders-app-standalone) .app-content');
     expect(layout).toContain('overflow-y: auto !important;');
