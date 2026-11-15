@@ -38,7 +38,7 @@ describe('Customs OS Phase 4 native mobile interactions', () => {
     expect(shell).toContain("shell.classList.toggle('is-mobile-keyboard-open', keyboardOpen)");
     expect(css).toContain('.app-shell.is-touch-layout.is-mobile-keyboard-open');
     expect(css).toContain('--mobile-visible-viewport-height');
-    expect(css).toContain('--mobile-keyboard-bottom-inset');
+    expect(canonicalDock).toContain('--mobile-keyboard-bottom-inset');
     expect(css).not.toContain('.app-mobile-dock');
     expect(canonicalDock).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-dock.native-bottom-tabs');
     expect(canonicalDock).toContain('inset-block-end: var(--mobile-keyboard-bottom-inset, 0px);');
