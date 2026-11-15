@@ -162,8 +162,8 @@ jobs:
                 composerClearance: dockRect && composerRect ? Math.round(dockRect.top - composerRect.bottom) : -999,
               };
             });
-            assert.equal(compact.dockHeight, 64, JSON.stringify(compact));
-            assert.equal(compact.dockToken, 64, JSON.stringify(compact));
+            assert.equal(compact.dockHeight, 30, JSON.stringify(compact));
+            assert.equal(compact.dockToken, 30, JSON.stringify(compact));
             assert.equal(compact.dockLeft, 0, JSON.stringify(compact));
             assert.equal(compact.dockRight, 390, JSON.stringify(compact));
             assert.equal(compact.dockBottom, 600, JSON.stringify(compact));
@@ -265,7 +265,7 @@ jobs:
             assert.equal(keyboard.shellHeight, 500, JSON.stringify(keyboard));
             assert.equal(keyboard.shellBottom, 500, JSON.stringify(keyboard));
             assert.ok(keyboard.dockTop >= 0 && keyboard.dockBottom <= 500, JSON.stringify(keyboard));
-            assert.equal(keyboard.dockHeight, 70, JSON.stringify(keyboard));
+            assert.equal(keyboard.dockHeight, 30, JSON.stringify(keyboard));
             assert.equal(keyboard.contentOverflowY, 'auto', JSON.stringify(keyboard));
             assert.equal(keyboard.horizontalOverflowX, 'auto', JSON.stringify(keyboard));
             assert.equal(keyboard.horizontalOverflowY, 'hidden', JSON.stringify(keyboard));
@@ -1025,7 +1025,7 @@ jobs:
                 }
                 console.log('Six-width mobile viewport sweep passed:', JSON.stringify(viewportSweep));
 
-                // Short phones reduce the same shared dock token; reserve space
+                // Short phones keep the same compact 30px dock token; reserve space
                 // must follow that token instead of a separate hard-coded offset.
                 await page.setViewportSize({ width: 390, height: 600 });
                 const compactViewport = await page.evaluate(() => {
@@ -1042,8 +1042,8 @@ jobs:
                     contentReserve: chatContent ? parseFloat(getComputedStyle(chatContent).paddingBottom) || 0 : 0,
                   };
                 });
-                expect(compactViewport.dockHeight, JSON.stringify(compactViewport)).toBe(64);
-                expect(compactViewport.sharedDockHeight, JSON.stringify(compactViewport)).toBe(64);
+                expect(compactViewport.dockHeight, JSON.stringify(compactViewport)).toBe(30);
+                expect(compactViewport.sharedDockHeight, JSON.stringify(compactViewport)).toBe(30);
                 expect(compactViewport.dockLeft, JSON.stringify(compactViewport)).toBe(0);
                 expect(compactViewport.dockRight, JSON.stringify(compactViewport)).toBe(390);
                 expect(compactViewport.dockBottom, JSON.stringify(compactViewport)).toBe(600);
@@ -1061,7 +1061,7 @@ jobs:
                 expect(layoutProbe.dockDisplay).not.toBe('none');
                 expect(layoutProbe.dockDisplayDuringChat).not.toBe('none');
                 expect(layoutProbe.dockPositionDuringChat).toBe('fixed');
-                expect(layoutProbe.chatContentPaddingBottom).toBeGreaterThanOrEqual(50);
+                expect(layoutProbe.chatContentPaddingBottom).toBeGreaterThanOrEqual(30);
                 expect(layoutProbe.composerClearance, JSON.stringify(layoutProbe)).toBeGreaterThanOrEqual(0);
                 expect(layoutProbe.composerPosition).toBe('relative');
                 console.log('Mobile viewport/card/chat CSS probe passed:', JSON.stringify(layoutProbe));
