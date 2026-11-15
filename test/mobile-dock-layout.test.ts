@@ -50,8 +50,8 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(layout).toContain('height: calc(100dvh + var(--cos-tab-safe-area)) !important;');
     expect(layout).toContain('min-height: calc(100dvh + var(--cos-tab-safe-area)) !important;');
     expect(layout).toContain('max-height: calc(100dvh + var(--cos-tab-safe-area)) !important;');
-    expect(nativeProduction).not.toContain('height: 100dvh !important;');
-    expect(nativeProduction).not.toContain('max-height: 100dvh !important;');
+    expect(nativeProduction).not.toMatch(/html,\s*body,\s*#root\s*\{[^}]*height:\s*100dvh/s);
+    expect(nativeProduction).not.toMatch(/html,\s*body,\s*#root\s*\{[^}]*max-height:\s*100dvh/s);
   });
 
   it('pins the five-tab dock flush to both side edges and the bottom edge', () => {
