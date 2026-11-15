@@ -925,7 +925,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </div>
       )}
       {!isDesktop && createPortal(<nav className="app-mobile-dock app-mobile-viewport-dock native-bottom-tabs" aria-label="پیمایش اصلی برنامه" dir="rtl" style={{ '--active-tab-index': mobileTabIndex } as React.CSSProperties}>
-        <span className="native-tab-indicator" aria-hidden="true" />
         <button type="button" className={location.pathname === '/' ? 'is-active' : ''} aria-current={location.pathname === '/' ? 'page' : undefined} onClick={() => goMobileTab('/')}>
           <Home size={22} strokeWidth={1.75} /><span>خانه</span>
         </button>
