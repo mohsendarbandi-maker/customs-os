@@ -50,6 +50,13 @@ describe('maritime six-screen mobile reference', () => {
     expect(design).toContain('.shipment-detail-progress-step');
   });
 
+  it('hides the overdue tab and opens the reminders timeline on the Open tab by default', () => {
+    expect(reminders).toContain("const TIMELINE_TABS=[{id:'all',label:'همه',section:'all'},{id:'today',label:'امروز',section:'today'},{id:'open',label:'باز',section:'open'},{id:'scheduled',label:'آینده',section:'scheduled'},{id:'done',label:'انجام‌شده',section:'done'}] as const;");
+    expect(reminders).not.toContain("{id:'overdue',label:'معوق',section:'overdue'}");
+    expect(reminders).toContain("pathToken==='home'?'open':pathToken");
+    expect(reminders).toContain("const isHome=currentSection==='open'");
+  });
+
   it('keeps the reminder search panel animated, keyboard-accessible, and explicitly clearable/closable', () => {
     expect(reminders).toContain('searchInputRef.current?.focus()');
     expect(reminders).toContain('searchPanelVisible');
