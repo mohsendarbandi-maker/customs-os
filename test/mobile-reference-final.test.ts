@@ -15,6 +15,7 @@ describe('maritime six-screen mobile reference', () => {
   const showcase = read('src/pages/ShipmentShowcasePage.tsx');
   const chat = read('src/features/chat/ChatPage.tsx');
   const reminders = read('src/features/reminders/RemindersPage.tsx');
+  const reminderTimeline = read('src/styles/reminders-timeline.css');
   const settings = read('src/pages/SettingsEnterprisePage.tsx');
 
   it('loads the maritime reference layer after the premium override layer', () => {
@@ -52,11 +53,12 @@ describe('maritime six-screen mobile reference', () => {
   it('keeps showcase, chat, reminders and theme previews within the same visual system', () => {
     expect(showcase).toContain('showcase-ship-icon');
     expect(chat).toContain('chat-conversation-view');
-    expect(reminders).toContain('reminders-hub-screen');
+    expect(reminders).toContain('reminders-timeline-screen');
+    expect(reminderTimeline).toContain('.reminders-timeline-card');
+    expect(reminderTimeline).toContain('.reminders-timeline-tabs');
     expect(settings).toContain('visual-theme-options');
     expect(design).toContain('.shipment-showcase-page .showcase-card');
     expect(design).toContain('.chat-message-area');
-    expect(design).toContain('.reminders-open-task');
     expect(design).toContain('.visual-theme-option');
   });
 });
