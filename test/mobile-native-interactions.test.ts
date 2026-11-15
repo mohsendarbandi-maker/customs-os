@@ -10,6 +10,7 @@ describe('Customs OS Phase 4 native mobile interactions', () => {
   const css = read('src/styles/mobile-native-interactions-2026.css');
   const main = read('src/main.tsx');
   const legacyMobileCss = read('src/styles/mobile-polish.css');
+  const canonicalDock = read('src/styles/mobile-bottom-anchored-shell-2026.css');
 
   it('tracks the keyboard-adjusted visual viewport and publishes the dock inset', () => {
     expect(shell).toContain('window.visualViewport');
@@ -19,9 +20,9 @@ describe('Customs OS Phase 4 native mobile interactions', () => {
     expect(shell).toContain('focusin');
     expect(shell).toContain('focusout');
     expect(css).toContain('height: var(--chat-visible-height, 100dvh) !important');
-    expect(css).toContain('bottom: var(--chat-visual-bottom-inset, 0px) !important');
-    expect(css).toContain('height: calc(var(--cos-tab-height) + env(safe-area-inset-bottom)) !important');
-    expect(css).toContain('inset-block-end: var(--chat-visual-bottom-inset, 0px) !important');
+    expect(canonicalDock).toContain('bottom: var(--mobile-keyboard-bottom-inset, 0px);');
+    expect(canonicalDock).toContain('height: var(--cos-tab-reserve);');
+    expect(canonicalDock).not.toContain('--chat-visual-bottom-inset');
     expect(css).toContain('.app-shell.is-touch-layout.is-chat-route .app-content.is-chat-content');
     expect(css).toContain('.chat-standalone[data-chat-selected="true"] .chat-composer');
     expect(css).toContain('margin-block-end: 0 !important');
@@ -38,10 +39,10 @@ describe('Customs OS Phase 4 native mobile interactions', () => {
     expect(css).toContain('.app-shell.is-touch-layout.is-mobile-keyboard-open');
     expect(css).toContain('--mobile-visible-viewport-height');
     expect(css).toContain('--mobile-keyboard-bottom-inset');
-    expect(css).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock');
-    expect(css).toContain('inset-block-end: calc(var(--mobile-keyboard-bottom-inset, 0px)');
-    expect(css).toContain('display: grid !important');
-    expect(css).toContain('visibility: visible !important');
+    expect(css).not.toContain('.app-mobile-dock');
+    expect(canonicalDock).toContain('html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-dock.native-bottom-tabs');
+    expect(canonicalDock).toContain('inset-block-end: var(--mobile-keyboard-bottom-inset, 0px);');
+    expect(canonicalDock).toContain('display: grid;');
     expect(legacyMobileCss).not.toContain('html:has(.app-shell input:focus) .app-mobile-viewport-dock');
     expect(css).not.toContain('is-mobile-keyboard-open .app-mobile-viewport-dock { display: none');
   });
@@ -60,7 +61,7 @@ describe('Customs OS Phase 4 native mobile interactions', () => {
   it('keeps the composer in the final flex row and reserves the fixed dock height', () => {
     expect(css).toContain('.app-shell.is-chat-route .chat-composer');
     expect(css).toContain('flex: 0 0 auto !important');
-    expect(css).toContain('padding: 0 0 calc(var(--cos-tab-height) + env(safe-area-inset-bottom)) !important');
+    expect(canonicalDock).toContain('padding-bottom: var(--cos-tab-reserve) !important;');
     expect(css).toContain('.app-shell.is-chat-route .chat-message-area');
   });
 
