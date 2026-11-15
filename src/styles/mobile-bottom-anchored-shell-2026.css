@@ -583,7 +583,7 @@
 @media (max-width: 1023px), (pointer: coarse) {
   :root {
     --cos-tab-height: 30px;
-    --cos-bottom-nav-safe-area: max(env(safe-area-inset-bottom, 0px), 8px);
+    --cos-bottom-nav-safe-area: env(safe-area-inset-bottom, 0px);
     --cos-tab-inset: 0px;
     --cos-tab-clearance: 0px;
     --cos-tab-reserve: calc(var(--cos-tab-height) + var(--cos-bottom-nav-safe-area));
