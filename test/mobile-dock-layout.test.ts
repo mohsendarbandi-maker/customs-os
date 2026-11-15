@@ -18,6 +18,32 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
       .toBeGreaterThan(entry.indexOf("import './styles/mobile-route-polish-2026.css';"));
   });
 
+  it('keeps navigation styling and sizing in one canonical stylesheet', () => {
+    const legacyStyles = [
+      '../src/responsive.css',
+      '../src/styles/mobile-polish.css',
+      '../src/styles/mobile-native-workspace.css',
+      '../src/styles/mobile-chat-calendar-fix.css',
+      '../src/styles/mobile-native-chat-viewport-fix-2026.css',
+      '../src/styles/mobile-native-interactions-2026.css',
+      '../src/styles/mobile-native-unified-2026.css',
+      '../src/styles/native-app-shell.css',
+      '../src/styles/native-mobile-production.css',
+      '../src/styles/mobile-app-premium.css',
+      '../src/styles/mobile-reference-redesign.css',
+      '../src/styles/mobile-reference-final.css',
+      '../src/styles/mobile-workspace-cohesion.css',
+      '../src/styles/ocean-pro-ui.css',
+    ];
+    for (const file of legacyStyles) {
+      const css = read(file);
+      expect(css, file).not.toMatch(/\\.app-mobile-dock\\b|\\.app-mobile-viewport-dock\\b|\\.native-bottom-tabs\\b/);
+    }
+    expect((layout.match(/--cos-tab-height\\s*:/g) || [])).toHaveLength(1);
+    expect((layout.match(/--cos-tab-safe-area\\s*:/g) || [])).toHaveLength(1);
+    expect(layout).not.toContain('--mobile-tabbar-height:');
+  });
+
   it('pins the five-tab dock flush to both side edges and the bottom edge', () => {
     expect(layout).toContain('left: 0;');
     expect(layout).toContain('right: 0;');
