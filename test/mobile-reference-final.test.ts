@@ -50,6 +50,24 @@ describe('maritime six-screen mobile reference', () => {
     expect(design).toContain('.shipment-detail-progress-step');
   });
 
+  it('keeps the reminder search panel animated, keyboard-accessible, and explicitly clearable/closable', () => {
+    expect(reminders).toContain('searchInputRef.current?.focus()');
+    expect(reminders).toContain('searchPanelVisible');
+    expect(reminders).toContain("className={'reminders-timeline-search-shell '+(isSearchPage?'is-open':'is-closing')}");
+    expect(reminders).toContain("aria-label={t('پاک‌کردن جست‌وجو')}");
+    expect(reminders).toContain("aria-label={t('بستن جست‌وجو')}");
+    expect(reminderTimeline).toContain('.reminders-timeline-search-shell.is-closing');
+    expect(reminderTimeline).toContain('prefers-reduced-motion:reduce');
+  });
+
+  it('exposes accessible loading, error, empty and live-count states in the timeline', () => {
+    expect(reminders).toContain('aria-busy={statsQuery.isPending}');
+    expect(reminders).toContain('className="reminders-count-loading"');
+    expect(reminders).toContain('aria-label={t(\'در حال بارگذاری یادآورها\')}');
+    expect(reminders).toContain('role="alert" aria-live="assertive" className="reminders-timeline-error"');
+    expect(reminders).toContain('role="status" aria-live="polite" className="reminders-empty-state reminders-timeline-empty"');
+  });
+
   it('keeps showcase, chat, reminders and theme previews within the same visual system', () => {
     expect(showcase).toContain('showcase-ship-icon');
     expect(chat).toContain('chat-conversation-view');
