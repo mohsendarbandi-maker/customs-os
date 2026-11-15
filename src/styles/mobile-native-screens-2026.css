@@ -399,11 +399,6 @@
     padding: 9px 11px !important; border-radius: 13px !important;
     background: #f7f9fc !important; font-size: 16px !important;
   }
-  .app-shell.is-chat-route .app-mobile-dock.native-bottom-tabs,
-  html:has(.app-shell.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock {
-    display: grid !important; visibility: visible !important; opacity: 1 !important;
-    pointer-events: auto !important; z-index: 900 !important;
-  }
   .app-shell.is-chat-route .chat-header-action { min-height: 42px !important; }
   .app-shell.is-chat-route .chat-hierarchy-panel { padding-bottom: 14px !important; }
   .app-shell.is-chat-route .chat-conversation-list { gap: 8px !important; }
