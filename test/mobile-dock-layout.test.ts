@@ -69,4 +69,19 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
     expect(buildWorkflow).not.toContain("contentReserve >= 84");
   });
 
+
+  it('keeps the dock on the physical screen edge and paints behind the iOS Home Indicator', () => {
+    const canonicalStart = layout.lastIndexOf('FINAL MOBILE DOCK GEOMETRY');
+    const canonical = layout.slice(canonicalStart);
+
+    expect(canonicalStart).toBeGreaterThanOrEqual(0);
+    expect(canonical).toContain('--cos-tab-height: 30px;');
+    expect(canonical).toContain('--cos-tab-reserve: calc(var(--cos-tab-height) + var(--cos-bottom-nav-safe-area));');
+    expect(canonical).toContain('bottom: 0 !important;');
+    expect(canonical).toContain('padding: 0 6px var(--cos-bottom-nav-safe-area) !important;');
+    expect(canonical).toContain('bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;');
+    expect(canonical).not.toContain('bottom: env(safe-area-inset-bottom, 0px) !important;');
+    expect(canonical).not.toContain('bottom: var(--chat-visual-bottom-inset, 0px) !important;');
+  });
+
 });
