@@ -19,7 +19,7 @@ import {areAllVisibleReminderIdsSelected,deselectVisibleReminderIds,selectableRe
 import {summarizeReminderBulkAction,type ReminderBulkAction} from './bulkActionModel';
 
 type Filter='today'|'scheduled'|'overdue'|'all'|'done'|'assigned'|'undated'|'day';
-type ReminderSection='home'|'search'|'today'|'scheduled'|'overdue'|'all'|'done'|'assigned'|'undated'|'lists'|'calendar'|'settings'|'list-documents'|'list-shipment'|'list-finance'|'list-other'|'day';
+type ReminderSection='home'|'open'|'search'|'today'|'scheduled'|'overdue'|'all'|'done'|'assigned'|'undated'|'lists'|'calendar'|'settings'|'list-documents'|'list-shipment'|'list-finance'|'list-other'|'day';
 const REMINDER_SECTIONS:ReminderSection[]=['home','open','search','today','scheduled','overdue','all','done','assigned','undated','lists','calendar','settings','list-documents','list-shipment','list-finance','list-other','day'];
 const SECTION_FILTER:Partial<Record<ReminderSection,Filter>>={home:'all',open:'all',search:'all',today:'today',scheduled:'scheduled',overdue:'overdue',all:'all',done:'done',assigned:'assigned',undated:'undated',lists:'all',calendar:'all',settings:'all','list-documents':'all','list-shipment':'all','list-finance':'all','list-other':'all',day:'day'};
 const SECTION_KIND:Partial<Record<ReminderSection,ReminderKind>>={'list-documents':'document','list-shipment':'shipment','list-finance':'finance','list-other':'other'};
