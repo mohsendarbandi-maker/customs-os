@@ -27,7 +27,7 @@ const SECTION_TITLE:Record<ReminderSection,string>={home:'یادآورها',open
 const CATEGORY_ICON:Record<ReminderKind,typeof ListChecks>={document:CalendarClock,shipment:Users,finance:Check,other:ListChecks};
 const categoryRoute=(kind:ReminderKind):ReminderSection=>kind==='document'?'list-documents':('list-'+kind) as ReminderSection;
 type QueryResult={rows:Reminder[];count:number;offlineCached?:boolean;cacheUpdatedAt?:number};
-type ReminderOverview={total:number;today:number;overdue:number;scheduled:number;done:number;undated:number;offlineCached?:boolean;cacheUpdatedAt?:number};
+type ReminderOverview={total:number;today:number;overdue:number;scheduled:number;done:number;undated:number;open:number;offlineCached?:boolean;cacheUpdatedAt?:number};
 type ReminderEntitySelection={type:ReminderEntityType;id:string;label:string;caseId?:string|null;shipmentId?:string|null};
 type QuickShipment={id:string;label:string;caseId:string|null;billOfLadingNo:string|null};
 type LinkedShipmentSummary={display_name:string|null;bill_of_lading_no:string|null};
@@ -250,14 +250,14 @@ const speechRestartTimerRef=useRef<number|null>(null);const speechShouldContinue
   queryKey:['reminder-overview',profile?.organization_id,user?.id,reminderCacheDay],
   enabled:Boolean(profile?.organization_id),staleTime:0,
   queryFn:async()=>{
-   const empty:ReminderOverview={total:0,today:0,overdue:0,scheduled:0,done:0,undated:0};
+   const empty:ReminderOverview={total:0,today:0,overdue:0,scheduled:0,done:0,undated:0,open:0};
    if(!profile?.organization_id)return empty;
    try{
     const [start,end]=todayRange(),now=new Date().toISOString();
     const base=()=>supabase.from('operational_reminders').select('id',{count:'exact',head:true}).eq('organization_id',profile.organization_id).is('deleted_at',null);
-    const results=await Promise.all([base(),base().eq('status','open').gte('due_at',start.toISOString()).lt('due_at',end.toISOString()),base().eq('status','open').lt('due_at',now),base().eq('status','open').gte('due_at',now),base().eq('status','done'),base().eq('status','open').is('due_at',null)]);
+    const results=await Promise.all([base(),base().eq('status','open').gte('due_at',start.toISOString()).lt('due_at',end.toISOString()),base().eq('status','open').lt('due_at',now),base().eq('status','open').gte('due_at',now),base().eq('status','done'),base().eq('status','open').is('due_at',null),base().eq('status','open')]);
     const failed=results.find(result=>result.error);if(failed?.error)throw failed.error;
-    const result:ReminderOverview={total:results[0].count??0,today:results[1].count??0,overdue:results[2].count??0,scheduled:results[3].count??0,done:results[4].count??0,undated:results[5].count??0,offlineCached:false};
+    const result:ReminderOverview={total:results[0].count??0,today:results[1].count??0,overdue:results[2].count??0,scheduled:results[3].count??0,done:results[4].count??0,undated:results[5].count??0,open:results[6].count??0,offlineCached:false};
     await saveOfflineQueryCache(statsCacheScope,user?.id,profile.organization_id,result).catch(()=>false);
     return result;
    }catch(error){
@@ -270,8 +270,8 @@ const speechRestartTimerRef=useRef<number|null>(null);const speechShouldContinue
   useEffect(()=>{if(!deepLinkId||notificationReminderQuery.isPending)return;const clearParams=()=>setParams(current=>{current.delete('reminder');current.delete('rid');return current;},{replace:true});if(notificationReminderQuery.isError){setToast({text:errorFa(notificationReminderQuery.error)});clearParams();return;}const linked=notificationReminderQuery.data;if(!linked){setToast({text:'یادآور پیدا نشد یا دسترسی نمایش آن وجود ندارد.'});clearParams();return;}const [todayStart,tomorrowStart]=todayRange();let target:ReminderSection='all';if(linked.status==='done')target='done';else if(linked.status==='open'){if(!linked.due_at)target='open';else{const due=new Date(linked.due_at),dueMs=due.getTime();target=linked.all_day&&due>=todayStart&&due<tomorrowStart?'today':dueMs<Date.now()?'overdue':due>=todayStart&&due<tomorrowStart?'today':'scheduled';}}const targetPath='/reminders/'+target;setDeepLinkedReminder(linked);setDeepLinkTargetPath(targetPath);setExpandedReminderId(linked.id);if(location.pathname!==targetPath)navigate(targetPath,{replace:true});clearParams();},[deepLinkId,notificationReminderQuery.data,notificationReminderQuery.error,notificationReminderQuery.isError,notificationReminderQuery.isPending,location.pathname,navigate,setParams]);
   const queuedDrafts=useMemo(()=>queuedReminderDrafts(offlineQueue,user?.id??null,profile?.organization_id??null),[offlineQueue,user?.id,profile?.organization_id]);
  const queuedClientUuids=useMemo(()=>new Set(queuedDrafts.map(x=>x.reminder.client_uuid).filter((x):x is string=>Boolean(x))),[queuedDrafts]);
- const reminders=(()=>{const rows=(query.data?.rows??[]).filter(r=>!(r.id.startsWith('local-')&&r.client_uuid&&queuedClientUuids.has(r.client_uuid)));if(deepLinkedReminder&&location.pathname===deepLinkTargetPath&&!rows.some(r=>r.id===deepLinkedReminder.id))rows.push(deepLinkedReminder);return rows;})();
- const linkedShipmentIds=useMemo(()=>Array.from(new Set((query.data?.rows??[]).map(reminderShipmentId).filter((id):id is string=>Boolean(id)))),[query.data?.rows]);
+ const reminders=useMemo(()=>{const rows=(query.data?.rows??[]).filter(r=>!(r.id.startsWith('local-')&&r.client_uuid&&queuedClientUuids.has(r.client_uuid)));if(deepLinkedReminder&&location.pathname===deepLinkTargetPath&&!rows.some(r=>r.id===deepLinkedReminder.id))rows.push(deepLinkedReminder);return rows;},[query.data?.rows,queuedClientUuids,deepLinkedReminder,location.pathname,deepLinkTargetPath]);
+ const linkedShipmentIds=useMemo(()=>Array.from(new Set(reminders.map(reminderShipmentId).filter((id):id is string=>Boolean(id)))),[reminders]);
  const shipmentLabelsQuery=useQuery<Record<string,LinkedShipmentSummary>>({queryKey:['reminder-shipment-labels',profile?.organization_id,linkedShipmentIds.join(',')],enabled:Boolean(profile?.organization_id&&linkedShipmentIds.length),staleTime:60_000,queryFn:async()=>{if(!profile?.organization_id||!linkedShipmentIds.length)return{};const chunks=Array.from({length:Math.ceil(linkedShipmentIds.length/100)},(_,index)=>linkedShipmentIds.slice(index*100,(index+1)*100));const results=await Promise.all(chunks.map(ids=>supabase.from('shipments').select('id,display_name,bill_of_lading_no').eq('organization_id',profile.organization_id).in('id',ids)));const failed=results.find(result=>result.error);if(failed?.error)throw failed.error;return results.flatMap(result=>result.data??[]).reduce<Record<string,LinkedShipmentSummary>>((acc,row)=>{const item=row as {id:string;display_name:string|null;bill_of_lading_no:string|null};acc[item.id]={display_name:item.display_name,bill_of_lading_no:item.bill_of_lading_no};return acc;},{});}});
  const shipmentLabels=shipmentLabelsQuery.data??{};
  const shipmentDisplayName=(id:string)=>shipmentLabels[id]?.display_name?.trim()||shipmentLabels[id]?.bill_of_lading_no?.trim()||'محموله پیوندشده';
@@ -406,7 +406,7 @@ const speechRestartTimerRef=useRef<number|null>(null);const speechShouldContinue
   useEffect(()=>{if(!deepLinkedReminder||!deepLinkTargetPath||location.pathname!==deepLinkTargetPath)return;const frame=window.requestAnimationFrame(()=>{const target=document.querySelector('[data-reminder-id="'+deepLinkedReminder.id+'"]');target?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});});return()=>window.cancelAnimationFrame(frame);},[deepLinkedReminder?.id,deepLinkTargetPath,location.pathname,groups]);
  const totalPages=Math.max(1,Math.ceil((query.data?.count??0)/PAGE_SIZE));
   const activeTimelineTab=(currentSection==='open'?'open':currentSection==='today'?'today':currentSection==='overdue'?'overdue':currentSection==='scheduled'?'scheduled':currentSection==='done'?'done':'all');
-  const timelineCounts={all:statsQuery.data?.total,today:statsQuery.data?.today,overdue:statsQuery.data?.overdue,open:statsQuery.data?Math.max(0,statsQuery.data.total-statsQuery.data.done):(isHome?query.data?.count:undefined),scheduled:statsQuery.data?.scheduled,done:statsQuery.data?.done};
+  const timelineCounts={all:statsQuery.data?.total,today:statsQuery.data?.today,overdue:statsQuery.data?.overdue,open:statsQuery.data?.open??(isHome?query.data?.count:undefined),scheduled:statsQuery.data?.scheduled,done:statsQuery.data?.done};
   const calendarCacheScope=JSON.stringify(['reminder-calendar',profile?.organization_id,user?.id,calendarMonth.year,calendarMonth.month]);
   const calendarQuery=useQuery<CalendarReminderDate[]>({
    queryKey:['reminder-calendar',profile?.organization_id,user?.id,calendarMonth.year,calendarMonth.month],
