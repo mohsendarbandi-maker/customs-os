@@ -7,7 +7,7 @@
 @media (max-width: 767px), (pointer: coarse) {
   :root {
     --mobile-header-height: 62px;
-    --mobile-tabbar-height: 68px;
+
     --mobile-page-gutter: 13px;
     --mobile-card-radius: 20px;
   }
@@ -125,7 +125,7 @@
     width: 100% !important;
     min-width: 0 !important;
     min-height: 0;
-    padding: 12px var(--mobile-page-gutter) calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom) + 18px) !important;
+    padding: 12px var(--mobile-page-gutter) var(--cos-tab-reserve) !important;
     overflow-x: clip !important;
     overflow-y: auto;
     overscroll-behavior-y: contain;
@@ -141,84 +141,13 @@
     animation: mobile-native-enter .22s ease-out both;
   }
 
-  /* iPhone-style glass tab bar: full width, fixed to the device safe area. */
-  .app-mobile-viewport-dock {
-    position: fixed !important;
-    inset-inline: 0 !important;
-    inset-block-end: 0 !important;
-    z-index: 500 !important;
-    display: grid !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-    align-items: stretch !important;
-    gap: 2px !important;
-    width: 100% !important;
-    min-height: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
-    height: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom)) !important;
-    padding: 5px 8px calc(6px + env(safe-area-inset-bottom)) !important;
-    border: 0 !important;
-    border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent) !important;
-    border-radius: 20px 20px 0 0 !important;
-    background: color-mix(in srgb, var(--surface) 91%, transparent) !important;
-    color: var(--text) !important;
-    box-shadow: 0 -10px 34px rgba(0, 8, 20, .16), inset 0 1px 0 rgba(255,255,255,.08) !important;
-    -webkit-backdrop-filter: blur(28px) saturate(175%) !important;
-    backdrop-filter: blur(28px) saturate(175%) !important;
-    transform: none !important;
-    pointer-events: auto !important;
-  }
-
-  .app-mobile-viewport-dock > button {
-    display: flex !important;
-    min-width: 0 !important;
-    min-height: 54px !important;
-    height: 100%;
-    align-items: center !important;
-    justify-content: center !important;
-    flex-direction: column !important;
-    gap: 4px !important;
-    padding: 4px 1px !important;
-    border: 0 !important;
-    border-radius: 13px !important;
-    background: transparent !important;
-    color: var(--text-muted) !important;
-    font-size: 10px !important;
-    font-weight: 800 !important;
-    line-height: 1.15 !important;
-    touch-action: manipulation !important;
-  }
-
-  .app-mobile-viewport-dock > button svg {
-    display: block !important;
-    width: 21px !important;
-    height: 21px !important;
-    stroke-width: 2.1;
-  }
-
-  .app-mobile-viewport-dock > button.is-active {
-    position: relative;
-    background: color-mix(in srgb, var(--primary) 13%, var(--surface)) !important;
-    color: var(--primary-2) !important;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-2) 18%, transparent) !important;
-  }
-
-  .app-mobile-viewport-dock > button.is-active::before {
-    content: "";
-    position: absolute;
-    inset-block-start: 2px;
-    inset-inline-start: calc(50% - 10px);
-    width: 20px;
-    height: 3px;
-    border-radius: 9px;
-    background: var(--primary-2);
-  }
-
   .app-more-scrim {
     position: fixed !important;
     inset: 0 !important;
     z-index: 510 !important;
     display: flex;
     align-items: flex-end;
-    padding: 12px 10px calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom) + 8px);
+    padding: 12px 10px calc(var(--cos-tab-reserve) + 8px);
     background: rgba(1, 10, 22, .48);
     -webkit-backdrop-filter: blur(5px);
     backdrop-filter: blur(5px);
@@ -693,7 +622,7 @@
   .file-manager-page :is(input, select) { min-width: 0 !important; max-width: 100%; }
   .file-manager-page .fixed.inset-x-3 {
     top: calc(var(--mobile-header-height) + env(safe-area-inset-top) + 8px) !important;
-    bottom: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom) + 12px) !important;
+    bottom: calc(var(--cos-tab-reserve) + 12px) !important;
     z-index: 520 !important;
   }
 
@@ -778,7 +707,7 @@
 
 @media (min-width: 768px) and (max-width: 1023px) {
   .app-shell.is-touch-layout .app-content {
-    padding: 16px 18px calc(98px + env(safe-area-inset-bottom)) !important;
+    padding: 16px 18px var(--cos-tab-reserve) !important;
   }
   .app-shell.is-touch-layout .customs-widget-grid {
     grid-template-columns: repeat(2,minmax(0,1fr)) !important;
@@ -800,5 +729,4 @@
 
 @media (prefers-reduced-motion: reduce) {
   .app-shell.is-touch-layout .future-route-stage { animation: none !important; }
-  .app-mobile-viewport-dock > button { transition: none !important; }
 }
