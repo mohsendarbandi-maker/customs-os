@@ -70,19 +70,23 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
   });
 
 
-  it('keeps the dock on the physical screen edge and paints behind the iOS Home Indicator', () => {
+  it('matches the reference tab scale and places the full tab controls inside the bottom safe area', () => {
     const canonicalStart = layout.lastIndexOf('FINAL MOBILE DOCK GEOMETRY');
     const canonical = layout.slice(canonicalStart);
 
     expect(canonicalStart).toBeGreaterThanOrEqual(0);
-    expect(canonical).toContain('--cos-tab-height: 30px;');
-    expect(canonical).toContain('--cos-bottom-nav-safe-area: env(safe-area-inset-bottom, 0px);');
-    expect(canonical).toContain('--cos-tab-reserve: calc(var(--cos-tab-height) + var(--cos-bottom-nav-safe-area));');
+    expect(canonical).toContain('--cos-tab-height: 70px;');
+    expect(canonical).toContain('--cos-tab-reserve: var(--cos-tab-height);');
     expect(canonical).toContain('bottom: 0 !important;');
-    expect(canonical).toContain('padding: 0 6px var(--cos-bottom-nav-safe-area) !important;');
-    expect(canonical).toContain('bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;');
-    expect(canonical).not.toContain('bottom: env(safe-area-inset-bottom, 0px) !important;');
-    expect(canonical).not.toContain('bottom: var(--chat-visual-bottom-inset, 0px) !important;');
+    expect(canonical).toContain('height: 100% !important;');
+    expect(canonical).toContain('min-height: 100% !important;');
+    expect(canonical).toContain('align-self: stretch !important;');
+    expect(canonical).toContain('justify-content: flex-end !important;');
+    expect(canonical).toContain('padding: 0 1px 10px !important;');
+    expect(canonical).toContain('width: 22px !important;');
+    expect(canonical).toContain('height: 22px !important;');
+    expect(canonical).toContain('font-size: 11px !important;');
+    expect(canonical).not.toContain('padding: 0 6px var(--cos-bottom-nav-safe-area)');
   });
 
 });
