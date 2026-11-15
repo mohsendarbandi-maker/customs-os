@@ -578,9 +578,10 @@
 @media (max-width: 1023px), (pointer: coarse) {
   :root {
     --cos-tab-height: 70px;
+    --cos-tab-safe-area: env(safe-area-inset-bottom, 0px);
     --cos-tab-inset: 0px;
     --cos-tab-clearance: 0px;
-    --cos-tab-reserve: var(--cos-tab-height);
+    --cos-tab-reserve: calc(var(--cos-tab-height) + var(--cos-tab-safe-area));
     --cos-bottom-nav-content-height: var(--cos-tab-height);
     --cos-bottom-nav-reserve: var(--cos-tab-reserve);
     --app-mobile-tabbar-height: var(--cos-tab-height);
@@ -600,11 +601,11 @@
     position: fixed !important;
     inset-inline: 0 !important;
     inset-block-start: auto !important;
-    inset-block-end: 0 !important;
+    inset-block-end: calc(-1 * var(--cos-tab-safe-area)) !important;
     top: auto !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: 0 !important;
+    bottom: calc(-1 * var(--cos-tab-safe-area)) !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: stretch !important;
@@ -612,9 +613,9 @@
     gap: 0 !important;
     width: 100% !important;
     max-width: none !important;
-    height: var(--cos-tab-height) !important;
-    min-height: var(--cos-tab-height) !important;
-    max-height: var(--cos-tab-height) !important;
+    height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
+    min-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
+    max-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
     box-sizing: border-box !important;
     margin: 0 !important;
     /* No safe-area bottom padding here: buttons must occupy that space too. */
@@ -640,11 +641,11 @@
   /* Chat has stricter legacy selectors; pin it to the same physical edge. */
   html:has(.app-shell.is-touch-layout.is-chat-route) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs,
   html:has(.app-shell.is-touch-layout.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock.native-bottom-tabs {
-    inset-block-end: 0 !important;
-    bottom: 0 !important;
-    height: var(--cos-tab-height) !important;
-    min-height: var(--cos-tab-height) !important;
-    max-height: var(--cos-tab-height) !important;
+    inset-block-end: calc(-1 * var(--cos-tab-safe-area)) !important;
+    bottom: calc(-1 * var(--cos-tab-safe-area)) !important;
+    height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
+    min-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
+    max-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
     padding: 0 6px !important;
   }
 
@@ -666,13 +667,13 @@
     max-height: 100% !important;
     align-self: stretch !important;
     margin: 0 !important;
-    padding: 0 1px 10px !important;
+    padding: 0 1px 16px !important;
     border: 0 !important;
     border-radius: 9px !important;
     background: transparent !important;
     color: rgba(245, 249, 255, .72) !important;
     opacity: 1 !important;
-    font-size: 11px !important;
+    font-size: 12px !important;
     line-height: 1.2 !important;
     box-shadow: none !important;
     -webkit-tap-highlight-color: transparent;
@@ -692,9 +693,9 @@
   html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button > svg,
   html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button > svg {
     display: block !important;
-    flex: 0 0 22px !important;
-    width: 22px !important;
-    height: 22px !important;
+    flex: 0 0 24px !important;
+    width: 24px !important;
+    height: 24px !important;
     stroke-width: 1.8 !important;
   }
 
@@ -714,7 +715,7 @@
   html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs .native-tab-indicator {
     position: absolute !important;
     z-index: 0 !important;
-    top: 8px !important;
+    top: calc(var(--cos-tab-safe-area) + 8px) !important;
     inset-inline-start: 0 !important;
     display: flex !important;
     align-items: center !important;
