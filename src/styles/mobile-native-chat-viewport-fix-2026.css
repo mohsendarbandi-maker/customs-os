@@ -119,19 +119,6 @@
 
 /* Final authoritative geometry: the portal dock remains floating even while iOS resizes visualViewport for the keyboard. */
 @media (max-width:1023px),(pointer:coarse) {
- html:has(.app-shell.is-touch-layout.is-chat-route) .app-mobile-viewport-dock {
-  position:fixed!important;inset-inline:auto!important;
-  inset-block-end:calc(var(--chat-visual-bottom-inset,0px) + var(--cos-tab-inset) + env(safe-area-inset-bottom))!important;
-  left:var(--cos-tab-inset)!important;right:var(--cos-tab-inset)!important;
-  bottom:calc(var(--chat-visual-bottom-inset,0px) + var(--cos-tab-inset) + env(safe-area-inset-bottom))!important;
-  width:auto!important;max-width:480px!important;height:var(--cos-tab-height)!important;min-height:var(--cos-tab-height)!important;
-  margin-inline:auto!important;margin-block:0!important;padding:6px 8px!important;box-sizing:border-box!important;
-  border:1px solid rgba(255,255,255,.15)!important;border-radius:24px!important;
-  background:rgba(9,39,68,.96)!important;
-  box-shadow:0 14px 38px rgba(7,28,48,.28),inset 0 1px 0 rgba(255,255,255,.08)!important;
-  -webkit-backdrop-filter:blur(22px) saturate(150%)!important;backdrop-filter:blur(22px) saturate(150%)!important;
-  z-index:900!important;
- }
 }
 
 
@@ -141,12 +128,12 @@
    -------------------------------------------------------------------------- */
 @media (max-width: 1023px), (pointer: coarse) {
   :root {
-    --cos-bottom-nav-content-height: 64px;
-    --cos-bottom-nav-safe-area: max(env(safe-area-inset-bottom, 0px), 8px);
-    --cos-bottom-nav-reserve: calc(65px + var(--cos-bottom-nav-safe-area));
-    --cos-tab-height: var(--cos-bottom-nav-content-height);
-    --cos-tab-inset: 0px;
-    --cos-tab-reserve: var(--cos-bottom-nav-reserve);
+    
+    
+    
+    
+    
+    
   }
 
   html:has(.app-shell.is-touch-layout),
@@ -176,176 +163,6 @@
     padding-bottom: 0 !important;
     min-height: 0 !important;
     max-height: none !important;
-  }
-
-  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs,
-  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs {
-    position: fixed !important;
-    inset-inline: 0 !important;
-    inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-around !important;
-    direction: rtl !important;
-    width: 100% !important;
-    max-width: none !important;
-    height: var(--cos-bottom-nav-reserve) !important;
-    min-height: var(--cos-bottom-nav-reserve) !important;
-    max-height: var(--cos-bottom-nav-reserve) !important;
-    box-sizing: border-box !important;
-    margin: 0 !important;
-    padding: 0 8px var(--cos-bottom-nav-safe-area) !important;
-    border: 0 !important;
-    border-top: 1px solid rgba(255, 255, 255, .08) !important;
-    border-radius: 24px 24px 0 0 !important;
-    background: rgba(7, 22, 43, .88) !important;
-    color: #f8fbff !important;
-    box-shadow: 0 -12px 34px rgba(0, 10, 26, .22) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-    backdrop-filter: blur(20px) saturate(180%) !important;
-    isolation: isolate !important;
-    overflow: visible !important;
-    z-index: 900 !important;
-  }
-
-  .app-mobile-dock.native-bottom-tabs > button {
-    position: relative !important;
-    z-index: 1 !important;
-    display: flex !important;
-    flex: 1 1 20% !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 4px !important;
-    width: 20% !important;
-    min-width: 0 !important;
-    height: 64px !important;
-    min-height: 64px !important;
-    max-height: 64px !important;
-    margin: 0 !important;
-    padding: 5px 2px 3px !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    color: rgba(245, 249, 255, .92) !important;
-    opacity: .55 !important;
-    font: inherit !important;
-    font-size: 10px !important;
-    line-height: 1.2 !important;
-    white-space: nowrap !important;
-    box-shadow: none !important;
-    transform: translateZ(0);
-    transition: opacity .2s ease, color .2s ease, transform .18s ease !important;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-  }
-
-  .app-mobile-dock.native-bottom-tabs > button.is-active,
-  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"] {
-    color: #fff !important;
-    opacity: 1 !important;
-  }
-
-  .app-mobile-dock.native-bottom-tabs > button > svg {
-    display: block !important;
-    width: 22px !important;
-    height: 22px !important;
-    flex: 0 0 22px !important;
-    stroke-width: 1.75 !important;
-    transition: transform .2s cubic-bezier(.4, 0, .2, 1) !important;
-  }
-
-  .app-mobile-dock.native-bottom-tabs > button.is-active > svg,
-  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"] > svg {
-    transform: translateY(-2px) !important;
-  }
-
-  .app-mobile-dock.native-bottom-tabs > button > span:not(.native-tab-badge) {
-    display: block !important;
-    max-width: 100% !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    opacity: .72 !important;
-    transform: translateY(1px);
-    transition: opacity .2s ease, transform .2s ease !important;
-  }
-
-  .app-mobile-dock.native-bottom-tabs > button.is-active > span:not(.native-tab-badge),
-  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"] > span:not(.native-tab-badge) {
-    opacity: 1 !important;
-    transform: translateY(0);
-    animation: cos-nav-label-in .22s ease both;
-  }
-
-  .app-mobile-dock.native-bottom-tabs > button:active {
-    transform: scale(.92) !important;
-  }
-
-  .app-mobile-dock.native-bottom-tabs > button:focus-visible {
-    outline: 2px solid rgba(95, 223, 255, .95) !important;
-    outline-offset: -3px !important;
-    border-radius: 14px !important;
-  }
-
-  .app-mobile-dock.native-bottom-tabs .native-tab-indicator {
-    position: absolute !important;
-    z-index: 0 !important;
-    top: 8px !important;
-    inset-inline-start: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 20% !important;
-    height: 33px !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    pointer-events: none !important;
-    transform: translateX(calc(var(--active-tab-index, 0) * -100%)) !important;
-    transform-origin: center !important;
-    transition: transform 300ms cubic-bezier(.4, 0, .2, 1) !important;
-  }
-
-  .app-mobile-dock.native-bottom-tabs .native-tab-indicator::before {
-    content: "" !important;
-    display: block !important;
-    width: 46px !important;
-    max-width: 72% !important;
-    height: 32px !important;
-    border-radius: 999px !important;
-    background: linear-gradient(135deg, #287bff 0%, #16cbd0 100%) !important;
-    box-shadow: 0 5px 20px rgba(27, 183, 229, .32), 0 0 12px rgba(32, 197, 223, .14) !important;
-  }
-
-  .app-mobile-dock.native-bottom-tabs .native-tab-badge {
-    position: absolute !important;
-    top: 3px !important;
-    left: calc(50% + 7px) !important;
-    z-index: 3 !important;
-    display: grid !important;
-    place-items: center !important;
-    min-width: 16px !important;
-    height: 16px !important;
-    padding: 0 4px !important;
-    border: 2px solid #0a1b32 !important;
-    border-radius: 999px !important;
-    background: #f04452 !important;
-    color: #fff !important;
-    font-size: 9px !important;
-    font-weight: 900 !important;
-    line-height: 1 !important;
-    opacity: 1 !important;
-    transform: none !important;
-    animation: cos-chat-badge-pulse 1.8s ease-in-out infinite !important;
-  }
-
-  /* When the iOS keyboard opens, keep the same dock just above the keyboard.
-     At rest, bottom is exactly zero and safe-area is applied only as padding. */
-  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock {
-    bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
-    inset-block-end: var(--mobile-keyboard-bottom-inset, 0px) !important;
   }
 
   /* Chat list filter chips: a single snap-scrolling row, never clipped vertically. */
@@ -651,7 +468,6 @@
   to { background-position: -100% 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .app-mobile-dock.native-bottom-tabs *,
   .chat-conversation-row,
   .chat-skeleton-avatar,
   .chat-skeleton-copy i,
@@ -665,28 +481,6 @@
 /* Higher-specificity correction for legacy chat dock rules. The chat dock is
    edge-to-edge at rest too; the keyboard inset is the only bottom offset. */
 @media (max-width:1023px),(pointer:coarse) {
-  html:has(.app-shell.is-touch-layout.is-chat-route) .app-mobile-viewport-dock.native-bottom-tabs {
-    position:fixed!important;
-    inset-inline:0!important;
-    inset-block-end:var(--mobile-keyboard-bottom-inset,0px)!important;
-    left:0!important;
-    right:0!important;
-    bottom:var(--mobile-keyboard-bottom-inset,0px)!important;
-    width:100%!important;
-    max-width:none!important;
-    height:var(--cos-bottom-nav-reserve)!important;
-    min-height:var(--cos-bottom-nav-reserve)!important;
-    max-height:var(--cos-bottom-nav-reserve)!important;
-    margin:0!important;
-    padding:0 8px var(--cos-bottom-nav-safe-area)!important;
-    border:0!important;
-    border-top:1px solid rgba(255,255,255,.08)!important;
-    border-radius:24px 24px 0 0!important;
-    background:rgba(7,22,43,.88)!important;
-    box-shadow:0 -12px 34px rgba(0,10,26,.22)!important;
-    -webkit-backdrop-filter:blur(20px) saturate(180%)!important;
-    backdrop-filter:blur(20px) saturate(180%)!important;
-  }
 
   .app-shell.is-touch-layout.is-chat-route .chat-composer {
     padding-bottom:8px!important;
@@ -764,27 +558,11 @@
 
 
 @media (max-width:1023px),(pointer:coarse) {
-  .app-mobile-dock.native-bottom-tabs > button > span:not(.native-tab-badge) {
-    opacity:1!important;
-  }
 }
 
 
 /* Final specificity pass: override the earlier unified-ocean chat rules. */
 @media (max-width:1023px),(pointer:coarse) {
-  .app-mobile-dock.native-bottom-tabs > button.is-active,
-  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"] {
-    border-color:transparent!important;
-    background:transparent!important;
-    box-shadow:none!important;
-  }
-  .app-mobile-dock.native-bottom-tabs > button.is-active::before,
-  .app-mobile-dock.native-bottom-tabs > button.is-active::after,
-  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"]::before,
-  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"]::after {
-    content:none!important;
-    display:none!important;
-  }
 
   .app-shell.is-touch-layout.is-chat-route .chat-standalone .chat-folder-strip {
     display:flex!important;
