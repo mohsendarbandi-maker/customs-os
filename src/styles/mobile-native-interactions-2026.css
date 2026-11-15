@@ -33,28 +33,6 @@
     pointer-events: none !important;
   }
 
-  /* A tab pressed while already selected scrolls its root screen to the top.
-     Chat is intentionally excluded: it must retain its selected conversation. */
-  .app-mobile-dock.native-bottom-tabs > button {
-    position: relative;
-    isolation: isolate;
-    -webkit-user-select: none;
-    user-select: none;
-  }
-  .app-mobile-dock.native-bottom-tabs > button[aria-current="page"]::after {
-    content: "";
-    position: absolute;
-    inset: 3px 5px;
-    z-index: -1;
-    border-radius: 13px;
-    background: transparent;
-    pointer-events: none;
-  }
-  .app-mobile-dock.native-bottom-tabs > button:focus-visible {
-    outline: 3px solid rgba(40,119,184,.22) !important;
-    outline-offset: -2px !important;
-  }
-
   /* Shared keyboard viewport for every mobile route. The shell's content
      scroller shrinks to the visible area and the single body-portal dock moves
      to the keyboard edge; navigation stays visible instead of being hidden. */
@@ -68,16 +46,6 @@
     min-height: 0 !important;
     max-height: var(--mobile-visible-viewport-height, 100dvh) !important;
     overflow: hidden !important;
-  }
-  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock {
-    position: fixed !important;
-    display: grid !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    inset-block-end: calc(var(--mobile-keyboard-bottom-inset, 0px) + var(--cos-tab-inset, 10px) + env(safe-area-inset-bottom)) !important;
-    bottom: calc(var(--mobile-keyboard-bottom-inset, 0px) + var(--cos-tab-inset, 10px) + env(safe-area-inset-bottom)) !important;
-    z-index: 900 !important;
   }
   .app-shell.is-touch-layout.is-mobile-keyboard-open .app-content {
     min-height: 0 !important;
@@ -182,17 +150,6 @@
     overflow-y: auto !important;
     overscroll-behavior: contain !important;
   }
-  html:has(.app-shell.is-chat-route) .app-mobile-viewport-dock {
-    position: fixed !important;
-    bottom: var(--chat-visual-bottom-inset, 0px) !important;
-    z-index: 900 !important;
-  }
-  .app-shell.is-chat-route .app-mobile-dock.native-bottom-tabs {
-    display: grid !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-  }
 
   /* Calendar/composer overlays may cover the dock; their close/save controls
      remain reachable within their own full-screen dialog scroll area. */
@@ -215,7 +172,6 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .native-route-exit-snapshot { animation: none !important; }
-    .app-mobile-dock.native-bottom-tabs > button { transition: none !important; }
   }
 }
 
@@ -246,22 +202,5 @@
   .app-shell.is-touch-layout.is-chat-route .chat-standalone[data-chat-selected="true"] .chat-composer {
     margin: 0 !important;
     margin-block-end: 0 !important;
-  }
-
-  html:has(.app-shell.is-touch-layout.is-chat-route) .app-mobile-viewport-dock {
-    position: fixed !important;
-    inset-inline: 0 !important;
-    inset-block-end: var(--chat-visual-bottom-inset, 0px) !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: var(--chat-visual-bottom-inset, 0px) !important;
-    width: 100% !important;
-    height: calc(var(--cos-tab-height) + env(safe-area-inset-bottom)) !important;
-    min-height: calc(var(--cos-tab-height) + env(safe-area-inset-bottom)) !important;
-    margin: 0 !important;
-    padding: 6px 8px calc(5px + env(safe-area-inset-bottom)) !important;
-    box-sizing: border-box !important;
-    border-radius: 18px 18px 0 0 !important;
-    z-index: 900 !important;
   }
 }
