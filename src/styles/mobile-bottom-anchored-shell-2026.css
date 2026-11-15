@@ -569,18 +569,17 @@
 
 
 /*
- * FINAL MOBILE DOCK GEOMETRY — reference-sized tabs inside the compact safe-area layout.
+ * FINAL MOBILE DOCK GEOMETRY — compact edge-to-edge tabs with no reserved safe-area band.
  *
- * The visible tab row is 58px; the iOS safe-area is added only as background
- * below it. Labels and icons stay fully above the Home Indicator.
+ * The entire 64px dock is interactive. Tabs occupy the former bottom safe-area
+ * space; no extra blank inset is added below the icons or captions.
  */
 @media (max-width: 1023px), (pointer: coarse) {
   :root {
-    --cos-tab-height: 58px;
-    --cos-tab-safe-area: env(safe-area-inset-bottom, 0px);
+    --cos-tab-height: 64px;
     --cos-tab-inset: 0px;
     --cos-tab-clearance: 0px;
-    --cos-tab-reserve: calc(var(--cos-tab-height) + var(--cos-tab-safe-area));
+    --cos-tab-reserve: var(--cos-tab-height);
     --cos-bottom-nav-content-height: var(--cos-tab-height);
     --cos-bottom-nav-reserve: var(--cos-tab-reserve);
     --app-mobile-tabbar-height: var(--cos-tab-height);
@@ -600,11 +599,11 @@
     position: fixed !important;
     inset-inline: 0 !important;
     inset-block-start: auto !important;
-    inset-block-end: calc(-1 * var(--cos-tab-safe-area)) !important;
+    inset-block-end: 0 !important;
     top: auto !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: calc(-1 * var(--cos-tab-safe-area)) !important;
+    bottom: 0 !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: stretch !important;
@@ -612,13 +611,13 @@
     gap: 0 !important;
     width: 100% !important;
     max-width: none !important;
-    height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
-    min-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
-    max-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
+    height: var(--cos-tab-height) !important;
+    min-height: var(--cos-tab-height) !important;
+    max-height: var(--cos-tab-height) !important;
     box-sizing: border-box !important;
     margin: 0 !important;
-    /* The dock background fills the safe area; controls do not. */
-    padding: 0 6px var(--cos-tab-safe-area) !important;
+    /* No separate safe-area band: the tabs use the full dock height. */
+    padding: 0 6px !important;
     border: 0 !important;
     border-top: 1px solid rgba(255, 255, 255, .09) !important;
     border-radius: 17px 17px 0 0 !important;
@@ -637,7 +636,7 @@
     z-index: 900 !important;
   }
 
-  /* Chat has stricter legacy selectors; pin it to the same physical edge. */
+  /* Chat uses the same compact, edge-to-edge dock. */
   html:has(.app-shell.is-touch-layout.is-chat-route) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs,
   html:has(.app-shell.is-touch-layout.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock.native-bottom-tabs {
     inset-block-end: calc(-1 * var(--cos-tab-safe-area)) !important;
@@ -645,10 +644,10 @@
     height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
     min-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
     max-height: calc(var(--cos-tab-height) + var(--cos-tab-safe-area)) !important;
-    padding: 0 6px var(--cos-tab-safe-area) !important;
+    padding: 0 6px !important;
   }
 
-  /* Hit areas fill the dock, while bottom padding keeps captions above safe-area. */
+  /* Icons and captions occupy the former safe-area space. */
   html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button,
   html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button {
     position: relative !important;
@@ -666,7 +665,7 @@
     max-height: 100% !important;
     align-self: stretch !important;
     margin: 0 !important;
-    padding: 0 1px calc(var(--cos-tab-safe-area) + 8px) !important;
+    padding: 0 1px 5px !important;
     border: 0 !important;
     border-radius: 9px !important;
     background: transparent !important;
@@ -760,7 +759,7 @@
     opacity: 1 !important;
   }
 
-  /* The keyboard removes the Home Indicator inset; retain compact tab geometry. */
+  /* Keyboard-open state retains the same compact tab geometry. */
   html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) {
     --cos-tab-safe-area: 0px;
     --cos-tab-reserve: var(--cos-tab-height);
@@ -773,7 +772,7 @@
     height: var(--cos-tab-height) !important;
     min-height: var(--cos-tab-height) !important;
     max-height: var(--cos-tab-height) !important;
-    padding: 0 6px 8px !important;
+    padding: 0 6px !important;
   }
 
   html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock, .app-mobile-viewport-dock).native-bottom-tabs,
