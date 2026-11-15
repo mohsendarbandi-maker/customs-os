@@ -51,11 +51,11 @@
     overflow: visible;
     isolation: isolate;
     border: 0;
-    border-top: 1px solid rgba(255, 255, 255, .12);
     border-radius: 18px 18px 0 0;
     background: rgba(7, 29, 51, .97);
     color: #f8fbff;
-    box-shadow: 0 -8px 26px rgba(7, 28, 48, .18);
+    /* Draw the divider without consuming one pixel of the 52px tap row. */
+    box-shadow: 0 -8px 26px rgba(7, 28, 48, .18), inset 0 1px 0 rgba(255, 255, 255, .12);
     -webkit-backdrop-filter: blur(20px) saturate(160%);
     backdrop-filter: blur(20px) saturate(160%);
   }
