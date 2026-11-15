@@ -76,17 +76,18 @@ describe('mobile full-height shell and bottom navigation geometry', () => {
 
     expect(canonicalStart).toBeGreaterThanOrEqual(0);
     expect(canonical).toContain('--cos-tab-height: 70px;');
-    expect(canonical).toContain('--cos-tab-reserve: var(--cos-tab-height);');
-    expect(canonical).toContain('bottom: 0 !important;');
+    expect(canonical).toContain('--cos-tab-safe-area: env(safe-area-inset-bottom, 0px);');
+    expect(canonical).toContain('--cos-tab-reserve: calc(var(--cos-tab-height) + var(--cos-tab-safe-area));');
+    expect(canonical).toContain('bottom: calc(-1 * var(--cos-tab-safe-area)) !important;');
     expect(canonical).toContain('height: 100% !important;');
     expect(canonical).toContain('min-height: 100% !important;');
     expect(canonical).toContain('align-self: stretch !important;');
     expect(canonical).toContain('justify-content: flex-end !important;');
-    expect(canonical).toContain('padding: 0 1px 10px !important;');
-    expect(canonical).toContain('width: 22px !important;');
-    expect(canonical).toContain('height: 22px !important;');
-    expect(canonical).toContain('font-size: 11px !important;');
-    expect(canonical).not.toContain('padding: 0 6px var(--cos-bottom-nav-safe-area)');
+    expect(canonical).toContain('padding: 0 1px 16px !important;');
+    expect(canonical).toContain('width: 24px !important;');
+    expect(canonical).toContain('height: 24px !important;');
+    expect(canonical).toContain('font-size: 12px !important;');
+    expect(canonical).toContain('top: calc(var(--cos-tab-safe-area) + 8px) !important;');
   });
 
 });
