@@ -281,9 +281,11 @@ $release$;
 
 -- A shipment already closed by finance must never be regressed to ready.
 RESET ROLE;
+SET request.jwt.claim.role = 'owner';
 UPDATE public.shipments
 SET finance_status = 'closed'
 WHERE id = '00000000-0000-0000-0000-000000000010';
+SET request.jwt.claim.role = 'warehouse';
 SET ROLE authenticated;
 DO $closed$
 DECLARE
