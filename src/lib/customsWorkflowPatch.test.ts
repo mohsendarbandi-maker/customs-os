@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCustomsWorkflowJsonbPatch } from "./customsWorkflowPatch";
+import { buildCustomsWorkflowJsonbPatch, mergeCustomsWorkflowJsonbPatch } from "./customsWorkflowPatch";
 
 describe("customs workflow JSONB patches", () => {
   it("only includes the leaf changed by the active operator", () => {
@@ -37,6 +37,18 @@ describe("customs workflow JSONB patches", () => {
       { status: "completed", standard: { expert_review: "approved" } },
       { status: "completed", standard: { expert_review: "approved" } },
     )).toEqual({});
+  });
+
+  it("advances only locally saved leaves in the compare snapshot", () => {
+    const baseline = {
+      standard: { expert_review: "pending", inspection_paid: false, standard_fee_paid: false },
+    };
+    const updated = mergeCustomsWorkflowJsonbPatch(baseline, {
+      standard: { expert_review: "approved" },
+    });
+    expect(updated).toEqual({
+      standard: { expert_review: "approved", inspection_paid: false, standard_fee_paid: false },
+    });
   });
 
   it("treats arrays as atomic values", () => {
