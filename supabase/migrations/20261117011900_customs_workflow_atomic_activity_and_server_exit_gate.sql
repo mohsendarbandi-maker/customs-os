@@ -275,7 +275,35 @@ BEGIN
     '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩',
     '01234567890123456789'
   );
-  v_parts := pg_catalog.regexp_match(v_normalized, '^([0-9]{4})/([0-9]{1,2})/([0-9]{1,2})
+  v_parts := pg_catalog.regexp_match(
+    v_normalized,
+    '^([0-9]{4})/([0-9]{1,2})/([0-9]{1,2})$'
+  );
+  IF v_parts IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  v_year := v_parts[1]::integer;
+  v_month := v_parts[2]::integer;
+  v_day := v_parts[3]::integer;
+  IF v_year < 1200 OR v_year > 1600 OR v_month < 1 OR v_month > 12 OR v_day < 1 THEN
+    RETURN NULL;
+  END IF;
+
+  v_leap := public.customs_workflow_jalali_leap_code(v_year) = 0;
+  v_max_day := CASE
+    WHEN v_month <= 6 THEN 31
+    WHEN v_month <= 11 THEN 30
+    WHEN v_leap THEN 30
+    ELSE 29
+  END;
+  IF v_day > v_max_day THEN
+    RETURN NULL;
+  END IF;
+
+  RETURN v_year::bigint * 10000 + v_month::bigint * 100 + v_day::bigint;
+END;
+$function$;
 
 CREATE OR REPLACE FUNCTION public.customs_workflow_readiness_issues(
   p_customs_path text,
