@@ -17,6 +17,7 @@ type Props={declarationId:string;organizationId:string;userId?:string;customsReg
 type WorkflowBaseline={
  evaluation:Record<string,any>;expertise:Record<string,any>;cashier:Record<string,any>;
  loadingPermit:Record<string,any>;exit:Record<string,any>;port:Record<string,any>;
+ db:{evaluation:Record<string,any>;expertise:Record<string,any>;cashier:Record<string,any>;loadingPermit:Record<string,any>;exit:Record<string,any>;port:Record<string,any>};
 };
 const cloneWorkflowState=<T,>(value:T):T=>JSON.parse(JSON.stringify(value)) as T;
 const stages=[['evaluation','ارزیابی'],['expertise','کارشناسی و مجوزها'],['cashier','صندوق'],['loading_permit','مجوز بارگیری'],['exit','درب خروج'],['port_charges','عوارض بندری'],['abandoned','متروکه'],['completed','تکمیل']] as const;
@@ -104,7 +105,8 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      cashier:cloneWorkflowState({...emptyCashier,...(r.cashier_state||{})}),
      loadingPermit:cloneWorkflowState({...emptyLoadingPermit,...(r.loading_permit_state||{}),sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')}),
      exit:cloneWorkflowState({...emptyExit,...(r.exit_state||{})}),
-     port:cloneWorkflowState({...emptyPort,...(r.port_charges_state||{})})
+     port:cloneWorkflowState({...emptyPort,...(r.port_charges_state||{})}),
+     db:{evaluation:cloneWorkflowState(r.evaluation_state||{}),expertise:cloneWorkflowState(r.expertise_state||{}),cashier:cloneWorkflowState(r.cashier_state||{}),loadingPermit:cloneWorkflowState(r.loading_permit_state||{}),exit:cloneWorkflowState(r.exit_state||{}),port:cloneWorkflowState(r.port_charges_state||{})}
     };
    }else if(editable){
     const initial=defaults(info);
@@ -125,7 +127,8 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      cashier:cloneWorkflowState({...emptyCashier,...r.cashier_state}),
      loadingPermit:cloneWorkflowState({...emptyLoadingPermit,...r.loading_permit_state,sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')}),
      exit:cloneWorkflowState({...emptyExit,...r.exit_state}),
-     port:cloneWorkflowState({...emptyPort,...r.port_charges_state})
+     port:cloneWorkflowState({...emptyPort,...r.port_charges_state}),
+     db:{evaluation:cloneWorkflowState(r.evaluation_state||{}),expertise:cloneWorkflowState(r.expertise_state||{}),cashier:cloneWorkflowState(r.cashier_state||{}),loadingPermit:cloneWorkflowState(r.loading_permit_state||{}),exit:cloneWorkflowState(r.exit_state||{}),port:cloneWorkflowState(r.port_charges_state||{})}
     };
    }else{
     const initial=defaults(info);setEvaluation(initial.evaluation);setExpertise(initial.expertise);setLoadingPermit({...emptyLoadingPermit,sata_code:String(customData?.sata_code||'')});setStage(getInitialCustomsWorkflowStage('evaluation',customsPath,initial.evaluation));
@@ -186,7 +189,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      const nextEvaluation={...evaluation};
      if(nextEvaluation.expert_requested&&nextEvaluation.status==='not_required')nextEvaluation.status='required';
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.evaluation,nextEvaluation);
-     baseState=row.evaluation_state||{};
+     baseState=workflowBaseline.current.db.evaluation;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
      const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
       p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
@@ -194,57 +197,57 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
      setEvaluation(nextEvaluation);
-     workflowBaseline.current.evaluation=cloneWorkflowState(nextEvaluation);
+     workflowBaseline.current.evaluation=cloneWorkflowState(nextEvaluation);workflowBaseline.current.db.evaluation=cloneWorkflowState(savedRow.evaluation_state||{});
     }else if(stage==='expertise'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.expertise,expertise);
-     baseState=row.expertise_state||{};
+     baseState=workflowBaseline.current.db.expertise;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
      const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
       p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
      });
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
-     workflowBaseline.current.expertise=cloneWorkflowState(expertise);
+     workflowBaseline.current.expertise=cloneWorkflowState(expertise);workflowBaseline.current.db.expertise=cloneWorkflowState(savedRow.expertise_state||{});
     }else if(stage==='cashier'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.cashier,cashier);
-     baseState=row.cashier_state||{};
+     baseState=workflowBaseline.current.db.cashier;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
      const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
       p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
      });
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
-     workflowBaseline.current.cashier=cloneWorkflowState(cashier);
+     workflowBaseline.current.cashier=cloneWorkflowState(cashier);workflowBaseline.current.db.cashier=cloneWorkflowState(savedRow.cashier_state||{});
     }else if(stage==='loading_permit'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.loadingPermit,loadingPermit);
-     baseState=row.loading_permit_state||{};
+     baseState=workflowBaseline.current.db.loadingPermit;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
      const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
       p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
      });
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
-     workflowBaseline.current.loadingPermit=cloneWorkflowState(loadingPermit);
+     workflowBaseline.current.loadingPermit=cloneWorkflowState(loadingPermit);workflowBaseline.current.db.loadingPermit=cloneWorkflowState(savedRow.loading_permit_state||{});
     }else if(stage==='exit'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.exit,exitState);
-     baseState=row.exit_state||{};
+     baseState=workflowBaseline.current.db.exit;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
      const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
       p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
      });
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
-     workflowBaseline.current.exit=cloneWorkflowState(exitState);
+     workflowBaseline.current.exit=cloneWorkflowState(exitState);workflowBaseline.current.db.exit=cloneWorkflowState(savedRow.exit_state||{});
     }else if(stage==='port_charges'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.port,port);
-     baseState=row.port_charges_state||{};
+     baseState=workflowBaseline.current.db.port;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
      const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
       p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
      });
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
-     workflowBaseline.current.port=cloneWorkflowState(port);
+     workflowBaseline.current.port=cloneWorkflowState(port);workflowBaseline.current.db.port=cloneWorkflowState(savedRow.port_charges_state||{});
     }else if(stage==='abandoned'){
      activity='abandoned';
      patch={notes:notes.trim()||null};
