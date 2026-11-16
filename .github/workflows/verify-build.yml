@@ -61,6 +61,9 @@ jobs:
       - name: Run PostgreSQL concurrency, rollback, RLS and exit-release contracts
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_customs_workflow_atomic_activity.test.sql
 
+      - name: Run two-session concurrent workflow patch test
+        run: bash supabase/tests/run_customs_workflow_atomic_concurrency.sh
+
       - name: Typecheck
         run: npm run typecheck
 
