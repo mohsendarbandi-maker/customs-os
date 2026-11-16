@@ -15,6 +15,7 @@ DECLARE
   v_base jsonb;
   v_result jsonb;
   v_stage text;
+  v_inspection_paid text;
   v_events integer;
 BEGIN
   SELECT expertise_state INTO v_base
@@ -76,10 +77,10 @@ BEGIN
   );
   SELECT expertise_state -> 'standard' ->> 'expert_review',
          expertise_state -> 'standard' ->> 'inspection_paid'
-    INTO v_stage, v_result
+    INTO v_stage, v_inspection_paid
   FROM public.customs_declaration_workflow
   WHERE id = '00000000-0000-0000-0000-000000000030';
-  IF v_stage <> 'approved' OR v_result #>> '{}' <> 'false' THEN
+  IF v_stage <> 'approved' OR v_inspection_paid <> 'false' THEN
     RAISE EXCEPTION 'Rollback overwrote an unrelated parallel leaf';
   END IF;
 
