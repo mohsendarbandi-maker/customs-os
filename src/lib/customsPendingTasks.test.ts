@@ -31,7 +31,7 @@ const completedWorkflow = {
     loading_completed_at: "1405/01/03",
   },
   port_charges_state: {
-    insurance_issue_date: "1404/12/30",
+    insurance_issue_date: "1404/12/29",
     warehouse_receipt_date: "1405/01/01",
     insurance_followup_status: "not_required",
     initial_invoice_status: "paid",
