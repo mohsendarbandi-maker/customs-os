@@ -767,6 +767,9 @@ DECLARE
   v_issues text[] := '{}'::text[];
   v_missing_exit_items integer := 0;
   v_permit jsonb;
+  v_workflow_sata text;
+  v_mirror_sata text;
+  v_existing_sata text;
 BEGIN
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Authentication required';
@@ -811,7 +814,28 @@ BEGIN
     RAISE EXCEPTION 'محموله مرتبط پیدا نشد یا دسترسی به آن مجاز نیست';
   END IF;
 
-  IF v_sata IS NOT NULL THEN
+  SELECT NULLIF(pg_catalog.btrim(sata_code), '')
+    INTO v_mirror_sata
+  FROM public.shipment_customs_data
+  WHERE shipment_id = v_declaration.shipment_id
+    AND organization_id = v_org_id;
+
+  v_workflow_sata := NULLIF(pg_catalog.btrim(v_workflow.loading_permit_state ->> 'sata_code'), '');
+  v_existing_sata := COALESCE(v_workflow_sata, v_mirror_sata);
+  v_sata := COALESCE(v_sata, v_existing_sata);
+
+  IF v_shipment.finance_status IS NULL
+     OR v_shipment.finance_status NOT IN ('not_ready', 'ready', 'closed') THEN
+    v_issues := pg_catalog.array_append(v_issues, 'وضعیت مالی محموله برای تحویل نهایی معتبر نیست.');
+  END IF;
+
+  IF v_shipment.finance_status IN ('ready', 'closed')
+     AND v_sata IS NOT NULL
+     AND v_sata IS DISTINCT FROM v_existing_sata THEN
+    v_issues := pg_catalog.array_append(v_issues, 'کد ساتا پس از تحویل محموله به مالی قابل تغییر نیست.');
+  END IF;
+
+  IF v_sata IS NOT NULL AND v_sata IS DISTINCT FROM v_workflow_sata THEN
     v_workflow.loading_permit_state := public.customs_workflow_jsonb_merge(
       v_workflow.loading_permit_state,
       pg_catalog.jsonb_build_object('sata_code', v_sata)
@@ -862,14 +886,16 @@ BEGIN
     RETURN pg_catalog.jsonb_build_object('ready', false, 'issues', v_issues);
   END IF;
 
-  -- Persist an explicitly entered SATA code only after all readiness checks pass.
-  IF v_sata IS NOT NULL THEN
+  -- Persist canonical SATA and its legacy shipment mirror only when either differs.
+  IF v_sata IS NOT NULL AND v_sata IS DISTINCT FROM v_workflow_sata THEN
     UPDATE public.customs_declaration_workflow
     SET loading_permit_state = v_workflow.loading_permit_state,
         updated_by = v_user_id,
         updated_at = pg_catalog.clock_timestamp()
     WHERE id = v_workflow.id AND organization_id = v_org_id;
+  END IF;
 
+  IF v_sata IS NOT NULL AND v_sata IS DISTINCT FROM v_mirror_sata THEN
     INSERT INTO public.shipment_customs_data (shipment_id, organization_id, sata_code)
     VALUES (v_declaration.shipment_id, v_org_id, v_sata)
     ON CONFLICT (shipment_id) DO UPDATE
@@ -877,20 +903,26 @@ BEGIN
         organization_id = EXCLUDED.organization_id;
   END IF;
 
-  UPDATE public.customs_declarations
-  SET workflow_stage = 6,
-      updated_at = pg_catalog.clock_timestamp()
-  WHERE id = p_declaration_id AND organization_id = v_org_id;
+  -- Idempotent release: do not emit another declaration update or repeat the
+  -- warehouse finance transition after the first successful release.
+  IF v_declaration.workflow_stage IS DISTINCT FROM 6 THEN
+    UPDATE public.customs_declarations
+    SET workflow_stage = 6,
+        updated_at = pg_catalog.clock_timestamp()
+    WHERE id = p_declaration_id AND organization_id = v_org_id;
+  END IF;
 
-  UPDATE public.shipments
-  SET finance_status = 'ready',
-      updated_at = pg_catalog.clock_timestamp()
-  WHERE id = v_declaration.shipment_id
-    AND organization_id = v_org_id
-  RETURNING * INTO v_shipment;
+  IF v_shipment.finance_status = 'not_ready' THEN
+    UPDATE public.shipments
+    SET finance_status = 'ready',
+        updated_at = pg_catalog.clock_timestamp()
+    WHERE id = v_declaration.shipment_id
+      AND organization_id = v_org_id
+    RETURNING * INTO v_shipment;
 
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'تغییر وضعیت محموله به آماده مالی انجام نشد؛ تراکنش خروج لغو شد';
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'تغییر وضعیت محموله به آماده مالی انجام نشد؛ تراکنش خروج لغو شد';
+    END IF;
   END IF;
 
   RETURN pg_catalog.jsonb_build_object(
