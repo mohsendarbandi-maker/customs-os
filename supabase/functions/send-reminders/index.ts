@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {createClient} from "jsr:@supabase/supabase-js@2";
 import { buildCustomsWorkflowPendingTasks } from "../_shared/customsPendingTasks.ts";
+import { deriveCustomsChecklistCompletion } from "../_shared/customsChecklistStatus.ts";
 import {generateVapidKeys} from "npm:@mmmike/web-push@1.3.0/vapid";
 import {sendPushNotification,rawPayload,WebPushError,type PushSubscriptionData} from "npm:@mmmike/web-push@1.3.0/send";
 
@@ -139,10 +140,11 @@ async function collectCustomsPendingDigest(organizationId:string){
    tasks.push({title:(declaration.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"")+" "+task.title,urgent:task.priority==="urgent"});
   }
  }
- const workflowDeclarationIds=new Set((workflows as any[]).map(row=>row.declaration_id));
+ const workflowByDeclaration=new Map((workflows as any[]).map(row=>[row.declaration_id,row] as const));
  for(const item of checklistResult.data??[]){
-  if(workflowDeclarationIds.has(item.declaration_id)&&item.source!=="manual")continue;
   const declaration=declarationMap.get(item.declaration_id);
+  const workflow=workflowByDeclaration.get(item.declaration_id);
+  if(workflow&&deriveCustomsChecklistCompletion(item,workflow,declaration?.customs_path)!==null)continue;
   tasks.push({title:(declaration?.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"")+" چک‌لیست: "+item.item_label,urgent:false});
  }
  const exitLabels:Record<string,string>={
