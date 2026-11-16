@@ -1,8 +1,9 @@
-import React,{useCallback,useEffect,useMemo,useState}from'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
 import{AlertTriangle,Clock3,RefreshCw,Save,ShieldCheck}from'lucide-react';
 import{supabase}from'../lib/supabase';
 import{compareJalaliDates,getAbandonedGoodsWarnings,getWorkflowStageIssues,getInitialCustomsWorkflowStage,shouldShowAssessmentStage,parseJalaliDate,type CustomsWorkflowValidationState}from'../lib/customsDeclarationWorkflow';
 import{toJalali,zonedJalaliToDate}from'../lib/jalali';
+import{buildCustomsWorkflowJsonbPatch}from'../lib/customsWorkflowPatch';
 import{JalaliDateTimePicker}from'../features/reminders/JalaliDateTimePicker';
 
 type WorkflowRow={
@@ -13,6 +14,11 @@ type WorkflowRow={
 };
 type WorkflowEvent={id:string;event_type:'created'|'stage_changed'|'saved'|'rollback';previous_stage:string|null;current_stage:string;changed_fields:string[];actor_id:string|null;created_at:string;previous_snapshot:Record<string,any>|null};
 type Props={declarationId:string;organizationId:string;userId?:string;customsRegime:string;customsPath:string;editable:boolean};
+type WorkflowBaseline={
+ evaluation:Record<string,any>;expertise:Record<string,any>;cashier:Record<string,any>;
+ loadingPermit:Record<string,any>;exit:Record<string,any>;port:Record<string,any>;
+};
+const cloneWorkflowState=<T,>(value:T):T=>JSON.parse(JSON.stringify(value)) as T;
 const stages=[['evaluation','ارزیابی'],['expertise','کارشناسی و مجوزها'],['cashier','صندوق'],['loading_permit','مجوز بارگیری'],['exit','درب خروج'],['port_charges','عوارض بندری'],['abandoned','متروکه'],['completed','تکمیل']] as const;
 const emptyEvaluation={status:'not_required',evaluator_number:'',expert_requested:false,expert_request_note:''};
 const emptyExpertise={appointment_status:'not_requested',appointment_number:'',road_authority_status:'not_required',plant_quarantine_status:'not_required',standard:{expert_review:'pending',inspection_status:'not_requested',inspection_company:'',inspection_fee:null,inspection_paid:false,inspection_invoice_received:false,inspection_invoice_status:'pending',sample_status:'not_sent',laboratory:'',results_uploaded:false,standard_fee:null,standard_fee_paid:false,standard_notified:false}};
@@ -40,6 +46,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const[saving,setSaving]=useState(false);
  const[error,setError]=useState('');
  const[message,setMessage]=useState('');
+ const workflowBaseline=useRef<WorkflowBaseline|null>(null);
  const[history,setHistory]=useState<WorkflowEvent[]>([]);
  const[historyUnavailable,setHistoryUnavailable]=useState(false);
  const[datePickerTarget,setDatePickerTarget]=useState<{label:string;value:string;onChange:(v:string)=>void}|null>(null);
@@ -92,6 +99,13 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     setExitState({...emptyExit,...(r.exit_state||{})});
     setPort({...emptyPort,...(r.port_charges_state||{})});
     setNotes(r.notes||'');
+    workflowBaseline.current={
+     evaluation:cloneWorkflowState(ev),expertise:cloneWorkflowState(ex),
+     cashier:cloneWorkflowState({...emptyCashier,...(r.cashier_state||{})}),
+     loadingPermit:cloneWorkflowState({...emptyLoadingPermit,...(r.loading_permit_state||{}),sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')}),
+     exit:cloneWorkflowState({...emptyExit,...(r.exit_state||{})}),
+     port:cloneWorkflowState({...emptyPort,...(r.port_charges_state||{})})
+    };
    }else if(editable){
     const initial=defaults(info);
     const{data:created,error:createError}=await supabase.from('customs_declaration_workflow').insert({
@@ -105,6 +119,14 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     setExpertise({...emptyExpertise,...r.expertise_state,standard:{...emptyExpertise.standard,...r.expertise_state?.standard}});
     setCashier({...emptyCashier,...r.cashier_state});setLoadingPermit({...emptyLoadingPermit,...r.loading_permit_state,sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')});
     setExitState({...emptyExit,...r.exit_state});setPort({...emptyPort,...r.port_charges_state});setNotes(r.notes||'');
+    workflowBaseline.current={
+     evaluation:cloneWorkflowState(ev),
+     expertise:cloneWorkflowState({...emptyExpertise,...r.expertise_state,standard:{...emptyExpertise.standard,...r.expertise_state?.standard}}),
+     cashier:cloneWorkflowState({...emptyCashier,...r.cashier_state}),
+     loadingPermit:cloneWorkflowState({...emptyLoadingPermit,...r.loading_permit_state,sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')}),
+     exit:cloneWorkflowState({...emptyExit,...r.exit_state}),
+     port:cloneWorkflowState({...emptyPort,...r.port_charges_state})
+    };
    }else{
     const initial=defaults(info);setEvaluation(initial.evaluation);setExpertise(initial.expertise);setLoadingPermit({...emptyLoadingPermit,sata_code:String(customData?.sata_code||'')});setStage(getInitialCustomsWorkflowStage('evaluation',customsPath,initial.evaluation));
    }
@@ -141,32 +163,116 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    const blockers=requiredActivities.flatMap(activity=>getWorkflowStageIssues(activity,validationState));
    if(blockers.length){setError('برای تکمیل نهایی و تأیید آمادگی خروج، موارد زیر باید تعیین تکلیف شوند:\n• '+blockers.join('\n• '));return}
   }
+  if(!workflowBaseline.current){setError('نسخه مبنای اطلاعات آماده نیست؛ صفحه را تازه‌سازی کنید.');return}
   setSaving(true);setError('');setMessage('');
   try{
-   const nextEvaluation={...evaluation};
-   if(nextEvaluation.expert_requested&&nextEvaluation.status==='not_required')nextEvaluation.status='required';
-   // Patch only the activity being edited. Updating every JSONB column from a
-   // stale browser snapshot can overwrite a different operator's parallel work.
-   const activityPatch:Record<string,unknown>={};
-   if(stage==='evaluation')activityPatch.evaluation_state=nextEvaluation;
-   else if(stage==='expertise')activityPatch.expertise_state=expertise;
-   else if(stage==='cashier')activityPatch.cashier_state=cashier;
-   else if(stage==='loading_permit')activityPatch.loading_permit_state=loadingPermit;
-   else if(stage==='exit')activityPatch.exit_state=exitState;
-   else if(stage==='port_charges')activityPatch.port_charges_state=port;
-   else if(stage==='abandoned'||stage==='completed')activityPatch.notes=notes.trim()||null;
-   const payload={...activityPatch,current_stage:stage,updated_by:userId||null,updated_at:new Date().toISOString()};
-   const{error:e}=await supabase.from('customs_declaration_workflow').update(payload).eq('id',row.id).eq('organization_id',organizationId);
-   if(e)throw e;
-   // The legacy shipment-level SATA mirror is updated only from the two
-   // relevant screens, never from an unrelated activity save.
-   if(stage==='loading_permit'||stage==='exit'){
-    const{error:saveSataError}=await supabase.from('shipment_customs_data').upsert({shipment_id:shipmentId,organization_id:organizationId,sata_code:String(loadingPermit.sata_code||'').trim()||null},{onConflict:'shipment_id'});
-    if(saveSataError)throw saveSataError;
+   let savedRow:WorkflowRow;
+   if(stage==='completed'){
+    const{data,error:completeError}=await supabase.rpc('complete_customs_declaration_workflow',{
+     p_workflow_id:row.id,p_notes:notes.trim()||null
+    });
+    if(completeError)throw completeError;
+    if(!complete?.ready){
+     const issues=Array.isArray(complete?.issues)?complete.issues.map(String):['شرایط تکمیل نهایی هنوز برقرار نیست.'];
+     setError(issues.join('\n• '));
+     return;
+    }
+    savedRow=complete.workflow as WorkflowRow;
+   }else{
+    let activity=stage;
+    let patch:Record<string,unknown>={};
+    let baseState:Record<string,unknown>={};
+    if(stage==='evaluation'){
+     const nextEvaluation={...evaluation};
+     if(nextEvaluation.expert_requested&&nextEvaluation.status==='not_required')nextEvaluation.status='required';
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.evaluation,nextEvaluation);
+     baseState=row.evaluation_state||{};
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     setEvaluation(nextEvaluation);
+     workflowBaseline.current.evaluation=cloneWorkflowState(nextEvaluation);
+    }else if(stage==='expertise'){
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.expertise,expertise);
+     baseState=row.expertise_state||{};
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     workflowBaseline.current.expertise=cloneWorkflowState(expertise);
+    }else if(stage==='cashier'){
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.cashier,cashier);
+     baseState=row.cashier_state||{};
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     workflowBaseline.current.cashier=cloneWorkflowState(cashier);
+    }else if(stage==='loading_permit'){
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.loadingPermit,loadingPermit);
+     baseState=row.loading_permit_state||{};
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     workflowBaseline.current.loadingPermit=cloneWorkflowState(loadingPermit);
+    }else if(stage==='exit'){
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.exit,exitState);
+     baseState=row.exit_state||{};
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     workflowBaseline.current.exit=cloneWorkflowState(exitState);
+    }else if(stage==='port_charges'){
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.port,port);
+     baseState=row.port_charges_state||{};
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     workflowBaseline.current.port=cloneWorkflowState(port);
+    }else if(stage==='abandoned'){
+     activity='abandoned';
+     patch={notes:notes.trim()||null};
+     baseState={notes:row.notes};
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+    }else{
+     setError('این فعالیت برای ذخیره مستقل پشتیبانی نمی‌شود.');return;
+    }
    }
-   setEvaluation(nextEvaluation);setRow({...row,...payload} as WorkflowRow);setMessage('اطلاعات این فعالیت ذخیره شد؛ سایر فعالیت‌های موازی بدون تغییر باقی ماندند.');await refreshHistory();window.dispatchEvent(new Event('customs-workflow-updated'));
-  }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'مجوز ذخیره عملیات گمرکی را ندارید.':'ذخیره عملیات گمرکی انجام نشد؛ اطلاعات واردشده و دسترسی را بررسی کنید.')}
-  finally{setSaving(false)}
+   setRow(savedRow);
+   workflowBaseline.current.currentStage=savedRow.current_stage;
+   setMessage(stage==='completed'?'آمادگی عملیات گمرکی در سرور تأیید و ثبت شد.':'فقط تغییرات همین فعالیت ذخیره شد؛ ویرایش‌های موازیِ فیلدهای دیگر حفظ شدند.');
+   await refreshHistory();
+   window.dispatchEvent(new Event('customs-workflow-updated'));
+  }catch(e:any){
+   const raw=String(e?.message||'');
+   if(e?.code==='40001'||/CUSTOMS_WORKFLOW_CONFLICT/i.test(raw)){
+    setError('همین فیلد در دستگاه دیگری تغییر کرده است. صفحه را تازه‌سازی کنید، مقدار جدید را ببینید و سپس ویرایش را دوباره انجام دهید.');
+   }else if(/permission|row-level security|42501/i.test(raw)){
+    setError('مجوز ذخیره عملیات گمرکی را ندارید.');
+   }else{
+    setError('ذخیره عملیات گمرکی انجام نشد؛ اطلاعات واردشده و دسترسی را بررسی کنید.');
+   }
+  }finally{setSaving(false)}
  };
  const input=(label:string,value:any,onChange:(v:string)=>void,placeholder='',numeric=false)=><Label>{label}<input value={value==null?'':typeof value==='boolean'?'':String(value)} onChange={e=>onChange(numeric?digits(e.target.value).replace(/[^0-9.]/g,''):e.target.value)} inputMode={numeric?'decimal':undefined} placeholder={placeholder} disabled={!editable} className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)] disabled:opacity-60"/></Label>;
  const dateInput=(label:string,value:any,onChange:(v:string)=>void)=>{const parsed=parseJalaliDate(String(value||''));return <Label>{label}<button type="button" onClick={()=>setDatePickerTarget({label,value:String(value||''),onChange})} disabled={!editable} aria-label={'انتخاب تاریخ '+label} className="w-full flex items-center justify-between gap-2 rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)] text-right disabled:opacity-60"><span>{parsed?faDigits(`${parsed.year}/${String(parsed.month).padStart(2,'0')}/${String(parsed.day).padStart(2,'0')}`):'انتخاب تاریخ شمسی'}</span><Clock3 size={16} className="app-muted"/></button></Label>};
