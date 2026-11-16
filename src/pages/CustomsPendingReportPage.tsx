@@ -74,6 +74,7 @@ type ReportGroup = {
   caseNumber: string;
   kottaj: string;
   regime: string | null;
+  updatedAt: string | null;
   href: string;
   items: ReportItem[];
 };
@@ -287,10 +288,15 @@ export const CustomsPendingReportPage: React.FC = () => {
             caseNumber: caseRow?.case_number || "شماره پرونده ثبت نشده",
             kottaj: declaration.kottaj_number || "کوتاژ ثبت نشده",
             regime: declaration.customs_regime,
+            updatedAt: workflow?.updated_at || null,
             href,
             items,
           });
         }
+      }
+      nextGroups.sort((a, b) => Date.parse(b.updatedAt || "") - Date.parse(a.updatedAt || ""));
+      for (const group of nextGroups) {
+        group.items.sort((a, b) => Number(b.priority === "urgent") - Number(a.priority === "urgent"));
       }
       setGroups(nextGroups);
       setRefreshedAt(new Date());
@@ -361,6 +367,7 @@ export const CustomsPendingReportPage: React.FC = () => {
                     <div className="font-black">{group.shipmentName}</div>
                     <div className="mt-1 text-xs app-muted">{group.clientName} · {group.billOfLading} · {regimeLabel(group.regime)}</div>
                     <div className="mt-1 text-xs app-muted">پرونده: {group.caseNumber} · کوتاژ: {group.kottaj}</div>
+                    {group.updatedAt&&<div className="mt-1 text-[11px] app-muted">آخرین تغییر عملیات: {new Date(group.updatedAt).toLocaleString("fa-IR")}</div>}
                   </div>
                   <Link to={group.href} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-bold text-white">بازکردن عملیات <ArrowUpRight size={14}/></Link>
                 </div>
