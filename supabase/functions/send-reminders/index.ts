@@ -118,7 +118,10 @@ async function collectCustomsPendingDigest(organizationId:string){
  const queryError=workflowResult.error||checklistResult.error||permitResult.error;
  if(queryError)throw queryError;
  const workflows=workflowResult.data??[];
- const declarationsIds=[...new Set(workflows.map((row:any)=>row.declaration_id).filter(Boolean))];
+ const declarationsIds=[...new Set([
+  ...workflows.map((row:any)=>row.declaration_id),
+  ...(checklistResult.data??[]).map((row:any)=>row.declaration_id),
+ ].filter(Boolean))];
  let declarationRows:any[]=[];
  if(declarationsIds.length){
   const {data,error}=await admin.from("customs_declarations").select("id,case_id,kottaj_number,customs_path,created_at").eq("organization_id",organizationId).in("id",declarationsIds);
