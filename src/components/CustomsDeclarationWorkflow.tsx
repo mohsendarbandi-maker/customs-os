@@ -152,7 +152,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    else if(stage==='expertise')activityPatch.expertise_state=expertise;
    else if(stage==='cashier')activityPatch.cashier_state=cashier;
    else if(stage==='loading_permit')activityPatch.loading_permit_state=loadingPermit;
-   else if(stage==='exit'){activityPatch.loading_permit_state=loadingPermit;activityPatch.exit_state=exitState;}
+   else if(stage==='exit')activityPatch.exit_state=exitState;
    else if(stage==='port_charges')activityPatch.port_charges_state=port;
    else if(stage==='abandoned'||stage==='completed')activityPatch.notes=notes.trim()||null;
    const payload={...activityPatch,current_stage:stage,updated_by:userId||null,updated_at:new Date().toISOString()};
