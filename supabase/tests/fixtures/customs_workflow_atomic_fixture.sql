@@ -238,28 +238,19 @@ CREATE POLICY declaration_update ON public.customs_declarations
   WITH CHECK (organization_id = public.user_org_id()
     AND public.user_role() IN ('owner','admin','broker','warehouse'));
 
+-- Production currently has permissive organization-scoped staff policies
+-- alongside role-specific policies. The BEFORE UPDATE trigger is the effective
+-- safeguard for warehouse finance transitions; mirror that contract here.
 CREATE POLICY shipment_select ON public.shipments
   FOR SELECT TO authenticated
   USING (organization_id = public.user_org_id()
-    AND (
-      public.user_role() IN ('owner','admin','broker')
-      OR (public.user_role() = 'accountant' AND finance_status = 'ready')
-      OR (public.user_role() = 'warehouse' AND finance_status = 'not_ready')
-    ));
+    AND public.user_role() IN ('owner','admin','broker','accountant','warehouse'));
 CREATE POLICY shipment_update ON public.shipments
   FOR UPDATE TO authenticated
   USING (organization_id = public.user_org_id()
-    AND (
-      public.user_role() IN ('owner','admin','broker')
-      OR (public.user_role() = 'accountant' AND finance_status = 'ready')
-      OR (public.user_role() = 'warehouse' AND finance_status = 'not_ready')
-    ))
+    AND public.user_role() IN ('owner','admin','broker','accountant','warehouse'))
   WITH CHECK (organization_id = public.user_org_id()
-    AND (
-      public.user_role() IN ('owner','admin','broker')
-      OR (public.user_role() = 'accountant' AND finance_status = 'closed')
-      OR (public.user_role() = 'warehouse' AND finance_status = 'ready')
-    ));
+    AND public.user_role() IN ('owner','admin','broker','accountant','warehouse'));
 
 CREATE POLICY exit_checklist_select ON public.declaration_exit_checklist_items
   FOR SELECT TO authenticated
