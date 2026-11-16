@@ -1,10 +1,6 @@
 -- End-to-end SQL contract tests for the atomic customs workflow and exit release.
 -- Run with psql -v ON_ERROR_STOP=1 after the fixture and migration.
 
-CREATE TRIGGER trg_log_customs_declaration_workflow_event
-AFTER INSERT OR UPDATE ON public.customs_declaration_workflow
-FOR EACH ROW EXECUTE FUNCTION public.log_customs_declaration_workflow_event();
-
 SET request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
 SET request.jwt.claim.org_id = '00000000-0000-0000-0000-000000000001';
 SET request.jwt.claim.role = 'broker';
@@ -184,9 +180,11 @@ BEGIN
   IF COALESCE((v_result ->> 'ready')::boolean, true) THEN
     RAISE EXCEPTION 'NULL customs path unexpectedly passed the exit gate';
   END IF;
-  IF NOT ('مسیر گمرکی اظهارنامه مشخص نیست؛ مسیر سبز، زرد یا قرمز را تعیین کنید.' = ANY(
-    ARRAY(SELECT jsonb_array_elements_text(v_result -> 'issues'))
-  )) THEN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements_text(v_result -> 'issues') AS issue(value)
+    WHERE issue.value = 'مسیر گمرکی اظهارنامه مشخص نیست؛ مسیر سبز، زرد یا قرمز را تعیین کنید.'
+  ) THEN
     RAISE EXCEPTION 'NULL route blocker was not returned to the caller';
   END IF;
 END;
