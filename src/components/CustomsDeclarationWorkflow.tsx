@@ -168,7 +168,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
   try{
    let savedRow:WorkflowRow;
    if(stage==='completed'){
-    const{data,error:completeError}=await supabase.rpc('complete_customs_declaration_workflow',{
+    const{data:complete,error:completeError}=await supabase.rpc('complete_customs_declaration_workflow',{
      p_workflow_id:row.id,p_notes:notes.trim()||null
     });
     if(completeError)throw completeError;
@@ -259,7 +259,6 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     }
    }
    setRow(savedRow);
-   workflowBaseline.current.currentStage=savedRow.current_stage;
    setMessage(stage==='completed'?'آمادگی عملیات گمرکی در سرور تأیید و ثبت شد.':'فقط تغییرات همین فعالیت ذخیره شد؛ ویرایش‌های موازیِ فیلدهای دیگر حفظ شدند.');
    await refreshHistory();
    window.dispatchEvent(new Event('customs-workflow-updated'));
