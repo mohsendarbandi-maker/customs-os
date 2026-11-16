@@ -40,8 +40,8 @@ CREATE TABLE public.customs_declarations (
   id uuid PRIMARY KEY,
   organization_id uuid NOT NULL,
   shipment_id uuid NOT NULL REFERENCES public.shipments(id),
-  customs_regime text NOT NULL,
-  customs_path text NOT NULL,
+  customs_regime text,
+  customs_path text,
   workflow_stage integer NOT NULL DEFAULT 4,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
