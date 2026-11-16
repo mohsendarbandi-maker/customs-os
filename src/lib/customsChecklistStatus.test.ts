@@ -56,6 +56,6 @@ describe("customs checklist mirrors operational state", () => {
 
   it("identifies mapped system items as workflow-managed", () => {
     expect(isWorkflowManagedChecklistItem({ item_label: "کد ساتا", source: "system" })).toBe(true);
-    expect(isWorkflowManagedChecklistItem({ item_label: "کد ساتا", source: "manual" })).toBe(true);
+    expect(isWorkflowManagedChecklistItem({ item_label: "کد ساتا", source: "manual" })).toBe(false);
   });
 });
