@@ -190,7 +190,7 @@ export const CustomsPendingReportPage: React.FC = () => {
         const clientName = clientId ? clientMap.get(clientId) || "صاحب کالا نامشخص" : "صاحب کالا ثبت نشده";
         const shipmentName = shipment?.display_name || "محموله بدون عنوان";
         const href = declaration.shipment_id
-          ? "/operations?tab=declaration&shipmentId=" + encodeURIComponent(declaration.shipment_id)
+          ? "/operations?tab=stage5&declarationId=" + encodeURIComponent(declaration.id) + "&shipmentId=" + encodeURIComponent(declaration.shipment_id)
           : declaration.case_id
             ? "/cases?caseId=" + encodeURIComponent(declaration.case_id)
             : "/operations";
