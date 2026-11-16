@@ -2,7 +2,7 @@ import {
   getAbandonedGoodsWarnings,
   getWorkflowStageIssues,
   type CustomsWorkflowValidationState,
-} from "../../../src/lib/customsDeclarationWorkflow.ts";
+} from "./customsDeclarationWorkflow.ts";
 
 export const CUSTOMS_WORKFLOW_PENDING_STAGES = [
   { key: "evaluation", label: "ارزیابی" },
