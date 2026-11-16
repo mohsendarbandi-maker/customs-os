@@ -142,7 +142,60 @@ BEGIN
 END;
 $gate$;
 
+-- A NULL customs regime must never pass the definitive-import exit endpoint.
 RESET ROLE;
+UPDATE public.customs_declarations
+SET customs_regime = NULL
+WHERE id = '00000000-0000-0000-0000-000000000020';
+SET ROLE authenticated;
+DO $unknown_regime$
+BEGIN
+  BEGIN
+    PERFORM public.complete_customs_declaration_exit(
+      '00000000-0000-0000-0000-000000000020',
+      NULL
+    );
+    RAISE EXCEPTION 'NULL customs regime unexpectedly passed the exit gate';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'NULL customs regime unexpectedly passed the exit gate' THEN
+      RAISE;
+    END IF;
+    IF SQLERRM NOT LIKE '%only for definitive import%' THEN
+      RAISE;
+    END IF;
+  END;
+END;
+$unknown_regime$;
+
+-- A NULL route is a readiness blocker rather than silently making assessment optional.
+RESET ROLE;
+UPDATE public.customs_declarations
+SET customs_regime = 'import_definitive', customs_path = NULL
+WHERE id = '00000000-0000-0000-0000-000000000020';
+SET ROLE authenticated;
+DO $unknown_path$
+DECLARE
+  v_result jsonb;
+BEGIN
+  v_result := public.complete_customs_declaration_exit(
+    '00000000-0000-0000-0000-000000000020',
+    NULL
+  );
+  IF COALESCE((v_result ->> 'ready')::boolean, true) THEN
+    RAISE EXCEPTION 'NULL customs path unexpectedly passed the exit gate';
+  END IF;
+  IF NOT ('مسیر گمرکی اظهارنامه مشخص نیست؛ مسیر سبز، زرد یا قرمز را تعیین کنید.' = ANY(
+    ARRAY(SELECT jsonb_array_elements_text(v_result -> 'issues'))
+  )) THEN
+    RAISE EXCEPTION 'NULL route blocker was not returned to the caller';
+  END IF;
+END;
+$unknown_path$;
+
+RESET ROLE;
+UPDATE public.customs_declarations
+SET customs_path = 'green'
+WHERE id = '00000000-0000-0000-0000-000000000020';
 
 -- Populate the authoritative workflow state and mandatory exit checklist as
 -- the fixture owner, then re-enter through the authenticated warehouse role.
