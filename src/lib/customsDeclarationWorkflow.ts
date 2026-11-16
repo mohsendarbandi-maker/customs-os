@@ -187,9 +187,9 @@ export const getInitialCustomsWorkflowStage = (
 
 
 /**
- * Returns Persian blocker messages for the specified stage. A stage is checked
- * only when the operator attempts to advance past it, so users can still open
- * and edit earlier stages without a dead-end.
+ * Returns Persian readiness issues for one operational activity. Activities
+ * can be saved independently; callers use these issues for final-exit readiness
+ * and for the daily pending-work report.
  */
 export const getWorkflowStageIssues = (
   stage: string,
@@ -215,7 +215,7 @@ export const getWorkflowStageIssues = (
     const expertise = state.expertise;
     const standard = recordValue(expertise.standard);
 
-    if (!oneOf(expertise.appointment_status, ['scheduled', 'completed'])) {
+    if (!oneOf(expertise.appointment_status, ['scheduled', 'completed', 'not_required'])) {
       issues.push('نوبت کارشناسی باید دریافت یا کارشناسی تکمیل شود.');
     }
     if (!oneOf(expertise.road_authority_status, ['approved', 'not_required', 'completed'])) {
