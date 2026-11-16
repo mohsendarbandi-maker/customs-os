@@ -145,12 +145,26 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
   try{
    const nextEvaluation={...evaluation};
    if(nextEvaluation.expert_requested&&nextEvaluation.status==='not_required')nextEvaluation.status='required';
-   const payload={current_stage:stage,evaluation_state:nextEvaluation,expertise_state:expertise,cashier_state:cashier,loading_permit_state:loadingPermit,exit_state:exitState,port_charges_state:port,notes:notes.trim()||null,updated_by:userId||null,updated_at:new Date().toISOString()};
+   // Patch only the activity being edited. Updating every JSONB column from a
+   // stale browser snapshot can overwrite a different operator's parallel work.
+   const activityPatch:Record<string,unknown>={};
+   if(stage==='evaluation')activityPatch.evaluation_state=nextEvaluation;
+   else if(stage==='expertise')activityPatch.expertise_state=expertise;
+   else if(stage==='cashier')activityPatch.cashier_state=cashier;
+   else if(stage==='loading_permit')activityPatch.loading_permit_state=loadingPermit;
+   else if(stage==='exit'){activityPatch.loading_permit_state=loadingPermit;activityPatch.exit_state=exitState;}
+   else if(stage==='port_charges')activityPatch.port_charges_state=port;
+   else if(stage==='abandoned'||stage==='completed')activityPatch.notes=notes.trim()||null;
+   const payload={...activityPatch,current_stage:stage,updated_by:userId||null,updated_at:new Date().toISOString()};
    const{error:e}=await supabase.from('customs_declaration_workflow').update(payload).eq('id',row.id).eq('organization_id',organizationId);
    if(e)throw e;
-   const{error:saveSataError}=await supabase.from('shipment_customs_data').upsert({shipment_id:shipmentId,organization_id:organizationId,sata_code:String(loadingPermit.sata_code||'').trim()||null},{onConflict:'shipment_id'});
-   if(saveSataError)throw saveSataError;
-   setEvaluation(nextEvaluation);setRow({...row,...payload} as WorkflowRow);setMessage('مراحل عملیات گمرکی ذخیره شد.');await refreshHistory();
+   // The legacy shipment-level SATA mirror is updated only from the two
+   // relevant screens, never from an unrelated activity save.
+   if(stage==='loading_permit'||stage==='exit'){
+    const{error:saveSataError}=await supabase.from('shipment_customs_data').upsert({shipment_id:shipmentId,organization_id:organizationId,sata_code:String(loadingPermit.sata_code||'').trim()||null},{onConflict:'shipment_id'});
+    if(saveSataError)throw saveSataError;
+   }
+   setEvaluation(nextEvaluation);setRow({...row,...payload} as WorkflowRow);setMessage('اطلاعات این فعالیت ذخیره شد؛ سایر فعالیت‌های موازی بدون تغییر باقی ماندند.');await refreshHistory();
   }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'مجوز ذخیره عملیات گمرکی را ندارید.':'ذخیره عملیات گمرکی انجام نشد؛ اطلاعات واردشده و دسترسی را بررسی کنید.')}
   finally{setSaving(false)}
  };
