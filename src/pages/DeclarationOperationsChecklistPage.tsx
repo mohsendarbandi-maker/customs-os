@@ -10,7 +10,7 @@ import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import { resolveDeclarationRelationIds } from '../lib/declarationWorkflowContext';
-import { deriveCustomsChecklistCompletion, isWorkflowManagedChecklistItem } from '../lib/customsChecklistStatus';
+import { deriveCustomsChecklistCompletion } from '../lib/customsChecklistStatus';
 
 type Decl={id:string;shipment_id:string|null;case_id:string|null;kottaj_number:string;declaration_date:string;customs_path:string|null;payment_reference:string|null;total_duties_irr:number|null;declaration_file_name:string|null;customs_office_id?:string|null;customs_regime?:string|null};
 type Item={id:string;item_key:string;item_label:string;completed:boolean;note:string|null;sort_order:number;source:string;is_active:boolean;workflowManaged:boolean};
@@ -127,6 +127,15 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
  },[canEdit,declarationId,profile?.organization_id]);
 
  useEffect(()=>{void load()},[load]);
+ useEffect(()=>{
+  const refresh=()=>{void load()};
+  window.addEventListener('customs-workflow-updated',refresh);
+  window.addEventListener('focus',refresh);
+  return()=>{
+   window.removeEventListener('customs-workflow-updated',refresh);
+   window.removeEventListener('focus',refresh);
+  };
+ },[load]);
 
  const pending=useMemo(()=>items.filter(x=>!x.completed),[items]);
  const completed=items.length-pending.length;
