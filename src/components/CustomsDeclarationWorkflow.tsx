@@ -164,7 +164,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     const{error:saveSataError}=await supabase.from('shipment_customs_data').upsert({shipment_id:shipmentId,organization_id:organizationId,sata_code:String(loadingPermit.sata_code||'').trim()||null},{onConflict:'shipment_id'});
     if(saveSataError)throw saveSataError;
    }
-   setEvaluation(nextEvaluation);setRow({...row,...payload} as WorkflowRow);setMessage('اطلاعات این فعالیت ذخیره شد؛ سایر فعالیت‌های موازی بدون تغییر باقی ماندند.');await refreshHistory();
+   setEvaluation(nextEvaluation);setRow({...row,...payload} as WorkflowRow);setMessage('اطلاعات این فعالیت ذخیره شد؛ سایر فعالیت‌های موازی بدون تغییر باقی ماندند.');await refreshHistory();window.dispatchEvent(new Event('customs-workflow-updated'));
   }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'مجوز ذخیره عملیات گمرکی را ندارید.':'ذخیره عملیات گمرکی انجام نشد؛ اطلاعات واردشده و دسترسی را بررسی کنید.')}
   finally{setSaving(false)}
  };
