@@ -937,8 +937,7 @@ BEGIN
   FROM public.customs_declaration_workflow_events
   WHERE workflow_id = p_workflow_id AND organization_id = v_org_id
   ORDER BY created_at DESC, id DESC
-  LIMIT 1
-  FOR UPDATE;
+  LIMIT 1;
 
   IF v_event.id IS NULL
      OR v_event.event_type IN ('created', 'rollback')
