@@ -48,6 +48,12 @@ describe("atomic customs workflow activities", () => {
     expect(patch).toContain("WHEN current_stage IS NOT DISTINCT FROM p_expected_current_stage THEN p_activity");
   });
 
+  it("orders audit events by actual write time rather than transaction start time", () => {
+    const audit = functionBody("log_customs_declaration_workflow_event");
+    expect(audit).toContain("clock_timestamp()");
+    expect(audit).toContain("actor_id, created_at");
+  });
+
   it("updates only the touched leaves in the undo/rollback path", () => {
     const undo = functionBody("customs_workflow_jsonb_undo");
     const rollback = functionBody("rollback_customs_declaration_workflow");
