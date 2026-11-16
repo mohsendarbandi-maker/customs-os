@@ -16,6 +16,23 @@ const equalJson = (left: unknown, right: unknown): boolean => {
     leftKeys.every((key, index) => key === rightKeys[index] && equalJson(left[key], right[key]));
 };
 
+/** Apply a nested JSONB patch locally without replacing untouched leaves. */
+export function mergeCustomsWorkflowJsonbPatch(
+  baseline: JsonObject,
+  patch: JsonObject,
+): JsonObject {
+  const merged: JsonObject = { ...baseline };
+  for (const [key, nextValue] of Object.entries(patch)) {
+    const previousValue = merged[key];
+    if (isRecord(previousValue) && isRecord(nextValue)) {
+      merged[key] = mergeCustomsWorkflowJsonbPatch(previousValue, nextValue);
+    } else {
+      merged[key] = nextValue;
+    }
+  }
+  return merged;
+}
+
 /**
  * Build a minimal nested patch between the last value shown to this operator
  * and the value currently in the editor. The server merges this patch into the
