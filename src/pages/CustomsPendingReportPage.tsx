@@ -12,6 +12,7 @@ type DeclarationRow = {
   kottaj_number: string;
   customs_path: string | null;
   customs_regime: string | null;
+  created_at: string;
 };
 
 type WorkflowRow = {
@@ -64,6 +65,7 @@ type ReportGroup = {
   clientName: string;
   caseNumber: string;
   kottaj: string;
+  regime: string | null;
   href: string;
   items: ReportItem[];
 };
@@ -109,7 +111,7 @@ export const CustomsPendingReportPage: React.FC = () => {
 
       const { data: declarations, error: declarationError } = await supabase
         .from("customs_declarations")
-        .select("id,case_id,shipment_id,kottaj_number,customs_path,customs_regime")
+        .select("id,case_id,shipment_id,kottaj_number,customs_path,customs_regime,created_at")
         .eq("organization_id", organizationId)
         .in("id", declarationIds);
       if (declarationError) throw declarationError;
@@ -169,6 +171,12 @@ export const CustomsPendingReportPage: React.FC = () => {
         checklistByDeclaration.set(row.declaration_id, [...(checklistByDeclaration.get(row.declaration_id) || []), row]);
       }
       const permitsByCase = new Map<string, PermitRow[]>();
+      const latestDeclarationByCase = new Map<string, DeclarationRow>();
+      for (const declaration of [...declarationRows].sort((a, b) => Date.parse(b.created_at || "") - Date.parse(a.created_at || ""))) {
+        if (declaration.case_id && !latestDeclarationByCase.has(declaration.case_id)) {
+          latestDeclarationByCase.set(declaration.case_id, declaration);
+        }
+      }
       for (const row of (permitResult.data || []) as PermitRow[]) {
         permitsByCase.set(row.case_id, [...(permitsByCase.get(row.case_id) || []), row]);
       }
@@ -220,7 +228,8 @@ export const CustomsPendingReportPage: React.FC = () => {
           });
         }
 
-        for (const permit of (declaration.case_id ? permitsByCase.get(declaration.case_id) || [] : [])) {
+        const isLatestCaseDeclaration = !declaration.case_id || latestDeclarationByCase.get(declaration.case_id)?.id === declaration.id;
+        for (const permit of (isLatestCaseDeclaration && declaration.case_id ? permitsByCase.get(declaration.case_id) || [] : [])) {
           items.push({
             id: "permit:" + permit.id,
             declarationId: declaration.id,
@@ -241,6 +250,7 @@ export const CustomsPendingReportPage: React.FC = () => {
             clientName,
             caseNumber: caseRow?.case_number || "شماره پرونده ثبت نشده",
             kottaj: declaration.kottaj_number || "کوتاژ ثبت نشده",
+            regime: declaration.customs_regime,
             href,
             items,
           });
@@ -313,7 +323,7 @@ export const CustomsPendingReportPage: React.FC = () => {
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b app-border p-4">
                   <div className="min-w-0">
                     <div className="font-black">{group.shipmentName}</div>
-                    <div className="mt-1 text-xs app-muted">{group.clientName} · {group.billOfLading} · {regimeLabel(declarationRowsForLabel(group.declarationId, []))}</div>
+                    <div className="mt-1 text-xs app-muted">{group.clientName} · {group.billOfLading} · {regimeLabel(group.regime)}</div>
                     <div className="mt-1 text-xs app-muted">پرونده: {group.caseNumber} · کوتاژ: {group.kottaj}</div>
                   </div>
                   <Link to={group.href} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-bold text-white">بازکردن عملیات <ArrowUpRight size={14}/></Link>
@@ -341,8 +351,5 @@ export const CustomsPendingReportPage: React.FC = () => {
   );
 };
 
-function declarationRowsForLabel(_id: string, _rows: DeclarationRow[]): string | null {
-  return "import_definitive";
-}
 
 export default CustomsPendingReportPage;
