@@ -266,8 +266,45 @@ BEGIN
   IF v_workflow_sata <> 'SAT-TEST-123' OR v_shipment_sata <> 'SAT-TEST-123' THEN
     RAISE EXCEPTION 'SATA canonical workflow value and shipment compatibility mirror diverged';
   END IF;
+
+  -- A retry after a successful release must return success without repeating
+  -- the warehouse-only not_ready -> ready transition.
+  v_result := public.complete_customs_declaration_exit(
+    '00000000-0000-0000-0000-000000000020',
+    'SAT-TEST-123'
+  );
+  IF NOT COALESCE((v_result ->> 'ready')::boolean, false) THEN
+    RAISE EXCEPTION 'A repeated exit request was not idempotent: %', v_result -> 'issues';
+  END IF;
 END;
 $release$;
+
+-- A shipment already closed by finance must never be regressed to ready.
+RESET ROLE;
+UPDATE public.shipments
+SET finance_status = 'closed'
+WHERE id = '00000000-0000-0000-0000-000000000010';
+SET ROLE authenticated;
+DO $closed$
+DECLARE
+  v_result jsonb;
+  v_finance_status text;
+BEGIN
+  v_result := public.complete_customs_declaration_exit(
+    '00000000-0000-0000-0000-000000000020',
+    'SAT-TEST-123'
+  );
+  IF NOT COALESCE((v_result ->> 'ready')::boolean, false) THEN
+    RAISE EXCEPTION 'A closed shipment could not safely re-check exit readiness';
+  END IF;
+  SELECT finance_status INTO v_finance_status
+  FROM public.shipments
+  WHERE id = '00000000-0000-0000-0000-000000000010';
+  IF v_finance_status <> 'closed' THEN
+    RAISE EXCEPTION 'Final exit regressed a finance-closed shipment';
+  END IF;
+END;
+$closed$;
 
 RESET ROLE;
 
