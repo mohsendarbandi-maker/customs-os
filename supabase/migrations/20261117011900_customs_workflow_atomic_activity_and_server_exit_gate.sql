@@ -342,6 +342,10 @@ DECLARE
   v_insurance_key bigint;
   v_receipt_key bigint;
 BEGIN
+  IF lower(COALESCE(p_customs_path, '')) NOT IN ('green', 'yellow', 'red') THEN
+    v_issues := pg_catalog.array_append(v_issues, 'مسیر گمرکی اظهارنامه مشخص نیست؛ مسیر سبز، زرد یا قرمز را تعیین کنید.');
+  END IF;
+
   v_status := COALESCE(v_evaluation ->> 'status', '');
   v_required := lower(COALESCE(p_customs_path, '')) = 'red'
     OR COALESCE(v_evaluation ->> 'expert_requested', 'false') = 'true'
@@ -779,7 +783,7 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'اظهارنامه پیدا نشد یا دسترسی سازمانی مجاز نیست';
   END IF;
-  IF v_declaration.customs_regime <> 'import_definitive' THEN
+  IF v_declaration.customs_regime IS DISTINCT FROM 'import_definitive' THEN
     RAISE EXCEPTION 'این کنترل نهایی فقط برای رویه واردات قطعی فعال است';
   END IF;
   IF v_declaration.shipment_id IS NULL THEN
