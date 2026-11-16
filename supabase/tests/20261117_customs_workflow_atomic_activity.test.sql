@@ -12,6 +12,8 @@ DECLARE
   v_result jsonb;
   v_stage text;
   v_inspection_paid text;
+  v_event1_at timestamptz;
+  v_event2_at timestamptz;
   v_events integer;
 BEGIN
   SELECT expertise_state INTO v_base
@@ -59,6 +61,22 @@ BEGIN
   EXCEPTION WHEN SQLSTATE '40001' THEN
     NULL;
   END;
+
+  SELECT
+    max(created_at) FILTER (
+      WHERE snapshot #>> '{expertise_state,standard,expert_review}' = 'approved'
+        AND snapshot #>> '{expertise_state,standard,inspection_paid}' = 'false'
+    ),
+    max(created_at) FILTER (
+      WHERE snapshot #>> '{expertise_state,standard,expert_review}' = 'approved'
+        AND snapshot #>> '{expertise_state,standard,inspection_paid}' = 'true'
+    )
+  INTO v_event1_at, v_event2_at
+  FROM public.customs_declaration_workflow_events
+  WHERE workflow_id = '00000000-0000-0000-0000-000000000030';
+  IF v_event1_at IS NULL OR v_event2_at IS NULL OR v_event2_at <= v_event1_at THEN
+    RAISE EXCEPTION 'Workflow audit events are not ordered by actual event time';
+  END IF;
 
   SELECT count(*) INTO v_events
   FROM public.customs_declaration_workflow_events
