@@ -173,7 +173,7 @@ export const CustomsPendingReportPage: React.FC = () => {
       if (clientResult.error) throw clientResult.error;
       if (permitResult.error) throw permitResult.error;
 
-      const clientMap = new Map((clientResult.data || []).map((row: ClientRow) => [row.id, row.name] as const));
+      const clientMap = new Map<string, string>((clientResult.data || []).map((row: ClientRow): [string, string] => [row.id, row.name]));
       const caseMap = new Map(cases.map((row) => [row.id, row] as const));
       const shipmentMap = new Map(uniqueShipments.map((row) => [row.id, row] as const));
       const workflowByDeclaration = new Map(workflowRows.map((row) => [row.declaration_id, row] as const));
