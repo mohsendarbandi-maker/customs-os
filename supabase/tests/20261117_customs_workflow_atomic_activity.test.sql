@@ -249,6 +249,38 @@ $dates$;
 SET request.jwt.claim.role = 'warehouse';
 SET ROLE authenticated;
 
+DO $shipment_policy$
+DECLARE
+  v_role text;
+  v_org uuid;
+  v_old_allowed boolean;
+  v_new_allowed boolean;
+BEGIN
+  v_role := public.user_role();
+  v_org := public.user_org_id();
+
+  SELECT
+    organization_id = v_org
+      AND (v_role IN ('owner','admin','broker')
+        OR (v_role = 'warehouse' AND finance_status = 'not_ready')),
+    organization_id = v_org
+      AND (v_role IN ('owner','admin','broker')
+        OR (v_role = 'warehouse' AND 'ready' = 'ready'))
+  INTO v_old_allowed, v_new_allowed
+  FROM public.shipments
+  WHERE id = '00000000-0000-0000-0000-000000000010';
+
+  IF current_user <> 'authenticated' OR v_role <> 'warehouse' OR v_org IS NULL THEN
+    RAISE EXCEPTION 'Unexpected test identity: db_role %, app_role %, organization %',
+      current_user, v_role, v_org;
+  END IF;
+  IF NOT COALESCE(v_old_allowed,false) OR NOT COALESCE(v_new_allowed,false) THEN
+    RAISE EXCEPTION 'Warehouse shipment policy preflight failed: old %, new %',
+      v_old_allowed, v_new_allowed;
+  END IF;
+END;
+$shipment_policy$;
+
 DO $release$
 DECLARE
   v_result jsonb;
