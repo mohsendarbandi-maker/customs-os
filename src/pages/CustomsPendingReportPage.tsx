@@ -371,8 +371,11 @@ export const CustomsPendingReportPage: React.FC = () => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-semibold">{item.title}</div>
-                        <div className="mt-1 text-xs app-muted">{item.detail} · {item.source === "workflow" ? "فعالیت عملیات" : item.source === "permit" ? "مجوز" : "چک‌لیست دستی"}</div>
+                        <div className="mt-1 text-xs app-muted">{item.detail} · {item.source === "workflow" ? "فعالیت عملیات" : item.source === "permit" ? "مجوز" : "چک‌لیست"}</div>
                       </div>
+                      <Link to={item.href} className="shrink-0 inline-flex items-center gap-1 rounded-lg border app-border px-2.5 py-1.5 text-[11px] font-bold">
+                        اقدام <ArrowUpRight size={13}/>
+                      </Link>
                     </div>
                   ))}
                 </div>
