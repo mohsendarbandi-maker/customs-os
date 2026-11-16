@@ -770,6 +770,7 @@ DECLARE
   v_workflow_sata text;
   v_mirror_sata text;
   v_existing_sata text;
+  v_updated_rows integer;
 BEGIN
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Authentication required';
@@ -917,12 +918,13 @@ BEGIN
     SET finance_status = 'ready',
         updated_at = pg_catalog.clock_timestamp()
     WHERE id = v_declaration.shipment_id
-      AND organization_id = v_org_id
-    RETURNING * INTO v_shipment;
+      AND organization_id = v_org_id;
 
-    IF NOT FOUND THEN
+    GET DIAGNOSTICS v_updated_rows = ROW_COUNT;
+    IF v_updated_rows <> 1 THEN
       RAISE EXCEPTION 'تغییر وضعیت محموله به آماده مالی انجام نشد؛ تراکنش خروج لغو شد';
     END IF;
+    v_shipment.finance_status := 'ready';
   END IF;
 
   RETURN pg_catalog.jsonb_build_object(
