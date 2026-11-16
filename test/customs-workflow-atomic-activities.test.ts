@@ -53,8 +53,10 @@ describe("atomic customs workflow activities", () => {
     const rollback = functionBody("rollback_customs_declaration_workflow");
     expect(undo).toContain("v_current_value IS NOT DISTINCT FROM v_after_value");
     expect(undo).toContain("v_result - v_key");
+    expect(rollback).toContain("SECURITY INVOKER");
     expect(rollback).toContain("customs_workflow_jsonb_undo");
     expect(rollback).toContain("v_event.changed_fields");
+    expect(migration).toContain("GRANT EXECUTE ON FUNCTION public.customs_workflow_jsonb_undo(jsonb, jsonb, jsonb) TO authenticated");
   });
 
   it("enforces every readiness condition and all exit checklist rows on the server", () => {
