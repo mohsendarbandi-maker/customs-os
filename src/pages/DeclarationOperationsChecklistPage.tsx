@@ -10,12 +10,19 @@ import{supabase}from'../lib/supabase';
 import{useAuth}from'../context/AuthContext';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import { resolveDeclarationRelationIds } from '../lib/declarationWorkflowContext';
+import { deriveCustomsChecklistCompletion, isWorkflowManagedChecklistItem } from '../lib/customsChecklistStatus';
 
 type Decl={id:string;shipment_id:string|null;case_id:string|null;kottaj_number:string;declaration_date:string;customs_path:string|null;payment_reference:string|null;total_duties_irr:number|null;declaration_file_name:string|null;customs_office_id?:string|null;customs_regime?:string|null};
-type Item={id:string;item_key:string;item_label:string;completed:boolean;note:string|null;sort_order:number;source:string;is_active:boolean};
+type Item={id:string;item_key:string;item_label:string;completed:boolean;note:string|null;sort_order:number;source:string;is_active:boolean;workflowManaged:boolean};
 type DeclarationContext={shipmentName:string;billOfLading:string;caseNumber:string;clientName:string};
 
 const PATH_LABELS:Record<string,string>={green:'سبز',yellow:'زرد',red:'قرمز'};
+const materializeChecklistItems=(rows:any[],workflow:Record<string,unknown>|null,customsPath:string|null):Item[]=>
+ rows.filter(x=>x.is_active).map(x=>{
+  const derived=deriveCustomsChecklistCompletion(x,workflow,customsPath);
+  return {...x,completed:derived===null?Boolean(x.completed):derived,workflowManaged:derived!==null} as Item;
+ });
+
 
 const digits=(v:string)=>String(v||'').replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const normalizeHs=(v:string)=>digits(v).replace(/\D/g,'');
@@ -91,6 +98,15 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
    const resolvedHs=normalizeHs(String(sc?.tariff_code||c?.tariff_code||ro?.tariff_code||''));
    setHs(resolvedHs);
 
+   let workflowState:Record<string,unknown>|null=null;
+   if(d.customs_regime==='import_definitive'&&profile?.organization_id){
+    const{data:workflowRow,error:workflowError}=await supabase.from('customs_declaration_workflow')
+     .select('evaluation_state,expertise_state,cashier_state,loading_permit_state')
+     .eq('organization_id',profile.organization_id).eq('declaration_id',declarationId).maybeSingle();
+    if(workflowError)throw workflowError;
+    workflowState=workflowRow as Record<string,unknown>|null;
+   }
+
    const{data:allRows,error:ce}=await supabase.from('declaration_checklist_items').select('id,item_key,item_label,completed,note,sort_order,source,is_active').eq('declaration_id',declarationId).order('sort_order').order('created_at');
    if(ce)throw ce;
 
@@ -99,10 +115,10 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
     if(ie)throw ie;
     const{data:re,error:rer}=await supabase.from('declaration_checklist_items').select('id,item_key,item_label,completed,note,sort_order,source,is_active').eq('declaration_id',declarationId).order('sort_order').order('created_at');
     if(rer)throw rer;
-    setItems((re||[]).filter((x:any)=>x.is_active).map((x:any)=>x as Item));
+    setItems(materializeChecklistItems(re||[],workflowState,d.customs_path||null));
     for(const x of re||[]){if(x.note)setDraftNote(p=>({...p,[x.id]:x.note||''}))}
    }else{
-    setItems((allRows||[]).filter((x:any)=>x.is_active).map((x:any)=>x as Item));
+    setItems(materializeChecklistItems(allRows||[],workflowState,d.customs_path||null));
     for(const x of allRows||[]){if(x.note)setDraftNote(p=>({...p,[x.id]:x.note||''}))}
    }
 
@@ -116,7 +132,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
  const completed=items.length-pending.length;
 
  const toggle=async(item:Item)=>{
-  if(!canEdit)return;
+  if(!canEdit||item.workflowManaged)return;
   const next=!item.completed;
   setItems(p=>p.map(x=>x.id===item.id?{...x,completed:next}:x));
   setError('');setMessage('');
@@ -148,7 +164,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
  };
 
  const removeItem=async(item:Item)=>{
-  if(!canEdit)return;
+  if(!canEdit||item.workflowManaged)return;
   const{error:e}=await supabase.rpc('set_declaration_checklist_item_active',{p_item_id:item.id,p_active:false});
   if(e){setError(e.message);return}
   setItems(p=>p.filter(x=>x.id!==item.id));setMessage('این مورد از چک‌لیست همین اظهارنامه حذف شد.');
@@ -169,7 +185,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
 
  return <main dir="rtl" className="min-h-screen p-4 md:p-8" style={{background:'var(--bg)',color:'var(--text)'}}><div className="max-w-5xl mx-auto space-y-5">
   <header className="flex flex-wrap items-center justify-between gap-3">
-   <div><div className="text-xs app-muted">مرحله ۴</div><h1 className="text-2xl font-black mt-1">عملیات گمرکی</h1><p className="text-xs app-muted mt-1">چک‌لیست این اظهارنامه قابل تنظیم است.</p></div>
+   <div><div className="text-xs app-muted">مرحله ۴</div><h1 className="text-2xl font-black mt-1">عملیات گمرکی</h1><p className="text-xs app-muted mt-1">موارد سیستمی از وضعیت عملیات گمرکی خوانده می‌شوند؛ موارد دستی این چک‌لیست مستقل باقی می‌مانند.</p></div>
    <Link to={`/operations?tab=declaration&shipmentId=${encodeURIComponent(decl?.shipment_id||'')}`} className="px-4 py-2 rounded-xl border app-border bg-[var(--surface)] text-sm"><ArrowLeft className="inline ml-1" size={15}/>بازگشت به ثبت اظهار</Link>
   </header>
 
@@ -212,9 +228,9 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
     const note=draftNote[item.id]??item.note??'';
     return <div key={item.id} className="border-b app-border last:border-b-0">
       <div className="flex items-start gap-2 p-3 md:p-4">
-       <button type="button" onClick={()=>void toggle(item)} disabled={!canEdit} className={`mt-0.5 w-7 h-7 rounded-lg border grid place-items-center shrink-0 ${item.completed?'bg-emerald-500 border-emerald-500 text-white':'app-border'} ${!canEdit?'opacity-70':''}`}>{item.completed&&<Check size={16}/>}</button>
-       <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`text-sm font-semibold ${item.completed?'line-through opacity-70':''}`}>{i+1}. {item.item_label||item.item_key}</span>{item.source==='manual'&&<span className="rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-300 px-2 py-0.5 text-[10px] font-bold">افزوده‌شده</span>}</div>{item.note&&<div className="mt-1 text-xs app-muted">توضیح: {item.note}</div>}</div>
-       {canEdit&&<div className="flex items-center gap-1 shrink-0"><button type="button" onClick={()=>setNoteOpen(p=>({...p,[item.id]:!open}))} className="w-8 h-8 rounded-lg border app-border grid place-items-center" title="افزودن توضیح"><span className="font-black text-base">{open?'−':'+'}</span></button><button type="button" onClick={()=>void removeItem(item)} className="w-8 h-8 rounded-lg border app-border grid place-items-center text-red-500" title="حذف از این اظهارنامه"><Trash2 size={14}/></button></div>}
+       <button type="button" onClick={()=>void toggle(item)} disabled={!canEdit||item.workflowManaged} className={`mt-0.5 w-7 h-7 rounded-lg border grid place-items-center shrink-0 ${item.completed?'bg-emerald-500 border-emerald-500 text-white':'app-border'} ${!canEdit?'opacity-70':''}`}>{item.completed&&<Check size={16}/>}</button>
+       <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`text-sm font-semibold ${item.completed?'line-through opacity-70':''}`}>{i+1}. {item.item_label||item.item_key}</span>{item.source==='manual'&&<span className="rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-300 px-2 py-0.5 text-[10px] font-bold">افزوده‌شده</span>}{item.workflowManaged&&<span className="rounded-full bg-[var(--primary)]/10 text-[var(--primary)] px-2 py-0.5 text-[10px] font-bold">وضعیت از عملیات</span>}</div>{item.note&&<div className="mt-1 text-xs app-muted">توضیح: {item.note}</div>}</div>
+       {canEdit&&<div className="flex items-center gap-1 shrink-0"><button type="button" onClick={()=>setNoteOpen(p=>({...p,[item.id]:!open}))} className="w-8 h-8 rounded-lg border app-border grid place-items-center" title="افزودن توضیح"><span className="font-black text-base">{open?'−':'+'}</span></button>{!item.workflowManaged&&<button type="button" onClick={()=>void removeItem(item)} className="w-8 h-8 rounded-lg border app-border grid place-items-center text-red-500" title="حذف از این اظهارنامه"><Trash2 size={14}/></button>}</div>}
       </div>
       {open&&canEdit&&<div className="px-3 pb-4 md:px-14"><div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3"><div className="text-xs font-bold mb-2">توضیح / دلیل ناقص ماندن مورد</div><textarea value={note} onChange={e=>setDraftNote(p=>({...p,[item.id]:e.target.value}))} rows={2} placeholder="مثلاً: منتظر تأیید کارشناس یا دریافت نامه هستیم..." className="w-full rounded-xl border app-border bg-[var(--surface)] p-3 text-sm"/><button type="button" onClick={()=>void saveNote(item)} className="mt-2 rounded-xl bg-[var(--primary)] text-white px-3 py-2 text-xs font-bold"><Save size={14} className="inline ml-1"/>ذخیره توضیح</button></div></div>}
     </div>;
