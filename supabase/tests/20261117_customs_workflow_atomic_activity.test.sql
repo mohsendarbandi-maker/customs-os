@@ -160,7 +160,7 @@ BEGIN
     IF SQLERRM = 'NULL customs regime unexpectedly passed the exit gate' THEN
       RAISE;
     END IF;
-    IF SQLERRM NOT LIKE '%only for definitive import%' THEN
+    IF SQLERRM NOT LIKE '%این کنترل نهایی فقط برای رویه واردات قطعی فعال است%' THEN
       RAISE;
     END IF;
   END;
