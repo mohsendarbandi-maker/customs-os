@@ -110,17 +110,19 @@ async function deliver(){
  return summary;
 }
 async function collectCustomsPendingDigest(organizationId:string){
- const [workflowResult,checklistResult,permitResult]=await Promise.all([
+ const [workflowResult,checklistResult,permitResult,exitChecklistResult]=await Promise.all([
   admin.from("customs_declaration_workflow").select("declaration_id,evaluation_state,expertise_state,cashier_state,loading_permit_state,exit_state,port_charges_state").eq("organization_id",organizationId).limit(1000),
   admin.from("declaration_checklist_items").select("id,declaration_id,item_label").eq("organization_id",organizationId).eq("source","manual").eq("is_active",true).eq("completed",false).limit(500),
-  admin.from("permits").select("id,case_id,permit_type").eq("organization_id",organizationId).eq("status","pending").limit(500)
+  admin.from("permits").select("id,case_id,permit_type").eq("organization_id",organizationId).eq("status","pending").limit(500),
+  admin.from("declaration_exit_checklist_items").select("id,declaration_id,item_key").eq("organization_id",organizationId).eq("completed",false).limit(500)
  ]);
- const queryError=workflowResult.error||checklistResult.error||permitResult.error;
+ const queryError=workflowResult.error||checklistResult.error||permitResult.error||exitChecklistResult.error;
  if(queryError)throw queryError;
  const workflows=workflowResult.data??[];
  const declarationsIds=[...new Set([
   ...workflows.map((row:any)=>row.declaration_id),
   ...(checklistResult.data??[]).map((row:any)=>row.declaration_id),
+  ...(exitChecklistResult.data??[]).map((row:any)=>row.declaration_id),
  ].filter(Boolean))];
  let declarationRows:any[]=[];
  if(declarationsIds.length){
@@ -140,6 +142,15 @@ async function collectCustomsPendingDigest(organizationId:string){
  for(const item of checklistResult.data??[]){
   const declaration=declarationMap.get(item.declaration_id);
   tasks.push({title:(declaration?.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"")+" چک‌لیست: "+item.item_label,urgent:false});
+ }
+ const exitLabels:Record<string,string>={
+  warehouse_invoice_initial:"صورت‌حساب انبارداری اولیه",
+  warehouse_invoice_supplement:"صورت‌حساب انبارداری متمم",
+  transport_power_of_attorney:"وکالت حمل",
+ };
+ for(const item of exitChecklistResult.data??[]){
+  const declaration=declarationMap.get(item.declaration_id);
+  tasks.push({title:(declaration?.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"")+"درب خروج: "+(exitLabels[item.item_key]||item.item_key),urgent:false});
  }
  const pendingPermits=permitResult.data??[];
  if(pendingPermits.length){
