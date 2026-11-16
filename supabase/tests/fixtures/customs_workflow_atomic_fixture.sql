@@ -1,6 +1,7 @@
 -- Minimal PostgreSQL contract fixture for the customs workflow migration.
 -- This is test-only and must never be pointed at the live Supabase project.
 
+CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
 CREATE SCHEMA auth;
 
@@ -77,7 +78,7 @@ CREATE TABLE public.customs_declaration_workflow_events (
   previous_snapshot jsonb,
   snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
   actor_id uuid,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 
 CREATE TABLE public.declaration_exit_checklist_items (
