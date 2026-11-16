@@ -285,8 +285,9 @@ BEGIN
     RAISE EXCEPTION 'SATA canonical workflow value and shipment compatibility mirror diverged';
   END IF;
 
-  -- A retry after a successful release must return success without repeating
+  -- Broker has cross-stage read access; repeated release must not repeat
   -- the warehouse-only not_ready -> ready transition.
+  PERFORM set_config('request.jwt.claim.role','broker',true);
   v_result := public.complete_customs_declaration_exit(
     '00000000-0000-0000-0000-000000000020',
     'SAT-TEST-123'
@@ -303,7 +304,7 @@ SET request.jwt.claim.role = 'owner';
 UPDATE public.shipments
 SET finance_status = 'closed'
 WHERE id = '00000000-0000-0000-0000-000000000010';
-SET request.jwt.claim.role = 'warehouse';
+SET request.jwt.claim.role = 'broker';
 SET ROLE authenticated;
 DO $closed$
 DECLARE
