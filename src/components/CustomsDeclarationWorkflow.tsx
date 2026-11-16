@@ -3,7 +3,7 @@ import{AlertTriangle,Clock3,RefreshCw,Save,ShieldCheck}from'lucide-react';
 import{supabase}from'../lib/supabase';
 import{compareJalaliDates,getAbandonedGoodsWarnings,getWorkflowStageIssues,getInitialCustomsWorkflowStage,shouldShowAssessmentStage,parseJalaliDate,type CustomsWorkflowValidationState}from'../lib/customsDeclarationWorkflow';
 import{toJalali,zonedJalaliToDate}from'../lib/jalali';
-import{buildCustomsWorkflowJsonbPatch}from'../lib/customsWorkflowPatch';
+import{buildCustomsWorkflowJsonbPatch,mergeCustomsWorkflowJsonbPatch}from'../lib/customsWorkflowPatch';
 import{JalaliDateTimePicker}from'../features/reminders/JalaliDateTimePicker';
 
 type WorkflowRow={
@@ -197,7 +197,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
      setEvaluation(nextEvaluation);
-     workflowBaseline.current.evaluation=cloneWorkflowState(nextEvaluation);workflowBaseline.current.db.evaluation=cloneWorkflowState(savedRow.evaluation_state||{});
+     workflowBaseline.current.evaluation=cloneWorkflowState(nextEvaluation);workflowBaseline.current.db.evaluation=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.evaluation,patch);
     }else if(stage==='expertise'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.expertise,expertise);
      baseState=workflowBaseline.current.db.expertise;
@@ -207,7 +207,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      });
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
-     workflowBaseline.current.expertise=cloneWorkflowState(expertise);workflowBaseline.current.db.expertise=cloneWorkflowState(savedRow.expertise_state||{});
+     workflowBaseline.current.expertise=cloneWorkflowState(expertise);workflowBaseline.current.db.expertise=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.expertise,patch);
     }else if(stage==='cashier'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.cashier,cashier);
      baseState=workflowBaseline.current.db.cashier;
@@ -217,7 +217,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      });
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
-     workflowBaseline.current.cashier=cloneWorkflowState(cashier);workflowBaseline.current.db.cashier=cloneWorkflowState(savedRow.cashier_state||{});
+     workflowBaseline.current.cashier=cloneWorkflowState(cashier);workflowBaseline.current.db.cashier=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.cashier,patch);
     }else if(stage==='loading_permit'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.loadingPermit,loadingPermit);
      baseState=workflowBaseline.current.db.loadingPermit;
@@ -227,7 +227,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      });
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
-     workflowBaseline.current.loadingPermit=cloneWorkflowState(loadingPermit);workflowBaseline.current.db.loadingPermit=cloneWorkflowState(savedRow.loading_permit_state||{});
+     workflowBaseline.current.loadingPermit=cloneWorkflowState(loadingPermit);workflowBaseline.current.db.loadingPermit=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.loadingPermit,patch);
     }else if(stage==='exit'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.exit,exitState);
      baseState=workflowBaseline.current.db.exit;
@@ -237,7 +237,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      });
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
-     workflowBaseline.current.exit=cloneWorkflowState(exitState);workflowBaseline.current.db.exit=cloneWorkflowState(savedRow.exit_state||{});
+     workflowBaseline.current.exit=cloneWorkflowState(exitState);workflowBaseline.current.db.exit=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.exit,patch);
     }else if(stage==='port_charges'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.port,port);
      baseState=workflowBaseline.current.db.port;
@@ -247,7 +247,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      });
      if(saveError)throw saveError;
      savedRow=data as WorkflowRow;
-     workflowBaseline.current.port=cloneWorkflowState(port);workflowBaseline.current.db.port=cloneWorkflowState(savedRow.port_charges_state||{});
+     workflowBaseline.current.port=cloneWorkflowState(port);workflowBaseline.current.db.port=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.port,patch);
     }else if(stage==='abandoned'){
      activity='abandoned';
      patch={notes:notes.trim()||null};
