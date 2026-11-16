@@ -102,20 +102,20 @@ export const CustomsPendingReportPage: React.FC = () => {
       if (workflowError) throw workflowError;
 
       const workflowRows = (workflows || []) as WorkflowRow[];
-      const declarationIds = [...new Set(workflowRows.map((row) => row.declaration_id).filter(Boolean))];
+      const { data: declarations, error: declarationError } = await supabase
+        .from("customs_declarations")
+        .select("id,case_id,shipment_id,kottaj_number,customs_path,customs_regime,created_at")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      if (declarationError) throw declarationError;
+      const declarationRows = (declarations || []) as DeclarationRow[];
+      const declarationIds = [...new Set(declarationRows.map((row) => row.id).filter(Boolean))];
       if (!declarationIds.length) {
         setGroups([]);
         setRefreshedAt(new Date());
         return;
       }
-
-      const { data: declarations, error: declarationError } = await supabase
-        .from("customs_declarations")
-        .select("id,case_id,shipment_id,kottaj_number,customs_path,customs_regime,created_at")
-        .eq("organization_id", organizationId)
-        .in("id", declarationIds);
-      if (declarationError) throw declarationError;
-      const declarationRows = (declarations || []) as DeclarationRow[];
       const caseIds = [...new Set(declarationRows.map((row) => row.case_id).filter((id): id is string => Boolean(id)))];
       const shipmentIds = [...new Set(declarationRows.map((row) => row.shipment_id).filter((id): id is string => Boolean(id)))];
 
@@ -183,7 +183,6 @@ export const CustomsPendingReportPage: React.FC = () => {
       const nextGroups: ReportGroup[] = [];
       for (const declaration of declarationRows) {
         const workflow = workflowByDeclaration.get(declaration.id);
-        if (!workflow) continue;
         const caseRow = declaration.case_id ? caseMap.get(declaration.case_id) : undefined;
         const shipment = (declaration.shipment_id ? shipmentMap.get(declaration.shipment_id) : undefined)
           || uniqueShipments.find((row) => row.case_id === declaration.case_id);
@@ -197,10 +196,12 @@ export const CustomsPendingReportPage: React.FC = () => {
             : "/operations";
         const items: ReportItem[] = [];
 
-        const workflowTasks: CustomsWorkflowPendingTask[] = buildCustomsWorkflowPendingTasks({
-          ...workflow,
-          customs_path: declaration.customs_path,
-        }, declaration.customs_path);
+        const workflowTasks: CustomsWorkflowPendingTask[] = workflow
+          ? buildCustomsWorkflowPendingTasks({
+              ...workflow,
+              customs_path: declaration.customs_path,
+            }, declaration.customs_path)
+          : [];
         for (const task of workflowTasks) {
           items.push({
             id: task.id,
