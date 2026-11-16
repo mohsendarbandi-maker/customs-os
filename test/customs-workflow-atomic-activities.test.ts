@@ -71,6 +71,10 @@ describe("atomic customs workflow activities", () => {
     expect(completion).toContain("transport_power_of_attorney");
     expect(completion).toContain("IF COALESCE(pg_catalog.array_length(v_issues, 1), 0) > 0 THEN");
     expect(completion).toContain("finance_status = 'ready'");
+    expect(completion).toContain("v_declaration.customs_regime IS DISTINCT FROM 'import_definitive'");
+    expect(completion).toContain("v_shipment.finance_status NOT IN ('not_ready', 'ready', 'closed')");
+    expect(completion).toContain("IF v_shipment.finance_status = 'not_ready' THEN");
+    expect(completion).toContain("IF v_declaration.workflow_stage IS DISTINCT FROM 6 THEN");
     expect(completion.indexOf("IF COALESCE(pg_catalog.array_length(v_issues, 1), 0) > 0 THEN"))
       .toBeLessThan(completion.indexOf("finance_status = 'ready'"));
   });
