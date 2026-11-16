@@ -39,6 +39,13 @@ type ShipmentRow = {
 type CaseRow = { id: string; case_number: string | null; client_id: string | null };
 type ClientRow = { id: string; name: string };
 type ChecklistRow = { id: string; declaration_id: string; item_label: string; note: string | null };
+type ExitChecklistRow = { id: string; declaration_id: string; item_key: string };
+const EXIT_CHECKLIST_LABELS: Record<string, string> = {
+  warehouse_invoice_initial: "صورت‌حساب انبارداری اولیه",
+  warehouse_invoice_supplement: "صورت‌حساب انبارداری متمم",
+  transport_power_of_attorney: "وکالت حمل",
+};
+
 type PermitRow = {
   id: string;
   case_id: string;
@@ -119,7 +126,7 @@ export const CustomsPendingReportPage: React.FC = () => {
       const caseIds = [...new Set(declarationRows.map((row) => row.case_id).filter((id): id is string => Boolean(id)))];
       const shipmentIds = [...new Set(declarationRows.map((row) => row.shipment_id).filter((id): id is string => Boolean(id)))];
 
-      const [shipmentById, shipmentByCase, caseResult, checklistResult] = await Promise.all([
+      const [shipmentById, shipmentByCase, caseResult, checklistResult, exitChecklistResult] = await Promise.all([
         shipmentIds.length
           ? supabase.from("shipments").select("id,case_id,client_id,display_name,bill_of_lading_no").eq("organization_id", organizationId).in("id", shipmentIds)
           : Promise.resolve({ data: [], error: null } as any),
@@ -136,8 +143,13 @@ export const CustomsPendingReportPage: React.FC = () => {
           .eq("source", "manual")
           .eq("is_active", true)
           .eq("completed", false),
+        supabase.from("declaration_exit_checklist_items")
+          .select("id,declaration_id,item_key")
+          .eq("organization_id", organizationId)
+          .in("declaration_id", declarationIds)
+          .eq("completed", false),
       ]);
-      for (const result of [shipmentById, shipmentByCase, caseResult, checklistResult]) {
+      for (const result of [shipmentById, shipmentByCase, caseResult, checklistResult, exitChecklistResult]) {
         if (result.error) throw result.error;
       }
 
@@ -145,6 +157,7 @@ export const CustomsPendingReportPage: React.FC = () => {
       const uniqueShipments = [...new Map(shipments.map((row) => [row.id, row])).values()];
       const cases = (caseResult.data || []) as CaseRow[];
       const checklistItems = (checklistResult.data || []) as ChecklistRow[];
+      const exitChecklistItems = (exitChecklistResult.data || []) as ExitChecklistRow[];
       const clientIds = [...new Set([
         ...uniqueShipments.map((row) => row.client_id),
         ...cases.map((row) => row.client_id),
@@ -168,6 +181,10 @@ export const CustomsPendingReportPage: React.FC = () => {
       const checklistByDeclaration = new Map<string, ChecklistRow[]>();
       for (const row of checklistItems) {
         checklistByDeclaration.set(row.declaration_id, [...(checklistByDeclaration.get(row.declaration_id) || []), row]);
+      }
+      const exitChecklistByDeclaration = new Map<string, ExitChecklistRow[]>();
+      for (const row of exitChecklistItems) {
+        exitChecklistByDeclaration.set(row.declaration_id, [...(exitChecklistByDeclaration.get(row.declaration_id) || []), row]);
       }
       const permitsByCase = new Map<string, PermitRow[]>();
       const latestDeclarationByCase = new Map<string, DeclarationRow>();
@@ -224,6 +241,21 @@ export const CustomsPendingReportPage: React.FC = () => {
             stage: "checklist",
             priority: "normal",
             href,
+            source: "checklist",
+          });
+        }
+        const exitHref = declaration.shipment_id
+          ? "/operations?tab=exit&declarationId=" + encodeURIComponent(declaration.id)
+          : href;
+        for (const item of exitChecklistByDeclaration.get(declaration.id) || []) {
+          items.push({
+            id: "exit-checklist:" + item.id,
+            declarationId: declaration.id,
+            title: "درب خروج: " + (EXIT_CHECKLIST_LABELS[item.item_key] || item.item_key),
+            detail: "چک‌لیست مستقل درب خروج",
+            stage: "exit",
+            priority: "normal",
+            href: exitHref,
             source: "checklist",
           });
         }
