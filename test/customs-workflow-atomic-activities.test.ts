@@ -56,6 +56,8 @@ describe("atomic customs workflow activities", () => {
     expect(rollback).toContain("SECURITY INVOKER");
     expect(rollback).toContain("customs_workflow_jsonb_undo");
     expect(rollback).toContain("v_event.changed_fields");
+    const eventRead = rollback.slice(rollback.indexOf("FROM public.customs_declaration_workflow_events"));
+    expect(eventRead).not.toContain("FOR UPDATE");
     expect(migration).toContain("GRANT EXECUTE ON FUNCTION public.customs_workflow_jsonb_undo(jsonb, jsonb, jsonb) TO authenticated");
   });
 
