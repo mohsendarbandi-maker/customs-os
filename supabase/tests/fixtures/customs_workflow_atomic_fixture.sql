@@ -162,6 +162,10 @@ BEGIN
 END;
 $function$;
 
+CREATE TRIGGER trg_log_customs_declaration_workflow_event
+AFTER INSERT OR UPDATE ON public.customs_declaration_workflow
+FOR EACH ROW EXECUTE FUNCTION public.log_customs_declaration_workflow_event();
+
 CREATE TABLE public.declaration_exit_checklist_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL,
