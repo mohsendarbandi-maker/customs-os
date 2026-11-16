@@ -172,7 +172,7 @@ async function digest(){
   let customs:{total:number;urgent:number;preview:string[]}={total:0,urgent:0,preview:[]};
   let customsReportAvailable=true;
   try{customs=await collectCustomsPendingDigest(profile.organization_id);}catch{customsReportAvailable=false;}
-  const fa=(value:number)=>String(value).replace(/\\d/g,x=>"۰۱۲۳۴۵۶۷۸۹"[Number(x)]);
+  const fa=(value:number)=>String(value).replace(/\d/g,x=>"۰۱۲۳۴۵۶۷۸۹"[Number(x)]);
   const preview=customs.preview.join("؛ ").slice(0,190);
   const body=p.hide_content
    ?"گزارش روزانه عملیات گمرکی و یادآورها آماده است."
