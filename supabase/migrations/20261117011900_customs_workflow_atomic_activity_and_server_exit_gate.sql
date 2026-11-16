@@ -903,7 +903,7 @@ $function$;
 CREATE OR REPLACE FUNCTION public.rollback_customs_declaration_workflow(p_workflow_id uuid)
 RETURNS void
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = ''
 AS $function$
 DECLARE
@@ -1040,7 +1040,7 @@ REVOKE ALL ON FUNCTION public.customs_workflow_has_amount(text) FROM PUBLIC, ano
 REVOKE ALL ON FUNCTION public.customs_workflow_jalali_leap_code(integer) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.customs_workflow_jalali_date_key(text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.customs_workflow_readiness_issues(text, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.customs_workflow_jsonb_undo(jsonb, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.customs_workflow_jsonb_undo(jsonb, jsonb, jsonb) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.patch_customs_declaration_workflow_activity(uuid, text, jsonb, jsonb, text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.complete_customs_declaration_workflow(uuid, text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.complete_customs_declaration_exit(uuid, text) FROM PUBLIC, anon;
@@ -1048,6 +1048,7 @@ REVOKE ALL ON FUNCTION public.rollback_customs_declaration_workflow(uuid) FROM P
 
 GRANT EXECUTE ON FUNCTION public.customs_workflow_jsonb_merge(jsonb, jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.customs_workflow_jsonb_conflicts(jsonb, jsonb, jsonb, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.customs_workflow_jsonb_undo(jsonb, jsonb, jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.customs_workflow_has_amount(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.customs_workflow_jalali_leap_code(integer) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.customs_workflow_jalali_date_key(text) TO authenticated;
