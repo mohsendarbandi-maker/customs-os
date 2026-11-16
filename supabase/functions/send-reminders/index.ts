@@ -112,7 +112,7 @@ async function deliver(){
 async function collectCustomsPendingDigest(organizationId:string){
  const [workflowResult,checklistResult,permitResult,exitChecklistResult]=await Promise.all([
   admin.from("customs_declaration_workflow").select("declaration_id,evaluation_state,expertise_state,cashier_state,loading_permit_state,exit_state,port_charges_state").eq("organization_id",organizationId).limit(1000),
-  admin.from("declaration_checklist_items").select("id,declaration_id,item_label").eq("organization_id",organizationId).eq("source","manual").eq("is_active",true).eq("completed",false).limit(500),
+  admin.from("declaration_checklist_items").select("id,declaration_id,item_label,source").eq("organization_id",organizationId).eq("is_active",true).eq("completed",false).limit(500),
   admin.from("permits").select("id,case_id,permit_type").eq("organization_id",organizationId).eq("status","pending").limit(500),
   admin.from("declaration_exit_checklist_items").select("id,declaration_id,item_key").eq("organization_id",organizationId).eq("completed",false).limit(500)
  ]);
@@ -139,7 +139,9 @@ async function collectCustomsPendingDigest(organizationId:string){
    tasks.push({title:(declaration.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"")+" "+task.title,urgent:task.priority==="urgent"});
   }
  }
+ const workflowDeclarationIds=new Set((workflows as any[]).map(row=>row.declaration_id));
  for(const item of checklistResult.data??[]){
+  if(workflowDeclarationIds.has(item.declaration_id)&&item.source!=="manual")continue;
   const declaration=declarationMap.get(item.declaration_id);
   tasks.push({title:(declaration?.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"")+" چک‌لیست: "+item.item_label,urgent:false});
  }
