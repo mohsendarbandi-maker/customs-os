@@ -94,6 +94,7 @@ export function deriveCustomsChecklistCompletion(
 }
 
 export function isWorkflowManagedChecklistItem(item: CustomsChecklistCandidate): boolean {
+  if (item.source === "manual") return false;
   return [
     "ارزیابی",
     "نوبت کارشناسی",
