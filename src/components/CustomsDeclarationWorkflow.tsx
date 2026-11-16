@@ -135,13 +135,11 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const save=async()=>{
   if(!row){setError('رکورد گردش‌کار هنوز آماده نیست. یک‌بار بروزرسانی کنید.');return}
   if(!editable)return;
-  const stageOrder=['evaluation','expertise','cashier','loading_permit','exit','port_charges','completed'];
-  const targetIndex=stageOrder.indexOf(stage);
-  const persistedIndex=stageOrder.indexOf(row.current_stage);
-  if(stage!=='abandoned'&&targetIndex>=0&&targetIndex>(persistedIndex<0?0:persistedIndex)){
+  if(stage==='completed'){
    const validationState:CustomsWorkflowValidationState={customsPath,evaluation,expertise:{...expertise,standard},cashier,loadingPermit,exit:exitState,port:{...port}};
-   const blockers=stageOrder.slice(0,targetIndex).flatMap(priorStage=>getWorkflowStageIssues(priorStage,validationState));
-   if(blockers.length){setError('برای عبور به مرحله «'+stageLabel(stage)+'»، ابتدا موارد زیر را تکمیل کنید:\n• '+blockers.join('\n• '));return}
+   const requiredActivities=['evaluation','expertise','cashier','loading_permit','exit','port_charges'];
+   const blockers=requiredActivities.flatMap(activity=>getWorkflowStageIssues(activity,validationState));
+   if(blockers.length){setError('برای تکمیل نهایی و تأیید آمادگی خروج، موارد زیر باید تعیین تکلیف شوند:\n• '+blockers.join('\n• '));return}
   }
   setSaving(true);setError('');setMessage('');
   try{
@@ -187,7 +185,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
   </div>)}
   {!loading&&stage==='expertise'&&panel('۲. کارشناسی و مجوزها','برای هر مجوز وضعیت جداگانه ثبت می‌شود. پیشنهادهای زیر بر اساس نوع کشتی، شرح کالا و HS هستند و جایگزین تشخیص کارشناس نیستند.',<div className="space-y-5">
    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-    {select('نوبت کارشناسی',expertise.appointment_status,[['not_requested','درخواست نشده'],['requested','درخواست نوبت'],['scheduled','نوبت دریافت شد'],['completed','کارشناسی انجام شد']],v=>setEx('appointment_status',v))}
+    {select('نوبت کارشناسی',expertise.appointment_status,[['not_requested','درخواست نشده'],['requested','درخواست نوبت'],['scheduled','نوبت دریافت شد'],['completed','کارشناسی انجام شد'],['not_required','نیازی نیست']],v=>setEx('appointment_status',v))}
     {input('شماره نوبت / مرجع',expertise.appointment_number,v=>setEx('appointment_number',v),'شماره یا کد نوبت')}
     {select('راهداری (در صورت کشتی خارجی)',expertise.road_authority_status,[['not_required','نیازی نیست'],['pending','در انتظار'],['requested','درخواست شد'],['approved','مجوز صادر شد'],['rejected','رد شد']],v=>setEx('road_authority_status',v))}
     {select('حفظ نباتات / قرنطینه',expertise.plant_quarantine_status,[['not_required','نیازی نیست'],['pending','در انتظار'],['requested','درخواست شد'],['approved','مجوز صادر شد'],['rejected','رد شد']],v=>setEx('plant_quarantine_status',v))}
