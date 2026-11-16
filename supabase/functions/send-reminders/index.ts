@@ -172,6 +172,7 @@ async function collectCustomsPendingDigest(organizationId:string){
    tasks.push({title:(kottaj?("کوتاژ "+kottaj+" · "):"")+"مجوز در انتظار: "+permit.permit_type,urgent:false});
   }
  }
+ tasks.sort((a,b)=>Number(b.urgent)-Number(a.urgent));
  return {
   total:tasks.length,
   urgent:tasks.filter(task=>task.urgent).length,
