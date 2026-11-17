@@ -366,6 +366,19 @@ begin
   end if;
 
   new.updated_at := clock_timestamp();
+  if new.status = 'completed' and exists (
+    select 1
+    from public.customs_activity_dependencies d
+    join public.customs_activities prerequisite
+      on prerequisite.id = d.prerequisite_activity_id
+     and prerequisite.organization_id = d.organization_id
+    where d.organization_id = new.organization_id
+      and d.blocked_activity_id = new.id
+      and prerequisite.status <> 'completed'
+  ) then
+    raise exception using errcode = '23514', message = 'CUSTOMS_ACTIVITY_DEPENDENCY_INCOMPLETE';
+  end if;
+
   if new.status = 'completed' then
     new.completed_at := coalesce(new.completed_at, clock_timestamp());
   else
@@ -412,6 +425,20 @@ begin
 
   if v_cycle then
     raise exception using errcode = '23514', message = 'CUSTOMS_ACTIVITY_DEPENDENCY_CYCLE';
+  end if;
+
+  if exists (
+    select 1
+    from public.customs_activities blocked
+    join public.customs_activities prerequisite
+      on prerequisite.id = new.prerequisite_activity_id
+     and prerequisite.organization_id = new.organization_id
+    where blocked.id = new.blocked_activity_id
+      and blocked.organization_id = new.organization_id
+      and blocked.status = 'completed'
+      and prerequisite.status <> 'completed'
+  ) then
+    raise exception using errcode = '23514', message = 'CUSTOMS_ACTIVITY_DEPENDENCY_COMPLETION_CONFLICT';
   end if;
 
   return new;
