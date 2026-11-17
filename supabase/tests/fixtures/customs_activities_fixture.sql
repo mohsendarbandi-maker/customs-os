@@ -55,6 +55,7 @@ as $$ select nullif(current_setting('request.jwt.claim.role', true), '') $$;
 create table public.shipments (
   id uuid primary key,
   organization_id uuid not null references public.organizations(id),
+  case_id uuid,
   display_name text,
   unique(id, organization_id)
 );
