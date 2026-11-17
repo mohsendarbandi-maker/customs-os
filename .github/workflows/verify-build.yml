@@ -81,7 +81,6 @@ jobs:
         run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117184500_ai_operator_server_owned_ledger.sql
 
       - name: Verify AI Operator ledger ACL and trusted audit flow
-        run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_ai_operator_ledger_acl.test.sql
 
         run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_ai_operator_ledger_acl.test.sql
 
