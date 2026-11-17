@@ -77,6 +77,10 @@ type ReportItem = {
   priority: "normal" | "urgent";
   href: string;
   source: "workflow" | "checklist" | "permit" | "finance" | "activity";
+  activityOverdue?: boolean;
+  activityDueToday?: boolean;
+  activityUnassigned?: boolean;
+  activityWaiting?: boolean;
 };
 
 type ReportGroup = {
@@ -366,6 +370,10 @@ export const CustomsPendingReportPage: React.FC = () => {
             priority: activityTask.priority,
             href: "/customs-activities?activityId=" + encodeURIComponent(activityTask.activityId),
             source: "activity",
+            activityOverdue: activityTask.overdue,
+            activityDueToday: activityTask.dueToday,
+            activityUnassigned: activityTask.unassigned,
+            activityWaiting: activityTask.waiting,
           });
         }
 
@@ -405,6 +413,10 @@ export const CustomsPendingReportPage: React.FC = () => {
           priority: task.priority,
           href: "/customs-activities?activityId=" + encodeURIComponent(task.activityId),
           source: "activity",
+          activityOverdue: task.overdue,
+          activityDueToday: task.dueToday,
+          activityUnassigned: task.unassigned,
+          activityWaiting: task.waiting,
         }));
         const lastUpdated = activitiesForContext
           .map((item) => item.updated_at)
@@ -452,6 +464,10 @@ export const CustomsPendingReportPage: React.FC = () => {
       permits: items.filter((item) => item.source === "permit").length,
       finance: items.filter((item) => item.source === "finance").length,
       activity: items.filter((item) => item.source === "activity").length,
+      activityOverdue: items.filter((item) => item.activityOverdue).length,
+      activityDueToday: items.filter((item) => item.activityDueToday).length,
+      activityUnassigned: items.filter((item) => item.activityUnassigned).length,
+      activityWaiting: items.filter((item) => item.activityWaiting).length,
     };
   }, [groups]);
 
@@ -479,6 +495,13 @@ export const CustomsPendingReportPage: React.FC = () => {
           <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">مجوز / چک‌لیست دستی</div><b className="mt-1 block text-xl">{faNumber(stats.permits + stats.checklist)}</b></div>
           <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">هزینه‌های در انتظار بررسی</div><b className="mt-1 block text-xl">{faNumber(stats.finance)}</b></div>
           <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">فعالیت‌های مستقل باز</div><b className="mt-1 block text-xl">{faNumber(stats.activity)}</b></div>
+        </section>
+
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">فعالیت‌های عقب‌افتاده</div><b className="mt-1 block text-lg">{faNumber(stats.activityOverdue)}</b></div>
+          <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">موعد امروز</div><b className="mt-1 block text-lg">{faNumber(stats.activityDueToday)}</b></div>
+          <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">بدون مسئول</div><b className="mt-1 block text-lg">{faNumber(stats.activityUnassigned)}</b></div>
+          <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">در انتظار / مسدود</div><b className="mt-1 block text-lg">{faNumber(stats.activityWaiting)}</b></div>
         </section>
 
         {error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm">{error}</div>}

@@ -123,6 +123,16 @@ describe("independent customs activity daily projection", () => {
 
     expect(tasks.find(task => task.activityId === "today")?.dueToday).toBe(true);
     expect(tasks.find(task => task.activityId === "today")?.bucket).toBe("due_today");
+    const overdueToday = buildCustomsActivityPendingTasks([{
+      id: "earlier-today",
+      title: "کار با موعد سپری‌شده امروز",
+      status: "in_progress",
+      priority: "normal",
+      assignee_id: "user-3",
+      due_at: "2026-11-17T07:00:00.000Z",
+    }], now)[0];
+    expect(overdueToday.overdue).toBe(true);
+    expect(overdueToday.dueToday).toBe(false);
     expect(tasks.find(task => task.activityId === "waiting")?.waiting).toBe(true);
     expect(tasks.find(task => task.activityId === "waiting")?.bucket).toBe("waiting");
   });

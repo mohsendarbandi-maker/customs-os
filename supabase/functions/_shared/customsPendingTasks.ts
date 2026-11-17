@@ -86,7 +86,7 @@ export function buildCustomsActivityPendingTasks(
       const dueTimestamp = dueAt ? Date.parse(dueAt) : Number.NaN;
       const hasDueDate = Number.isFinite(dueTimestamp);
       const overdue = hasDueDate && dueTimestamp < now.getTime();
-      const dueToday = hasDueDate && formatTehranDay(new Date(dueTimestamp)) === todayKey;
+      const dueToday = hasDueDate && !overdue && formatTehranDay(new Date(dueTimestamp)) === todayKey;
       const unassigned = !asText(activity.assignee_id);
       const waiting = activity.status === "waiting" || activity.status === "blocked";
       const urgent = activity.priority === "urgent" || overdue;
