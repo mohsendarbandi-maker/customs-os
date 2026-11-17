@@ -87,3 +87,12 @@
 - Remaining Supabase advisor configuration warnings: pg_net installed in public (not changed because cron functions depend on net schema paths); leaked-password protection disabled (Auth settings not changed).
 - Reviewed `ai_operator_transition_command` and its tamper trigger. Plan fields are immutable and executed rows frozen, but the owner of a command row can invoke the transition RPC directly to forge their own executed/result snapshot. This is an audit-integrity gap; business operations still require the Edge Function. Correct fix needs a server-signed capability or trusted transition boundary. No patch applied in this stage.
 - PR297, PR298 and PR299 are all Draft and CI green. No Production migration, merge or deploy.
+
+
+## 2026-11-17 — Stage 7: AI Operator ledger integrity hardening
+
+- A deeper live Production check found authenticated users still had table-level INSERT on `ai_operator_commands`, with a same-user-only RLS insert policy. This allowed forged `executed` rows independently of the vulnerable transition RPC.
+- Created Draft PR300 (`dd8e6484e8694e750af28336c5daca71b8d2e007`) to remove direct client ledger writes and put command creation/transition behind dedicated service-role-only RPCs. User history SELECT remains available under existing tenant/user policies.
+- Edge Function was changed to keep all business operations on the caller-JWT client; the server-only client is limited to ledger RPCs. The existing global audit trigger is given the verified user id inside the trusted transaction so actor attribution is retained.
+- Added isolated PostgreSQL ACL/audit-attribution/immutability tests, Vitest contract tests, and Deno validation to CI.
+- CI run 44151721561 and Shipment Cost run 44151721617 were started. Await their conclusions. No Production migration, deploy or merge performed.
