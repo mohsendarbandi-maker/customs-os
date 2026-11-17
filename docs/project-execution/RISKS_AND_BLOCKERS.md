@@ -60,3 +60,12 @@ Mitigation in Draft PR 295: validation workflow has no deploy command; deploymen
 ## High — activity rollback gap
 
 Independent activity versioning and immutable event history are implemented and tested, but activity-scoped rollback is not. Do not treat optimistic concurrency as a rollback substitute.
+
+
+## Stage 3 evidence update — 2026-11-17
+
+- Production auto-deploy risk is mitigated in main: PR295 merged; production deployment now requires manual workflow dispatch from main and exact phrase `DEPLOY CUSTOMS OS`. Environment-level required reviewers remain unverified.
+- Daily digest execution gap is resolved: `send-reminders` version 73 returned HTTP 200; ledger for 2026-11-17 recorded 18 successful and 0 failed deliveries.
+- PDF source lineage and automatic archive are implemented on Draft PR296 only. Authenticated real-shipment Telegram upload, retry/reconciliation and reload acceptance remain open.
+- Independent customs activity model and pending/digest integration are implemented on Draft PR294. Production `customs_activities` table is absent and migration has not been applied; authenticated acceptance and release approval remain open.
+- Security advisor findings remain open for function-by-function review; do not apply blanket grants/revokes without inspecting each function and its tenant boundary.

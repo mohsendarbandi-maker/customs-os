@@ -60,3 +60,14 @@ Production changes: none performed by this audit branch.
 - registration orders: 3
 
 Counts are a point-in-time inventory only; they do not prove data integrity or business reconciliation.
+
+
+## Authoritative update — 2026-11-17, after Stage 3 verification
+
+This section supersedes the earlier status rows above where they conflict with later evidence.
+
+- Main is now `ca272524436a8135372e74c6f97f38ba195d5440`. PR295 is merged. Validation is separate from production release; deploy requires manual dispatch from main and exact phrase `DEPLOY CUSTOMS OS`. GitHub Environment required reviewers are not independently verified.
+- PR292's daily digest runtime gap is DONE: `send-reminders` deployed as version 73 on 2026-11-17 15:57:29 UTC. Live pg_net invocation returned HTTP 200. Delivery ledger for 2026-11-17: `sent`, 18 successful and 0 failed. Existing cron remains active every minute.
+- PR294 independent customs activity model remains Draft/open, head `db7c390574284b97ce80953912638d732e8613a5`. CI runs `44116762839`, `44116762892`, `44116763351` succeeded. The live `public.customs_activities` relation is absent; no Production migration/backfill has been applied. Authenticated browser acceptance is still required.
+- PR296 PDF Studio/File Manager lineage and autoarchive remains Draft/open, latest head `ea2b3c446acee0c47d1d9185c38b35fcce599d0a`. It preserves source File Manager row/asset/folder type/shipment/client, maps each output page to its parent, autoarchives eligible same-shipment output using the existing Telegram archive gateway, persists `metadata.pdfStudioLineage`, and shows a lineage indicator in File Manager. Unit tests passed in run `44122485767`; remaining CI stages were still running at this update. No merge, migration or deployment has occurred.
+- No new production DB migration, data backfill, Cloudflare Worker deploy or website deploy was performed in Stage 3.

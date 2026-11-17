@@ -40,3 +40,13 @@
 - A GitHub contents update call unexpectedly wrote commit `bdfec746` to main while the intended target was the feature branch. Main was restored to `968c58f` using a guarded ref update. This remains recorded as a repository write incident.
 - Two automatic Worker deployments were observed: run 44108881420 on main and run 44109859363 after the initial `fix/**` branch push. Both Worker deploy steps reported success; the first live smoke failed on build signature and the second smoke was cancelled. Cloudflare Worker metadata showed modified time 2026-11-17 15:05:27 UTC. No Production database migration or data row update occurred.
 - PR 295 now replaces the automatic main deploy with a manual workflow requiring dispatch from main and the exact confirmation string `DEPLOY CUSTOMS OS`. It remains Draft; latest validation run 44110782206 was pending at log update time.
+
+
+## 2026-11-17 — Stage 3: PR292 live verification and PDF follow-through
+
+- Audited PR292 merged implementation against the live Edge Function. Live `send-reminders` was version 72 and did not yet contain the merged digest claim/finish calls.
+- Deployed the main implementation plus required shared modules as `send-reminders` version 73; retained the existing function slug and `verify_jwt=false`.
+- Live evidence: pg_net invoked version 73 with HTTP 200; the 2026-11-17 digest ledger row reached `sent` with 18 successful deliveries and 0 failed; existing every-minute Cron remained active.
+- Opened Draft PR296 for PDF source lineage and automatic Telegram archive, using existing File Manager records and archive gateway; no separate binary store or Production migration.
+- First PR296 CI found one stale static test expectation after split-output provenance changed the output type. Updated the test contract and added source lineage tests. Latest run `44122485767`: Unit tests passed; the rest of the pipeline was still in progress.
+- PR294 remains Draft and not in Production. No production migration/backfill, PR merge, main ref update or Cloudflare deployment in Stage 3.
