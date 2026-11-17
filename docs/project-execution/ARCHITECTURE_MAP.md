@@ -47,3 +47,17 @@ Audit base: `main@968c58f2624c04f53cc98f094be888cd7e74dc72`
 3. PDF page groups and output documents need verified parent/child lineage persisted through file assets and File Manager.
 4. Production CI deploys Cloudflare Worker on main push; verification and release must be separated.
 5. SECURITY DEFINER and RLS advisor findings require a function-by-function authorization audit.
+
+
+## Independent customs activity model (Stage 2 candidate)
+
+Draft implementation lives on PR 294, not main:
+
+- `customs_activities`: independent task identity, declaration/shipment context, assignee, schedule, priority, status, source key and optimistic version.
+- `customs_activity_dependencies`: explicit prerequisite graph, no automatic chaining; cycle and completion guards.
+- `customs_activity_events`: immutable event history.
+- `customs_activity_attachments`: tenant-bound links to existing `file_assets` and same-shipment File Manager records; binary data is not duplicated.
+- Existing `finance_cost_items` optionally reference an activity. Existing `operational_reminders` link by the current polymorphic entity fields.
+- UI route: `/customs-activities`, with a menu entry and link to the existing reminder workflow.
+
+Candidate schema is not yet live; no production migration has been executed.
