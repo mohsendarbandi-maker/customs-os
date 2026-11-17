@@ -89,6 +89,19 @@ VALUES
  ('00000000-0000-0000-0000-000000000205','00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000001','executing')
 ON CONFLICT (id) DO NOTHING;
 
+CREATE OR REPLACE FUNCTION public.ai_operator_begin_command_with_proof(
+  p_command_id uuid,p_proof_payload text,p_proof_signature text
+)
+RETURNS public.ai_operator_commands
+LANGUAGE plpgsql SECURITY DEFINER
+AS $
+DECLARE v_row public.ai_operator_commands;
+BEGIN
+  UPDATE public.ai_operator_commands SET status='executing' WHERE id=p_command_id RETURNING * INTO v_row;
+  RETURN v_row;
+END;
+$;
+
 CREATE OR REPLACE FUNCTION public.ai_operator_transition_command(
   p_command_id uuid,
   p_status text,

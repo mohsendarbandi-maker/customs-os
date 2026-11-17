@@ -34,14 +34,53 @@ BEGIN
   FROM public.ai_operator_create_command(
     'session-test','safe read request','/control','control','control.report',
     '{}'::jsonb,'{"action_code":"control.report","module":"control","target":{},"params":{}}'::jsonb,
-    0.99,'safe','executing',NULL
+    0.99,'safe','proposed',NULL
   );
   IF v_row.user_id <> v_expected
      OR v_row.organization_id <> '00000000-0000-0000-0000-000000000001'
-     OR v_row.status <> 'executing'
+     OR v_row.status <> 'proposed'
      OR v_row.executed_by IS NOT NULL
      OR v_row.executed_at IS NOT NULL THEN
-    RAISE EXCEPTION 'Trusted creation RPC did not bind identity/tenant or set safe initial state';
+    RAISE EXCEPTION 'Authenticated creation RPC did not bind identity/tenant or set safe initial state';
+  END IF;
+
+  -- Direct transition to executing is no longer allowed even on a user's own row.
+  BEGIN
+    PERFORM public.ai_operator_transition_command(
+      v_row.id,'executing',clock_timestamp(),NULL,NULL,NULL,NULL,NULL,NULL,NULL
+    );
+    RAISE EXCEPTION 'Expected direct executing transition to be rejected';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%Direct executing/executed transitions are forbidden%' THEN RAISE; END IF;
+  END;
+
+  -- A mathematically valid but wrong-risk proof cannot begin a different persisted plan.
+  v_payload := jsonb_build_object(
+    'version',1,'purpose','begin','command_id',v_row.id,
+    'user_id',v_expected,'status','executing','risk_level','destructive',
+    'issued_at',clock_timestamp(),'nonce','wrong-risk-begin',
+    'confirmation_at',clock_timestamp(),'final_confirmation_at',clock_timestamp()
+  )::text;
+  v_signature := encode(extensions.hmac(convert_to(v_payload,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
+  BEGIN
+    PERFORM public.ai_operator_begin_command_with_proof(v_row.id,v_payload,v_signature);
+    RAISE EXCEPTION 'Expected a mismatched-risk begin proof to be rejected';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%risk does not match%' THEN RAISE; END IF;
+  END;
+
+  -- Only a valid Edge Function proof can move the safe command to executing.
+  v_payload := jsonb_build_object(
+    'version',1,'purpose','begin','command_id',v_row.id,
+    'user_id',v_expected,'status','executing','risk_level','safe',
+    'issued_at',clock_timestamp(),'nonce','safe-begin-001',
+    'confirmation_at',clock_timestamp(),'final_confirmation_at',NULL
+  )::text;
+  v_signature := encode(extensions.hmac(convert_to(v_payload,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
+  SELECT * INTO v_row
+  FROM public.ai_operator_begin_command_with_proof(v_row.id,v_payload,v_signature);
+  IF v_row.status <> 'executing' THEN
+    RAISE EXCEPTION 'Signed begin proof did not move proposed command to executing';
   END IF;
 
   BEGIN
@@ -55,7 +94,8 @@ BEGIN
     IF SQLERRM NOT LIKE '%initial command state is not permitted%' THEN RAISE; END IF;
   END;
 
-  IF has_function_privilege('anon','public.ai_operator_assert_transition_signer(text,text)','EXECUTE')
+  IF has_function_privilege('anon','public.ai_operator_begin_command_with_proof(uuid,text,text)','EXECUTE')
+     OR has_function_privilege('anon','public.ai_operator_assert_transition_signer(text,text)','EXECUTE')
      OR has_function_privilege('anon','public.ai_operator_complete_command_with_proof(uuid,text,text)','EXECUTE')
      OR has_function_privilege('anon','public.ai_operator_transition_command(uuid,text,timestamp with time zone,timestamp with time zone,jsonb,text,jsonb,jsonb,uuid,timestamp with time zone)','EXECUTE') THEN
     RAISE EXCEPTION 'Anonymous role must not execute AI Operator transition RPCs';

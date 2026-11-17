@@ -135,6 +135,22 @@ const transition=async(sb:any,id:string,patch:any,userId?:string)=>{
  if(r.error)throw r.error;
  return r.data;
 };
+const beginCommand=async(sb:any,id:string,userId:string,patch:{risk_level:Risk;confirmation_at?:string|null;final_confirmation_at?:string|null})=>{
+ const secret=Deno.env.get('AI_OPERATOR_TRANSITION_HMAC_SECRET')||'';
+ if(secret.length<32)throw new Error('AI_OPERATOR_TRANSITION_HMAC_SECRET is missing or too short.');
+ const proofPayload=JSON.stringify({
+  version:1,purpose:'begin',command_id:id,user_id:userId,status:'executing',
+  risk_level:patch.risk_level,issued_at:new Date().toISOString(),nonce:crypto.randomUUID(),
+  confirmation_at:patch.confirmation_at??null,
+  final_confirmation_at:patch.final_confirmation_at??null
+ });
+ const signature=await signAiOperatorTransitionProof(secret,proofPayload);
+ const r=await sb.rpc('ai_operator_begin_command_with_proof',{
+  p_command_id:id,p_proof_payload:proofPayload,p_proof_signature:signature
+ });
+ if(r.error)throw r.error;
+ return r.data;
+};
 const assertTransitionSignerReady=async(sb:any,userId:string)=>{
  const secret=Deno.env.get('AI_OPERATOR_TRANSITION_HMAC_SECRET')||'';
  if(secret.length<32)throw new Error('AI_OPERATOR_TRANSITION_HMAC_SECRET is missing or too short.');
@@ -478,7 +494,7 @@ async function main(req:Request){
      p_session_id:str(body.session_id)||null,p_natural_command:query,p_page_context:str(body.page_context),
      p_module:plan.module,p_action_code:plan.action_code,p_target:plan.target||{},p_plan:plan,
      p_confidence:plan.confidence||0,p_risk_level:risk,
-     p_status:risk==='safe'?'executing':'awaiting_confirmation',
+     p_status:risk==='safe'?'proposed':'awaiting_confirmation',
      p_final_confirmation_phrase:phrase
    });
    if(r.error)throw r.error;
@@ -487,6 +503,7 @@ async function main(req:Request){
    let actionCompleted=false;
    try{
      await assertTransitionSignerReady(sb,user.id);
+     await beginCommand(sb,r.data.id,user.id,{risk_level:risk,confirmation_at:risk==='safe'?new Date().toISOString():null});
      const before=await snap(sb,plan.action_code,plan.target||{});
      const result=await execute(sb,user,pr.data.organization_id,plan.action_code,plan.target||{},plan.params||{},body.attachment||null);
      if(result?.clarification){await transition(sb,r.data.id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:r.data.id,status:'clarification_needed',clarification:result.clarification},200,origin);}
@@ -530,7 +547,7 @@ async function main(req:Request){
    let actionCompleted=false;
    try{
      await assertTransitionSignerReady(sb,user.id);
-     await transition(sb,id,{status:'executing',confirmation_at:risk==='requires_confirmation'?new Date().toISOString():cmd.confirmation_at||null,final_confirmation_at:risk==='destructive'?new Date().toISOString():null});
+     await beginCommand(sb,id,user.id,{risk_level:risk,confirmation_at:risk==='requires_confirmation'?new Date().toISOString():cmd.confirmation_at||null,final_confirmation_at:risk==='destructive'?new Date().toISOString():null});
      const before=await snap(sb,cmd.action_code,cmd.target||{});
      const result=await execute(sb,user,pr.data.organization_id,cmd.action_code,cmd.target||{},cmd.plan?.params||{},body.attachment||null);
      if(result?.clarification){await transition(sb,id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:id,status:'clarification_needed',clarification:result.clarification},200,origin);}

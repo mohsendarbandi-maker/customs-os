@@ -149,10 +149,10 @@ begin
     raise exception 'AI Operator confidence is invalid';
   end if;
 
-  -- The caller can create only a non-terminal request. The Edge Function
-  -- re-validates the allowlisted action and derives its effective risk again.
+  -- The caller can create only a proposed/awaiting/clarification request.
+  -- Entering executing requires a signed Edge Function proof.
   if not (
-    (p_status = 'executing' and p_risk_level = 'safe' and p_action_code <> 'clarification')
+    (p_status = 'proposed' and p_risk_level = 'safe' and p_action_code <> 'clarification')
     or
     (p_status = 'awaiting_confirmation' and p_risk_level in ('requires_confirmation','destructive') and p_action_code <> 'clarification')
     or
@@ -218,6 +218,97 @@ begin
   return true;
 end;
 $$;
+
+create or replace function public.ai_operator_begin_command_with_proof(
+  p_command_id uuid,
+  p_proof_payload text,
+  p_proof_signature text
+)
+returns public.ai_operator_commands
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $
+declare
+  v_uid uuid := auth.uid();
+  v_proof jsonb;
+  v_old public.ai_operator_commands;
+  v_new public.ai_operator_commands;
+  v_issued_at timestamptz;
+  v_risk text;
+  v_confirmation_at timestamptz;
+  v_final_confirmation_at timestamptz;
+begin
+  if v_uid is null then
+    raise exception 'کاربر وارد سامانه نشده است';
+  end if;
+
+  v_proof := private.verify_ai_operator_transition_proof(
+    p_proof_payload, p_proof_signature, v_uid
+  );
+
+  if v_proof ->> 'purpose' <> 'begin'
+     or v_proof ->> 'status' <> 'executing'
+     or v_proof ->> 'command_id' <> p_command_id::text then
+    raise exception 'AI Operator signed begin proof does not match this command';
+  end if;
+
+  v_issued_at := (v_proof ->> 'issued_at')::timestamptz;
+  v_risk := v_proof ->> 'risk_level';
+  v_confirmation_at := nullif(v_proof ->> 'confirmation_at', '')::timestamptz;
+  v_final_confirmation_at := nullif(v_proof ->> 'final_confirmation_at', '')::timestamptz;
+
+  select *
+    into v_old
+  from public.ai_operator_commands
+  where id = p_command_id
+  for update;
+
+  if not found or v_old.user_id <> v_uid then
+    raise exception 'دستور پیدا نشد یا دسترسی ندارید';
+  end if;
+  if v_old.status not in ('proposed','awaiting_confirmation') then
+    raise exception 'Only a proposed or confirmed AI Operator command can begin';
+  end if;
+  if v_old.risk_level <> v_risk then
+    raise exception 'AI Operator begin proof risk does not match the persisted command';
+  end if;
+
+  if v_risk = 'safe' then
+    if v_old.status <> 'proposed' or v_confirmation_at is null
+       or v_final_confirmation_at is not null then
+      raise exception 'Safe AI Operator command begin proof is invalid';
+    end if;
+  elsif v_risk = 'requires_confirmation' then
+    if v_old.status <> 'awaiting_confirmation' or v_confirmation_at is null
+       or v_final_confirmation_at is not null then
+      raise exception 'Confirmed AI Operator command begin proof is invalid';
+    end if;
+  elsif v_risk = 'destructive' then
+    if v_old.status <> 'awaiting_confirmation' or v_confirmation_at is null
+       or v_final_confirmation_at is null then
+      raise exception 'Destructive AI Operator command requires both confirmations';
+    end if;
+  else
+    raise exception 'AI Operator begin risk is invalid';
+  end if;
+
+  update public.ai_operator_commands
+  set status = 'executing',
+      confirmation_at = coalesce(v_confirmation_at, confirmation_at),
+      final_confirmation_at = coalesce(v_final_confirmation_at, final_confirmation_at),
+      updated_at = clock_timestamp()
+  where id = p_command_id
+  returning * into v_new;
+
+  return v_new;
+end;
+$;
+
+revoke all on function public.ai_operator_begin_command_with_proof(uuid,text,text)
+  from public, anon, authenticated;
+grant execute on function public.ai_operator_begin_command_with_proof(uuid,text,text)
+  to authenticated;
 
 create or replace function public.ai_operator_complete_command_with_proof(
   p_command_id uuid,
@@ -309,8 +400,8 @@ begin
   if v_uid is null then
     raise exception 'کاربر وارد سامانه نشده است';
   end if;
-  if p_status = 'executed' then
-    raise exception 'Direct executed transitions are forbidden; use the signed AI Operator completion proof';
+  if p_status in ('executing','executed') then
+    raise exception 'Direct executing/executed transitions are forbidden; use the signed AI Operator begin/completion proof';
   end if;
 
   select *
@@ -327,8 +418,8 @@ begin
   end if;
 
   v_allowed :=
-    (v_old.status = 'proposed' and p_status in ('awaiting_confirmation','executing','clarification_needed','cancelled','rejected')) or
-    (v_old.status = 'awaiting_confirmation' and p_status in ('awaiting_confirmation','executing','clarification_needed','cancelled','rejected')) or
+    (v_old.status = 'proposed' and p_status in ('awaiting_confirmation','clarification_needed','cancelled','rejected')) or
+    (v_old.status = 'awaiting_confirmation' and p_status in ('awaiting_confirmation','clarification_needed','cancelled','rejected')) or
     (v_old.status = 'executing' and p_status in ('failed','clarification_needed'));
 
   if not v_allowed then
