@@ -2,6 +2,9 @@ DO $privileges$
 BEGIN
  IF has_table_privilege('authenticated','public.ai_operator_commands','INSERT') THEN RAISE EXCEPTION 'authenticated can still insert directly'; END IF;
  IF has_table_privilege('authenticated','public.ai_operator_commands','UPDATE') THEN RAISE EXCEPTION 'authenticated can still update directly'; END IF;
+ IF has_table_privilege('authenticated','public.ai_operator_commands','DELETE') THEN RAISE EXCEPTION 'authenticated can still delete directly'; END IF;
+ IF has_table_privilege('service_role','public.ai_operator_commands','INSERT') THEN RAISE EXCEPTION 'service_role can still insert directly'; END IF;
+ IF has_table_privilege('service_role','public.ai_operator_commands','UPDATE') THEN RAISE EXCEPTION 'service_role can still update directly'; END IF;
  IF NOT has_table_privilege('authenticated','public.ai_operator_commands','SELECT') THEN RAISE EXCEPTION 'authorized history read access lost'; END IF;
  IF has_function_privilege('authenticated','public.ai_operator_create_command_trusted(uuid,jsonb)','EXECUTE') OR has_function_privilege('anon','public.ai_operator_create_command_trusted(uuid,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'client can invoke trusted create'; END IF;
  IF has_function_privilege('authenticated','public.ai_operator_transition_command_trusted(uuid,uuid,text,timestamp with time zone,timestamp with time zone,jsonb,text,jsonb,jsonb,uuid,timestamp with time zone)','EXECUTE') OR has_function_privilege('anon','public.ai_operator_transition_command_trusted(uuid,uuid,text,timestamp with time zone,timestamp with time zone,jsonb,text,jsonb,jsonb,uuid,timestamp with time zone)','EXECUTE') THEN RAISE EXCEPTION 'client can invoke trusted transition'; END IF;
@@ -37,6 +40,7 @@ DECLARE
  v_row public.ai_operator_commands;
  v_actor uuid;
  v_rejected boolean:=false;
+ v_error text;
 BEGIN
  v_row:=public.ai_operator_create_command_trusted(v_user,jsonb_build_object(
   'natural_command','Read case status','page_context','/cases','module','cases','action_code','cases.read',
@@ -52,7 +56,10 @@ BEGIN
  IF v_actor IS DISTINCT FROM v_user THEN RAISE EXCEPTION 'update audit actor mismatch'; END IF;
  BEGIN
   PERFORM public.ai_operator_transition_command_trusted(v_row.id,v_user,'failed',NULL,NULL,'{"fake":true}'::jsonb,'late change',NULL,NULL,v_user,now());
- EXCEPTION WHEN raise_exception THEN v_rejected:=true; END;
+ EXCEPTION WHEN raise_exception THEN
+  GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT;
+  IF v_error = 'Terminal AI Operator command is immutable' THEN v_rejected:=true; ELSE RAISE; END IF;
+ END;
  IF NOT v_rejected THEN RAISE EXCEPTION 'executed command immutability failed'; END IF;
 END $trusted_flow$;
 RESET ROLE;
