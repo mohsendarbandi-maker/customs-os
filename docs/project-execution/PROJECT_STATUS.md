@@ -150,13 +150,11 @@ A read-only review sampled eight high-impact functions: declaration exit stage, 
 - Of the 15 RLS-enabled tables with no policies, Production privileges show no direct SELECT/INSERT/UPDATE/DELETE for authenticated users; service_role has the expected server access. These advisor INFO findings are not evidence of an authenticated table-access bypass.
 - Security advisor still reports one `pg_net` extension-in-public warning and Auth leaked-password protection disabled. Moving pg_net can affect existing cron jobs, and Auth setting change needs separate controlled config access; neither was changed in this stage.
 
-### Residual AI Operator audit-integrity issue
-- The live transition RPC checks `auth.uid()` owns the command row and enforces the status-transition graph; the tamper trigger freezes the plan fields and blocks edits after status `executed`.
-- It nevertheless accepts caller-supplied execution attribution/result/snapshot fields while the caller is still transitioning their own row. A direct authenticated RPC call could mark the caller-owned command `executing` and then `executed` with fabricated results and `executed_by`, even though no business operation ran.
-- This does not grant execution of customs/finance operations by itself. It can falsify the audit record visible to organization owners and is therefore tracked as an audit-integrity weakness, not a business-data authorization bypass.
-- Correct repair requires a server-authenticated transition capability. The current AI Operator intentionally uses an end-user JWT and security tests prohibit embedding the Supabase service-role secret. Do not remove those controls or claim this fixed without a signed transition-token/trusted server boundary and direct-RPC forgery tests.
-
-
+### AI Operator audit-integrity issue — mitigation candidate ready in PR300
+- Production exposed two independent audit-forgery paths: direct authenticated INSERT into `ai_operator_commands`, and caller-controlled result/snapshot/actor fields in the SECURITY DEFINER transition RPC.
+- Draft PR300 now addresses both paths with a server-only ledger writer, revoked client writes/legacy transition call, verified user/org binding, preserved history SELECT and audit-trigger attribution. The Edge Function keeps every business mutation on the caller JWT/RLS client.
+- PR300 isolated PostgreSQL ACL/audit actor/terminal immutability tests pass; full CI and Shipment Cost CI also pass (runs 44154127820 and 44154127402). Deno check, Worker dry-run and production build passed. Mobile viewport smoke was skipped.
+- This is a tested mitigation candidate, not a live Production fix: migration and Edge Function are not deployed. Release still needs review, authenticated acceptance, and explicit release approval.
 
 ## Stage 7 — AI Operator ledger integrity hardening (2026-11-17)
 
@@ -164,7 +162,7 @@ A read-only review sampled eight high-impact functions: declaration exit stage, 
 - Live Production review established two distinct audit-forgery paths: authenticated users could call the SECURITY DEFINER transition RPC with fabricated result/snapshot/actor fields, and had direct INSERT privilege on `ai_operator_commands` where the RLS policy only checked row ownership.
 - Draft PR300 `security/ai-operator-server-owned-ledger-2026-11-17` moves creation and transitions to two service_role-only RPCs, revokes browser INSERT/UPDATE/DELETE and the old client-callable transition RPC, while retaining authorized history reads.
 - The AI Operator Edge Function's service-role client is confined to those two ledger RPCs. Customs/finance/document operations continue to use the caller JWT client and normal RLS. A PostgreSQL fixture validates ACL denial, trusted create/transition, actor attribution and terminal immutability.
-- PR300 head `dd8e6484e8694e750af28336c5daca71b8d2e007`; main CI run `44151721561` and Shipment Cost run `44151721617` started. Await final run conclusions before marking green.
+- PR300 latest head `3b1b69c5f58083bc62f862c6e89b0199ed25d168`; full verification CI `44154127820` and Shipment Cost CI `44154127402` both succeeded. Deno Edge Function checks and Worker dry-run are green; mobile viewport smoke was skipped.
 - No Production migration, Edge Function deploy, merge or data change. Runtime secret availability and authenticated UI acceptance remain release checks.
 
 ### Other security PRs and configuration
