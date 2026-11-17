@@ -66,3 +66,112 @@ export const PDF_STUDIO_PRESETS = {
     { name: 'فرم AEO', patterns: [/AEO/i] },
   ],
 } as const;
+
+
+export type PdfStudioLineageSource = {
+  documentId: string;
+  fileAssetId: string | null;
+  fileManagerFileId: string | null;
+  fileName: string;
+  folderId: string | null;
+  folderType: string | null;
+  shipmentId: string | null;
+  clientId: string | null;
+};
+
+export type PdfStudioLineagePage = {
+  documentId: string;
+  pageIndex: number;
+  label: string;
+  rotation: number;
+};
+
+export type PdfStudioLineage = {
+  version: 1;
+  parentFileAssetIds: string[];
+  parentFileManagerFileIds: string[];
+  sourceFiles: Array<{
+    fileAssetId: string;
+    fileManagerFileId: string;
+    fileName: string;
+    folderId: string;
+    folderType: string;
+    shipmentId: string;
+    clientId: string | null;
+  }>;
+  archiveTarget: {
+    folderId: string | null;
+    folderType: string | null;
+    shipmentId: string;
+    clientId: string | null;
+  };
+  pages: Array<{
+    fileAssetId: string;
+    fileManagerFileId: string;
+    sourcePageNumber: number;
+    label: string;
+    rotation: number;
+  }>;
+};
+
+/**
+ * Create source-to-output lineage only when every output page resolves to a
+ * persisted File Manager asset in one shipment and one client scope.
+ * Different source folders safely fall back to the shipment documents folder.
+ */
+export function buildPdfStudioLineage(
+  pages: readonly PdfStudioLineagePage[],
+  sourceFiles: readonly PdfStudioLineageSource[],
+): PdfStudioLineage | null {
+  if (!pages.length) return null;
+  const sources = new Map(sourceFiles.map((source) => [source.documentId, source]));
+  const usedIds = [...new Set(pages.map((page) => page.documentId))];
+  const usedSources = usedIds.map((id) => sources.get(id));
+  if (usedSources.some((source) =>
+    !source?.fileAssetId || !source.fileManagerFileId || !source.folderId || !source.folderType || !source.shipmentId
+  )) return null;
+
+  const completeSources = usedSources as PdfStudioLineageSource[];
+  const first = completeSources[0];
+  if (completeSources.some((source) =>
+    source.shipmentId !== first.shipmentId || source.clientId !== first.clientId
+  )) return null;
+
+  const uniqueSources = completeSources.filter((source, index, all) =>
+    all.findIndex((candidate) => candidate.fileAssetId === source.fileAssetId) === index
+  );
+  const commonFolderId = uniqueSources.every((source) => source.folderId === first.folderId)
+    ? first.folderId
+    : null;
+
+  return {
+    version: 1,
+    parentFileAssetIds: uniqueSources.map((source) => source.fileAssetId as string),
+    parentFileManagerFileIds: uniqueSources.map((source) => source.fileManagerFileId as string),
+    sourceFiles: uniqueSources.map((source) => ({
+      fileAssetId: source.fileAssetId as string,
+      fileManagerFileId: source.fileManagerFileId as string,
+      fileName: source.fileName,
+      folderId: source.folderId as string,
+      folderType: source.folderType as string,
+      shipmentId: source.shipmentId as string,
+      clientId: source.clientId,
+    })),
+    archiveTarget: {
+      folderId: commonFolderId,
+      folderType: commonFolderId ? first.folderType : null,
+      shipmentId: first.shipmentId as string,
+      clientId: first.clientId,
+    },
+    pages: pages.map((page) => {
+      const source = sources.get(page.documentId)!;
+      return {
+        fileAssetId: source.fileAssetId as string,
+        fileManagerFileId: source.fileManagerFileId as string,
+        sourcePageNumber: page.pageIndex + 1,
+        label: page.label,
+        rotation: page.rotation,
+      };
+    }),
+  };
+}

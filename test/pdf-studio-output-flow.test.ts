@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const source = fs.readFileSync(path.resolve(__dirname, '../src/pages/PdfStudioPage.tsx'), 'utf8');
+const fileManagerSource = fs.readFileSync(path.resolve(__dirname, '../src/pages/FileManagerPage.tsx'), 'utf8');
 
 describe('PDF Studio prepared output workflow', () => {
   it('stages outputs and triggers a browser download only from the explicit download handler', () => {
@@ -58,10 +59,22 @@ describe('PDF Studio prepared output workflow', () => {
   });
 
   it('produces individual PDF files for split outputs rather than an automatic ZIP download', () => {
-    expect(source).toContain('const outputFiles: Array<{ name: string; bytes: Uint8Array }>');
+    expect(source).toContain('const outputFiles: Array<{ name: string; bytes: Uint8Array; pageItems: PageItem[] }>');
     expect(source).toContain("type: 'application/pdf'");
     expect(source).not.toContain('zipSync(');
     expect(source).not.toContain("type: 'application/zip'");
     expect(source).not.toContain('.zip');
+    expect(source).toContain('pageItems: item.pageItems');
+    expect(source).toContain('const archiveReadyOutput = async (output: ReadyOutput)');
+    expect(source).toContain('sourceContextsRef.current.set(importedFile');
+  });
+});
+
+
+describe('PDF Studio File Manager lineage visibility', () => {
+  it('shows the names of parent source documents on archived PDF children', () => {
+    expect(fileManagerSource).toContain('sourceFiles?:Array<{fileName?:string}>');
+    expect(fileManagerSource).toContain('parentNames.slice(0,3).join');
+    expect(fileManagerSource).toContain('مبنای خروجی:');
   });
 });
