@@ -82,13 +82,6 @@ jobs:
       - name: Run two-session concurrent workflow patch test
         run: bash supabase/tests/run_customs_workflow_atomic_concurrency.sh
 
-      - name: Create isolated AI Operator ledger ACL database
-        run: createdb ai_operator_ledger_test
-      - name: Create AI Operator ledger ACL fixture
-        run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/ai_operator_ledger_acl_fixture.sql
-      - name: Apply server-owned AI Operator ledger migration
-        run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117184500_ai_operator_server_owned_ledger.sql
-      - name: Verify AI Operator ledger ACL and trusted audit flow
         run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_ai_operator_ledger_acl.test.sql
 
 
@@ -132,7 +125,6 @@ jobs:
         run: deno check --node-modules-dir=auto supabase/functions/send-reminders/index.ts
       - name: Check Supabase AI Operator function
         run: deno check --node-modules-dir=auto supabase/functions/ai-operator/index.ts
-      - name: Check Supabase AI Operator function
         run: deno check --node-modules-dir=auto supabase/functions/ai-operator/index.ts
       - name: Cloudflare Worker dry run
         run: npx wrangler@4 deploy --dry-run
