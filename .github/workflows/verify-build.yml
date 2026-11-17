@@ -107,7 +107,7 @@ jobs:
         run: deno check supabase/functions/messenger-gateway/index.ts
 
       - name: Check Supabase reminder function
-        run: deno check supabase/functions/send-reminders/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/send-reminders/index.ts
       - name: Cloudflare Worker dry run
         run: npx wrangler@4 deploy --dry-run
 
