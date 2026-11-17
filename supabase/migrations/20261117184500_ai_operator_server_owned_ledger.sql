@@ -1,6 +1,6 @@
 -- Make AI Operator command creation and final audit writes server-owned.
 BEGIN;
-REVOKE INSERT, UPDATE, DELETE ON public.ai_operator_commands FROM anon, authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.ai_operator_commands FROM anon, authenticated, service_role;
 DROP POLICY IF EXISTS ai_operator_commands_insert ON public.ai_operator_commands;
 DROP POLICY IF EXISTS ai_operator_commands_update ON public.ai_operator_commands;
 DROP POLICY IF EXISTS ai_operator_commands_delete ON public.ai_operator_commands;
