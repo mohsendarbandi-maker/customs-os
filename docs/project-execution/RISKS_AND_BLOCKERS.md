@@ -86,3 +86,11 @@ Eight sensitive functions were read from live PostgreSQL definitions and execute
 - Confirmed a higher-risk role gap in `sync_case_alert_reminders(uuid)`: authenticated client accounts can call a SECURITY DEFINER routine with no internal role check. It can create/close system reminders across all cases in the same organization, bypassing the row-level insert/update role guard. Candidate service_role-only ACL is PR298; CI pending. No production changes.
 - `ai_operator_transition_command` permits the owner of a personal command row to set transition/result fields; this may permit self-owned ledger forgery but it does not itself execute the underlying business operation. Needs a separate audit-integrity review of its Edge Function call contract and organization-visible history before changes.
 - Remaining SECURITY DEFINER functions require function-by-function review; do not blanket revoke authenticated grants where RPCs are used by the app or RLS policies.
+
+
+## Stage 5 — findings as of 2026-11-17
+
+- PR297 (chat helper and trigger direct RPC ACL): CI green, Draft, not live. Production grants remain until authorized migration.
+- PR298 (case-alert sync): CI green, Draft, not live. Production `sync_case_alert_reminders(uuid)` remains authenticated-callable until an approved migration is applied.
+- PR299 (legacy reminder creation overloads): CI green, Draft, not live. Production old overloads remain authenticated-callable until approved migration; current UI uses only the safer JSONB overload.
+- AI Operator audit integrity: `ai_operator_transition_command` trusts caller-supplied execution/result fields after checking row ownership and status graph. Users cannot mutate business data through this RPC alone, but can forge a personal audit record visible to organization owners. Requires server-signed proof / trusted transition boundary; not fixed in this stage.

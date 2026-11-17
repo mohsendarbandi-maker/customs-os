@@ -66,3 +66,13 @@
 - Found `sync_case_alert_reminders(uuid)` is callable by authenticated and lacks a client-role guard; it runs with definer rights and mutates system reminders across the caller organization's cases. Current UI is read-only and no other repository/database callsites were found.
 - Opened Draft PR298 to restrict that synchronizer to service_role; CI runs `44145432402` and `44145432384` queued at ledger update.
 - No production migration, merge or deployment occurred.
+
+
+## 2026-11-17 — Stage 5: PR297–299 security follow-through
+
+- PR297 chat helper/trigger ACL hardening: run `44144410862` success; Shipment Cost run `44144410705` success.
+- PR298 case-alert synchronizer service-only access: run `44145432402` success; Shipment Cost run `44145432384` success.
+- PR299 legacy role-unaware reminder overloads: run `44146345105` success; Shipment Cost run `44146345100` success.
+- All three candidate migrations are still in Draft PRs and have only been tested in isolated PostgreSQL databases. No Production migration or merge took place.
+- Live app call-site audit found current reminder creation uses only the JSONB payload overload with a staff-role allowlist; the two older positional overloads are not used by current source.
+- Identified a separate AI Operator audit integrity gap: transition RPC allows the owner of a command record to supply result/executed attribution. It cannot execute the business action itself, but can create a false ledger state. No patch applied pending a proper server-authenticated proof design.

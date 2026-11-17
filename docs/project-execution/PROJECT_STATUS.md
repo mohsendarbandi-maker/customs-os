@@ -108,3 +108,32 @@ A read-only review sampled eight high-impact functions: declaration exit stage, 
 - PR297/298 remain Draft pending CI/review. No migration has been applied to Production.
 - The other exposed SECURITY DEFINER routines still need a full call-site and role matrix; this stage does not claim all 92 warnings are resolved.
 - Keep elevated functions and RLS findings open until representative cross-tenant negative tests and role-based UI acceptance are completed.
+
+
+## Stage 5 — legacy reminder overloads and AI Operator audit boundary (2026-11-17)
+
+### PR298 — case alert sync role boundary
+- Draft PR298 head `8a3b96b7365e19fd59467a272acdf6f2f66d02e0`.
+- Both required CI runs succeeded: `44145432402` (main verification) and `44145432384` (Shipment Cost CI).
+- Isolated PostgreSQL test confirms authenticated/anon direct calls are denied, service_role execution remains, and trusted backend call succeeds.
+- Live Production has **not** received the migration. `sync_case_alert_reminders(uuid)` remains currently callable by authenticated until an approved release/migration.
+
+### PR299 — legacy reminder overloads
+- Draft PR299 head `b6e5245da5417983818fbe58774c29009c2771f2`.
+- Live function inventory confirmed old overloads `create_operational_reminder(text,text,timestamptz,text,uuid,uuid)` and `(...,uuid,uuid,text)` are SECURITY DEFINER and callable by authenticated but do not reject role client. The current UI calls only the JSONB overload, which has an explicit internal-role allowlist.
+- Candidate migration revokes direct PUBLIC/anon/authenticated execution for the old overloads and retains service_role; current JSONB path remains callable.
+- Full CI runs `44146345105` and `44146345100` both succeeded: unit tests, isolated PostgreSQL migration/ACL/JSONB compatibility tests, TypeScript, lint, build, Deno checks and Worker dry-run. Mobile viewport smoke skipped by workflow conditions.
+- No Production migration/merge was performed; old overload access remains live until release approval.
+
+### PR297 — internal chat helper and trigger ACL
+- Draft PR297 head `77dd4afc00b8d1fd865b0fc0af26a06304f6f396`.
+- Main verification `44144410862` and Shipment Cost `44144410705` succeeded.
+- Direct authenticated/anon access to two internal helper RPCs is removed in the candidate migration, while postgres-owned SECURITY DEFINER parent paths are preserved. Direct execute grants on SECURITY DEFINER trigger functions are revoked; isolated test confirms a trigger still fires.
+- No Production migration/merge performed.
+
+### AI Operator command-ledger integrity — follow-up design required
+- `ai_operator_transition_command` is a SECURITY DEFINER RPC callable by authenticated. It verifies `auth.uid()` owns the command row and enforces a status-transition graph, but accepts caller-supplied `p_executed_by`, `p_executed_at`, `p_result`, `p_before_data` and `p_after_data`. It does not independently prove that the Edge Function actually performed the business action.
+- This is an audit-integrity weakness: a user can falsify the state/result of their own command row; it does not itself execute the underlying customs/finance operation.
+- The current Edge Function uses the end-user JWT and tests explicitly prohibit embedding a service-role secret. Fixing this correctly needs a server-authenticated transition capability (for example, a dedicated signed transition token) or a trusted internal service boundary. Do not make a superficial `p_executed_by=auth.uid()` change and claim the issue resolved.
+- Keep this finding open; design a signed proof and test both direct-RPC forgery denial and legitimate Edge Function transitions.
+

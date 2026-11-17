@@ -74,3 +74,15 @@ Status: NOT READY FOR RELEASE APPROVAL
 - PR298: Draft; service-role-only case-alert sync ACL. CI runs `44145432402` and `44145432384` queued at last update. No Production migration.
 - The case-alert function is still directly executable by authenticated in current Production until an approved migration is applied; do not claim it is fixed live.
 - Remaining 92-function review and AI Operator command-ledger audit remain open.
+
+
+## 2026-11-17 — Stage 5 release checklist
+
+- PR297, PR298 and PR299 have green automated CI and remain Draft. Their ACL migrations were applied only to separate ephemeral PostgreSQL databases.
+- Live Production grants remain unchanged until authorized migration approval:
+  - `orgs_are_connected`, `chat_connection_allowed_for_conversation`, trigger helper execute grants (PR297).
+  - `sync_case_alert_reminders(uuid)` authenticated grant (PR298).
+  - two legacy positional `create_operational_reminder` authenticated grants (PR299).
+- Current JSONB reminder creation remains the app path and is not revoked.
+- AI Operator transition ledger proof design remains open. Do not claim immutable audit integrity until a server-authenticated transition proof is implemented and tested.
+- No Worker/site deploy, main merge or Production DB migration performed in Stage 5.
