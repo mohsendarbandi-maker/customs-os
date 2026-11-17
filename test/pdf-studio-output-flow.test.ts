@@ -58,10 +58,13 @@ describe('PDF Studio prepared output workflow', () => {
   });
 
   it('produces individual PDF files for split outputs rather than an automatic ZIP download', () => {
-    expect(source).toContain('const outputFiles: Array<{ name: string; bytes: Uint8Array }>');
+    expect(source).toContain('const outputFiles: Array<{ name: string; bytes: Uint8Array; pageItems: PageItem[] }>');
     expect(source).toContain("type: 'application/pdf'");
     expect(source).not.toContain('zipSync(');
     expect(source).not.toContain("type: 'application/zip'");
     expect(source).not.toContain('.zip');
+    expect(source).toContain('pageItems: item.pageItems');
+    expect(source).toContain('const archiveReadyOutput = async (output: ReadyOutput)');
+    expect(source).toContain('sourceContextsRef.current.set(importedFile');
   });
 });

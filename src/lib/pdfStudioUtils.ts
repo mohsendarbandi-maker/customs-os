@@ -74,6 +74,7 @@ export type PdfStudioLineageSource = {
   fileManagerFileId: string | null;
   fileName: string;
   folderId: string | null;
+  folderType: string | null;
   shipmentId: string | null;
   clientId: string | null;
 };
@@ -94,11 +95,13 @@ export type PdfStudioLineage = {
     fileManagerFileId: string;
     fileName: string;
     folderId: string;
+    folderType: string;
     shipmentId: string;
     clientId: string | null;
   }>;
   archiveTarget: {
     folderId: string | null;
+    folderType: string | null;
     shipmentId: string;
     clientId: string | null;
   };
@@ -125,7 +128,7 @@ export function buildPdfStudioLineage(
   const usedIds = [...new Set(pages.map((page) => page.documentId))];
   const usedSources = usedIds.map((id) => sources.get(id));
   if (usedSources.some((source) =>
-    !source?.fileAssetId || !source.fileManagerFileId || !source.folderId || !source.shipmentId
+    !source?.fileAssetId || !source.fileManagerFileId || !source.folderId || !source.folderType || !source.shipmentId
   )) return null;
 
   const completeSources = usedSources as PdfStudioLineageSource[];
@@ -150,11 +153,13 @@ export function buildPdfStudioLineage(
       fileManagerFileId: source.fileManagerFileId as string,
       fileName: source.fileName,
       folderId: source.folderId as string,
+      folderType: source.folderType as string,
       shipmentId: source.shipmentId as string,
       clientId: source.clientId,
     })),
     archiveTarget: {
       folderId: commonFolderId,
+      folderType: commonFolderId ? first.folderType : null,
       shipmentId: first.shipmentId as string,
       clientId: first.clientId,
     },

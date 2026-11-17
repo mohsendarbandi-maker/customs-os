@@ -22,7 +22,7 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
-type SourceDocument = { id: string; file: File; pageCount: number; hasProtectedFeatures: boolean; convertedFromImage: boolean; sourceFileAssetId: string | null; sourceFileManagerFileId: string | null; sourceFolderId: string | null; sourceShipmentId: string | null; sourceClientId: string | null };
+type SourceDocument = { id: string; file: File; pageCount: number; hasProtectedFeatures: boolean; convertedFromImage: boolean; sourceFileAssetId: string | null; sourceFileManagerFileId: string | null; sourceFolderId: string | null; sourceFolderType: string | null; sourceShipmentId: string | null; sourceClientId: string | null };
 type SplitRow = { id: string; name: string; pageExpression: string };
 type FileManagerRow = {
   id: string;
@@ -104,7 +104,7 @@ export const PdfStudioPage: React.FC = () => {
   const imageRef = useRef<HTMLInputElement>(null);
   const sampleInputRef = useRef<HTMLInputElement>(null);
   const sourcePdfs = useRef(new Map<string, PDFDocument>());
-  const sourceContextsRef = useRef(new WeakMap<File, { fileAssetId: string | null; fileManagerFileId: string; folderId: string; shipmentId: string | null; clientId: string | null }>());
+  const sourceContextsRef = useRef(new WeakMap<File, { fileAssetId: string | null; fileManagerFileId: string; folderId: string; folderType: string; shipmentId: string | null; clientId: string | null }>());
   const archiveInFlightRef = useRef(new Set<string>());
   const [documents, setDocuments] = useState<SourceDocument[]>([]);
   const [pages, setPages] = useState<PageItem[]>([]);
@@ -163,7 +163,7 @@ export const PdfStudioPage: React.FC = () => {
       }
       const lineage = output.lineage;
       const targetFolder = lineage.archiveTarget.folderId
-        ? { id: lineage.archiveTarget.folderId }
+        ? { id: lineage.archiveTarget.folderId, folder_type: lineage.archiveTarget.folderType || 'other' }
         : await getDefaultShipmentUploadFolder(lineage.archiveTarget.shipmentId);
       let fileAssetId = output.archiveFileAssetId;
       if (!fileAssetId) {
@@ -172,7 +172,7 @@ export const PdfStudioPage: React.FC = () => {
         const uploaded = await uploadTelegramArchivedFile(file, {
           folderId: targetFolder.id,
           shipmentId: lineage.archiveTarget.shipmentId,
-          documentType: 'other',
+          documentType: targetFolder.folder_type,
           documentName: output.name,
           tags: ['PDF Studio', 'خروجی پردازش‌شده'],
           destination,
@@ -208,6 +208,7 @@ export const PdfStudioPage: React.FC = () => {
           fileManagerFileId: source.sourceFileManagerFileId,
           fileName: source.file.name,
           folderId: source.sourceFolderId,
+          folderType: source.sourceFolderType,
           shipmentId: source.sourceShipmentId,
           clientId: source.sourceClientId,
         })),
@@ -423,6 +424,7 @@ export const PdfStudioPage: React.FC = () => {
           sourceFileAssetId: sourceContext?.fileAssetId ?? null,
           sourceFileManagerFileId: sourceContext?.fileManagerFileId ?? null,
           sourceFolderId: sourceContext?.folderId ?? null,
+          sourceFolderType: sourceContext?.folderType ?? null,
           sourceShipmentId: sourceContext?.shipmentId ?? null,
           sourceClientId: sourceContext?.clientId ?? null,
         }]);
@@ -1082,6 +1084,7 @@ export const PdfStudioPage: React.FC = () => {
           fileAssetId: aliasId || row.file_asset_id,
           fileManagerFileId: row.id,
           folderId: row.folder_id,
+          folderType: fileManagerFolders.find((folder) => folder.id === row.folder_id)?.folder_type || 'other',
           shipmentId: row.shipment_id,
           clientId: row.client_id,
         });
