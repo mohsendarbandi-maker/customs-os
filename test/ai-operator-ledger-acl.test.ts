@@ -19,7 +19,7 @@ describe('AI Operator server-owned command ledger',()=>{
   expect(operator).not.toContain("execute(auditSb");
  });
  it('revokes browser table writes and client execution of privileged RPCs',()=>{
-  expect(migration).toContain('REVOKE INSERT, UPDATE, DELETE ON public.ai_operator_commands FROM anon, authenticated');
+  expect(migration).toContain('REVOKE INSERT, UPDATE, DELETE ON public.ai_operator_commands FROM anon, authenticated, service_role');
   expect(migration).toContain('REVOKE ALL ON FUNCTION public.ai_operator_transition_command');
   expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.ai_operator_create_command_trusted');
   expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.ai_operator_transition_command_trusted');
