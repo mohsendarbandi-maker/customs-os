@@ -95,3 +95,11 @@ Status: NOT READY FOR RELEASE APPROVAL
 - PR297, PR298 and PR299 green CI, Draft only; their Production grants remain unchanged pending approved migration.
 - AI Operator command result/status can be falsified by a user for their own record through a direct authenticated transition RPC. Business writes remain Edge Function-gated, but the owner-visible audit log can be misleading. Requires server-authenticated transition proof before calling audit history trustworthy.
 - pg_net-in-public and leaked-password-protection warnings remain open. No Production changes from this audit.
+
+
+## 2026-11-17 — Stage 7 AI Operator audit integrity
+
+- Draft PR300 moves AI Operator ledger writes behind server-only RPCs and revokes authenticated direct table writes / legacy transition calls. It retains user-scoped history reads and keeps business operations on the caller JWT.
+- Isolated PostgreSQL ACL, audit-actor and immutable-terminal-state test suite is added to CI; main verification run 44151721561 and Shipment Cost run 44151721617 are pending at this ledger revision.
+- Production remains unchanged. Do not treat the audit weakness as resolved in Production until PR300 is reviewed, CI green, runtime configuration checked, and its migration applied under an explicit release approval.
+- Auth leaked-password protection and the pg_net-in-public advisor warning remain open. Authenticated browser acceptance for PR294 and PR296 remains outstanding.
