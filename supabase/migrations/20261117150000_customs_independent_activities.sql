@@ -182,6 +182,48 @@ create table public.customs_activity_attachments (
 create index customs_activity_attachments_activity_idx
   on public.customs_activity_attachments (organization_id, activity_id, created_at desc);
 
+create or replace function public.validate_customs_activity_attachment()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $function$
+declare
+  v_activity_shipment uuid;
+  v_file_shipment uuid;
+begin
+  select a.shipment_id into v_activity_shipment
+  from public.customs_activities a
+  where a.id = new.activity_id and a.organization_id = new.organization_id;
+
+  if not found then
+    raise exception using errcode = '23503', message = 'CUSTOMS_ACTIVITY_NOT_FOUND';
+  end if;
+
+  select f.shipment_id into v_file_shipment
+  from public.file_manager_files f
+  where f.organization_id = new.organization_id
+    and f.file_asset_id = new.file_asset_id
+  limit 1;
+
+  if not found then
+    raise exception using errcode = '23514', message = 'CUSTOMS_ACTIVITY_ATTACHMENT_FILE_NOT_IN_MANAGER';
+  end if;
+
+  if v_activity_shipment is not null
+     and v_file_shipment is distinct from v_activity_shipment then
+    raise exception using errcode = '23514', message = 'CUSTOMS_ACTIVITY_ATTACHMENT_SHIPMENT_MISMATCH';
+  end if;
+
+  return new;
+end;
+$function$;
+
+revoke all on function public.validate_customs_activity_attachment() from public, anon, authenticated;
+create trigger trg_validate_customs_activity_attachment
+before insert or update on public.customs_activity_attachments
+for each row execute function public.validate_customs_activity_attachment();
+
 alter table public.customs_activity_attachments enable row level security;
 grant select, insert, delete on public.customs_activity_attachments to authenticated;
 
@@ -560,6 +602,36 @@ create index if not exists finance_cost_items_customs_activity_idx
   on public.finance_cost_items (organization_id, customs_activity_id)
   where customs_activity_id is not null;
 
+create or replace function public.validate_customs_activity_finance_link()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $function$
+declare
+  v_activity_shipment uuid;
+begin
+  if new.customs_activity_id is null then return new; end if;
+
+  select a.shipment_id into v_activity_shipment
+  from public.customs_activities a
+  where a.id = new.customs_activity_id
+    and a.organization_id = new.organization_id;
+
+  if not found or v_activity_shipment is null
+     or new.shipment_id is distinct from v_activity_shipment then
+    raise exception using errcode = '23514', message = 'CUSTOMS_ACTIVITY_FINANCE_SHIPMENT_MISMATCH';
+  end if;
+
+  return new;
+end;
+$function$;
+
+revoke all on function public.validate_customs_activity_finance_link() from public, anon, authenticated;
+create trigger trg_validate_customs_activity_finance_link
+before insert or update of customs_activity_id, shipment_id, organization_id on public.finance_cost_items
+for each row execute function public.validate_customs_activity_finance_link();
+
 create or replace function public.log_customs_activity_finance_link()
 returns trigger
 language plpgsql
@@ -666,14 +738,36 @@ language plpgsql
 security invoker
 set search_path = ''
 as $function$
+declare
+  v_activity_shipment uuid;
+  v_shipment_case uuid;
 begin
   if new.entity_type = 'customs_activities' then
-    if new.entity_id is null or not exists (
-      select 1 from public.customs_activities a
-      where a.id = new.entity_id
-        and a.organization_id = new.organization_id
-    ) then
+    select a.shipment_id, s.case_id
+      into v_activity_shipment, v_shipment_case
+    from public.customs_activities a
+    left join public.shipments s
+      on s.id = a.shipment_id and s.organization_id = a.organization_id
+    where a.id = new.entity_id
+      and a.organization_id = new.organization_id;
+
+    if not found then
       raise exception using errcode = '23514', message = 'CUSTOMS_ACTIVITY_REMINDER_LINK_INVALID';
+    end if;
+
+    if v_activity_shipment is not null then
+      if new.shipment_id is null then
+        new.shipment_id := v_activity_shipment;
+      elsif new.shipment_id is distinct from v_activity_shipment then
+        raise exception using errcode = '23514', message = 'CUSTOMS_ACTIVITY_REMINDER_SHIPMENT_MISMATCH';
+      end if;
+      if new.case_id is null then
+        new.case_id := v_shipment_case;
+      elsif v_shipment_case is not null and new.case_id is distinct from v_shipment_case then
+        raise exception using errcode = '23514', message = 'CUSTOMS_ACTIVITY_REMINDER_CASE_MISMATCH';
+      end if;
+    elsif new.shipment_id is not null then
+      raise exception using errcode = '23514', message = 'CUSTOMS_ACTIVITY_REMINDER_SHIPMENT_MISMATCH';
     end if;
   end if;
   return new;
@@ -697,7 +791,7 @@ begin
     perform public.append_customs_activity_event(
       old.organization_id, old.entity_id, 'reminder_unlinked',
       array['entity_type','entity_id'], to_jsonb(old.id),
-      '{}'::jsonb, coalesce(new.updated_by, auth.uid())
+      '{}'::jsonb, coalesce(new.created_by, auth.uid())
     );
   end if;
 
