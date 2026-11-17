@@ -37,8 +37,8 @@ describe('reminder push delivery safety', () => {
     expect(source).toContain('delivery,digest:digestSummary,digestError');
     expect(digest).toContain('const summary:DailyDigestSummary={eligible:0,sent:0,failed:0,skipped:0}');
     expect(digest).toContain('if(accepted===false)');
-    expect(digest).toContain('await notePushSuccess(s.id)');
-    expect(digest).toContain('await notePushFailure(s.id)');
+    expect(digest).toContain('await notePushSuccess(device.id)');
+    expect(digest).toContain('await notePushFailure(device.id)');
     expect(source).not.toContain('await digest().catch(()=>0)');
   });
 
