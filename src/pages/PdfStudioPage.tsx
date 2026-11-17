@@ -1569,7 +1569,7 @@ export const PdfStudioPage: React.FC = () => {
                           <button type="button" onClick={() => downloadReadyOutput(output)} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white">
                             <FileText size={14}/>{output.downloadedAt ? 'دانلود دوباره' : 'دانلود'}
                           </button>
-                          {output.archiveState === 'failed' && output.lineage && profile?.role !== 'client' && <button type="button" onClick={() => void archiveReadyOutput(output)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-amber-500/40 px-2.5 text-xs font-bold text-amber-500">تلاش مجدد آرشیو</button>}
+                          {output.archiveState === 'failed' && output.lineage && output.size <= FILE_ARCHIVE_MAX_BYTES && profile?.role !== 'client' && <button type="button" onClick={() => void archiveReadyOutput(output)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-amber-500/40 px-2.5 text-xs font-bold text-amber-500">تلاش مجدد آرشیو</button>}
                           <button type="button" onClick={() => void transferReadyOutput(output, 'file-manager')} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 text-xs font-bold">
                             <Folder size={14}/>فایل‌منیجر
                           </button>

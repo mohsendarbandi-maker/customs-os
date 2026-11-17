@@ -35,11 +35,11 @@ describe('PDF Studio persisted source lineage', () => {
   const sources = [
     {
       documentId: 'doc-a', fileAssetId: 'asset-a', fileManagerFileId: 'row-a',
-      fileName: 'bill.pdf', folderId: 'folder-a', shipmentId: 'shipment-a', clientId: 'client-a',
+      fileName: 'bill.pdf', folderId: 'folder-a', folderType: 'other', shipmentId: 'shipment-a', clientId: 'client-a',
     },
     {
       documentId: 'doc-b', fileAssetId: 'asset-b', fileManagerFileId: 'row-b',
-      fileName: 'manifest.pdf', folderId: 'folder-a', shipmentId: 'shipment-a', clientId: 'client-a',
+      fileName: 'manifest.pdf', folderId: 'folder-a', folderType: 'other', shipmentId: 'shipment-a', clientId: 'client-a',
     },
   ];
 
@@ -50,7 +50,7 @@ describe('PDF Studio persisted source lineage', () => {
     ], sources);
 
     expect(lineage?.parentFileAssetIds).toEqual(['asset-a', 'asset-b']);
-    expect(lineage?.archiveTarget).toEqual({ folderId: 'folder-a', shipmentId: 'shipment-a', clientId: 'client-a' });
+    expect(lineage?.archiveTarget).toEqual({ folderId: 'folder-a', folderType: 'other', shipmentId: 'shipment-a', clientId: 'client-a' });
     expect(lineage?.pages.map((page) => [page.fileAssetId, page.sourcePageNumber, page.label, page.rotation])).toEqual([
       ['asset-a', 1, 'قبض انبار رو', 0],
       ['asset-b', 3, 'مانیفست', 90],
@@ -64,6 +64,7 @@ describe('PDF Studio persisted source lineage', () => {
     ], sources.map((source) => ({ ...source, folderId: source.documentId === 'doc-a' ? 'folder-a' : 'folder-b' })));
 
     expect(lineage?.archiveTarget.folderId).toBeNull();
+    expect(lineage?.archiveTarget.folderType).toBeNull();
     expect(lineage?.archiveTarget.shipmentId).toBe('shipment-a');
   });
 
