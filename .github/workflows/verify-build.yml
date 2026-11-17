@@ -52,15 +52,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y postgresql-client
 
-      - name: Create isolated AI Operator ledger ACL database
-        run: createdb ai_operator_ledger_test
-      - name: Create AI Operator ledger ACL fixture
-        run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/ai_operator_ledger_acl_fixture.sql
-      - name: Apply server-owned AI Operator ledger migration
-        run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117184500_ai_operator_server_owned_ledger.sql
-      - name: Verify AI Operator ledger ACL and trusted audit flow
-        run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_ai_operator_ledger_acl.test.sql
-
       - name: Create isolated customs workflow fixture
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/customs_workflow_atomic_fixture.sql
 
@@ -78,6 +69,16 @@ jobs:
 
       - name: Run two-session concurrent workflow patch test
         run: bash supabase/tests/run_customs_workflow_atomic_concurrency.sh
+
+      - name: Create isolated AI Operator ledger ACL database
+        run: createdb ai_operator_ledger_test
+      - name: Create AI Operator ledger ACL fixture
+        run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/ai_operator_ledger_acl_fixture.sql
+      - name: Apply server-owned AI Operator ledger migration
+        run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117184500_ai_operator_server_owned_ledger.sql
+      - name: Verify AI Operator ledger ACL and trusted audit flow
+        run: PGDATABASE=ai_operator_ledger_test psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_ai_operator_ledger_acl.test.sql
+
 
       - name: Typecheck
         run: npm run typecheck
