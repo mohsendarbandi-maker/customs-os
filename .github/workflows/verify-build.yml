@@ -70,6 +70,18 @@ jobs:
       - name: Run two-session concurrent workflow patch test
         run: bash supabase/tests/run_customs_workflow_atomic_concurrency.sh
 
+      - name: Create isolated case alert ACL test database
+        run: createdb case_alert_acl_test
+
+      - name: Create case alert sync ACL fixture
+        run: PGDATABASE=case_alert_acl_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/case_alert_sync_acl_fixture.sql
+
+      - name: Revoke direct client RPC execution for case alert sync
+        run: PGDATABASE=case_alert_acl_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117171500_revoke_direct_case_alert_sync.sql
+
+      - name: Verify case alert sync is service-only
+        run: PGDATABASE=case_alert_acl_test psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_case_alert_sync_acl.test.sql
+
       - name: Typecheck
         run: npm run typecheck
 
