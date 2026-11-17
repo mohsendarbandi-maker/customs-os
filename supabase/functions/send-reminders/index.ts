@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {createClient} from "jsr:@supabase/supabase-js@2";
+import { buildCustomsWorkflowPendingTasks } from "../_shared/customsPendingTasks.ts";
+import { deriveCustomsChecklistCompletion } from "../_shared/customsChecklistStatus.ts";
 import {generateVapidKeys} from "npm:@mmmike/web-push@1.3.0/vapid";
 import {sendPushNotification,rawPayload,WebPushError,type PushSubscriptionData} from "npm:@mmmike/web-push@1.3.0/send";
 
@@ -108,23 +110,128 @@ async function deliver(){
  }
  return summary;
 }
-async function digest(){
- const {data,error}=await admin.from("notification_preferences").select("user_id,morning_digest_time,timezone,hide_content").eq("push_enabled",true);if(error)throw error;const now=new Date(),vapid=await ensureVapid();let sent=0;
+async function collectCustomsPendingDigest(organizationId:string){
+ const [workflowResult,checklistResult,permitResult,exitChecklistResult]=await Promise.all([
+  admin.from("customs_declaration_workflow").select("declaration_id,evaluation_state,expertise_state,cashier_state,loading_permit_state,exit_state,port_charges_state").eq("organization_id",organizationId).limit(1000),
+  admin.from("declaration_checklist_items").select("id,declaration_id,item_label,source").eq("organization_id",organizationId).eq("is_active",true).eq("completed",false).limit(500),
+  admin.from("permits").select("id,case_id,permit_type").eq("organization_id",organizationId).eq("status","pending").limit(500),
+  admin.from("declaration_exit_checklist_items").select("id,declaration_id,item_key").eq("organization_id",organizationId).eq("completed",false).limit(500)
+ ]);
+ const queryError=workflowResult.error||checklistResult.error||permitResult.error||exitChecklistResult.error;
+ if(queryError)throw queryError;
+ const workflows=workflowResult.data??[];
+ const declarationsIds=[...new Set([
+  ...workflows.map((row:any)=>row.declaration_id),
+  ...(checklistResult.data??[]).map((row:any)=>row.declaration_id),
+  ...(exitChecklistResult.data??[]).map((row:any)=>row.declaration_id),
+ ].filter(Boolean))];
+ let declarationRows:any[]=[];
+ if(declarationsIds.length){
+  const {data,error}=await admin.from("customs_declarations").select("id,case_id,kottaj_number,customs_path,created_at").eq("organization_id",organizationId).in("id",declarationsIds);
+  if(error)throw error;
+  declarationRows=data??[];
+ }
+ const declarationMap=new Map(declarationRows.map((row:any)=>[row.id,row] as const));
+ const tasks:Array<{title:string;urgent:boolean}>=[];
+ for(const workflow of workflows as any[]){
+  const declaration=declarationMap.get(workflow.declaration_id);
+  if(!declaration)continue;
+  for(const task of buildCustomsWorkflowPendingTasks({...workflow,customs_path:declaration.customs_path},declaration.customs_path)){
+   tasks.push({title:(declaration.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"")+" "+task.title,urgent:task.priority==="urgent"});
+  }
+ }
+ const workflowByDeclaration=new Map((workflows as any[]).map(row=>[row.declaration_id,row] as const));
+ for(const item of checklistResult.data??[]){
+  const declaration=declarationMap.get(item.declaration_id);
+  const workflow=workflowByDeclaration.get(item.declaration_id);
+  if(workflow&&deriveCustomsChecklistCompletion(item,workflow,declaration?.customs_path)!==null)continue;
+  tasks.push({title:(declaration?.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"")+" چک‌لیست: "+item.item_label,urgent:false});
+ }
+ const exitLabels:Record<string,string>={
+  warehouse_invoice_initial:"صورت‌حساب انبارداری اولیه",
+  warehouse_invoice_supplement:"صورت‌حساب انبارداری متمم",
+  transport_power_of_attorney:"وکالت حمل",
+ };
+ for(const item of exitChecklistResult.data??[]){
+  const declaration=declarationMap.get(item.declaration_id);
+  tasks.push({title:(declaration?.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"")+"درب خروج: "+(exitLabels[item.item_key]||item.item_key),urgent:false});
+ }
+ const pendingPermits=permitResult.data??[];
+ if(pendingPermits.length){
+  const caseIds=[...new Set(pendingPermits.map((row:any)=>row.case_id).filter(Boolean))];
+  const latestCases=new Map<string,string>();
+  if(caseIds.length){
+   const {data:caseDeclarations,error}=await admin.from("customs_declarations").select("id,case_id,kottaj_number,created_at").eq("organization_id",organizationId).in("case_id",caseIds).order("created_at",{ascending:false}).limit(1000);
+   if(error)throw error;
+   for(const declaration of caseDeclarations??[]){
+    if(declaration.case_id&&!latestCases.has(declaration.case_id))latestCases.set(declaration.case_id,declaration.kottaj_number||"");
+   }
+  }
+  for(const permit of pendingPermits){
+   const kottaj=latestCases.get(permit.case_id);
+   tasks.push({title:(kottaj?("کوتاژ "+kottaj+" · "):"")+"مجوز در انتظار: "+permit.permit_type,urgent:false});
+  }
+ }
+ tasks.sort((a,b)=>Number(b.urgent)-Number(a.urgent));
+ return {
+  total:tasks.length,
+  urgent:tasks.filter(task=>task.urgent).length,
+  preview:tasks.slice(0,3).map(task=>task.title),
+ };
+}
+type DailyDigestSummary = { eligible: number; sent: number; failed: number; skipped: number };
+async function digest():Promise<DailyDigestSummary>{
+ const {data,error}=await admin.from("notification_preferences").select("user_id,morning_digest_time,timezone,hide_content").eq("push_enabled",true);
+ if(error)throw error;
+ const now=new Date(),vapid=await ensureVapid();
+ const summary:DailyDigestSummary={eligible:0,sent:0,failed:0,skipped:0};
  for(const p of (data??[]) as Array<{user_id:string;morning_digest_time:string;timezone:string;hide_content:boolean}>){
   const {data:profile,error:profileError}=await admin.from("profiles").select("organization_id,role,is_active").eq("id",p.user_id).maybeSingle();
-  if(profileError||!profile?.is_active||profile.role==="client"||!profile.organization_id)continue;
-  const tz=p.timezone||TZ,g=getParts(now,tz,"gregory"),[hh,mm]=p.morning_digest_time.split(":").map(Number);if(g.hour!==hh||g.minute!==mm)continue;
+  if(profileError||!profile?.is_active||profile.role==="client"||!profile.organization_id){summary.skipped++;continue;}
+  const tz=p.timezone||TZ,g=getParts(now,tz,"gregory"),[hh,mm]=p.morning_digest_time.split(":").map(Number);
+  if(g.hour!==hh||g.minute!==mm)continue;
+  summary.eligible++;
   const start=zonedToUtc({year:g.year,month:g.month,day:g.day,hour:0,minute:0},tz),nextDay=new Date(Date.UTC(g.year,g.month-1,g.day)+86400000),end=zonedToUtc({year:nextDay.getUTCFullYear(),month:nextDay.getUTCMonth()+1,day:nextDay.getUTCDate(),hour:0,minute:0},tz);
-  const todayQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).gte("due_at",start.toISOString()).lt("due_at",end.toISOString()).eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team"),overQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).not("due_at","is",null).lt("due_at",now.toISOString()).eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team"),devices=await subs(p.user_id);
-  if(todayQ.error||overQ.error||!devices.length)continue;
-  for(const s of devices){try{await send(s,{title:"خلاصه صبحگاهی",body:p.hide_content?"خلاصه امروز آماده است.":"امروز "+String(todayQ.count??0).replace(/\d/g,x=>"۰۱۲۳۴۵۶۷۸۹"[Number(x)])+" یادآور و "+String(overQ.count??0).replace(/\d/g,x=>"۰۱۲۳۴۵۶۷۸۹"[Number(x)])+" مورد معوق دارید.",tag:"morning-"+g.year+"-"+g.month+"-"+g.day,url:"/reminders?view=today",actions:[],data:{url:"/reminders?view=today"},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"},vapid);sent++;}catch(err){if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410))await admin.from("push_subscriptions").delete().eq("id",s.id);}}
+  const todayQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).gte("due_at",start.toISOString()).lt("due_at",end.toISOString()).eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team");
+  const overQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).not("due_at","is",null).lt("due_at",now.toISOString()).eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team");
+  if(todayQ.error||overQ.error){summary.failed++;continue;}
+  const devices=await subs(p.user_id);
+  if(!devices.length){summary.skipped++;continue;}
+  let customs:{total:number;urgent:number;preview:string[]}={total:0,urgent:0,preview:[]};
+  let customsReportAvailable=true;
+  try{customs=await collectCustomsPendingDigest(profile.organization_id);}catch{customsReportAvailable=false;}
+  const fa=(value:number)=>String(value).replace(/\d/g,x=>"۰۱۲۳۴۵۶۷۸۹"[Number(x)]);
+  const preview=customs.preview.join("؛ ").slice(0,190);
+  const body=p.hide_content
+   ?"گزارش روزانه عملیات گمرکی و یادآورها آماده است."
+   :[
+     "یادآورها: "+fa(todayQ.count??0)+" امروز، "+fa(overQ.count??0)+" معوق",
+     customsReportAvailable
+      ?"کارهای باز گمرکی: "+fa(customs.total)+" مورد"+(customs.urgent?"، "+fa(customs.urgent)+" فوری":"")+(preview?" · "+preview:"")
+      :"گزارش کارهای باز گمرکی موقتاً قابل دریافت نیست؛ لطفاً صفحه گزارش را باز کنید."
+    ].join(" | ").slice(0,420);
+  for(const s of devices){
+   try{
+    const accepted=await send(s,{title:"گزارش روزانه Customs OS",body,tag:"customs-daily-"+g.year+"-"+g.month+"-"+g.day,url:"/customs-pending",actions:[],data:{url:"/customs-pending"},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"},vapid);
+    if(accepted===false){summary.failed++;await notePushFailure(s.id);continue;}
+    await notePushSuccess(s.id);
+    summary.sent++;
+   }catch(err){
+    summary.failed++;
+    if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410)){
+     await admin.from("push_subscriptions").delete().eq("id",s.id);
+    }else{
+     await notePushFailure(s.id);
+    }
+   }
+  }
  }
- return sent;
+ return summary;
 }
 async function main(req:Request){
  if(!supabaseUrl||!serviceKey)return json({error:"تنظیمات سرور کامل نیست"},500);
  const body=(await req.json().catch(()=>({}))) as {mode?:string},mode=body.mode??"cron";
- if(mode==="cron"){const expected=await getSecret("reminder_cron_secret"),given=req.headers.get("x-reminder-cron-secret");if(!expected||given!==expected)return json({error:"دسترسی زمان‌بندی مجاز نیست"},401);const delivery=await deliver();let digestSent=0,digestError=false;try{digestSent=await digest();}catch{digestError=true;}return json({ok:true,processed:delivery.claimed,delivery,digest:{sent:digestSent,error:digestError}});}
+ if(mode==="cron"){const expected=await getSecret("reminder_cron_secret"),given=req.headers.get("x-reminder-cron-secret");if(!expected||given!==expected)return json({error:"دسترسی زمان‌بندی مجاز نیست"},401);const delivery=await deliver();let digestSummary:DailyDigestSummary={eligible:0,sent:0,failed:0,skipped:0},digestError=false;try{digestSummary=await digest();}catch{digestError=true;}return json({ok:true,processed:delivery.claimed,delivery,digest:digestSummary,digestError});}
  const user=await authUser(req);if(!user)return json({error:"ورود به سامانه لازم است"},401);
  const {data:profile}=await admin.from("profiles").select("organization_id,role,is_active").eq("id",user.id).maybeSingle() as {data:{organization_id:string;role:string;is_active:boolean}|null};
  if(!profile?.is_active||profile.role==="client")return json({error:"این قابلیت برای این حساب فعال نیست"},403);
