@@ -6,6 +6,40 @@ SET request.jwt.claim.org_id = '00000000-0000-0000-0000-000000000001';
 SET request.jwt.claim.role = 'broker';
 SET ROLE authenticated;
 
+-- The audit trigger is SECURITY DEFINER only to append immutable history.
+-- Its fixed search_path must put pg_catalog first, and the function must not
+-- be directly executable by API roles.
+DO $trigger_security$
+DECLARE
+  v_security_definer boolean;
+  v_search_path text;
+BEGIN
+  SELECT prosecdef, (
+    SELECT setting
+    FROM pg_catalog.unnest(proconfig) AS setting
+    WHERE setting LIKE 'search_path=%'
+    LIMIT 1
+  )
+  INTO v_security_definer, v_search_path
+  FROM pg_catalog.pg_proc
+  WHERE oid = 'public.log_customs_declaration_workflow_event()'::regprocedure;
+
+  IF NOT COALESCE(v_security_definer, false) THEN
+    RAISE EXCEPTION 'Workflow audit trigger must retain its narrowly scoped SECURITY DEFINER mode';
+  END IF;
+  IF v_search_path IS DISTINCT FROM 'search_path=pg_catalog, public, pg_temp' THEN
+    RAISE EXCEPTION 'Workflow audit trigger search_path is unsafe: %', v_search_path;
+  END IF;
+  IF pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.log_customs_declaration_workflow_event()',
+    'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION 'Authenticated users must not execute the internal audit trigger directly';
+  END IF;
+END;
+$trigger_security$;
+
 DO $test$
 DECLARE
   v_base jsonb;
