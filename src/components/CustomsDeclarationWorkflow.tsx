@@ -1,8 +1,9 @@
-import React,{useCallback,useEffect,useMemo,useState}from'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
 import{AlertTriangle,Clock3,RefreshCw,Save,ShieldCheck}from'lucide-react';
 import{supabase}from'../lib/supabase';
 import{compareJalaliDates,getAbandonedGoodsWarnings,getWorkflowStageIssues,getInitialCustomsWorkflowStage,shouldShowAssessmentStage,parseJalaliDate,type CustomsWorkflowValidationState}from'../lib/customsDeclarationWorkflow';
 import{toJalali,zonedJalaliToDate}from'../lib/jalali';
+import{buildCustomsWorkflowJsonbPatch,mergeCustomsWorkflowJsonbPatch}from'../lib/customsWorkflowPatch';
 import{JalaliDateTimePicker}from'../features/reminders/JalaliDateTimePicker';
 
 type WorkflowRow={
@@ -13,6 +14,12 @@ type WorkflowRow={
 };
 type WorkflowEvent={id:string;event_type:'created'|'stage_changed'|'saved'|'rollback';previous_stage:string|null;current_stage:string;changed_fields:string[];actor_id:string|null;created_at:string;previous_snapshot:Record<string,any>|null};
 type Props={declarationId:string;organizationId:string;userId?:string;customsRegime:string;customsPath:string;editable:boolean};
+type WorkflowBaseline={
+ evaluation:Record<string,any>;expertise:Record<string,any>;cashier:Record<string,any>;
+ loadingPermit:Record<string,any>;exit:Record<string,any>;port:Record<string,any>;
+ db:{evaluation:Record<string,any>;expertise:Record<string,any>;cashier:Record<string,any>;loadingPermit:Record<string,any>;exit:Record<string,any>;port:Record<string,any>};
+};
+const cloneWorkflowState=<T,>(value:T):T=>JSON.parse(JSON.stringify(value)) as T;
 const stages=[['evaluation','ارزیابی'],['expertise','کارشناسی و مجوزها'],['cashier','صندوق'],['loading_permit','مجوز بارگیری'],['exit','درب خروج'],['port_charges','عوارض بندری'],['abandoned','متروکه'],['completed','تکمیل']] as const;
 const emptyEvaluation={status:'not_required',evaluator_number:'',expert_requested:false,expert_request_note:''};
 const emptyExpertise={appointment_status:'not_requested',appointment_number:'',road_authority_status:'not_required',plant_quarantine_status:'not_required',standard:{expert_review:'pending',inspection_status:'not_requested',inspection_company:'',inspection_fee:null,inspection_paid:false,inspection_invoice_received:false,inspection_invoice_status:'pending',sample_status:'not_sent',laboratory:'',results_uploaded:false,standard_fee:null,standard_fee_paid:false,standard_notified:false}};
@@ -40,6 +47,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const[saving,setSaving]=useState(false);
  const[error,setError]=useState('');
  const[message,setMessage]=useState('');
+ const workflowBaseline=useRef<WorkflowBaseline|null>(null);
  const[history,setHistory]=useState<WorkflowEvent[]>([]);
  const[historyUnavailable,setHistoryUnavailable]=useState(false);
  const[datePickerTarget,setDatePickerTarget]=useState<{label:string;value:string;onChange:(v:string)=>void}|null>(null);
@@ -92,6 +100,14 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     setExitState({...emptyExit,...(r.exit_state||{})});
     setPort({...emptyPort,...(r.port_charges_state||{})});
     setNotes(r.notes||'');
+    workflowBaseline.current={
+     evaluation:cloneWorkflowState(ev),expertise:cloneWorkflowState(ex),
+     cashier:cloneWorkflowState({...emptyCashier,...(r.cashier_state||{})}),
+     loadingPermit:cloneWorkflowState({...emptyLoadingPermit,...(r.loading_permit_state||{}),sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')}),
+     exit:cloneWorkflowState({...emptyExit,...(r.exit_state||{})}),
+     port:cloneWorkflowState({...emptyPort,...(r.port_charges_state||{})}),
+     db:{evaluation:cloneWorkflowState(r.evaluation_state||{}),expertise:cloneWorkflowState(r.expertise_state||{}),cashier:cloneWorkflowState(r.cashier_state||{}),loadingPermit:cloneWorkflowState(r.loading_permit_state||{}),exit:cloneWorkflowState(r.exit_state||{}),port:cloneWorkflowState(r.port_charges_state||{})}
+    };
    }else if(editable){
     const initial=defaults(info);
     const{data:created,error:createError}=await supabase.from('customs_declaration_workflow').insert({
@@ -105,6 +121,15 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     setExpertise({...emptyExpertise,...r.expertise_state,standard:{...emptyExpertise.standard,...r.expertise_state?.standard}});
     setCashier({...emptyCashier,...r.cashier_state});setLoadingPermit({...emptyLoadingPermit,...r.loading_permit_state,sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')});
     setExitState({...emptyExit,...r.exit_state});setPort({...emptyPort,...r.port_charges_state});setNotes(r.notes||'');
+    workflowBaseline.current={
+     evaluation:cloneWorkflowState(ev),
+     expertise:cloneWorkflowState({...emptyExpertise,...r.expertise_state,standard:{...emptyExpertise.standard,...r.expertise_state?.standard}}),
+     cashier:cloneWorkflowState({...emptyCashier,...r.cashier_state}),
+     loadingPermit:cloneWorkflowState({...emptyLoadingPermit,...r.loading_permit_state,sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')}),
+     exit:cloneWorkflowState({...emptyExit,...r.exit_state}),
+     port:cloneWorkflowState({...emptyPort,...r.port_charges_state}),
+     db:{evaluation:cloneWorkflowState(r.evaluation_state||{}),expertise:cloneWorkflowState(r.expertise_state||{}),cashier:cloneWorkflowState(r.cashier_state||{}),loadingPermit:cloneWorkflowState(r.loading_permit_state||{}),exit:cloneWorkflowState(r.exit_state||{}),port:cloneWorkflowState(r.port_charges_state||{})}
+    };
    }else{
     const initial=defaults(info);setEvaluation(initial.evaluation);setExpertise(initial.expertise);setLoadingPermit({...emptyLoadingPermit,sata_code:String(customData?.sata_code||'')});setStage(getInitialCustomsWorkflowStage('evaluation',customsPath,initial.evaluation));
    }
@@ -135,26 +160,121 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const save=async()=>{
   if(!row){setError('رکورد گردش‌کار هنوز آماده نیست. یک‌بار بروزرسانی کنید.');return}
   if(!editable)return;
-  const stageOrder=['evaluation','expertise','cashier','loading_permit','exit','port_charges','completed'];
-  const targetIndex=stageOrder.indexOf(stage);
-  const persistedIndex=stageOrder.indexOf(row.current_stage);
-  if(stage!=='abandoned'&&targetIndex>=0&&targetIndex>(persistedIndex<0?0:persistedIndex)){
+  if(stage==='completed'){
    const validationState:CustomsWorkflowValidationState={customsPath,evaluation,expertise:{...expertise,standard},cashier,loadingPermit,exit:exitState,port:{...port}};
-   const blockers=stageOrder.slice(0,targetIndex).flatMap(priorStage=>getWorkflowStageIssues(priorStage,validationState));
-   if(blockers.length){setError('برای عبور به مرحله «'+stageLabel(stage)+'»، ابتدا موارد زیر را تکمیل کنید:\n• '+blockers.join('\n• '));return}
+   const requiredActivities=['evaluation','expertise','cashier','loading_permit','exit','port_charges'];
+   const blockers=requiredActivities.flatMap(activity=>getWorkflowStageIssues(activity,validationState));
+   if(blockers.length){setError('برای تکمیل نهایی و تأیید آمادگی خروج، موارد زیر باید تعیین تکلیف شوند:\n• '+blockers.join('\n• '));return}
   }
+  if(!workflowBaseline.current){setError('نسخه مبنای اطلاعات آماده نیست؛ صفحه را تازه‌سازی کنید.');return}
   setSaving(true);setError('');setMessage('');
   try{
-   const nextEvaluation={...evaluation};
-   if(nextEvaluation.expert_requested&&nextEvaluation.status==='not_required')nextEvaluation.status='required';
-   const payload={current_stage:stage,evaluation_state:nextEvaluation,expertise_state:expertise,cashier_state:cashier,loading_permit_state:loadingPermit,exit_state:exitState,port_charges_state:port,notes:notes.trim()||null,updated_by:userId||null,updated_at:new Date().toISOString()};
-   const{error:e}=await supabase.from('customs_declaration_workflow').update(payload).eq('id',row.id).eq('organization_id',organizationId);
-   if(e)throw e;
-   const{error:saveSataError}=await supabase.from('shipment_customs_data').upsert({shipment_id:shipmentId,organization_id:organizationId,sata_code:String(loadingPermit.sata_code||'').trim()||null},{onConflict:'shipment_id'});
-   if(saveSataError)throw saveSataError;
-   setEvaluation(nextEvaluation);setRow({...row,...payload} as WorkflowRow);setMessage('مراحل عملیات گمرکی ذخیره شد.');await refreshHistory();
-  }catch(e:any){const raw=String(e?.message||'');setError(/permission|row-level security|42501/i.test(raw)?'مجوز ذخیره عملیات گمرکی را ندارید.':'ذخیره عملیات گمرکی انجام نشد؛ اطلاعات واردشده و دسترسی را بررسی کنید.')}
-  finally{setSaving(false)}
+   let savedRow:WorkflowRow;
+   if(stage==='completed'){
+    const{data:complete,error:completeError}=await supabase.rpc('complete_customs_declaration_workflow',{
+     p_workflow_id:row.id,p_notes:notes.trim()||null
+    });
+    if(completeError)throw completeError;
+    if(!complete?.ready){
+     const issues=Array.isArray(complete?.issues)?complete.issues.map(String):['شرایط تکمیل نهایی هنوز برقرار نیست.'];
+     setError(issues.join('\n• '));
+     return;
+    }
+    savedRow=complete.workflow as WorkflowRow;
+   }else{
+    let activity=stage;
+    let patch:Record<string,unknown>={};
+    let baseState:Record<string,unknown>={};
+    if(stage==='evaluation'){
+     const nextEvaluation={...evaluation};
+     if(nextEvaluation.expert_requested&&nextEvaluation.status==='not_required')nextEvaluation.status='required';
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.evaluation,nextEvaluation);
+     baseState=workflowBaseline.current.db.evaluation;
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     setEvaluation(nextEvaluation);
+     workflowBaseline.current.evaluation=cloneWorkflowState(nextEvaluation);workflowBaseline.current.db.evaluation=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.evaluation,patch);
+    }else if(stage==='expertise'){
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.expertise,expertise);
+     baseState=workflowBaseline.current.db.expertise;
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     workflowBaseline.current.expertise=cloneWorkflowState(expertise);workflowBaseline.current.db.expertise=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.expertise,patch);
+    }else if(stage==='cashier'){
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.cashier,cashier);
+     baseState=workflowBaseline.current.db.cashier;
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     workflowBaseline.current.cashier=cloneWorkflowState(cashier);workflowBaseline.current.db.cashier=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.cashier,patch);
+    }else if(stage==='loading_permit'){
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.loadingPermit,loadingPermit);
+     baseState=workflowBaseline.current.db.loadingPermit;
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     workflowBaseline.current.loadingPermit=cloneWorkflowState(loadingPermit);workflowBaseline.current.db.loadingPermit=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.loadingPermit,patch);
+    }else if(stage==='exit'){
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.exit,exitState);
+     baseState=workflowBaseline.current.db.exit;
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     workflowBaseline.current.exit=cloneWorkflowState(exitState);workflowBaseline.current.db.exit=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.exit,patch);
+    }else if(stage==='port_charges'){
+     patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.port,port);
+     baseState=workflowBaseline.current.db.port;
+     if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+     workflowBaseline.current.port=cloneWorkflowState(port);workflowBaseline.current.db.port=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.port,patch);
+    }else if(stage==='abandoned'){
+     activity='abandoned';
+     patch={notes:notes.trim()||null};
+     baseState={notes:row.notes};
+     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
+     });
+     if(saveError)throw saveError;
+     savedRow=data as WorkflowRow;
+    }else{
+     setError('این فعالیت برای ذخیره مستقل پشتیبانی نمی‌شود.');return;
+    }
+   }
+   setRow(savedRow);
+   setMessage(stage==='completed'?'آمادگی عملیات گمرکی در سرور تأیید و ثبت شد.':'فقط تغییرات همین فعالیت ذخیره شد؛ ویرایش‌های موازیِ فیلدهای دیگر حفظ شدند.');
+   await refreshHistory();
+   window.dispatchEvent(new Event('customs-workflow-updated'));
+  }catch(e:any){
+   const raw=String(e?.message||'');
+   if(e?.code==='40001'||/CUSTOMS_WORKFLOW_CONFLICT/i.test(raw)){
+    setError('همین فیلد در دستگاه دیگری تغییر کرده است. صفحه را تازه‌سازی کنید، مقدار جدید را ببینید و سپس ویرایش را دوباره انجام دهید.');
+   }else if(/permission|row-level security|42501/i.test(raw)){
+    setError('مجوز ذخیره عملیات گمرکی را ندارید.');
+   }else{
+    setError('ذخیره عملیات گمرکی انجام نشد؛ اطلاعات واردشده و دسترسی را بررسی کنید.');
+   }
+  }finally{setSaving(false)}
  };
  const input=(label:string,value:any,onChange:(v:string)=>void,placeholder='',numeric=false)=><Label>{label}<input value={value==null?'':typeof value==='boolean'?'':String(value)} onChange={e=>onChange(numeric?digits(e.target.value).replace(/[^0-9.]/g,''):e.target.value)} inputMode={numeric?'decimal':undefined} placeholder={placeholder} disabled={!editable} className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)] disabled:opacity-60"/></Label>;
  const dateInput=(label:string,value:any,onChange:(v:string)=>void)=>{const parsed=parseJalaliDate(String(value||''));return <Label>{label}<button type="button" onClick={()=>setDatePickerTarget({label,value:String(value||''),onChange})} disabled={!editable} aria-label={'انتخاب تاریخ '+label} className="w-full flex items-center justify-between gap-2 rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--text)] text-right disabled:opacity-60"><span>{parsed?faDigits(`${parsed.year}/${String(parsed.month).padStart(2,'0')}/${String(parsed.day).padStart(2,'0')}`):'انتخاب تاریخ شمسی'}</span><Clock3 size={16} className="app-muted"/></button></Label>};
@@ -171,23 +291,23 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  if(!isImport)return <section className="rounded-2xl border app-border bg-[var(--surface)] p-4"><div className="flex items-start gap-3"><ShieldCheck size={20} className="mt-0.5 text-[var(--primary)]"/><div><h2 className="font-black">گردش‌کار متناسب با رویه گمرکی</h2><p className="text-sm app-muted mt-1">این گردش‌کار جزئیات ارزیابی، کارشناسی، صندوق، مجوز بارگیری، درب خروج، عوارض بندری و متروکه را برای «واردات قطعی» فعال می‌کند. رویه انتخاب‌شده این اظهارنامه: {customsRegime||'ثبت نشده'}.</p></div></div></section>;
 
  return <section className="space-y-4">
-  <header className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-black">گردش‌کار واردات قطعی</h2><p className="text-xs app-muted mt-1">مراحل عملیاتی متناسب با مسیر و ارجاع‌های گمرکی؛ در مسیر سبز، ارزیابی فقط در صورت درخواست کارشناس فعال می‌شود؛ مسیرهای دیگر طبق وضعیت اظهارنامه بررسی می‌شوند.</p><div className="text-xs app-muted mt-2">تشخیص پیشنهادی کالا: {commodity.description||'شرح کالا ثبت نشده'} · HS: {commodity.hsCode||'—'} · نوع کشتی: {commodity.vesselType||'—'}</div></div><button type="button" onClick={()=>void load()} disabled={loading||saving} className="rounded-xl border app-border p-2.5" aria-label="بروزرسانی گردش‌کار"><RefreshCw size={16} className={loading?'animate-spin':''}/></button></div>
-   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mt-4">{visibleStages.map(([key,label],i)=><button type="button" key={key} onClick={()=>setStage(key)} className={'rounded-xl border px-2 py-3 text-xs font-bold '+(stage===key?'border-[var(--primary)] bg-[var(--primary)] text-white':'app-border bg-[var(--surface-2)]')}>{faDigits(i+1)}<span className="block mt-1">{label}</span></button>)}</div>
+  <header className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-black">گردش‌کار واردات قطعی</h2><p className="text-xs app-muted mt-1">فعالیت‌ها مستقل و قابل انجام به‌صورت موازی هستند؛ برای ثبت ارزیابی، کارشناسی، استاندارد، قرنطینه، ضمانت‌نامه یا مجوزها لازم نیست فعالیت دیگری تمام شده باشد. فقط تکمیل نهایی، کنترل آمادگی خروج را اجرا می‌کند.</p><div className="text-xs app-muted mt-2">تشخیص پیشنهادی کالا: {commodity.description||'شرح کالا ثبت نشده'} · HS: {commodity.hsCode||'—'} · نوع کشتی: {commodity.vesselType||'—'}</div></div><button type="button" onClick={()=>void load()} disabled={loading||saving} className="rounded-xl border app-border p-2.5" aria-label="بروزرسانی گردش‌کار"><RefreshCw size={16} className={loading?'animate-spin':''}/></button></div>
+   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mt-4">{visibleStages.map(([key,label])=><button type="button" key={key} onClick={()=>setStage(key)} className={'rounded-xl border px-2 py-3 text-xs font-bold '+(stage===key?'border-[var(--primary)] bg-[var(--primary)] text-white':'app-border bg-[var(--surface-2)]')}>{label}</button>)}</div>
    {!loading&&!assessmentStageActive&&<div className="mt-3 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 flex flex-wrap items-center justify-between gap-3"><div className="text-xs app-muted">در مسیر سبز، ارزیابی به‌صورت پیش‌فرض مرحلهٔ فعال نیست. اگر کارشناس گمرک ارزیابی درخواست کرد، آن را فعال کنید.</div><button type="button" disabled={!editable} onClick={()=>{setEvaluation(p=>({...p,expert_requested:true,status:p.status==='not_required'?'required':p.status,expert_request_note:p.expert_request_note||'ارجاع ارزیابی توسط کارشناس گمرک'}));setStage('evaluation');}} className="shrink-0 rounded-lg bg-[var(--primary)] text-white px-3 py-2 text-xs font-bold disabled:opacity-50">فعال‌کردن ارزیابی با ارجاع کارشناس</button></div>}
   </header>
   {loading&&<div className="rounded-xl border app-border p-6 text-center app-muted">در حال بارگذاری گردش‌کار…</div>}
   {error&&<div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 whitespace-pre-line">{error}</div>}
   {message&&<div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">{message}</div>}
   {overdue.any&&<div role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 p-4"><div className="flex items-start gap-2"><AlertTriangle size={19} className="shrink-0 text-red-600"/><div><b className="text-red-700 dark:text-red-300">هشدار بررسی متروکه</b>{overdue.loadingFormExpired&&<p className="text-sm mt-1">بیش از یک ماه از دریافت فرم بارگیری گذشته و اتمام بارگیری ثبت نشده است.</p>}{overdue.receiptExpired&&<p className="text-sm mt-1">سه ماه از تاریخ قبض انبار گذشته و شروع بارگیری ثبت نشده است.</p>}<p className="text-xs app-muted mt-2">این هشدار بر اساس تاریخ‌های ثبت‌شده در سامانه است؛ وضعیت قانونی پرونده را با گمرک/بندر کنترل کنید.</p><button type="button" onClick={()=>setStage('abandoned')} className="mt-3 rounded-lg border border-red-500/40 px-3 py-2 text-xs font-bold">بررسی در مرحله متروکه</button></div></div></div>}
-  {!loading&&stage==='evaluation'&&panel('۱. ارزیابی','مسیر سبز معمولاً از ارزیابی عبور می‌کند؛ مسیر قرمز نیازمند بررسی است. در مسیر سبز/زرد نیز کارشناس می‌تواند ارزیابی درخواست کند.',<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  {!loading&&stage==='evaluation'&&panel('ارزیابی','مسیر سبز معمولاً از ارزیابی عبور می‌کند؛ مسیر قرمز نیازمند بررسی است. در مسیر سبز/زرد نیز کارشناس می‌تواند ارزیابی درخواست کند.',<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
    {select('وضعیت ارزیابی',evaluation.status,[['not_required','نیازی نیست'],['required','الزامی / درخواست شده'],['in_progress','در حال ارزیابی'],['completed','ارزیابی تکمیل شد']],v=>setEvaluation(p=>({...p,status:v})))}
    {input('شماره ارزیاب (مثلاً ۱، ۲، ۳…)',evaluation.evaluator_number,v=>setEvaluation(p=>({...p,evaluator_number:v})),'شماره ارزیاب')}
    {check('درخواست ارزیابی توسط کارشناس',evaluation.expert_requested,v=>setEvaluation(p=>({...p,expert_requested:v,status:v&&p.status==='not_required'?'required':p.status})))}
    <div className="sm:col-span-2 lg:col-span-3">{input('توضیح درخواست / نتیجه ارزیابی',evaluation.expert_request_note,v=>setEvaluation(p=>({...p,expert_request_note:v})),'علت ارجاع، نتیجه یا توضیح کارشناس')}</div>
   </div>)}
-  {!loading&&stage==='expertise'&&panel('۲. کارشناسی و مجوزها','برای هر مجوز وضعیت جداگانه ثبت می‌شود. پیشنهادهای زیر بر اساس نوع کشتی، شرح کالا و HS هستند و جایگزین تشخیص کارشناس نیستند.',<div className="space-y-5">
+  {!loading&&stage==='expertise'&&panel('کارشناسی، استاندارد و قرنطینه','برای هر مجوز وضعیت جداگانه ثبت می‌شود. پیشنهادهای زیر بر اساس نوع کشتی، شرح کالا و HS هستند و جایگزین تشخیص کارشناس نیستند.',<div className="space-y-5">
    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-    {select('نوبت کارشناسی',expertise.appointment_status,[['not_requested','درخواست نشده'],['requested','درخواست نوبت'],['scheduled','نوبت دریافت شد'],['completed','کارشناسی انجام شد']],v=>setEx('appointment_status',v))}
+    {select('نوبت کارشناسی',expertise.appointment_status,[['not_requested','درخواست نشده'],['requested','درخواست نوبت'],['scheduled','نوبت دریافت شد'],['completed','کارشناسی انجام شد'],['not_required','نیازی نیست']],v=>setEx('appointment_status',v))}
     {input('شماره نوبت / مرجع',expertise.appointment_number,v=>setEx('appointment_number',v),'شماره یا کد نوبت')}
     {select('راهداری (در صورت کشتی خارجی)',expertise.road_authority_status,[['not_required','نیازی نیست'],['pending','در انتظار'],['requested','درخواست شد'],['approved','مجوز صادر شد'],['rejected','رد شد']],v=>setEx('road_authority_status',v))}
     {select('حفظ نباتات / قرنطینه',expertise.plant_quarantine_status,[['not_required','نیازی نیست'],['pending','در انتظار'],['requested','درخواست شد'],['approved','مجوز صادر شد'],['rejected','رد شد']],v=>setEx('plant_quarantine_status',v))}
@@ -207,14 +327,14 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     {check('استاندارد مطلع شد',standard.standard_notified,v=>setStandard('standard_notified',v))}
    </div></div>
   </div>)}
-  {!loading&&stage==='cashier'&&panel('۳. صندوق','روش پرداخت نقدی یا ضمانت‌نامه بانکی را انتخاب کنید؛ ضمانت حقوق ورودی و مالیات بر ارزش افزوده به‌صورت مستقل علامت می‌خورند.',<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  {!loading&&stage==='cashier'&&panel('صندوق و ضمانت‌نامه','روش پرداخت نقدی یا ضمانت‌نامه بانکی را انتخاب کنید؛ ضمانت حقوق ورودی و مالیات بر ارزش افزوده به‌صورت مستقل علامت می‌خورند.',<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
    {select('روش تسویه',cashier.method,[['pending','تعیین نشده'],['cash','پرداخت نقدی'],['bank_guarantee','ضمانت‌نامه بانکی'],['mixed','ترکیبی']],v=>setCashier(p=>({...p,method:v})))}
    {input('مبلغ پرداخت نقدی (ریال)',cashier.cash_paid_irr,v=>setCashier(p=>({...p,cash_paid_irr:v})),'مبلغ',true)}
    {check('ضمانت حقوق ورودی',cashier.guarantee_duties,v=>setCashier(p=>({...p,guarantee_duties:v})))}
    {check('ضمانت مالیات بر ارزش افزوده',cashier.guarantee_vat,v=>setCashier(p=>({...p,guarantee_vat:v})))}
    {input('شماره ضمانت‌نامه / مرجع پرداخت',cashier.guarantee_reference,v=>setCashier(p=>({...p,guarantee_reference:v})),'شماره سند یا مرجع')}
   </div>)}
-  {!loading&&stage==='loading_permit'&&panel('۴. صدور مجوز بارگیری','درخواست‌ها و موانع ترخیص در این مرحله پیگیری می‌شوند. درخواست ترخیص ۹۰ درصدی نیازمند ثبت توضیح و تأیید مرجع ذی‌ربط است.',<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  {!loading&&stage==='loading_permit'&&panel('مجوزها و منشأ ارز','درخواست‌ها و موانع ترخیص در این مرحله پیگیری می‌شوند. درخواست ترخیص ۹۰ درصدی نیازمند ثبت توضیح و تأیید مرجع ذی‌ربط است.',<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
    {select('درخواست تبصره ۲ منطقه آزاد',loadingPermit.clause2_request_status,[['not_required','نیازی نیست'],['pending','در انتظار'],['requested','درخواست شد'],['approved','تأیید شد'],['rejected','رد شد']],v=>setLoadingPermit(p=>({...p,clause2_request_status:v})))}
    {select('مجوز سازمان امور مالیاتی',loadingPermit.tax_permission_status,[['pending','در انتظار'],['requested','درخواست شد'],['approved','صادر شد'],['rejected','رد شد'],['not_required','نیازی نیست']],v=>setLoadingPermit(p=>({...p,tax_permission_status:v})))}
    {select('مجوز بانک مرکزی / منشأ ارز',loadingPermit.central_bank_status,[['pending','در انتظار'],['awaiting_sata','منتظر کد ساتا'],['requested','درخواست شد'],['approved','تأیید شد'],['rejected','رد شد'],['not_required','نیازی نیست']],v=>setLoadingPermit(p=>({...p,central_bank_status:v})))}
@@ -222,7 +342,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    {check('درخواست ترخیص ۹۰ درصدی در صورت نداشتن ساتا',loadingPermit.clearance_90_percent_requested,v=>setLoadingPermit(p=>({...p,clearance_90_percent_requested:!p.sata_code.trim()&&v})),!!String(loadingPermit.sata_code||'').trim())}
    <div className="sm:col-span-2 lg:col-span-3">{input('توضیح / کامنت درخواست',loadingPermit.comment,v=>setLoadingPermit(p=>({...p,comment:v})),'شرح درخواست، مرجع پیگیری و پاسخ دریافتی')}</div>
   </div>)}
-  {!loading&&stage==='exit'&&panel('۵. درب خروج','مجوز بارگیری، ثبت مالی و هزینه دیماند باسکول پس از اتمام بارگیری (در صورت وجود) ثبت می‌شوند. کد ساتا تا پیش از این مرحله اختیاری است و در صورت نیاز باید پیش از تکمیل خروج ثبت شود.',<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  {!loading&&stage==='exit'&&panel('درب خروج','مجوز بارگیری، ثبت مالی و هزینه دیماند باسکول پس از اتمام بارگیری (در صورت وجود) ثبت می‌شوند. کد ساتا تا پیش از این مرحله اختیاری است و در صورت نیاز باید پیش از تکمیل خروج ثبت شود.',<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
    {input('کد ساتا این محموله',loadingPermit.sata_code,v=>setLoadingPermit(p=>({...p,sata_code:v})),'در صورت نیاز، پیش از خروج کالا ثبت کنید')}
    {select('اجازه بارگیری',exitState.loading_permission_status,[['pending','در انتظار'],['approved','صادر شد'],['rejected','رد شد']],v=>setExitState(p=>({...p,loading_permission_status:v})))}
    {select('ثبت مالی',exitState.financial_registration_status,[['pending','ثبت نشده'],['registered','ثبت مالی انجام شد']],v=>setExitState(p=>({...p,financial_registration_status:v})))}
@@ -231,7 +351,7 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    {exitState.weighbridge_required&&check('دیماند باسکول پرداخت شد',exitState.weighbridge_paid,v=>setExitState(p=>({...p,weighbridge_paid:v})))}
    {dateInput('تاریخ اتمام بارگیری',exitState.loading_completed_at,v=>setExitState(p=>({...p,loading_completed_at:v})))}
   </div>)}
-  {!loading&&stage==='port_charges'&&panel('۶. عوارض بندری','بیمه، صورتحساب‌ها و مدارک حمل/بارگیری را ثبت کنید. تاریخ‌ها شمسی هستند و برای هشدار متروکه بررسی می‌شوند.',<div className="space-y-4">
+  {!loading&&stage==='port_charges'&&panel('عوارض بندری','بیمه، صورتحساب‌ها و مدارک حمل/بارگیری را ثبت کنید. تاریخ‌ها شمسی هستند و برای هشدار متروکه بررسی می‌شوند.',<div className="space-y-4">
    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
     {input('شماره بیمه‌نامه',port.insurance_policy_no,v=>setPort(p=>({...p,insurance_policy_no:v})),'شماره بیمه‌نامه')}
     {dateInput('تاریخ بیمه‌نامه',port.insurance_issue_date,v=>setPort(p=>({...p,insurance_issue_date:v})))}
@@ -247,14 +367,14 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
    {insuranceWarning&&<div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm"><AlertTriangle size={16} className="inline ml-1 text-amber-600"/>تاریخ بیمه‌نامه در روز قبض انبار یا پس از آن است؛ بیمه‌نامه باید از نظر تاریخ و اعتبار بررسی شود.</div>}
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3 text-xs app-muted">یادآوری: تاریخ بیمه‌نامه را با تاریخ قبض انبار تطبیق دهید. صورتحساب متمم را هنگام اقدام به بارگیری آخرین کامیون پیگیری کنید.</div>
   </div>)}
-  {!loading&&stage==='abandoned'&&panel('۷. بررسی متروکه','سامانه در صورت عبور از مهلت‌های ثبت‌شده هشدار می‌دهد؛ وضعیت نهایی متروکه باید با توجه به پرونده و تصمیم مرجع بندری/گمرکی تأیید شود.',<div className="space-y-3">
+  {!loading&&stage==='abandoned'&&panel('بررسی متروکه','سامانه در صورت عبور از مهلت‌های ثبت‌شده هشدار می‌دهد؛ وضعیت نهایی متروکه باید با توجه به پرونده و تصمیم مرجع بندری/گمرکی تأیید شود.',<div className="space-y-3">
    {overdue.any?<div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">یک یا چند مهلت ثبت‌شده گذشته است؛ پرونده نیازمند اقدام و بررسی فوری است.</div>:<div className="rounded-xl border app-border p-3 text-sm">بر اساس تاریخ‌های ثبت‌شده، هنوز مهلت هشدار متروکه عبور نکرده یا تاریخ لازم ثبت نشده است.</div>}
    <div className="grid sm:grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-[var(--surface-2)] p-3">فرم بارگیری: {faDigits(port.loading_form_received_at||'ثبت نشده')} · مهلت یک‌ماهه</div><div className="rounded-xl bg-[var(--surface-2)] p-3">قبض انبار: {faDigits(port.warehouse_receipt_date||'ثبت نشده')} · مهلت سه‌ماهه</div></div>
    {input('یادداشت پیگیری متروکه',notes,v=>setNotes(v),'اقدام انجام‌شده، مرجع پیگیری و توضیحات')}
   </div>)}
   {datePickerTarget&&<JalaliDateTimePicker value={(()=>{const p=parseJalaliDate(datePickerTarget.value);return p?zonedJalaliToDate(p.year,p.month,p.day,9,0):new Date()})()} onChange={date=>{const j=toJalali(date);datePickerTarget.onChange(`${j.year}/${String(j.month).padStart(2,'0')}/${String(j.day).padStart(2,'0')}`);setDatePickerTarget(null)}} onClose={()=>setDatePickerTarget(null)} allDay onAllDayChange={()=>{}} language="fa" onApply={()=>setDatePickerTarget(null)}/>}
   {!loading&&stage==='completed'&&panel('تکمیل گردش‌کار','پس از کنترل اسناد، وضعیت نهایی و توضیحات پرونده را ذخیره کنید.',<div className="grid sm:grid-cols-2 gap-3">{input('یادداشت نهایی',notes,v=>setNotes(v),'خلاصه وضعیت و موارد باقی‌مانده')}</div>)}
-  {!loading&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 flex flex-wrap items-center justify-between gap-3"><div className="text-xs app-muted flex items-center gap-2"><Clock3 size={15}/>مرحله جاری: <b className="text-[var(--text)]">{stages.find(x=>x[0]===stage)?.[1]||stage}</b>{row?.updated_at&&<span>· آخرین ذخیره {new Date(row.updated_at).toLocaleString('fa-IR')}</span>}</div><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>void rollbackLatestChange()} disabled={!editable||!canRollback||saving||loading||!row} title={!canRollback?'تغییر قبلی برای بازگردانی وجود ندارد':''} className="inline-flex items-center gap-2 rounded-xl border app-border px-4 py-3 text-sm font-bold disabled:opacity-40"><RefreshCw size={15}/>{saving?'در حال انجام…':'بازگردانی آخرین تغییر'}</button><button type="button" onClick={()=>void save()} disabled={!editable||saving||loading||!row} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-3 text-sm font-black text-white disabled:opacity-50"><Save size={16}/>{saving?'در حال ذخیره…':'ذخیره مرحله و وضعیت‌ها'}</button></div></section>}
+  {!loading&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 flex flex-wrap items-center justify-between gap-3"><div className="text-xs app-muted flex items-center gap-2"><Clock3 size={15}/>مرحله جاری: <b className="text-[var(--text)]">{stages.find(x=>x[0]===stage)?.[1]||stage}</b>{row?.updated_at&&<span>· آخرین ذخیره {new Date(row.updated_at).toLocaleString('fa-IR')}</span>}</div><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>void rollbackLatestChange()} disabled={!editable||!canRollback||saving||loading||!row} title={!canRollback?'تغییر قبلی برای بازگردانی وجود ندارد':''} className="inline-flex items-center gap-2 rounded-xl border app-border px-4 py-3 text-sm font-bold disabled:opacity-40"><RefreshCw size={15}/>{saving?'در حال انجام…':'بازگردانی آخرین تغییر'}</button><button type="button" onClick={()=>void save()} disabled={!editable||saving||loading||!row} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-3 text-sm font-black text-white disabled:opacity-50"><Save size={16}/>{saving?'در حال ذخیره…':'ذخیره فعالیت مستقل'}</button></div></section>}
   {!loading&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5 space-y-4">
    <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-black">سوابق تغییرات عملیات گمرکی</h3><p className="text-xs app-muted mt-1">تغییر مرحله و ذخیره هر بخش به‌صورت خودکار ثبت می‌شود.</p></div><span className="rounded-full border app-border px-2.5 py-1 text-xs app-muted">{faDigits(history.length)} رویداد اخیر</span></div>
    {historyUnavailable?<p className="text-sm app-muted">تاریخچه در حال حاضر قابل دریافت نیست؛ داده‌های عملیات همچنان جداگانه ذخیره شده‌اند.</p>:history.length===0?<p className="text-sm app-muted">هنوز رویدادی ثبت نشده است. پس از اولین ذخیره، سوابق در این قسمت نمایش داده می‌شوند.</p>:<ol className="space-y-3">{history.map(event=><li key={event.id} className="relative rounded-xl border app-border bg-[var(--surface-2)] p-3">
