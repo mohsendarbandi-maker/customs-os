@@ -402,11 +402,11 @@ SELECT
     AND pg_catalog.btrim(d.lc_number) <> pg_catalog.btrim(ro.payment_instrument_code)) AS payment_instrument_mismatch,
   ro.is_closed AS order_is_closed,
   (ro.net_weight_kg IS NOT NULL
-    AND coalesce(ci.net_weight_kg, 0) + coalesce(d.net_weight_kg, s.net_weight_kg, 0) > ro.net_weight_kg + 0.001) AS would_exceed_net_weight,
+    AND coalesce(ci.net_weight_kg, 0) + coalesce(ce.net_weight_kg, 0) + coalesce(d.net_weight_kg, s.net_weight_kg, 0) > ro.net_weight_kg + 0.001) AS would_exceed_net_weight,
   (ro.gross_weight_kg IS NOT NULL
-    AND coalesce(ci.gross_weight_kg, 0) + coalesce(d.gross_weight_kg, s.gross_weight_kg, 0) > ro.gross_weight_kg + 0.001) AS would_exceed_gross_weight,
+    AND coalesce(ci.gross_weight_kg, 0) + coalesce(ce.gross_weight_kg, 0) + coalesce(d.gross_weight_kg, s.gross_weight_kg, 0) > ro.gross_weight_kg + 0.001) AS would_exceed_gross_weight,
   (ro.value_amount IS NOT NULL
-    AND coalesce(ci.value_amount, 0) + coalesce(d.invoice_amount, 0) > ro.value_amount + 0.01) AS would_exceed_value
+    AND coalesce(ci.value_amount, 0) + coalesce(ce.value_amount, 0) + coalesce(d.invoice_amount, 0) > ro.value_amount + 0.01) AS would_exceed_value
 FROM public.shipments s
 JOIN public.shipment_customs_data d
   ON d.shipment_id = s.id AND d.organization_id = s.organization_id
