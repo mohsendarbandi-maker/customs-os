@@ -234,3 +234,37 @@ end;
 $test$;
 
 reset role;
+
+do $privileges$
+begin
+  if not has_function_privilege(
+    'authenticated',
+    'public.reminder_entity_is_visible(uuid,text,uuid)',
+    'EXECUTE'
+  ) then
+    raise exception 'Authenticated reminder linkage lost the existing RPC helper grant';
+  end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'public.reminder_entity_is_visible(uuid,text,uuid)',
+    'EXECUTE'
+  ) then
+    raise exception 'Service role reminder helper grant was not preserved';
+  end if;
+
+  if has_function_privilege(
+    'anon',
+    'public.reminder_entity_is_visible(uuid,text,uuid)',
+    'EXECUTE'
+  ) then
+    raise exception 'Anonymous users must not execute the reminder visibility helper';
+  end if;
+
+  if has_table_privilege('authenticated','public.customs_activity_events','INSERT')
+     or has_table_privilege('authenticated','public.customs_activity_events','UPDATE')
+     or has_table_privilege('authenticated','public.customs_activity_events','DELETE') then
+    raise exception 'Authenticated users must not mutate immutable activity history';
+  end if;
+end
+$privileges$;
