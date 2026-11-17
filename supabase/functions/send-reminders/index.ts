@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {createClient} from "jsr:@supabase/supabase-js@2";
-import { buildCustomsWorkflowPendingTasks } from "../_shared/customsPendingTasks.ts";
+import { buildCustomsWorkflowPendingTasks, buildCustomsActivityPendingTasks } from "../_shared/customsPendingTasks.ts";
 import { deriveCustomsChecklistCompletion } from "../_shared/customsChecklistStatus.ts";
 import {generateVapidKeys} from "npm:@mmmike/web-push@1.3.0/vapid";
 import {sendPushNotification,rawPayload,WebPushError,type PushSubscriptionData} from "npm:@mmmike/web-push@1.3.0/send";
@@ -111,19 +111,22 @@ async function deliver(){
  return summary;
 }
 async function collectCustomsPendingDigest(organizationId:string){
- const [workflowResult,checklistResult,permitResult,exitChecklistResult]=await Promise.all([
+ const [workflowResult,checklistResult,permitResult,exitChecklistResult,activityResult]=await Promise.all([
   admin.from("customs_declaration_workflow").select("declaration_id,evaluation_state,expertise_state,cashier_state,loading_permit_state,exit_state,port_charges_state").eq("organization_id",organizationId).limit(1000),
   admin.from("declaration_checklist_items").select("id,declaration_id,item_label,source").eq("organization_id",organizationId).eq("is_active",true).eq("completed",false).limit(500),
   admin.from("permits").select("id,case_id,permit_type").eq("organization_id",organizationId).eq("status","pending").limit(500),
-  admin.from("declaration_exit_checklist_items").select("id,declaration_id,item_key").eq("organization_id",organizationId).eq("completed",false).limit(500)
+  admin.from("declaration_exit_checklist_items").select("id,declaration_id,item_key").eq("organization_id",organizationId).eq("completed",false).limit(500),
+  admin.from("customs_activities").select("id,declaration_id,shipment_id,title,status,priority,assignee_id,due_at").eq("organization_id",organizationId).in("status",["open","in_progress","waiting","blocked"]).limit(1000)
  ]);
- const queryError=workflowResult.error||checklistResult.error||permitResult.error||exitChecklistResult.error;
+ const queryError=workflowResult.error||checklistResult.error||permitResult.error||exitChecklistResult.error||activityResult.error;
  if(queryError)throw queryError;
  const workflows=workflowResult.data??[];
+ const activityRows=activityResult.data??[];
  const declarationsIds=[...new Set([
   ...workflows.map((row:any)=>row.declaration_id),
   ...(checklistResult.data??[]).map((row:any)=>row.declaration_id),
   ...(exitChecklistResult.data??[]).map((row:any)=>row.declaration_id),
+  ...activityRows.map((row:any)=>row.declaration_id),
  ].filter(Boolean))];
  let declarationRows:any[]=[];
  if(declarationsIds.length){
@@ -173,6 +176,14 @@ async function collectCustomsPendingDigest(organizationId:string){
  for(const item of exitChecklistResult.data??[]){
   const declaration=declarationMap.get(item.declaration_id);
   tasks.push({title:(declaration?.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"")+"درب خروج: "+(exitLabels[item.item_key]||item.item_key),urgent:false});
+ }
+ for(const task of buildCustomsActivityPendingTasks(activityRows)){
+  const declaration=task.declarationId?declarationMap.get(task.declarationId):null;
+  const prefix=declaration?.kottaj_number?("کوتاژ "+declaration.kottaj_number+" · "):"";
+  tasks.push({
+   title:prefix+"فعالیت مستقل: "+task.title+" · "+task.detail,
+   urgent:task.urgent
+  });
  }
  const pendingPermits=permitResult.data??[];
  if(pendingPermits.length){

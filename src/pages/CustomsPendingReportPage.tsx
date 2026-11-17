@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowUpRight, Clock3, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
-import { buildCustomsWorkflowPendingTasks, type CustomsWorkflowPendingTask } from "../lib/customsPendingTasks";
+import { buildCustomsWorkflowPendingTasks, buildCustomsActivityPendingTasks, type CustomsWorkflowPendingTask } from "../lib/customsPendingTasks";
 import { deriveCustomsChecklistCompletion } from "../lib/customsChecklistStatus";
 import { buildCustomsFinancePendingTasks, type CustomsFinancePendingCost } from "../lib/customsFinancePendingTasks";
 
@@ -15,6 +15,18 @@ type DeclarationRow = {
   customs_path: string | null;
   customs_regime: string | null;
   created_at: string;
+};
+
+type ActivityRow = {
+  id: string;
+  declaration_id: string | null;
+  shipment_id: string | null;
+  title: string;
+  status: "open" | "in_progress" | "waiting" | "blocked" | "completed" | "cancelled";
+  priority: "low" | "normal" | "high" | "urgent";
+  assignee_id: string | null;
+  due_at: string | null;
+  updated_at: string;
 };
 
 type WorkflowRow = {
@@ -64,7 +76,7 @@ type ReportItem = {
   stage: string;
   priority: "normal" | "urgent";
   href: string;
-  source: "workflow" | "checklist" | "permit" | "finance";
+  source: "workflow" | "checklist" | "permit" | "finance" | "activity";
 };
 
 type ReportGroup = {
@@ -120,14 +132,21 @@ export const CustomsPendingReportPage: React.FC = () => {
         .limit(1000);
       if (declarationError) throw declarationError;
       const declarationRows = (declarations || []) as DeclarationRow[];
+      const { data: activities, error: activityError } = await supabase
+        .from("customs_activities")
+        .select("id,declaration_id,shipment_id,title,status,priority,assignee_id,due_at,updated_at")
+        .eq("organization_id", organizationId)
+        .in("status", ["open", "in_progress", "waiting", "blocked"])
+        .order("due_at", { ascending: true })
+        .limit(1000);
+      if (activityError) throw activityError;
+      const activityRows = (activities || []) as ActivityRow[];
       const declarationIds = [...new Set(declarationRows.map((row) => row.id).filter(Boolean))];
-      if (!declarationIds.length) {
-        setGroups([]);
-        setRefreshedAt(new Date());
-        return;
-      }
       const caseIds = [...new Set(declarationRows.map((row) => row.case_id).filter((id): id is string => Boolean(id)))];
-      const shipmentIds = [...new Set(declarationRows.map((row) => row.shipment_id).filter((id): id is string => Boolean(id)))];
+      const shipmentIds = [...new Set([
+        ...declarationRows.map((row) => row.shipment_id),
+        ...activityRows.map((row) => row.shipment_id),
+      ].filter((id): id is string => Boolean(id)))];
 
       const [shipmentById, shipmentByCase, caseResult, checklistResult, exitChecklistResult] = await Promise.all([
         shipmentIds.length
@@ -139,17 +158,21 @@ export const CustomsPendingReportPage: React.FC = () => {
         caseIds.length
           ? supabase.from("cases").select("id,case_number,client_id").eq("organization_id", organizationId).in("id", caseIds)
           : Promise.resolve({ data: [], error: null } as any),
-        supabase.from("declaration_checklist_items")
-          .select("id,declaration_id,item_label,note,source")
-          .eq("organization_id", organizationId)
-          .in("declaration_id", declarationIds)
-          .eq("is_active", true)
-          .eq("completed", false),
-        supabase.from("declaration_exit_checklist_items")
-          .select("id,declaration_id,item_key")
-          .eq("organization_id", organizationId)
-          .in("declaration_id", declarationIds)
-          .eq("completed", false),
+        declarationIds.length
+          ? supabase.from("declaration_checklist_items")
+              .select("id,declaration_id,item_label,note,source")
+              .eq("organization_id", organizationId)
+              .in("declaration_id", declarationIds)
+              .eq("is_active", true)
+              .eq("completed", false)
+          : Promise.resolve({ data: [], error: null } as any),
+        declarationIds.length
+          ? supabase.from("declaration_exit_checklist_items")
+              .select("id,declaration_id,item_key")
+              .eq("organization_id", organizationId)
+              .in("declaration_id", declarationIds)
+              .eq("completed", false)
+          : Promise.resolve({ data: [], error: null } as any),
       ]);
       for (const result of [shipmentById, shipmentByCase, caseResult, checklistResult, exitChecklistResult]) {
         if (result.error) throw result.error;
@@ -192,6 +215,30 @@ export const CustomsPendingReportPage: React.FC = () => {
       const caseMap = new Map(cases.map((row) => [row.id, row] as const));
       const shipmentMap = new Map(uniqueShipments.map((row) => [row.id, row] as const));
       const workflowByDeclaration = new Map(workflowRows.map((row) => [row.declaration_id, row] as const));
+      const declarationById = new Map(declarationRows.map((row) => [row.id, row] as const));
+      const latestDeclarationByShipment = new Map<string, DeclarationRow>();
+      for (const declaration of [...declarationRows].sort((a, b) => Date.parse(b.created_at || "") - Date.parse(a.created_at || ""))) {
+        if (declaration.shipment_id && !latestDeclarationByShipment.has(declaration.shipment_id)) {
+          latestDeclarationByShipment.set(declaration.shipment_id, declaration);
+        }
+      }
+      const activitiesByDeclaration = new Map<string, ActivityRow[]>();
+      const standaloneActivities: ActivityRow[] = [];
+      for (const activity of activityRows) {
+        const declaration = activity.declaration_id
+          ? declarationById.get(activity.declaration_id)
+          : activity.shipment_id
+            ? latestDeclarationByShipment.get(activity.shipment_id)
+            : undefined;
+        if (!declaration) {
+          standaloneActivities.push(activity);
+          continue;
+        }
+        activitiesByDeclaration.set(declaration.id, [
+          ...(activitiesByDeclaration.get(declaration.id) || []),
+          activity,
+        ]);
+      }
       const checklistByDeclaration = new Map<string, ChecklistRow[]>();
       for (const row of checklistItems) {
         checklistByDeclaration.set(row.declaration_id, [...(checklistByDeclaration.get(row.declaration_id) || []), row]);
@@ -306,6 +353,22 @@ export const CustomsPendingReportPage: React.FC = () => {
           }
         }
 
+        const activityTasks = buildCustomsActivityPendingTasks(
+          activitiesByDeclaration.get(declaration.id) || [],
+        );
+        for (const activityTask of activityTasks) {
+          items.push({
+            id: activityTask.id,
+            declarationId: declaration.id,
+            title: activityTask.title,
+            detail: activityTask.detail,
+            stage: activityTask.bucket,
+            priority: activityTask.priority,
+            href: "/customs-activities?activityId=" + encodeURIComponent(activityTask.activityId),
+            source: "activity",
+          });
+        }
+
         if (items.length) {
           nextGroups.push({
             declarationId: declaration.id,
@@ -321,6 +384,48 @@ export const CustomsPendingReportPage: React.FC = () => {
           });
         }
       }
+      const standaloneByContext = new Map<string, ActivityRow[]>();
+      for (const activity of standaloneActivities) {
+        const key = activity.shipment_id || "activity:" + activity.id;
+        standaloneByContext.set(key, [...(standaloneByContext.get(key) || []), activity]);
+      }
+      for (const [contextId, activitiesForContext] of standaloneByContext) {
+        const shipmentId = contextId.startsWith("activity:") ? null : contextId;
+        const shipment = shipmentId ? shipmentMap.get(shipmentId) : undefined;
+        const clientName = shipment?.client_id
+          ? clientMap.get(shipment.client_id) || "صاحب کالا نامشخص"
+          : "صاحب کالا ثبت نشده";
+        const pendingTasks = buildCustomsActivityPendingTasks(activitiesForContext);
+        const items: ReportItem[] = pendingTasks.map((task) => ({
+          id: task.id,
+          declarationId: "activity-only:" + contextId,
+          title: task.title,
+          detail: task.detail,
+          stage: task.bucket,
+          priority: task.priority,
+          href: "/customs-activities?activityId=" + encodeURIComponent(task.activityId),
+          source: "activity",
+        }));
+        const lastUpdated = activitiesForContext
+          .map((item) => item.updated_at)
+          .filter(Boolean)
+          .sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null;
+        if (items.length) {
+          nextGroups.push({
+            declarationId: "activity-only:" + contextId,
+            shipmentName: shipment?.display_name || "فعالیت بدون اظهارنامه",
+            billOfLading: shipment?.bill_of_lading_no || "بارنامه ثبت نشده",
+            clientName,
+            caseNumber: "پرونده مرتبط ثبت نشده",
+            kottaj: "اظهارنامه مرتبط ثبت نشده",
+            regime: null,
+            updatedAt: lastUpdated,
+            href: "/customs-activities",
+            items,
+          });
+        }
+      }
+
       nextGroups.sort((a, b) => Date.parse(b.updatedAt || "") - Date.parse(a.updatedAt || ""));
       for (const group of nextGroups) {
         group.items.sort((a, b) => Number(b.priority === "urgent") - Number(a.priority === "urgent"));
@@ -346,6 +451,7 @@ export const CustomsPendingReportPage: React.FC = () => {
       checklist: items.filter((item) => item.source === "checklist").length,
       permits: items.filter((item) => item.source === "permit").length,
       finance: items.filter((item) => item.source === "finance").length,
+      activity: items.filter((item) => item.source === "activity").length,
     };
   }, [groups]);
 
@@ -365,13 +471,14 @@ export const CustomsPendingReportPage: React.FC = () => {
           </button>
         </header>
 
-        <section className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+        <section className="grid grid-cols-2 sm:grid-cols-7 gap-2">
           <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">کل موارد باز</div><b className="mt-1 block text-xl">{faNumber(stats.tasks)}</b></div>
           <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">محموله‌های درگیر</div><b className="mt-1 block text-xl">{faNumber(stats.shipments)}</b></div>
           <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">مهلت‌های فوری</div><b className="mt-1 block text-xl">{faNumber(stats.urgent)}</b></div>
           <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">فعالیت‌های عملیات</div><b className="mt-1 block text-xl">{faNumber(stats.workflow)}</b></div>
           <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">مجوز / چک‌لیست دستی</div><b className="mt-1 block text-xl">{faNumber(stats.permits + stats.checklist)}</b></div>
           <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">هزینه‌های در انتظار بررسی</div><b className="mt-1 block text-xl">{faNumber(stats.finance)}</b></div>
+          <div className="rounded-xl border app-border bg-[var(--surface)] p-3"><div className="text-xs app-muted">فعالیت‌های مستقل باز</div><b className="mt-1 block text-xl">{faNumber(stats.activity)}</b></div>
         </section>
 
         {error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm">{error}</div>}
@@ -408,7 +515,7 @@ export const CustomsPendingReportPage: React.FC = () => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-semibold">{item.title}</div>
-                        <div className="mt-1 text-xs app-muted">{item.detail} · {item.source === "workflow" ? "فعالیت عملیات" : item.source === "permit" ? "مجوز" : item.source === "finance" ? "هزینه مالی" : "چک‌لیست"}</div>
+                        <div className="mt-1 text-xs app-muted">{item.detail} · {item.source === "workflow" ? "فعالیت عملیات" : item.source === "activity" ? "فعالیت مستقل" : item.source === "permit" ? "مجوز" : item.source === "finance" ? "هزینه مالی" : "چک‌لیست"}</div>
                       </div>
                       <Link to={item.href} className="shrink-0 inline-flex items-center gap-1 rounded-lg border app-border px-2.5 py-1.5 text-[11px] font-bold">
                         اقدام <ArrowUpRight size={13}/>

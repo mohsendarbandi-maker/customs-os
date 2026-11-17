@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCustomsWorkflowPendingTasks } from "./customsPendingTasks";
+import { buildCustomsWorkflowPendingTasks, buildCustomsActivityPendingTasks } from "./customsPendingTasks";
 
 const completedWorkflow = {
   declaration_id: "declaration-1",
@@ -89,5 +89,49 @@ describe("customs pending report", () => {
     );
 
     expect(tasks.filter(task => task.priority === "urgent")).toHaveLength(2);
+  });
+});
+
+
+describe("independent customs activity daily projection", () => {
+  const now = new Date("2026-11-17T08:00:00.000Z");
+
+  it("marks an overdue unassigned activity urgent and reports both flags", () => {
+    const [task] = buildCustomsActivityPendingTasks([{
+      id: "activity-1",
+      title: "پیگیری مجوز",
+      status: "open",
+      priority: "normal",
+      assignee_id: null,
+      due_at: "2026-11-16T08:00:00.000Z",
+      declaration_id: "decl-1",
+      shipment_id: "ship-1",
+    }], now);
+
+    expect(task.urgent).toBe(true);
+    expect(task.overdue).toBe(true);
+    expect(task.unassigned).toBe(true);
+    expect(task.bucket).toBe("overdue");
+    expect(task.detail).toContain("بدون مسئول");
+  });
+
+  it("recognizes a Tehran-local due-today activity and a waiting activity", () => {
+    const tasks = buildCustomsActivityPendingTasks([
+      { id: "today", title: "کنترل اسناد", status: "in_progress", priority: "normal", assignee_id: "user-1", due_at: "2026-11-17T18:00:00.000Z" },
+      { id: "waiting", title: "انتظار مجوز", status: "waiting", priority: "normal", assignee_id: "user-2", due_at: null },
+    ], now);
+
+    expect(tasks.find(task => task.activityId === "today")?.dueToday).toBe(true);
+    expect(tasks.find(task => task.activityId === "today")?.bucket).toBe("due_today");
+    expect(tasks.find(task => task.activityId === "waiting")?.waiting).toBe(true);
+    expect(tasks.find(task => task.activityId === "waiting")?.bucket).toBe("waiting");
+  });
+
+  it("does not include completed or cancelled activities", () => {
+    const tasks = buildCustomsActivityPendingTasks([
+      { id: "done", title: "انجام‌شده", status: "completed", priority: "normal" },
+      { id: "cancelled", title: "لغوشده", status: "cancelled", priority: "urgent" },
+    ], now);
+    expect(tasks).toEqual([]);
   });
 });
