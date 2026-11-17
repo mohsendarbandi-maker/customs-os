@@ -76,3 +76,14 @@
 - All three candidate migrations are still in Draft PRs and have only been tested in isolated PostgreSQL databases. No Production migration or merge took place.
 - Live app call-site audit found current reminder creation uses only the JSONB payload overload with a staff-role allowlist; the two older positional overloads are not used by current source.
 - Identified a separate AI Operator audit integrity gap: transition RPC allows the owner of a command record to supply result/executed attribution. It cannot execute the business action itself, but can create a false ledger state. No patch applied pending a proper server-authenticated proof design.
+
+
+## 2026-11-17 — Stage 6: full SECURITY DEFINER and RLS privilege inventory
+
+- Enumerated all 152 public SECURITY DEFINER functions in live Production.
+- Confirmed zero anon-executable functions and zero missing explicit search_path settings. Fifteen use `search_path=''`; all are schema-qualified, restrictive function definitions.
+- Counted 92 functions still callable by authenticated; call-graph review classified legitimate user-owned, organization-scoped, chat-member and owner-guarded cases separately from the PR297–299 candidates.
+- Enumerated 15 RLS-enabled tables without policies. Production privileges show authenticated has no direct table-level SELECT/INSERT/UPDATE/DELETE on those tables; service_role has server access. Recorded these as intentional service-managed resources pending continued review, not direct authenticated exposure.
+- Remaining Supabase advisor configuration warnings: pg_net installed in public (not changed because cron functions depend on net schema paths); leaked-password protection disabled (Auth settings not changed).
+- Reviewed `ai_operator_transition_command` and its tamper trigger. Plan fields are immutable and executed rows frozen, but the owner of a command row can invoke the transition RPC directly to forge their own executed/result snapshot. This is an audit-integrity gap; business operations still require the Edge Function. Correct fix needs a server-signed capability or trusted transition boundary. No patch applied in this stage.
+- PR297, PR298 and PR299 are all Draft and CI green. No Production migration, merge or deploy.

@@ -137,3 +137,22 @@ A read-only review sampled eight high-impact functions: declaration exit stage, 
 - The current Edge Function uses the end-user JWT and tests explicitly prohibit embedding a service-role secret. Fixing this correctly needs a server-authenticated transition capability (for example, a dedicated signed transition token) or a trusted internal service boundary. Do not make a superficial `p_executed_by=auth.uid()` change and claim the issue resolved.
 - Keep this finding open; design a signed proof and test both direct-RPC forgery denial and legitimate Edge Function transitions.
 
+ 
+
+## Stage 6 — complete SECURITY DEFINER inventory and residual risk classification (2026-11-17)
+
+### Live Production inventory
+- 152 public `SECURITY DEFINER` functions in total.
+- Zero functions are executable by `anon`.
+- 92 remain executable by `authenticated`; the count includes legitimate user-scoped RPCs, chat-membership helpers, owner-guarded finance/admin functions and personal/session helpers, not only vulnerabilities.
+- All 152 functions have an explicit `search_path` setting. Fifteen use an empty search_path, which is the restrictive form; sampled functions qualify objects by schema.
+- 47 functions return `trigger`; 2 had unnecessary direct authenticated grants and are covered by PR297's revoke loop.
+- Of the 15 RLS-enabled tables with no policies, Production privileges show no direct SELECT/INSERT/UPDATE/DELETE for authenticated users; service_role has the expected server access. These advisor INFO findings are not evidence of an authenticated table-access bypass.
+- Security advisor still reports one `pg_net` extension-in-public warning and Auth leaked-password protection disabled. Moving pg_net can affect existing cron jobs, and Auth setting change needs separate controlled config access; neither was changed in this stage.
+
+### Residual AI Operator audit-integrity issue
+- The live transition RPC checks `auth.uid()` owns the command row and enforces the status-transition graph; the tamper trigger freezes the plan fields and blocks edits after status `executed`.
+- It nevertheless accepts caller-supplied execution attribution/result/snapshot fields while the caller is still transitioning their own row. A direct authenticated RPC call could mark the caller-owned command `executing` and then `executed` with fabricated results and `executed_by`, even though no business operation ran.
+- This does not grant execution of customs/finance operations by itself. It can falsify the audit record visible to organization owners and is therefore tracked as an audit-integrity weakness, not a business-data authorization bypass.
+- Correct repair requires a server-authenticated transition capability. The current AI Operator intentionally uses an end-user JWT and security tests prohibit embedding the Supabase service-role secret. Do not remove those controls or claim this fixed without a signed transition-token/trusted server boundary and direct-RPC forgery tests.
+

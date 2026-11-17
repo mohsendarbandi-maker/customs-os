@@ -94,3 +94,11 @@ Eight sensitive functions were read from live PostgreSQL definitions and execute
 - PR298 (case-alert sync): CI green, Draft, not live. Production `sync_case_alert_reminders(uuid)` remains authenticated-callable until an approved migration is applied.
 - PR299 (legacy reminder creation overloads): CI green, Draft, not live. Production old overloads remain authenticated-callable until approved migration; current UI uses only the safer JSONB overload.
 - AI Operator audit integrity: `ai_operator_transition_command` trusts caller-supplied execution/result fields after checking row ownership and status graph. Users cannot mutate business data through this RPC alone, but can forge a personal audit record visible to organization owners. Requires server-signed proof / trusted transition boundary; not fixed in this stage.
+
+
+## Stage 6 — residual security inventory
+
+- Production audit: 152 public SECURITY DEFINER functions; 0 anon-executable; 92 authenticated-executable; all have explicit search_path, with 15 using empty path. The number 92 is an inventory count, not a count of confirmed vulnerabilities.
+- 15 RLS-enabled/no-policy tables expose no direct authenticated table privileges (no SELECT/INSERT/UPDATE/DELETE); they are service-managed. Keep reviewed as informational unless a new privilege path is found.
+- Remaining Supabase advisor warnings: pg_net extension in public (migration could break cron if moved without path adjustment); leaked-password protection disabled (Auth config). No changes made.
+- AI Operator command ledger can be self-forged via the authenticated transition RPC. This is an audit-integrity weakness; the caller cannot execute the underlying operation through the RPC. Needs server-signed transition proof while preserving no-service-role-key-in-browser/AI-Operator client invariant.

@@ -86,3 +86,12 @@ Status: NOT READY FOR RELEASE APPROVAL
 - Current JSONB reminder creation remains the app path and is not revoked.
 - AI Operator transition ledger proof design remains open. Do not claim immutable audit integrity until a server-authenticated transition proof is implemented and tested.
 - No Worker/site deploy, main merge or Production DB migration performed in Stage 5.
+
+
+## 2026-11-17 — Stage 6 security evidence
+
+- 152 public SECURITY DEFINER functions inventoried; 0 anon access; 92 authenticated grants; every function has an explicit search_path.
+- 15 RLS-enabled tables without policies deny all direct authenticated table operations via table grants; service_role remains the server actor.
+- PR297, PR298 and PR299 green CI, Draft only; their Production grants remain unchanged pending approved migration.
+- AI Operator command result/status can be falsified by a user for their own record through a direct authenticated transition RPC. Business writes remain Edge Function-gated, but the owner-visible audit log can be misleading. Requires server-authenticated transition proof before calling audit history trustworthy.
+- pg_net-in-public and leaked-password-protection warnings remain open. No Production changes from this audit.
