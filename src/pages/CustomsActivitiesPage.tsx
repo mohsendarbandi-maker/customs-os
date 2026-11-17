@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity, AlertCircle, Bell, CalendarDays, ChevronDown, Clock3,
-  FilePlus2, History, Link2, LoaderCircle, Plus, RefreshCw, Save, Trash2,
+  FilePlus2, History, Link2, Loader2, Plus, RefreshCw, Save, Trash2,
   UserRound, X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -505,7 +505,7 @@ export const CustomsActivitiesPage: React.FC = () => {
             </div>
             <div className="flex justify-end">
               <button type="button" disabled={saving || !newTitle.trim() || (!newShipmentId && !newDeclarationId)} onClick={() => void createActivity()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-bold text-white disabled:opacity-50">
-                {saving ? <LoaderCircle size={16} className="animate-spin"/> : <Save size={16}/>} ثبت فعالیت
+                {saving ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} ثبت فعالیت
               </button>
             </div>
           </section>
@@ -521,7 +521,7 @@ export const CustomsActivitiesPage: React.FC = () => {
         </section>
 
         {loading ? (
-          <div className="rounded-xl border app-border bg-[var(--surface)] p-10 text-center app-muted"><LoaderCircle size={20} className="mx-auto mb-2 animate-spin"/>در حال دریافت فعالیت‌ها…</div>
+          <div className="rounded-xl border app-border bg-[var(--surface)] p-10 text-center app-muted"><Loader2 size={20} className="mx-auto mb-2 animate-spin"/>در حال دریافت فعالیت‌ها…</div>
         ) : visibleActivities.length === 0 ? (
           <div className="rounded-xl border app-border bg-[var(--surface)] p-10 text-center">
             <Activity size={28} className="mx-auto mb-2 app-muted"/>
