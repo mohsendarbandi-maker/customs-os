@@ -139,11 +139,11 @@ async function loadOperatorContext(sb:any,org:string,q:string){
   sb.from('finance_payments').select('shipment_id,case_id,amount,currency,amount_irr,payment_type,description,payment_date').eq('organization_id',org).order('payment_date',{ascending:false}).limit(700),
   sb.from('finance_payment_requests').select('shipment_id,request_no,requested_amount,currency,status,subject').eq('organization_id',org).order('request_date',{ascending:false}).limit(500)
  ]);
- const cm=new Map((clients.data||[]).map((x:any)=>[x.id,x.name]));
- const km=new Map((cases.data||[]).map((x:any)=>[x.id,x]));
+ const cm=new Map<string,any>((clients.data||[]).map((x:any)=>[x.id,x.name] as [string,any]));
+ const km=new Map<string,any>((cases.data||[]).map((x:any)=>[x.id,x] as [string,any]));
  const dm=new Map<string,any>();for(const x of (decls.data||[])){if(x.shipment_id&&!dm.has(x.shipment_id))dm.set(x.shipment_id,x);}
  const scm=new Map<string,any>();for(const x of (customs.data||[])){if(x.shipment_id&&!scm.has(x.shipment_id))scm.set(x.shipment_id,x);}
- const vm=new Map((vessels.data||[]).map((x:any)=>[x.id,x]));
+ const vm=new Map<string,any>((vessels.data||[]).map((x:any)=>[x.id,x] as [string,any]));
  const db=new Map<string,any[]>();for(const x of (docs.data||[])){const a=db.get(x.shipment_id)||[];a.push(x);db.set(x.shipment_id,a);}
  const pb=new Map<string,any[]>();for(const x of (payments.data||[])){const a=pb.get(x.shipment_id)||[];a.push(x);pb.set(x.shipment_id,a);}
  const rb=new Map<string,any[]>();for(const x of (requests.data||[])){const a=rb.get(x.shipment_id)||[];a.push(x);rb.set(x.shipment_id,a);}
@@ -188,15 +188,15 @@ function validate(raw:any,g:any):Plan{
  const code=str(raw?.action_code),def=ACTIONS[code];if(!def)throw new Error('Action ناشناخته است.');
  const p:Plan={action_code:code,module:str(raw?.module),target:raw?.target&&typeof raw.target==='object'?raw.target:{},params:raw?.params&&typeof raw.params==='object'?raw.params:{},confidence:Number(raw?.confidence),clarification:raw?.clarification?str(raw.clarification):null,reason:str(raw?.reason)};
  if(p.module!==def.module)throw new Error('Module/action mismatch.');
- if(!Number.isFinite(p.confidence)||p.confidence<0||p.confidence>1)throw new Error('Confidence نامعتبر است.');
- p.risk=riskFor(p);if(p.confidence<(Number(g.confidence_threshold)||.75))p.clarification=p.clarification||'اطمینان برای اجرای امن کافی نیست؛ هدف یا پارامترها را دقیق تر مشخص کنید.';
+ const confidence=Number(p.confidence);if(!Number.isFinite(confidence)||confidence<0||confidence>1)throw new Error('Confidence نامعتبر است.');
+ p.risk=riskFor(p);if(confidence<(Number(g.confidence_threshold)||.75))p.clarification=p.clarification||'اطمینان برای اجرای امن کافی نیست؛ هدف یا پارامترها را دقیق تر مشخص کنید.';
  return p;
 }
-async function one(sb:any,table:string,id:any){if(!isUuid(id))return null;const{data,error}=await sb.from(table).select('*').eq('id',id).maybeSingle();if(error)throw error;return data||null;}
-async function byField(sb:any,table:string,field:string,value:any){if(!str(value))return{row:null};const{data,error}=await sb.from(table).select('*').eq(field,str(value)).limit(2);if(error)throw error;if((data||[]).length===1)return{row:data![0]};if((data||[]).length>1)return{clarification:'چند رکورد منطبق وجود دارد؛ شناسه دقیق را مشخص کنید.'};return{row:null};}
-async function shipment(sb:any,t:any){if(isUuid(t?.shipment_id)){const r=await one(sb,'shipments',t.shipment_id);if(r)return{row:r};}if(str(t?.bill_of_lading)){const x=await byField(sb,'shipments','bill_of_lading_no',t.bill_of_lading);if(x.clarification)return x;if(x.row)return x;}if(str(t?.shipment_name)){const x=await byField(sb,'shipments','display_name',t.shipment_name);if(x.clarification)return x;if(x.row)return x;}if(isUuid(t?.case_id)){const{data,error}=await sb.from('shipments').select('*').eq('case_id',t.case_id).limit(2);if(error)throw error;if((data||[]).length===1)return{row:data![0]};if((data||[]).length>1)return{clarification:'این پرونده چند محموله دارد؛ محموله دقیق را مشخص کنید.'};}return{clarification:'محموله یکتا پیدا نشد.'};}
-async function caseRow(sb:any,t:any){if(isUuid(t?.case_id)){const r=await one(sb,'cases',t.case_id);if(r)return{row:r};}if(isUuid(t?.shipment_id)){const x=await shipment(sb,t);if(x.clarification)return x;if(x.row?.case_id){const r=await one(sb,'cases',x.row.case_id);if(r)return{row:r,shipment:x.row};}}if(str(t?.case_number)){const x=await byField(sb,'cases','case_number',t.case_number);if(x.clarification)return x;if(x.row)return x;}return{clarification:'پرونده یکتا پیدا نشد. شماره پرونده، شناسه پرونده یا محموله دقیق را مشخص کنید.'};}
-async function target(sb:any,table:string,t:any,idKey:string,nameKey:string,nameField:string){if(isUuid(t?.[idKey])){const r=await one(sb,table,t[idKey]);if(r)return{row:r};}return byField(sb,table,nameField,t?.[nameKey]);}
+async function one(sb:any,table:string,id:any):Promise<any>{if(!isUuid(id))return null;const{data,error}=await sb.from(table).select('*').eq('id',id).maybeSingle();if(error)throw error;return data||null;}
+async function byField(sb:any,table:string,field:string,value:any):Promise<any>{if(!str(value))return{row:null};const{data,error}=await sb.from(table).select('*').eq(field,str(value)).limit(2);if(error)throw error;if((data||[]).length===1)return{row:data![0]};if((data||[]).length>1)return{clarification:'چند رکورد منطبق وجود دارد؛ شناسه دقیق را مشخص کنید.'};return{row:null};}
+async function shipment(sb:any,t:any):Promise<any>{if(isUuid(t?.shipment_id)){const r=await one(sb,'shipments',t.shipment_id);if(r)return{row:r};}if(str(t?.bill_of_lading)){const x=await byField(sb,'shipments','bill_of_lading_no',t.bill_of_lading);if(x.clarification)return x;if(x.row)return x;}if(str(t?.shipment_name)){const x=await byField(sb,'shipments','display_name',t.shipment_name);if(x.clarification)return x;if(x.row)return x;}if(isUuid(t?.case_id)){const{data,error}=await sb.from('shipments').select('*').eq('case_id',t.case_id).limit(2);if(error)throw error;if((data||[]).length===1)return{row:data![0]};if((data||[]).length>1)return{clarification:'این پرونده چند محموله دارد؛ محموله دقیق را مشخص کنید.'};}return{clarification:'محموله یکتا پیدا نشد.'};}
+async function caseRow(sb:any,t:any):Promise<any>{if(isUuid(t?.case_id)){const r=await one(sb,'cases',t.case_id);if(r)return{row:r};}if(isUuid(t?.shipment_id)){const x=await shipment(sb,t);if(x.clarification)return x;if(x.row?.case_id){const r=await one(sb,'cases',x.row.case_id);if(r)return{row:r,shipment:x.row};}}if(str(t?.case_number)){const x=await byField(sb,'cases','case_number',t.case_number);if(x.clarification)return x;if(x.row)return x;}return{clarification:'پرونده یکتا پیدا نشد. شماره پرونده، شناسه پرونده یا محموله دقیق را مشخص کنید.'};}
+async function target(sb:any,table:string,t:any,idKey:string,nameKey:string,nameField:string):Promise<any>{if(isUuid(t?.[idKey])){const r=await one(sb,table,t[idKey]);if(r)return{row:r};}return byField(sb,table,nameField,t?.[nameKey]);}
 
 const snap=async(sb:any,code:string,t:any)=>{
  if(code.startsWith('cases.')){const x=await caseRow(sb,t);return x.row?pick(x.row,['id','case_number','client_id','status','registration_order_no','proforma_no','warehouse_receipt_no','warehouse_receipt_date','cargo_description','cargo_count','cargo_count_unit','net_weight_kg','gross_weight_kg','release_status','valuation_status','total_payable_irr']):null;}
