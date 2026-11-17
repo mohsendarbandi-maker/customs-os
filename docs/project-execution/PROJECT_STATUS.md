@@ -156,3 +156,17 @@ A read-only review sampled eight high-impact functions: declaration exit stage, 
 - This does not grant execution of customs/finance operations by itself. It can falsify the audit record visible to organization owners and is therefore tracked as an audit-integrity weakness, not a business-data authorization bypass.
 - Correct repair requires a server-authenticated transition capability. The current AI Operator intentionally uses an end-user JWT and security tests prohibit embedding the Supabase service-role secret. Do not remove those controls or claim this fixed without a signed transition-token/trusted server boundary and direct-RPC forgery tests.
 
+
+
+## Stage 7 — AI Operator ledger integrity hardening (2026-11-17)
+
+### PR300 — server-owned command ledger
+- Live Production review established two distinct audit-forgery paths: authenticated users could call the SECURITY DEFINER transition RPC with fabricated result/snapshot/actor fields, and had direct INSERT privilege on `ai_operator_commands` where the RLS policy only checked row ownership.
+- Draft PR300 `security/ai-operator-server-owned-ledger-2026-11-17` moves creation and transitions to two service_role-only RPCs, revokes browser INSERT/UPDATE/DELETE and the old client-callable transition RPC, while retaining authorized history reads.
+- The AI Operator Edge Function's service-role client is confined to those two ledger RPCs. Customs/finance/document operations continue to use the caller JWT client and normal RLS. A PostgreSQL fixture validates ACL denial, trusted create/transition, actor attribution and terminal immutability.
+- PR300 head `dd8e6484e8694e750af28336c5daca71b8d2e007`; main CI run `44151721561` and Shipment Cost run `44151721617` started. Await final run conclusions before marking green.
+- No Production migration, Edge Function deploy, merge or data change. Runtime secret availability and authenticated UI acceptance remain release checks.
+
+### Other security PRs and configuration
+- PR297/298/299 remain Draft, with prior CI success recorded in Stage 6. Production grants have not yet been changed.
+- Auth leaked-password protection remains disabled; pg_net-in-public remains an advisor warning. No supported config mutation was available from current project tools.
