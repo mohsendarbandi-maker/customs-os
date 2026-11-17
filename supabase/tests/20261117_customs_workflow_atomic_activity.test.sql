@@ -130,6 +130,39 @@ BEGIN
     END IF;
   END;
   PERFORM set_config('request.jwt.claim.org_id','00000000-0000-0000-0000-000000000001',false);
+
+  -- Accountant and client may observe operational state but must not edit it.
+  PERFORM set_config('request.jwt.claim.role','accountant',false);
+  BEGIN
+    PERFORM public.patch_customs_declaration_workflow_activity(
+      '00000000-0000-0000-0000-000000000030',
+      'expertise',
+      '{"standard":{"inspection_paid":false}}'::jsonb,
+      v_base,
+      'evaluation'
+    );
+    RAISE EXCEPTION 'Accountant workflow edit unexpectedly succeeded';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'Accountant workflow edit unexpectedly succeeded' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE '%not allowed to edit customs workflow%' THEN RAISE; END IF;
+  END;
+
+  PERFORM set_config('request.jwt.claim.role','client',false);
+  BEGIN
+    PERFORM public.patch_customs_declaration_workflow_activity(
+      '00000000-0000-0000-0000-000000000030',
+      'expertise',
+      '{"standard":{"inspection_paid":false}}'::jsonb,
+      v_base,
+      'evaluation'
+    );
+    RAISE EXCEPTION 'Client workflow edit unexpectedly succeeded';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'Client workflow edit unexpectedly succeeded' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE '%not allowed to edit customs workflow%' THEN RAISE; END IF;
+  END;
+
+  PERFORM set_config('request.jwt.claim.role','broker',false);
 END;
 $test$;
 
