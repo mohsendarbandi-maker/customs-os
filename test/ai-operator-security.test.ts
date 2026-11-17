@@ -179,6 +179,12 @@ describe('AI Operator security invariants',()=>{
     const proof=readFileSync(new URL('../supabase/functions/_shared/aiOperatorTransitionProof.ts',import.meta.url),'utf8');
     const signedMigration=readFileSync(new URL('../supabase/migrations/20261117190000_ai_operator_signed_execution_proof.sql',import.meta.url),'utf8');
     expect(edge).toContain("AI_OPERATOR_TRANSITION_HMAC_SECRET");
+    expect(edge).toContain("sb.rpc('ai_operator_create_command'");
+    expect(edge).not.toContain("sb.from('ai_operator_commands').insert");
+    expect(signedMigration).toContain("revoke insert on public.ai_operator_commands from public, anon, authenticated");
+    expect(signedMigration).toContain("drop policy if exists ai_operator_commands_insert");
+    expect(signedMigration).toContain("p_status = 'executed'");
+
     expect(edge).toContain("sb.rpc('ai_operator_assert_transition_signer'");
     expect(edge).toContain("sb.rpc('ai_operator_complete_command_with_proof'");
     expect(edge).toContain("await assertTransitionSignerReady(sb,user.id)");

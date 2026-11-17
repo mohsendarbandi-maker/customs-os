@@ -93,6 +93,103 @@ $$;
 revoke all on function private.verify_ai_operator_transition_proof(text, text, uuid)
   from public, anon, authenticated;
 
+create or replace function public.ai_operator_create_command(
+  p_session_id text,
+  p_natural_command text,
+  p_page_context text,
+  p_module text,
+  p_action_code text,
+  p_target jsonb,
+  p_plan jsonb,
+  p_confidence numeric,
+  p_risk_level text,
+  p_status text,
+  p_final_confirmation_phrase text default null
+)
+returns public.ai_operator_commands
+language plpgsql
+security definer
+set search_path = public, pg_catalog, pg_temp
+as $
+declare
+  v_uid uuid := auth.uid();
+  v_profile public.profiles;
+  v_row public.ai_operator_commands;
+begin
+  if v_uid is null then
+    raise exception 'کاربر وارد سامانه نشده است';
+  end if;
+
+  select *
+    into v_profile
+  from public.profiles
+  where id = v_uid
+  for share;
+
+  if not found or v_profile.is_active is distinct from true
+     or v_profile.organization_id is null then
+    raise exception 'پروفایل کاربر معتبر یا فعال نیست';
+  end if;
+
+  if p_natural_command is null or length(trim(p_natural_command)) = 0
+     or length(p_natural_command) > 4000 then
+    raise exception 'AI Operator command text is invalid';
+  end if;
+  if p_page_context is not null and length(p_page_context) > 2000 then
+    raise exception 'AI Operator page context is too long';
+  end if;
+  if p_target is null or jsonb_typeof(p_target) <> 'object'
+     or p_plan is null or jsonb_typeof(p_plan) <> 'object' then
+    raise exception 'AI Operator target and plan must be JSON objects';
+  end if;
+  if p_risk_level not in ('safe','requires_confirmation','destructive') then
+    raise exception 'AI Operator risk level is invalid';
+  end if;
+  if p_confidence is null or p_confidence < 0 or p_confidence > 1 then
+    raise exception 'AI Operator confidence is invalid';
+  end if;
+
+  -- The caller can create only a non-terminal request. The Edge Function
+  -- re-validates the allowlisted action and derives its effective risk again.
+  if not (
+    (p_status = 'executing' and p_risk_level = 'safe' and p_action_code <> 'clarification')
+    or
+    (p_status = 'awaiting_confirmation' and p_risk_level in ('requires_confirmation','destructive') and p_action_code <> 'clarification')
+    or
+    (p_status = 'clarification_needed' and p_risk_level = 'safe' and p_action_code = 'clarification')
+  ) then
+    raise exception 'AI Operator initial command state is not permitted';
+  end if;
+  if p_risk_level = 'destructive' and nullif(trim(p_final_confirmation_phrase), '') is null then
+    raise exception 'Destructive AI Operator command requires a final confirmation phrase';
+  end if;
+  if p_risk_level <> 'destructive' and p_final_confirmation_phrase is not null then
+    raise exception 'Final confirmation phrase is only valid for destructive commands';
+  end if;
+
+  insert into public.ai_operator_commands(
+    organization_id,user_id,session_id,natural_command,page_context,module,action_code,
+    target,plan,confidence,risk_level,status,confirmation_required,final_confirmation_phrase
+  ) values (
+    v_profile.organization_id,v_uid,p_session_id,trim(p_natural_command),p_page_context,p_module,p_action_code,
+    p_target,p_plan,p_confidence,p_risk_level,p_status,
+    p_risk_level <> 'safe',
+    p_final_confirmation_phrase
+  )
+  returning * into v_row;
+
+  return v_row;
+end;
+$;
+
+revoke all on function public.ai_operator_create_command(text,text,text,text,text,jsonb,jsonb,numeric,text,text,text)
+  from public, anon, authenticated;
+grant execute on function public.ai_operator_create_command(text,text,text,text,text,jsonb,jsonb,numeric,text,text,text)
+  to authenticated;
+
+revoke insert on public.ai_operator_commands from public, anon, authenticated;
+drop policy if exists ai_operator_commands_insert on public.ai_operator_commands;
+
 create or replace function public.ai_operator_assert_transition_signer(
   p_proof_payload text,
   p_proof_signature text

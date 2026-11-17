@@ -464,12 +464,23 @@ async function main(req:Request){
    if(plan.action_code.startsWith('settings.')&&pr.data.role!=='owner')return out({error:'این عملیات فقط برای Owner مجاز است.'},403,origin);
 
    if(plan.action_code==='clarification'||plan.clarification){
-     const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:'clarification',target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:'safe',status:'clarification_needed'}).select('id').single();
+     const r=await sb.rpc('ai_operator_create_command',{
+       p_session_id:str(body.session_id)||null,p_natural_command:query,p_page_context:str(body.page_context),
+       p_module:plan.module,p_action_code:'clarification',p_target:plan.target||{},p_plan:plan,
+       p_confidence:plan.confidence||0,p_risk_level:'safe',p_status:'clarification_needed',
+       p_final_confirmation_phrase:null
+     });
      if(r.error)throw r.error;return out({command_id:r.data.id,status:'clarification_needed',plan,provider:planned.provider},200,origin);
    }
 
    const risk=riskFor(plan);const phrase=risk==='destructive'?'تأیید نهایی: '+ACTIONS[plan.action_code].label:null;
-   const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:plan.action_code,target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:risk,status:risk==='safe'?'executing':'awaiting_confirmation',confirmation_required:risk!=='safe',final_confirmation_phrase:phrase}).select('id').single();
+   const r=await sb.rpc('ai_operator_create_command',{
+     p_session_id:str(body.session_id)||null,p_natural_command:query,p_page_context:str(body.page_context),
+     p_module:plan.module,p_action_code:plan.action_code,p_target:plan.target||{},p_plan:plan,
+     p_confidence:plan.confidence||0,p_risk_level:risk,
+     p_status:risk==='safe'?'executing':'awaiting_confirmation',
+     p_final_confirmation_phrase:phrase
+   });
    if(r.error)throw r.error;
    if(risk!=='safe')return out({command_id:r.data.id,status:'awaiting_confirmation',plan,risk_level:risk,confirmation_required:true,final_confirmation_phrase:phrase},200,origin);
 

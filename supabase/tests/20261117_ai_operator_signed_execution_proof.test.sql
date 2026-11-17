@@ -12,6 +12,49 @@ DECLARE
   v_expected uuid := '00000000-0000-0000-0000-000000000101';
   v_other uuid := '00000000-0000-0000-0000-000000000102';
 BEGIN
+  IF has_table_privilege('authenticated','public.ai_operator_commands','INSERT')
+     OR has_table_privilege('anon','public.ai_operator_commands','INSERT') THEN
+    RAISE EXCEPTION 'Direct command ledger INSERT must be denied to API roles';
+  END IF;
+  IF NOT has_table_privilege('authenticated','public.ai_operator_commands','SELECT') THEN
+    RAISE EXCEPTION 'Authenticated users must retain their own history read access';
+  END IF;
+
+  BEGIN
+    INSERT INTO public.ai_operator_commands(organization_id,user_id,natural_command,status)
+    VALUES ('00000000-0000-0000-0000-000000000001',v_expected,'forged initial record','executed');
+    RAISE EXCEPTION 'Expected direct command insert to be denied';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  -- The authenticated creation RPC derives owner and tenant from auth.uid()
+  -- and does not accept a terminal state or forged execution fields.
+  SELECT * INTO v_row
+  FROM public.ai_operator_create_command(
+    'session-test','safe read request','/control','control','control.report',
+    '{}'::jsonb,'{"action_code":"control.report","module":"control","target":{},"params":{}}'::jsonb,
+    0.99,'safe','executing',NULL
+  );
+  IF v_row.user_id <> v_expected
+     OR v_row.organization_id <> '00000000-0000-0000-0000-000000000001'
+     OR v_row.status <> 'executing'
+     OR v_row.executed_by IS NOT NULL
+     OR v_row.executed_at IS NOT NULL THEN
+    RAISE EXCEPTION 'Trusted creation RPC did not bind identity/tenant or set safe initial state';
+  END IF;
+
+  BEGIN
+    PERFORM public.ai_operator_create_command(
+      NULL,'forged terminal row',NULL,'control','control.report',
+      '{}'::jsonb,'{"action_code":"control.report"}'::jsonb,1,
+      'safe','executed',NULL
+    );
+    RAISE EXCEPTION 'Expected terminal state creation to be rejected';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%initial command state is not permitted%' THEN RAISE; END IF;
+  END;
+
   IF has_function_privilege('anon','public.ai_operator_assert_transition_signer(text,text)','EXECUTE')
      OR has_function_privilege('anon','public.ai_operator_complete_command_with_proof(uuid,text,text)','EXECUTE')
      OR has_function_privilege('anon','public.ai_operator_transition_command(uuid,text,timestamp with time zone,timestamp with time zone,jsonb,text,jsonb,jsonb,uuid,timestamp with time zone)','EXECUTE') THEN
