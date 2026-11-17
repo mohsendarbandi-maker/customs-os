@@ -47,6 +47,7 @@ const nav: NavItem[] = [
   { label: 'مرکز کنترل', en: 'Control Center', to: '/control', icon: Activity, group: 'عملیات', roles: management },
   { label: 'عملیات پرونده', en: 'Cases & Operations', to: '/operations', icon: ClipboardCheck, group: 'عملیات', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'کارهای باز گمرکی', en: 'Customs Pending Work', to: '/customs-pending', icon: ClipboardList, group: 'عملیات', roles: allStaff },
+  { label: 'فعالیت‌های گمرکی', en: 'Independent Customs Activities', to: '/customs-activities', icon: Activity, group: 'عملیات', roles: allStaff },
   { label: 'پرونده', en: 'Cases', to: '/cases', icon: Folder, group: 'عملیات', roles: ['owner', 'admin', 'broker', 'warehouse', 'client'] },
   { label: 'ثبت سفارش‌ها', en: 'Registration Orders', to: '/registration-orders', icon: FileText, group: 'عملیات', roles: management },
   { label: 'یادآورها', en: 'Reminders', to: '/reminders', icon: ClipboardList, group: 'عملیات' },
