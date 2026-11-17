@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Activity, AlertCircle, Bell, CalendarDays, ChevronDown, Clock3,
   FilePlus2, History, Link2, Loader2, Plus, RefreshCw, Save, Trash2,
@@ -91,6 +92,8 @@ const isFinanceRole = (role: string) => ["owner", "admin", "accountant"].include
 
 export const CustomsActivitiesPage: React.FC = () => {
   const { user, profile } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedActivityId = searchParams.get("activityId") || "";
   const organizationId = profile?.organization_id || "";
   const role = String(profile?.role || "");
   const canWrite = ["owner", "admin", "broker", "warehouse"].includes(role);
@@ -114,6 +117,9 @@ export const CustomsActivitiesPage: React.FC = () => {
   const [newStartAt, setNewStartAt] = useState("");
   const [newPriority, setNewPriority] = useState<ActivityPriority>("normal");
   const [newActivityType, setNewActivityType] = useState("general");
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editActivityType, setEditActivityType] = useState("general");
   const [expandedId, setExpandedId] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [events, setEvents] = useState<ActivityEvent[]>([]);
@@ -213,8 +219,20 @@ export const CustomsActivitiesPage: React.FC = () => {
     setDetailLoading(false);
   }, [organizationId, canLinkFinance]);
 
-  const updateActivity = async (activity: CustomsActivity, patch: Partial<CustomsActivity>) => {
-    if (!canWrite || !user) return;
+  useEffect(() => {
+    if (loading || !requestedActivityId || expandedId === requestedActivityId) return;
+    const requested = activities.find((item) => item.id === requestedActivityId);
+    if (!requested) return;
+    setStatusFilter("all");
+    setExpandedId(requested.id);
+    setEditTitle(requested.title);
+    setEditDescription(requested.description || "");
+    setEditActivityType(requested.activity_type);
+    void refreshDetails(requested);
+  }, [activities, expandedId, loading, requestedActivityId, refreshDetails]);
+
+  const updateActivity = async (activity: CustomsActivity, patch: Partial<CustomsActivity>): Promise<boolean> => {
+    if (!canWrite || !user) return false;
     setSaving(true);
     setError("");
     setNotice("");
@@ -231,8 +249,10 @@ export const CustomsActivitiesPage: React.FC = () => {
       setActivities((current) => current.map((item) => item.id === activity.id ? data as CustomsActivity : item));
       setNotice("تغییر فعالیت ذخیره شد.");
       if (expandedId === activity.id) await refreshDetails(data as CustomsActivity);
+      return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "ذخیره تغییر فعالیت انجام نشد.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -287,9 +307,20 @@ export const CustomsActivitiesPage: React.FC = () => {
   const toggleDetails = async (activity: CustomsActivity) => {
     if (expandedId === activity.id) {
       setExpandedId("");
+      if (requestedActivityId === activity.id) {
+        const next = new URLSearchParams(searchParams);
+        next.delete("activityId");
+        setSearchParams(next, { replace: true });
+      }
       return;
     }
     setExpandedId(activity.id);
+    setEditTitle(activity.title);
+    setEditDescription(activity.description || "");
+    setEditActivityType(activity.activity_type);
+    const next = new URLSearchParams(searchParams);
+    next.set("activityId", activity.id);
+    setSearchParams(next, { replace: true });
     setSelectedFileId("");
     setSelectedPrerequisiteId("");
     setDependencyReason("");
@@ -574,7 +605,7 @@ export const CustomsActivitiesPage: React.FC = () => {
               const isOverdue = Boolean(activity.due_at && Date.parse(activity.due_at) < Date.now() && !["completed","cancelled"].includes(activity.status));
               const detailOpen = expandedId === activity.id;
               return (
-                <article key={activity.id} className="overflow-hidden rounded-2xl border app-border bg-[var(--surface)]">
+                <article key={activity.id} className={"overflow-hidden rounded-2xl border bg-[var(--surface)] " + (requestedActivityId === activity.id ? "border-[var(--primary)] ring-2 ring-[var(--primary)]/20" : "app-border")}>
                   <div className="p-4 space-y-3">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
@@ -616,6 +647,38 @@ export const CustomsActivitiesPage: React.FC = () => {
                     <section className="border-t app-border bg-[var(--surface-2)]/40 p-4 space-y-4">
                       {detailLoading ? <div className="text-sm app-muted">در حال دریافت تاریخچه و پیوندها…</div> : (
                         <>
+                          {canWrite && (
+                            <div className="rounded-xl border app-border bg-[var(--surface)] p-3 space-y-3">
+                              <div className="font-bold text-sm">اطلاعات اصلی فعالیت</div>
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <label className="text-xs app-muted">عنوان
+                                  <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} maxLength={240} className="input mt-1 w-full"/>
+                                </label>
+                                <label className="text-xs app-muted">نوع فعالیت
+                                  <select value={editActivityType} onChange={(event) => setEditActivityType(event.target.value)} className="input mt-1 w-full">
+                                    {Object.entries(activityTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                                  </select>
+                                </label>
+                                <label className="text-xs app-muted md:col-span-2">توضیحات
+                                  <textarea value={editDescription} onChange={(event) => setEditDescription(event.target.value)} rows={3} className="input mt-1 w-full"/>
+                                </label>
+                              </div>
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  disabled={saving || !editTitle.trim()}
+                                  onClick={() => void updateActivity(activity, {
+                                    title: editTitle.trim(),
+                                    description: editDescription.trim() || null,
+                                    activity_type: editActivityType,
+                                  })}
+                                  className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[var(--primary)] px-3 text-xs font-bold text-white disabled:opacity-50"
+                                >
+                                  <Save size={14}/> ذخیره اطلاعات اصلی
+                                </button>
+                              </div>
+                            </div>
+                          )}
                           <div className="grid gap-3 md:grid-cols-2">
                             <div className="rounded-xl border app-border bg-[var(--surface)] p-3 space-y-2">
                               <div className="flex items-center gap-2 font-bold text-sm"><CalendarDays size={16}/> برنامه زمانی</div>
