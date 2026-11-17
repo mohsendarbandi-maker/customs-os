@@ -45,3 +45,18 @@ Migration history shows master-order and allocation work. Do not backfill or inf
 ### RISK-CUST-02 — Independent activity candidate awaiting contract acceptance
 
 PR 294 adds a normalized activity model, but it remains a draft until the dedicated ephemeral PostgreSQL migration/tests and frontend CI complete. Initial CI failed before applying the new migration because the fixture recreated cluster-global roles already created by the previous fixture; this was corrected by making role creation conditional. Do not apply the candidate migration to live Supabase before CI passes and authenticated UI acceptance is complete.
+
+
+## Critical — 2026-11-17 production deployment incident
+
+- Main briefly advanced to `bdfec746ec9dd5e89d11a8373ea0668eeba1bdb9` due a contents-API branch targeting failure; it was restored to `968c58f2624c04f53cc98f094be888cd7e74dc72` with an expected-SHA guarded ref update.
+- Main workflow run 44108881420 deployed Worker successfully, then its live smoke test failed because the live Worker served a different build signature.
+- Initial `fix/manual-production-deployment-2026-11-17` branch creation triggered the old `fix/**` build workflow before the updated YAML was committed; run 44109859363 also deployed Worker successfully and was cancelled during smoke.
+- Cloudflare Worker metadata reports last modification 2026-11-17 15:05:27 UTC. These were automated workflow deployments, not an explicit user-approved release.
+- Main is currently back on `968c58f`; no Production database migrations or data writes were performed.
+
+Mitigation in Draft PR 295: validation workflow has no deploy command; deployment is moved to a manual-only workflow dispatch from main with exact confirmation phrase `DEPLOY CUSTOMS OS`. Full smoke tests are retained in the manual deployment workflow. PR must be reviewed and merged with explicit permission; GitHub Environment required reviewers should be configured.
+
+## High — activity rollback gap
+
+Independent activity versioning and immutable event history are implemented and tested, but activity-scoped rollback is not. Do not treat optimistic concurrency as a rollback substitute.

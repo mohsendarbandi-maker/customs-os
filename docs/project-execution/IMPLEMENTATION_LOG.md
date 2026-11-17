@@ -29,3 +29,14 @@
 - CI run 44106707234: pre-existing workflow migration, RLS/rollback and two-session concurrency tests passed; new activity fixture failed because database roles are cluster-wide and already existed. Fixture was amended to conditionally create roles. Newer CI run for commit 12b45b37847c7164a35fb63de5594c8d62e43b61 was in progress when this ledger entry was written.
 - No production DDL, data modification, merge or deployment was performed.
 - Acceptance remains pending until latest CI and authenticated UI acceptance complete.
+
+
+## 2026-11-17 — Stage 2 verification and production workflow incident
+
+- PR 294 commit `62e1886d28e60da297ccbfea4d7f164487437743` passed the isolated PostgreSQL 15 activity fixture, candidate migration, RLS and tenant isolation, stale-version compare-and-swap, dependency cycle/completion, File Manager attachment, finance linkage, reminder linkage, immutable history privilege assertions, TypeScript, lint, production build, Deno checks and Cloudflare Worker dry-run.
+- CI run 44109793070: success; Shipment Cost CI run 44109793175: success. Mobile viewport/keyboard smoke in the messenger workflow was skipped. No authenticated production UI test was performed.
+- Activity-scoped rollback remains unimplemented; the current version column prevents stale writes but does not provide a revert action.
+- PR 295 was created to separate routine validation from manual production deployment. The previous validation tests expected live smoke-script text in `build.yml`; those scripts were moved to `deploy-production.yml` and the tests redirected to the new workflow.
+- A GitHub contents update call unexpectedly wrote commit `bdfec746` to main while the intended target was the feature branch. Main was restored to `968c58f` using a guarded ref update. This remains recorded as a repository write incident.
+- Two automatic Worker deployments were observed: run 44108881420 on main and run 44109859363 after the initial `fix/**` branch push. Both Worker deploy steps reported success; the first live smoke failed on build signature and the second smoke was cancelled. Cloudflare Worker metadata showed modified time 2026-11-17 15:05:27 UTC. No Production database migration or data row update occurred.
+- PR 295 now replaces the automatic main deploy with a manual workflow requiring dispatch from main and the exact confirmation string `DEPLOY CUSTOMS OS`. It remains Draft; latest validation run 44110782206 was pending at log update time.
