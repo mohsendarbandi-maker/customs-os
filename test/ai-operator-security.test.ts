@@ -173,4 +173,20 @@ describe('AI Operator security invariants',()=>{
    expect(workspace).toContain("currentFormSchema, file.size");
  });
 
+
+  it('requires a signed, user-bound server proof before marking AI Operator commands executed',()=>{
+    const edge=readFileSync(new URL('../supabase/functions/ai-operator/index.ts',import.meta.url),'utf8');
+    const proof=readFileSync(new URL('../supabase/functions/_shared/aiOperatorTransitionProof.ts',import.meta.url),'utf8');
+    const signedMigration=readFileSync(new URL('../supabase/migrations/20261117190000_ai_operator_signed_execution_proof.sql',import.meta.url),'utf8');
+    expect(edge).toContain("AI_OPERATOR_TRANSITION_HMAC_SECRET");
+    expect(edge).toContain("sb.rpc('ai_operator_assert_transition_signer'");
+    expect(edge).toContain("sb.rpc('ai_operator_complete_command_with_proof'");
+    expect(edge).toContain("await assertTransitionSignerReady(sb,user.id)");
+    expect(edge).toContain("if(cmd.status==='executing')");
+    expect(edge).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(proof).toContain("name: 'HMAC', hash: 'SHA-256'");
+    expect(signedMigration).toContain("Direct executed transitions are forbidden");
+    expect(signedMigration).toContain("executed_by = v_uid");
+    expect(signedMigration).toContain("private.verify_ai_operator_transition_proof");
+  });
 });
