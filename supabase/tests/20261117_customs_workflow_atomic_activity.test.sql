@@ -189,6 +189,32 @@ BEGIN
 END;
 $gate$;
 
+-- Only customs operators may invoke the final exit release endpoint.
+DO $exit_role_guard$
+DECLARE
+  v_role text;
+BEGIN
+  FOREACH v_role IN ARRAY ARRAY['accountant', 'client'] LOOP
+    PERFORM set_config('request.jwt.claim.role', v_role, false);
+    BEGIN
+      PERFORM public.complete_customs_declaration_exit(
+        '00000000-0000-0000-0000-000000000020',
+        NULL
+      );
+      RAISE EXCEPTION '% exit release unexpectedly succeeded', v_role;
+    EXCEPTION WHEN OTHERS THEN
+      IF SQLERRM = v_role || ' exit release unexpectedly succeeded' THEN
+        RAISE;
+      END IF;
+      IF SQLERRM NOT LIKE '%not allowed to complete customs exit%' THEN
+        RAISE;
+      END IF;
+    END;
+  END LOOP;
+  PERFORM set_config('request.jwt.claim.role', 'warehouse', false);
+END;
+$exit_role_guard$;
+
 -- A NULL customs regime must never pass the definitive-import exit endpoint.
 RESET ROLE;
 UPDATE public.customs_declarations
