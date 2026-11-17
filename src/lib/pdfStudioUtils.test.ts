@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pageExpressionForMatches, parsePageSelection, suggestDocumentLabel } from './pdfStudioUtils';
+import { buildPdfStudioLineage, pageExpressionForMatches, parsePageSelection, suggestDocumentLabel } from './pdfStudioUtils';
 
 describe('PDF Studio page selection', () => {
   it('supports ranges and explicit page lists in one field', () => {
@@ -27,5 +27,57 @@ describe('PDF Studio page selection', () => {
       { label: 'قبض انبار پشت' },
       { label: 'مانیفست الکترونیک' },
     ], [/قبض انبار/])).toBe('2');
+  });
+});
+
+
+describe('PDF Studio persisted source lineage', () => {
+  const sources = [
+    {
+      documentId: 'doc-a', fileAssetId: 'asset-a', fileManagerFileId: 'row-a',
+      fileName: 'bill.pdf', folderId: 'folder-a', shipmentId: 'shipment-a', clientId: 'client-a',
+    },
+    {
+      documentId: 'doc-b', fileAssetId: 'asset-b', fileManagerFileId: 'row-b',
+      fileName: 'manifest.pdf', folderId: 'folder-a', shipmentId: 'shipment-a', clientId: 'client-a',
+    },
+  ];
+
+  it('keeps exact parent file and page mapping for a merged output', () => {
+    const lineage = buildPdfStudioLineage([
+      { documentId: 'doc-a', pageIndex: 0, label: 'قبض انبار رو', rotation: 0 },
+      { documentId: 'doc-b', pageIndex: 2, label: 'مانیفست', rotation: 90 },
+    ], sources);
+
+    expect(lineage?.parentFileAssetIds).toEqual(['asset-a', 'asset-b']);
+    expect(lineage?.archiveTarget).toEqual({ folderId: 'folder-a', shipmentId: 'shipment-a', clientId: 'client-a' });
+    expect(lineage?.pages.map((page) => [page.fileAssetId, page.sourcePageNumber, page.label, page.rotation])).toEqual([
+      ['asset-a', 1, 'قبض انبار رو', 0],
+      ['asset-b', 3, 'مانیفست', 90],
+    ]);
+  });
+
+  it('uses the shipment documents folder when source files came from different folders', () => {
+    const lineage = buildPdfStudioLineage([
+      { documentId: 'doc-a', pageIndex: 0, label: 'A', rotation: 0 },
+      { documentId: 'doc-b', pageIndex: 1, label: 'B', rotation: 0 },
+    ], sources.map((source) => ({ ...source, folderId: source.documentId === 'doc-a' ? 'folder-a' : 'folder-b' })));
+
+    expect(lineage?.archiveTarget.folderId).toBeNull();
+    expect(lineage?.archiveTarget.shipmentId).toBe('shipment-a');
+  });
+
+  it('refuses automatic archiving across shipments, clients, or unlinked files', () => {
+    const pages = [
+      { documentId: 'doc-a', pageIndex: 0, label: 'A', rotation: 0 },
+      { documentId: 'doc-b', pageIndex: 0, label: 'B', rotation: 0 },
+    ];
+    expect(buildPdfStudioLineage(pages, sources.map((source, index) => ({
+      ...source, shipmentId: index === 0 ? 'shipment-a' : 'shipment-b',
+    })))).toBeNull();
+    expect(buildPdfStudioLineage(pages, sources.map((source, index) => ({
+      ...source, clientId: index === 0 ? 'client-a' : 'other-client',
+    })))).toBeNull();
+    expect(buildPdfStudioLineage(pages, [sources[0], { ...sources[1], fileAssetId: null }])).toBeNull();
   });
 });

@@ -8,8 +8,11 @@ import { PDFDocument, degrees } from 'pdf-lib';
 import { createWorker } from 'tesseract.js';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { downloadTelegramArchivedFile } from '../lib/fileManager';
-import { PDF_STUDIO_PRESETS, pageExpressionForMatches, parsePageSelection, suggestDocumentLabel } from '../lib/pdfStudioUtils';
+import {
+  downloadTelegramArchivedFile, getDefaultShipmentUploadFolder, getFileArchiveDestination,
+  persistPdfStudioLineage, uploadTelegramArchivedFile, FILE_ARCHIVE_MAX_BYTES,
+} from '../lib/fileManager';
+import { buildPdfStudioLineage, PDF_STUDIO_PRESETS, pageExpressionForMatches, parsePageSelection, suggestDocumentLabel, type PdfStudioLineage } from '../lib/pdfStudioUtils';
 import {
   buildDocumentPageFeatures, buildDocumentPageFeaturesFromText, estimateJpegBytesFromSamples,
   recognizeDocumentPage, type DocumentPageFeatures, type RecognitionSample,
@@ -19,11 +22,13 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
-type SourceDocument = { id: string; file: File; pageCount: number; hasProtectedFeatures: boolean; convertedFromImage: boolean };
+type SourceDocument = { id: string; file: File; pageCount: number; hasProtectedFeatures: boolean; convertedFromImage: boolean; sourceFileAssetId: string | null; sourceFileManagerFileId: string | null; sourceFolderId: string | null; sourceShipmentId: string | null; sourceClientId: string | null };
 type SplitRow = { id: string; name: string; pageExpression: string };
 type FileManagerRow = {
   id: string;
   folder_id: string;
+  shipment_id: string | null;
+  client_id: string | null;
   file_asset_id: string | null;
   original_name: string;
   mime_type: string;
@@ -62,9 +67,13 @@ type ReadyOutput = {
   description: string;
   createdAt: string;
   downloadedAt?: string;
+  lineage?: PdfStudioLineage;
+  archiveState?: 'archiving' | 'archived' | 'failed';
+  archiveFileAssetId?: string;
+  archiveError?: string;
 };
 type OutputTools = { merge: boolean; split: boolean; compression: boolean; stamp: boolean };
-type FileManagerFolder = { id: string; parent_id: string | null; display_name: string; folder_type: string };
+type FileManagerFolder = { id: string; parent_id: string | null; display_name: string; folder_type: string; shipment_id?: string | null; client_id?: string | null };
 const formatSize = (bytes: number) => bytes < 1024 * 1024
   ? Math.round(bytes / 1024) + ' KB'
   : (bytes / 1024 / 1024).toFixed(1) + ' MB';
@@ -95,6 +104,8 @@ export const PdfStudioPage: React.FC = () => {
   const imageRef = useRef<HTMLInputElement>(null);
   const sampleInputRef = useRef<HTMLInputElement>(null);
   const sourcePdfs = useRef(new Map<string, PDFDocument>());
+  const sourceContextsRef = useRef(new WeakMap<File, { fileAssetId: string | null; fileManagerFileId: string; folderId: string; shipmentId: string | null; clientId: string | null }>());
+  const archiveInFlightRef = useRef(new Set<string>());
   const [documents, setDocuments] = useState<SourceDocument[]>([]);
   const [pages, setPages] = useState<PageItem[]>([]);
   const [busy, setBusy] = useState(false);
@@ -139,17 +150,83 @@ export const PdfStudioPage: React.FC = () => {
   const totalBytes = useMemo(() => documents.reduce((sum, item) => sum + item.file.size, 0), [documents]);
   const compressionItems = useMemo(() => selectedCount ? selectedPages : pages, [selectedCount, selectedPages, pages]);
 
-  const queueOutputs = (outputs: Array<{ blob: Blob; name: string; description: string }>) => {
+  const archiveReadyOutput = async (output: ReadyOutput) => {
+    if (!output.lineage || !organizationId || profile?.role === 'client' || archiveInFlightRef.current.has(output.id)) return;
+    if (output.archiveState === 'archived') return;
+    archiveInFlightRef.current.add(output.id);
+    setReadyOutputs((previous) => previous.map((item) => item.id === output.id
+      ? { ...item, archiveState: 'archiving', archiveError: undefined }
+      : item));
+    try {
+      if (output.size > FILE_ARCHIVE_MAX_BYTES) {
+        throw new Error('حجم خروجی بیش از سقف ۲۰ مگابایت آرشیو تلگرام است؛ نسخه اصلی و خروجی آماده دانلود باقی می‌مانند.');
+      }
+      const lineage = output.lineage;
+      const targetFolder = lineage.archiveTarget.folderId
+        ? { id: lineage.archiveTarget.folderId }
+        : await getDefaultShipmentUploadFolder(lineage.archiveTarget.shipmentId);
+      let fileAssetId = output.archiveFileAssetId;
+      if (!fileAssetId) {
+        const destination = await getFileArchiveDestination();
+        const file = new File([output.blob], output.name, { type: 'application/pdf', lastModified: Date.now() });
+        const uploaded = await uploadTelegramArchivedFile(file, {
+          folderId: targetFolder.id,
+          shipmentId: lineage.archiveTarget.shipmentId,
+          documentType: 'other',
+          documentName: output.name,
+          tags: ['PDF Studio', 'خروجی پردازش‌شده'],
+          destination,
+        });
+        fileAssetId = uploaded.fileAssetId;
+        setReadyOutputs((previous) => previous.map((item) => item.id === output.id
+          ? { ...item, archiveFileAssetId: fileAssetId }
+          : item));
+      }
+      await persistPdfStudioLineage(fileAssetId, organizationId, targetFolder.id, lineage);
+      setReadyOutputs((previous) => previous.map((item) => item.id === output.id
+        ? { ...item, archiveFileAssetId: fileAssetId, archiveState: 'archived', archiveError: undefined }
+        : item));
+      setStatus('«' + output.name + '» در پوشه محموله آرشیو شد و ارتباط آن با ' + lineage.parentFileAssetIds.length + ' سند مبدأ ثبت شد.');
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'آرشیو خودکار خروجی ناموفق بود.';
+      setReadyOutputs((previous) => previous.map((item) => item.id === output.id
+        ? { ...item, archiveState: 'failed', archiveError: message }
+        : item));
+    } finally {
+      archiveInFlightRef.current.delete(output.id);
+    }
+  };
+
+  const queueOutputs = (outputs: Array<{ blob: Blob; name: string; description: string; pageItems?: PageItem[] }>) => {
     if (!outputs.length) return;
-    const prepared: ReadyOutput[] = outputs.map((output) => ({
-      id: crypto.randomUUID(),
-      name: output.name,
-      blob: output.blob,
-      size: output.blob.size,
-      description: output.description,
-      createdAt: new Date().toISOString(),
-    }));
+    const prepared: ReadyOutput[] = outputs.map((output) => {
+      const lineage = output.pageItems ? buildPdfStudioLineage(
+        output.pageItems.map((page) => ({ documentId: page.documentId, pageIndex: page.pageIndex, label: page.label, rotation: page.rotation })),
+        documents.map((source) => ({
+          documentId: source.id,
+          fileAssetId: source.sourceFileAssetId,
+          fileManagerFileId: source.sourceFileManagerFileId,
+          fileName: source.file.name,
+          folderId: source.sourceFolderId,
+          shipmentId: source.sourceShipmentId,
+          clientId: source.sourceClientId,
+        })),
+      ) || undefined : undefined;
+      return {
+        id: crypto.randomUUID(),
+        name: output.name,
+        blob: output.blob,
+        size: output.blob.size,
+        description: output.description,
+        createdAt: new Date().toISOString(),
+        lineage,
+        archiveState: lineage && profile?.role !== 'client' ? 'archiving' as const : undefined,
+      };
+    });
     setReadyOutputs((previous) => [...prepared, ...previous]);
+    for (const output of prepared) {
+      if (output.lineage && profile?.role !== 'client') void archiveReadyOutput(output);
+    }
     setStatus(
       prepared.length === 1
         ? 'فایل «' + prepared[0].name + '» آماده است. برای دریافت، دکمه دانلود را بزنید؛ فایل‌های ورودی و تنظیمات حفظ می‌شوند.'
@@ -340,7 +417,15 @@ export const PdfStudioPage: React.FC = () => {
           canvas.width = 1;
           canvas.height = 1;
         }
-        setDocuments((previous) => [...previous, { id, file, pageCount: previewDocument.numPages, hasProtectedFeatures, convertedFromImage: isImage }]);
+        const sourceContext = sourceContextsRef.current.get(file);
+        setDocuments((previous) => [...previous, {
+          id, file, pageCount: previewDocument.numPages, hasProtectedFeatures, convertedFromImage: isImage,
+          sourceFileAssetId: sourceContext?.fileAssetId ?? null,
+          sourceFileManagerFileId: sourceContext?.fileManagerFileId ?? null,
+          sourceFolderId: sourceContext?.folderId ?? null,
+          sourceShipmentId: sourceContext?.shipmentId ?? null,
+          sourceClientId: sourceContext?.clientId ?? null,
+        }]);
         setPages((previous) => [...previous, ...nextPages]);
         await previewDocument.destroy();
       }
@@ -431,7 +516,7 @@ export const PdfStudioPage: React.FC = () => {
   const buildPdf = async (items: PageItem[], fileName: string, description: string) => {
     const bytes = await createPdfBytes(items);
     const outputName = fileName.endsWith('.pdf') ? fileName : fileName + '.pdf';
-    queueOutputs([{ blob: new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), name: outputName, description }]);
+    queueOutputs([{ blob: new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }), name: outputName, description, pageItems: items }]);
   };
 
   const renderPdfPageJpeg = async (pdfPage: any, item: PageItem, settings: CompressionSettings) => {
@@ -683,6 +768,7 @@ export const PdfStudioPage: React.FC = () => {
       const outputName = 'PDF-Studio-' + safeName(profileName) + '-compressed.pdf';
       queueOutputs([{
         blob: candidate.blob,
+        pageItems: compressionItems,
         name: outputName,
         description: 'فشرده‌سازی با پروفایل «' + profileName + '» · از ' +
           formatSize(originalBytes.byteLength) + ' به ' + formatSize(candidate.blob.size) +
@@ -783,6 +869,7 @@ export const PdfStudioPage: React.FC = () => {
             blob: new Blob([toArrayBuffer(sourceBytes)], { type: 'application/pdf' }),
             name: safeName(packageName) + '.pdf',
             description: 'PDF استاندارد · ' + formatSize(sourceBytes.byteLength) + ' · زیر سقف ۲ مگابایت',
+            pageItems: pages,
           }]);
           setStatus('خروجی استاندارد با حجم ' + formatSize(sourceBytes.byteLength) + ' آماده دانلود است؛ محیط کاری حفظ شد.');
           return;
@@ -794,13 +881,14 @@ export const PdfStudioPage: React.FC = () => {
           name: safeName(packageName) + '.pdf',
           description: 'PDF استاندارد فشرده · ' + formatSize(result.blob.size) +
             ' · وضوح ' + result.scale.toFixed(2) + ' · کیفیت ' + Math.round(result.quality * 100) + '٪',
+          pageItems: pages,
         }]);
         setStatus('خروجی استاندارد آماده دانلود است: ' + formatSize(result.blob.size) + '؛ محیط کاری حفظ شد.');
         return;
       }
 
       if (protectedIncluded && !window.confirm('تقسیم فایل دارای امضای دیجیتال یا فرم تعاملی، اعتبار امضای اصلی را حفظ نمی‌کند. فقط روی نسخه کپی ادامه می‌دهید؟')) return;
-      const outputFiles: Array<{ name: string; bytes: Uint8Array }> = [];
+      const outputFiles: Array<{ name: string; bytes: Uint8Array; pageItems: PageItem[] }> = [];
       const outputNames = new Set<string>();
       for (let index = 0; index < splitRows.length; index += 1) {
         const row = splitRows[index];
@@ -810,13 +898,14 @@ export const PdfStudioPage: React.FC = () => {
         const fileName = safeName(row.name.trim()) + '.pdf';
         if (outputNames.has(fileName)) throw new Error('نام خروجی تکراری است: ' + row.name);
         outputNames.add(fileName);
-        outputFiles.push({ name: fileName, bytes: await createPdfBytes(items) });
+        outputFiles.push({ name: fileName, bytes: await createPdfBytes(items), pageItems: items });
       }
       if (!outputFiles.length) throw new Error('حداقل یک بخش برای خروجی تعریف کنید.');
       queueOutputs(outputFiles.map((item) => ({
         name: item.name,
         blob: new Blob([toArrayBuffer(item.bytes)], { type: 'application/pdf' }),
         description: 'بخش تفکیک‌شده از بسته «' + packageName + '»',
+        pageItems: item.pageItems,
       })));
       setStatus(outputFiles.length + ' فایل PDF جداگانه آماده دانلود است؛ هرکدام دکمه دانلود مستقل دارد. هیچ ZIP ساخته نشد و فایل‌های ورودی حفظ شدند.');
     } catch (reason) {
@@ -869,6 +958,7 @@ export const PdfStudioPage: React.FC = () => {
           blob: new Blob([toArrayBuffer(bytes)], { type: 'application/pdf' }),
           name: safeName(fileName) + '-annotated.pdf',
           description: 'نسخه دارای متن یا مهر تصویری؛ فایل اصلی در محیط باقی ماند.',
+          pageItems: items,
         }]);
       }
       setStatus('نسخه‌های مهرشده آماده دانلود هستند؛ فایل‌های ورودی و صفحات فعلی در محیط باقی ماندند.');
@@ -909,6 +999,7 @@ export const PdfStudioPage: React.FC = () => {
           blob: new Blob([toArrayBuffer(outputBytes)], { type: 'application/pdf' }),
           name: safeName(fileName) + '-signed.pdf',
           description: 'نسخه دارای تصویر مهر یا امضا؛ فایل اصلی در محیط باقی ماند.',
+          pageItems: items,
         }]);
       }
       setStatus('نسخه‌های دارای مهر یا امضا آماده دانلود هستند؛ فایل‌های ورودی در محیط باقی ماندند.');
@@ -934,7 +1025,7 @@ export const PdfStudioPage: React.FC = () => {
       const allRows: FileManagerRow[] = [];
       for (let offset = 0; ; offset += 500) {
         const { data, error: filesError } = await supabase.from('file_manager_files')
-          .select('id,folder_id,file_asset_id,original_name,mime_type,size_bytes,storage_path,metadata,created_at')
+          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,storage_path,metadata,created_at')
           .eq('organization_id', organizationId)
           .eq('is_archived', false)
           .order('created_at', { ascending: false })
@@ -986,7 +1077,15 @@ export const PdfStudioPage: React.FC = () => {
         } else {
           throw new Error('مسیر بازیابی فایل «' + row.original_name + '» ثبت نشده است.');
         }
-        imported.push(new File([blob], row.original_name, { type: row.mime_type || blob.type || 'application/pdf', lastModified: Date.now() }));
+        const importedFile = new File([blob], row.original_name, { type: row.mime_type || blob.type || 'application/pdf', lastModified: Date.now() });
+        sourceContextsRef.current.set(importedFile, {
+          fileAssetId: aliasId || row.file_asset_id,
+          fileManagerFileId: row.id,
+          folderId: row.folder_id,
+          shipmentId: row.shipment_id,
+          clientId: row.client_id,
+        });
+        imported.push(importedFile);
       }
       setFileManagerOpen(false);
       setSelectedFileManagerIds(new Set());
@@ -1459,11 +1558,15 @@ export const PdfStudioPage: React.FC = () => {
                           <div className="truncate text-xs font-bold">{output.name}</div>
                           <div className="mt-1 text-[10px] leading-5 text-[var(--muted)]">{output.description} · {formatSize(output.size)}</div>
                           <div className="mt-1 text-[10px] text-[var(--muted)]">{output.downloadedAt ? 'دانلود قبلی ثبت شد؛ امکان دانلود دوباره وجود دارد.' : 'هنوز دانلود نشده است.'}</div>
+                          {output.archiveState === 'archiving' && <div className="mt-1 text-[10px] text-blue-400">در حال آرشیو در پوشه محموله و ثبت ارتباط با سند مبدأ…</div>}
+                          {output.archiveState === 'archived' && <div className="mt-1 text-[10px] text-emerald-500">آرشیو تلگرام تأیید شد · ارتباط والد و فرزند ثبت شد</div>}
+                          {output.archiveError && <div className="mt-1 text-[10px] text-red-400">آرشیو: {output.archiveError}</div>}
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           <button type="button" onClick={() => downloadReadyOutput(output)} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white">
                             <FileText size={14}/>{output.downloadedAt ? 'دانلود دوباره' : 'دانلود'}
                           </button>
+                          {output.archiveState === 'failed' && output.lineage && profile?.role !== 'client' && <button type="button" onClick={() => void archiveReadyOutput(output)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-amber-500/40 px-2.5 text-xs font-bold text-amber-500">تلاش مجدد آرشیو</button>}
                           <button type="button" onClick={() => void transferReadyOutput(output, 'file-manager')} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 text-xs font-bold">
                             <Folder size={14}/>فایل‌منیجر
                           </button>

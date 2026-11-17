@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { safeWindowsFileName } from './safeWindowsFileName';
+import type { PdfStudioLineage } from './pdfStudioUtils';
 
 export type FileArchiveDestination = {
   connectionId: string;
@@ -288,3 +289,54 @@ export async function downloadTelegramArchivedFile(fileAssetId: string): Promise
 }
 
 export const FILE_ARCHIVE_MAX_BYTES = FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES;
+
+
+/**
+ * Persist the parent/child relationship on the File Manager placement created
+ * by the existing Telegram archive gateway. This never uploads bytes or creates
+ * a second file record. Repeating the write is idempotent for the same lineage.
+ */
+export async function persistPdfStudioLineage(
+  fileAssetId: string,
+  organizationId: string,
+  folderId: string,
+  lineage: PdfStudioLineage,
+): Promise<void> {
+  if (!fileAssetId || !organizationId || !folderId || !lineage.parentFileAssetIds.length) {
+    throw new Error('اطلاعات پیوند سند مبدأ و خروجی کامل نیست.');
+  }
+
+  const { data: rows, error: lookupError } = await supabase
+    .from('file_manager_files')
+    .select('id,metadata')
+    .eq('organization_id', organizationId)
+    .eq('folder_id', folderId)
+    .eq('file_asset_id', fileAssetId)
+    .eq('is_archived', false)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (lookupError) throw lookupError;
+  const row = rows?.[0];
+  if (!row?.id) {
+    throw new Error('فایل در آرشیو ثبت شد، اما رکورد فایل‌منیجر برای ثبت پیوند مبدأ پیدا نشد.');
+  }
+
+  const currentMetadata = row.metadata && typeof row.metadata === 'object'
+    ? row.metadata as Record<string, unknown>
+    : {};
+  const nextMetadata = {
+    ...currentMetadata,
+    pdfStudioLineage: lineage,
+  };
+  const { data: updated, error: updateError } = await supabase
+    .from('file_manager_files')
+    .update({ metadata: nextMetadata })
+    .eq('id', row.id)
+    .eq('organization_id', organizationId)
+    .select('id')
+    .maybeSingle();
+  if (updateError) throw updateError;
+  if (!updated?.id) {
+    throw new Error('فایل آرشیو شد، اما مجوز یا تأیید ثبت رابطه والد و فرزند دریافت نشد.');
+  }
+}
