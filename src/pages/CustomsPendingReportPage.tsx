@@ -192,16 +192,21 @@ export const CustomsPendingReportPage: React.FC = () => {
         ...cases.map((row) => row.client_id),
       ].filter((id): id is string => Boolean(id)))];
 
-      const [clientResult, permitResult] = await Promise.all([
+      const assigneeIds = [...new Set(activityRows.map((row) => row.assignee_id).filter((id): id is string => Boolean(id)))];
+      const [clientResult, permitResult, assigneeResult] = await Promise.all([
         clientIds.length
           ? supabase.from("clients").select("id,name").eq("organization_id", organizationId).in("id", clientIds)
           : Promise.resolve({ data: [], error: null } as any),
         caseIds.length
           ? supabase.from("permits").select("id,case_id,permit_type,permit_number,issuing_authority").eq("organization_id", organizationId).in("case_id", caseIds).eq("status", "pending")
           : Promise.resolve({ data: [], error: null } as any),
+        assigneeIds.length
+          ? supabase.from("profiles").select("id,full_name").eq("organization_id", organizationId).in("id", assigneeIds)
+          : Promise.resolve({ data: [], error: null } as any),
       ]);
       if (clientResult.error) throw clientResult.error;
       if (permitResult.error) throw permitResult.error;
+      if (assigneeResult.error) throw assigneeResult.error;
 
       const financeShipmentIds = [...new Set(uniqueShipments.map((row) => row.id))];
       const financeCostResult = financeShipmentIds.length
@@ -216,6 +221,7 @@ export const CustomsPendingReportPage: React.FC = () => {
       if (financeCostResult.error) throw financeCostResult.error;
 
       const clientMap = new Map<string, string>((clientResult.data || []).map((row: ClientRow): [string, string] => [row.id, row.name]));
+      const activityAssigneeMap = new Map<string, string>((assigneeResult.data || []).map((row: { id: string; full_name: string | null }): [string, string] => [row.id, row.full_name || "مسئول بدون نام"]));
       const caseMap = new Map(cases.map((row) => [row.id, row] as const));
       const shipmentMap = new Map(uniqueShipments.map((row) => [row.id, row] as const));
       const workflowByDeclaration = new Map(workflowRows.map((row) => [row.declaration_id, row] as const));
@@ -365,7 +371,9 @@ export const CustomsPendingReportPage: React.FC = () => {
             id: activityTask.id,
             declarationId: declaration.id,
             title: activityTask.title,
-            detail: activityTask.detail,
+            detail: activityTask.assigneeId
+              ? activityTask.detail + " · مسئول: " + (activityAssigneeMap.get(activityTask.assigneeId) || "نامشخص")
+              : activityTask.detail,
             stage: activityTask.bucket,
             priority: activityTask.priority,
             href: "/customs-activities?activityId=" + encodeURIComponent(activityTask.activityId),
@@ -408,7 +416,9 @@ export const CustomsPendingReportPage: React.FC = () => {
           id: task.id,
           declarationId: "activity-only:" + contextId,
           title: task.title,
-          detail: task.detail,
+          detail: task.assigneeId
+            ? task.detail + " · مسئول: " + (activityAssigneeMap.get(task.assigneeId) || "نامشخص")
+            : task.detail,
           stage: task.bucket,
           priority: task.priority,
           href: "/customs-activities?activityId=" + encodeURIComponent(task.activityId),
