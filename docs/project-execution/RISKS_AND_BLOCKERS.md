@@ -40,3 +40,8 @@ Migration history shows master-order and allocation work. Do not backfill or inf
 - Merge to `main`.
 - Cloudflare or website deployment.
 - Any legal/business rule not determinable from existing code, records or source documents.
+
+
+### RISK-CUST-02 — Independent activity candidate awaiting contract acceptance
+
+PR 294 adds a normalized activity model, but it remains a draft until the dedicated ephemeral PostgreSQL migration/tests and frontend CI complete. Initial CI failed before applying the new migration because the fixture recreated cluster-global roles already created by the previous fixture; this was corrected by making role creation conditional. Do not apply the candidate migration to live Supabase before CI passes and authenticated UI acceptance is complete.
