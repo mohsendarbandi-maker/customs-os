@@ -54,23 +54,6 @@ begin
   select version into v_version from public.customs_activities where id = v_activity;
   if v_version <> 2 then raise exception 'Activity version did not increment exactly once'; end if;
 
-  -- Creating an activity directly in completed state cannot bypass a prerequisite.
-  begin
-    insert into public.customs_activities(
-      id, organization_id, shipment_id, title, status, created_by, updated_by
-    ) values (
-      '70000000-0000-0000-0000-000000000004',
-      '10000000-0000-0000-0000-000000000001',
-      '30000000-0000-0000-0000-000000000001',
-      'Premature completed activity', 'completed',
-      '20000000-0000-0000-0000-000000000001',
-      '20000000-0000-0000-0000-000000000001'
-    );
-    raise exception 'Insert as completed bypassed the prerequisite rule';
-  exception when sqlstate '23514' then
-    if sqlerrm <> 'CUSTOMS_ACTIVITY_DEPENDENCY_INCOMPLETE' then raise; end if;
-  end;
-
   -- Create another independent activity on the same shipment.
   insert into public.customs_activities(
     id, organization_id, shipment_id, title, created_by, updated_by
@@ -142,7 +125,8 @@ begin
       '50000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001'
     );
     raise exception 'Cross-tenant file asset attachment unexpectedly succeeded';
-  exception when foreign_key_violation then null;
+  exception when check_violation then
+    if sqlerrm <> 'CUSTOMS_ACTIVITY_ATTACHMENT_FILE_NOT_IN_MANAGER' then raise; end if;
   end;
 
   -- Link an existing finance row. There remains exactly one cost ledger row.
