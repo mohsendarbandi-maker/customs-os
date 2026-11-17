@@ -402,8 +402,15 @@ as $function$
 declare
   v_cycle boolean;
 begin
-  -- Lock both endpoint activities in a stable order to serialize concurrent
-  -- edge additions and prevent a two-session cycle race.
+  -- Serialize graph mutations per tenant. Locking only the two endpoint
+  -- rows is insufficient when concurrent edges on disjoint endpoints could
+  -- jointly close a cycle. This transaction-scoped advisory lock makes every
+  -- dependency insertion/deletion graph check observe the latest committed graph.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(new.organization_id::text, 0)
+  );
+
+  -- Lock endpoints in stable order after obtaining the tenant graph lock.
   perform a.id
   from public.customs_activities a
   where a.organization_id = new.organization_id
