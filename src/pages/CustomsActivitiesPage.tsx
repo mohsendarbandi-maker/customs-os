@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity, AlertCircle, Bell, CalendarDays, Check, ChevronDown, Clock3,
+  Activity, AlertCircle, Bell, CalendarDays, ChevronDown, Clock3,
   FilePlus2, History, Link2, LoaderCircle, Plus, RefreshCw, Save, Trash2,
   UserRound, X,
 } from "lucide-react";
