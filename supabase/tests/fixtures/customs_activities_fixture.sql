@@ -93,6 +93,23 @@ insert into public.file_assets(id,organization_id,original_name) values
  ('50000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','declaration.pdf'),
  ('50000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','foreign.pdf');
 
+create table public.file_manager_files (
+  id uuid primary key,
+  organization_id uuid not null references public.organizations(id),
+  file_asset_id uuid,
+  shipment_id uuid,
+  original_name text not null,
+  document_type text not null default 'other'
+);
+insert into public.file_manager_files(id,organization_id,file_asset_id,shipment_id,original_name)
+values (
+  '51000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  '50000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001',
+  'declaration.pdf'
+);
+
 create table public.finance_cost_items (
   id uuid primary key,
   organization_id uuid not null references public.organizations(id),
@@ -152,6 +169,6 @@ grant execute on function auth.uid() to authenticated, anon;
 grant execute on function public.user_org_id() to authenticated, anon;
 grant execute on function public.user_role() to authenticated, anon;
 grant select on public.profiles, public.organizations, public.shipments,
-  public.customs_declarations, public.file_assets, public.finance_cost_items,
+  public.customs_declarations, public.file_assets, public.file_manager_files, public.finance_cost_items,
   public.operational_reminders to authenticated;
 grant insert, update on public.finance_cost_items, public.operational_reminders to authenticated;
