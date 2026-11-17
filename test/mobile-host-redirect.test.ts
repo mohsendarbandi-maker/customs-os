@@ -32,7 +32,7 @@ describe('mobile hostname routing without cross-origin session sharing', () => {
 
   it('redirects phone page visits from the primary hostname and keeps the mobile hostname standalone', () => {
     const worker = read('worker/index.ts');
-    const workflow = read('.github/workflows/build.yml');
+    const workflow = read('.github/workflows/deploy-production.yml');
 
     expect(worker).toContain("const isPrimaryDomain = legacyHost === 'darbandicommercial.ir' || legacyHost === 'www.darbandicommercial.ir'");
     expect(worker).toContain("const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent)");

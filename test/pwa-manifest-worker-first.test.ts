@@ -7,7 +7,7 @@ const wrangler = JSON.parse(fs.readFileSync(path.join(root, 'wrangler.jsonc'), '
   assets?: { run_worker_first?: string[] };
 };
 const worker = fs.readFileSync(path.join(root, 'worker/index.ts'), 'utf8');
-const workflow = fs.readFileSync(path.join(root, '.github/workflows/build.yml'), 'utf8');
+const workflow = fs.readFileSync(path.join(root, '.github/workflows/deploy-production.yml'), 'utf8');
 
 describe('PWA manifest requests pass through the canonical Worker', () => {
   it('routes canonical and previously installed per-area manifest URLs to Worker before ASSETS', () => {
