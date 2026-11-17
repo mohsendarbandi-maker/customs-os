@@ -93,7 +93,7 @@ Eight sensitive functions were read from live PostgreSQL definitions and execute
 - PR297 (chat helper and trigger direct RPC ACL): CI green, Draft, not live. Production grants remain until authorized migration.
 - PR298 (case-alert sync): CI green, Draft, not live. Production `sync_case_alert_reminders(uuid)` remains authenticated-callable until an approved migration is applied.
 - PR299 (legacy reminder creation overloads): CI green, Draft, not live. Production old overloads remain authenticated-callable until approved migration; current UI uses only the safer JSONB overload.
-- AI Operator audit integrity: `ai_operator_transition_command` trusts caller-supplied execution/result fields after checking row ownership and status graph. Users cannot mutate business data through this RPC alone, but can forge a personal audit record visible to organization owners. Requires server-signed proof / trusted transition boundary; not fixed in this stage.
+- AI Operator audit integrity: production remains exposed until PR300 migration + Edge Function are released. Draft PR300 now removes direct authenticated ledger INSERT/UPDATE/DELETE and legacy transition RPC, routes audit writes through two service-role-only functions, and preserves user-scoped business execution. PR300 CI and Shipment Cost CI are green; authenticated browser acceptance and release are still outstanding.
 
 
 ## Stage 6 — residual security inventory
@@ -110,3 +110,11 @@ Eight sensitive functions were read from live PostgreSQL definitions and execute
 - PR300 is Draft; until its migration is approved/applied, Production remains vulnerable to misleading AI Operator command history for a user's own rows. This does not, by itself, permit the direct RPC to execute the underlying customs/finance business action.
 - Candidate server-only ledger RPCs derive organization/user from active profile and require service_role; terminal attribution is checked against the user authenticated by the Edge Function. Actual business actions remain on the user's JWT client.
 - Release checks: successful CI; verify service-role env availability in the deployed Edge runtime without revealing it; authenticated plan/confirm/execute/history acceptance; apply Production migration only within explicitly authorized release.
+
+
+## Stage 7 — AI Operator candidate verified; Production release outstanding
+
+- PR300 head `3b1b69c5f58083bc62f862c6e89b0199ed25d168` is Draft/open/mergeable. Automated verify CI `44154127820` and Shipment Cost CI `44154127402` succeeded.
+- Unit tests, isolated PostgreSQL ACL and audit attribution, immutable terminal-state tests, TypeScript, ESLint, build, Deno checks and Cloudflare Worker dry-run passed. Mobile viewport smoke was skipped.
+- Production vulnerability remains until the matching migration and Edge Function are released together. No Production schema/function/site/Worker change was made.
+- Release checks: code review; confirm service-role env variable is available in deployed Edge runtime without exposing it; exercise AI Operator plan/confirm/execute/history with authenticated browser; apply migration and deploy function only under explicit release approval.
