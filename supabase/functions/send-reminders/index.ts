@@ -179,15 +179,24 @@ async function collectCustomsPendingDigest(organizationId:string){
   preview:tasks.slice(0,3).map(task=>task.title),
  };
 }
-async function digest(){
- const {data,error}=await admin.from("notification_preferences").select("user_id,morning_digest_time,timezone,hide_content").eq("push_enabled",true);if(error)throw error;const now=new Date(),vapid=await ensureVapid();let sent=0;
+type DailyDigestSummary = { eligible: number; sent: number; failed: number; skipped: number };
+async function digest():Promise<DailyDigestSummary>{
+ const {data,error}=await admin.from("notification_preferences").select("user_id,morning_digest_time,timezone,hide_content").eq("push_enabled",true);
+ if(error)throw error;
+ const now=new Date(),vapid=await ensureVapid();
+ const summary:DailyDigestSummary={eligible:0,sent:0,failed:0,skipped:0};
  for(const p of (data??[]) as Array<{user_id:string;morning_digest_time:string;timezone:string;hide_content:boolean}>){
   const {data:profile,error:profileError}=await admin.from("profiles").select("organization_id,role,is_active").eq("id",p.user_id).maybeSingle();
-  if(profileError||!profile?.is_active||profile.role==="client"||!profile.organization_id)continue;
-  const tz=p.timezone||TZ,g=getParts(now,tz,"gregory"),[hh,mm]=p.morning_digest_time.split(":").map(Number);if(g.hour!==hh||g.minute!==mm)continue;
+  if(profileError||!profile?.is_active||profile.role==="client"||!profile.organization_id){summary.skipped++;continue;}
+  const tz=p.timezone||TZ,g=getParts(now,tz,"gregory"),[hh,mm]=p.morning_digest_time.split(":").map(Number);
+  if(g.hour!==hh||g.minute!==mm)continue;
+  summary.eligible++;
   const start=zonedToUtc({year:g.year,month:g.month,day:g.day,hour:0,minute:0},tz),nextDay=new Date(Date.UTC(g.year,g.month-1,g.day)+86400000),end=zonedToUtc({year:nextDay.getUTCFullYear(),month:nextDay.getUTCMonth()+1,day:nextDay.getUTCDate(),hour:0,minute:0},tz);
-  const todayQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).gte("due_at",start.toISOString()).lt("due_at",end.toISOString()).eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team"),overQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).not("due_at","is",null).lt("due_at",now.toISOString()).eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team"),devices=await subs(p.user_id);
-  if(todayQ.error||overQ.error||!devices.length)continue;
+  const todayQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).gte("due_at",start.toISOString()).lt("due_at",end.toISOString()).eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team");
+  const overQ=await admin.from("operational_reminders").select("id",{count:"exact",head:true}).not("due_at","is",null).lt("due_at",now.toISOString()).eq("organization_id",profile.organization_id).is("deleted_at",null).eq("status","open").or("assignee_id.eq."+p.user_id+",created_by.eq."+p.user_id+",visibility.eq.team");
+  if(todayQ.error||overQ.error){summary.failed++;continue;}
+  const devices=await subs(p.user_id);
+  if(!devices.length){summary.skipped++;continue;}
   let customs:{total:number;urgent:number;preview:string[]}={total:0,urgent:0,preview:[]};
   let customsReportAvailable=true;
   try{customs=await collectCustomsPendingDigest(profile.organization_id);}catch{customsReportAvailable=false;}
@@ -203,17 +212,26 @@ async function digest(){
     ].join(" | ").slice(0,420);
   for(const s of devices){
    try{
-    await send(s,{title:"گزارش روزانه Customs OS",body,tag:"customs-daily-"+g.year+"-"+g.month+"-"+g.day,url:"/customs-pending",actions:[],data:{url:"/customs-pending"},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"},vapid);
-    sent++;
-   }catch(err){if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410))await admin.from("push_subscriptions").delete().eq("id",s.id);}
+    const accepted=await send(s,{title:"گزارش روزانه Customs OS",body,tag:"customs-daily-"+g.year+"-"+g.month+"-"+g.day,url:"/customs-pending",actions:[],data:{url:"/customs-pending"},icon:"/pwa/icon-192.png",badge:"/pwa/monochrome-96.png",dir:"rtl",lang:"fa"},vapid);
+    if(accepted===false){summary.failed++;await notePushFailure(s.id);continue;}
+    await notePushSuccess(s.id);
+    summary.sent++;
+   }catch(err){
+    summary.failed++;
+    if(err instanceof WebPushError&&(err.statusCode===404||err.statusCode===410)){
+     await admin.from("push_subscriptions").delete().eq("id",s.id);
+    }else{
+     await notePushFailure(s.id);
+    }
+   }
   }
  }
- return sent;
+ return summary;
 }
 async function main(req:Request){
  if(!supabaseUrl||!serviceKey)return json({error:"تنظیمات سرور کامل نیست"},500);
  const body=(await req.json().catch(()=>({}))) as {mode?:string},mode=body.mode??"cron";
- if(mode==="cron"){const expected=await getSecret("reminder_cron_secret"),given=req.headers.get("x-reminder-cron-secret");if(!expected||given!==expected)return json({error:"دسترسی زمان‌بندی مجاز نیست"},401);const delivery=await deliver();let digestSent=0,digestError=false;try{digestSent=await digest();}catch{digestError=true;}return json({ok:true,processed:delivery.claimed,delivery,digest:{sent:digestSent,error:digestError}});}
+ if(mode==="cron"){const expected=await getSecret("reminder_cron_secret"),given=req.headers.get("x-reminder-cron-secret");if(!expected||given!==expected)return json({error:"دسترسی زمان‌بندی مجاز نیست"},401);const delivery=await deliver();let digest:DailyDigestSummary={eligible:0,sent:0,failed:0,skipped:0},digestError=false;try{digest=await digest();}catch{digestError=true;}return json({ok:true,processed:delivery.claimed,delivery,digest,digestError});}
  const user=await authUser(req);if(!user)return json({error:"ورود به سامانه لازم است"},401);
  const {data:profile}=await admin.from("profiles").select("organization_id,role,is_active").eq("id",user.id).maybeSingle() as {data:{organization_id:string;role:string;is_active:boolean}|null};
  if(!profile?.is_active||profile.role==="client")return json({error:"این قابلیت برای این حساب فعال نیست"},403);
