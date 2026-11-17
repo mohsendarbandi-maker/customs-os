@@ -4,7 +4,8 @@ import path from 'node:path';
 
 const root = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'supabase/functions/send-reminders/index.ts'), 'utf8');
-const digest = source.slice(source.indexOf('async function digest(){'), source.indexOf('async function main(req:Request){'));
+const digestStart = source.search(/async function digest\(\)/);
+const digest = source.slice(digestStart, source.indexOf('async function main(req:Request){', digestStart));
 const delivery = source.slice(source.indexOf('async function deliver(){'), source.indexOf('async function digest(){'));
 
 describe('reminder push delivery safety', () => {
@@ -33,7 +34,11 @@ describe('reminder push delivery safety', () => {
   it('records delivery outcomes and reason counters for scheduler diagnostics', () => {
     expect(delivery).toContain('claimed:rows.length,sent:0,skipped:0,failed:0,deferred:0');
     expect(delivery).toContain('summary.reasons[why]=(summary.reasons[why]??0)+1');
-    expect(source).toContain('delivery,digest:{sent:digestSent,error:digestError}');
+    expect(source).toContain('delivery,digest:digestSummary,digestError');
+    expect(digest).toContain('const summary:DailyDigestSummary={eligible:0,sent:0,failed:0,skipped:0}');
+    expect(digest).toContain('if(accepted===false)');
+    expect(digest).toContain('await notePushSuccess(s.id)');
+    expect(digest).toContain('await notePushFailure(s.id)');
     expect(source).not.toContain('await digest().catch(()=>0)');
   });
 
