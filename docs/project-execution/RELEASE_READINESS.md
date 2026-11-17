@@ -22,3 +22,11 @@ Status: NOT READY FOR RELEASE APPROVAL
 - Production migrations or data backfills.
 - Merge to main.
 - Cloudflare Worker deployment or website release.
+
+
+## Stage 2 status (PR 294)
+
+- Independent activity schema, RLS, trigger history, dependency graph, reminder/cost/file references and RTL workspace are implemented on a feature branch.
+- Initial test run failed during fixture setup only (duplicate cluster-wide role); corrected fixture has been pushed.
+- Latest CI at the time of this entry was still running. This PR is not yet release-ready or accepted.
+- No production migration, merge or deployment was performed.
