@@ -125,7 +125,6 @@ jobs:
         run: deno check --node-modules-dir=auto supabase/functions/send-reminders/index.ts
       - name: Check Supabase AI Operator function
         run: deno check --node-modules-dir=auto supabase/functions/ai-operator/index.ts
-        run: deno check --node-modules-dir=auto supabase/functions/ai-operator/index.ts
       - name: Cloudflare Worker dry run
         run: npx wrangler@4 deploy --dry-run
 
