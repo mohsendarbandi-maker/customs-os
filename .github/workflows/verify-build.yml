@@ -62,7 +62,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_customs_workflow_atomic_activity.test.sql
 
       - name: Apply daily customs digest idempotency migration on ephemeral PostgreSQL
-        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117210000_customs_daily_digest_delivery_idempotency.sql
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117140000_customs_daily_digest_delivery_idempotency.sql
 
       - name: Verify daily customs digest idempotency and service-role boundary
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_customs_daily_digest_idempotency.test.sql
