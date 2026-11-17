@@ -70,6 +70,18 @@ jobs:
       - name: Run two-session concurrent workflow patch test
         run: bash supabase/tests/run_customs_workflow_atomic_concurrency.sh
 
+      - name: Create isolated legacy reminder RPC ACL test database
+        run: createdb legacy_reminder_acl_test
+
+      - name: Create legacy reminder RPC ACL fixture
+        run: PGDATABASE=legacy_reminder_acl_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/legacy_reminder_rpc_acl_fixture.sql
+
+      - name: Revoke unused legacy reminder overload RPC access
+        run: PGDATABASE=legacy_reminder_acl_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117173000_revoke_legacy_reminder_overload_rpc.sql
+
+      - name: Verify legacy reminder overload ACL and JSONB compatibility
+        run: PGDATABASE=legacy_reminder_acl_test psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_legacy_reminder_rpc_acl.test.sql
+
       - name: Typecheck
         run: npm run typecheck
 
