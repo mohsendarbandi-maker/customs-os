@@ -1,4 +1,4 @@
-name: Customs OS Build (validation only)
+name: Customs OS Build
 
 on:
   push:
