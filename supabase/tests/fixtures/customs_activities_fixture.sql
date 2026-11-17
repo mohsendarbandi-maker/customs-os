@@ -1,10 +1,20 @@
 -- Isolated PostgreSQL 15 fixture for the independent customs activity aggregate.
 -- Run only against the dedicated customs_activity_test database in CI.
 
-create role anon nologin;
-create role authenticated nologin;
-create role service_role nologin bypassrls;
-create schema auth;
+do $roles$
+begin
+  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'anon') then
+    create role anon nologin;
+  end if;
+  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin;
+  end if;
+  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'service_role') then
+    create role service_role nologin bypassrls;
+  end if;
+end
+$roles$;
+create schema if not exists auth;
 
 create table auth.users (id uuid primary key);
 create table public.organizations (id uuid primary key);
