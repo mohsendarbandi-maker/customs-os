@@ -101,8 +101,8 @@ begin
   where e.id = p_event_id
     and e.organization_id = v_org_id
     and e.event_type in ('updated','status_changed','assignee_changed','deadline_changed')
-    and e.previous_snapshot is not null
-  for share;
+    and e.previous_snapshot is not null;
+
 
   if not found then
     raise exception using errcode = 'P0002', message = 'CUSTOMS_ACTIVITY_ROLLBACK_EVENT_NOT_FOUND';
