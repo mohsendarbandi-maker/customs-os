@@ -102,3 +102,11 @@ Eight sensitive functions were read from live PostgreSQL definitions and execute
 - 15 RLS-enabled/no-policy tables expose no direct authenticated table privileges (no SELECT/INSERT/UPDATE/DELETE); they are service-managed. Keep reviewed as informational unless a new privilege path is found.
 - Remaining Supabase advisor warnings: pg_net extension in public (migration could break cron if moved without path adjustment); leaked-password protection disabled (Auth config). No changes made.
 - AI Operator command ledger can be self-forged via the authenticated transition RPC. This is an audit-integrity weakness; the caller cannot execute the underlying operation through the RPC. Needs server-signed transition proof while preserving no-service-role-key-in-browser/AI-Operator client invariant.
+
+
+## Stage 7 — AI Operator ledger integrity mitigation candidate
+
+- PR300 removes two Production audit-forgery paths in a tested candidate: direct authenticated INSERT on `ai_operator_commands` and authenticated execution of `ai_operator_transition_command`.
+- PR300 is Draft; until its migration is approved/applied, Production remains vulnerable to misleading AI Operator command history for a user's own rows. This does not, by itself, permit the direct RPC to execute the underlying customs/finance business action.
+- Candidate server-only ledger RPCs derive organization/user from active profile and require service_role; terminal attribution is checked against the user authenticated by the Edge Function. Actual business actions remain on the user's JWT client.
+- Release checks: successful CI; verify service-role env availability in the deployed Edge runtime without revealing it; authenticated plan/confirm/execute/history acceptance; apply Production migration only within explicitly authorized release.
