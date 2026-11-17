@@ -66,3 +66,11 @@ Status: NOT READY FOR RELEASE APPROVAL
 
 - PR296 latest head `092fed4dd611033e7b668515a41c4b941f169daf` passed CI run `44123150742`; the mobile chat/keyboard viewport smoke step was skipped. PR296 remains Draft pending authenticated real-shipment Telegram archive/retry acceptance.
 - Eight sensitive SECURITY DEFINER functions were sampled in live PostgreSQL. Authentication, tenant scope, relevant role/ownership checks, fixed search_path and no anon execution were present in those samples. The full 92-function advisor backlog is not resolved.
+
+
+## 2026-11-17 — Stage 4 security release gate
+
+- PR297: Draft; CI `44144410862` and `44144410705` succeeded. Only isolated PostgreSQL tests, no Production migration. Direct chat helper and trigger ACL hardening candidate.
+- PR298: Draft; service-role-only case-alert sync ACL. CI runs `44145432402` and `44145432384` queued at last update. No Production migration.
+- The case-alert function is still directly executable by authenticated in current Production until an approved migration is applied; do not claim it is fixed live.
+- Remaining 92-function review and AI Operator command-ledger audit remain open.

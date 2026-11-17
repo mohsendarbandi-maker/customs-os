@@ -80,3 +80,31 @@ A read-only review sampled eight high-impact functions: declaration exit stage, 
 - Function-specific role/ownership constraints were observed; folder-copy also checked organization/client/shipment/customs-office scope and client ownership. owner_console_guard explicitly requires an authenticated organization owner.
 - Fixed search_path values were present on the sampled functions. No immediate cross-tenant bypass was established in this sample.
 - This is not a complete audit of the 92 advisor findings; continue function-by-function review rather than bulk privilege changes.
+ 
+
+## Stage 4 — SECURITY DEFINER ACL review, 2026-11-17
+
+### Audit coverage
+- Production PostgreSQL currently reports 92 public SECURITY DEFINER routines executable by `authenticated`; all sampled routines had explicit `search_path` configuration, and the advisor reported anon execution denied for the sampled group.
+- Read-only classification found 2 trigger-returning functions with unnecessary direct authenticated EXECUTE grants, 2 helper RPCs with no caller identity/org check, and several functions without explicit `user_org_id()` that instead derive authorization from `auth.uid()`, same-conversation membership, profile ownership or owner-only guard.
+- Reviewed function definitions and call graph for chat helper routines, session/profile helpers, reminders, finance, File Manager, customs exit/ship-pass and owner operations. Eight high-impact functions were inspected previously; the current stage expanded the chat/reminder helper review.
+
+### PR297 — internal chat helper and trigger ACL hardening
+- Draft PR297 head `77dd4afc00b8d1fd865b0fc0af26a06304f6f396`.
+- Revokes direct Data API execute for `orgs_are_connected(uuid,uuid)` and `chat_connection_allowed_for_conversation(uuid,uuid)` from PUBLIC/anon/authenticated; keeps service_role and owner access.
+- Dynamically revokes direct API-role execute on public SECURITY DEFINER trigger functions. PostgreSQL still fires triggers because execute rights are checked when a trigger is created, not at trigger invocation.
+- Live call graph confirms the two trusted orgs_are_connected callers (`chat_add_member`, `chat_storage_path_allowed`) are SECURITY DEFINER, owner postgres; no RLS policy, view or other routine directly calls the connection-allowed helper.
+- CI run `44144410862` and Shipment Cost run `44144410705`: both succeeded. The isolated test proved direct authenticated/anon calls denied, trusted nested SECURITY DEFINER calls still succeed, and a trigger continues firing. Mobile viewport smoke skipped by workflow conditions.
+- Not merged; no Production migration applied.
+
+### PR298 — case-alert synchronizer role boundary
+- Draft PR298 head `8a3b96b7365e19fd59467a272acdf6f2f66d02e0`; verification workflow `44145432402` and Shipment Cost workflow `44145432384` queued at the time of this update.
+- Live `sync_case_alert_reminders(uuid)` is SECURITY DEFINER and directly executable by authenticated users, but contains no role restriction; it loops every case in the caller's organization and can create or close system reminders. SECURITY DEFINER bypasses the reminder table's normal client-role RLS restriction.
+- Current Case Alerts UI calculates read-only alerts locally. No direct application/Edge Function callsite, other database routine, view or trigger reference was found for this RPC.
+- Candidate migration revokes PUBLIC/anon/authenticated execution and retains service_role access. Isolated PostgreSQL tests cover client direct-call denial and trusted service-role execution.
+- No Production change performed.
+
+### Remaining security work
+- PR297/298 remain Draft pending CI/review. No migration has been applied to Production.
+- The other exposed SECURITY DEFINER routines still need a full call-site and role matrix; this stage does not claim all 92 warnings are resolved.
+- Keep elevated functions and RLS findings open until representative cross-tenant negative tests and role-based UI acceptance are completed.

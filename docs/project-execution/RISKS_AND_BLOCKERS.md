@@ -78,3 +78,11 @@ Eight sensitive functions were read from live PostgreSQL definitions and execute
 - Role/ownership controls were present; owner profile management delegates to owner_console_guard, which explicitly requires an authenticated organization owner. Folder copy also enforces same organization/client/shipment/customs-office scope and client-owned folder restrictions.
 - Sampled functions use fixed search_path settings. No immediate bypass was established in this sample.
 - This does not resolve all 92 advisor findings; remaining functions require per-function analysis.
+
+
+## Stage 4 — Security findings (2026-11-17)
+
+- Confirmed unnecessary direct authenticated execution on two internal chat helper RPCs and two SECURITY DEFINER trigger functions. Candidate ACL removal and ephemeral PostgreSQL tests are in PR297; CI green, not merged.
+- Confirmed a higher-risk role gap in `sync_case_alert_reminders(uuid)`: authenticated client accounts can call a SECURITY DEFINER routine with no internal role check. It can create/close system reminders across all cases in the same organization, bypassing the row-level insert/update role guard. Candidate service_role-only ACL is PR298; CI pending. No production changes.
+- `ai_operator_transition_command` permits the owner of a personal command row to set transition/result fields; this may permit self-owned ledger forgery but it does not itself execute the underlying business operation. Needs a separate audit-integrity review of its Edge Function call contract and organization-visible history before changes.
+- Remaining SECURITY DEFINER functions require function-by-function review; do not blanket revoke authenticated grants where RPCs are used by the app or RLS policies.

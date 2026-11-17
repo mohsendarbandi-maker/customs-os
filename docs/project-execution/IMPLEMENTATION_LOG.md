@@ -57,3 +57,12 @@
 - Latest PR296 head `092fed4dd611033e7b668515a41c4b941f169daf`, workflow `44123150742`: success. Unit tests, PostgreSQL fixture/migration contracts, RLS/concurrency, TypeScript, lint, production build, Deno checks and Cloudflare Worker dry-run passed. Mobile viewport smoke skipped by workflow conditions.
 - Added File Manager display of parent source filenames for each PDF child.
 - Read-only review sampled eight high-impact SECURITY DEFINER functions. All denied anon execution and showed authentication, org scope, relevant role/ownership guards and explicit search_path. Remaining advisor findings are still open.
+
+
+## 2026-11-17 — Stage 4 security ACL review
+
+- Audited the live SECURITY DEFINER inventory and the call graph for the exposed chat connection helpers, trigger functions and case-alert synchronizer.
+- Opened Draft PR297 for direct RPC ACL removal on two internal organization/chat helpers plus direct execution revocation on SECURITY DEFINER trigger functions. Full CI `44144410862` and Shipment Cost CI `44144410705` succeeded; direct denial, nested trusted call paths and trigger execution were tested in isolated PostgreSQL.
+- Found `sync_case_alert_reminders(uuid)` is callable by authenticated and lacks a client-role guard; it runs with definer rights and mutates system reminders across the caller organization's cases. Current UI is read-only and no other repository/database callsites were found.
+- Opened Draft PR298 to restrict that synchronizer to service_role; CI runs `44145432402` and `44145432384` queued at ledger update.
+- No production migration, merge or deployment occurred.
