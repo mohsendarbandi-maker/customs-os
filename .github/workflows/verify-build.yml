@@ -70,6 +70,18 @@ jobs:
       - name: Run two-session concurrent workflow patch test
         run: bash supabase/tests/run_customs_workflow_atomic_concurrency.sh
 
+      - name: Create isolated customs activity test database
+        run: createdb customs_activity_test
+
+      - name: Create independent customs activity fixture
+        run: PGDATABASE=customs_activity_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/customs_activities_fixture.sql
+
+      - name: Apply independent customs activity migration on ephemeral PostgreSQL
+        run: PGDATABASE=customs_activity_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117150000_customs_independent_activities.sql
+
+      - name: Run independent customs activity tenant, concurrency, dependency and integration tests
+        run: PGDATABASE=customs_activity_test psql -v ON_ERROR_STOP=1 -f supabase/tests/customs_activities.test.sql
+
       - name: Typecheck
         run: npm run typecheck
 
