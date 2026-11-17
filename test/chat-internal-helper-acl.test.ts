@@ -15,6 +15,8 @@ describe('internal chat helper RPC ACL', () => {
     expect(migration).toContain('REVOKE EXECUTE ON FUNCTION public.chat_connection_allowed_for_conversation(uuid, uuid)');
     expect(migration).toContain('FROM PUBLIC, anon, authenticated');
     expect(migration).toContain('TO service_role');
+    expect(migration).toContain("p.prorettype = 'trigger'::regtype");
+    expect(migration).toContain('FROM PUBLIC, anon, authenticated');
   });
 
   it('runs real PostgreSQL role and nested SECURITY DEFINER contract tests in CI', () => {

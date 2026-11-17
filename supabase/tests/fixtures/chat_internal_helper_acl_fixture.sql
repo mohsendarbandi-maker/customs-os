@@ -65,3 +65,27 @@ $function$;
 
 GRANT EXECUTE ON FUNCTION public.chat_add_member_acl_probe(uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.chat_storage_path_acl_probe(uuid, uuid) TO authenticated;
+
+
+CREATE TABLE public.trigger_acl_probe (
+  id integer primary key,
+  trigger_ran boolean not null default false
+);
+
+CREATE OR REPLACE FUNCTION public.chat_trigger_acl_probe()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog, pg_temp
+AS $function$
+BEGIN
+  NEW.trigger_ran := true;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE TRIGGER chat_trigger_acl_probe_before_insert
+BEFORE INSERT ON public.trigger_acl_probe
+FOR EACH ROW EXECUTE FUNCTION public.chat_trigger_acl_probe();
+
+GRANT INSERT, SELECT ON public.trigger_acl_probe TO authenticated;
