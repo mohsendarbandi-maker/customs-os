@@ -98,18 +98,20 @@ function riskFor(p:Plan):Risk{
 }
 const effectiveRisk=(p:Plan)=>riskFor(p);
 const catalog=()=>Object.entries(ACTIONS).map(([action_code,d])=>({action_code,module:d.module,label:d.label,description:d.description,risk:d.risk}));
-const transition=async(sb:any,id:string,patch:any)=>{
- const r=await sb.rpc('ai_operator_transition_command',{
-  p_command_id:id,p_status:patch.status,
+const transition=async(auditSb:any,userId:string,id:string,patch:any)=>{
+ const r=await auditSb.rpc('ai_operator_transition_command_trusted',{
+  p_command_id:id,p_user_id:userId,p_status:patch.status,
   p_confirmation_at:patch.confirmation_at??null,
   p_final_confirmation_at:patch.final_confirmation_at??null,
-  p_result:patch.result??null,
-  p_error_message:patch.error_message??null,
-  p_before_data:patch.before_data??null,
-  p_after_data:patch.after_data??null,
-  p_executed_by:patch.executed_by??null,
-  p_executed_at:patch.executed_at??null
+  p_result:patch.result??null,p_error_message:patch.error_message??null,
+  p_before_data:patch.before_data??null,p_after_data:patch.after_data??null,
+  p_executed_by:patch.executed_by??null,p_executed_at:patch.executed_at??null
  });
+ if(r.error)throw r.error;
+ return r.data;
+};
+const createCommand=async(auditSb:any,userId:string,command:Record<string,unknown>)=>{
+ const r=await auditSb.rpc('ai_operator_create_command_trusted',{p_user_id:userId,p_command:command});
  if(r.error)throw r.error;
  return r.data;
 };
@@ -397,10 +399,13 @@ async function main(req:Request){
 
  const auth=req.headers.get('Authorization')||'';const jwt=auth.startsWith('Bearer ')?auth.slice(7).trim():'';
  if(!jwt)return out({error:'Unauthorized'},401,origin);
- const url=Deno.env.get('SUPABASE_URL'),anon=Deno.env.get('SUPABASE_ANON_KEY');
- if(!url||!anon)return out({error:'Supabase configuration missing'},503,origin);
+ const url=Deno.env.get('SUPABASE_URL'),anon=Deno.env.get('SUPABASE_ANON_KEY'),serviceRoleKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+ if(!url||!anon||!serviceRoleKey)return out({error:'Supabase server audit configuration missing'},503,origin);
 
+ // User JWT remains the only credential used for customs and finance actions.
+ // The service-role client is confined to the two server-owned ledger RPCs.
  const sb=createClient(url,anon,{global:{headers:{Authorization:'Bearer '+jwt}}});
+ const auditSb=createClient(url,serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}});
  const authUser=await sb.auth.getUser(jwt);if(!authUser.data.user)return out({error:'Unauthorized'},401,origin);
  const user=authUser.data.user;
  const pr=await sb.from('profiles').select('id,organization_id,role,is_active,client_id,full_name').eq('id',user.id).maybeSingle();
@@ -428,25 +433,25 @@ async function main(req:Request){
    if(plan.action_code.startsWith('settings.')&&pr.data.role!=='owner')return out({error:'این عملیات فقط برای Owner مجاز است.'},403,origin);
 
    if(plan.action_code==='clarification'||plan.clarification){
-     const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:'clarification',target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:'safe',status:'clarification_needed'}).select('id').single();
-     if(r.error)throw r.error;return out({command_id:r.data.id,status:'clarification_needed',plan,provider:planned.provider},200,origin);
+     const r=await createCommand(auditSb,user.id,{session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:'clarification',target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:'safe',status:'clarification_needed',confirmation_required:false,final_confirmation_phrase:null});
+     return out({command_id:r.id,status:'clarification_needed',plan,provider:planned.provider},200,origin);
    }
 
    const risk=riskFor(plan);const phrase=risk==='destructive'?'تأیید نهایی: '+ACTIONS[plan.action_code].label:null;
-   const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:plan.action_code,target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:risk,status:risk==='safe'?'executing':'awaiting_confirmation',confirmation_required:risk!=='safe',final_confirmation_phrase:phrase}).select('id').single();
-   if(r.error)throw r.error;
-   if(risk!=='safe')return out({command_id:r.data.id,status:'awaiting_confirmation',plan,risk_level:risk,confirmation_required:true,final_confirmation_phrase:phrase},200,origin);
+   const r=await createCommand(auditSb,user.id,{session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:plan.action_code,target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:risk,status:risk==='safe'?'proposed':'awaiting_confirmation',confirmation_required:risk!=='safe',final_confirmation_phrase:phrase});
+   if(risk!=='safe')return out({command_id:r.id,status:'awaiting_confirmation',plan,risk_level:risk,confirmation_required:true,final_confirmation_phrase:phrase},200,origin);
 
    try{
+     await transition(auditSb,user.id,r.id,{status:'executing'});
      const before=await snap(sb,plan.action_code,plan.target||{});
      const result=await execute(sb,user,pr.data.organization_id,plan.action_code,plan.target||{},plan.params||{},body.attachment||null);
-     if(result?.clarification){await transition(sb,r.data.id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:r.data.id,status:'clarification_needed',clarification:result.clarification},200,origin);}
+     if(result?.clarification){await transition(auditSb,user.id,r.id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:r.data.id,status:'clarification_needed',clarification:result.clarification},200,origin);}
      const after=await snap(sb,plan.action_code,targetWithResult(plan.action_code,plan.target||{},result?.data??result));
-     await transition(sb,r.data.id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_by:user.id,executed_at:new Date().toISOString(),confirmation_at:new Date().toISOString()});
+     await transition(auditSb,user.id,r.id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_by:user.id,executed_at:new Date().toISOString(),confirmation_at:new Date().toISOString()});
      return out({command_id:r.data.id,status:'executed',plan,risk_level:risk,result:result?.data??result,before_data:before,after_data:after},200,origin);
    }catch(e){
      const msg=e instanceof Error?e.message:String(e);
-     await transition(sb,r.data.id,{status:'failed',error_message:msg,result:{error:msg},executed_by:user.id,executed_at:new Date().toISOString()});
+     await transition(auditSb,user.id,r.id,{status:'failed',error_message:msg,result:{error:msg},executed_by:user.id,executed_at:new Date().toISOString()});
      return out({command_id:r.data.id,status:'failed',error:msg},403,origin);
    }
  }
@@ -470,22 +475,22 @@ async function main(req:Request){
    }
    if(risk==='destructive'&&!cmd.confirmation_at){
      if(body.confirm!==true)return out({error:'ابتدا تأیید اولیه عملیات مخرب لازم است.',command_id:id},409,origin);
-     await transition(sb,id,{status:'awaiting_confirmation',confirmation_at:new Date().toISOString()});
+     await transition(auditSb,user.id,id,{status:'awaiting_confirmation',confirmation_at:new Date().toISOString()});
      return out({status:'awaiting_final_confirmation',command_id:id,final_confirmation_phrase:cmd.final_confirmation_phrase},200,origin);
    }
    if(risk==='destructive'&&str(body.final_confirmation)!==str(cmd.final_confirmation_phrase))return out({error:'عبارت تأیید نهایی صحیح نیست.',command_id:id},409,origin);
 
    try{
-     await transition(sb,id,{status:'executing',confirmation_at:risk==='requires_confirmation'?new Date().toISOString():cmd.confirmation_at||null,final_confirmation_at:risk==='destructive'?new Date().toISOString():null});
+     await transition(auditSb,user.id,id,{status:'executing',confirmation_at:risk==='requires_confirmation'?new Date().toISOString():cmd.confirmation_at||null,final_confirmation_at:risk==='destructive'?new Date().toISOString():null});
      const before=await snap(sb,cmd.action_code,cmd.target||{});
      const result=await execute(sb,user,pr.data.organization_id,cmd.action_code,cmd.target||{},cmd.plan?.params||{},body.attachment||null);
-     if(result?.clarification){await transition(sb,id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:id,status:'clarification_needed',clarification:result.clarification},200,origin);}
+     if(result?.clarification){await transition(auditSb,user.id,id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:id,status:'clarification_needed',clarification:result.clarification},200,origin);}
      const after=await snap(sb,cmd.action_code,targetWithResult(cmd.action_code,cmd.target||{},result?.data??result));
-     await transition(sb,id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_by:user.id,executed_at:new Date().toISOString()});
+     await transition(auditSb,user.id,id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_by:user.id,executed_at:new Date().toISOString()});
      return out({command_id:id,status:'executed',risk_level:risk,result:result?.data??result,before_data:before,after_data:after},200,origin);
    }catch(e){
      const msg=e instanceof Error?e.message:String(e);
-     try{await transition(sb,id,{status:'failed',error_message:msg,result:{error:msg},executed_by:user.id,executed_at:new Date().toISOString()});}catch{}
+     try{await transition(auditSb,user.id,id,{status:'failed',error_message:msg,result:{error:msg},executed_by:user.id,executed_at:new Date().toISOString()});}catch{}
      return out({command_id:id,status:'failed',error:msg},403,origin);
    }
  }
