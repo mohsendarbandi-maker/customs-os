@@ -231,7 +231,7 @@ async function digest():Promise<DailyDigestSummary>{
 async function main(req:Request){
  if(!supabaseUrl||!serviceKey)return json({error:"تنظیمات سرور کامل نیست"},500);
  const body=(await req.json().catch(()=>({}))) as {mode?:string},mode=body.mode??"cron";
- if(mode==="cron"){const expected=await getSecret("reminder_cron_secret"),given=req.headers.get("x-reminder-cron-secret");if(!expected||given!==expected)return json({error:"دسترسی زمان‌بندی مجاز نیست"},401);const delivery=await deliver();let digest:DailyDigestSummary={eligible:0,sent:0,failed:0,skipped:0},digestError=false;try{digest=await digest();}catch{digestError=true;}return json({ok:true,processed:delivery.claimed,delivery,digest,digestError});}
+ if(mode==="cron"){const expected=await getSecret("reminder_cron_secret"),given=req.headers.get("x-reminder-cron-secret");if(!expected||given!==expected)return json({error:"دسترسی زمان‌بندی مجاز نیست"},401);const delivery=await deliver();let digestSummary:DailyDigestSummary={eligible:0,sent:0,failed:0,skipped:0},digestError=false;try{digestSummary=await digest();}catch{digestError=true;}return json({ok:true,processed:delivery.claimed,delivery,digest:digestSummary,digestError});}
  const user=await authUser(req);if(!user)return json({error:"ورود به سامانه لازم است"},401);
  const {data:profile}=await admin.from("profiles").select("organization_id,role,is_active").eq("id",user.id).maybeSingle() as {data:{organization_id:string;role:string;is_active:boolean}|null};
  if(!profile?.is_active||profile.role==="client")return json({error:"این قابلیت برای این حساب فعال نیست"},403);
