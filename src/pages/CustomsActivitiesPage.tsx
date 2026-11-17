@@ -51,6 +51,16 @@ const priorityLabels: Record<ActivityPriority, string> = {
   high: "زیاد",
   urgent: "فوری",
 };
+const activityTypeLabels: Record<string, string> = {
+  general: "فعالیت عمومی",
+  document: "بررسی اسناد",
+  permit: "مجوز و مجوزها",
+  finance: "امور مالی",
+  inspection: "بازرسی",
+  warehouse: "انبار و بارگیری",
+  transport: "حمل و خروج",
+  other: "سایر",
+};
 const eventLabels: Record<string, string> = {
   created: "ایجاد فعالیت",
   updated: "ویرایش فعالیت",
@@ -102,6 +112,7 @@ export const CustomsActivitiesPage: React.FC = () => {
   const [newDueAt, setNewDueAt] = useState("");
   const [newStartAt, setNewStartAt] = useState("");
   const [newPriority, setNewPriority] = useState<ActivityPriority>("normal");
+  const [newActivityType, setNewActivityType] = useState("general");
   const [expandedId, setExpandedId] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [events, setEvents] = useState<ActivityEvent[]>([]);
@@ -240,7 +251,7 @@ export const CustomsActivitiesPage: React.FC = () => {
         organization_id: organizationId,
         shipment_id: newShipmentId || null,
         declaration_id: newDeclarationId || null,
-        activity_type: "general",
+        activity_type: newActivityType,
         title: newTitle.trim(),
         description: newDescription.trim() || null,
         status: "open",
@@ -261,6 +272,7 @@ export const CustomsActivitiesPage: React.FC = () => {
       setNewDueAt("");
       setNewStartAt("");
       setNewPriority("normal");
+      setNewActivityType("general");
       setCreateOpen(false);
       setNotice("فعالیت مستقل ثبت شد.");
       await load();
@@ -482,6 +494,11 @@ export const CustomsActivitiesPage: React.FC = () => {
                   {Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
+              <label className="text-xs app-muted">نوع فعالیت
+                <select value={newActivityType} onChange={(event) => setNewActivityType(event.target.value)} className="input mt-1 w-full">
+                  {Object.entries(activityTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
               <label className="text-xs app-muted md:col-span-2">توضیحات
                 <textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} rows={2} className="input mt-1 w-full" placeholder="شرح، نتیجه مورد انتظار یا نکات اجرایی"/>
               </label>
@@ -526,6 +543,7 @@ export const CustomsActivitiesPage: React.FC = () => {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="font-black">{activity.title}</h2>
+                          <span className="rounded-full bg-[var(--surface-2)] px-2 py-1 text-[10px] font-semibold">{activityTypeLabels[activity.activity_type] || activity.activity_type}</span>
                           <span className="rounded-full bg-[var(--surface-2)] px-2 py-1 text-[10px] font-semibold">{priorityLabels[activity.priority]}</span>
                           {isOverdue && <span className="rounded-full bg-red-500/10 px-2 py-1 text-[10px] font-bold text-red-600">عقب‌افتاده</span>}
                         </div>
