@@ -50,3 +50,10 @@
 - Opened Draft PR296 for PDF source lineage and automatic Telegram archive, using existing File Manager records and archive gateway; no separate binary store or Production migration.
 - First PR296 CI found one stale static test expectation after split-output provenance changed the output type. Updated the test contract and added source lineage tests. Latest run `44122485767`: Unit tests passed; the rest of the pipeline was still in progress.
 - PR294 remains Draft and not in Production. No production migration/backfill, PR merge, main ref update or Cloudflare deployment in Stage 3.
+
+
+## 2026-11-17 — PR296 full validation and targeted security review
+
+- Latest PR296 head `092fed4dd611033e7b668515a41c4b941f169daf`, workflow `44123150742`: success. Unit tests, PostgreSQL fixture/migration contracts, RLS/concurrency, TypeScript, lint, production build, Deno checks and Cloudflare Worker dry-run passed. Mobile viewport smoke skipped by workflow conditions.
+- Added File Manager display of parent source filenames for each PDF child.
+- Read-only review sampled eight high-impact SECURITY DEFINER functions. All denied anon execution and showed authentication, org scope, relevant role/ownership guards and explicit search_path. Remaining advisor findings are still open.

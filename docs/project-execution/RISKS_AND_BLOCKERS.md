@@ -69,3 +69,12 @@ Independent activity versioning and immutable event history are implemented and 
 - PDF source lineage and automatic archive are implemented on Draft PR296 only. Authenticated real-shipment Telegram upload, retry/reconciliation and reload acceptance remain open.
 - Independent customs activity model and pending/digest integration are implemented on Draft PR294. Production `customs_activities` table is absent and migration has not been applied; authenticated acceptance and release approval remain open.
 - Security advisor findings remain open for function-by-function review; do not apply blanket grants/revokes without inspecting each function and its tenant boundary.
+
+
+## Targeted SECURITY DEFINER review — 2026-11-17
+
+Eight sensitive functions were read from live PostgreSQL definitions and execute privileges: declaration exit stage, ship-pass control, maritime shipment update, finance cost archive/create, File Manager folder copy, owner profile insert and owner profile manage.
+- All denied anon execution and authenticated callers before mutation, then scoped actions to the caller's organization.
+- Role/ownership controls were present; owner profile management delegates to owner_console_guard, which explicitly requires an authenticated organization owner. Folder copy also enforces same organization/client/shipment/customs-office scope and client-owned folder restrictions.
+- Sampled functions use fixed search_path settings. No immediate bypass was established in this sample.
+- This does not resolve all 92 advisor findings; remaining functions require per-function analysis.

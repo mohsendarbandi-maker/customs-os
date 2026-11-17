@@ -60,3 +60,9 @@ Status: NOT READY FOR RELEASE APPROVAL
 - Function-by-function review of SECURITY DEFINER/RLS findings.
 - Verify GitHub production Environment reviewer approvals.
 - Clean browser/live build-marker smoke after explicit release authorization.
+
+
+## 2026-11-17 — latest CI and security review
+
+- PR296 latest head `092fed4dd611033e7b668515a41c4b941f169daf` passed CI run `44123150742`; the mobile chat/keyboard viewport smoke step was skipped. PR296 remains Draft pending authenticated real-shipment Telegram archive/retry acceptance.
+- Eight sensitive SECURITY DEFINER functions were sampled in live PostgreSQL. Authentication, tenant scope, relevant role/ownership checks, fixed search_path and no anon execution were present in those samples. The full 92-function advisor backlog is not resolved.
