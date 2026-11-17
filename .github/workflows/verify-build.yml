@@ -10,9 +10,28 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: customs_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d customs_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
       VITE_SUPABASE_URL: https://bjngfgiecvihofemptub.supabase.co
       VITE_SUPABASE_ANON_KEY: sb_publishable_pIh0yF6SQcQ-IAa_FkbjWA_qTSm83Sr
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: customs_test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,6 +46,29 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y postgresql-client
+
+      - name: Create isolated customs workflow fixture
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/customs_workflow_atomic_fixture.sql
+
+      - name: Apply candidate customs workflow migration on ephemeral PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117011900_customs_workflow_atomic_activity_and_server_exit_gate.sql
+
+      - name: Run PostgreSQL concurrency, rollback, RLS and exit-release contracts
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_customs_workflow_atomic_activity.test.sql
+
+      - name: Apply daily customs digest idempotency migration on ephemeral PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117140000_customs_daily_digest_delivery_idempotency.sql
+
+      - name: Verify daily customs digest idempotency and service-role boundary
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_customs_daily_digest_idempotency.test.sql
+
+      - name: Run two-session concurrent workflow patch test
+        run: bash supabase/tests/run_customs_workflow_atomic_concurrency.sh
 
       - name: Typecheck
         run: npm run typecheck
@@ -63,6 +105,9 @@ jobs:
           deno-version: v2.x
       - name: Check Supabase messenger function
         run: deno check supabase/functions/messenger-gateway/index.ts
+
+      - name: Check Supabase reminder function
+        run: deno check --node-modules-dir=auto supabase/functions/send-reminders/index.ts
       - name: Cloudflare Worker dry run
         run: npx wrangler@4 deploy --dry-run
 

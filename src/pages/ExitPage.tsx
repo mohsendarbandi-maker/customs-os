@@ -16,6 +16,7 @@ type Declaration = {
   id: string;
   shipment_id: string | null;
   kottaj_number: string;
+  customs_regime: string | null;
 };
 
 type Uploads = {
@@ -83,7 +84,7 @@ export const ExitPage: React.FC = () => {
 
       const { data, error: declarationError } = await supabase
         .from('customs_declarations')
-        .select('id,shipment_id,kottaj_number')
+        .select('id,shipment_id,kottaj_number,customs_regime')
         .eq('id', declarationId)
         .maybeSingle();
 
@@ -302,53 +303,78 @@ export const ExitPage: React.FC = () => {
       return;
     }
 
-    if (!shipmentId) {
+    if (!shipmentId || !declaration) {
       setError('محموله مرتبط با اظهارنامه مشخص نیست.');
       return;
     }
 
     setBusy(true);
     setError('');
+    setMessage('');
 
     try {
-      const sataValue = String(sataCode || '').trim();
-      if (!sataValue) {
-        const { data: workflowRow, error: workflowError } = await supabase.from('customs_declaration_workflow').select('loading_permit_state').eq('declaration_id', declarationId).eq('organization_id', organizationId).maybeSingle();
-        if (workflowError) throw workflowError;
-        const permit = (workflowRow?.loading_permit_state || {}) as Record<string, unknown>;
-        const sataNotRequired = permit.central_bank_status === 'not_required' || (permit.clearance_90_percent_requested === true && String(permit.comment || '').trim() !== '');
-        if (!sataNotRequired) {
-          setError('برای تکمیل درب خروج، کد ساتای این محموله را ثبت کنید؛ در صورت عدم نیاز، وضعیت بانک مرکزی را «نیازی نیست» یا استثنای مجاز را در عملیات گمرکی ثبت کنید.');
+      if (declaration.customs_regime === 'import_definitive') {
+        // Database RPC re-checks every workflow condition and all three exit
+        // checklist rows in one transaction before releasing the shipment to finance.
+        const { data: result, error: completionError } = await supabase.rpc(
+          'complete_customs_declaration_exit',
+          {
+            p_declaration_id: declarationId,
+            p_sata_code: String(sataCode || '').trim() || null,
+          },
+        );
+        if (completionError) throw completionError;
+        if (!result?.ready) {
+          const issues = Array.isArray(result?.issues)
+            ? result.issues.map((issue: unknown) => String(issue))
+            : ['شرایط نهایی خروج هنوز تکمیل نشده است.'];
+          setError(issues.join('\n• '));
           return;
         }
       } else {
-        const { error: sataSaveError } = await supabase.from('shipment_customs_data').upsert({ shipment_id: shipmentId, organization_id: organizationId, sata_code: sataValue }, { onConflict: 'shipment_id' });
-        if (sataSaveError) throw sataSaveError;
+        // Other customs regimes retain their existing specialized workflow
+        // until their individual server-side readiness rules are migrated.
+        const sataValue = String(sataCode || '').trim();
+        if (!sataValue) {
+          const { data: workflowRow, error: workflowError } = await supabase
+            .from('customs_declaration_workflow')
+            .select('loading_permit_state')
+            .eq('declaration_id', declarationId)
+            .eq('organization_id', organizationId)
+            .maybeSingle();
+          if (workflowError) throw workflowError;
+          const permit = (workflowRow?.loading_permit_state || {}) as Record<string, unknown>;
+          const sataNotRequired = permit.central_bank_status === 'not_required' ||
+            (permit.clearance_90_percent_requested === true && String(permit.comment || '').trim() !== '');
+          if (!sataNotRequired) {
+            setError('برای تکمیل درب خروج، کد ساتای این محموله را ثبت کنید؛ در صورت عدم نیاز، وضعیت بانک مرکزی را «نیازی نیست» یا استثنای مجاز را در عملیات گمرکی ثبت کنید.');
+            return;
+          }
+        } else {
+          const { error: sataSaveError } = await supabase
+            .from('shipment_customs_data')
+            .upsert(
+              { shipment_id: shipmentId, organization_id: organizationId, sata_code: sataValue },
+              { onConflict: 'shipment_id' },
+            );
+          if (sataSaveError) throw sataSaveError;
+        }
+
+        const now = new Date().toISOString();
+        const { error: declarationError } = await supabase
+          .from('customs_declarations')
+          .update({ workflow_stage: 6, updated_at: now })
+          .eq('id', declarationId);
+        if (declarationError) throw declarationError;
+
+        const { error: shipmentError } = await supabase
+          .from('shipments')
+          .update({ finance_status: 'ready', updated_at: now })
+          .eq('id', shipmentId);
+        if (shipmentError) throw shipmentError;
       }
-      const now = new Date().toISOString();
 
-      const { error: declarationError } = await supabase
-        .from('customs_declarations')
-        .update({
-          workflow_stage: 6,
-          updated_at: now,
-        })
-        .eq('id', declarationId);
-
-      if (declarationError) throw declarationError;
-
-      const { error: shipmentError } = await supabase
-        .from('shipments')
-        .update({
-          finance_status: 'ready',
-          updated_at: now,
-        })
-        .eq('id', shipmentId);
-
-      if (shipmentError) throw shipmentError;
-
-      setMessage('مرحله ۶ درب خروج تکمیل شد؛ پرونده به مرکز مالی تحویل داده شد.');
-
+      setMessage('مرحله درب خروج تکمیل شد؛ محموله به مرکز مالی تحویل داده شد.');
       window.setTimeout(() => {
         window.location.assign(
           `/finance/shipments/${encodeURIComponent(shipmentId)}`,

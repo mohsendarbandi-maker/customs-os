@@ -1,0 +1,457 @@
+-- End-to-end SQL contract tests for the atomic customs workflow and exit release.
+-- Run with psql -v ON_ERROR_STOP=1 after the fixture and migration.
+
+SET request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
+SET request.jwt.claim.org_id = '00000000-0000-0000-0000-000000000001';
+SET request.jwt.claim.role = 'broker';
+SET ROLE authenticated;
+
+-- The audit trigger is SECURITY DEFINER only to append immutable history.
+-- Its fixed search_path must put pg_catalog first, and the function must not
+-- be directly executable by API roles.
+DO $trigger_security$
+DECLARE
+  v_security_definer boolean;
+  v_search_path text;
+BEGIN
+  SELECT prosecdef, (
+    SELECT setting
+    FROM pg_catalog.unnest(proconfig) AS setting
+    WHERE setting LIKE 'search_path=%'
+    LIMIT 1
+  )
+  INTO v_security_definer, v_search_path
+  FROM pg_catalog.pg_proc
+  WHERE oid = 'public.log_customs_declaration_workflow_event()'::regprocedure;
+
+  IF NOT COALESCE(v_security_definer, false) THEN
+    RAISE EXCEPTION 'Workflow audit trigger must retain its narrowly scoped SECURITY DEFINER mode';
+  END IF;
+  IF v_search_path IS DISTINCT FROM 'search_path=pg_catalog, public, pg_temp' THEN
+    RAISE EXCEPTION 'Workflow audit trigger search_path is unsafe: %', v_search_path;
+  END IF;
+  IF pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.log_customs_declaration_workflow_event()',
+    'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION 'Authenticated users must not execute the internal audit trigger directly';
+  END IF;
+END;
+$trigger_security$;
+
+DO $test$
+DECLARE
+  v_base jsonb;
+  v_result jsonb;
+  v_stage text;
+  v_inspection_paid text;
+  v_event1_at timestamptz;
+  v_event2_at timestamptz;
+  v_events integer;
+BEGIN
+  SELECT expertise_state INTO v_base
+  FROM public.customs_declaration_workflow
+  WHERE id = '00000000-0000-0000-0000-000000000030';
+
+  v_result := public.patch_customs_declaration_workflow_activity(
+    '00000000-0000-0000-0000-000000000030',
+    'expertise',
+    '{"standard":{"expert_review":"approved"}}'::jsonb,
+    v_base,
+    'evaluation'
+  );
+  IF v_result #>> '{expertise_state,standard,expert_review}' <> 'approved' THEN
+    RAISE EXCEPTION 'First expertise patch was not saved';
+  END IF;
+
+  -- A second operator uses the original snapshot but changes a different leaf.
+  -- It must merge without overwriting the first operator's expert_review.
+  v_result := public.patch_customs_declaration_workflow_activity(
+    '00000000-0000-0000-0000-000000000030',
+    'expertise',
+    '{"standard":{"inspection_paid":true}}'::jsonb,
+    v_base,
+    'evaluation'
+  );
+  IF v_result #>> '{expertise_state,standard,expert_review}' <> 'approved'
+     OR v_result #>> '{expertise_state,standard,inspection_paid}' <> 'true' THEN
+    RAISE EXCEPTION 'Disjoint parallel edits did not merge';
+  END IF;
+  IF v_result ->> 'current_stage' <> 'expertise' THEN
+    RAISE EXCEPTION 'A stale parallel request overwrote the newer stage pointer';
+  END IF;
+
+  -- A stale edit to the same leaf must fail with serialization SQLSTATE 40001.
+  BEGIN
+    PERFORM public.patch_customs_declaration_workflow_activity(
+      '00000000-0000-0000-0000-000000000030',
+      'expertise',
+      '{"standard":{"expert_review":"rejected"}}'::jsonb,
+      v_base,
+      'evaluation'
+    );
+    RAISE EXCEPTION 'Expected same-leaf conflict was not raised';
+  EXCEPTION WHEN SQLSTATE '40001' THEN
+    NULL;
+  END;
+
+  SELECT
+    max(created_at) FILTER (
+      WHERE snapshot #>> '{expertise_state,standard,expert_review}' = 'approved'
+        AND snapshot #>> '{expertise_state,standard,inspection_paid}' = 'false'
+    ),
+    max(created_at) FILTER (
+      WHERE snapshot #>> '{expertise_state,standard,expert_review}' = 'approved'
+        AND snapshot #>> '{expertise_state,standard,inspection_paid}' = 'true'
+    )
+  INTO v_event1_at, v_event2_at
+  FROM public.customs_declaration_workflow_events
+  WHERE workflow_id = '00000000-0000-0000-0000-000000000030';
+  IF v_event1_at IS NULL OR v_event2_at IS NULL OR v_event2_at <= v_event1_at THEN
+    RAISE EXCEPTION 'Workflow audit events are not ordered by actual event time';
+  END IF;
+
+  SELECT count(*) INTO v_events
+  FROM public.customs_declaration_workflow_events
+  WHERE workflow_id = '00000000-0000-0000-0000-000000000030';
+  IF v_events <> 3 THEN
+    RAISE EXCEPTION 'Expected created + two successful patches events, got %', v_events;
+  END IF;
+
+  -- Rollback of the most recent patch restores only its changed leaf.
+  PERFORM public.rollback_customs_declaration_workflow(
+    '00000000-0000-0000-0000-000000000030'
+  );
+  SELECT expertise_state -> 'standard' ->> 'expert_review',
+         expertise_state -> 'standard' ->> 'inspection_paid'
+    INTO v_stage, v_inspection_paid
+  FROM public.customs_declaration_workflow
+  WHERE id = '00000000-0000-0000-0000-000000000030';
+  IF v_stage <> 'approved' OR v_inspection_paid <> 'false' THEN
+    RAISE EXCEPTION 'Rollback overwrote an unrelated parallel leaf';
+  END IF;
+
+  -- A rollback event blocks immediate repeated rollback.
+  BEGIN
+    PERFORM public.rollback_customs_declaration_workflow(
+      '00000000-0000-0000-0000-000000000030'
+    );
+    RAISE EXCEPTION 'Immediate repeated rollback should be rejected';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'Immediate repeated rollback should be rejected' THEN
+      RAISE;
+    END IF;
+  END;
+
+  -- An authenticated user from another organization must not reach the row.
+  PERFORM set_config('request.jwt.claim.org_id','00000000-0000-0000-0000-000000000099',false);
+  BEGIN
+    PERFORM public.patch_customs_declaration_workflow_activity(
+      '00000000-0000-0000-0000-000000000030',
+      'expertise',
+      '{"standard":{"inspection_paid":false}}'::jsonb,
+      v_base,
+      'evaluation'
+    );
+    RAISE EXCEPTION 'Cross-organization workflow edit unexpectedly succeeded';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'Cross-organization workflow edit unexpectedly succeeded' THEN
+      RAISE;
+    END IF;
+    IF SQLERRM NOT LIKE '%not found or access denied%' THEN
+      RAISE;
+    END IF;
+  END;
+  PERFORM set_config('request.jwt.claim.org_id','00000000-0000-0000-0000-000000000001',false);
+
+  -- Accountant and client may observe operational state but must not edit it.
+  PERFORM set_config('request.jwt.claim.role','accountant',false);
+  BEGIN
+    PERFORM public.patch_customs_declaration_workflow_activity(
+      '00000000-0000-0000-0000-000000000030',
+      'expertise',
+      '{"standard":{"inspection_paid":false}}'::jsonb,
+      v_base,
+      'evaluation'
+    );
+    RAISE EXCEPTION 'Accountant workflow edit unexpectedly succeeded';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'Accountant workflow edit unexpectedly succeeded' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE '%not allowed to edit customs workflow%' THEN RAISE; END IF;
+  END;
+
+  PERFORM set_config('request.jwt.claim.role','client',false);
+  BEGIN
+    PERFORM public.patch_customs_declaration_workflow_activity(
+      '00000000-0000-0000-0000-000000000030',
+      'expertise',
+      '{"standard":{"inspection_paid":false}}'::jsonb,
+      v_base,
+      'evaluation'
+    );
+    RAISE EXCEPTION 'Client workflow edit unexpectedly succeeded';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'Client workflow edit unexpectedly succeeded' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE '%not allowed to edit customs workflow%' THEN RAISE; END IF;
+  END;
+
+  PERFORM set_config('request.jwt.claim.role','broker',false);
+END;
+$test$;
+
+-- The incomplete workflow must not release the shipment to finance.
+SET request.jwt.claim.role = 'warehouse';
+DO $gate$
+DECLARE
+  v_result jsonb;
+  v_finance_status text;
+BEGIN
+  v_result := public.complete_customs_declaration_exit(
+    '00000000-0000-0000-0000-000000000020',
+    NULL
+  );
+  IF COALESCE((v_result ->> 'ready')::boolean, true) THEN
+    RAISE EXCEPTION 'Incomplete workflow was incorrectly marked ready';
+  END IF;
+  SELECT finance_status INTO v_finance_status
+  FROM public.shipments
+  WHERE id = '00000000-0000-0000-0000-000000000010';
+  IF v_finance_status <> 'not_ready' THEN
+    RAISE EXCEPTION 'An incomplete workflow changed shipment finance_status';
+  END IF;
+END;
+$gate$;
+
+-- Only customs operators may invoke the final exit release endpoint.
+DO $exit_role_guard$
+DECLARE
+  v_role text;
+BEGIN
+  FOREACH v_role IN ARRAY ARRAY['accountant', 'client'] LOOP
+    PERFORM set_config('request.jwt.claim.role', v_role, false);
+    BEGIN
+      PERFORM public.complete_customs_declaration_exit(
+        '00000000-0000-0000-0000-000000000020',
+        NULL
+      );
+      RAISE EXCEPTION '% exit release unexpectedly succeeded', v_role;
+    EXCEPTION WHEN OTHERS THEN
+      IF SQLERRM = v_role || ' exit release unexpectedly succeeded' THEN
+        RAISE;
+      END IF;
+      IF SQLERRM NOT LIKE '%not allowed to complete customs exit%' THEN
+        RAISE;
+      END IF;
+    END;
+  END LOOP;
+  PERFORM set_config('request.jwt.claim.role', 'warehouse', false);
+END;
+$exit_role_guard$;
+
+-- A NULL customs regime must never pass the definitive-import exit endpoint.
+RESET ROLE;
+UPDATE public.customs_declarations
+SET customs_regime = NULL
+WHERE id = '00000000-0000-0000-0000-000000000020';
+SET ROLE authenticated;
+DO $unknown_regime$
+BEGIN
+  BEGIN
+    PERFORM public.complete_customs_declaration_exit(
+      '00000000-0000-0000-0000-000000000020',
+      NULL
+    );
+    RAISE EXCEPTION 'NULL customs regime unexpectedly passed the exit gate';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'NULL customs regime unexpectedly passed the exit gate' THEN
+      RAISE;
+    END IF;
+    IF SQLERRM NOT LIKE '%این کنترل نهایی فقط برای رویه واردات قطعی فعال است%' THEN
+      RAISE;
+    END IF;
+  END;
+END;
+$unknown_regime$;
+
+-- A NULL route is a readiness blocker rather than silently making assessment optional.
+RESET ROLE;
+UPDATE public.customs_declarations
+SET customs_regime = 'import_definitive', customs_path = NULL
+WHERE id = '00000000-0000-0000-0000-000000000020';
+SET ROLE authenticated;
+DO $unknown_path$
+DECLARE
+  v_result jsonb;
+BEGIN
+  v_result := public.complete_customs_declaration_exit(
+    '00000000-0000-0000-0000-000000000020',
+    NULL
+  );
+  IF COALESCE((v_result ->> 'ready')::boolean, true) THEN
+    RAISE EXCEPTION 'NULL customs path unexpectedly passed the exit gate';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements_text(v_result -> 'issues') AS issue(value)
+    WHERE issue.value = 'مسیر گمرکی اظهارنامه مشخص نیست؛ مسیر سبز، زرد یا قرمز را تعیین کنید.'
+  ) THEN
+    RAISE EXCEPTION 'NULL route blocker was not returned to the caller';
+  END IF;
+END;
+$unknown_path$;
+
+RESET ROLE;
+UPDATE public.customs_declarations
+SET customs_path = 'green'
+WHERE id = '00000000-0000-0000-0000-000000000020';
+
+-- Populate the authoritative workflow state and mandatory exit checklist as
+-- the fixture owner, then re-enter through the authenticated warehouse role.
+UPDATE public.customs_declaration_workflow
+SET
+  evaluation_state = '{"status":"not_required","expert_requested":false,"evaluator_number":""}',
+  expertise_state = '{"appointment_status":"not_required","road_authority_status":"not_required","plant_quarantine_status":"not_required","standard":{"expert_review":"not_required"}}',
+  cashier_state = '{"method":"cash","cash_paid_irr":"0","guarantee_duties":false,"guarantee_vat":false,"guarantee_reference":""}',
+  loading_permit_state = '{"clause2_request_status":"not_required","tax_permission_status":"not_required","central_bank_status":"not_required","sata_code":"","clearance_90_percent_requested":false,"comment":""}',
+  exit_state = '{"loading_permission_status":"approved","financial_registration_status":"registered","weighbridge_required":false,"weighbridge_paid":false,"loading_completed_at":"1405/01/02"}',
+  port_charges_state = '{"insurance_policy_no":"POLICY-TEST","insurance_issue_date":"1404/12/29","insurance_followup_status":"pending","warehouse_receipt_date":"1405/01/01","initial_invoice_status":"received","transport_power_of_attorney_status":"received","loading_form_received_at":"1405/01/01","loading_started_at":"","supplemental_invoice_status":"not_required","last_truck_loaded_at":""}',
+  updated_at = now()
+WHERE id = '00000000-0000-0000-0000-000000000030';
+
+UPDATE public.declaration_exit_checklist_items
+SET completed = true
+WHERE organization_id = '00000000-0000-0000-0000-000000000001'
+  AND declaration_id = '00000000-0000-0000-0000-000000000020';
+
+-- Verify SQL Jalali parsing and leap-year boundaries before attempting release.
+DO $dates$
+BEGIN
+  IF public.customs_workflow_jalali_date_key('۱۴۰۵/۰۱/۰۱') <> 14050101 THEN
+    RAISE EXCEPTION 'Persian digit date normalization failed';
+  END IF;
+  IF public.customs_workflow_jalali_date_key('1403/12/30') IS NULL THEN
+    RAISE EXCEPTION 'Leap-year last day was rejected';
+  END IF;
+  IF public.customs_workflow_jalali_date_key('1404/12/30') IS NOT NULL THEN
+    RAISE EXCEPTION 'Invalid non-leap-year last day was accepted';
+  END IF;
+END;
+$dates$;
+
+SET request.jwt.claim.role = 'warehouse';
+SET ROLE authenticated;
+
+DO $shipment_policy$
+DECLARE
+  v_role text;
+  v_org uuid;
+  v_old_allowed boolean;
+  v_new_allowed boolean;
+BEGIN
+  v_role := public.user_role();
+  v_org := public.user_org_id();
+
+  SELECT
+    organization_id = v_org
+      AND (v_role IN ('owner','admin','broker')
+        OR (v_role = 'warehouse' AND finance_status = 'not_ready')),
+    organization_id = v_org
+      AND (v_role IN ('owner','admin','broker')
+        OR (v_role = 'warehouse' AND 'ready' = 'ready'))
+  INTO v_old_allowed, v_new_allowed
+  FROM public.shipments
+  WHERE id = '00000000-0000-0000-0000-000000000010';
+
+  IF current_user <> 'authenticated' OR v_role <> 'warehouse' OR v_org IS NULL THEN
+    RAISE EXCEPTION 'Unexpected test identity: db_role %, app_role %, organization %',
+      current_user, v_role, v_org;
+  END IF;
+  IF NOT COALESCE(v_old_allowed,false) OR NOT COALESCE(v_new_allowed,false) THEN
+    RAISE EXCEPTION 'Warehouse shipment policy preflight failed: old %, new %',
+      v_old_allowed, v_new_allowed;
+  END IF;
+END;
+$shipment_policy$;
+
+DO $release$
+DECLARE
+  v_result jsonb;
+  v_finance_status text;
+  v_workflow_sata text;
+  v_shipment_sata text;
+  v_stage integer;
+BEGIN
+  v_result := public.complete_customs_declaration_exit(
+    '00000000-0000-0000-0000-000000000020',
+    'SAT-TEST-123'
+  );
+  IF NOT COALESCE((v_result ->> 'ready')::boolean, false) THEN
+    RAISE EXCEPTION 'Ready workflow did not pass final exit gate: %', v_result -> 'issues';
+  END IF;
+
+  SELECT finance_status INTO v_finance_status
+  FROM public.shipments
+  WHERE id = '00000000-0000-0000-0000-000000000010';
+  SELECT loading_permit_state ->> 'sata_code' INTO v_workflow_sata
+  FROM public.customs_declaration_workflow
+  WHERE id = '00000000-0000-0000-0000-000000000030';
+  SELECT sata_code INTO v_shipment_sata
+  FROM public.shipment_customs_data
+  WHERE shipment_id = '00000000-0000-0000-0000-000000000010';
+  SELECT workflow_stage INTO v_stage
+  FROM public.customs_declarations
+  WHERE id = '00000000-0000-0000-0000-000000000020';
+
+  IF v_finance_status <> 'ready' OR v_stage <> 6 THEN
+    RAISE EXCEPTION 'Final exit did not atomically advance declaration and finance status';
+  END IF;
+  IF v_workflow_sata <> 'SAT-TEST-123' OR v_shipment_sata <> 'SAT-TEST-123' THEN
+    RAISE EXCEPTION 'SATA canonical workflow value and shipment compatibility mirror diverged';
+  END IF;
+
+  -- Broker has cross-stage read access; repeated release must not repeat
+  -- the warehouse-only not_ready -> ready transition.
+  PERFORM set_config('request.jwt.claim.role','broker',true);
+  v_result := public.complete_customs_declaration_exit(
+    '00000000-0000-0000-0000-000000000020',
+    'SAT-TEST-123'
+  );
+  IF NOT COALESCE((v_result ->> 'ready')::boolean, false) THEN
+    RAISE EXCEPTION 'A repeated exit request was not idempotent: %', v_result -> 'issues';
+  END IF;
+END;
+$release$;
+
+-- A shipment already closed by finance must never be regressed to ready.
+RESET ROLE;
+SET request.jwt.claim.role = 'owner';
+UPDATE public.shipments
+SET finance_status = 'closed'
+WHERE id = '00000000-0000-0000-0000-000000000010';
+SET request.jwt.claim.role = 'broker';
+SET ROLE authenticated;
+DO $closed$
+DECLARE
+  v_result jsonb;
+  v_finance_status text;
+BEGIN
+  v_result := public.complete_customs_declaration_exit(
+    '00000000-0000-0000-0000-000000000020',
+    'SAT-TEST-123'
+  );
+  IF NOT COALESCE((v_result ->> 'ready')::boolean, false) THEN
+    RAISE EXCEPTION 'A closed shipment could not safely re-check exit readiness';
+  END IF;
+  SELECT finance_status INTO v_finance_status
+  FROM public.shipments
+  WHERE id = '00000000-0000-0000-0000-000000000010';
+  IF v_finance_status <> 'closed' THEN
+    RAISE EXCEPTION 'Final exit regressed a finance-closed shipment';
+  END IF;
+END;
+$closed$;
+
+RESET ROLE;
+
+SELECT 'customs workflow atomic PostgreSQL contract tests passed' AS result;
