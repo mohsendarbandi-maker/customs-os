@@ -14,6 +14,7 @@ CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
 $$;
 CREATE TABLE public.profiles(id uuid PRIMARY KEY,organization_id uuid NOT NULL,is_active boolean NOT NULL DEFAULT true);
 CREATE TABLE public.audit_logs(id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,user_id uuid,table_name text NOT NULL,record_id uuid NOT NULL,action text NOT NULL);
+GRANT SELECT ON public.audit_logs TO service_role;
 CREATE TABLE public.ai_operator_commands(
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organization_id uuid NOT NULL,user_id uuid NOT NULL,
  session_id text,natural_command text NOT NULL,page_context text,module text,action_code text,
