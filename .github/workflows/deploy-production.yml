@@ -1,0 +1,78 @@
+name: Customs OS Production Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type DEPLOY CUSTOMS OS to deploy the current main commit"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customs-os-production-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event.inputs.confirmation == 'DEPLOY CUSTOMS OS'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 20
+    env:
+      VITE_SUPABASE_URL: https://bjngfgiecvihofemptub.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_pIh0yF6SQcQ-IAa_FkbjWA_qTSm83Sr
+    steps:
+      - name: Checkout selected main commit
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Unit tests
+        run: npm test
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Prepare immutable production build signature
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_id="${GITHUB_SHA}-${GITHUB_RUN_ID}"
+          echo "$build_id" > dist/build-marker.txt
+          mkdir -p "dist/__builds/$build_id"
+          cp dist/index.html "dist/__builds/$build_id/index.html"
+          sed -i -E "s/const BUILD_SIGNATURE = '[^']*';/const BUILD_SIGNATURE = '$build_id';/" worker/index.ts
+          grep -F -q "const BUILD_SIGNATURE = '$build_id';" worker/index.ts
+          echo "build_id=$build_id" >> "$GITHUB_OUTPUT"
+      - name: Verify latest main still matches the selected commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --quiet
+          latest_sha="$(git rev-parse FETCH_HEAD)"
+          test "$latest_sha" = "$GITHUB_SHA"
+      - name: Deploy Worker to Cloudflare
+        run: npx wrangler@4 deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Verify deployed primary and mobile asset markers
+        shell: bash
+        env:
+          BUILD_ID: ${{ steps.build.outputs.build_id }}
+        run: |
+          set -euo pipefail
+          for base in "https://darbandicommercial.ir" "https://mobile.darbandicommercial.ir"; do
+            actual="$(curl --fail --silent --show-error --location --retry 4 --retry-delay 5 --max-time 30 "$base/build-marker.txt")"
+            test "$actual" = "$BUILD_ID"
+          done
