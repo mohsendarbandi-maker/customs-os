@@ -6,7 +6,7 @@ import {parseReminder,type Reminder,type ReminderKind,resolveAssignee,resolveLin
 import {JalaliDateTimePicker} from './JalaliDateTimePicker';
 import {formatJalaliDateTime,zonedJalaliToDate,toJalali} from '../../lib/jalali';
 
-type Props={entityType:'customs_documents'|'shipment_documents'|'documents'|'shipments'|'cases'|'finance_invoices'|'clients';entityId:string;defaultTitle:string};
+type Props={entityType:'customs_documents'|'shipment_documents'|'documents'|'shipments'|'cases'|'finance_invoices'|'clients'|'customs_activities';entityId:string;defaultTitle:string};
 export const AddReminderButton:React.FC<Props>=({entityType,entityId,defaultTitle})=>{
  const {user,profile}=useAuth();const [open,setOpen]=useState(false);const [title,setTitle]=useState(defaultTitle);const [due,setDue]=useState(()=>new Date(Date.now()+3600000));const [picker,setPicker]=useState(false);const [saving,setSaving]=useState(false);
  const save=async()=>{if(!user||!profile||!title.trim())return;setSaving(true);try{
