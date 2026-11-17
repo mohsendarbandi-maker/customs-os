@@ -75,6 +75,7 @@ const eventLabels: Record<string, string> = {
   cost_unlinked: "قطع اتصال هزینه",
   reminder_linked: "اتصال یادآور",
   reminder_unlinked: "قطع اتصال یادآور",
+  rollback: "بازگردانی تغییر",
 };
 const dateLabel = (value: string | null) =>
   value ? new Date(value).toLocaleString("fa-IR", { dateStyle: "medium", timeStyle: "short" }) : "بدون موعد";
@@ -373,6 +374,42 @@ export const CustomsActivitiesPage: React.FC = () => {
       await refreshDetails(activity);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "حذف وابستگی ناموفق بود.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const rollbackActivityEvent = async (event: ActivityEvent, activity: CustomsActivity) => {
+    if (!canWrite) return;
+    const confirmed = window.confirm("فقط تغییرات همین رویداد، در صورت تطابق نسخه فعلی، بازگردانی می‌شود. ادامه می‌دهید؟");
+    if (!confirmed) return;
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      const { data, error: rollbackError } = await supabase.rpc("rollback_customs_activity_event", {
+        p_event_id: event.id,
+        p_expected_version: activity.version,
+      });
+      if (rollbackError) {
+        const message = String(rollbackError.message || "");
+        if (message.includes("CUSTOMS_ACTIVITY_ROLLBACK_VERSION_CONFLICT")) {
+          throw new Error("این فعالیت پس از مشاهده شما تغییر کرده است؛ ابتدا فهرست را تازه کنید.");
+        }
+        if (message.includes("CUSTOMS_ACTIVITY_ROLLBACK_FIELD_CONFLICT")) {
+          throw new Error("فیلدهای این رویداد بعداً تغییر کرده‌اند؛ برای جلوگیری از حذف تغییر جدید، بازگردانی انجام نشد.");
+        }
+        if (message.includes("CUSTOMS_ACTIVITY_ROLLBACK_FORBIDDEN")) {
+          throw new Error("مجوز بازگردانی فعالیت را ندارید.");
+        }
+        throw rollbackError;
+      }
+      const restored = data as CustomsActivity;
+      setActivities((current) => current.map((item) => item.id === activity.id ? restored : item));
+      setNotice("تغییر انتخاب‌شده بازگردانی شد و رویداد بازگردانی در تاریخچه ثبت شد.");
+      await refreshDetails(restored);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "بازگردانی امن تغییر ناموفق بود.");
     } finally {
       setSaving(false);
     }
@@ -685,6 +722,16 @@ export const CustomsActivitiesPage: React.FC = () => {
                                     <div className="min-w-0 flex-1">
                                       <div className="text-xs font-bold">{eventLabels[event.event_type] || event.event_type}</div>
                                       <div className="mt-1 text-[11px] app-muted">{dateLabel(event.created_at)} · {event.changed_fields?.join("، ") || "بدون فیلد تغییریافته"}</div>
+                                      {canWrite && event.previous_snapshot && ["updated","status_changed","assignee_changed","deadline_changed"].includes(event.event_type) && (
+                                        <button
+                                          type="button"
+                                          disabled={saving}
+                                          onClick={() => void rollbackActivityEvent(event, activity)}
+                                          className="mt-2 inline-flex min-h-8 items-center gap-1 rounded-lg border app-border px-2 text-[11px] font-semibold disabled:opacity-50"
+                                        >
+                                          <RefreshCw size={13}/> بازگردانی این تغییر
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 ))}

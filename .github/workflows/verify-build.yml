@@ -79,7 +79,10 @@ jobs:
       - name: Apply independent customs activity migration on ephemeral PostgreSQL
         run: PGDATABASE=customs_activity_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117150000_customs_independent_activities.sql
 
-      - name: Run independent customs activity tenant, concurrency, dependency and integration tests
+      - name: Apply safe customs activity rollback migration on ephemeral PostgreSQL
+        run: PGDATABASE=customs_activity_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117160000_customs_activity_safe_rollback.sql
+
+      - name: Run independent customs activity tenant, concurrency, dependency, rollback and integration tests
         run: PGDATABASE=customs_activity_test psql -v ON_ERROR_STOP=1 -f supabase/tests/customs_activities.test.sql
 
       - name: Typecheck

@@ -183,6 +183,7 @@ begin
   end if;
 
   v_result := pg_catalog.to_jsonb(v_activity);
+  perform pg_catalog.set_config('customs.activity_rollback', 'false', true);
   return v_result;
 end;
 $function$;

@@ -15,6 +15,8 @@ declare
   v_rows integer;
   v_events integer;
   v_linked uuid;
+  v_rollback_event uuid;
+  v_rollback_result jsonb;
 begin
   -- A declaration supplies the shipment relation automatically.
   insert into public.customs_activities(
@@ -53,6 +55,48 @@ begin
 
   select version into v_version from public.customs_activities where id = v_activity;
   if v_version <> 2 then raise exception 'Activity version did not increment exactly once'; end if;
+
+  -- Restore only the exact latest field delta; preserve the event as immutable history.
+  select id into v_rollback_event
+  from public.customs_activity_events
+  where activity_id = v_activity
+    and event_type = 'updated'
+    and changed_fields @> array['title']::text[]
+  order by created_at desc
+  limit 1;
+
+  if v_rollback_event is null then raise exception 'The title update event was not recorded'; end if;
+
+  v_rollback_result := public.rollback_customs_activity_event(v_rollback_event, v_version);
+  select version into v_version from public.customs_activities where id = v_activity;
+  if v_version <> 3 then raise exception 'Rollback must create a new version'; end if;
+  if not exists (
+    select 1 from public.customs_activities
+    where id = v_activity and title = 'کنترل اسناد حمل'
+  ) then raise exception 'Rollback did not restore the previous title'; end if;
+  if not exists (
+    select 1 from public.customs_activity_events
+    where activity_id = v_activity
+      and event_type = 'rollback'
+      and changed_fields @> array['title']::text[]
+  ) then raise exception 'Rollback was not recorded as a new immutable event'; end if;
+
+  -- A stale caller cannot rollback against an old version.
+  begin
+    perform public.rollback_customs_activity_event(v_rollback_event, 2);
+    raise exception 'Stale rollback version unexpectedly succeeded';
+  exception when sqlstate '40001' then
+    if sqlerrm <> 'CUSTOMS_ACTIVITY_ROLLBACK_VERSION_CONFLICT' then raise; end if;
+  end;
+
+  -- Even with the current version, the old after-value no longer matches,
+  -- so the same event cannot be replayed a second time.
+  begin
+    perform public.rollback_customs_activity_event(v_rollback_event, 3);
+    raise exception 'Already reverted event unexpectedly succeeded again';
+  exception when sqlstate '40001' then
+    if sqlerrm <> 'CUSTOMS_ACTIVITY_ROLLBACK_FIELD_CONFLICT' then raise; end if;
+  end;
 
   -- Create another independent activity on the same shipment.
   insert into public.customs_activities(
@@ -198,6 +242,13 @@ begin
   exception when insufficient_privilege then null;
   end;
 
+  begin
+    perform public.rollback_customs_activity_event(v_rollback_event, 3);
+    raise exception 'Accountant unexpectedly rolled back a customs activity';
+  exception when insufficient_privilege then
+    if sqlerrm <> 'CUSTOMS_ACTIVITY_ROLLBACK_FORBIDDEN' then raise; end if;
+  end;
+
   perform set_config('request.jwt.claim.role','broker',false);
 
   -- Mismatched declaration/shipment and foreign assignee are rejected.
@@ -265,6 +316,22 @@ begin
      or has_table_privilege('authenticated','public.customs_activity_events','UPDATE')
      or has_table_privilege('authenticated','public.customs_activity_events','DELETE') then
     raise exception 'Authenticated users must not mutate immutable activity history';
+  end if;
+
+  if not has_function_privilege(
+    'authenticated',
+    'public.rollback_customs_activity_event(uuid,integer)',
+    'EXECUTE'
+  ) then
+    raise exception 'Authenticated users need the rollback RPC privilege';
+  end if;
+
+  if has_function_privilege(
+    'anon',
+    'public.rollback_customs_activity_event(uuid,integer)',
+    'EXECUTE'
+  ) then
+    raise exception 'Anonymous users must not execute activity rollback';
   end if;
 end
 $privileges$;
