@@ -849,6 +849,6 @@ after insert or update of entity_type, entity_id on public.operational_reminders
 for each row execute function public.log_customs_activity_reminder_link();
 
 revoke all on function public.reminder_entity_is_visible(uuid,text,uuid) from public, anon;
-grant execute on function public.reminder_entity_is_visible(uuid,text,uuid) to authenticated;
+grant execute on function public.reminder_entity_is_visible(uuid,text,uuid) to authenticated, service_role;
 
 commit;
