@@ -61,6 +61,12 @@ jobs:
       - name: Run PostgreSQL concurrency, rollback, RLS and exit-release contracts
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_customs_workflow_atomic_activity.test.sql
 
+      - name: Apply daily customs digest idempotency migration on ephemeral PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117210000_customs_daily_digest_delivery_idempotency.sql
+
+      - name: Verify daily customs digest idempotency and service-role boundary
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_customs_daily_digest_idempotency.test.sql
+
       - name: Run two-session concurrent workflow patch test
         run: bash supabase/tests/run_customs_workflow_atomic_concurrency.sh
 
@@ -99,6 +105,9 @@ jobs:
           deno-version: v2.x
       - name: Check Supabase messenger function
         run: deno check supabase/functions/messenger-gateway/index.ts
+
+      - name: Check Supabase reminder function
+        run: deno check supabase/functions/send-reminders/index.ts
       - name: Cloudflare Worker dry run
         run: npx wrangler@4 deploy --dry-run
 
