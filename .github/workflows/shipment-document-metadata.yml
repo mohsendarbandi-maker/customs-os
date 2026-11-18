@@ -5,11 +5,20 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'src/lib/customsDocumentExtraction.ts'
+      - 'src/lib/customsDocumentAI.ts'
+      - 'src/components/CustomsStageDocumentAI.tsx'
       - 'src/pages/CustomsDocumentManagerPage.tsx'
+      - 'src/pages/ShipmentFirstPage.tsx'
+      - 'src/pages/FileManagerPage.tsx'
       - 'test/customs-document-extraction.test.ts'
+      - 'test/customs-document-ai.test.ts'
+      - 'test/customs-per-file-workflow.test.ts'
+      - 'supabase/functions/messenger-gateway/index.ts'
       - 'supabase/migrations/*shipment_document_independent_invoice_metadata.sql'
+      - 'supabase/migrations/*customs_per_file_operation_extractions.sql'
       - 'supabase/tests/fixtures/shipment_document_independent_invoice_metadata_fixture.sql'
       - 'supabase/tests/*shipment_document_independent_invoice_metadata.test.sql'
+      - 'supabase/tests/*customs_document_operation_extractions.test.sql'
       - '.github/workflows/shipment-document-metadata.yml'
 
 permissions:
@@ -52,6 +61,12 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118113000_shipment_document_independent_invoice_metadata.sql
       - name: Verify independent document numbers and dates
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261118_shipment_document_independent_invoice_metadata.test.sql
+      - name: Apply operation-scoped extraction migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118120000_customs_per_file_operation_extractions.sql
+      - name: Verify extraction migration is safely repeatable
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118120000_customs_per_file_operation_extractions.sql
+      - name: Verify isolated per-file and per-operation extraction records
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261118_customs_document_operation_extractions.test.sql
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -59,4 +74,4 @@ jobs:
       - name: Install test dependencies
         run: npm install --no-audit --no-fund
       - name: Run document identity extraction unit tests
-        run: npx vitest run test/customs-document-extraction.test.ts
+        run: npx vitest run test/customs-document-extraction.test.ts test/customs-document-ai.test.ts test/customs-per-file-workflow.test.ts
