@@ -1,0 +1,62 @@
+name: Independent shipment document invoice metadata
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/lib/customsDocumentExtraction.ts'
+      - 'src/pages/CustomsDocumentManagerPage.tsx'
+      - 'test/customs-document-extraction.test.ts'
+      - 'supabase/migrations/*shipment_document_independent_invoice_metadata.sql'
+      - 'supabase/tests/fixtures/shipment_document_independent_invoice_metadata_fixture.sql'
+      - 'supabase/tests/*shipment_document_independent_invoice_metadata.test.sql'
+      - '.github/workflows/shipment-document-metadata.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  document-metadata-contract:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: customs_shipment_document_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d customs_shipment_document_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: customs_shipment_document_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Create isolated shipment document fixture
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/shipment_document_independent_invoice_metadata_fixture.sql
+      - name: Apply additive document metadata migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118113000_shipment_document_independent_invoice_metadata.sql
+      - name: Verify migration is safely repeatable
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118113000_shipment_document_independent_invoice_metadata.sql
+      - name: Verify independent document numbers and dates
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261118_shipment_document_independent_invoice_metadata.test.sql
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run document identity extraction unit tests
+        run: npx vitest run test/customs-document-extraction.test.ts

@@ -23,6 +23,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { createWorker } from 'tesseract.js';
 import { buildCargoName, formatCount } from '../lib/cargoNaming';
 import { AddReminderButton } from '../features/reminders/AddReminderButton';
+import { extractProformaInvoiceIdentity, normalizeDocumentExtractionDigits } from '../lib/customsDocumentExtraction';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.mjs',
@@ -64,6 +65,11 @@ type Doc = {
   id: string;
   shipment_id: string | null;
   document_type: DocType | null;
+  document_number?: string | null;
+  issue_date?: string | null;
+  issue_date_shamsi?: string | null;
+  invoice_amount?: number | null;
+  invoice_currency?: string | null;
   original_name: string;
   display_name: string | null;
   storage_path: string | null;
@@ -155,6 +161,9 @@ export const CustomsDocumentManagerPage: React.FC = () => {
   const [extracting, setExtracting] = useState<Doc | null>(null);
   const [extracted, setExtracted] = useState<any[]>([]);
   const [extractProgress, setExtractProgress] = useState('');
+  const [editingMetadataId, setEditingMetadataId] = useState<string | null>(null);
+  const [metadataBusy, setMetadataBusy] = useState(false);
+  const [metadataForm, setMetadataForm] = useState({ document_type: '', document_number: '', issue_date: '', issue_date_shamsi: '', invoice_amount: '', invoice_currency: '' });
   const [previewUrl, setPreviewUrl] = useState('');
   const [inputRef] = useState(() => React.createRef<HTMLInputElement>());
   const mounted = useRef(true);
@@ -245,33 +254,39 @@ export const CustomsDocumentManagerPage: React.FC = () => {
     setBusy(true);
     setError('');
     try {
-      const [{ data: canonical, error: canonicalError }, { data: legacy, error: legacyError }] =
-        await Promise.all([
-          supabase
-            .from('shipment_documents')
-            .select(
-              'id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,telegram_message_id,telegram_archive_requested,created_at,updated_at',
-            )
-            .eq('shipment_id', id)
-            .eq('is_archived', false)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('customs_documents')
-            .select(
-              'id,shipment_id,document_type,original_name,display_name,storage_path,mime_type,size_bytes,status,storage_backend,file_asset_id,folder_id,telegram_message_id,created_at',
-            )
-            .eq('shipment_id', id)
-            .eq('is_archived', false)
-            .order('created_at', { ascending: false }),
-        ]);
-
-      if (canonicalError) throw canonicalError;
-      if (legacyError) throw legacyError;
-
+      const [canonicalResult, legacyResult, fileManagerResult] = await Promise.all([
+        supabase.from('shipment_documents')
+          .select('id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,telegram_message_id,telegram_archive_requested,document_type,document_number,issue_date,issue_date_shamsi,invoice_amount,invoice_currency,created_at,updated_at')
+          .eq('shipment_id', id).eq('is_archived', false).order('created_at', { ascending: false }),
+        supabase.from('customs_documents')
+          .select('id,shipment_id,document_type,document_number,issue_date,issue_date_shamsi,invoice_amount,currency,original_name,display_name,storage_path,mime_type,size_bytes,status,storage_backend,file_asset_id,folder_id,telegram_message_id,created_at')
+          .eq('shipment_id', id).eq('is_archived', false).order('created_at', { ascending: false }),
+        supabase.from('file_manager_files').select('shipment_document_id,document_type').eq('shipment_id', id),
+      ]);
+      if (legacyResult.error) throw legacyResult.error;
+      let canonical = canonicalResult.data as any[] | null;
+      if (canonicalResult.error) {
+        const schemaMessage = canonicalResult.error.message || '';
+        if (!/column|schema cache/i.test(schemaMessage)) throw canonicalResult.error;
+        const fallback = await supabase.from('shipment_documents')
+          .select('id,shipment_id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,storage_backend,file_asset_id,folder_id,telegram_message_id,telegram_archive_requested,created_at,updated_at')
+          .eq('shipment_id', id).eq('is_archived', false).order('created_at', { ascending: false });
+        if (fallback.error) throw fallback.error;
+        canonical = fallback.data as any[];
+      }
+      const fileManagerTypes = new Map<string, string>();
+      for (const row of fileManagerResult.data || []) {
+        if (row.shipment_document_id && row.document_type) fileManagerTypes.set(row.shipment_document_id, row.document_type);
+      }
       const canonicalDocs: Doc[] = (canonical || []).map((d: any) => ({
         id: d.id,
         shipment_id: d.shipment_id,
-        document_type: null,
+        document_type: (d.document_type || fileManagerTypes.get(d.id) || null) as DocType | null,
+        document_number: d.document_number || null,
+        issue_date: d.issue_date || null,
+        issue_date_shamsi: d.issue_date_shamsi || null,
+        invoice_amount: d.invoice_amount == null ? null : Number(d.invoice_amount),
+        invoice_currency: d.invoice_currency || null,
         original_name: d.original_file_name || d.document_name || '',
         display_name: d.document_name || d.original_file_name || null,
         storage_path: d.storage_path || null,
@@ -285,14 +300,18 @@ export const CustomsDocumentManagerPage: React.FC = () => {
         telegram_archive_requested: d.telegram_archive_requested === true,
         source: 'shipment_documents',
       }));
-
       const canonicalIds = new Set(canonicalDocs.map((d) => d.id));
-      const fallbackDocs: Doc[] = (legacy || [])
+      const fallbackDocs: Doc[] = (legacyResult.data || [])
         .filter((d: any) => !canonicalIds.has(d.id))
         .map((d: any) => ({
           id: d.id,
           shipment_id: d.shipment_id,
           document_type: d.document_type || null,
+          document_number: d.document_number || null,
+          issue_date: d.issue_date || null,
+          issue_date_shamsi: d.issue_date_shamsi || null,
+          invoice_amount: d.invoice_amount == null ? null : Number(d.invoice_amount),
+          invoice_currency: d.currency || null,
           original_name: d.original_name || '',
           display_name: d.display_name || null,
           storage_path: d.storage_path || null,
@@ -305,7 +324,6 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           telegram_message_id: d.telegram_message_id || null,
           source: 'customs_documents',
         }));
-
       setDocs([...canonicalDocs, ...fallbackDocs]);
     } catch (e: any) {
       setError(e?.message || 'دریافت اسناد ناموفق بود');
@@ -388,6 +406,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
               uploaded_by: user.id,
               document_name: file.name,
               original_file_name: file.name,
+              document_type: inferType(file.name),
               storage_path: storagePath,
               mime_type: mime,
               file_size_bytes: file.size,
@@ -403,14 +422,15 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           }
           documentCreated = true;
 
-          if (uploadTags.length) {
-            const { error: tagsError } = await supabase
-              .from('file_manager_files')
-              .update({ tags: uploadTags, document_type: inferType(file.name) || 'other' })
-              .eq('organization_id', org)
-              .eq('shipment_document_id', document.id);
-            if (tagsError) console.warn('[CustomsDocumentManagerPage] file tags were not saved:', tagsError);
-          }
+          // File type is synchronized regardless of whether optional tags were supplied.
+          const fileMetadataPatch: Record<string, unknown> = { document_type: inferType(file.name) || 'other' };
+          if (uploadTags.length) fileMetadataPatch.tags = uploadTags;
+          const { error: fileMetadataError } = await supabase
+            .from('file_manager_files')
+            .update(fileMetadataPatch)
+            .eq('organization_id', org)
+            .eq('shipment_document_id', document.id);
+          if (fileMetadataError) console.warn('[CustomsDocumentManagerPage] File Manager metadata was not synchronized:', fileMetadataError);
           completed += 1;
           setPendingFiles((previous) => previous.filter((candidate) => candidate !== file));
         } catch (fileError: any) {
@@ -435,6 +455,73 @@ export const CustomsDocumentManagerPage: React.FC = () => {
       setBusy(false);
     }
   };
+  const beginEditMetadata = (d: Doc) => {
+    setEditingMetadataId(d.id);
+    setMetadataForm({
+      document_type: d.document_type || inferType(fileName(d)) || '',
+      document_number: d.document_number || '',
+      issue_date: d.issue_date ? String(d.issue_date).slice(0, 10) : '',
+      issue_date_shamsi: d.issue_date_shamsi || '',
+      invoice_amount: d.invoice_amount == null ? '' : String(d.invoice_amount),
+      invoice_currency: d.invoice_currency || '',
+    });
+    setError('');
+  };
+
+  const saveDocumentMetadata = async (d: Doc) => {
+    setMetadataBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const { org } = await profile();
+      const amountText = normalizeDocumentExtractionDigits(metadataForm.invoice_amount).replace(/[٬,\\s]/g, '');
+      const amount = amountText.trim() ? Number(amountText) : null;
+      if (amount !== null && !Number.isFinite(amount)) throw new Error('مبلغ فاکتور معتبر نیست.');
+      const selectedType = metadataForm.document_type || null;
+      const commonPatch = {
+        document_type: d.source === 'customs_documents' && selectedType === 'other' ? null : selectedType,
+        document_number: metadataForm.document_number.trim() || null,
+        issue_date: metadataForm.issue_date || null,
+        issue_date_shamsi: metadataForm.issue_date_shamsi.trim() || null,
+        invoice_amount: amount,
+      };
+      const patch: Record<string, unknown> = d.source === 'customs_documents'
+        ? { ...commonPatch, currency: metadataForm.invoice_currency.trim() || null }
+        : { ...commonPatch, invoice_currency: metadataForm.invoice_currency.trim() || null };
+      const { data: updated, error: updateError } = await supabase
+        .from(d.source).update(patch)
+        .eq('organization_id', org).eq('id', d.id)
+        .select('id').maybeSingle();
+      if (updateError) throw updateError;
+      if (!updated?.id) throw new Error('سند پیدا نشد یا مجوز ویرایش آن وجود ندارد.');
+
+      if (d.source === 'shipment_documents' && d.shipment_id) {
+        const { error: syncError } = await supabase.from('file_manager_files')
+          .update({ document_type: selectedType || 'other' })
+          .eq('organization_id', org).eq('shipment_document_id', d.id).eq('shipment_id', d.shipment_id);
+        if (syncError) console.warn('[CustomsDocumentManagerPage] File Manager document-type sync failed:', syncError);
+      }
+
+      const next: Doc = {
+        ...d,
+        document_type: (commonPatch.document_type || null) as DocType | null,
+        document_number: commonPatch.document_number as string | null,
+        issue_date: commonPatch.issue_date as string | null,
+        issue_date_shamsi: commonPatch.issue_date_shamsi as string | null,
+        invoice_amount: amount,
+        invoice_currency: metadataForm.invoice_currency.trim() || null,
+      };
+      setDocs((previous) => previous.map((item) => item.id === d.id ? next : item));
+      setSelected((previous) => previous?.id === d.id ? next : previous);
+      setEditingMetadataId(null);
+      setMessage('مشخصات مستقل این سند ذخیره شد؛ شماره و تاریخ سایر اسناد تغییر نکرد.');
+    } catch (e: any) {
+      setError(e?.message || 'ذخیره مشخصات سند ناموفق بود.');
+    } finally {
+      setMetadataBusy(false);
+    }
+  };
+
   const extractFields = async (d: Doc) => {
     if (d.storage_backend === 'telegram' || d.file_asset_id) {
       return setError('محتوای فایل‌های آرشیوشده در تلگرام طبق سیاست فایل‌منیجر برای OCR، استخراج یا تحلیل خوانده نمی‌شود.');
@@ -463,16 +550,12 @@ export const CustomsDocumentManagerPage: React.FC = () => {
       const rules: [string, RegExp][] = [
         ['شماره ثبت سفارش', /(?:ثبت\s*سفارش|registration\s*order)[^\d\n]{0,40}([0-9۰-۹]{6,20})/i],
         ['شماره بارنامه', /(?:B\s*[/]\s*L|BILL\s+OF\s+LADING|بارنامه)[^A-Z0-9۰-۹]{0,30}([A-Z0-9۰-۹-]{5,40})/i],
-        ['شماره فاکتور', /(?:invoice\s*(?:no|number)|شماره\s*فاکتور)[^A-Z0-9۰-۹]{0,30}([A-Z0-9۰-۹-]{3,40})/i],
         ['کد تعرفه', /(?:HS\s*(?:CODE|NO)?|کد\s*تعرفه)[^0-9۰-۹]{0,15}([0-9۰-۹]{6,12})/i],
         ['تعداد', /(?:quantity|qty|مقدار|تعداد)[^0-9۰-۹]{0,20}([0-9۰-۹.,]+)/i],
         ['وزن ناخالص', /(?:gross\s*weight|وزن\s*ناخالص)[^0-9۰-۹]{0,20}([0-9۰-۹.,]+)/i],
         ['وزن خالص', /(?:net\s*weight|وزن\s*خالص)[^0-9۰-۹]{0,20}([0-9۰-۹.,]+)/i],
       ];
-      const norm = (v: string) =>
-        v
-          .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
-          .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
+      const norm = normalizeDocumentExtractionDigits;
 
       if ((d.mime_type || '').toLowerCase() === 'application/pdf' || isPdf(d)) {
         const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
@@ -484,7 +567,10 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           for (const [rkey, re] of rules) {
             if (out.some((x) => x.key === rkey)) continue;
             const m = text.match(re);
-            if (m) out.push({ key: rkey, value: norm(m[1]), page: n, source: 'PDF text', confidence: 0.9 });
+            if (m) out.push({ key: rkey, label: rkey, value: norm(m[1]), sourceText: m[0], page: n, source: 'PDF text', confidence: 0.9 });
+          }
+          for (const field of extractProformaInvoiceIdentity(text, n, 'PDF text', 0.9)) {
+            if (!out.some((x) => x.key === field.key)) out.push(field);
           }
         }
       } else if ((d.mime_type || '').startsWith('image/') || isImage(d)) {
@@ -494,7 +580,10 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           const { data } = await worker.recognize(blob);
           for (const [rkey, re] of rules) {
             const m = data.text.match(re);
-            if (m) out.push({ key: rkey, value: norm(m[1]), page: 1, source: 'Tesseract OCR', confidence: 0.82 });
+            if (m) out.push({ key: rkey, label: rkey, value: norm(m[1]), sourceText: m[0], page: 1, source: 'Tesseract OCR', confidence: 0.82 });
+          }
+          for (const field of extractProformaInvoiceIdentity(data.text, 1, 'Tesseract OCR', 0.82)) {
+            if (!out.some((x) => x.key === field.key)) out.push(field);
           }
         } finally {
           await worker.terminate();
@@ -504,7 +593,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (user && out.length) {
+      if (canonicalDocument && user && out.length) {
         const { data: p } = await supabase.from('profiles').select('organization_id').eq('id', user.id).single();
         if (p?.organization_id) {
           const rows = out.map((x) => ({
@@ -512,8 +601,9 @@ export const CustomsDocumentManagerPage: React.FC = () => {
             shipment_id: d.shipment_id,
             document_id: d.id,
             field_key: x.key,
-            field_label: x.key,
+            field_label: x.label || x.key,
             extracted_value: x.value,
+            source_text: x.sourceText || null,
             confidence: x.confidence,
             page_number: x.page,
             extraction_method: x.source,
@@ -796,6 +886,48 @@ export const CustomsDocumentManagerPage: React.FC = () => {
                         : 'ذخیره امن در سایت'}
                   </div>
                 </button>
+                {(d.document_number || d.issue_date || d.issue_date_shamsi || d.invoice_amount != null) && (
+                  <div className="mt-2 rounded-lg bg-[var(--surface-2)] p-2 text-[11px] app-muted">
+                    {d.document_number && <div>شماره سند: <b dir="ltr" className="text-[var(--text)]">{d.document_number}</b></div>}
+                    {(d.issue_date_shamsi || d.issue_date) && <div>تاریخ سند: <b dir="ltr" className="text-[var(--text)]">{d.issue_date_shamsi || d.issue_date}</b></div>}
+                    {d.invoice_amount != null && <div>مبلغ این سند: <b dir="ltr" className="text-[var(--text)]">{d.invoice_amount} {d.invoice_currency || ''}</b></div>}
+                  </div>
+                )}
+                <button type="button" className="mt-2 w-full rounded-lg border app-border px-2 py-1.5 text-xs" onClick={() => beginEditMetadata(d)}>
+                  ویرایش شماره، تاریخ و مبلغ این سند
+                </button>
+                {editingMetadataId === d.id && (
+                  <div className="mt-2 space-y-2 rounded-xl border app-border bg-[var(--surface-2)] p-2">
+                    <label className="block text-[11px] app-muted">نوع سند
+                      <select value={metadataForm.document_type} onChange={(e) => setMetadataForm((p) => ({ ...p, document_type: e.target.value }))} className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] p-2 text-xs">
+                        <option value="">تشخیص‌داده‌نشده</option>
+                        {TYPES.map((item) => <option key={item.v} value={item.v}>{item.l}</option>)}
+                        <option value="other">سایر</option>
+                      </select>
+                    </label>
+                    <label className="block text-[11px] app-muted">شماره همین سند
+                      <input value={metadataForm.document_number} onChange={(e) => setMetadataForm((p) => ({ ...p, document_number: e.target.value }))} className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] p-2 text-xs" dir="auto" />
+                    </label>
+                    <label className="block text-[11px] app-muted">تاریخ میلادی
+                      <input type="date" value={metadataForm.issue_date} onChange={(e) => setMetadataForm((p) => ({ ...p, issue_date: e.target.value }))} className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] p-2 text-xs" />
+                    </label>
+                    <label className="block text-[11px] app-muted">تاریخ شمسی / متن اصلی سند
+                      <input value={metadataForm.issue_date_shamsi} onChange={(e) => setMetadataForm((p) => ({ ...p, issue_date_shamsi: e.target.value }))} className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] p-2 text-xs" dir="auto" placeholder="بدون تبدیل خودکار تقویم" />
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-[11px] app-muted">مبلغ فاکتور
+                        <input inputMode="decimal" value={metadataForm.invoice_amount} onChange={(e) => setMetadataForm((p) => ({ ...p, invoice_amount: e.target.value }))} className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] p-2 text-xs" />
+                      </label>
+                      <label className="text-[11px] app-muted">ارز
+                        <input value={metadataForm.invoice_currency} onChange={(e) => setMetadataForm((p) => ({ ...p, invoice_currency: e.target.value.toUpperCase() }))} className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] p-2 text-xs" placeholder="USD / AED" />
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => void saveDocumentMetadata(d)} disabled={metadataBusy} className="flex-1 rounded-lg bg-[var(--primary)] px-2 py-2 text-xs font-bold text-white">{metadataBusy ? 'در حال ذخیره…' : 'ذخیره مشخصات'}</button>
+                      <button type="button" onClick={() => setEditingMetadataId(null)} disabled={metadataBusy} className="rounded-lg border app-border px-3 py-2 text-xs">انصراف</button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex gap-1 mt-2">
                   <button className="icon-btn flex-1" onClick={() => void preview(d)} title="نمایش">
                     <Eye size={15} />
@@ -836,7 +968,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
               <div className="grid md:grid-cols-2 gap-2 mt-3">
                 {extracted.map((x: any) => (
                   <div key={x.key} className="rounded-xl border app-border bg-[var(--surface-2)] p-3">
-                    <div className="font-bold">{x.key}</div>
+                    <div className="font-bold">{x.label || x.key}</div>
                     <div className="text-lg font-black mt-1" dir="ltr">
                       {x.value}
                     </div>
