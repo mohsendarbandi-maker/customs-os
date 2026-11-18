@@ -97,9 +97,12 @@ describe('one-click file manager synchronization', () => {
     expect(unsupportedBrowserBranch).not.toContain('همگام‌سازی مستقیم پوشه فقط در Microsoft Edge یا Google Chrome');
   });
 
-  it('uses Supabase Storage as a fallback for Telegram-archived files, including files over 20 MB', () => {
-    expect(page).toContain('if (file.storage_path && Number(file.size_bytes) > FILE_ARCHIVE_MAX_BYTES)');
-    expect(page).toContain('if (file.storage_path) return downloadStorageCopy()');
+  it('prefers cached private Supabase Storage for every file size and falls back to Telegram only when needed', () => {
+    expect(page).toContain('// Prefer the original private Storage copy for every file size.');
+    expect(page).toContain('if (file.storage_path) {');
+    expect(page).toContain('return await downloadStorageCopy();');
+    expect(page).toContain('downloadTelegramArchivedFile(fallbackAssetId)');
+    expect(page).toContain('getCachedPrivateFileBlob(\'storage:\'+profile?.id+\':\'+organizationId+\':\'+file.storage_path');
     expect(page).not.toContain('if (remote.file_asset_id && Number(remote.size_bytes) > FILE_ARCHIVE_MAX_BYTES)');
   });
 
