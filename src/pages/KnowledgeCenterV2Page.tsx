@@ -9,26 +9,95 @@ const typeLabels:Record<string,string>={law:'قانون',circular:'بخشنام�
 const statusLabels:Record<string,string>={pending_review:'در انتظار تأیید',active:'فعال',rejected:'رد شده',superseded:'منسوخ/جایگزین شده',revoked:'لغو شده',draft:'پیش‌نویس'};
 const sha256=async(file:File)=>{const b=await file.arrayBuffer();const h=await crypto.subtle.digest('SHA-256',b);return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,'0')).join('')};
 const fileToBase64=(file:File)=>new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>{const s=String(r.result||'');const i=s.indexOf(',');resolve(i>=0?s.slice(i+1):s)};r.onerror=()=>reject(new Error('خواندن فایل ناموفق بود.'));r.readAsDataURL(file)});
+const uploadKnowledgeFileWithProgress=async(file:File,path:string,onProgress:(percent:number)=>void):Promise<void>=>{
+ const {data:{session},error}=await supabase.auth.getSession();
+ if(error||!session?.access_token)throw new Error('جلسه کاربر معتبر نیست؛ دوباره وارد شوید.');
+ const apiKey=(import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+ if(!apiKey)throw new Error('کلید عمومی Supabase در تنظیمات برنامه موجود نیست.');
+ const objectPath=path.split('/').map(x=>encodeURIComponent(x)).join('/');
+ await new Promise<void>((resolve,reject)=>{
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST',window.location.origin+'/storage/v1/object/customs-knowledge/'+objectPath);
+  xhr.setRequestHeader('Authorization','Bearer '+session.access_token);
+  xhr.setRequestHeader('apikey',apiKey);
+  xhr.setRequestHeader('Content-Type',file.type||'application/octet-stream');
+  xhr.setRequestHeader('x-upsert','false');
+  xhr.setRequestHeader('cache-control','3600');
+  xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress(Math.max(0,Math.min(100,Math.round(e.loaded/e.total*100))))};
+  xhr.onerror=()=>reject(new Error('ارتباط هنگام آپلود فایل قطع شد.'));
+  xhr.onabort=()=>reject(new Error('آپلود فایل لغو شد.'));
+  xhr.onload=()=>{
+   if(xhr.status>=200&&xhr.status<300){onProgress(100);resolve();return;}
+   let detail=xhr.responseText||'';
+   try{const body=JSON.parse(detail);detail=body.message||body.error||detail;}catch{}
+   reject(new Error('آپلود فایل ناموفق بود (HTTP '+xhr.status+'): '+String(detail).slice(0,350)));
+  };
+  xhr.send(file);
+ });
+};
 
 export const KnowledgeCenterV2Page:React.FC=()=>{
- const[sources,setSources]=useState<Source[]>([]),[pending,setPending]=useState<Source[]>([]),[q,setQ]=useState(''),[answer,setAnswer]=useState(''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[file,setFile]=useState<File|null>(null),[review,setReview]=useState<Extraction|null>(null),[reviewSourceId,setReviewSourceId]=useState(''),[selected,setSelected]=useState<Source|null>(null);
- const load=async()=>{const{data,error}=await supabase.from('knowledge_sources').select('id,title,source_type,source_number,issued_at,effective_at,issuer,subject,status,metadata,ai_extraction,storage_path,created_at').order('updated_at',{ascending:false}).limit(100);if(error){setErr(error.message);return}const rows=(data||[]) as Source[];setSources(rows.filter(x=>x.status==='active'));setPending(rows.filter(x=>x.status==='pending_review'))};
+ const[sources,setSources]=useState<Source[]>([]),[pending,setPending]=useState<Source[]>([]),[q,setQ]=useState(''),[answer,setAnswer]=useState(''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[file,setFile]=useState<File|null>(null),[review,setReview]=useState<Extraction|null>(null),[reviewSourceId,setReviewSourceId]=useState(''),[selected,setSelected]=useState<Source|null>(null),[uploadProgress,setUploadProgress]=useState(0),[uploadStage,setUploadStage]=useState(''),[draftSourceId,setDraftSourceId]=useState('');
+ const load=async()=>{const{data,error}=await supabase.from('knowledge_sources').select('id,title,source_type,source_number,issued_at,effective_at,issuer,subject,status,metadata,ai_extraction,storage_path,created_at').order('updated_at',{ascending:false}).limit(100);if(error){setErr(error.message);return}const rows=(data||[]) as Source[];setSources(rows.filter(x=>x.status==='active'));setPending(rows.filter(x=>x.status==='pending_review'||x.status==='draft'))};
  useEffect(()=>{void load()},[]);
  const extract=async()=>{
-  if(!file)return;setBusy(true);setErr('');setReview(null);setReviewSourceId('');
+  if(!file)return;
+  setBusy(true);setErr('');setReview(null);setReviewSourceId('');setUploadProgress(draftSourceId?100:0);setUploadStage(draftSourceId?'ادامه استخراج فایل ذخیره‌شده':'آماده‌سازی آپلود');
+  let savedSourceId=draftSourceId;
   try{
-   const mime=file.type||'application/octet-stream';if(!(mime==='application/pdf'||mime==='text/plain'||mime==='text/markdown'||mime.startsWith('image/')))throw new Error('PDF، تصویر، TXT یا Markdown انتخاب کنید.');if(file.size>25*1024*1024)throw new Error('حداکثر حجم فایل ۲۵ مگابایت است.');
-   const data=await fileToBase64(file);const{data:r,error}=await supabase.functions.invoke('knowledge-ai',{body:{action:'extract',filename:file.name,document_mime_type:mime,document_data:data}});if(error)throw error;
-   const ex=r?.extraction as Extraction;if(!ex?.title||!Array.isArray(ex.chunks))throw new Error('استخراج AI ناقص بود.');
+   const mime=file.type||'application/octet-stream';
+   if(!(mime==='application/pdf'||mime==='text/plain'||mime==='text/markdown'||mime.startsWith('image/')))throw new Error('PDF، تصویر، TXT یا Markdown انتخاب کنید.');
+   if(file.size>25*1024*1024)throw new Error('حداکثر حجم فایل ۲۵ مگابایت است.');
    const{data:{user}}=await supabase.auth.getUser();if(!user)throw new Error('کاربر وارد نشده است.');
-   const{data:p,error:pe}=await supabase.from('profiles').select('organization_id').eq('id',user.id).maybeSingle();if(pe||!p?.organization_id)throw new Error(pe?.message||'سازمان کاربر مشخص نیست.');
-   const hash=await sha256(file);const safe=file.name.replace(/[^\w.\-\u0600-\u06ff]+/g,'_');const path=p.organization_id+'/'+crypto.randomUUID()+'-'+safe;
-   const up=await supabase.storage.from('customs-knowledge').upload(path,file,{contentType:mime,cacheControl:'3600',upsert:false});if(up.error)throw up.error;
-   const{data:s,error:se}=await supabase.from('knowledge_sources').insert({organization_id:p.organization_id,title:ex.title,source_type:typeLabels[ex.source_type]?ex.source_type:'other',source_number:ex.source_number||null,issued_at:ex.issued_at||null,effective_at:ex.effective_at||null,issuer:ex.issuer||null,subject:ex.subject||null,keywords:Array.isArray(ex.keywords)?ex.keywords:[],status:'pending_review',storage_path:path,mime_type:mime,created_by:user.id,extracted_text:ex.extracted_text||'',ai_extraction:ex,extraction_model:r?.model||'gemini-3.8-flash',metadata:{filename:file.name,size:file.size,sha256:hash,summary:ex.summary||''}}).select('id').single();
-   if(se||!s){await supabase.storage.from('customs-knowledge').remove([path]);throw se||new Error('ثبت منبع ناموفق بود.')}setReview(ex);setReviewSourceId(s.id);setFile(null);await load();
-  }catch(e:any){setErr(e?.message||'استخراج ناموفق بود.')}finally{setBusy(false)}
+   const{data:p,error:pe}=await supabase.from('profiles').select('organization_id').eq('id',user.id).maybeSingle();
+   if(pe||!p?.organization_id)throw new Error(pe?.message||'سازمان کاربر مشخص نیست.');
+   if(!savedSourceId){
+    const hash=await sha256(file);
+    const safe=file.name.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_');
+    const path=p.organization_id+'/'+crypto.randomUUID()+'-'+safe;
+    setUploadStage('آپلود فایل به فضای ذخیره‌سازی');setUploadProgress(0);
+    await uploadKnowledgeFileWithProgress(file,path,setUploadProgress);
+    setUploadStage('ثبت فایل در دانشنامه');
+    const{data:s,error:se}=await supabase.from('knowledge_sources').insert({
+      organization_id:p.organization_id,title:file.name,source_type:'other',status:'draft',
+      storage_path:path,mime_type:mime,created_by:user.id,extracted_text:'',
+      metadata:{filename:file.name,size:file.size,sha256:hash,upload_complete:true}
+    }).select('id').single();
+    if(se||!s){
+      await supabase.storage.from('customs-knowledge').remove([path]);
+      throw se||new Error('ثبت مشخصات فایل در دانشنامه ناموفق بود.');
+    }
+    savedSourceId=s.id;setDraftSourceId(s.id);
+   }
+   setUploadStage('استخراج و تحلیل سند با هوش مصنوعی');
+   const data=await fileToBase64(file);
+   const{data:r,error}=await supabase.functions.invoke('knowledge-ai',{body:{action:'extract',filename:file.name,document_mime_type:mime,document_data:data}});
+   if(error){
+    let reason=error.message;try{const detail=await(error as any).context?.json?.();if(detail?.error)reason=detail.error;}catch{}
+    throw new Error(reason||'استخراج هوش مصنوعی ناموفق بود.');
+   }
+   const ex=r?.extraction as Extraction;
+   if(!ex?.title||!Array.isArray(ex.chunks)||!ex.chunks.length)throw new Error('استخراج AI ناقص بود؛ فایل ذخیره است و می‌توانید استخراج را دوباره اجرا کنید.');
+   setUploadStage('ثبت نتیجه استخراج و آماده‌سازی بررسی');
+   const{error:updateError}=await supabase.from('knowledge_sources').update({
+    title:ex.title,source_type:typeLabels[ex.source_type]?ex.source_type:'other',
+    source_number:ex.source_number||null,issued_at:ex.issued_at||null,effective_at:ex.effective_at||null,
+    issuer:ex.issuer||null,subject:ex.subject||null,keywords:Array.isArray(ex.keywords)?ex.keywords:[],
+    status:'pending_review',extracted_text:ex.extracted_text||'',ai_extraction:ex,
+    extraction_model:r?.model||'gemini-3.8-flash',
+    metadata:{filename:file.name,size:file.size,upload_complete:true,summary:ex.summary||''}
+   }).eq('id',savedSourceId).eq('organization_id',p.organization_id);
+   if(updateError)throw updateError;
+   setReview(ex);setReviewSourceId(savedSourceId);setDraftSourceId('');setFile(null);setUploadStage('استخراج کامل شد');setUploadProgress(100);await load();
+  }catch(e:any){
+   const detail=e?.message||'فرآیند ثبت دانشنامه ناموفق بود.';
+   setErr(savedSourceId?'فایل در دانشنامه ذخیره شد، اما مرحله استخراج/ثبت نتیجه کامل نشد. فایل را دوباره انتخاب نکنید؛ با همان فایل دکمه استخراج را دوباره بزنید. جزئیات: '+detail:detail);
+   setUploadStage(savedSourceId?'فایل ذخیره شد؛ استخراج نیازمند تلاش مجدد است':'آپلود ناموفق بود');
+   if(savedSourceId)setDraftSourceId(savedSourceId);
+  }finally{setBusy(false)}
  };
- const reviewAction=async(action:'approve'|'reject')=>{if(!reviewSourceId)return;setBusy(true);setErr('');try{const{data,error}=await supabase.functions.invoke('knowledge-ai',{body:{action,source_id:reviewSourceId,note:action==='reject'?'رد شده در بررسی انسانی':'تأیید و انتشار پس از بررسی انسانی'}});if(error)throw error;if(data?.error)throw new Error(data.error);setReview(null);setReviewSourceId('');await load()}catch(e:any){setErr(e?.message||'عملیات بررسی ناموفق بود.')}finally{setBusy(false)}};
+
+ const reviewAction= const reviewAction=async(action:'approve'|'reject')=>{if(!reviewSourceId)return;setBusy(true);setErr('');try{const{data,error}=await supabase.functions.invoke('knowledge-ai',{body:{action,source_id:reviewSourceId,note:action==='reject'?'رد شده در بررسی انسانی':'تأیید و انتشار پس از بررسی انسانی'}});if(error)throw error;if(data?.error)throw new Error(data.error);setReview(null);setReviewSourceId('');await load()}catch(e:any){setErr(e?.message||'عملیات بررسی ناموفق بود.')}finally{setBusy(false)}};
  const ask=async()=>{if(!q.trim())return;setBusy(true);setErr('');setAnswer('');try{const{data,error}=await supabase.functions.invoke('ai-core',{body:{query:q,mode:'chat'}});if(error)throw error;setAnswer(data?.answer||'پاسخی دریافت نشد.')}catch(e:any){setErr(e?.message||'پاسخ‌گویی ناموفق بود.')}finally{setBusy(false)}};
  return <main dir="rtl" className="min-h-screen p-4 md:p-8" style={{background:'var(--bg)',color:'var(--text)'}}><div className="max-w-6xl mx-auto space-y-5">
   <header><div className="flex items-center gap-2"><BookOpen/><h1 className="text-2xl font-black">دانشنامه گمرکی</h1></div><p className="text-xs app-muted mt-1">آپلود سند → استخراج هوش مصنوعی → بررسی انسانی → انتشار در دانش فعال</p></header>
@@ -36,6 +105,12 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex items-center gap-2 mb-3"><Upload size={18}/><h2 className="font-bold">افزودن قانون / بخشنامه</h2></div>
    <label className="block p-6 rounded-xl border border-dashed app-border text-center cursor-pointer"><FileSearch className="mx-auto mb-2" size={28}/><div className="font-bold">{file?file.name:'فایل را انتخاب کنید'}</div><div className="text-xs app-muted mt-1">PDF، تصویر، TXT یا Markdown — حداکثر ۲۵MB</div><input type="file" className="hidden" accept="application/pdf,image/*,.txt,.md" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>
    <button className="w-full mt-3 py-3 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50" disabled={!file||busy} onClick={extract}>{busy?<span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={17}/>در حال استخراج...</span>:'استخراج خودکار با AI'}</button>
+   {(busy||uploadProgress>0)&&<div className="mt-3 rounded-xl border app-border bg-[var(--surface-2)] p-3" aria-live="polite">
+    <div className="flex items-center justify-between gap-3 text-xs"><b>{uploadStage||'آماده‌سازی فایل'}</b><strong className="tabular-nums">{uploadProgress}%</strong></div>
+    <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--border)]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}>
+     <div className="h-full rounded-full bg-[var(--primary)] transition-[width] duration-150" style={{width:uploadProgress+'%'}}/>
+    </div>
+   </div>
   </section>
   {review&&<section className="rounded-2xl border-2 border-amber-400/40 bg-[var(--surface)] p-5"><div className="flex items-center gap-2"><Clock3/><h2 className="font-bold">بررسی قبل از انتشار</h2></div>
    <div className="grid md:grid-cols-2 gap-3 mt-4 text-sm"><div>عنوان: <b>{review.title||'—'}</b></div><div>نوع: <b>{typeLabels[review.source_type]||'سایر'}</b></div><div>شماره: {review.source_number||'—'}</div><div>مرجع: {review.issuer||'—'}</div><div>تاریخ صدور: {review.issued_at||'—'}</div><div>تاریخ اجرا: {review.effective_at||'—'}</div><div className="md:col-span-2">موضوع: {review.subject||'—'}</div><div className="md:col-span-2">خلاصه AI: {review.summary||'—'}</div></div>
@@ -43,7 +118,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
    <div className="mt-4"><div className="font-bold text-sm mb-2">بخش‌های قابل استناد: {review.chunks.length}</div><div className="max-h-48 overflow-auto space-y-2">{review.chunks.slice(0,20).map((c,i)=><div key={i} className="rounded-lg bg-[var(--surface-2)] p-3 text-xs"><b>{c.page_number?'صفحه '+c.page_number:'بخش '+(i+1)}</b><div className="mt-1">{c.content}</div></div>)}</div></div>
    <div className="flex gap-2 mt-4"><button className="flex-1 py-3 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50" disabled={busy} onClick={()=>reviewAction('approve')}><Check className="inline ml-1" size={17}/>تأیید و انتشار</button><button className="px-5 py-3 rounded-xl border app-border font-bold disabled:opacity-50" disabled={busy} onClick={()=>reviewAction('reject')}><X className="inline ml-1" size={17}/>رد</button></div>
   </section>}
-  {pending.length>0&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><h2 className="font-bold mb-3">در انتظار تأیید ({pending.length})</h2><div className="grid md:grid-cols-2 gap-2">{pending.map(s=><button key={s.id} onClick={()=>{setReview(s.ai_extraction);setReviewSourceId(s.id)}} className="text-right p-3 rounded-xl bg-[var(--surface-2)]"><b>{s.title}</b><div className="text-xs app-muted mt-1">{typeLabels[s.source_type]||'سایر'}{s.source_number?' · '+s.source_number:''}</div></button>)}</div></section>}
+  {pending.length>0&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><h2 className="font-bold mb-3">منابع نیازمند تکمیل یا تأیید ({pending.length})</h2><div className="grid md:grid-cols-2 gap-2">{pending.map(s=><button key={s.id} disabled={s.status==='draft'} onClick={()=>{if(s.ai_extraction){setReview(s.ai_extraction);setReviewSourceId(s.id)}}} className="text-right p-3 rounded-xl bg-[var(--surface-2)] disabled:opacity-70"><b>{s.title}</b><div className="text-xs app-muted mt-1">{typeLabels[s.source_type]||'سایر'}{s.source_number?' · '+s.source_number:''} · {s.status==='draft'?'فایل ذخیره شده؛ استخراج ناتمام':'آماده بررسی انسانی'}</div></button>)}</div></section>}
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex items-center gap-2 mb-3"><MessageCircle size={18}/><h2 className="font-bold">پرسش از دانش فعال</h2></div><div className="flex gap-2"><input className="field flex-1" value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&ask()} placeholder="مثلاً: در این بخشنامه چه الزامی برای قبض انبار آمده؟"/><button className="px-5 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50" onClick={ask} disabled={busy||!q.trim()}>{busy?<Loader2 className="animate-spin"/>:'پرسش'}</button></div>{answer&&<div className="mt-4 rounded-xl bg-[var(--surface-2)] p-4 whitespace-pre-wrap leading-7 text-sm">{answer}</div>}</section>
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex items-center gap-2 mb-3"><ShieldCheck size={18}/><h2 className="font-bold">منابع فعال ({sources.length})</h2></div>{!sources.length?<div className="text-sm app-muted">هنوز منبع تأییدشده‌ای ثبت نشده است.</div>:<div className="grid md:grid-cols-2 gap-2">{sources.map(s=><div key={s.id} className="p-3 rounded-xl bg-[var(--surface-2)]"><b>{s.title}</b><div className="text-xs app-muted mt-1">{typeLabels[s.source_type]||'سایر'}{s.source_number?' · '+s.source_number:''}{s.issuer?' · '+s.issuer:''} · {statusLabels[s.status]||s.status}</div></div>)}</div>}</section>
  </div></main>;

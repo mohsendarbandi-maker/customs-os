@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import {
   downloadTelegramArchivedFile,
+  getCachedPrivateFileBlob,
   FILE_ARCHIVE_MAX_BYTES,
   createTelegramArchiveIdempotencyKey,
   getFileArchiveDestination,
@@ -491,9 +492,11 @@ export const FileManagerPage: React.FC = () => {
     const copyAliasAssetId = typeof file.metadata?.copyAliasFileAssetId === 'string' ? file.metadata.copyAliasFileAssetId : '';
     const downloadStorageCopy = async (): Promise<Blob> => {
       if (!file.storage_path) throw new Error('نسخه پشتیبان فایل در Supabase Storage ثبت نشده است.');
-      const { data, error: storageError } = await supabase.storage.from('customs_documents').download(file.storage_path);
-      if (storageError) throw storageError;
-      return data;
+      return getCachedPrivateFileBlob('storage:'+organizationId+':'+file.storage_path+':'+file.size_bytes,async()=>{
+        const { data, error: storageError } = await supabase.storage.from('customs_documents').download(file.storage_path!);
+        if (storageError) throw storageError;
+        return data;
+      });
     };
 
     // Telegram Bot API download is limited to 20 MB. Prefer the original Storage

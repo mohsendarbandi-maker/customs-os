@@ -263,28 +263,52 @@ export async function archiveShipmentDocumentInBackground(
   return body as TelegramArchiveUpload;
 }
 
+
+const privateFileBlobPromises=new Map<string,Promise<Blob>>();
+const PRIVATE_FILE_CACHE_TTL_MS=30*24*60*60*1000;
+async function privateCacheRequest(cacheKey:string):Promise<Request>{
+ let digest=cacheKey;
+ try{const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(cacheKey));digest=Array.from(new Uint8Array(bytes)).map(x=>x.toString(16).padStart(2,'0')).join('');}catch{}
+ return new Request(new URL('/__customs-os-private-file-cache__/'+digest,window.location.origin).toString());
+}
+export async function getCachedPrivateFileBlob(cacheKey:string,loader:()=>Promise<Blob>):Promise<Blob>{
+ const pending=privateFileBlobPromises.get(cacheKey);if(pending)return pending;
+ const task=(async()=>{
+  let cache:Cache|null=null,request:Request|null=null;
+  try{
+   if(typeof caches!=='undefined'){
+    cache=await caches.open('customs-os-private-file-cache-v1');request=await privateCacheRequest(cacheKey);
+    const cached=await cache.match(request);
+    if(cached){const storedAt=Number(cached.headers.get('x-customs-cache-time')||0);if(storedAt&&Date.now()-storedAt<PRIVATE_FILE_CACHE_TTL_MS)return await cached.blob();await cache.delete(request);}
+   }
+  }catch{}
+  const blob=await loader();
+  try{if(cache&&request)await cache.put(request,new Response(blob,{status:200,headers:{'Content-Type':blob.type||'application/octet-stream','x-customs-cache-time':String(Date.now())}}));}catch{}
+  return blob;
+ })();
+ privateFileBlobPromises.set(cacheKey,task);
+ try{return await task;}finally{if(privateFileBlobPromises.get(cacheKey)===task)privateFileBlobPromises.delete(cacheKey);}
+}
+
 export async function downloadTelegramArchivedFile(fileAssetId: string): Promise<Blob> {
   if (!fileAssetId) throw new Error('شناسه فایل معتبر نیست.');
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) throw new Error('نشست معتبر نیست؛ دوباره وارد وب‌سایت شوید.');
-  const headers = new Headers();
-  headers.set('Authorization', `Bearer ${data.session.access_token}`);
-  const apiKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
-  if (apiKey) headers.set('apikey', apiKey);
-  const response = await fetch(`/api/messenger/files/${encodeURIComponent(fileAssetId)}/download`, {
-    method: 'GET',
-    headers,
-    cache: 'no-store',
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    const code = String(body?.error || 'FILE_DOWNLOAD_FAILED');
-    if (code === 'SOURCE_FILE_OVER_DOWNLOAD_LIMIT') {
-      throw new Error('بازیابی این فایل از Bot API معمولی تلگرام پشتیبانی نمی‌شود؛ برای فایل‌های بزرگ‌تر، Local Bot API Server لازم است.');
+  const userId=data.session.user.id;
+  return getCachedPrivateFileBlob('telegram:'+userId+':'+fileAssetId,async()=>{
+    const headers = new Headers();
+    headers.set('Authorization', `Bearer ${data.session!.access_token}`);
+    const apiKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+    if (apiKey) headers.set('apikey', apiKey);
+    const response = await fetch(`/api/messenger/files/${encodeURIComponent(fileAssetId)}/download`, {method:'GET',headers,cache:'no-store'});
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      const code = String(body?.error || 'FILE_DOWNLOAD_FAILED');
+      if (code === 'SOURCE_FILE_OVER_DOWNLOAD_LIMIT') throw new Error('بازیابی این فایل از Bot API معمولی تلگرام پشتیبانی نمی‌شود؛ برای فایل‌های بزرگ‌تر، Local Bot API Server لازم است.');
+      throw new Error(code);
     }
-    throw new Error(code);
-  }
-  return response.blob();
+    return response.blob();
+  });
 }
 
 export const FILE_ARCHIVE_MAX_BYTES = FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES;
