@@ -2,6 +2,9 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const allowed=new Set([
+  'https://darbandicommercial.ir',
+  'https://www.darbandicommercial.ir',
+  'https://mobile.darbandicommercial.ir',
   'https://customs-os-psi.vercel.app',
   'https://customs.mohsen-darbandi.workers.dev',
   'http://localhost:5173',
@@ -126,23 +129,22 @@ Deno.serve(async(req)=>{
     }
 
     if(action==='approve'){
-      const {error:ue}=await sb.from('knowledge_sources').update({
-        status:'active',reviewed_by:user.id,reviewed_at:new Date().toISOString(),review_note:clean(b.note)||null
-      }).eq('id',sourceId).eq('organization_id',profile.organization_id);
-      if(ue)throw ue;
-      await sb.from('knowledge_chunks').delete().eq('source_id',sourceId).eq('organization_id',profile.organization_id);
       const chunks=Array.isArray(source.ai_extraction?.chunks)?source.ai_extraction.chunks:[];
       if(!chunks.length)throw new Error('برای انتشار، chunk قابل استناد وجود ندارد.');
+      const {error:pendingError}=await sb.from('knowledge_sources').update({status:'pending_review',review_note:clean(b.note)||'در حال ایجاد شاخص جست‌وجو'}).eq('id',sourceId).eq('organization_id',profile.organization_id);
+      if(pendingError)throw pendingError;
+      const {error:deleteError}=await sb.from('knowledge_chunks').delete().eq('source_id',sourceId).eq('organization_id',profile.organization_id);
+      if(deleteError)throw deleteError;
       let embedded=0;
       for(let i=0;i<chunks.length;i++){
-        const c=chunks[i];const content=clean(c?.content);if(!content)continue;
+        const c=chunks[i],content=clean(c?.content);if(!content)continue;
         const vector=await embed(content,geminiKey);
-        const {error:ie}=await sb.from('knowledge_chunks').insert({
-          organization_id:profile.organization_id,source_id:sourceId,chunk_index:i,content,page_number:Number.isInteger(c?.page_number)?c.page_number:null,embedding:vector,metadata:{embedding_model:'gemini-embedding-2',embedding_dimensions:1536}
-        });
-        if(ie)throw ie;
-        embedded++;
+        const {error:ie}=await sb.from('knowledge_chunks').insert({organization_id:profile.organization_id,source_id:sourceId,chunk_index:i,content,page_number:Number.isInteger(c?.page_number)?c.page_number:null,embedding:vector,metadata:{embedding_model:'gemini-embedding-2',embedding_dimensions:1536}});
+        if(ie)throw ie;embedded++;
       }
+      if(!embedded)throw new Error('هیچ بخش قابل جست‌وجویی برای ایندکس وجود نداشت.');
+      const {error:activeError}=await sb.from('knowledge_sources').update({status:'active',reviewed_by:user.id,reviewed_at:new Date().toISOString(),review_note:clean(b.note)||null}).eq('id',sourceId).eq('organization_id',profile.organization_id);
+      if(activeError)throw activeError;
       return reply({status:'active',source_id:sourceId,embedded_chunks:embedded,embedding_model:'gemini-embedding-2'},200,origin);
     }
 
