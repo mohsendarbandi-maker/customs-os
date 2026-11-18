@@ -90,9 +90,12 @@ describe('Telegram-backed Customs OS file manager', () => {
     expect(fileManagerClient).toContain('FILE_ARCHIVE_MAX_DOWNLOADABLE_BYTES');
   });
 
-  it('keeps upload archival background-only while allowing explicit stage-2 extraction of archived documents', () => {
+  it('keeps Telegram archival independent and extracts each archived file for its selected customs stage', () => {
     expect(fileManager).not.toContain('tesseract');
-    expect(fileManager).not.toContain('ai-assistant');
+    expect(fileManager).toContain('ai-assistant');
+    expect(fileManager).toContain('extract_fields: true');
+    expect(fileManager).toContain('telegram_file_asset_id: archived.fileAssetId');
+    expect(fileManager).toContain('aiExtractionStatus');
     expect(fileManager).toContain('uploadTelegramArchivedFile');
     expect(documentPage).toContain("d.storage_backend === 'telegram' || d.file_asset_id");
     expect(preDeclaration).toContain('telegram_file_asset_id');

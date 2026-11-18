@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { CustomsWorkflowAuditHistory } from './CustomsWorkflowAuditHistory';
 import { validateAdditionalRegimeStage } from '../lib/customsOtherRegimeValidation';
+import { CustomsStageDocumentIntake } from './CustomsStageDocumentIntake';
 
 type StageKey = 'documents' | 'permits' | 'declaration' | 'loading' | 'exit' | 'completed';
 type Props = { declarationId: string; organizationId: string; userId?: string; customsRegime: string; editable: boolean };
@@ -127,6 +128,7 @@ export const CustomsOtherRegimeWorkflow: React.FC<Props> = ({ declarationId, org
         {stage === 'completed' && <span className="text-xs app-muted self-center"><ShieldCheck className="inline ml-1" size={15}/>بستن نهایی پس از تکمیل مرجع تأیید</span>}
       </div>
     </div>
+    <CustomsStageDocumentIntake declarationId={declarationId} organizationId={organizationId} userId={userId} stage={stage} stageLabel={current.label} fields={current.fields.map(field=>({key:field.key,label:field.label,required:field.required,type:'text'}))} editable={editable} onApply={(values)=>Object.entries(values).forEach(([key,value])=>updateField(stage,key,typeof value==='boolean'?value:String(value??'')))}/>
   <CustomsWorkflowAuditHistory declarationId={declarationId} organizationId={organizationId} userId={userId}/>
     </section>;
 };

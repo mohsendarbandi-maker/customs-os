@@ -2,6 +2,7 @@ import React,{useCallback,useEffect,useState}from'react';
 import{AlertTriangle,RefreshCw,Save,CalendarClock,ShieldCheck}from'lucide-react';
 import{supabase}from'../lib/supabase';
 import { CustomsWorkflowAuditHistory } from './CustomsWorkflowAuditHistory';
+import { CustomsStageDocumentIntake } from './CustomsStageDocumentIntake';
 
 type StageKey='documents'|'permits'|'declaration'|'guarantee'|'use_period'|'re_export'|'completed';
 type State=Record<string,any>;
@@ -58,6 +59,7 @@ export const CustomsTemporaryImportWorkflow:React.FC<Props>=({declarationId,orga
  {stage==='completed'&&<label className="flex items-start gap-2 text-sm"><input type="checkbox" disabled={!editable} checked={!!state.completed?.reviewed} onChange={e=>patch('reviewed',e.target.checked)}/><span><ShieldCheck size={15} className="inline ml-1"/>کنترل اسناد خروج/تعیین تکلیف، وضعیت تضمین و بستن تعهد انجام شده است.</span></label>}
  <div className="flex flex-wrap justify-between gap-2"><button type="button" disabled={!editable||saving} onClick={()=>void save()} className="inline-flex items-center gap-2 rounded-xl border app-border px-4 py-2.5 text-sm font-bold"><Save size={15}/>ذخیره مرحله</button><button type="button" disabled={!editable||saving||stage==='completed'} onClick={()=>{const missing=validate(stage);if(missing.length){setError('موارد لازم: '+missing.join('، '));return}const next=stages[Math.min(index+1,stages.length-1)].key;void save(next)}} className="rounded-xl bg-[var(--primary)] text-white px-4 py-2.5 text-sm font-bold">{saving?'در حال ذخیره…':'اعتبارسنجی و مرحله بعد'}</button></div>
  {!editable&&<p className="text-xs app-muted">این حساب فقط اجازه مشاهده دارد.</p>}</div>
+ <CustomsStageDocumentIntake declarationId={declarationId} organizationId={organizationId} userId={userId} stage={stage} stageLabel={stages[index].label} fields={schema[stage].map(field=>({key:field.key,label:field.label,type:field.kind||'text',options:field.options}))} editable={editable} onApply={(values)=>Object.entries(values).forEach(([key,value])=>patch(key,typeof value==='boolean'?value:String(value??'')))}/>
  <p className="text-xs app-muted">این گردش‌کار ابزار ثبت و پیگیری داخلی است و جایگزین تأیید مرجع گمرکی یا تعیین مهلت قانونی برای هر پرونده نیست.</p>
  <CustomsWorkflowAuditHistory declarationId={declarationId} organizationId={organizationId} userId={userId}/>
   </section>
