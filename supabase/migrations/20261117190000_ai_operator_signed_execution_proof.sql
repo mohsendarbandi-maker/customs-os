@@ -110,7 +110,7 @@ returns public.ai_operator_commands
 language plpgsql
 security definer
 set search_path = public, pg_catalog, pg_temp
-as $
+as $$
 declare
   v_uid uuid := auth.uid();
   v_profile public.profiles;
@@ -180,7 +180,7 @@ begin
 
   return v_row;
 end;
-$;
+$$;
 
 revoke all on function public.ai_operator_create_command(text,text,text,text,text,jsonb,jsonb,numeric,text,text,text)
   from public, anon, authenticated;
@@ -228,7 +228,7 @@ returns public.ai_operator_commands
 language plpgsql
 security definer
 set search_path = pg_catalog, public, private, pg_temp
-as $
+as $$
 declare
   v_uid uuid := auth.uid();
   v_proof jsonb;
@@ -303,7 +303,7 @@ begin
 
   return v_new;
 end;
-$;
+$$;
 
 revoke all on function public.ai_operator_begin_command_with_proof(uuid,text,text)
   from public, anon, authenticated;
@@ -319,7 +319,7 @@ returns public.ai_operator_commands
 language plpgsql
 security definer
 set search_path = pg_catalog, public, private, pg_temp
-as $
+as $$
 declare
   v_uid uuid := auth.uid();
   v_proof jsonb;
@@ -370,7 +370,7 @@ begin
 
   return v_new;
 end;
-$;
+$$;
 
 revoke all on function public.ai_operator_fail_command_with_proof(uuid,text,text)
   from public, anon, authenticated;
