@@ -611,7 +611,7 @@ export const FileManagerPage: React.FC = () => {
       setError(e instanceof Error ? e.message : 'نمایش فایل ناموفق بود.');
     }
   };
-  const transferFileFromManager=  const transferFileFromManager=async(file:FileRow,target:'chat'|'pdf-studio')=>{
+  const transferFileFromManager=async(file:FileRow,target:'chat'|'pdf-studio')=>{
     const mime=(file.mime_type||'').toLowerCase();
     if(target==='pdf-studio'&&!(mime==='application/pdf'||mime==='image/png'||mime==='image/jpeg'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))){
       setError('PDF Studio فقط PDF و تصویرهای JPG یا PNG را می‌پذیرد.');return;
