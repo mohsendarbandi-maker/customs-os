@@ -730,3 +730,74 @@
 @media (prefers-reduced-motion: reduce) {
   .app-shell.is-touch-layout .future-route-stage { animation: none !important; }
 }
+
+
+/* Mobile File Manager: the expanded folder tree must not inherit the desktop
+   relative/230px sidebar dimensions. Keep the whole tree in a fixed scrollable drawer. */
+@media (max-width: 900px) {
+  .file-manager-page .fm-workspace-layout > aside.fm-folder-sidebar.is-open {
+    display: flex !important;
+    position: fixed !important;
+    inset: calc(var(--mobile-header-height, 4.5rem) + env(safe-area-inset-top) + 8px)
+      10px
+      calc(var(--cos-tab-reserve, 72px) + env(safe-area-inset-bottom) + 12px)
+      10px !important;
+    z-index: 620 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    align-self: stretch !important;
+    overflow: hidden !important;
+    overscroll-behavior: contain;
+    border-radius: 18px !important;
+    background: var(--surface) !important;
+    box-shadow: 0 24px 72px rgba(0, 0, 0, .34) !important;
+  }
+  .file-manager-page .fm-workspace-layout > aside.fm-folder-sidebar.is-open > div:first-child {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 3 !important;
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    background: var(--surface) !important;
+  }
+  .file-manager-page .fm-workspace-layout > aside.fm-folder-sidebar.is-open > div:nth-child(2) {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+  .file-manager-page .fm-workspace-layout > aside.fm-folder-sidebar.is-open :is(button, span) {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+  .file-manager-page .fm-workspace-layout > section.fm-files-panel {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+  .file-manager-page .fm-workspace-layout > section.fm-files-panel > .fm-file-content {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .file-manager-page .fm-workspace-layout .fm-file-content .grid,
+  .file-manager-page .fm-workspace-layout .fm-file-content .grid > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
