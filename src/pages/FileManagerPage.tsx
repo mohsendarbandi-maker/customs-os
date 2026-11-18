@@ -1516,6 +1516,7 @@ export const FileManagerPage: React.FC = () => {
         <div className="file-manager-page-actions flex flex-wrap gap-2">
           <Link to="/operations" className="rounded-xl border app-border px-2.5 sm:px-3 py-2 text-xs sm:text-sm"><ArrowRight size={15} className="ml-1 inline" />عملیات</Link>
           <Link to="/settings/messengers" className="rounded-xl border app-border px-2.5 sm:px-3 py-2 text-xs sm:text-sm">تنظیم آرشیو</Link>
+          <Link to="/share-import" className="rounded-xl border border-[var(--primary)]/40 bg-[var(--primary)]/10 px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-bold text-[var(--primary)]">دریافت از Share</Link>
           <button type="button" onClick={() => { void loadFolders(); if (selectedFolderId) void loadFiles(selectedFolderId); }} disabled={loading} className="rounded-xl border app-border px-2.5 sm:px-3 py-2 text-xs sm:text-sm disabled:opacity-50"><RefreshCw size={15} className="ml-1 inline" />تازه‌سازی</button>
         </div>
       </header>
