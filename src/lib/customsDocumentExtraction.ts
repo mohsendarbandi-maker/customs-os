@@ -8,7 +8,7 @@ export type ExtractedDocumentIdentityField = {
   confidence: number;
 };
 
-const DATE_VALUE = "(?:\\d{4}[./-]\\d{1,2}[./-]\\d{1,2}|\\d{1,2}[./-]\\d{1,2}[./-]\\d{2,4})";
+const DATE_VALUE = "(?:[0-9۰-۹٠-٩]{4}[./-][0-9۰-۹٠-٩]{1,2}[./-][0-9۰-۹٠-٩]{1,2}|[0-9۰-۹٠-٩]{1,2}[./-][0-9۰-۹٠-٩]{1,2}[./-][0-9۰-۹٠-٩]{2,4})";
 const NUMBER_VALUE = "([A-Z0-9\\u0600-\\u06FF][A-Z0-9\\u0600-\\u06FF./_-]{1,39})";
 
 export function normalizeDocumentExtractionDigits(value: string): string {
@@ -22,7 +22,7 @@ function firstMatch(text: string, patterns: RegExp[], rejectProforma = false) {
     pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(text)) !== null) {
-      if (rejectProforma && /pro[\s-]?forma|پروفرما|پروفورما/i.test(text.slice(Math.max(0, match.index - 45), match.index))) {
+      if (rejectProforma && /(?:pro[\s-]?forma|پروفرما|پروفورما)\s*$/i.test(text.slice(Math.max(0, match.index - 24), match.index))) {
         if (!pattern.global) break;
         continue;
       }
