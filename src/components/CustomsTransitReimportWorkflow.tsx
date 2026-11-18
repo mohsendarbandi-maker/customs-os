@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { CustomsWorkflowAuditHistory } from './CustomsWorkflowAuditHistory';
+import { CustomsStageDocumentIntake } from './CustomsStageDocumentIntake';
 
 type StageKey = 'documents' | 'permits' | 'declaration' | 'valuation' | 'loading' | 'exit' | 'completed';
 type Field = { key: string; label: string; kind?: 'select' | 'date' | 'number'; options?: { value: string; label: string }[] };
@@ -180,6 +181,7 @@ export const CustomsTransitReimportWorkflow: React.FC<Props> = ({ declarationId,
       <div className="flex flex-wrap justify-between gap-2"><button type="button" disabled={!editable || saving} onClick={() => void save()} className="inline-flex items-center gap-2 rounded-xl border app-border px-4 py-2.5 text-sm font-bold"><Save size={15} />ذخیره مرحله</button><button type="button" disabled={!editable || saving || stage === 'completed'} onClick={() => void advance()} className="rounded-xl bg-[var(--primary)] text-white px-4 py-2.5 text-sm font-bold">{saving ? 'در حال ذخیره…' : 'اعتبارسنجی و مرحله بعد'}</button></div>
       {!editable && <p className="text-xs app-muted">این حساب فقط اجازه مشاهده گردش‌کار را دارد.</p>}
     </div>
+    <CustomsStageDocumentIntake declarationId={declarationId} organizationId={organizationId} userId={userId} stage={stage} stageLabel={stages[index]?.label || stage} fields={stages[index]?.fields || []} editable={editable} onApply={(values)=>Object.entries(values).forEach(([key,value])=>patch(key,typeof value==='boolean'?value:String(value??'')))}/>
     <p className="text-xs app-muted">این فرم برای ثبت و پیگیری داخلی است؛ مهلت‌ها، مجوزها و تشریفات نهایی باید با پروانه و مقررات رسمی همان پرونده تطبیق داده شوند.</p>
   <CustomsWorkflowAuditHistory declarationId={declarationId} organizationId={organizationId} userId={userId}/>
     </section>;

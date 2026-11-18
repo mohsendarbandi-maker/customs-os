@@ -5,6 +5,8 @@ import{compareJalaliDates,getAbandonedGoodsWarnings,getWorkflowStageIssues,getIn
 import{toJalali,zonedJalaliToDate}from'../lib/jalali';
 import{buildCustomsWorkflowJsonbPatch,mergeCustomsWorkflowJsonbPatch}from'../lib/customsWorkflowPatch';
 import{JalaliDateTimePicker}from'../features/reminders/JalaliDateTimePicker';
+import { CustomsStageDocumentIntake } from './CustomsStageDocumentIntake';
+import { DEFAULT_CUSTOMS_STAGE_FIELDS } from '../lib/customsStageExtraction';
 
 type WorkflowRow={
  id:string;organization_id:string;declaration_id:string;current_stage:string;
@@ -374,6 +376,57 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
   </div>)}
   {datePickerTarget&&<JalaliDateTimePicker value={(()=>{const p=parseJalaliDate(datePickerTarget.value);return p?zonedJalaliToDate(p.year,p.month,p.day,9,0):new Date()})()} onChange={date=>{const j=toJalali(date);datePickerTarget.onChange(`${j.year}/${String(j.month).padStart(2,'0')}/${String(j.day).padStart(2,'0')}`);setDatePickerTarget(null)}} onClose={()=>setDatePickerTarget(null)} allDay onAllDayChange={()=>{}} language="fa" onApply={()=>setDatePickerTarget(null)}/>}
   {!loading&&stage==='completed'&&panel('تکمیل گردش‌کار','پس از کنترل اسناد، وضعیت نهایی و توضیحات پرونده را ذخیره کنید.',<div className="grid sm:grid-cols-2 gap-3">{input('یادداشت نهایی',notes,v=>setNotes(v),'خلاصه وضعیت و موارد باقی‌مانده')}</div>)}
+  {!loading&&<CustomsStageDocumentIntake
+   declarationId={declarationId}
+   organizationId={organizationId}
+   userId={userId}
+   stage="documents"
+   stageLabel="اسناد پایه محموله"
+   fields={DEFAULT_CUSTOMS_STAGE_FIELDS.documents}
+   editable={editable}
+   onApply={(values)=>{
+    const textValue=(value:unknown)=>typeof value==='boolean'?value:String(value??'');
+    setCommodity(previous=>({
+     ...previous,
+     description:textValue(values.goodsDescription)||previous.description,
+     hsCode:textValue(values.hsCode)||previous.hsCode,
+    }));
+    if(values.invoiceNo||values.documentReferences){
+     setNotes(previous=>[previous,String(values.invoiceNo||''),String(values.documentReferences||'')].filter(Boolean).join(' · '));
+    }
+   }}
+  />}
+  {!loading&&<CustomsStageDocumentIntake
+   declarationId={declarationId}
+   organizationId={organizationId}
+   userId={userId}
+   stage={stage}
+   stageLabel={stageLabel(stage)}
+   fields={DEFAULT_CUSTOMS_STAGE_FIELDS[stage] || [{ key: 'notes', label: 'یادداشت و مستندات این مرحله' }]}
+   editable={editable}
+   onApply={(values)=>{
+    const textValue=(value:unknown)=>typeof value==='boolean'?value:String(value??'');
+    if(stage==='documents')setCommodity(previous=>({...previous,description:textValue(values.goodsDescription)||previous.description,hsCode:textValue(values.hsCode)||previous.hsCode}));
+    else if(stage==='evaluation')setEvaluation(previous=>({...previous,...values}));
+    else if(stage==='expertise'){
+     setExpertise(previous=>{
+      const next={...previous,standard:{...emptyExpertise.standard,...(previous.standard||{})}};
+      const standard={...next.standard};
+      Object.entries(values).forEach(([key,value])=>{
+       if(key.startsWith('standard_'))standard[key.slice(9)]=textValue(value);
+       else next[key]=textValue(value);
+      });
+      next.standard=standard;
+      return next;
+     });
+    }else if(stage==='cashier')setCashier(previous=>({...previous,...values}));
+    else if(stage==='loading_permit')setLoadingPermit(previous=>({...previous,...values}));
+    else if(stage==='exit')setExitState(previous=>({...previous,...values}));
+    else if(stage==='port_charges')setPort(previous=>({...previous,...values}));
+    else if(stage==='abandoned'&&values.notes!==undefined)setNotes(String(values.notes||''));
+    else if(stage==='completed')setNotes(String(values.closureNote||values.closureReference||''));
+   }}
+  />}
   {!loading&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 flex flex-wrap items-center justify-between gap-3"><div className="text-xs app-muted flex items-center gap-2"><Clock3 size={15}/>مرحله جاری: <b className="text-[var(--text)]">{stages.find(x=>x[0]===stage)?.[1]||stage}</b>{row?.updated_at&&<span>· آخرین ذخیره {new Date(row.updated_at).toLocaleString('fa-IR')}</span>}</div><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>void rollbackLatestChange()} disabled={!editable||!canRollback||saving||loading||!row} title={!canRollback?'تغییر قبلی برای بازگردانی وجود ندارد':''} className="inline-flex items-center gap-2 rounded-xl border app-border px-4 py-3 text-sm font-bold disabled:opacity-40"><RefreshCw size={15}/>{saving?'در حال انجام…':'بازگردانی آخرین تغییر'}</button><button type="button" onClick={()=>void save()} disabled={!editable||saving||loading||!row} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-3 text-sm font-black text-white disabled:opacity-50"><Save size={16}/>{saving?'در حال ذخیره…':'ذخیره فعالیت مستقل'}</button></div></section>}
   {!loading&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5 space-y-4">
    <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-black">سوابق تغییرات عملیات گمرکی</h3><p className="text-xs app-muted mt-1">تغییر مرحله و ذخیره هر بخش به‌صورت خودکار ثبت می‌شود.</p></div><span className="rounded-full border app-border px-2.5 py-1 text-xs app-muted">{faDigits(history.length)} رویداد اخیر</span></div>
