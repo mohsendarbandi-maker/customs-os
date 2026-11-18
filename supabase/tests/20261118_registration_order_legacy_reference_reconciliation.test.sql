@@ -46,7 +46,7 @@ begin
    raise exception 'Explicit master-linked shipment must not be an unresolved candidate';
  end if;
  select count(*) into v_count from public.registration_order_legacy_match_candidates
- where registration_order_id='10000000-0000-0000-0000-000000000001';
+ where registration_order_id='10000000-0000-0000-0000-000000000002';
  if v_count<>2 then raise exception 'Expected only two unambiguous unresolved customs-reference candidates, got %',v_count; end if;
  if exists(select 1 from public.registration_order_legacy_match_candidates where shipment_id in (
    '40000000-0000-0000-0000-000000000003',

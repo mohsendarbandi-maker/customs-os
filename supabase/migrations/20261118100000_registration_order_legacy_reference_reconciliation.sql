@@ -28,15 +28,16 @@ as $$
 declare
   v_org uuid;
   v_client uuid;
+  v_direct_order_id uuid;
   v_order_key text;
   v_matches uuid[];
 begin
   v_order_key:=public.normalize_registration_order_reference(p_customs_order_number);
   if v_order_key is null then return null; end if;
 
-  select organization_id,client_id into v_org,v_client
+  select organization_id,client_id,registration_order_id into v_org,v_client,v_direct_order_id
   from public.shipments where id=p_shipment_id;
-  if not found then return null; end if;
+  if not found or v_direct_order_id is not null then return null; end if;
 
   select array_agg(ro.id order by ro.id)
     into v_matches
@@ -76,6 +77,15 @@ join public.registration_orders ro
 where s.registration_order_id is null
   -- Already-linked-by-case records are not presented as unresolved candidates.
   and not (ro.case_id is not null and s.case_id=ro.case_id)
+  and not exists (
+    select 1
+    from public.cases c
+    where c.id=s.case_id
+      and c.organization_id=s.organization_id
+      and nullif(public.normalize_registration_order_reference(c.registration_order_no),'') is not null
+      and public.normalize_registration_order_reference(c.registration_order_no)
+          <> public.normalize_registration_order_reference(ro.order_number)
+  )
   and not exists (
     select 1
     from public.cases c
