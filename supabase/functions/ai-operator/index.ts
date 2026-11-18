@@ -175,13 +175,13 @@ async function loadOperatorContext(sb:any,org:string,q:string){
  const shipmentIds=new Set([...matched,...recent].map((x:any)=>x.shipment_id).filter(Boolean));
  const caseIds=new Set([...matched,...recent].map((x:any)=>x.case_id).filter(Boolean));
  const terms=tokens.map((x:string)=>x.toLowerCase());
- const relevant=(items:any[],getText:(x:any)=>string,limit:number,linkField='shipment_id')=>{
+ const relevant=(items:any[],getText:(x:any)=>string,limit:number,_linkField='shipment_id')=>{
   const selected=items.filter((x:any)=>{
-   const linked=linkField==='case_id'?caseIds.has(x.case_id):shipmentIds.has(x.shipment_id);
+   const linked=(!!x.shipment_id&&shipmentIds.has(x.shipment_id))||(!!x.case_id&&caseIds.has(x.case_id));
    const hay=normalizeText(getText(x));
    return linked||(terms.length>0&&terms.some((t:string)=>hay.includes(t)));
   });
-  return (selected.length?selected:items.slice(0,Math.min(limit,10))).slice(0,limit);
+  return selected.slice(0,limit);
  };
  const relatedSiteData={
   shipment_reports:relevant(reportResult.data||[],(x:any)=>[x.report,x.stage,x.status,x.actor_name].join(' '),18).map((x:any)=>({...x,report:String(x.report||'').slice(0,1200)})),
