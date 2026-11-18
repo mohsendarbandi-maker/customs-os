@@ -15,7 +15,11 @@ describe('PWA navigation cache', () => {
     expect(vite).toContain("strategies:'injectManifest'");
     expect(vite).toContain('injectRegister:false');
     expect(main).toContain("import { registerSW } from 'virtual:pwa-register'");
+    expect(main).toContain("navigator.serviceWorker.register('/sw.js'");
+    expect(main).toContain("updateViaCache: 'none'");
     expect(main).toContain('immediate: true');
+    expect(main).toContain('onRegisteredSW(scriptUrl, registration)');
+    expect(fs.readFileSync(path.resolve(__dirname, '../src/features/reminders/PwaLifecycle.tsx'), 'utf8')).not.toContain("import { registerSW }");
     expect(main).toContain("customs-os:pwa-update-ready");
     expect(main).toContain("customs-os:pwa-update-request");
     expect(appShell).toContain("customs-os:pwa-update-request");

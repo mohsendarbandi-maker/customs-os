@@ -155,23 +155,50 @@ try {
 // the update prompt under the application's control. Register the custom
 // injectManifest worker explicitly; do not auto-activate a waiting update while
 // a customs form or chat composer may contain unsaved work.
-if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-  const updateServiceWorker = registerSW({
-    immediate: true,
-    onNeedRefresh() {
-      window.dispatchEvent(new Event('customs-os:pwa-update-ready'));
-    },
-    onOfflineReady() {
-      console.info('[Customs OS] Offline app shell is ready.');
-    },
-    onRegisterError(error) {
-      console.error('[Customs OS] Service worker registration failed:', error);
-      window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
-    },
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && import.meta.env.PROD) {
+  let updateServiceWorker: ((reloadPage?: boolean) => Promise<void>) | null = null;
+
+  const attachPwaUpdateFlow = () => {
+    if (updateServiceWorker) return;
+    updateServiceWorker = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        window.dispatchEvent(new Event('customs-os:pwa-update-ready'));
+      },
+      onOfflineReady() {
+        console.info('[Customs OS] Offline app shell is ready.');
+      },
+      onRegisteredSW(scriptUrl, registration) {
+        console.info('[Customs OS] Workbox attached to service worker:', scriptUrl, registration?.scope || '/');
+      },
+      onRegisterError(error) {
+        console.error('[Customs OS] Workbox service worker registration failed:', error);
+        window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
+      },
+    });
+  };
+
+  // Register the known root worker directly first. This avoids a silent no-op
+  // when a virtual registration helper cannot resolve its script URL on a
+  // custom domain; Workbox then attaches to this same registration and manages
+  // prompt-based updates without automatically replacing an open form.
+  void navigator.serviceWorker.register('/sw.js', {
+    scope: '/',
+    updateViaCache: 'none',
+  }).then((registration) => {
+    console.info('[Customs OS] Service worker registered:', registration.scope);
+    attachPwaUpdateFlow();
+  }).catch((error) => {
+    console.error('[Customs OS] Direct service worker registration failed; retrying with Workbox:', error);
+    attachPwaUpdateFlow();
   });
 
   window.addEventListener('customs-os:pwa-update-request', () => {
     window.dispatchEvent(new Event('customs-os:pwa-update-started'));
+    if (!updateServiceWorker) {
+      window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
+      return;
+    }
     void updateServiceWorker().catch((error) => {
       console.error('[Customs OS] Service worker update failed:', error);
       window.dispatchEvent(new Event('customs-os:pwa-update-failed'));

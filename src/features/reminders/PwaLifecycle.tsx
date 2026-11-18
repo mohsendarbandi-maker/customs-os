@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { registerSW } from 'virtual:pwa-register';
+import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const isIos = () =>
@@ -14,17 +13,10 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
-type UpdateSW = (reloadPage?: boolean) => Promise<void>;
-
 export const PwaLifecycle: React.FC = () => {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [iosGuide, setIosGuide] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
-  const updateSW = useRef<UpdateSW | null>(null);
-  const updateAvailable = useRef(false);
-  const updateInProgress = useRef(false);
-  const updateTimeout = useRef<number | null>(null);
-  const activateUpdateRef = useRef<() => Promise<void>>(async () => undefined);
   const location = useLocation();
 
   // The install identity is always Customs OS. Only the browser-tab title changes by route.
@@ -55,34 +47,6 @@ export const PwaLifecycle: React.FC = () => {
   }, [location.pathname, pwaArea, reminderEnglish]);
 
   useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const start = () => {
-      timer = setTimeout(() => {
-        if (cancelled) return;
-        try {
-          updateSW.current = registerSW({
-            immediate: true,
-            // Keep the update waiting until the user taps the small toolbar sync icon.
-            // Never reload automatically: an open customs form or chat draft may be active.
-            onNeedRefresh: () => {
-              updateAvailable.current = true;
-              window.dispatchEvent(new Event('customs-os:pwa-update-ready'));
-            },
-            onNeedReload: () => undefined,
-            onOfflineReady: () => undefined,
-            onRegisterError: (error) => console.warn('[PWA] service worker registration failed:', error),
-          });
-        } catch (error) {
-          console.error('[PWA] service worker registration failed:', error);
-        }
-      }, 1500);
-    };
-
-    const onUpdateRequest = () => {
-      void activateUpdateRef.current();
-    };
     const onInstall = (event: Event) => {
       event.preventDefault();
       setInstallEvent(event as BeforeInstallPromptEvent);
@@ -90,17 +54,11 @@ export const PwaLifecycle: React.FC = () => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
 
-    start();
-    window.addEventListener('customs-os:pwa-update-request', onUpdateRequest);
     window.addEventListener('beforeinstallprompt', onInstall);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
 
     return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      if (updateTimeout.current) clearTimeout(updateTimeout.current);
-      window.removeEventListener('customs-os:pwa-update-request', onUpdateRequest);
       window.removeEventListener('beforeinstallprompt', onInstall);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
@@ -149,47 +107,6 @@ export const PwaLifecycle: React.FC = () => {
     setIosGuide(false);
   };
 
-  const activateUpdate = async () => {
-    if (!updateAvailable.current || updateInProgress.current) return;
-    const activate = updateSW.current;
-    if (!activate || !('serviceWorker' in navigator)) {
-      window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
-      return;
-    }
-
-    updateInProgress.current = true;
-    window.dispatchEvent(new Event('customs-os:pwa-update-started'));
-    let reloading = false;
-    const onControllerChange = () => {
-      if (reloading) return;
-      reloading = true;
-      if (updateTimeout.current) clearTimeout(updateTimeout.current);
-      updateTimeout.current = null;
-      window.location.reload();
-    };
-
-    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
-    // A failed or unsupported activation must not leave the toolbar icon spinning forever.
-    updateTimeout.current = window.setTimeout(() => {
-      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
-      updateTimeout.current = null;
-      updateInProgress.current = false;
-      window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
-    }, 12000);
-
-    try {
-      // Ask the waiting worker to activate; reload only after it controls this tab.
-      await activate(false);
-    } catch (error) {
-      console.warn('[PWA] activating the new version failed:', error);
-      if (updateTimeout.current) clearTimeout(updateTimeout.current);
-      updateTimeout.current = null;
-      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
-      updateInProgress.current = false;
-      window.dispatchEvent(new Event('customs-os:pwa-update-failed'));
-    }
-  };
-  activateUpdateRef.current = activateUpdate;
 
   return (
     <>
