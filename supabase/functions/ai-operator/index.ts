@@ -192,7 +192,7 @@ async function loadOperatorContext(sb:any,org:string,q:string){
   registration_orders:relevant(orderResult.data||[],(x:any)=>[x.order_number,x.tariff_code,x.status,x.bank_name,x.payment_instrument_code,x.notes].join(' '),18,'case_id')
  };
 
- return JSON.stringify({organization_visible_shipments:rows.length,matched,recent,related_site_data:relatedSiteData,matching_note:'matched records are ranked by exact identifiers, numbers, names, cargo, B/L, client and vessel text. Reports, files, extracted fields, reminders and registration orders are also scoped to this organization. Use only these records as database evidence.'}).slice(0,26000);
+ return JSON.stringify({organization_visible_shipments:rows.length,matched,recent,related_site_data:relatedSiteData,matching_note:'matched records are ranked by exact identifiers, numbers, names, cargo, B/L, client and vessel text. Reports, files, extracted fields, reminders and registration orders are also scoped to this organization. Use only these records as database evidence.'}).slice(0,16000);
 }
 
 async function buildPlan(sb:any,org:string,query:string,role:string,page:string,g:any,attachmentMeta:any=null){
