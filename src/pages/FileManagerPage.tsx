@@ -60,9 +60,24 @@ type FileRow = {
   shipment_document_id: string | null;
   customs_document_id: string | null;
   storage_path: string | null;
+  operation_sections: string[];
   is_archived: boolean;
   created_at: string;
 };
+const CUSTOMS_FILE_OPERATION_SECTIONS = [
+  ['evaluation','ارزیابی'],['expertise','کارشناسی و مجوزها'],['cashier','صندوق'],
+  ['loading_permit','مجوز بارگیری'],['exit','درب خروج'],['port_charges','عوارض بندری'],
+] as const;
+const FILE_DOCUMENT_TYPES = [
+  ['OTHER','سایر اسناد'],['BILL_OF_LADING','بارنامه'],['PROFORMA_INVOICE','پروفرما'],
+  ['COMMERCIAL_INVOICE','فاکتور تجاری'],['PACKING_LIST','پکینگ لیست'],['DELIVERY_ORDER','ترخیصیه'],
+  ['WAREHOUSE_RECEIPT','قبض انبار'],['IMPORT_LICENSE','مجوز ثبت سفارش'],['CERTIFICATE_OF_ORIGIN','گواهی مبدأ'],
+  ['INSPECTION_CERTIFICATE','گواهی بازرسی'],['INSURANCE_POLICY','بیمه‌نامه'],['SATA_PAYMENT_DOC','مدرک ساتا'],
+  ['TECHNICAL_SPEC_CATALOG','کاتالوگ فنی'],['POWER_OF_ATTORNEY','وکالت‌نامه'],['CUSTOMS_DECLARATION_PRINT','اظهارنامه گمرکی'],
+] as const;
+type PendingFileDraft={id:string;file:File;displayName:string;documentType:string;tags:string[];operationSections:string[]};
+const createPendingFileDraft=(file:File):PendingFileDraft=>({id:crypto.randomUUID(),file,displayName:file.name,documentType:'OTHER',tags:[],operationSections:[]});
+
 type SearchHit = {
   entity_type: string;
   entity_id: string;
@@ -113,7 +128,7 @@ export const FileManagerPage: React.FC = () => {
   const [folders, setFolders] = useState<FolderRow[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState(params.get('folderId') || '');
   const [files, setFiles] = useState<FileRow[]>([]);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<PendingFileDraft[]>([]);
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -227,7 +242,7 @@ export const FileManagerPage: React.FC = () => {
     }
     const { data, error: filesError } = await supabase
       .from('file_manager_files')
-      .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
+      .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,operation_sections,is_archived,created_at')
       .eq('organization_id', organizationId)
       .eq('folder_id', folderId)
       .eq('is_archived', false)
@@ -251,7 +266,7 @@ export const FileManagerPage: React.FC = () => {
     handledTransferIds.current.add(incomingTransferId);
     void consumeAppFileTransfer(incomingTransferId, 'file-manager')
       .then((transferredFiles) => {
-        setPendingFiles((previous) => [...previous, ...transferredFiles]);
+        setPendingFiles((previous) => [...previous, ...transferredFiles.map(createPendingFileDraft)]);
         setUploadPanelOpen(true);
         setMessage(transferredFiles.length + ' فایل از بخش دیگر دریافت شد. پوشه صاحب کالا یا محموله را انتخاب و سپس «ارسال به آرشیو تلگرام» را بزنید.');
       })
@@ -379,71 +394,65 @@ export const FileManagerPage: React.FC = () => {
 
   const archiveFiles = async () => {
     if (!pendingFiles.length) return;
-    setUploading(true);
-    setError('');
-    setMessage('');
-    let completed = 0;
-    let attemptingFile = '';
+    setUploading(true); setError(''); setMessage('');
+    let completed = 0; let attemptingFile = '';
     setProgress('در حال بررسی مقصد آرشیو تلگرام…');
     try {
       const target = await getUploadTarget();
       const destination = await getFileArchiveDestination();
-      setProgress('مقصد «' + destination.displayName + '» آماده است؛ فایل‌ها آماده‌سازی می‌شوند.');
-      for (const file of pendingFiles) {
-        attemptingFile = file.name;
-        setProgress('در حال بهینه‌سازی فایل در همین دستگاه: ' + file.name);
+      const queue = [...pendingFiles];
+      setProgress('مقصد «' + destination.displayName + '» آماده است؛ هر فایل با نام و مشخصات مستقل ارسال می‌شود.');
+      for (const draft of queue) {
+        const file = draft.file;
+        const displayName = windowsName(draft.displayName.trim() || file.name);
+        attemptingFile = displayName;
+        setProgress('در حال بهینه‌سازی فایل: ' + displayName);
         const optimized = await optimizeFileForUpload(file);
         const fileToUpload = optimized.file;
-        if (fileToUpload.size > FILE_ARCHIVE_MAX_BYTES) {
-          throw new Error(`فایل «${file.name}» پس از بهینه‌سازی هنوز بیشتر از ۲۰ مگابایت است؛ مقصد فعلی آرشیو تلگرام این محدودیت را دارد.`);
-        }
+        if (fileToUpload.size > FILE_ARCHIVE_MAX_BYTES) throw new Error(`فایل «${displayName}» پس از بهینه‌سازی هنوز بیشتر از ۲۰ مگابایت است؛ مقصد فعلی آرشیو تلگرام این محدودیت را دارد.`);
         const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || '';
         const segments = relativePath.split('/').filter(Boolean).slice(0, -1);
         let parent = target;
         for (const segment of segments) parent = await getOrCreateSubfolder(parent, segment);
-        const documentType = parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG';
+        const documentType = draft.documentType || (parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG');
+        const tags = [...new Set([...uploadTags, ...draft.tags].map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
         const idempotencyKey = await createTelegramArchiveIdempotencyKey(fileToUpload, {
-          folderId: parent.id,
-          ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
-          documentType,
-          documentName: fileToUpload.name,
-          destination,
+          folderId: parent.id, ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+          documentType, documentName: displayName, destination,
         });
-        setProgress(
-          optimized.optimized
-            ? `حجم فایل ${optimized.savedPercent}٪ کاهش یافت؛ در حال ارسال: ${fileToUpload.name}`
-            : 'در حال ارسال به تلگرام: ' + file.name
-        );
-        await uploadTelegramArchivedFile(fileToUpload, {
-          folderId: parent.id,
-          ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
-          documentType,
-          tags: uploadTags,
-          destination,
-          idempotencyKey,
+        setProgress(optimized.optimized
+          ? `حجم فایل ${optimized.savedPercent}٪ کاهش یافت؛ در حال ذخیره مستقل: ${displayName}`
+          : 'در حال ذخیره مستقل در تلگرام: ' + displayName);
+        const archived = await uploadTelegramArchivedFile(fileToUpload, {
+          folderId: parent.id, ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+          documentType, documentName: displayName, tags, destination, idempotencyKey,
         });
+        const { data: priorFile, error: lookupError } = await supabase.from('file_manager_files')
+          .select('id,metadata').eq('organization_id', organizationId).eq('file_asset_id', archived.fileAssetId).maybeSingle();
+        if (lookupError) throw lookupError;
+        if (!priorFile) throw new Error('فایل در تلگرام دریافت شد، اما رکورد فایل‌منیجر هنوز قابل تأیید نیست؛ صف حفظ شده و تلاش مجدد فایل تکراری ایجاد نمی‌کند.');
+        const priorMetadata = (priorFile.metadata && typeof priorFile.metadata === 'object') ? priorFile.metadata as Record<string,unknown> : {};
+        const { data: linkedFile, error: metadataError } = await supabase.from('file_manager_files')
+          .update({ document_type: documentType, operation_sections: draft.operationSections,
+            metadata: { ...priorMetadata, documentName: displayName, documentType, customsOperationSections: draft.operationSections } })
+          .eq('organization_id', organizationId).eq('id', priorFile.id).select('id').maybeSingle();
+        if (metadataError) throw metadataError;
+        if (!linkedFile) throw new Error('فایل در تلگرام ذخیره شد، اما اطلاعات مستقل فایل‌منیجر تأیید نشد؛ صف حفظ شده و تلاش مجدد فایل تکراری ایجاد نمی‌کند.');
         completed += 1;
-        setPendingFiles((previous) => previous.filter((candidate) => candidate !== file));
-        setProgress(`ذخیره در تلگرام: ${completed} از ${pendingFiles.length}`);
-        if (relativePath) {
-          // Folder rows are created on demand; refresh once after the batch.
-          void relativePath;
-        }
+        setPendingFiles(previous => previous.filter(item => item.id !== draft.id));
+        setProgress(`فایل‌های ذخیره‌شده: ${completed} از ${queue.length}`);
+        if (relativePath) void relativePath;
       }
       await loadFolders();
       if (currentFolder?.folder_type === 'shipment') setSelectedFolderId(target.id);
       await loadFiles(currentFolder?.folder_type === 'shipment' ? target.id : selectedFolderId);
-      setMessage(completed + ' فایل به گفت‌وگوی تلگرام «' + destination.displayName + '» ارسال شد و در همین پوشه ثبت شد. برای یافتن، نام فایل یا برچسب را در همان گفتگو جست‌وجو کنید.');
-      setPendingFiles([]);
+      setMessage(completed + ' فایل به‌صورت رکوردهای جداگانه در فایل‌منیجر و آرشیو تلگرام ذخیره شد؛ نام اصلی هر فایل حفظ و نام نمایشی، نوع سند، برچسب‌ها و باکس‌های عملیات مستقل ثبت شد.');
       setProgress('');
     } catch (e) {
       const reason = e instanceof Error ? e.message : 'آپلود ناموفق بود.';
       setError(attemptingFile ? `فایل «${attemptingFile}»: ${reason}` : reason);
       if (completed > 0) setMessage(`${completed} فایل ذخیره شد. فایل‌های باقی‌مانده در صف انتخاب‌شده باقی مانده‌اند.`);
-    } finally {
-      setUploading(false);
-      setProgress('');
-    }
+    } finally { setUploading(false); setProgress(''); }
   };
 
   const createFolder = async () => {
@@ -871,7 +880,7 @@ export const FileManagerPage: React.FC = () => {
       for (let offset = 0; ; offset += 500) {
         const { data, error: listError } = await supabase
           .from('file_manager_files')
-          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
+          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,operation_sections,is_archived,created_at')
           .eq('organization_id', organizationId)
           .in('folder_id', folderIds)
           .eq('is_archived', false)
@@ -1115,7 +1124,7 @@ export const FileManagerPage: React.FC = () => {
       for (let offset = 0; ; offset += 500) {
         const { data: rows, error: fileError } = await supabase
           .from('file_manager_files')
-          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,is_archived,created_at')
+          .select('id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,storage_path,operation_sections,is_archived,created_at')
           .eq('organization_id', organizationId)
           .in('folder_id', [...folderPathById.keys()])
           .eq('is_archived', false)
@@ -1621,19 +1630,26 @@ export const FileManagerPage: React.FC = () => {
           </div>
           {currentFolder&&uploadPanelOpen&&<div className="max-h-none shrink-0 border-b app-border p-3 md:p-4 lg:max-h-none lg:overflow-visible">
             <div className="flex flex-wrap items-center gap-2">
-              <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-bold text-white"><UploadCloud size={16}/>انتخاب فایل<input type="file" multiple className="hidden" disabled={!uploadEnabled||uploading||syncing} onChange={e=>{const picked=Array.from(e.target.files||[]);if(picked.length){setPendingFiles(old=>[...old,...picked]);setUploadPanelOpen(true);setMessage(`${picked.length} فایل انتخاب شد؛ برای شروع، دکمه «ارسال به آرشیو تلگرام» را بزنید.`);setError('');}e.currentTarget.value='';}}/></label>
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-bold text-white"><UploadCloud size={16}/>انتخاب فایل<input type="file" multiple className="hidden" disabled={!uploadEnabled||uploading||syncing} onChange={e=>{const picked=Array.from(e.target.files||[]);if(picked.length){setPendingFiles(old=>[...old,...picked.map(createPendingFileDraft)]);setUploadPanelOpen(true);setMessage(`${picked.length} فایل انتخاب شد؛ برای شروع، دکمه «ارسال به آرشیو تلگرام» را بزنید.`);setError('');}e.currentTarget.value='';}}/></label>
               <button type="button" onClick={()=>directoryInput.current?.click()} disabled={!uploadEnabled||uploading} className="flex items-center gap-2 rounded-xl border app-border px-4 py-2.5 text-sm disabled:opacity-40"><FolderOpen size={16}/>انتخاب مسیر ویندوز</button>
-              <input ref={directoryInput} {...directoryProps} type="file" multiple className="hidden" disabled={!uploadEnabled||uploading} onChange={e=>{const picked=Array.from(e.target.files||[]);if(picked.length){setPendingFiles(old=>[...old,...picked]);setUploadPanelOpen(true);setMessage(`${picked.length} فایل از پوشه انتخاب شد؛ برای شروع، دکمه «ارسال به آرشیو تلگرام» را بزنید.`);setError('');}e.currentTarget.value='';}}/>
+              <input ref={directoryInput} {...directoryProps} type="file" multiple className="hidden" disabled={!uploadEnabled||uploading} onChange={e=>{const picked=Array.from(e.target.files||[]);if(picked.length){setPendingFiles(old=>[...old,...picked.map(createPendingFileDraft)]);setUploadPanelOpen(true);setMessage(`${picked.length} فایل از پوشه انتخاب شد؛ برای شروع، دکمه «ارسال به آرشیو تلگرام» را بزنید.`);setError('');}e.currentTarget.value='';}}/>
               <span className="text-xs app-muted">حداکثر ۲۰ مگابایت برای بازیابی از Bot API فعلی تلگرام.</span>
             </div>
             <label className="mt-3 block"><span className="mb-1 block text-xs font-bold app-muted">برچسب‌ها</span><input value={tagInput} onChange={e=>setTagInput(e.target.value)} disabled={uploading} placeholder="فاکتور، قبض انبار، بیمه…" className="w-full rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2 text-sm"/></label>
-            {pendingFiles.length>0&&<div className="mt-3 rounded-xl border app-border bg-[var(--surface-2)] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><b className="text-sm">{pendingFiles.length} فایل در صف</b><button type="button" onClick={()=>setPendingFiles([])} disabled={uploading} className="text-xs app-muted underline">پاک‌کردن صف</button></div><div className="mt-2 max-h-28 space-y-1 overflow-auto">{pendingFiles.slice(0,40).map((file,index)=><div key={file.name+file.size+file.lastModified+index} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate">{(file as File&{webkitRelativePath?:string}).webkitRelativePath||file.name}</span><span className="shrink-0 app-muted">{byteLabel(file.size)}</span></div>)}{pendingFiles.length>40&&<div className="text-xs app-muted">و {pendingFiles.length-40} فایل دیگر…</div>}</div><button type="button" onClick={()=>void archiveFiles()} disabled={uploading} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{uploading?<Loader2 size={16} className="animate-spin"/>:<Upload size={16}/>}ارسال به آرشیو تلگرام و ثبت فراداده</button></div>}
+            {pendingFiles.length>0&&<div className="mt-3 rounded-xl border app-border bg-[var(--surface-2)] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><b className="text-sm">{pendingFiles.length} فایل در صف</b><button type="button" onClick={()=>setPendingFiles([])} disabled={uploading} className="text-xs app-muted underline">پاک‌کردن صف</button></div><div className="mt-2 max-h-80 space-y-2 overflow-auto">{pendingFiles.slice(0,40).map(draft=><article key={draft.id} className="rounded-xl border app-border bg-[var(--surface)] p-3 space-y-2">
+ <div className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate font-bold">{(draft.file as File&{webkitRelativePath?:string}).webkitRelativePath||draft.file.name}</span><span className="shrink-0 app-muted">{byteLabel(draft.file.size)}</span></div>
+ <label className="block text-xs"><span className="mb-1 block app-muted">نام نمایشی مستقل در فایل‌منیجر</span><input value={draft.displayName} disabled={uploading} onChange={e=>setPendingFiles(old=>old.map(item=>item.id===draft.id?{...item,displayName:e.target.value}:item))} className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2 text-sm"/></label>
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-2"><label className="block text-xs"><span className="mb-1 block app-muted">نوع سند</span><select value={draft.documentType} disabled={uploading} onChange={e=>setPendingFiles(old=>old.map(item=>item.id===draft.id?{...item,documentType:e.target.value}:item))} className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2 text-sm">{FILE_DOCUMENT_TYPES.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+ <label className="block text-xs"><span className="mb-1 block app-muted">برچسب‌های همین فایل</span><input value={draft.tags.join(', ')} disabled={uploading} onChange={e=>setPendingFiles(old=>old.map(item=>item.id===draft.id?{...item,tags:[...new Set(e.target.value.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20)}:item))} placeholder="فاکتور، قبض انبار…" className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2 text-sm"/></label></div>
+ <div className="flex flex-wrap gap-x-3 gap-y-2">{CUSTOMS_FILE_OPERATION_SECTIONS.map(([value,label])=><label key={value} className="inline-flex items-center gap-1.5 text-[11px]"><input type="checkbox" checked={draft.operationSections.includes(value)} disabled={uploading} onChange={e=>setPendingFiles(old=>old.map(item=>item.id===draft.id?{...item,operationSections:e.target.checked?[...new Set([...item.operationSections,value])]:item.operationSections.filter(section=>section!==value)}:item))}/>{label}</label>)}</div>
+ <div className="text-[10px] app-muted">نام اصلی فایل بدون تغییر حفظ می‌شود: {draft.file.name}</div>
+ </article>)}{pendingFiles.length>40&&<div className="text-xs app-muted">و {pendingFiles.length-40} فایل دیگر…</div>}</div><button type="button" onClick={()=>void archiveFiles()} disabled={uploading} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{uploading?<Loader2 size={16} className="animate-spin"/>:<Upload size={16}/>}ارسال به آرشیو تلگرام و ثبت فراداده</button></div>}
             {!uploadEnabled&&<p className="mt-2 text-xs app-muted">برای آپلود، پرونده صاحب کالا یا محموله را انتخاب کنید.</p>}
           </div>}
           <div className="fm-file-toolbar"><b className="min-w-0 truncate">{currentFolder?.display_name || 'فایل‌منیجر'} <span className="font-normal app-muted">· {files.length} سند</span></b><span className="fm-branch-count">{childFolders.length} شاخه</span></div>
           <div className="fm-file-content min-h-0 flex-none overflow-visible p-3 md:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">محتویات زیرشاخه</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 rounded-xl border app-border p-1.5 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'سیستمی':'سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی شاخه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
-            {files.length>0&&<div className="overflow-hidden rounded-xl border app-border"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
+            {files.length>0&&<div className="overflow-hidden rounded-xl border app-border"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}{Array.isArray(file.operation_sections)&&file.operation_sections.length>0&&<div className="mt-1 flex flex-wrap gap-1">{file.operation_sections.map(section=><span key={section} className="rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] text-[var(--primary)]">{CUSTOMS_FILE_OPERATION_SECTIONS.find(([key])=>key===section)?.[1]||section}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
             {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این مسیر خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
           </div>
         </section>
