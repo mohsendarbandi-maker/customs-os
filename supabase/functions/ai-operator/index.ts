@@ -237,7 +237,7 @@ function validate(raw:any,g:any):Plan{
  if(p.module!==def.module)throw new Error('Module/action mismatch.');
  const confidence = p.confidence ?? 0;
   if(!Number.isFinite(confidence)||confidence<0||confidence>1)throw new Error('Confidence نامعتبر است.');
- p.risk=riskFor(p);if(p.confidence<(Number(g.confidence_threshold)||.75))p.clarification=p.clarification||'اطمینان برای اجرای امن کافی نیست؛ هدف یا پارامترها را دقیق تر مشخص کنید.';
+ p.risk=riskFor(p);if(confidence<(Number(g.confidence_threshold)||.75))p.clarification=p.clarification||'اطمینان برای اجرای امن کافی نیست؛ هدف یا پارامترها را دقیق تر مشخص کنید.';
  return p;
 }
 async function one(sb:any,table:string,id:any){if(!isUuid(id))return null;const{data,error}=await sb.from(table).select('*').eq('id',id).maybeSingle();if(error)throw error;return data||null;}
