@@ -81,9 +81,15 @@ begin
   if not exists(select 1 from public.finance_invoice_lines where invoice_id='10000000-0000-0000-0000-000000000001') then
     raise exception 'Issued invoice source-cost line was cascade-deleted';
   end if;
-  if has_table_privilege('authenticated','public.finance_invoices','DELETE')
-     and pg_policies_policy_check_placeholder() then
-    raise exception 'placeholder';
+  if not exists (
+    select 1 from pg_policies
+    where schemaname='public'
+      and tablename='finance_invoices'
+      and policyname='finance_invoices_delete'
+      and cmd='DELETE'
+      and qual='false'
+  ) then
+    raise exception 'Authenticated direct invoice DELETE must remain denied by RLS';
   end if;
 end;
 $$;
