@@ -102,6 +102,16 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
  };
 
  const reviewAction=async(action:'approve'|'reject')=>{if(!reviewSourceId)return;setBusy(true);setErr('');try{const{data,error}=await supabase.functions.invoke('knowledge-ai',{body:{action,source_id:reviewSourceId,note:action==='reject'?'رد شده در بررسی انسانی':'تأیید و انتشار پس از بررسی انسانی'}});if(error)throw error;if(data?.error)throw new Error(data.error);setReview(null);setReviewSourceId('');await load()}catch(e:any){setErr(e?.message||'عملیات بررسی ناموفق بود.')}finally{setBusy(false)}};
+ const resumeOrReviewSource=(source:Source)=>{
+  if(source.status==='draft'){
+   setDraftSourceId(source.id);setReview(null);setReviewSourceId('');
+   setErr('این فایل قبلاً ذخیره شده است. فایل اصلی را دوباره انتخاب کنید و استخراج را ادامه دهید.');
+   setUploadProgress(100);setUploadStage('پیش‌نویس ذخیره‌شده؛ انتخاب فایل اصلی برای ادامه');
+   (document.getElementById('knowledge-source-file') as HTMLInputElement|null)?.click();
+   return;
+  }
+  if(source.ai_extraction){setReview(source.ai_extraction);setReviewSourceId(source.id);}
+ };
  const ask=async()=>{if(!q.trim())return;setBusy(true);setErr('');setAnswer('');try{const{data,error}=await supabase.functions.invoke('ai-core',{body:{query:q,mode:'chat'}});if(error)throw error;setAnswer(data?.answer||'پاسخی دریافت نشد.')}catch(e:any){setErr(e?.message||'پاسخ‌گویی ناموفق بود.')}finally{setBusy(false)}};
  return <main dir="rtl" className="min-h-screen p-4 md:p-8" style={{background:'var(--bg)',color:'var(--text)'}}><div className="max-w-6xl mx-auto space-y-5">
   <header><div className="flex items-center gap-2"><BookOpen/><h1 className="text-2xl font-black">دانشنامه گمرکی</h1></div><p className="text-xs app-muted mt-1">آپلود سند → استخراج هوش مصنوعی → بررسی انسانی → انتشار در دانش فعال</p></header>
@@ -122,14 +132,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
    <div className="mt-4"><div className="font-bold text-sm mb-2">بخش‌های قابل استناد: {review.chunks.length}</div><div className="max-h-48 overflow-auto space-y-2">{review.chunks.slice(0,20).map((c,i)=><div key={i} className="rounded-lg bg-[var(--surface-2)] p-3 text-xs"><b>{c.page_number?'صفحه '+c.page_number:'بخش '+(i+1)}</b><div className="mt-1">{c.content}</div></div>)}</div></div>
    <div className="flex gap-2 mt-4"><button className="flex-1 py-3 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50" disabled={busy} onClick={()=>reviewAction('approve')}><Check className="inline ml-1" size={17}/>تأیید و انتشار</button><button className="px-5 py-3 rounded-xl border app-border font-bold disabled:opacity-50" disabled={busy} onClick={()=>reviewAction('reject')}><X className="inline ml-1" size={17}/>رد</button></div>
   </section>}
-  {pending.length>0&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><h2 className="font-bold mb-3">منابع نیازمند تکمیل یا تأیید ({pending.length})</h2><div className="grid md:grid-cols-2 gap-2">{pending.map(s=><button key={s.id} onClick={()=>{
-    if(s.status==='draft'){
-     setDraftSourceId(s.id);setReview(null);setReviewSourceId('');
-     setErr('این فایل قبلاً ذخیره شده است. فایل اصلی را دوباره انتخاب کنید و استخراج را ادامه دهید.');
-     setUploadProgress(100);setUploadStage('پیش‌نویس ذخیره‌شده؛ انتخاب فایل اصلی برای ادامه');
-     (document.getElementById('knowledge-source-file') as HTMLInputElement|null)?.click();
-    }else if(s.ai_extraction){setReview(s.ai_extraction);setReviewSourceId(s.id);}
-   }} className="text-right p-3 rounded-xl bg-[var(--surface-2)]"><b>{s.title}</b><div className="text-xs app-muted mt-1">{typeLabels[s.source_type]||'سایر'}{s.source_number?' · '+s.source_number:''} · {s.status==='draft'?'فایل ذخیره شده؛ استخراج ناتمام':'آماده بررسی انسانی'}</div></button>)}</div></section>}
+  {pending.length>0&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><h2 className="font-bold mb-3">منابع نیازمند تکمیل یا تأیید ({pending.length})</h2><div className="grid md:grid-cols-2 gap-2">{pending.map(s=><button key={s.id} onClick={()=>resumeOrReviewSource(s)} className="text-right p-3 rounded-xl bg-[var(--surface-2)]"><b>{s.title}</b><div className="text-xs app-muted mt-1">{typeLabels[s.source_type]||'سایر'}{s.source_number?' · '+s.source_number:''} · {s.status==='draft'?'فایل ذخیره شده؛ استخراج ناتمام':'آماده بررسی انسانی'}</div></button>)}</div></section>}
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex items-center gap-2 mb-3"><MessageCircle size={18}/><h2 className="font-bold">پرسش از دانش فعال</h2></div><div className="flex gap-2"><input className="field flex-1" value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&ask()} placeholder="مثلاً: در این بخشنامه چه الزامی برای قبض انبار آمده؟"/><button className="px-5 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50" onClick={ask} disabled={busy||!q.trim()}>{busy?<Loader2 className="animate-spin"/>:'پرسش'}</button></div>{answer&&<div className="mt-4 rounded-xl bg-[var(--surface-2)] p-4 whitespace-pre-wrap leading-7 text-sm">{answer}</div>}</section>
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex items-center gap-2 mb-3"><ShieldCheck size={18}/><h2 className="font-bold">منابع فعال ({sources.length})</h2></div>{!sources.length?<div className="text-sm app-muted">هنوز منبع تأییدشده‌ای ثبت نشده است.</div>:<div className="grid md:grid-cols-2 gap-2">{sources.map(s=><div key={s.id} className="p-3 rounded-xl bg-[var(--surface-2)]"><b>{s.title}</b><div className="text-xs app-muted mt-1">{typeLabels[s.source_type]||'سایر'}{s.source_number?' · '+s.source_number:''}{s.issuer?' · '+s.issuer:''} · {statusLabels[s.status]||s.status}</div></div>)}</div>}</section>
  </div></main>;
