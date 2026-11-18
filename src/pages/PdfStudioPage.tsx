@@ -3,7 +3,7 @@ import {
   ArrowDown, ArrowUp, Check, ChevronLeft, FileImage, FilePlus2, FileText, Files, Folder, MessageCircle, Loader2, Minus, RotateCw, Scissors, ShieldCheck, Stamp, Trash2, Upload, Sparkles, X,
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { createAppFileTransfer, consumeAppFileTransfer } from '../lib/appFileTransfer';
+import { createAppFileTransfer, consumeAppFileTransferWithContext } from '../lib/appFileTransfer';
 import { PDFDocument, degrees } from 'pdf-lib';
 import { createWorker } from 'tesseract.js';
 import { supabase } from '../lib/supabase';
@@ -20,6 +20,16 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 GlobalWorkerOptions.workerSrc = workerUrl;
 
 type SourceDocument = { id: string; file: File; pageCount: number; hasProtectedFeatures: boolean; convertedFromImage: boolean };
+type ShipmentDraftDocumentMeta = {
+  id: string; name: string; displayName: string; documentType: string; tags: string[];
+  operationSections: string[]; mimeType: string; sizeBytes: number; pageCount: number;
+  storagePath?: string; uploadedBy?: string; extractedFields?: Record<string, string>;
+};
+type ShipmentReturnBundle = {
+  primaryDocumentId: string;
+  selectedBillOfLadingId: string;
+  documents: Array<{ metadata: ShipmentDraftDocumentMeta; file: File }>;
+};
 type SplitRow = { id: string; name: string; pageExpression: string };
 type FileManagerRow = {
   id: string;
@@ -113,6 +123,7 @@ export const PdfStudioPage: React.FC = () => {
   const [compressionEstimate, setCompressionEstimate] = useState<CompressionEstimate | null>(null);
   const [compressionEstimating, setCompressionEstimating] = useState(false);
   const [readyOutputs, setReadyOutputs] = useState<ReadyOutput[]>([]);
+  const [shipmentReturnBundle, setShipmentReturnBundle] = useState<ShipmentReturnBundle | null>(null);
   const [outputTools, setOutputTools] = useState<OutputTools>({
     merge: false, split: false, compression: false, stamp: false,
   });
@@ -356,11 +367,27 @@ export const PdfStudioPage: React.FC = () => {
   useEffect(() => {
     if (!incomingTransferId || handledTransferIds.current.has(incomingTransferId)) return;
     handledTransferIds.current.add(incomingTransferId);
-    void consumeAppFileTransfer(incomingTransferId, 'pdf-studio')
-      .then(async (files) => {
-        await loadFiles(files);
+    void consumeAppFileTransferWithContext(incomingTransferId, 'pdf-studio')
+      .then(async ({ files, context }) => {
+        const draftMetadata = Array.isArray(context?.shipmentDraftDocuments)
+          ? context.shipmentDraftDocuments as ShipmentDraftDocumentMeta[]
+          : [];
+        if (context?.returnTo === 'shipment' && draftMetadata.length === files.length && files.length > 0) {
+          const primaryDocumentId = String(context.primaryDocumentId || '');
+          const primaryIndex = draftMetadata.findIndex((item) => item.id === primaryDocumentId);
+          if (primaryIndex < 0) throw new Error('سند اصلی برای بازگشت به ثبت محموله پیدا نشد.');
+          setShipmentReturnBundle({
+            primaryDocumentId,
+            selectedBillOfLadingId: String(context.selectedBillOfLadingId || ''),
+            documents: draftMetadata.map((metadata, index) => ({ metadata, file: files[index] })),
+          });
+          await loadFiles([files[primaryIndex]]);
+          setStatus('سند انتخاب‌شده از ثبت محموله باز شد؛ سایر فایل‌های موقت نیز برای بازگشت حفظ شده‌اند.');
+        } else {
+          await loadFiles(files);
+          setStatus(files.length + ' فایل انتقال‌یافته از بخش دیگر به PDF Studio اضافه شد.');
+        }
         setStudioTab('pages');
-        setStatus(files.length + ' فایل انتقال‌یافته از بخش دیگر به PDF Studio اضافه شد.');
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : 'دریافت فایل انتقالی ناموفق بود.'))
       .finally(() => {
@@ -426,6 +453,39 @@ export const PdfStudioPage: React.FC = () => {
       output.addPage(copied);
     }
     return output.save({ useObjectStreams: true });
+  };
+
+  const returnEditedPdfToShipment = async () => {
+    const bundle = shipmentReturnBundle;
+    if (!bundle) return setError('این PDF از ثبت محموله فراخوانی نشده است.');
+    if (!pages.length) return setError('برای بازگشت به محموله، حداقل یک صفحه باید باقی بماند.');
+    const protectedIncluded = pages.some((item) => documents.some((document) =>
+      document.id === item.documentId && document.hasProtectedFeatures));
+    if (protectedIncluded && !window.confirm('فایل ورودی دارای امضا یا ساختار محافظت‌شده است. بازسازی صفحات ممکن است امضای دیجیتال/فرم تعاملی را معتبر نگه ندارد؛ فایل اصلی در آرشیو دست‌نخورده می‌ماند. فقط نسخه ویرایش‌شده را به محموله برگردانیم؟')) return;
+
+    setBusy(true);
+    setError('');
+    try {
+      const bytes = await createPdfBytes(pages);
+      const primary = bundle.documents.find((item) => item.metadata.id === bundle.primaryDocumentId);
+      if (!primary) throw new Error('اطلاعات سند اصلی برای بازگشت پیدا نشد.');
+      const editedFile = new File([toArrayBuffer(bytes)], primary.metadata.name || primary.file.name || 'document.pdf', {
+        type: 'application/pdf', lastModified: Date.now(),
+      });
+      const returnFiles = bundle.documents.map((item) =>
+        item.metadata.id === bundle.primaryDocumentId ? editedFile : item.file
+      );
+      const transferId = await createAppFileTransfer(returnFiles, 'shipment', {
+        editedDocumentId: bundle.primaryDocumentId,
+        selectedBillOfLadingId: bundle.selectedBillOfLadingId,
+        shipmentDraftDocuments: bundle.documents.map((item) => item.metadata),
+      });
+      navigate('/operations?shipmentFileTransfer=' + encodeURIComponent(transferId));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'بازگرداندن PDF ویرایش‌شده به محموله ناموفق بود.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const buildPdf = async (items: PageItem[], fileName: string, description: string) => {
@@ -1235,6 +1295,18 @@ export const PdfStudioPage: React.FC = () => {
             <Link to="/office" className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold">دبیرخانه</Link>
           </div>
         </header>
+
+        {shipmentReturnBundle && (
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+            <div className="min-w-0">
+              <b className="text-sm">ویرایش سند ثبت محموله</b>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">ترتیب، چرخش و حذف صفحات روی نسخه خروجی اعمال می‌شود؛ سایر اسناد موقت محموله نیز همراه این فایل حفظ می‌شوند.</p>
+            </div>
+            <button type="button" onClick={() => void returnEditedPdfToShipment()} disabled={busy || !pages.length} className="min-h-11 rounded-xl bg-emerald-600 px-4 text-xs font-black text-white disabled:opacity-40">
+              ذخیره تغییرات و بازگشت به ثبت محموله
+            </button>
+          </section>
+        )}
 
         <section className="overflow-hidden rounded-3xl border border-blue-500/25 bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-900 p-4 text-white shadow-lg md:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">

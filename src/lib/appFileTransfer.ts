@@ -1,4 +1,5 @@
-export type AppFileTransferTarget = 'chat' | 'pdf-studio' | 'file-manager';
+export type AppFileTransferTarget = 'chat' | 'pdf-studio' | 'file-manager' | 'shipment';
+export type AppFileTransferContext = Record<string, unknown>;
 
 type StoredFile = {
   name: string;
@@ -12,6 +13,7 @@ type TransferRecord = {
   target: AppFileTransferTarget;
   createdAt: number;
   files: StoredFile[];
+  context?: AppFileTransferContext;
 };
 
 const DATABASE_NAME = 'customs-os-file-transfer';
@@ -65,6 +67,7 @@ function writeRecord(database: IDBDatabase, record: TransferRecord): Promise<voi
 export async function createAppFileTransfer(
   files: readonly File[],
   target: AppFileTransferTarget,
+  context?: AppFileTransferContext,
 ): Promise<string> {
   if (!files.length) throw new Error('هیچ فایلی برای انتقال انتخاب نشده است.');
   if (files.length > MAX_TRANSFER_FILES) throw new Error('در هر انتقال حداکثر ۵۰ فایل مجاز است.');
@@ -74,6 +77,7 @@ export async function createAppFileTransfer(
     id,
     target,
     createdAt: Date.now(),
+    ...(context ? { context } : {}),
     files: files.map((file) => ({
       name: file.name || 'attachment',
       type: file.type || 'application/octet-stream',
@@ -96,10 +100,10 @@ export async function createAppFileTransfer(
   }
 }
 
-export async function consumeAppFileTransfer(
+export async function consumeAppFileTransferWithContext(
   id: string,
   expectedTarget: AppFileTransferTarget,
-): Promise<File[]> {
+): Promise<{ files: File[]; context?: AppFileTransferContext }> {
   if (!id) throw new Error('شناسه انتقال فایل معتبر نیست.');
   const database = await openTransferDatabase();
   let record: TransferRecord | null = null;
@@ -139,9 +143,20 @@ export async function consumeAppFileTransfer(
     throw new Error('فایل انتقالی پیدا نشد، منقضی شده یا برای این بخش ثبت نشده است؛ فایل را دوباره فوروارد کنید.');
   }
 
-  return transferRecord.files.map((file) => new File(
-    [file.blob],
-    file.name,
-    { type: file.type || file.blob.type || 'application/octet-stream', lastModified: file.lastModified || Date.now() },
-  ));
+  return {
+    files: transferRecord.files.map((file) => new File(
+      [file.blob],
+      file.name,
+      { type: file.type || file.blob.type || 'application/octet-stream', lastModified: file.lastModified || Date.now() },
+    )),
+    ...(transferRecord.context ? { context: transferRecord.context } : {}),
+  };
+}
+
+export async function consumeAppFileTransfer(
+  id: string,
+  expectedTarget: AppFileTransferTarget,
+): Promise<File[]> {
+  const transfer = await consumeAppFileTransferWithContext(id, expectedTarget);
+  return transfer.files;
 }

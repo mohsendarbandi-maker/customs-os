@@ -1,6 +1,7 @@
 import React,{useEffect,useState}from'react';
 import{CheckCircle2,Download,ExternalLink,Eye,FileText,Loader2,Plus,RefreshCw,Save,ShieldCheck,Ship,Sparkles,Upload}from'lucide-react';
-import{Link,useSearchParams}from'react-router-dom';
+import{Link,useNavigate,useSearchParams}from'react-router-dom';
+import { createAppFileTransfer, consumeAppFileTransferWithContext } from '../lib/appFileTransfer';
 import{supabase}from'../lib/supabase';
 import{invokeEdgeFunction}from'../lib/edgeFunction';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -49,8 +50,11 @@ const BUCKET='customs_documents';
 
 export const ShipmentFirstPage:React.FC=()=>{
  const{profile}=useAuth();
- const[searchParams]=useSearchParams();
+ const navigate=useNavigate();
+ const[searchParams,setSearchParams]=useSearchParams();
  const requestedShipmentId=searchParams.get('shipmentId');
+ const incomingShipmentFileTransferId=searchParams.get('shipmentFileTransfer');
+ const handledShipmentFileTransfers=React.useRef(new Set<string>());
  const preselectedShipmentId=React.useRef('');
  const[clients,setClients]=useState<any[]>([]),[vessels,setVessels]=useState<Vessel[]>([]),[lines,setLines]=useState<ShippingLine[]>([]),[rows,setRows]=useState<Row[]>([]),[registrationOrders,setRegistrationOrders]=useState<RegistrationOrderOption[]>([]),[shipmentCases,setShipmentCases]=useState<ShipmentCaseRef[]>([]),[docs,setDocs]=useState<Doc[]>([]),[customsOffices,setCustomsOffices]=useState<Office[]>([]);const[uploadTagInput,setUploadTagInput]=useState('');const uploadTags=[...new Set(uploadTagInput.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
  const[selected,setSelected]=useState(''),[form,setForm]=useState<Form>(empty),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[message,setMessage]=useState('');
@@ -126,9 +130,14 @@ const edit=React.useCallback((r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_i
    if(!profile?.organization_id||!profile.id)throw new Error('اطلاعات کاربر برای ذخیره فایل آماده نیست؛ دوباره وارد شوید.');
    if(document.sizeBytes<=0||document.sizeBytes>FILE_ARCHIVE_MAX_BYTES)
     throw new Error('برای اینکه فایل بعداً در تلگرام قابل بازیابی باشد، حجم هر سند باید حداکثر ۲۰ مگابایت باشد.');
+   const previousStoragePath=document.storagePath;
    const storagePath=`${profile.organization_id}/staging/${crypto.randomUUID()}-${safeStorageFilename(document.name)}`;
    const {error}=await supabase.storage.from(BUCKET).upload(storagePath,document.file,{contentType:document.mimeType,cacheControl:'3600',upsert:false});
    if(error)throw new Error(`ذخیره امن فایل ناموفق بود: ${error.message}`);
+   if(previousStoragePath && previousStoragePath!==storagePath){
+    const {error:cleanupError}=await supabase.storage.from(BUCKET).remove([previousStoragePath]);
+    if(cleanupError)console.warn('[ShipmentFirstPage] previous staged PDF cleanup failed:',cleanupError);
+   }
    setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,storagePath,uploadStatus:'ready',uploadError:undefined,uploadedBy:profile.id}:item));
    setMessage('فایل در فضای امن سایت ذخیره شد؛ بعد از ثبت محموله، آرشیو تلگرام به‌صورت خودکار در پس‌زمینه انجام می‌شود: '+document.name);
   }catch(error:any){
@@ -167,11 +176,82 @@ const edit=React.useCallback((r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_i
  const retryStagedShipmentDocument=(document:PendingShipmentDocument)=>{
   void storePendingShipmentDocument(document);
  };
- const previewPendingBillOfLading=(document:PendingShipmentDocument)=>{
+ const previewPendingBillOfLading=async(document:PendingShipmentDocument)=>{
+  if(document.mimeType==='application/pdf'){
+   if(pendingDocuments.some(item=>item.uploadStatus==='uploading')){
+    setMessage('ابتدا صبر کن ذخیره امن همه اسناد تمام شود؛ پس از بازگشت از PDF Studio فایل‌های دیگر محموله هم حفظ می‌شوند.');
+    return;
+   }
+   try{
+    const shipmentDraftDocuments=pendingDocuments.map(item=>({
+     id:item.id,name:item.name,displayName:item.displayName,documentType:item.documentType,
+     tags:item.tags,operationSections:item.operationSections,mimeType:item.mimeType,
+     sizeBytes:item.sizeBytes,pageCount:item.pageCount,storagePath:item.storagePath,
+     uploadedBy:item.uploadedBy,extractedFields:item.extractedFields,
+    }));
+    formDraft.saveDraftNow();
+    const transferId=await createAppFileTransfer(pendingDocuments.map(item=>item.file),'pdf-studio',{
+     returnTo:'shipment',primaryDocumentId:document.id,selectedBillOfLadingId,
+     shipmentDraftDocuments,
+    });
+    navigate('/pdf-studio?fileTransfer='+encodeURIComponent(transferId));
+   }catch(error){
+    setMessage(error instanceof Error?error.message:'انتقال فایل به PDF Studio ناموفق بود.');
+   }
+   return;
+  }
   if(previewBillOfLadingId===document.id){setPreviewBillOfLadingId('');setPreviewBillOfLadingUrl('');return;}
   setPreviewBillOfLadingId(document.id);
   setPreviewBillOfLadingUrl(document.previewUrl);
  };
+
+ useEffect(()=>{
+  const transferId=incomingShipmentFileTransferId;
+  if(!transferId||handledShipmentFileTransfers.current.has(transferId)||!profile?.id)return;
+  handledShipmentFileTransfers.current.add(transferId);
+  void consumeAppFileTransferWithContext(transferId,'shipment').then(async({files,context})=>{
+   const metadata=Array.isArray(context?.shipmentDraftDocuments)?context.shipmentDraftDocuments as Array<Record<string,unknown>>:[];
+   if(!metadata.length||metadata.length!==files.length)throw new Error('اطلاعات اسناد موقت محموله با فایل‌های برگشتی تطابق ندارد؛ هیچ فایلی جایگزین نشد.');
+   const editedDocumentId=String(context?.editedDocumentId||'');
+   if(!metadata.some(item=>String(item.id||'')===editedDocumentId))throw new Error('سند ویرایش‌شده در فهرست اسناد محموله پیدا نشد.');
+   const selectedId=String(context?.selectedBillOfLadingId||'');
+   const restored:PendingShipmentDocument[]=[];
+   for(let index=0;index<metadata.length;index++){
+    const item=metadata[index];
+    const id=String(item.id||'');
+    const isEdited=id===editedDocumentId;
+    const originalName=String(item.name||files[index].name||'document.pdf');
+    const mimeType=isEdited?'application/pdf':String(item.mimeType||files[index].type||'application/octet-stream');
+    const restoredFile=new File([files[index]],originalName,{type:mimeType,lastModified:files[index].lastModified||Date.now()});
+    let pageCount=Math.max(1,Number(item.pageCount)||1);
+    if(isEdited){
+     const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await restoredFile.arrayBuffer())}).promise;
+     pageCount=pdf.numPages;await pdf.destroy();
+    }
+    const previewUrl=URL.createObjectURL(restoredFile);
+    restored.push({
+     id,name:originalName,displayName:String(item.displayName||originalName),
+     documentType:String(item.documentType||'OTHER'),tags:Array.isArray(item.tags)?item.tags.filter((tag):tag is string=>typeof tag==='string'):[],
+     operationSections:Array.isArray(item.operationSections)?item.operationSections.filter((section):section is string=>typeof section==='string'):[],
+     mimeType,sizeBytes:restoredFile.size,pageCount,file:restoredFile,previewUrl,
+     storagePath:typeof item.storagePath==='string'&&item.storagePath?item.storagePath:undefined,
+     uploadStatus:isEdited||!item.storagePath?'uploading':'ready',
+     uploadedBy:String(item.uploadedBy||profile.id),
+     extractedFields:item.extractedFields&&typeof item.extractedFields==='object'?item.extractedFields as Record<string,string>:undefined,
+    });
+   }
+   setPendingDocuments(restored);
+   setSelectedBillOfLadingId(restored.some(item=>item.id===selectedId)?selectedId:'');
+   const edited=restored.find(item=>item.id===editedDocumentId)!;
+   setPreviewBillOfLadingId(edited.id);setPreviewBillOfLadingUrl(edited.previewUrl);
+   setMessage('نسخه ویرایش‌شده PDF برگشت؛ '+restored.length+' سند ثبت محموله حفظ شده است. در حال ذخیره نسخه جدید و جایگزینی فایل موقت قبلی…');
+   restored.filter(item=>item.id===editedDocumentId||!item.storagePath).forEach(item=>void storePendingShipmentDocument(item));
+  }).catch(error=>{
+   setMessage(error instanceof Error?error.message:'دریافت نسخه ویرایش‌شده از PDF Studio ناموفق بود.');
+  }).finally(()=>{
+   setSearchParams(current=>{const next=new URLSearchParams(current);next.delete('shipmentFileTransfer');return next;},{replace:true});
+  });
+ },[incomingShipmentFileTransferId,profile?.id,setSearchParams,storePendingShipmentDocument]);
  const extractSelectedBillOfLading=async()=>{
    const document=pendingDocuments.find(item=>item.id===selectedBillOfLadingId);
    if(!document){setMessage('ابتدا فایل بارنامه را انتخاب کن.');return;}
@@ -417,7 +497,7 @@ const edit=React.useCallback((r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_i
       </div>
       <div className="flex flex-wrap items-center gap-2">
        <button type="button" onClick={()=>setSelectedBillOfLadingId(document.id)} className={`rounded-lg px-3 py-2 text-xs font-bold ${selectedBillOfLadingId===document.id?'bg-[var(--primary)] text-white':'border app-border'}`}>{selectedBillOfLadingId===document.id?'بارنامه انتخاب‌شده':'انتخاب به‌عنوان بارنامه'}</button>
-       <button type="button" onClick={()=>void previewPendingBillOfLading(document)} className="rounded-lg border app-border px-3 py-2 text-xs"><Eye size={14} className="inline ml-1"/>نمایش</button>
+       <button type="button" disabled={document.mimeType==='application/pdf'&&pendingDocuments.some(item=>item.uploadStatus==='uploading')} onClick={()=>void previewPendingBillOfLading(document)} className="rounded-lg border app-border px-3 py-2 text-xs disabled:opacity-40"><Eye size={14} className="inline ml-1"/>{document.mimeType==='application/pdf'?'ویرایش در PDF Studio':'نمایش'}</button>
       </div>
      </div>
      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -428,7 +508,7 @@ const edit=React.useCallback((r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_i
      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">{SHIPMENT_OPERATION_SECTIONS.map(([value,label])=><label key={value} className="inline-flex items-center gap-1.5 text-[11px]"><input type="checkbox" checked={document.operationSections.includes(value)} onChange={e=>setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,operationSections:e.target.checked?[...new Set([...item.operationSections,value])]:item.operationSections.filter(section=>section!==value)}:item))}/>{label}</label>)}</div>
      <div className="text-[10px] app-muted mt-1">نام فایل اصلی برای حفظ سابقه تغییر نمی‌کند: {document.name}</div>
      {document.uploadStatus==='failed'&&<div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-600"><span>{document.uploadError||'ذخیره فایل ناموفق بود.'}</span><button type="button" onClick={()=>retryStagedShipmentDocument(document)} className="rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">تلاش دوباره برای ذخیره فایل</button></div>}{document.uploadStatus==='ready'&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">نسخه امن فایل ذخیره شد؛ با ثبت محموله، همین سند به محموله متصل و برای آرشیو تلگرام صف می‌شود.</div>}{document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}
-     {previewBillOfLadingId===document.id&&(document.mimeType==="application/pdf"?<iframe title={document.name} src={previewBillOfLadingUrl||document.previewUrl} className="mt-3 h-[420px] w-full rounded-xl border app-border bg-white"/>:<img alt={document.name} src={previewBillOfLadingUrl||document.previewUrl} className="mt-3 max-h-[420px] w-full rounded-xl border app-border bg-white object-contain"/>)}
+     {previewBillOfLadingId===document.id&&document.mimeType!=="application/pdf"&&<img alt={document.name} src={previewBillOfLadingUrl||document.previewUrl} className="mt-3 max-h-[420px] w-full rounded-xl border app-border bg-white object-contain"/>}
     </div>)}
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--surface-2)] p-3">
      <div className="text-xs app-muted">انتخاب و پیش‌نمایش فوراً انجام می‌شود. فایل‌های کوچک‌تر مستقیماً از مرورگر برای استخراج اطلاعات استفاده می‌شوند؛ آرشیو تلگرام پس از ثبت محموله در پس‌زمینه ادامه می‌یابد.</div>
