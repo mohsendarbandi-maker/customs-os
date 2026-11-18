@@ -101,7 +101,7 @@ BEGIN
      OR has_function_privilege('anon','public.ai_operator_transition_command(uuid,text,timestamp with time zone,timestamp with time zone,jsonb,text,jsonb,jsonb,uuid,timestamp with time zone)','EXECUTE') THEN
     RAISE EXCEPTION 'Anonymous role must not execute AI Operator transition RPCs';
   END IF;
-  IF has_function_privilege('authenticated','private.verify_ai_operator_transition_proof(text,text,uuid)','EXECUTE') THEN
+  IF has_function_privilege('authenticated','ai_operator_private.verify_ai_operator_transition_proof(text,text,uuid)','EXECUTE') THEN
     RAISE EXCEPTION 'Authenticated users must not call the private proof verifier directly';
   END IF;
 

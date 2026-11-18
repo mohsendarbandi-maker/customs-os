@@ -198,8 +198,8 @@ describe('AI Operator security invariants',()=>{
     expect(signedMigration).toContain("Direct executing/terminal transitions are forbidden");
     expect(signedMigration).toContain("ai_operator_fail_command_with_proof");
     expect(signedMigration).toContain("ai_operator_begin_command_with_proof");
-    expect(signedMigration).toContain("p_status = 'executing'");
+    expect(signedMigration).toContain("v_proof ->> 'status' <> 'executing'");
     expect(signedMigration).toContain("executed_by = v_uid");
-    expect(signedMigration).toContain("private.verify_ai_operator_transition_proof");
+    expect(signedMigration).toContain("ai_operator_private.verify_ai_operator_transition_proof");
   });
 });

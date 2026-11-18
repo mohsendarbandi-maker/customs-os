@@ -4,10 +4,10 @@
 --   2) Supabase Vault secret named ai_operator_transition_hmac_v1
 -- Never commit either secret. The Edge Function verifies parity before executing a business action.
 
-create schema if not exists private;
-revoke all on schema private from public, anon, authenticated;
+create schema if not exists ai_operator_private;
+revoke all on schema ai_operator_private from public, anon, authenticated;
 
-create or replace function private.verify_ai_operator_transition_proof(
+create or replace function ai_operator_private.verify_ai_operator_transition_proof(
   p_proof_payload text,
   p_proof_signature text,
   p_expected_user_id uuid
@@ -90,7 +90,7 @@ begin
 end;
 $$;
 
-revoke all on function private.verify_ai_operator_transition_proof(text, text, uuid)
+revoke all on function ai_operator_private.verify_ai_operator_transition_proof(text, text, uuid)
   from public, anon, authenticated;
 
 create or replace function public.ai_operator_create_command(
@@ -197,7 +197,7 @@ create or replace function public.ai_operator_assert_transition_signer(
 returns boolean
 language plpgsql
 security definer
-set search_path = pg_catalog, public, private, pg_temp
+set search_path = pg_catalog, public, ai_operator_private, pg_temp
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -207,7 +207,7 @@ begin
     raise exception 'کاربر وارد سامانه نشده است';
   end if;
 
-  v_proof := private.verify_ai_operator_transition_proof(
+  v_proof := ai_operator_private.verify_ai_operator_transition_proof(
     p_proof_payload, p_proof_signature, v_uid
   );
 
@@ -227,7 +227,7 @@ create or replace function public.ai_operator_begin_command_with_proof(
 returns public.ai_operator_commands
 language plpgsql
 security definer
-set search_path = pg_catalog, public, private, pg_temp
+set search_path = pg_catalog, public, ai_operator_private, pg_temp
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -243,7 +243,7 @@ begin
     raise exception 'کاربر وارد سامانه نشده است';
   end if;
 
-  v_proof := private.verify_ai_operator_transition_proof(
+  v_proof := ai_operator_private.verify_ai_operator_transition_proof(
     p_proof_payload, p_proof_signature, v_uid
   );
 
@@ -318,7 +318,7 @@ create or replace function public.ai_operator_fail_command_with_proof(
 returns public.ai_operator_commands
 language plpgsql
 security definer
-set search_path = pg_catalog, public, private, pg_temp
+set search_path = pg_catalog, public, ai_operator_private, pg_temp
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -332,7 +332,7 @@ begin
     raise exception 'کاربر وارد سامانه نشده است';
   end if;
 
-  v_proof := private.verify_ai_operator_transition_proof(
+  v_proof := ai_operator_private.verify_ai_operator_transition_proof(
     p_proof_payload, p_proof_signature, v_uid
   );
 
@@ -385,7 +385,7 @@ create or replace function public.ai_operator_complete_command_with_proof(
 returns public.ai_operator_commands
 language plpgsql
 security definer
-set search_path = pg_catalog, public, private, pg_temp
+set search_path = pg_catalog, public, ai_operator_private, pg_temp
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -398,7 +398,7 @@ begin
     raise exception 'کاربر وارد سامانه نشده است';
   end if;
 
-  v_proof := private.verify_ai_operator_transition_proof(
+  v_proof := ai_operator_private.verify_ai_operator_transition_proof(
     p_proof_payload, p_proof_signature, v_uid
   );
 
