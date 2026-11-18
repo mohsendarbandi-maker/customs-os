@@ -136,7 +136,42 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
   }finally{setBusy(false)}
  };
 
- const reviewAction=async(action:'approve'|'reject')=>{if(!reviewSourceId)return;setBusy(true);setErr('');try{const{data,error}=await supabase.functions.invoke('knowledge-ai',{body:{action,source_id:reviewSourceId,note:action==='reject'?'رد شده در بررسی انسانی':'تأیید و انتشار پس از بررسی انسانی'}});if(error)throw error;if(data?.error)throw new Error(data.error);setReview(null);setReviewSourceId('');await load()}catch(e:any){setErr(e?.message||'عملیات بررسی ناموفق بود.')}finally{setBusy(false)}};
+ const reviewAction=async(action:'approve'|'reject')=>{
+  if(!reviewSourceId)return;
+  setBusy(true);setErr('');
+  try{
+   if(action==='reject'){
+    const{data,error}=await supabase.functions.invoke('knowledge-ai',{body:{action,source_id:reviewSourceId,note:'رد شده در بررسی انسانی'}});
+    if(error)throw error;if(data?.error)throw new Error(data.error);
+    setReview(null);setReviewSourceId('');await load();return;
+   }
+   setUploadStage('کنترل کیفیت استخراج متن و صفحات');
+   const qa=await supabase.functions.invoke('knowledge-ai',{body:{action:'qa',source_id:reviewSourceId}});
+   if(qa.error)throw qa.error;
+   if(qa.data?.error)throw new Error(qa.data.error);
+   const metrics=qa.data?.metrics||{};
+   if(!qa.data?.passed){
+    const reasons=Array.isArray(qa.data?.warnings)?qa.data.warnings.join('، '):'معیارهای کیفیت استخراج تأمین نشده است.';
+    throw new Error('کنترل کیفیت اجازه انتشار نداد: '+reasons);
+   }
+   const qaWarnings=Array.isArray(qa.data?.warnings)?qa.data.warnings:[];
+   setUploadStage('ایندکس‌گذاری برداری '+(metrics.nonempty_chunks||0)+' قطعه؛ '+(metrics.unique_pages||0)+' صفحه شناسایی‌شده');
+   let result:any=null;
+   for(let attempt=0;attempt<250;attempt++){
+    const{data,error}=await supabase.functions.invoke('knowledge-ai',{body:{action:'approve',source_id:reviewSourceId,note:'تأیید پس از کنترل کیفیت و ایندکس‌گذاری کامل'}});
+    if(error)throw error;if(data?.error)throw new Error(data.error);
+    result=data;
+    if(data?.status==='active')break;
+    if(data?.status!=='indexing')throw new Error('وضعیت غیرمنتظره هنگام ایندکس‌گذاری: '+String(data?.status||'نامشخص'));
+    setUploadStage('ایندکس‌گذاری برداری: '+data.embedded_chunks+'/'+data.total_chunks+' قطعه');
+   }
+   if(result?.status!=='active')throw new Error('ایندکس‌گذاری بیش از سقف مجاز ادامه یافت؛ با فشردن دوباره تأیید، از ادامه کار تکمیل می‌شود.');
+   setUploadStage('ایندکس کامل شد: '+result.embedded_chunks+' قطعه برداری');
+   if(qaWarnings.length)setErr('هشدارهای کنترل کیفیت: '+qaWarnings.join('، '));
+   setReview(null);setReviewSourceId('');await load();
+  }catch(e:any){setErr(e?.message||'عملیات بررسی ناموفق بود.')}
+  finally{setBusy(false)}
+ };
  const resumeOrReviewSource=(source:Source)=>{
   if(source.status==='draft'){
    setDraftSourceId(source.id);setFile(null);setReview(null);setReviewSourceId('');
