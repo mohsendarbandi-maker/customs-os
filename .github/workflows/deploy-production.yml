@@ -1,6 +1,8 @@
 name: Customs OS Production Deployment
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       confirmation:
@@ -17,7 +19,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event.inputs.confirmation == 'DEPLOY CUSTOMS OS'
+    if: github.ref == 'refs/heads/main' && ((github.event_name == 'push' && startsWith(github.event.head_commit.message, '[deploy-approved]')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.confirmation == 'DEPLOY CUSTOMS OS'))
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 25
