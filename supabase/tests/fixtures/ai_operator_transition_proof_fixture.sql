@@ -21,6 +21,8 @@ $$;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+GRANT USAGE ON SCHEMA extensions TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION extensions.hmac(bytea, bytea, text) TO anon, authenticated;
 CREATE SCHEMA IF NOT EXISTS vault;
 
 CREATE TABLE IF NOT EXISTS auth.users (id uuid primary key);
