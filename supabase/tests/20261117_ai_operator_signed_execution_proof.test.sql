@@ -277,6 +277,6 @@ BEGIN
     RAISE EXCEPTION 'Signed clarification was incorrectly recorded as execution';
   END IF;
 END;
-$;
+$$;
 
 ROLLBACK;
