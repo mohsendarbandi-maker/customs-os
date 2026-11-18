@@ -470,7 +470,7 @@ export const FileManagerPage: React.FC = () => {
 
         let customsDocumentId: string | null = null;
         try {
-          const { data: existingDocument, error: existingDocumentError } = await supabase.from('customs_documents')
+          const { data: existingDocument, error: existingDocumentError } = await supabase.from('customs_documents' as any)
             .select('id')
             .eq('organization_id', organizationId)
             .eq('file_asset_id', archived.fileAssetId)
@@ -478,7 +478,7 @@ export const FileManagerPage: React.FC = () => {
           if (existingDocumentError) throw existingDocumentError;
           customsDocumentId = existingDocument?.id || null;
           if (!customsDocumentId) {
-            const { data: documentRow, error: documentInsertError } = await supabase.from('customs_documents').insert({
+            const { data: documentRow, error: documentInsertError } = await supabase.from('customs_documents' as any).insert({
               organization_id: organizationId,
               shipment_id: parent.shipment_id || null,
               client_id: parent.client_id || null,
@@ -505,7 +505,7 @@ export const FileManagerPage: React.FC = () => {
           console.warn('[FileManagerPage] canonical customs document link could not be created; File Manager row is retained:', documentLinkCause);
         }
         if (customsDocumentId) {
-          const { error: metadataSyncError } = await supabase.from('customs_documents').update({
+          const { error: metadataSyncError } = await supabase.from('customs_documents' as any).update({
             display_name: displayName,
             document_type: documentType,
             description: pending.description.trim() || null,
@@ -581,7 +581,7 @@ export const FileManagerPage: React.FC = () => {
                 .eq('organization_id', organizationId);
               if (saveExtractionError) throw saveExtractionError;
               if (customsDocumentId) {
-                const { error: customsExtractionError } = await supabase.from('customs_documents')
+                const { error: customsExtractionError } = await supabase.from('customs_documents' as any)
                   .update({
                     extraction,
                     extraction_status: 'completed',
@@ -599,7 +599,7 @@ export const FileManagerPage: React.FC = () => {
                 metadata: { ...nextMetadata, aiExtractionStatus: 'failed', aiExtractionError: reason.slice(0, 1000) },
               }).eq('id', fileManagerRow.id).eq('organization_id', organizationId);
               if (customsDocumentId) {
-                await supabase.from('customs_documents').update({
+                await supabase.from('customs_documents' as any).update({
                   extraction_status: 'failed',
                   extraction_error: reason.slice(0, 2000),
                   extraction_completed_at: new Date().toISOString(),
@@ -675,7 +675,7 @@ export const FileManagerPage: React.FC = () => {
     const copyAliasAssetId = typeof file.metadata?.copyAliasFileAssetId === 'string' ? file.metadata.copyAliasFileAssetId : '';
     const downloadStorageCopy = async (): Promise<Blob> => {
       if (!file.storage_path) throw new Error('نسخه پشتیبان فایل در Supabase Storage ثبت نشده است.');
-      const { data, error: storageError } = await supabase.storage.from('customs_documents').download(file.storage_path);
+      const { data, error: storageError } = await supabase.storage.from('customs_documents' as any).download(file.storage_path);
       if (storageError) throw storageError;
       return data;
     };

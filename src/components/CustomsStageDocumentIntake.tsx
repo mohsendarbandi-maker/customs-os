@@ -104,7 +104,7 @@ export const CustomsStageDocumentIntake: React.FC<Props> = ({
       .maybeSingle();
     if (declarationError) throw declarationError;
     const shipmentId = declarationRow?.shipment_id || null;
-    let documentQuery = supabase.from('customs_documents')
+    let documentQuery = supabase.from('customs_documents' as any)
       .select('id,original_name,display_name,document_type,description,tags,operation_stage,extraction,extraction_status,extraction_error,storage_path,file_asset_id,storage_backend,mime_type,size_bytes,created_at')
       .eq('organization_id', organizationId)
       .eq('operation_stage', stage)
@@ -153,7 +153,7 @@ export const CustomsStageDocumentIntake: React.FC<Props> = ({
     setExtractingId(document.id);
     setError('');
     try {
-      const { error: startError } = await supabase.from('customs_documents')
+      const { error: startError } = await supabase.from('customs_documents' as any)
         .update({ extraction_status: 'processing', extraction_error: null } as any)
         .eq('id', document.id).eq('organization_id', organizationId);
       if (startError) throw startError;
@@ -178,7 +178,7 @@ export const CustomsStageDocumentIntake: React.FC<Props> = ({
         provider: data?.provider || null,
         extractedAt: new Date().toISOString(),
       };
-      const { error: updateError } = await supabase.from('customs_documents')
+      const { error: updateError } = await supabase.from('customs_documents' as any)
         .update({
           extraction,
           extraction_status: 'completed',
@@ -194,7 +194,7 @@ export const CustomsStageDocumentIntake: React.FC<Props> = ({
       setMessage('اطلاعات سند «' + (document.display_name || document.original_name) + '» برای بخش «' + stageLabel + '» استخراج و ذخیره شد.');
     } catch (cause: any) {
       const reason = cause?.message || 'استخراج هوشمند سند ناموفق بود.';
-      await supabase.from('customs_documents').update({
+      await supabase.from('customs_documents' as any).update({
         extraction_status: 'failed',
         extraction_error: reason.slice(0, 2000),
         extraction_completed_at: new Date().toISOString(),
@@ -241,7 +241,7 @@ export const CustomsStageDocumentIntake: React.FC<Props> = ({
     if (storageError) throw new Error('ذخیره فایل اصلی ناموفق بود: ' + storageError.message);
     let documentSaved = false;
     try {
-      const { data: row, error: insertError } = await supabase.from('customs_documents').insert({
+      const { data: row, error: insertError } = await supabase.from('customs_documents' as any).insert({
         organization_id: organizationId,
         shipment_id: declaration.shipment_id,
         case_id: declaration.case_id,

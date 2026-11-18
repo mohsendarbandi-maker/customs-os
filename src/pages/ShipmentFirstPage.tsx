@@ -103,7 +103,7 @@ const set=(k:keyof Form,v:string)=>{setForm(p=>({...p,[k]:v,...(k==='ownerId'?{r
  };
  const loadDocs=async(id:string)=>{
   if(!id){setDocs([]);return}
-  const{data,error}=await supabase.from('shipment_documents').select('id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,document_type,description,tags,operation_stage,storage_backend,file_asset_id,folder_id,telegram_archive_requested,created_at').eq('shipment_id',id).order('created_at',{ascending:false});
+  const{data,error}=await supabase.from('shipment_documents' as any).select('id,document_name,original_file_name,storage_path,mime_type,file_size_bytes,document_type,description,tags,operation_stage,storage_backend,file_asset_id,folder_id,telegram_archive_requested,created_at').eq('shipment_id',id).order('created_at',{ascending:false});
   if(error){setMessage(error.message);return} setDocs((data||[]) as Doc[]);
  };
  const load=async()=>{
@@ -260,7 +260,7 @@ const edit=React.useCallback((r:Row)=>{setQueuedShipmentUploads([]);const v=vess
     const shipmentFolder=await getDefaultShipmentUploadFolder(shipmentId);
     for(const staged of pendingDocuments){
      try{
-      const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
+      const {data:doc,error:docError}=await supabase.from('shipment_documents' as any).insert({
        organization_id:profile.organization_id,shipment_id:shipmentId,uploaded_by:staged.uploadedBy,
        document_name:staged.displayName.trim()||staged.name,original_file_name:staged.name,
         storage_path:staged.storagePath!,storage_backend:'supabase',
@@ -336,7 +336,7 @@ const edit=React.useCallback((r:Row)=>{setQueuedShipmentUploads([]);const v=vess
      storagePath=profile.organization_id+'/'+selected+'/'+crypto.randomUUID()+'-'+safeStorageFilename(file.name);
      const {error:storageError}=await supabase.storage.from(BUCKET).upload(storagePath,file,{contentType:mime,cacheControl:'3600',upsert:false});
      if(storageError)throw new Error('ذخیره امن فایل ناموفق بود: '+storageError.message);
-     const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
+     const {data:doc,error:docError}=await supabase.from('shipment_documents' as any).insert({
       organization_id:profile.organization_id,shipment_id:selected,uploaded_by:profile.id,
       document_name:item.displayName.trim()||file.name,original_file_name:file.name,
       storage_path:storagePath,mime_type:mime,file_size_bytes:file.size,folder_id:folder.id,
@@ -379,7 +379,7 @@ const edit=React.useCallback((r:Row)=>{setQueuedShipmentUploads([]);const v=vess
      .update({metadata}).eq('id',mirror.id).eq('organization_id',profile.organization_id);
     if(mirrorUpdateError)throw mirrorUpdateError;
    }
-   const {error}=await supabase.from('shipment_documents').update({telegram_archive_requested:true})
+   const {error}=await supabase.from('shipment_documents' as any).update({telegram_archive_requested:true})
     .eq('id',d.id).eq('organization_id',profile.organization_id);
    if(error)throw error;
    await loadDocs(selected);
@@ -444,7 +444,7 @@ const edit=React.useCallback((r:Row)=>{setQueuedShipmentUploads([]);const v=vess
        <button type="button" onClick={()=>void previewPendingBillOfLading(document)} className="rounded-lg border app-border px-3 py-2 text-xs"><Eye size={14} className="inline ml-1"/>نمایش</button>
       </div>
      </div>
-     {document.uploadStatus==='failed'&&<div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-600"><span>{document.uploadError||'ذخیره فایل ناموفق بود.'}</span><button type="button" onClick={()=>retryStagedShipmentDocument(document)} className="rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">تلاش دوباره برای ذخیره فایل</button></div>}{document.uploadStatus==='ready'&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">نسخه امن فایل ذخیره شد؛ با ثبت محموله، همین سند با مشخصات مستقل به فایل‌منیجر متصل می‌شود.</div>
+     {document.uploadStatus==='failed'&&<div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-600"><span>{document.uploadError||'ذخیره فایل ناموفق بود.'}</span><button type="button" onClick={()=>retryStagedShipmentDocument(document)} className="rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">تلاش دوباره برای ذخیره فایل</button></div>}{document.uploadStatus==='ready'&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">نسخه امن فایل ذخیره شد؛ با ثبت محموله، همین سند با نام و مشخصات مستقل به فایل‌منیجر متصل می‌شود و برای آرشیو تلگرام صف می‌شود.</div>
      <div className="mt-3 grid gap-2 sm:grid-cols-2"><label className="text-[11px] app-muted">نام نمایشی این فایل<input value={document.displayName} onChange={event=>setPendingDocuments(items=>items.map(item=>item.id===document.id?{...item,displayName:event.target.value}:item))} className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] px-3 py-2 text-sm"/></label><label className="text-[11px] app-muted">نوع سند<select value={document.documentType} onChange={event=>setPendingDocuments(items=>items.map(item=>item.id===document.id?{...item,documentType:event.target.value as CustomsDocumentType}:item))} className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] px-3 py-2 text-sm">{CUSTOMS_DOCUMENT_TYPE_OPTIONS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className="text-[11px] app-muted">بخش عملیات<select value={document.operationStage} onChange={event=>setPendingDocuments(items=>items.map(item=>item.id===document.id?{...item,operationStage:event.target.value}:item))} className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] px-3 py-2 text-sm">{Object.entries(CUSTOMS_OPERATION_STAGE_LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label className="text-[11px] app-muted">برچسب‌های همین فایل<input value={document.tagsText} onChange={event=>setPendingDocuments(items=>items.map(item=>item.id===document.id?{...item,tagsText:event.target.value}:item))} placeholder="فاکتور، بارنامه، مجوز…" className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] px-3 py-2 text-sm"/></label><label className="text-[11px] app-muted sm:col-span-2">توضیحات مستقل<input value={document.description} onChange={event=>setPendingDocuments(items=>items.map(item=>item.id===document.id?{...item,description:event.target.value}:item))} className="mt-1 w-full rounded-lg border app-border bg-[var(--surface)] px-3 py-2 text-sm"/></label></div>}{document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}
      {previewBillOfLadingId===document.id&&(document.mimeType==="application/pdf"?<iframe title={document.name} src={previewBillOfLadingUrl||document.previewUrl} className="mt-3 h-[420px] w-full rounded-xl border app-border bg-white"/>:<img alt={document.name} src={previewBillOfLadingUrl||document.previewUrl} className="mt-3 max-h-[420px] w-full rounded-xl border app-border bg-white object-contain"/>)}
     </div>)}
