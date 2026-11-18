@@ -118,3 +118,21 @@ Eight sensitive functions were read from live PostgreSQL definitions and execute
 - Unit tests, isolated PostgreSQL ACL and audit attribution, immutable terminal-state tests, TypeScript, ESLint, build, Deno checks and Cloudflare Worker dry-run passed. Mobile viewport smoke was skipped.
 - Production vulnerability remains until the matching migration and Edge Function are released together. No Production schema/function/site/Worker change was made.
 - Release checks: code review; confirm service-role env variable is available in deployed Edge runtime without exposing it; exercise AI Operator plan/confirm/execute/history with authenticated browser; apply migration and deploy function only under explicit release approval.
+
+
+
+## Stage 8 — AI Operator signed proof rollout gate (2026-11-18)
+
+- PR301 is a tested candidate, not a live fix. Production remains exposed until its migration and Edge Function are released together.
+- Required Edge runtime secret: `AI_OPERATOR_TRANSITION_HMAC_SECRET` (random, at least 32 characters). Required Vault secret name: `ai_operator_transition_hmac_v1`; values must match byte-for-byte.
+- Neither secret has been provisioned by this change. No Supabase secret/Vault config was altered. Do not apply the migration before both secrets are created and signer preflight is verified.
+- If an operation succeeds but signed completion cannot be persisted, command remains `executing` and is deliberately non-retryable. This prevents duplicate business writes but requires a reconciliation process before an operator can safely resolve it.
+- PR301 requires authenticated Edge invocation acceptance (safe / confirmation-required / destructive flows, signed begin, successful completion, failure and history) before Production release.
+
+## Stage 9 — registration-order legacy candidates (2026-11-18)
+
+- Customs-data registration numbers are historical evidence, not an automatically trusted foreign key. Live rows include cross-cargo-owner references, conflicting case references, unknown master numbers and apparent order-capacity conflicts.
+- PR302 therefore exposes only uniquely matched, same-organization/same-owner candidates and never auto-updates `shipments.registration_order_id`.
+- Candidate rows are separate from confirmed master totals and do not consume/release capacity. A future explicit attach action must use the normal shipment update path and allow the existing database capacity/owner trigger to reject an invalid allocation.
+- Ambiguous normalized parent numbers, conflicting case references, direct-FK rows and already case-linked rows are excluded from the candidate list.
+- Production has not been migrated, backfilled or mutated. PR302 remains Draft pending full CI and authenticated browser acceptance.

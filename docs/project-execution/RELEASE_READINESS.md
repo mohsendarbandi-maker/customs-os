@@ -111,3 +111,20 @@ Status: NOT READY FOR RELEASE APPROVAL
 - PostgreSQL AI Operator server-owned ledger ACL/audit tests, all workflow/digest contracts, Vitest, TypeScript, ESLint, build, Deno checks and Worker dry-run passed. Mobile viewport smoke was skipped.
 - Do not mark Production fixed: migration and Edge Function remain Draft/unreleased. Confirm runtime secret availability and complete authenticated plan/confirmation/execution/history acceptance before a release. Production migration, Edge deploy, site/Worker deployment and PR merge require explicit approval.
 - Open configuration warnings: Auth leaked-password protection disabled and pg_net installed in public schema. Authenticated acceptance for PR294 independent activities and PR296 PDF Studio lineage remains outstanding.
+
+
+
+## 2026-11-18 — Stage 8 signed proof and Stage 9 reconciliation candidates
+
+### Candidate verification
+- PR301 signed AI Operator command-state proof: full CI, dedicated PostgreSQL contract and Shipment Cost CI passed (44240033780, 44240033778, 44240033773). Draft only.
+- PR302 legacy registration-order candidate contract passed in isolated PostgreSQL (44243008963). UI integration is committed in the PR branch; broad TypeScript/lint/build pipelines were still running at head `aae971fa03af13ddd58468d5c53d40fd2969236a` in runs 44243373100 and 44243373151.
+- Main branch remains at the previously reported Production SHA unless separately rechecked; no merge occurred in these stages.
+
+### Release blockers
+- PR301: provision matching Edge HMAC secret and Vault secret; complete authenticated end-to-end acceptance before migration/function release.
+- PR302: finish all CI; review candidate list against a controlled real shipment set; decide and implement an explicit authorized attach workflow only where supported by business evidence.
+- Complete authenticated real-shipment PDF Studio → archive → File Manager parent/child/retry/reload acceptance for PR296.
+- Complete authenticated independent activity workflow acceptance for PR294.
+- Security PR297–299 and AI Operator PR301 are candidate migrations/functions, not Production fixes.
+- No Production migration/backfill, PR merge, Edge Function deploy, Worker/site deploy or real business-data edit was performed.

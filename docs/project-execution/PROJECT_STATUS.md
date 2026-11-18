@@ -168,3 +168,26 @@ A read-only review sampled eight high-impact functions: declaration exit stage, 
 ### Other security PRs and configuration
 - PR297/298/299 remain Draft, with prior CI success recorded in Stage 6. Production grants have not yet been changed.
 - Auth leaked-password protection remains disabled; pg_net-in-public remains an advisor warning. No supported config mutation was available from current project tools.
+
+
+
+## Stage 8 — AI Operator signed transition proof (2026-11-18)
+
+### PR301 — signed proof for all trusted command-state changes
+- Draft PR301 head `c11de0b5df1f629d7b07797c429b4caa06379c43`.
+- Replaced the earlier proposed service-role ledger-write approach with a narrower HMAC-SHA256 capability: the Edge Function signs create/begin/completion/failure proof payloads, while PostgreSQL verifies key parity against a dedicated Vault secret and binds every transition to `auth.uid()` and the command id.
+- Direct browser INSERT on `ai_operator_commands` is revoked; command creation derives user and organization from the active profile. Direct unsigned transition to executing/failed/clarification/executed is rejected. Only signed RPCs can begin or complete a command.
+- The Edge Function requires signer preflight before any business operation. A command left in `executing` after successful business execution but failed audit persistence is blocked from re-execution and marked for reconciliation.
+- Isolated PostgreSQL signature/ACL/tenant/expiry/tamper/audit-attribution tests, Vitest HMAC tests, Deno check, main verification and Shipment Cost CI all passed (runs 44240033780, 44240033778 and 44240033773).
+- PR301 remains Draft; no Production migration, HMAC secret, Edge Function deployment or merge has been applied.
+
+## Stage 9 — legacy registration-order candidate matching (2026-11-18)
+
+### PR302 — review-only legacy shipment candidates
+- Draft PR302 latest development head `aae971fa03af13ddd58468d5c53d40fd2969236a`.
+- Live read-only data audit found 17 shipments without a direct master-order FK; 14 have a customs-data registration number, of which 10 can be matched to a master record within same organization/owner. Four references have no corresponding master record. Three have no customs registration reference.
+- The live audit also revealed historical over-capacity/conflicting reference risks. Therefore customs-data number matches are intentionally not added to authoritative capacity totals and are not auto-linked.
+- PR302 adds `registration_order_legacy_match_candidates`, Persian/Arabic digit normalization, same-tenant/exact-owner uniqueness and ambiguity/conflicting-case exclusions. Existing direct FK and case-based allocation/capacity behavior remains authoritative.
+- Registration Orders UI displays unresolved matches separately with their bill, net weight and invoice amount; it clearly states they do not count toward confirmed capacity and have not been auto-attached.
+- Isolated PostgreSQL candidate contract run 44243008963 succeeded on the migration/test head. Full UI typecheck/lint/build and the broader main verify pipeline were still running at the latest update (44243373164/44243373100/44243373151, head `aae971fa03af13ddd58468d5c53d40fd2969236a`).
+- No Production migration, data backfill, FK update, merge or deployment.

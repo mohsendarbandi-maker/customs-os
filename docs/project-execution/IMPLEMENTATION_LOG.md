@@ -105,3 +105,20 @@
 - Shipment Cost workflow `44154127402`: success (tests, typecheck, lint, build, embedded Supabase client configuration).
 - Mobile chat/reminders keyboard viewport smoke was skipped by existing workflow conditions and is not counted as passed.
 - PR300 remains Draft and Production has not been migrated/deployed. Authenticated browser acceptance and explicit release approval remain outstanding.
+
+
+
+## 2026-11-18 — Stage 8: AI Operator signed proof implementation
+
+- Draft PR301 implements a signed transition capability without introducing a service-role key into the AI Operator runtime path. The Edge Function signs canonical JSON payloads with HMAC-SHA256; Postgres verifies the signature using the matching Supabase Vault secret and validates the authenticated user, command ID, proof purpose, status and short issue-time window.
+- Direct INSERT for authenticated users on `ai_operator_commands` is revoked. A new authenticated command-create RPC derives organization and actor from the current active profile. Unsigned transition RPCs cannot enter executing or terminal states.
+- Added signed begin, completion and failure RPCs; actor identity and execution timestamps are DB-owned. Failure-to-write after a successful business action yields `audit_pending` and prevents duplicate re-execution.
+- Isolated PostgreSQL and Vitest tests, Deno check, full verify and Shipment Cost CI succeeded: 44240033780, 44240033778, 44240033773. PR301 remains Draft and unreleased.
+- Required for rollout: provision the same random 32+ character secret in Edge Function secret `AI_OPERATOR_TRANSITION_HMAC_SECRET` and Vault secret `ai_operator_transition_hmac_v1`, run a controlled authenticated acceptance test, then seek explicit release authorization. No secrets, Production migration or deploy changed.
+
+## 2026-11-18 — Stage 9: safe customs registration-order legacy matching
+
+- Read-only Production analysis identified 17 shipments with no direct `registration_order_id`; 14 have a customs-data registration reference, 10 uniquely match a same-tenant/same-owner master order, four point to absent master records, and three have no customs reference.
+- Found evidence of conflicting legacy references and potential over-allocation if customs-data text were silently treated as a committed FK. Changed the design to review-only candidates rather than automatic linkage or capacity accounting.
+- Draft PR302 adds candidate lookup/view, Persian/Arabic numeral normalization, strict owner/tenant matching, duplicate-normalized-number ambiguity rejection, direct-FK precedence and conflicting-case exclusion. RegistrationOrders UI displays the separate review list and warns it does not change confirmed capacity.
+- Migration contract run 44243008963 succeeded after fixing workflow health-check flags and the isolated fixture role. At latest head `aae971fa03af13ddd58468d5c53d40fd2969236a`, broader Shipment Cost and main verify workflows were still running. PR302 remains Draft. No Production writes/backfill/merge/deploy.
