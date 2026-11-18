@@ -56,14 +56,6 @@ jobs:
       - name: Verify ACL, signature, owner binding, replay window, and audit attribution
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_ai_operator_signed_execution_proof.test.sql
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
-      - name: Check AI Operator Edge Function
-        run: deno check --node-modules-dir=auto supabase/functions/ai-operator/index.ts
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -74,3 +66,11 @@ jobs:
 
       - name: Run AI Operator signing unit test
         run: npx vitest run test/ai-operator-transition-proof.test.ts
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check AI Operator Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/ai-operator/index.ts
