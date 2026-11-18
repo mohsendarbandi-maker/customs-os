@@ -107,13 +107,26 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
    if(fileSize>25*1024*1024)throw new Error('حجم فایل ذخیره‌شده بیش از ۲۵ مگابایت است.');
    setUploadProgress(100);
    setUploadStage('استخراج هوش مصنوعی از همان فایل ذخیره‌شده');
-   const{data:r,error}=await supabase.functions.invoke('knowledge-ai',{body:{
-    action:'extract',filename,document_mime_type:mime,source_id:savedSourceId,storage_path:storagePath
-   }});
-   if(error){
-    let reason=error.message;try{const detail=await(error as any).context?.json?.();if(detail?.error)reason=detail.error;}catch{}
-    throw new Error(reason||'استخراج هوش مصنوعی ناموفق بود.');
+   let r:any=null;
+   for(let batchAttempt=0;batchAttempt<500;batchAttempt++){
+    const response=await supabase.functions.invoke('knowledge-ai',{body:{
+     action:'extract',filename,document_mime_type:mime,source_id:savedSourceId,storage_path:storagePath
+    }});
+    if(response.error){
+     let reason=response.error.message;try{const detail=await(response.error as any).context?.json?.();if(detail?.error)reason=detail.error;}catch{}
+     throw new Error(reason||'استخراج هوش مصنوعی ناموفق بود.');
+    }
+    r=response.data;
+    if(r?.status==='processing'){
+     const progress=r.progress||{};
+     setUploadStage('استخراج مرحله‌ای PDF: '+(progress.processed_pages||0)+' از '+(progress.total_pages||0)+' صفحه');
+     setUploadProgress(Math.max(1,Math.min(99,Math.round((progress.processed_pages||0)/(progress.total_pages||1)*100))));
+     continue;
+    }
+    break;
    }
+   if(r?.status==='processing')throw new Error('استخراج مرحله‌ای ادامه دارد؛ دوباره «ادامه استخراج از فایل ذخیره‌شده» را بزنید تا از صفحه بعد ادامه یابد.');
+   if(r?.status!=='extracted')throw new Error(r?.error||'پاسخ استخراج نامعتبر بود.');
    const ex=r?.extraction as Extraction;
    if(!ex?.title||!Array.isArray(ex.chunks)||!ex.chunks.length)throw new Error('استخراج AI ناقص بود؛ فایل در دانشنامه ذخیره است و می‌توانید استخراج را دوباره اجرا کنید.');
    setUploadStage('ثبت نتیجه استخراج و آماده‌سازی بررسی');
