@@ -124,7 +124,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
     <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--border)]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}>
      <div className="h-full rounded-full bg-[var(--primary)] transition-[width] duration-150" style={{width:uploadProgress+'%'}}/>
     </div>
-   </div>
+   </div>}
   </section>
   {review&&<section className="rounded-2xl border-2 border-amber-400/40 bg-[var(--surface)] p-5"><div className="flex items-center gap-2"><Clock3/><h2 className="font-bold">بررسی قبل از انتشار</h2></div>
    <div className="grid md:grid-cols-2 gap-3 mt-4 text-sm"><div>عنوان: <b>{review.title||'—'}</b></div><div>نوع: <b>{typeLabels[review.source_type]||'سایر'}</b></div><div>شماره: {review.source_number||'—'}</div><div>مرجع: {review.issuer||'—'}</div><div>تاریخ صدور: {review.issued_at||'—'}</div><div>تاریخ اجرا: {review.effective_at||'—'}</div><div className="md:col-span-2">موضوع: {review.subject||'—'}</div><div className="md:col-span-2">خلاصه AI: {review.summary||'—'}</div></div>
