@@ -31,6 +31,6 @@ describe("independent shipment document metadata workflow", () => {
   it("synchronizes File Manager's inferred type even if the user did not enter optional tags", () => {
     expect(page).toContain("const fileMetadataPatch: Record<string, unknown>");
     expect(page).toContain("document_type: inferType(file.name) || 'other'");
-    expect(page).toContain("this is intentionally outside the uploadTags condition");
+    expect(page).toContain("File type is synchronized regardless of whether optional tags were supplied.");
   });
 });
