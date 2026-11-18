@@ -14,6 +14,8 @@ describe('cross-workspace file handoff', () => {
     expect(transfer).toContain('value.target !== expectedTarget');
     expect(transfer).toContain('store.delete(id)');
     expect(transfer).toContain('TRANSFER_TTL_MS');
+    expect(transfer).toContain('export async function consumeAppFileTransferWithContext');
+    expect(transfer).toContain('export async function consumeAppFileTransfer(');
   });
 
   it('connects Chat, PDF Studio and File Manager in both directions', () => {
@@ -27,7 +29,6 @@ describe('cross-workspace file handoff', () => {
     expect(chat).toContain("from('chat-files').download(attachment.storage_path)");
 
     expect(studio).toContain("consumeAppFileTransferWithContext(incomingTransferId, 'pdf-studio')");
-    expect(studio).toContain("transferReadyOutput(output, 'file-manager')");
     expect(studio).toContain("transferReadyOutput(output, 'file-manager')");
     expect(studio).toContain("transferReadyOutput(output, 'chat')");
 
