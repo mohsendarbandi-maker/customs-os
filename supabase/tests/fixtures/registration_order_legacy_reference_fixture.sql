@@ -1,3 +1,10 @@
+DO $$
+BEGIN
+  CREATE ROLE authenticated NOLOGIN;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END;
+$$;
+
 create type public.currency_code as enum ('IRR','USD','EUR','AED','CNY','RUB','GBP','CHF','TRY');
 create table public.registration_orders (
  id uuid primary key,organization_id uuid not null,case_id uuid,order_number text not null,
