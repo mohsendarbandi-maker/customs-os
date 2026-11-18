@@ -158,6 +158,7 @@ export const FileManagerPage: React.FC = () => {
   const [copyingFolder, setCopyingFolder] = useState(false);
   const [folderCopyAvailable, setFolderCopyAvailable] = useState(false);
   const [preview, setPreview] = useState<{url:string; name:string; mime:string} | null>(null);
+  const signedStorageUrlCache = useRef(new Map<string, { url: string; expiresAt: number }>());
   const directoryInput = useRef<HTMLInputElement | null>(null);
 
   const currentFolder = useMemo(
@@ -522,19 +523,95 @@ export const FileManagerPage: React.FC = () => {
     throw new Error('مسیر بازیابی فایل ثبت نشده است.');
   };
 
-  const downloadFile = async (file:FileRow) => {
-    setError('');
-    try {const blob=await getFileBlob(file);saveBlob(blob,file.original_name||'document.bin');}
-    catch(e){setError(e instanceof Error?e.message:'دریافت فایل ناموفق بود.');}
+  const getPrivateStorageUrl = async (file: FileRow, download = false): Promise<string | null> => {
+    if (!file.storage_path) return null;
+    const name = windowsName(file.original_name || 'document.bin');
+    const userKey = profile?.id || 'signed-in-user';
+    const cacheKey = [userKey, organizationId, file.storage_path, download ? 'download:' + name : 'preview'].join(':');
+    const cached = signedStorageUrlCache.current.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now() + 30_000) return cached.url;
+
+    const options = download ? { download: name } : undefined;
+    const { data, error } = await supabase.storage
+      .from('customs_documents')
+      .createSignedUrl(file.storage_path, 600, options);
+    if (error) throw error;
+    if (!data?.signedUrl) throw new Error('لینک امن و موقت فایل ساخته نشد.');
+
+    const entry = { url: data.signedUrl, expiresAt: Date.now() + 8 * 60 * 1000 };
+    signedStorageUrlCache.current.set(cacheKey, entry);
+    if (signedStorageUrlCache.current.size > 100) {
+      const now = Date.now();
+      for (const [key, value] of signedStorageUrlCache.current) {
+        if (value.expiresAt <= now) signedStorageUrlCache.current.delete(key);
+      }
+      while (signedStorageUrlCache.current.size > 100) {
+        const oldest = signedStorageUrlCache.current.keys().next().value as string | undefined;
+        if (!oldest) break;
+        signedStorageUrlCache.current.delete(oldest);
+      }
+    }
+    return entry.url;
   };
-  const previewDocument=async(file:FileRow)=>{
-    const mime=(file.mime_type||'').toLowerCase();
-    if(!(mime.startsWith('image/')||mime==='application/pdf'||mime==='text/plain')){setError('پیش‌نمایش این نوع فایل پشتیبانی نمی‌شود؛ از دانلود استفاده کنید.');return;}
-    setError('');
-    try{const blob=await getFileBlob(file);setPreview({url:URL.createObjectURL(blob),name:file.original_name||'document.bin',mime});}
-    catch(e){setError(e instanceof Error?e.message:'نمایش فایل ناموفق بود.');}
+
+  const startDirectDownload = (url: string) => {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   };
-  const transferFileFromManager=async(file:FileRow,target:'chat'|'pdf-studio')=>{
+
+  const downloadFile = async (file: FileRow) => {
+    setError('');
+    try {
+      if (file.storage_path) {
+        try {
+          const signedUrl = await getPrivateStorageUrl(file, true);
+          if (signedUrl) {
+            startDirectDownload(signedUrl);
+            setMessage('دانلود مستقیم فایل آغاز شد.');
+            return;
+          }
+        } catch (signedUrlError) {
+          console.warn('[File Manager] Direct signed download unavailable; using cached Blob fallback:', signedUrlError);
+        }
+      }
+      const blob = await getFileBlob(file);
+      saveBlob(blob, file.original_name || 'document.bin');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'دریافت فایل ناموفق بود.');
+    }
+  };
+
+  const previewDocument = async (file: FileRow) => {
+    const mime = (file.mime_type || '').toLowerCase();
+    if (!(mime.startsWith('image/') || mime === 'application/pdf' || mime === 'text/plain')) {
+      setError('پیش‌نمایش این نوع فایل پشتیبانی نمی‌شود؛ از دانلود استفاده کنید.');
+      return;
+    }
+    setError('');
+    try {
+      if (file.storage_path) {
+        try {
+          const signedUrl = await getPrivateStorageUrl(file, false);
+          if (signedUrl) {
+            setPreview({ url: signedUrl, name: file.original_name || 'document.bin', mime });
+            return;
+          }
+        } catch (signedUrlError) {
+          console.warn('[File Manager] Direct signed preview unavailable; using cached Blob fallback:', signedUrlError);
+        }
+      }
+      const blob = await getFileBlob(file);
+      setPreview({ url: URL.createObjectURL(blob), name: file.original_name || 'document.bin', mime });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'نمایش فایل ناموفق بود.');
+    }
+  };
+  const transferFileFromManager=  const transferFileFromManager=async(file:FileRow,target:'chat'|'pdf-studio')=>{
     const mime=(file.mime_type||'').toLowerCase();
     if(target==='pdf-studio'&&!(mime==='application/pdf'||mime==='image/png'||mime==='image/jpeg'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))){
       setError('PDF Studio فقط PDF و تصویرهای JPG یا PNG را می‌پذیرد.');return;
@@ -571,7 +648,7 @@ export const FileManagerPage: React.FC = () => {
       setError(m.includes('FILE_MANAGER_COPY_SCOPE_MISMATCH')?'فقط در همان صاحب کالا/محموله کپی کنید تا مالکیت تغییر نکند.':m.includes('PGRST202')||m.toLowerCase().includes('schema cache')?'قابلیت کپی هنوز در دیتابیس فعال نیست؛ هیچ فایلی تغییر نکرد.':m);
     }finally{setCopyingFolder(false);await loadFolders().catch(()=>undefined);}
   };
-  useEffect(()=>()=>{if(preview?.url)URL.revokeObjectURL(preview.url);},[preview?.url]);
+  useEffect(()=>()=>{if(preview?.url?.startsWith('blob:'))URL.revokeObjectURL(preview.url);},[preview?.url]);
 
 
   const publishPortableProgress = (progressState: import('../lib/fileManagerPortableSyncService').PortableSyncProgress) => {

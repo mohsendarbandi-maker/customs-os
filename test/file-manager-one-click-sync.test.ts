@@ -97,12 +97,23 @@ describe('one-click file manager synchronization', () => {
     expect(unsupportedBrowserBranch).not.toContain('همگام‌سازی مستقیم پوشه فقط در Microsoft Edge یا Google Chrome');
   });
 
-  it('prefers cached private Supabase Storage for every file size and falls back to Telegram only when needed', () => {
+  it('streams private Storage previews and downloads through short-lived signed URLs before falling back to Blobs', () => {
+    expect(page).toContain("createSignedUrl(file.storage_path, 600, options)");
+    expect(page).toContain("download ? { download: name } : undefined");
+    expect(page).toContain("expiresAt: Date.now() + 8 * 60 * 1000");
+    expect(page).toContain("setPreview({ url: signedUrl, name: file.original_name || 'document.bin', mime })");
+    expect(page).toContain("startDirectDownload(signedUrl)");
+    expect(page).toContain("const blob = await getFileBlob(file)");
+    expect(page).toContain("signedStorageUrlCache.current");
+    expect(page).toContain("profile?.id || 'signed-in-user'");
+  });
+
+  it('keeps a cached private Storage Blob path available for transfers and Telegram recovery', () => {
     expect(page).toContain('// Prefer the original private Storage copy for every file size.');
     expect(page).toContain('if (file.storage_path) {');
     expect(page).toContain('return await downloadStorageCopy();');
     expect(page).toContain('downloadTelegramArchivedFile(fallbackAssetId)');
-    expect(page).toContain('getCachedPrivateFileBlob(\'storage:\'+profile?.id+\':\'+organizationId+\':\'+file.storage_path');
+    expect(page).toContain("getCachedPrivateFileBlob('storage:'+profile?.id+':'+organizationId+':'+file.storage_path");
     expect(page).not.toContain('if (remote.file_asset_id && Number(remote.size_bytes) > FILE_ARCHIVE_MAX_BYTES)');
   });
 
