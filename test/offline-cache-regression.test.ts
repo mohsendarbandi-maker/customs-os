@@ -39,10 +39,14 @@ describe('offline and background-update safety', () => {
   });
 
   it('keeps service-worker updates behind the compact manual toolbar action', () => {
-    expect(lifecycle).toContain('onNeedRefresh: () => {');
-    expect(lifecycle).toContain("customs-os:pwa-update-ready");
-    expect(lifecycle).toContain("customs-os:pwa-update-request");
-    expect(lifecycle).toContain('await activate(false)');
+    expect(runtime).toContain("customs-os:pwa-update-ready");
+    expect(runtime).toContain("customs-os:pwa-update-request");
+    expect(runtime).toContain('onNeedRefresh() {');
+    expect(runtime).toContain('void updateServiceWorker().catch');
+    expect(runtime).toContain("navigator.serviceWorker.register('/sw.js'");
+    expect(runtime).toContain("updateViaCache: 'none'");
+    expect(runtime).toContain('onRegisterError(error)');
+    expect(lifecycle).not.toContain('registerSW(');
     expect(lifecycle).not.toContain('pwa-version-notice');
     expect(lifecycle).not.toContain('setNewVersionAvailable(true)');
     expect(serviceWorker).toContain("event.data.type === 'SKIP_WAITING'");

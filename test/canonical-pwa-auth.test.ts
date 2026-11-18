@@ -129,11 +129,15 @@ describe('one canonical Customs OS PWA', () => {
     expect(authContext).toContain("'reading the cached workspace profile'");
   });
 
-  it('starts service-worker registration even when the load event has already fired', () => {
-    expect(pwaLifecycle).toContain('registerSW({');
-    expect(pwaLifecycle).toContain('immediate: true');
-    expect(pwaLifecycle).toContain('    start();');
-    expect(pwaLifecycle).not.toContain("else window.addEventListener('load', start, { once: true })");
+  it('registers the root service worker directly without depending on the window load event', () => {
+    expect(mainEntry).toContain("navigator.serviceWorker.register('/sw.js'");
+    expect(mainEntry).toContain("scope: '/'");
+    expect(mainEntry).toContain("updateViaCache: 'none'");
+    expect(mainEntry).toContain('attachPwaUpdateFlow();');
+    expect(mainEntry).toContain('registerSW({');
+    expect(mainEntry).toContain('immediate: true');
+    expect(pwaLifecycle).not.toContain('registerSW(');
+    expect(mainEntry).not.toContain("window.addEventListener('load', start, { once: true })");
   });
 
   it('preserves Supabase auto-refresh and performs throttled recovery on visibility, focus and pageshow', () => {
