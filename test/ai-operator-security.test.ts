@@ -188,7 +188,7 @@ describe('AI Operator security invariants',()=>{
     expect(signedMigration).toContain("p_status in ('executing','executed','failed','clarification_needed')");
 
     expect(edge).toContain("sb.rpc('ai_operator_assert_transition_signer'");
-    expect(edge).toContain("sb.rpc('ai_operator_complete_command_with_proof'");
+    expect(edge).toContain("'ai_operator_complete_command_with_proof':'ai_operator_fail_command_with_proof'");
     expect(edge).toContain("sb.rpc(rpc,{p_command_id:id,p_proof_payload:proofPayload,p_proof_signature:signature})");
     expect(edge).toContain("ai_operator_fail_command_with_proof");
     expect(edge).toContain("await assertTransitionSignerReady(sb,user.id)");

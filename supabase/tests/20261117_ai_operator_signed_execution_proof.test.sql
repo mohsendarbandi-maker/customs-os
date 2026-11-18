@@ -114,7 +114,7 @@ BEGIN
     );
     RAISE EXCEPTION 'Expected direct executed transition to be rejected';
   EXCEPTION WHEN OTHERS THEN
-    IF SQLERRM NOT LIKE '%Direct executed transitions are forbidden%' THEN
+    IF SQLERRM NOT LIKE '%Direct executing/terminal transitions are forbidden%' THEN
       RAISE;
     END IF;
   END;
@@ -224,19 +224,17 @@ BEGIN
     IF SQLERRM NOT LIKE '%proof is expired%' THEN RAISE; END IF;
   END;
 
-  -- Failed-command actor and timestamp are assigned by Postgres, never caller input.
-  PERFORM public.ai_operator_transition_command(
-    '00000000-0000-0000-0000-000000000205',
-    'failed',NULL,NULL,'{"error":"test"}'::jsonb,'business failure',NULL,NULL,
-    v_other,'2001-01-01T00:00:00Z'
-  );
-  SELECT * INTO v_row FROM public.ai_operator_commands
-  WHERE id='00000000-0000-0000-0000-000000000205';
-  IF v_row.status <> 'failed'
-     OR v_row.executed_by <> v_expected
-     OR v_row.executed_at < clock_timestamp() - interval '1 minute' THEN
-    RAISE EXCEPTION 'Failed command actor/timestamp was not server-derived';
-  END IF;
+  -- Unsigned direct status changes cannot impersonate server-side failures.
+  BEGIN
+    PERFORM public.ai_operator_transition_command(
+      '00000000-0000-0000-0000-000000000205',
+      'failed',NULL,NULL,'{"error":"forged"}'::jsonb,'forged failure',NULL,NULL,
+      v_other,'2001-01-01T00:00:00Z'
+    );
+    RAISE EXCEPTION 'Expected unsigned failed transition to be rejected';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%Direct executing/terminal transitions are forbidden%' THEN RAISE; END IF;
+  END;
   -- Valid signed failure derives actor and timestamp and cannot accept caller spoofing.
   v_payload := jsonb_build_object(
     'version',1,'purpose','terminal',
