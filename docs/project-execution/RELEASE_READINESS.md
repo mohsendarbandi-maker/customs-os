@@ -147,3 +147,21 @@ Status: NOT READY FOR RELEASE APPROVAL
 - PR301: matching Edge/Vault HMAC secret provisioning and authenticated signed transition acceptance required; do not apply migration until both secrets match.
 - PR302: candidate review in UI; no automatic legacy FK links or capacity changes.
 - No PR merge, Production migration/backfill, Edge Function deploy, Worker/site deploy or real operational-data update was made.
+
+
+
+## 2026-11-18 — Stage 11 financial invoice integrity
+
+### Candidate verification
+- PR304 Draft head `24bd7c9203c5837bdfb88731cb39e9faa56acd48`.
+- Dedicated SQL contract run 44247590428 passed: test fixture, candidate migration, repeat migration, exception-view assertions and service-role hard-delete rejection.
+- Main full verify and Shipment Cost CI on the latest PR304 head were running/not yet green at capture (44247590412 and 44247590384).
+- Live Production exception remains one orphaned approved invoice cost of 45M IRR on BEGEY shipment. No record was corrected automatically.
+
+### Release blockers
+- PR304: await full verify + Shipment Cost CI and code review. Candidate migration not applied.
+- Historical invoice `FIN-2026-00001` and its source lines were physically deleted. Restoring this financial document and deciding whether the linked 45M IRR cost can be re-billed require source evidence and explicit accounting approval.
+- PR301 signed HMAC transition fix still requires matching Edge Function/Vault secret and authenticated acceptance before Production release.
+- PR294 and PR296 still require authenticated real activity and PDF Studio/File Manager acceptance.
+- PR303 still requires authenticated browser acceptance of upload/extract/edit/reload/File Manager metadata.
+- No PR merges, Production migrations, backfills, finance data repairs or deployments were performed.

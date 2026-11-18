@@ -135,3 +135,16 @@
 - Full main verify pipeline passed PostgreSQL workflow/digest contracts, concurrency test, TypeScript, ESLint, production build, Supabase Edge checks, Cloudflare Worker dry-run and AI Operator layout guard: run 44246162116.
 - No Production migration, data backfill, merge, secret changes, Edge/Worker/site deploy or real document row update.
 
+
+
+
+## 2026-11-18 — Stage 11: financial invoice retention and exception reporting
+
+- PR304 Draft head `24bd7c9203c5837bdfb88731cb39e9faa56acd48` adds a `BEFORE DELETE` trigger preventing hard deletion of every finance invoice, including deletes attempted by service_role. This preserves financial invoice audit history and prevents cascaded loss of source-cost invoice lines.
+- Adds read-only security-invoker `finance_cost_invoice_integrity` report for missing active invoice, duplicate active invoice links and mismatch between confirmed/invoiced cost state and active invoice links.
+- FinancePage shows permission-filtered exception cards with amount, shipment, issue and deep link. It does not mutate cost or invoice records; before migration, schema-not-present fallback leaves the legacy Finance page usable.
+- Production read-only evidence: exactly one current approved billable orphaned cost (IRR 45,000,000) on shipment `۳۷ رول ارس تارلا امین BEGEY`, linked in historical audit to deleted invoice `FIN-2026-00001`; two physical invoice deletions were recorded on 2026-10-10.
+- Dedicated PostgreSQL contract (fixture, migration twice, service-role delete guard, integrity view) passed: 44247590428.
+- Full verify and Shipment Cost workflows on this commit were queued/in progress: 44247590412 and 44247590384.
+- No live invoice restore/recreation, cost-status change, Production migration, merge or deploy.
+

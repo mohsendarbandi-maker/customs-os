@@ -208,3 +208,17 @@ A read-only review sampled eight high-impact functions: declaration exit stage, 
 ### Overall stage status
 - Implemented and CI-verified in candidate branches: AI Operator signed command-state proof (PR301), legacy customs registration-order review candidates (PR302), independent document identity metadata/extraction (PR303).
 - Not yet accepted in Production: every corresponding migration/function deployment remains blocked by the explicit release rule; authenticated browser acceptance is still required for activity and PDF Studio workflows.
+
+
+
+## Stage 11 — financial invoice retention and cost-link integrity (2026-11-18)
+
+### PR304 — prevent physical invoice deletion and expose exceptions
+- Draft PR304 latest head `24bd7c9203c5837bdfb88731cb39e9faa56acd48`.
+- Read-only Production audit found 2 physically deleted invoice audit rows dated 2026-10-10. One approved billable cost of IRR 45,000,000 on shipment `۳۷ رول ارس تارلا امین BEGEY` remains `invoiced` with no live invoice or invoice-line row. The corresponding deleted invoice was `FIN-2026-00001`.
+- PR304 introduces a database `BEFORE DELETE` guard on `finance_invoices`; it also blocks service-role/direct SQL hard deletes, preventing cascade loss of invoice lines.
+- Added security-invoker read-only view `finance_cost_invoice_integrity` to identify approved billable cost status/link conflicts: missing active invoice, multiple active invoices, and confirmed cost linked to an active invoice.
+- Finance Control Center loads the exception view only for owner/admin/accountant or users with `view_org_financials`. It displays shipment-linked exception cards and explicitly warns not to re-invoice before reviewing.
+- Dedicated isolated PostgreSQL migration/repeatability/delete-guard/integrity workflow passed on head `24bd7c...` (run 44247590428).
+- Broader main verify and Shipment Cost CI were still running at the time of this entry (runs 44247590412 and 44247590384). Static UI assertion for all three issue labels was fixed in that same head.
+- No invoice was recreated/restored, no cost status was reset, no Production migration/data update, no merge or deployment performed.

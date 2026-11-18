@@ -146,3 +146,15 @@ Eight sensitive functions were read from live PostgreSQL definitions and execute
 - Extracted values are suggestions, not writes to master registration order or shipment totals. Calendar text is preserved; no silent Jalali/Gregorian conversion is performed.
 - Legacy `customs_documents` extraction suggestions are not inserted into `shipment_document_extractions`, since its FK points only to canonical `shipment_documents`. The UI shows suggestions, but a future explicit legacy extraction store would require separate schema/ownership review; not needed for this stage.
 - PR303 tests and full CI are green; PR remains Draft pending code review and authenticated test of document upload, OCR/PDF extraction, manual edit, refresh/reload and File Manager type synchronization.
+
+
+
+## Stage 11 — finance invoice recovery and release blockers (2026-11-18)
+
+- Production data contains one approved billable 45,000,000 IRR expense still marked `invoiced` but with no surviving invoice-line relation. Audit history indicates its parent issued invoice `FIN-2026-00001` and invoice lines were physically deleted on 2026-10-10.
+- PR304 blocks future physical invoice deletion at database level, including service-role deletes. This does not recover the two historical invoices already deleted.
+- PR304 reports orphan/status mismatch records but deliberately does not re-invoice or reset cost statuses.
+- Recovering `FIN-2026-00001`, restoring source lines and deciding whether/when the cost can be billed again is a real financial history correction. Must be reconciled against accounting/source records and explicitly approved; do not infer invoice number/line reconstruction from the surviving cost row.
+- Latest PR304 SQL contract passed on isolated PostgreSQL (44247590428). Full verify and Shipment Cost CI had not yet completed at the time this entry was created (44247590412, 44247590384).
+- Production remains unchanged.
+
