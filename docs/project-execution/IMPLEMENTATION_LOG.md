@@ -122,3 +122,16 @@
 - Found evidence of conflicting legacy references and potential over-allocation if customs-data text were silently treated as a committed FK. Changed the design to review-only candidates rather than automatic linkage or capacity accounting.
 - Draft PR302 adds candidate lookup/view, Persian/Arabic numeral normalization, strict owner/tenant matching, duplicate-normalized-number ambiguity rejection, direct-FK precedence and conflicting-case exclusion. RegistrationOrders UI displays the separate review list and warns it does not change confirmed capacity.
 - Migration contract run 44243008963 succeeded after fixing workflow health-check flags and the isolated fixture role. At latest head `aae971fa03af13ddd58468d5c53d40fd2969236a`, broader Shipment Cost and main verify workflows were still running. PR302 remains Draft. No Production writes/backfill/merge/deploy.
+
+
+
+## 2026-11-18 — Stage 10: Proforma / Commercial Invoice source-of-truth completion
+
+- PR303 (Draft) head `27de274de42279bdf869c62a3289dded1b47b7c9` adds per-document metadata to canonical `shipment_documents`: `document_type`, `document_number`, Gregorian `issue_date`, original/display `issue_date_shamsi`, `invoice_amount`, `invoice_currency`. Existing legacy `customs_documents` columns are reused; no Proforma-only or Invoice-only duplicate column set created.
+- Customs Document Manager reads canonical and legacy values, supports per-file manual edit, displays identity and monetary data, stores the two date representations independently, and updates File Manager document type independently of optional tags.
+- Extraction helper distinguishes four fields: Proforma number/date and Commercial Invoice number/date. Persian/Arabic digits normalize to ASCII, but date/calendar conversion is not inferred. Extraction suggestions persist only for canonical document rows because the legacy document table is not valid for the extraction FK.
+- Dedicated migration/SQL contract and repeated migration passed; extraction helper Vitest 4/4 passed: run 44246162174.
+- Shipment Cost CI passed 746/746 unit tests, TypeScript, ESLint, production build and embedded Supabase config verification: run 44246162246.
+- Full main verify pipeline passed PostgreSQL workflow/digest contracts, concurrency test, TypeScript, ESLint, production build, Supabase Edge checks, Cloudflare Worker dry-run and AI Operator layout guard: run 44246162116.
+- No Production migration, data backfill, merge, secret changes, Edge/Worker/site deploy or real document row update.
+

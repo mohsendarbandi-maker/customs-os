@@ -136,3 +136,13 @@ Eight sensitive functions were read from live PostgreSQL definitions and execute
 - Candidate rows are separate from confirmed master totals and do not consume/release capacity. A future explicit attach action must use the normal shipment update path and allow the existing database capacity/owner trigger to reject an invalid allocation.
 - Ambiguous normalized parent numbers, conflicting case references, direct-FK rows and already case-linked rows are excluded from the candidate list.
 - Production has not been migrated, backfilled or mutated. PR302 remains Draft pending full CI and authenticated browser acceptance.
+
+
+
+## Stage 10 — document identity release gate (2026-11-18)
+
+- PR303 migration is additive and verified only on isolated PostgreSQL. Production schema remains unchanged until explicit release approval.
+- Existing legacy document rows already have their own metadata columns; the new columns are for canonical `shipment_documents` uploads. The UI supports a staged fallback while the migration is absent, but authenticated browser acceptance before/after migration is still required.
+- Extracted values are suggestions, not writes to master registration order or shipment totals. Calendar text is preserved; no silent Jalali/Gregorian conversion is performed.
+- Legacy `customs_documents` extraction suggestions are not inserted into `shipment_document_extractions`, since its FK points only to canonical `shipment_documents`. The UI shows suggestions, but a future explicit legacy extraction store would require separate schema/ownership review; not needed for this stage.
+- PR303 tests and full CI are green; PR remains Draft pending code review and authenticated test of document upload, OCR/PDF extraction, manual edit, refresh/reload and File Manager type synchronization.

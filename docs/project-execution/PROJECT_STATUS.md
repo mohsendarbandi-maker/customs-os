@@ -191,3 +191,20 @@ A read-only review sampled eight high-impact functions: declaration exit stage, 
 - Registration Orders UI displays unresolved matches separately with their bill, net weight and invoice amount; it clearly states they do not count toward confirmed capacity and have not been auto-attached.
 - Isolated PostgreSQL candidate contract run 44243008963 succeeded on the migration/test head. Full UI typecheck/lint/build and the broader main verify pipeline were still running at the latest update (44243373164/44243373100/44243373151, head `aae971fa03af13ddd58468d5c53d40fd2969236a`).
 - No Production migration, data backfill, FK update, merge or deployment.
+
+
+
+## Stage 10 — independent Proforma / Commercial Invoice metadata (2026-11-18)
+
+### PR303 — per-document source of truth
+- Draft PR303 latest head `27de274de42279bdf869c62a3289dded1b47b7c9`.
+- Live schema audit confirmed legacy `customs_documents` already stores `document_type`, `document_number`, Gregorian `issue_date`, separate `issue_date_shamsi`, invoice amount and currency. No redundant Proforma-specific or Commercial-Invoice-specific columns were added to that table.
+- New canonical `shipment_documents` uploads did not persist these identity fields, and UI left canonical `document_type` null. PR303 adds six additive metadata columns to canonical file rows and uses one document row per file, allowing Proforma and Commercial Invoice values to remain independent.
+- Customs Document Manager can read legacy + canonical per-document values, edit number/date/amount/currency on the selected file, preserves Gregorian and Jalali date values separately (no implicit conversion), syncs File Manager type on upload even when optional tags are absent, and displays independent extracted Proforma/Invoice number/date suggestions.
+- Corrected a legacy FK bug: `shipment_document_extractions.document_id` references `shipment_documents`, not `customs_documents`; suggestions from legacy documents stay UI-only rather than generating invalid FK writes.
+- Verification on head `27de274...`: dedicated PostgreSQL contract + repeatable migration + all 4 new extraction unit tests passed (run 44246162174). Shipment Cost CI passed: 746/746 Vitest, TypeScript, lint, build, Supabase config check (44246162246). Main full verify passed including unit tests, PostgreSQL concurrency/RLS/rollback, typecheck, lint, Production build, Supabase Deno checks and Cloudflare Worker dry-run (44246162116).
+- PR303 remains Draft; no Production migration, merge, site/Worker deploy, or real document metadata updates performed.
+
+### Overall stage status
+- Implemented and CI-verified in candidate branches: AI Operator signed command-state proof (PR301), legacy customs registration-order review candidates (PR302), independent document identity metadata/extraction (PR303).
+- Not yet accepted in Production: every corresponding migration/function deployment remains blocked by the explicit release rule; authenticated browser acceptance is still required for activity and PDF Studio workflows.

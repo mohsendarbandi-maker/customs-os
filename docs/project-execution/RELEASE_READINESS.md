@@ -128,3 +128,22 @@ Status: NOT READY FOR RELEASE APPROVAL
 - Complete authenticated independent activity workflow acceptance for PR294.
 - Security PR297–299 and AI Operator PR301 are candidate migrations/functions, not Production fixes.
 - No Production migration/backfill, PR merge, Edge Function deploy, Worker/site deploy or real business-data edit was performed.
+
+
+
+## 2026-11-18 — Stage 10 Proforma / Commercial Invoice verified
+
+### Candidate verification
+- PR303 head `27de274de42279bdf869c62a3289dded1b47b7c9` is Draft/open/mergeable.
+- Dedicated PostgreSQL metadata migration contract, repeatability test and four extraction unit tests passed: run 44246162174.
+- Shipment Cost CI passed: run 44246162246 (746/746 tests, typecheck, lint, build, Supabase config check).
+- Full main verification passed: run 44246162116 (PostgreSQL workflow/digest/idempotency and concurrency contracts, typecheck, lint, build, Deno functions, Worker dry-run, AI Operator layout guard).
+- UI data path is connected to canonical + legacy document tables; no Production data or schema changes were performed.
+
+### Remaining release blockers
+- PR303: review and authenticated browser acceptance of PDF upload → extraction → independent number/date edit → reload → File Manager type sync before applying its additive Production migration.
+- PR296: authenticated real-shipment PDF Studio grouping/splitting → archive → File Manager lineage/retry/reload remains untested.
+- PR294: authenticated independent customs activity UI/assignment/due date/attachment/concurrency acceptance remains untested.
+- PR301: matching Edge/Vault HMAC secret provisioning and authenticated signed transition acceptance required; do not apply migration until both secrets match.
+- PR302: candidate review in UI; no automatic legacy FK links or capacity changes.
+- No PR merge, Production migration/backfill, Edge Function deploy, Worker/site deploy or real operational-data update was made.
