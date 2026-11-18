@@ -422,6 +422,7 @@ export const CustomsDocumentManagerPage: React.FC = () => {
           }
           documentCreated = true;
 
+          // File type is synchronized regardless of whether optional tags were supplied.
           const fileMetadataPatch: Record<string, unknown> = { document_type: inferType(file.name) || 'other' };
           if (uploadTags.length) fileMetadataPatch.tags = uploadTags;
           const { error: fileMetadataError } = await supabase

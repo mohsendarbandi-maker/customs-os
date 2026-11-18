@@ -30,7 +30,7 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres -d customs_shipment_document_test"
           --health-interval 5s
-          --timeout 5s
+          --health-timeout 5s
           --retries 12
     env:
       PGHOST: 127.0.0.1
@@ -47,6 +47,8 @@ jobs:
       - name: Create isolated shipment document fixture
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/shipment_document_independent_invoice_metadata_fixture.sql
       - name: Apply additive document metadata migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118113000_shipment_document_independent_invoice_metadata.sql
+      - name: Verify migration is safely repeatable
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118113000_shipment_document_independent_invoice_metadata.sql
       - name: Verify independent document numbers and dates
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261118_shipment_document_independent_invoice_metadata.test.sql
