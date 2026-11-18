@@ -22,7 +22,7 @@ function firstMatch(text: string, patterns: RegExp[], rejectProforma = false) {
     pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(text)) !== null) {
-      if (rejectProforma && /pro[\\s-]?forma|پروفرما|پروفورما/i.test(text.slice(Math.max(0, match.index - 45), match.index))) {
+      if (rejectProforma && /pro[\s-]?forma|پروفرما|پروفورما/i.test(text.slice(Math.max(0, match.index - 45), match.index))) {
         if (!pattern.global) break;
         continue;
       }
