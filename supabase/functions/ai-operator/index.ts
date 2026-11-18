@@ -100,24 +100,23 @@ function riskFor(p:Plan):Risk{
 const effectiveRisk=(p:Plan)=>riskFor(p);
 const catalog=()=>Object.entries(ACTIONS).map(([action_code,d])=>({action_code,module:d.module,label:d.label,description:d.description,risk:d.risk}));
 const transition=async(sb:any,id:string,patch:any,userId?:string)=>{
- if(patch.status==='executed'){
-  if(!userId)throw new Error('AI Operator completion proof requires the authenticated user id.');
+ if(patch.status==='executed'||patch.status==='failed'||patch.status==='clarification_needed'){
+  if(!userId)throw new Error('AI Operator signed terminal proof requires the authenticated user id.');
   const secret=Deno.env.get('AI_OPERATOR_TRANSITION_HMAC_SECRET')||'';
   if(secret.length<32)throw new Error('AI_OPERATOR_TRANSITION_HMAC_SECRET is missing or too short.');
-  const proofPayload=JSON.stringify({
+  const proofPayload=JSON.stringify(patch.status==='executed'?{
    version:1,purpose:'completion',command_id:id,user_id:userId,status:'executed',
-   issued_at:patch.executed_at||new Date().toISOString(),
-   nonce:crypto.randomUUID(),
-   confirmation_at:patch.confirmation_at??null,
-   final_confirmation_at:patch.final_confirmation_at??null,
-   result:patch.result??null,
-   before_data:patch.before_data??null,
-   after_data:patch.after_data??null
+   issued_at:patch.executed_at||new Date().toISOString(),nonce:crypto.randomUUID(),
+   confirmation_at:patch.confirmation_at??null,final_confirmation_at:patch.final_confirmation_at??null,
+   result:patch.result??null,before_data:patch.before_data??null,after_data:patch.after_data??null
+  }:{
+   version:1,purpose:'terminal',command_id:id,user_id:userId,status:patch.status,
+   issued_at:new Date().toISOString(),nonce:crypto.randomUUID(),
+   error_message:patch.error_message??null,result:patch.result??null
   });
   const signature=await signAiOperatorTransitionProof(secret,proofPayload);
-  const r=await sb.rpc('ai_operator_complete_command_with_proof',{
-   p_command_id:id,p_proof_payload:proofPayload,p_proof_signature:signature
-  });
+  const rpc=patch.status==='executed'?'ai_operator_complete_command_with_proof':'ai_operator_fail_command_with_proof';
+  const r=await sb.rpc(rpc,{p_command_id:id,p_proof_payload:proofPayload,p_proof_signature:signature});
   if(r.error)throw r.error;
   return r.data;
  }
@@ -128,9 +127,7 @@ const transition=async(sb:any,id:string,patch:any,userId?:string)=>{
   p_result:patch.result??null,
   p_error_message:patch.error_message??null,
   p_before_data:patch.before_data??null,
-  p_after_data:patch.after_data??null,
-  p_executed_by:patch.executed_by??null,
-  p_executed_at:patch.executed_at??null
+  p_after_data:patch.after_data??null
  });
  if(r.error)throw r.error;
  return r.data;
@@ -506,7 +503,7 @@ async function main(req:Request){
      await beginCommand(sb,r.data.id,user.id,{risk_level:risk,confirmation_at:risk==='safe'?new Date().toISOString():null});
      const before=await snap(sb,plan.action_code,plan.target||{});
      const result=await execute(sb,user,pr.data.organization_id,plan.action_code,plan.target||{},plan.params||{},body.attachment||null);
-     if(result?.clarification){await transition(sb,r.data.id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:r.data.id,status:'clarification_needed',clarification:result.clarification},200,origin);}
+     if(result?.clarification){await transition(sb,r.data.id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}},user.id);return out({command_id:r.data.id,status:'clarification_needed',clarification:result.clarification},200,origin);}
      actionCompleted=true;
      const after=await snap(sb,plan.action_code,targetWithResult(plan.action_code,plan.target||{},result?.data??result));
      await transition(sb,r.data.id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_at:new Date().toISOString(),confirmation_at:new Date().toISOString()},user.id);
@@ -514,7 +511,7 @@ async function main(req:Request){
    }catch(e){
      const msg=e instanceof Error?e.message:String(e);
      if(actionCompleted)return out({command_id:r.data.id,status:'executing',audit_pending:true,error:'Business action returned successfully, but the signed completion record could not be persisted. Do not re-run this command; reconcile the audit record.'},503,origin);
-     await transition(sb,r.data.id,{status:'failed',error_message:msg,result:{error:msg}});
+     await transition(sb,r.data.id,{status:'failed',error_message:msg,result:{error:msg}},user.id);
      return out({command_id:r.data.id,status:'failed',error:msg},403,origin);
    }
  }
@@ -550,7 +547,7 @@ async function main(req:Request){
      await beginCommand(sb,id,user.id,{risk_level:risk,confirmation_at:risk==='requires_confirmation'?new Date().toISOString():cmd.confirmation_at||null,final_confirmation_at:risk==='destructive'?new Date().toISOString():null});
      const before=await snap(sb,cmd.action_code,cmd.target||{});
      const result=await execute(sb,user,pr.data.organization_id,cmd.action_code,cmd.target||{},cmd.plan?.params||{},body.attachment||null);
-     if(result?.clarification){await transition(sb,id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:id,status:'clarification_needed',clarification:result.clarification},200,origin);}
+     if(result?.clarification){await transition(sb,id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}},user.id);return out({command_id:id,status:'clarification_needed',clarification:result.clarification},200,origin);}
      actionCompleted=true;
      const after=await snap(sb,cmd.action_code,targetWithResult(cmd.action_code,cmd.target||{},result?.data??result));
      await transition(sb,id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_at:new Date().toISOString()},user.id);
@@ -558,7 +555,7 @@ async function main(req:Request){
    }catch(e){
      const msg=e instanceof Error?e.message:String(e);
      if(actionCompleted)return out({command_id:id,status:'executing',audit_pending:true,error:'Business action returned successfully, but the signed completion record could not be persisted. Do not re-run this command; reconcile the audit record.'},503,origin);
-     try{await transition(sb,id,{status:'failed',error_message:msg,result:{error:msg}});}catch{}
+     try{await transition(sb,id,{status:'failed',error_message:msg,result:{error:msg}},user.id);}catch{}
      return out({command_id:id,status:'failed',error:msg},403,origin);
    }
  }

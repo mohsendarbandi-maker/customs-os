@@ -310,6 +310,73 @@ revoke all on function public.ai_operator_begin_command_with_proof(uuid,text,tex
 grant execute on function public.ai_operator_begin_command_with_proof(uuid,text,text)
   to authenticated;
 
+create or replace function public.ai_operator_fail_command_with_proof(
+  p_command_id uuid,
+  p_proof_payload text,
+  p_proof_signature text
+)
+returns public.ai_operator_commands
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private, pg_temp
+as $
+declare
+  v_uid uuid := auth.uid();
+  v_proof jsonb;
+  v_old public.ai_operator_commands;
+  v_new public.ai_operator_commands;
+  v_status text;
+  v_issued_at timestamptz;
+begin
+  if v_uid is null then
+    raise exception 'کاربر وارد سامانه نشده است';
+  end if;
+
+  v_proof := private.verify_ai_operator_transition_proof(
+    p_proof_payload, p_proof_signature, v_uid
+  );
+
+  v_status := v_proof ->> 'status';
+  if v_proof ->> 'purpose' <> 'terminal'
+     or v_status not in ('failed','clarification_needed')
+     or v_proof ->> 'command_id' <> p_command_id::text then
+    raise exception 'AI Operator signed terminal proof does not match this command';
+  end if;
+
+  v_issued_at := (v_proof ->> 'issued_at')::timestamptz;
+
+  select *
+    into v_old
+  from public.ai_operator_commands
+  where id = p_command_id
+  for update;
+
+  if not found or v_old.user_id <> v_uid then
+    raise exception 'دستور پیدا نشد یا دسترسی ندارید';
+  end if;
+  if v_old.status not in ('proposed','awaiting_confirmation','executing') then
+    raise exception 'Only a pending AI Operator command can enter a signed terminal state';
+  end if;
+
+  update public.ai_operator_commands
+  set status = v_status,
+      error_message = v_proof ->> 'error_message',
+      result = v_proof -> 'result',
+      executed_by = case when v_status = 'failed' then v_uid else executed_by end,
+      executed_at = case when v_status = 'failed' then v_issued_at else executed_at end,
+      updated_at = clock_timestamp()
+  where id = p_command_id
+  returning * into v_new;
+
+  return v_new;
+end;
+$;
+
+revoke all on function public.ai_operator_fail_command_with_proof(uuid,text,text)
+  from public, anon, authenticated;
+grant execute on function public.ai_operator_fail_command_with_proof(uuid,text,text)
+  to authenticated;
+
 create or replace function public.ai_operator_complete_command_with_proof(
   p_command_id uuid,
   p_proof_payload text,
@@ -400,8 +467,8 @@ begin
   if v_uid is null then
     raise exception 'کاربر وارد سامانه نشده است';
   end if;
-  if p_status in ('executing','executed') then
-    raise exception 'Direct executing/executed transitions are forbidden; use the signed AI Operator begin/completion proof';
+  if p_status in ('executing','executed','failed','clarification_needed') then
+    raise exception 'Direct executing/terminal transitions are forbidden; use signed AI Operator proofs';
   end if;
 
   select *
@@ -418,9 +485,8 @@ begin
   end if;
 
   v_allowed :=
-    (v_old.status = 'proposed' and p_status in ('awaiting_confirmation','clarification_needed','cancelled','rejected')) or
-    (v_old.status = 'awaiting_confirmation' and p_status in ('awaiting_confirmation','clarification_needed','cancelled','rejected')) or
-    (v_old.status = 'executing' and p_status in ('failed','clarification_needed'));
+    (v_old.status = 'proposed' and p_status in ('awaiting_confirmation','cancelled','rejected')) or
+    (v_old.status = 'awaiting_confirmation' and p_status in ('awaiting_confirmation','cancelled','rejected'));
 
   if not v_allowed then
     raise exception 'انتقال وضعیت AI Operator مجاز نیست';
@@ -450,8 +516,14 @@ revoke all on function public.ai_operator_assert_transition_signer(text, text)
 grant execute on function public.ai_operator_assert_transition_signer(text, text)
   to authenticated;
 
+revoke all on function public.ai_operator_fail_command_with_proof(uuid,text,text)
+  from public, anon, authenticated;
+
 revoke all on function public.ai_operator_complete_command_with_proof(uuid, text, text)
   from public, anon, authenticated;
+grant execute on function public.ai_operator_fail_command_with_proof(uuid,text,text)
+  to authenticated;
+
 grant execute on function public.ai_operator_complete_command_with_proof(uuid, text, text)
   to authenticated;
 

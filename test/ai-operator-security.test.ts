@@ -185,15 +185,18 @@ describe('AI Operator security invariants',()=>{
     expect(edge).not.toContain("sb.from('ai_operator_commands').insert");
     expect(signedMigration).toContain("revoke insert on public.ai_operator_commands from public, anon, authenticated");
     expect(signedMigration).toContain("drop policy if exists ai_operator_commands_insert");
-    expect(signedMigration).toContain("p_status = 'executed'");
+    expect(signedMigration).toContain("p_status in ('executing','executed','failed','clarification_needed')");
 
     expect(edge).toContain("sb.rpc('ai_operator_assert_transition_signer'");
     expect(edge).toContain("sb.rpc('ai_operator_complete_command_with_proof'");
+    expect(edge).toContain("sb.rpc(rpc,{p_command_id:id,p_proof_payload:proofPayload,p_proof_signature:signature})");
+    expect(edge).toContain("ai_operator_fail_command_with_proof");
     expect(edge).toContain("await assertTransitionSignerReady(sb,user.id)");
     expect(edge).toContain("if(cmd.status==='executing')");
     expect(edge).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
     expect(proof).toContain("name: 'HMAC', hash: 'SHA-256'");
-    expect(signedMigration).toContain("Direct executing/executed transitions are forbidden");
+    expect(signedMigration).toContain("Direct executing/terminal transitions are forbidden");
+    expect(signedMigration).toContain("ai_operator_fail_command_with_proof");
     expect(signedMigration).toContain("ai_operator_begin_command_with_proof");
     expect(signedMigration).toContain("p_status = 'executing'");
     expect(signedMigration).toContain("executed_by = v_uid");

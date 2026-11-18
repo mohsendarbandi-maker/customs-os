@@ -94,7 +94,8 @@ BEGIN
     IF SQLERRM NOT LIKE '%initial command state is not permitted%' THEN RAISE; END IF;
   END;
 
-  IF has_function_privilege('anon','public.ai_operator_begin_command_with_proof(uuid,text,text)','EXECUTE')
+  IF has_function_privilege('anon','public.ai_operator_fail_command_with_proof(uuid,text,text)','EXECUTE')
+     OR has_function_privilege('anon','public.ai_operator_begin_command_with_proof(uuid,text,text)','EXECUTE')
      OR has_function_privilege('anon','public.ai_operator_assert_transition_signer(text,text)','EXECUTE')
      OR has_function_privilege('anon','public.ai_operator_complete_command_with_proof(uuid,text,text)','EXECUTE')
      OR has_function_privilege('anon','public.ai_operator_transition_command(uuid,text,timestamp with time zone,timestamp with time zone,jsonb,text,jsonb,jsonb,uuid,timestamp with time zone)','EXECUTE') THEN
@@ -116,6 +117,17 @@ BEGIN
     IF SQLERRM NOT LIKE '%Direct executed transitions are forbidden%' THEN
       RAISE;
     END IF;
+  END;
+
+  -- Direct failed/clarification states are also forbidden without a server proof.
+  BEGIN
+    PERFORM public.ai_operator_transition_command(
+      '00000000-0000-0000-0000-000000000206','failed',NULL,NULL,'{"fake":true}'::jsonb,
+      'forged failure',NULL,NULL,v_other,'2001-01-01T00:00:00Z'
+    );
+    RAISE EXCEPTION 'Expected direct failed transition to be rejected';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%Direct executing/terminal transitions are forbidden%' THEN RAISE; END IF;
   END;
 
   IF (SELECT status FROM public.ai_operator_commands WHERE id='00000000-0000-0000-0000-000000000201') <> 'executing' THEN
@@ -225,7 +237,48 @@ BEGIN
      OR v_row.executed_at < clock_timestamp() - interval '1 minute' THEN
     RAISE EXCEPTION 'Failed command actor/timestamp was not server-derived';
   END IF;
+  -- Valid signed failure derives actor and timestamp and cannot accept caller spoofing.
+  v_payload := jsonb_build_object(
+    'version',1,'purpose','terminal',
+    'command_id','00000000-0000-0000-0000-000000000206',
+    'user_id',v_expected,'status','failed',
+    'issued_at',clock_timestamp(),'nonce','signed-failure-001',
+    'error_message','business action failed',
+    'result',jsonb_build_object('error','expected test failure'),
+    'executed_by',v_other
+  )::text;
+  v_signature := encode(extensions.hmac(convert_to(v_payload,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
+  SELECT * INTO v_row
+  FROM public.ai_operator_fail_command_with_proof(
+    '00000000-0000-0000-0000-000000000206',v_payload,v_signature
+  );
+  IF v_row.status <> 'failed'
+     OR v_row.executed_by <> v_expected
+     OR v_row.error_message <> 'business action failed'
+     OR v_row.executed_at < clock_timestamp() - interval '1 minute' THEN
+    RAISE EXCEPTION 'Signed failure did not derive trusted audit attribution';
+  END IF;
+
+  -- Clarification also needs a signed terminal state, but is not marked as execution.
+  v_payload := jsonb_build_object(
+    'version',1,'purpose','terminal',
+    'command_id','00000000-0000-0000-0000-000000000207',
+    'user_id',v_expected,'status','clarification_needed',
+    'issued_at',clock_timestamp(),'nonce','signed-clarification-001',
+    'error_message','Need more information',
+    'result',jsonb_build_object('clarification','Need more information')
+  )::text;
+  v_signature := encode(extensions.hmac(convert_to(v_payload,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
+  SELECT * INTO v_row
+  FROM public.ai_operator_fail_command_with_proof(
+    '00000000-0000-0000-0000-000000000207',v_payload,v_signature
+  );
+  IF v_row.status <> 'clarification_needed'
+     OR v_row.executed_by IS NOT NULL
+     OR v_row.executed_at IS NOT NULL THEN
+    RAISE EXCEPTION 'Signed clarification was incorrectly recorded as execution';
+  END IF;
 END;
-$$;
+$;
 
 ROLLBACK;

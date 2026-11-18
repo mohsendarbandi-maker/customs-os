@@ -80,14 +80,31 @@ CREATE TABLE IF NOT EXISTS public.ai_operator_commands (
   created_at timestamptz not null default now()
 );
 
-INSERT INTO public.ai_operator_commands(id, organization_id, user_id, status)
+INSERT INTO public.ai_operator_commands(
+ id, organization_id, user_id, natural_command, target, plan, risk_level, status
+)
 VALUES
- ('00000000-0000-0000-0000-000000000201','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101','executing'),
- ('00000000-0000-0000-0000-000000000202','00000000-0000-0000-0000-000000000102','00000000-0000-0000-0000-000000000001','executing'),
- ('00000000-0000-0000-0000-000000000203','00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000001','executing'),
- ('00000000-0000-0000-0000-000000000204','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101','executing'),
- ('00000000-0000-0000-0000-000000000205','00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000001','executing')
+ ('00000000-0000-0000-0000-000000000201','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101','signed completion test','{}','{}','safe','executing'),
+ ('00000000-0000-0000-0000-000000000202','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000102','cross-user proof test','{}','{}','safe','executing'),
+ ('00000000-0000-0000-0000-000000000203','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101','tamper proof test','{}','{}','safe','executing'),
+ ('00000000-0000-0000-0000-000000000204','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101','expired proof test','{}','{}','safe','executing'),
+ ('00000000-0000-0000-0000-000000000205','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101','failure attribution test','{}','{}','safe','executing'),
+ ('00000000-0000-0000-0000-000000000206','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000101','signed failure test','{}','{}','safe','executing'),
+ ('00000000-0000-0000-0000-000000000207','00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000001','signed clarification test','{}','{}','safe','executing')
 ON CONFLICT (id) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION public.ai_operator_fail_command_with_proof(
+  p_command_id uuid,p_proof_payload text,p_proof_signature text
+)
+RETURNS public.ai_operator_commands
+LANGUAGE plpgsql SECURITY DEFINER
+AS $
+DECLARE v_row public.ai_operator_commands;
+BEGIN
+  UPDATE public.ai_operator_commands SET status='failed' WHERE id=p_command_id RETURNING * INTO v_row;
+  RETURN v_row;
+END;
+$;
 
 CREATE OR REPLACE FUNCTION public.ai_operator_begin_command_with_proof(
   p_command_id uuid,p_proof_payload text,p_proof_signature text
