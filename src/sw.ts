@@ -18,6 +18,40 @@ registerRoute(({request,url})=>request.mode==='navigate'&&!['code','error','erro
  networkTimeoutSeconds:1,
 }));
 precacheAndRoute(self.__WB_MANIFEST);
+
+const SHARE_DB_NAME='customs-os-share-inbox-v1';
+const SHARE_STORE='incoming';
+function openShareDb():Promise<IDBDatabase>{
+ return new Promise((resolve,reject)=>{
+  const request=indexedDB.open(SHARE_DB_NAME,1);
+  request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(SHARE_STORE))request.result.createObjectStore(SHARE_STORE,{keyPath:'id'});};
+  request.onsuccess=()=>resolve(request.result);
+  request.onerror=()=>reject(request.error);
+ });
+}
+self.addEventListener('fetch',(event:FetchEvent)=>{
+ const url=new URL(event.request.url);
+ if(event.request.method!=='POST'||url.origin!==self.location.origin||url.pathname!=='/share-inbox')return;
+ event.respondWith((async()=>{
+  try{
+   const form=await event.request.formData();
+   const files=form.getAll('files').filter((item):item is File=>item instanceof File&&item.size>0);
+   if(!files.length)return Response.redirect(new URL('/share-inbox?shareError=no-files',self.location.origin).toString(),303);
+   const db=await openShareDb();
+   await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction(SHARE_STORE,'readwrite'),store=tx.objectStore(SHARE_STORE);
+    for(const file of files)store.put({id:crypto.randomUUID(),name:file.name,file,createdAt:Date.now()});
+    tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+   });
+   db.close();
+   return Response.redirect(new URL('/share-inbox?shared=1',self.location.origin).toString(),303);
+  }catch(error){
+   console.error('[Customs OS] Share Target intake failed:',error);
+   return Response.redirect(new URL('/share-inbox?shareError=save-failed',self.location.origin).toString(),303);
+  }
+ })());
+});
+
 setCatchHandler(async({request})=>{
  if(request.mode!=='navigate')return Response.error();
  return (await matchPrecache('/index.html'))??(await matchPrecache('/offline.html'))??Response.error();
