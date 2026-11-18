@@ -22,6 +22,12 @@ type Reconciliation={
  external_allocations_missing_value:number;external_allocations_currency_mismatch:number;
  total_allocated_net_weight_kg:number;total_allocated_gross_weight_kg:number;total_allocated_value_amount:number;total_allocation_count:number;
 };
+type LegacyMatchCandidate={
+ registration_order_id:string;organization_id:string;order_number:string;shipment_id:string;
+ shipment_name:string|null;bill_of_lading_no:string|null;customs_registration_order_no:string;
+ candidate_net_weight_kg:number|null;candidate_gross_weight_kg:number|null;
+ candidate_invoice_amount:number|null;candidate_invoice_currency:string|null;candidate_source:string;
+};
 type ExternalAllocation={
  id:string;organization_id:string;registration_order_id:string;recipient_company:string|null;destination_customs:string|null;
  allocation_reference:string|null;status:'allocated'|'dispatched'|'completed'|'cancelled';net_weight_kg:number;gross_weight_kg:number|null;
@@ -51,6 +57,7 @@ export const RegistrationOrdersPage:React.FC=()=>{
  const[clients,setClients]=useState<Client[]>([]);
  const[cases,setCases]=useState<CaseLegacy[]>([]);
  const[reconciliation,setReconciliation]=useState<Reconciliation[]>([]);
+ const[legacyCandidates,setLegacyCandidates]=useState<LegacyMatchCandidate[]>([]);
  const[externalAllocations,setExternalAllocations]=useState<ExternalAllocation[]>([]);
  const[allocationForm,setAllocationForm]=useState<ExternalAllocationForm>({...blankExternalAllocation});
  const[allocationEditingId,setAllocationEditingId]=useState('');
@@ -67,14 +74,17 @@ export const RegistrationOrdersPage:React.FC=()=>{
   if(!profile?.organization_id)return;
   setBusy(true);setError('');
   try{
-   const[{data:o,error:oe},{data:c,error:ce},{data:legacy,error:le},{data:r,error:re}]=await Promise.all([
+   const[{data:o,error:oe},{data:c,error:ce},{data:legacy,error:le},{data:r,error:re},{data:candidates,error:candidateError}]=await Promise.all([
     supabase.from('registration_orders').select('id,organization_id,case_id,client_id,order_number,order_date,status,tariff_code,quantity,quantity_unit,value_amount,currency,notes,net_weight_kg,gross_weight_kg,bank_name,bank_branch,bank_branch_code,payment_instrument_code,is_closed,closed_at').eq('organization_id',profile.organization_id).order('created_at',{ascending:false}),
     supabase.from('clients').select('id,name').eq('organization_id',profile.organization_id).order('name'),
     supabase.from('cases').select('id,registration_order_no,net_weight_kg,gross_weight_kg').eq('organization_id',profile.organization_id),
-    supabase.from('registration_order_reconciliation').select('*').eq('organization_id',profile.organization_id)
+    supabase.from('registration_order_reconciliation').select('*').eq('organization_id',profile.organization_id),
+    supabase.from('registration_order_legacy_match_candidates').select('registration_order_id,organization_id,order_number,shipment_id,shipment_name,bill_of_lading_no,customs_registration_order_no,candidate_net_weight_kg,candidate_gross_weight_kg,candidate_invoice_amount,candidate_invoice_currency,candidate_source').eq('organization_id',profile.organization_id)
    ]);
    if(oe||ce||le||re)throw oe||ce||le||re;
    setOrders((o||[]) as RegistrationOrder[]);setClients((c||[]) as Client[]);setCases((legacy||[]) as CaseLegacy[]);setReconciliation((r||[]) as Reconciliation[]);
+   // The optional candidate view may be absent before its migration is applied.
+   setLegacyCandidates(candidateError?[]:(candidates||[]) as LegacyMatchCandidate[]);
    const selectedOrder=(o||[]).find(x=>x.id===selected);
    if(selectedOrder&&!editing)selectOrder(selectedOrder,(legacy||[]) as CaseLegacy[]);
    if(!selectedOrder&&!selected&&o?.length&&!editing){selectOrder(o[0] as RegistrationOrder,(legacy||[]) as CaseLegacy[])}
@@ -278,7 +288,24 @@ export const RegistrationOrdersPage:React.FC=()=>{
         <div className="rounded-xl bg-[var(--surface-2)] p-3"><div className="text-xs app-muted">محموله‌های داخلی متصل</div><b>{fa(r.shipment_count||0)}</b></div>
         <div className="rounded-xl bg-[var(--surface-2)] p-3"><div className="text-xs app-muted">سهم‌های خارج از دسترس فعال</div><b>{fa(r.external_allocation_count||0)}</b></div>
        </div>})()}
-       <section className="mt-4 rounded-2xl border app-border bg-[var(--surface-2)] p-4">
+       {legacyCandidates.filter(candidate=>candidate.registration_order_id===current.id).length>0&&<section className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+         <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><h3 className="font-black">محموله‌های قدیمی در انتظار تطبیق</h3><p className="mt-1 text-xs app-muted">شماره ثبت سفارش در اطلاعات گمرکی با این سفارش مادر منطبق است؛ هنوز اتصال قطعی ثبت نشده است.</p></div>
+          <span className="rounded-lg bg-amber-500/10 px-2 py-1 text-xs text-amber-700">{fa(legacyCandidates.filter(candidate=>candidate.registration_order_id===current.id).length)} مورد نیازمند بررسی</span>
+         </div>
+         <p className="mt-2 text-xs text-amber-700">این موارد فعلاً در ظرفیت قطعی، مجموع وزن یا ارزش این ثبت سفارش محاسبه نمی‌شوند و به‌صورت خودکار متصل نشده‌اند.</p>
+         <div className="mt-3 space-y-2">
+          {legacyCandidates.filter(candidate=>candidate.registration_order_id===current.id).map(candidate=><div key={candidate.shipment_id} className="rounded-xl border app-border bg-[var(--surface)] p-3">
+           <div className="flex flex-wrap items-start justify-between gap-2"><b>{candidate.shipment_name||'محموله بدون عنوان'}</b><span className="text-xs app-muted" dir="ltr">{candidate.bill_of_lading_no||'بدون بارنامه'}</span></div>
+           <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
+            <div>شماره ثبت سفارش در اطلاعات گمرکی: <b dir="ltr">{candidate.customs_registration_order_no}</b></div>
+            <div>وزن خالص احتمالی: <b>{fa(candidate.candidate_net_weight_kg)} kg</b></div>
+            <div>ارزش فاکتور احتمالی: <b>{fa(candidate.candidate_invoice_amount)} {candidate.candidate_invoice_currency||''}</b></div>
+           </div>
+          </div>)}
+         </div>
+        </section>}
+        <section className="mt-4 rounded-2xl border app-border bg-[var(--surface-2)] p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
          <div><h3 className="font-black">سهم ثبت سفارش واگذارشده به گمرک یا شرکت دیگر</h3><p className="mt-1 text-xs app-muted">برای بخشی از ثبت سفارش که محموله‌اش در سیستم ما قابل مشاهده نیست، فقط مقصد، وزن و ارزش را ثبت کن. این سهم از همان ظرفیت مشترک کم می‌شود.</p></div>
          <span className="rounded-lg border app-border px-2 py-1 text-xs">در سقف کل محاسبه می‌شود</span>
