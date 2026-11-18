@@ -26,7 +26,8 @@ describe('cross-workspace file handoff', () => {
     expect(chat).toContain("transferMessageAttachments('file-manager')");
     expect(chat).toContain("from('chat-files').download(attachment.storage_path)");
 
-    expect(studio).toContain("consumeAppFileTransfer(incomingTransferId, 'pdf-studio')");
+    expect(studio).toContain("consumeAppFileTransferWithContext(incomingTransferId, 'pdf-studio')");
+    expect(studio).toContain("transferReadyOutput(output, 'file-manager')");
     expect(studio).toContain("transferReadyOutput(output, 'file-manager')");
     expect(studio).toContain("transferReadyOutput(output, 'chat')");
 
