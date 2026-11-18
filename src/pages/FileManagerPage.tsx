@@ -492,7 +492,7 @@ export const FileManagerPage: React.FC = () => {
     const copyAliasAssetId = typeof file.metadata?.copyAliasFileAssetId === 'string' ? file.metadata.copyAliasFileAssetId : '';
     const downloadStorageCopy = async (): Promise<Blob> => {
       if (!file.storage_path) throw new Error('نسخه پشتیبان فایل در Supabase Storage ثبت نشده است.');
-      return getCachedPrivateFileBlob('storage:'+organizationId+':'+file.storage_path+':'+file.size_bytes,async()=>{
+      return getCachedPrivateFileBlob('storage:'+profile?.id+':'+organizationId+':'+file.storage_path+':'+file.size_bytes,async()=>{
         const { data, error: storageError } = await supabase.storage.from('customs_documents').download(file.storage_path!);
         if (storageError) throw storageError;
         return data;
