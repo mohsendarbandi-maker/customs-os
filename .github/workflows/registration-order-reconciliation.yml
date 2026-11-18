@@ -24,8 +24,8 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres -d customs_registration_order_test"
           --health-interval 5s
-          --timeout 5s
-          --retries 12
+          --health-timeout 5s
+          --health-retries 12
     env:
       PGHOST: 127.0.0.1
       PGPORT: 5432
@@ -42,5 +42,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/registration_order_legacy_reference_fixture.sql
       - name: Apply candidate migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118100000_registration_order_legacy_reference_reconciliation.sql
-      - name: Verify safe legacy lookup, currency normalization, totals, tenant and rollback
+      - name: Verify safe legacy lookup, tenant isolation and ambiguity handling
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261118_registration_order_legacy_reference_reconciliation.test.sql
