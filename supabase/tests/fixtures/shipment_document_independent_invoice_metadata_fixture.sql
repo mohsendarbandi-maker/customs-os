@@ -1,4 +1,45 @@
-create table public.shipment_documents (
+-- Minimal platform objects required to exercise the customs extraction migration in isolated PostgreSQL CI.
+create schema if not exists auth;
+create table if not exists auth.users (id uuid primary key);
+
+do $$
+begin
+  create role authenticated nologin;
+exception when duplicate_object then null;
+end;
+$$;
+
+do $$
+begin
+  create type public.user_role as enum ('owner','admin','broker','warehouse','accountant','client');
+exception when duplicate_object then null;
+end;
+$$;
+
+create or replace function public.user_org_id()
+returns uuid language sql stable
+as $$ select 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid; $$;
+
+create or replace function public.user_role()
+returns public.user_role language sql stable
+as $$ select 'owner'::public.user_role; $$;
+
+create table if not exists public.organizations (id uuid primary key);
+create table if not exists public.shipments (id uuid primary key);
+create table if not exists public.customs_declarations (
+  id uuid primary key,
+  organization_id uuid not null,
+  shipment_id uuid
+);
+create table if not exists public.file_manager_files (
+  id uuid primary key,
+  organization_id uuid not null,
+  operation_sections text[] not null default '{}'
+);
+create table if not exists public.customs_documents (id uuid primary key);
+create table if not exists public.file_assets (id uuid primary key);
+
+create table if not exists public.shipment_documents (
  id uuid primary key, organization_id uuid not null, shipment_id uuid not null, uploaded_by uuid,
  document_name text not null, original_file_name text not null, storage_path text not null,
  mime_type text not null, file_size_bytes bigint not null,
