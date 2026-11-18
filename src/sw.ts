@@ -10,7 +10,7 @@ cleanupOutdatedCaches();
 // A previously visited route is returned from Cache Storage after a short timeout;
 // fresh HTML replaces it whenever the network responds. API routes are not navigations
 // and remain uncached here, so tenant-specific data and authenticated responses stay private.
-registerRoute(({request,url})=>request.mode==='navigate'&&!['code','error','error_description','access_token','refresh_token','type'].some(key=>url.searchParams.has(key)),new NetworkFirst({
+registerRoute(({request,url})=>request.method==='GET'&&request.mode==='navigate'&&!['code','error','error_description','access_token','refresh_token','type'].some(key=>url.searchParams.has(key)),new NetworkFirst({
  // Do not return an old HTML shell just because a mobile connection takes >1s.
  // Old shells can reference fingerprinted JS chunks removed by a newer deployment,
  // which causes "Importing a module script failed". Offline fallback is handled below.
