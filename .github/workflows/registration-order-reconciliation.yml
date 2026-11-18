@@ -1,0 +1,46 @@
+name: Registration order legacy-reference reconciliation
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'supabase/migrations/*registration_order_legacy_reference_reconciliation.sql'
+      - 'supabase/tests/fixtures/registration_order_legacy_reference_fixture.sql'
+      - 'supabase/tests/*registration_order_legacy_reference_reconciliation.test.sql'
+      - '.github/workflows/registration-order-reconciliation.yml'
+permissions:
+  contents: read
+jobs:
+  reconciliation-contract:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: customs_registration_order_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d customs_registration_order_test"
+          --health-interval 5s
+          --timeout 5s
+          --retries 12
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: customs_registration_order_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Create isolated fixture
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/registration_order_legacy_reference_fixture.sql
+      - name: Apply candidate migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118100000_registration_order_legacy_reference_reconciliation.sql
+      - name: Verify safe legacy lookup, currency normalization, totals, tenant and rollback
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261118_registration_order_legacy_reference_reconciliation.test.sql
