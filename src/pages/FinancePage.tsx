@@ -285,7 +285,7 @@ const extractExpenseReceipt=async(file:File)=>{
    </div>
    <div className="mt-3 grid gap-2 md:grid-cols-2">
     {invoiceIntegrity.slice(0,6).map((item:any)=><div key={item.cost_item_id} className="rounded-xl border app-border bg-[var(--surface)] p-3">
-     <div className="flex items-start justify-between gap-2"><b className="text-sm">{item.description||'هزینه بدون شرح'}</b><span className="text-[10px] text-amber-700">{item.integrity_issue==='MISSING_ACTIVE_INVOICE'?'فاکتور فعال ندارد':item.integrity_issue==='MULTIPLE_ACTIVE_INVOICES'?'اتصال به چند فاکتور فعال':'عدم تطابق وضعیت و اتصال'}</span></div>
+     <div className="flex items-start justify-between gap-2"><b className="text-sm">{item.description||'هزینه بدون شرح'}</b><span className="text-[10px] text-amber-700">{item.integrity_issue==='MISSING_ACTIVE_INVOICE'?'فاکتور فعال ندارد':item.integrity_issue==='MULTIPLE_ACTIVE_INVOICES'?'اتصال به چند فاکتور فعال':item.integrity_issue==='INVOICE_LINK_STATUS_MISMATCH'?'عدم تطابق وضعیت و اتصال':'نیازمند بررسی مالی'}</span></div>
      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] app-muted"><span>{shipmentName(item.shipment_id)}</span><span>مبلغ: {formatMoney(Number(item.amount_irr||0)+Number(item.vat_amount||0),'IRR')}</span><span>هزینه: {item.cost_status}</span></div>
      {item.active_invoice_numbers&&<div className="mt-1 text-[10px] app-muted">فاکتورهای فعال: {item.active_invoice_numbers}</div>}
      {item.shipment_id&&<Link to={'/finance/shipments/'+item.shipment_id} className="mt-2 inline-block text-xs font-bold text-[var(--primary)]">بررسی جزئیات مالی محموله ←</Link>}
