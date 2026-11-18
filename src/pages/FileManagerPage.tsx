@@ -499,21 +499,26 @@ export const FileManagerPage: React.FC = () => {
       });
     };
 
-    // Telegram Bot API download is limited to 20 MB. Prefer the original Storage
-    // copy for larger files, and fall back to it if Telegram retrieval fails.
-    if (file.storage_path && Number(file.size_bytes) > FILE_ARCHIVE_MAX_BYTES) {
-      return downloadStorageCopy();
-    }
-    const assetId = copyAliasAssetId || file.file_asset_id;
-    if (assetId) {
+    // Prefer the original private Storage copy for every file size.
+    // Storage is the fast path and is cached per signed-in user; Telegram remains
+    // a recovery fallback for older or incomplete Storage copies.
+    if (file.storage_path) {
       try {
-        return await downloadTelegramArchivedFile(assetId);
-      } catch (telegramError) {
-        if (file.storage_path) return downloadStorageCopy();
-        throw telegramError;
+        return await downloadStorageCopy();
+      } catch (storageError) {
+        const fallbackAssetId = copyAliasAssetId || file.file_asset_id;
+        if (fallbackAssetId) {
+          try {
+            return await downloadTelegramArchivedFile(fallbackAssetId);
+          } catch {
+            throw storageError;
+          }
+        }
+        throw storageError;
       }
     }
-    if (file.storage_path) return downloadStorageCopy();
+    const assetId = copyAliasAssetId || file.file_asset_id;
+    if (assetId) return downloadTelegramArchivedFile(assetId);
     throw new Error('مسیر بازیابی فایل ثبت نشده است.');
   };
 
