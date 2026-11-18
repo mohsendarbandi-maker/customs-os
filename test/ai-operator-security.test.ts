@@ -173,4 +173,33 @@ describe('AI Operator security invariants',()=>{
    expect(workspace).toContain("currentFormSchema, file.size");
  });
 
+
+  it('requires a signed, user-bound server proof before marking AI Operator commands executed',()=>{
+    const edge=readFileSync(new URL('../supabase/functions/ai-operator/index.ts',import.meta.url),'utf8');
+    const proof=readFileSync(new URL('../supabase/functions/_shared/aiOperatorTransitionProof.ts',import.meta.url),'utf8');
+    const signedMigration=readFileSync(new URL('../supabase/migrations/20261117190000_ai_operator_signed_execution_proof.sql',import.meta.url),'utf8');
+    expect(edge).toContain("AI_OPERATOR_TRANSITION_HMAC_SECRET");
+    expect(edge).toContain("sb.rpc('ai_operator_create_command'");
+    expect(edge).toContain("sb.rpc('ai_operator_begin_command_with_proof'");
+    expect(edge).toContain("await beginCommand(sb,r.data.id,user.id");
+    expect(edge).not.toContain("sb.from('ai_operator_commands').insert");
+    expect(signedMigration).toContain("revoke insert on public.ai_operator_commands from public, anon, authenticated");
+    expect(signedMigration).toContain("drop policy if exists ai_operator_commands_insert");
+    expect(signedMigration).toContain("p_status in ('executing','executed','failed','clarification_needed')");
+
+    expect(edge).toContain("sb.rpc('ai_operator_assert_transition_signer'");
+    expect(edge).toContain("'ai_operator_complete_command_with_proof':'ai_operator_fail_command_with_proof'");
+    expect(edge).toContain("sb.rpc(rpc,{p_command_id:id,p_proof_payload:proofPayload,p_proof_signature:signature})");
+    expect(edge).toContain("ai_operator_fail_command_with_proof");
+    expect(edge).toContain("await assertTransitionSignerReady(sb,user.id)");
+    expect(edge).toContain("if(cmd.status==='executing')");
+    expect(edge).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(proof).toContain("name: 'HMAC', hash: 'SHA-256'");
+    expect(signedMigration).toContain("Direct executing/terminal transitions are forbidden");
+    expect(signedMigration).toContain("ai_operator_fail_command_with_proof");
+    expect(signedMigration).toContain("ai_operator_begin_command_with_proof");
+    expect(signedMigration).toContain("v_proof ->> 'status' <> 'executing'");
+    expect(signedMigration).toContain("executed_by = v_uid");
+    expect(signedMigration).toContain("ai_operator_private.verify_ai_operator_transition_proof");
+  });
 });

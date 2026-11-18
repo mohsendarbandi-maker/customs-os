@@ -1,0 +1,76 @@
+name: AI Operator signed completion security
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'supabase/functions/ai-operator/**'
+      - 'supabase/functions/_shared/aiOperatorTransitionProof.ts'
+      - 'supabase/migrations/*ai_operator_signed_execution_proof.sql'
+      - 'supabase/tests/fixtures/ai_operator_transition_proof_fixture.sql'
+      - 'supabase/tests/*ai_operator_signed_execution_proof.test.sql'
+      - 'test/ai-operator-transition-proof.test.ts'
+      - '.github/workflows/ai-operator-security.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  signed-completion-contract:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: customs_ai_operator_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d customs_ai_operator_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: customs_ai_operator_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y postgresql-client
+
+      - name: Create isolated AI Operator fixture
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/ai_operator_transition_proof_fixture.sql
+
+      - name: Apply candidate signed-completion migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117190000_ai_operator_signed_execution_proof.sql
+
+      - name: Verify ACL, signature, owner binding, replay window, and audit attribution
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_ai_operator_signed_execution_proof.test.sql
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run AI Operator signing unit test
+        run: npx vitest run test/ai-operator-transition-proof.test.ts
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check AI Operator Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/ai-operator/index.ts
