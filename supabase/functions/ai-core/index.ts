@@ -38,6 +38,35 @@ async function getContext(sb:any,org:string){
  });
 }
 
+
+async function getWebsiteContext(sb:any,org:string,query:string,shipmentId:string){
+ const reportQuery=sb.from('file_manager_shipment_reports').select('shipment_id,status,stage,report,actor_name,created_at').eq('organization_id',org).order('created_at',{ascending:false}).limit(250);
+ const fileQuery=sb.from('file_manager_files').select('id,shipment_id,client_id,folder_id,original_name,mime_type,document_type,tags,operation_sections,file_manager_search_text,created_at').eq('organization_id',org).eq('is_archived',false).order('created_at',{ascending:false}).limit(400);
+ const customsQuery=sb.from('customs_document_extractions').select('shipment_id,display_name,original_file_name,document_type,operation_section,status,extracted_fields,confidence,completed_at').eq('organization_id',org).order('created_at',{ascending:false}).limit(250);
+ const extractionQuery=sb.from('shipment_document_extractions').select('shipment_id,document_id,field_key,field_label,extracted_value,source_text,confidence,page_number,updated_at').eq('organization_id',org).order('updated_at',{ascending:false}).limit(500);
+ const reminderQuery=sb.from('operational_reminders').select('shipment_id,case_id,title,description,due_at,priority,status,kind,entity_type,visibility').eq('organization_id',org).is('deleted_at',null).order('due_at',{ascending:true}).limit(300);
+ if(shipmentId){reportQuery.eq('shipment_id',shipmentId);fileQuery.eq('shipment_id',shipmentId);customsQuery.eq('shipment_id',shipmentId);extractionQuery.eq('shipment_id',shipmentId);reminderQuery.eq('shipment_id',shipmentId);}
+ const [reports,files,folders,customsExtractions,extractions,reminders,orders]=await Promise.all([
+  reportQuery,fileQuery,
+  sb.from('file_manager_folders').select('id,display_name,parent_id').eq('organization_id',org).limit(500),
+  customsQuery,extractionQuery,reminderQuery,
+  sb.from('registration_orders').select('case_id,client_id,order_number,order_date,status,tariff_code,quantity,quantity_unit,value_amount,currency,net_weight_kg,gross_weight_kg,bank_name,bank_branch_code,payment_instrument_code,is_closed,notes').eq('organization_id',org).order('created_at',{ascending:false}).limit(250)
+ ]);
+ const foldersById=new Map((folders.data||[]).map((x:any)=>[x.id,x.display_name]));
+ const terms=clean(query).toLowerCase().split(/\s+/).filter((x:string)=>x.length>=2);
+ const relevant=(items:any[],value:(x:any)=>string,max:number)=>{
+  const matches=terms.length?items.filter((x:any)=>terms.some((t:string)=>String(value(x)||'').toLowerCase().includes(t))):[];
+  return (matches.length?matches:items).slice(0,max);
+ };
+ const reportsOut=relevant(reports.data||[],(x:any)=>[x.report,x.stage,x.status,x.actor_name].join(' '),24).map((x:any)=>({...x,report:String(x.report||'').slice(0,1400)}));
+ const filesOut=relevant(files.data||[],(x:any)=>[x.original_name,x.document_type,(x.tags||[]).join(' '),(x.operation_sections||[]).join(' '),x.file_manager_search_text].join(' '),30).map((x:any)=>({shipment_id:x.shipment_id,client_id:x.client_id,name:x.original_name,folder:foldersById.get(x.folder_id)||null,mime_type:x.mime_type,document_type:x.document_type,tags:x.tags,operation_sections:x.operation_sections,search_text:String(x.file_manager_search_text||'').slice(0,800),created_at:x.created_at}));
+ const customsOut=relevant(customsExtractions.data||[],(x:any)=>[x.display_name,x.original_file_name,x.document_type,x.operation_section,JSON.stringify(x.extracted_fields||{})].join(' '),24);
+ const extractionsOut=relevant(extractions.data||[],(x:any)=>[x.field_label,x.field_key,x.extracted_value,x.source_text].join(' '),40).map((x:any)=>({...x,source_text:String(x.source_text||'').slice(0,350)}));
+ const remindersOut=relevant(reminders.data||[],(x:any)=>[x.title,x.description,x.status,x.kind].join(' '),24);
+ const ordersOut=relevant(orders.data||[],(x:any)=>[x.order_number,x.tariff_code,x.status,x.bank_name,x.payment_instrument_code,x.notes].join(' '),24);
+ return {reports:reportsOut,files:filesOut,customs_document_extractions:customsOut,shipment_document_extractions:extractionsOut,operational_reminders:remindersOut,registration_orders:ordersOut};
+}
+
 function selectRows(rows:any[],q:string,shipmentId:string){
  if(shipmentId){
   const exact=rows.filter(r=>r.shipment_id===shipmentId);
@@ -114,7 +143,7 @@ Deno.serve(async(req)=>{
   if(!query&&!b.document_data&&!b.document_text)return reply({error:'No input'},400,origin);
   const sessionId=clean(b.session_id);
   const memory=sessionId?await sb.from('ai_interactions').select('query,answer,created_at').eq('organization_id',profile.organization_id).eq('session_id',sessionId).order('created_at',{ascending:false}).limit(8).then((x:any)=>x.data||[]).catch(()=>[]):[];
-  const rows=profile.organization_id?await getContext(sb,profile.organization_id):[];const selected=selectRows(rows,query,shipmentId);const finding=['agent','command','audit','risk'].includes(mode)?risks(selected):[];
+  const [rows,websiteContext]=await Promise.all([profile.organization_id?getContext(sb,profile.organization_id):Promise.resolve([]),profile.organization_id?getWebsiteContext(sb,profile.organization_id,query,shipmentId).catch((e:any)=>{console.error('[ai-core] website context failed:',e instanceof Error?e.message:String(e));return {}; }):Promise.resolve({})]);const selected=selectRows(rows,query,shipmentId);const finding=['agent','command','audit','risk'].includes(mode)?risks(selected):[];
   const knowledge=await sb.rpc('ai_find_knowledge',{search_text:query,org_id:profile.organization_id,max_rows:6}).then((x:any)=>x.data||[]).catch(()=>[]);
   let semanticKnowledge:any[]=[];
   if(query&&profile.organization_id){
@@ -123,7 +152,7 @@ Deno.serve(async(req)=>{
   }
   const mutationIntent=mode==='agent'&&/(ثبت|تغییر|اصلاح|حذف|بستن|تأیید|رد|پرداخت|ایجاد|ویرایش|لغو|ارسال|کنسل|update|delete|create|change)/i.test(query);
   let prompt='کاربر: '+clip(query,4000)+'\nحالت: '+mode+'\nداده واقعی محموله: '+clip(JSON.stringify(selected),10000)+'\nیافته‌های اعتبارسنجی: '+clip(JSON.stringify(finding),4000)+'\nدانش داخلی مرتبط: '+clip(JSON.stringify({keyword:knowledge,semantic:semanticKnowledge}),5000)+'\nحافظه جلسه اخیر: '+clip(JSON.stringify(memory),3000)+'\nاگر از دانشنامه استفاده می‌کنی، منبع را با عنوان/شماره/صفحه در پاسخ مشخص کن و هرگز منبع یا بند را جعل نکن.';
-  if(mutationIntent)prompt+='\nاین درخواست تغییر داده است. فقط پیشنهاد اقدام ساختاریافته بده؛ هیچ تغییر مستقیم در داده اصلی انجام نده و برای هر پیشنهاد شواهد و ریسک را مشخص کن.';
+  prompt+='\nداده‌های زنده سایر بخش‌های وب‌سایت، شامل گزارش‌ها، فایل‌منیجر، استخراج اسناد گمرکی، یادآورها و ثبت‌سفارش‌ها: '+clip(JSON.stringify(websiteContext),7000)+'\nاین اطلاعات نیز فقط در محدوده سازمان کاربر است؛ مقادیر ناموجود را حدس نزن.';if(mutationIntent)prompt+='\nاین درخواست تغییر داده است. فقط پیشنهاد اقدام ساختاریافته بده؛ هیچ تغییر مستقیم در داده اصلی انجام نده و برای هر پیشنهاد شواهد و ریسک را مشخص کن.';
   if(mode==='audit'||mode==='risk')prompt+='\nگزارش: وضعیت، موارد تاییدشده، مغایرت‌ها، کمبودها و اقدام بعدی را جدا کن.';
   if(mode==='extract')prompt+='\nفقط داده واقعی سند را استخراج کن؛ موارد ناموجود/ناخوانا xxxx.';
   const parts:any[]=[];const docText=clean(b.document_text);if(docText)parts.push({text:'DOCUMENT:\n'+clip(docText,18000)});

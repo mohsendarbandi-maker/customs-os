@@ -161,7 +161,38 @@ async function loadOperatorContext(sb:any,org:string,q:string){
  }).sort((a:any,b:any)=>b.score-a.score);
  const matched=scored.filter((x:any)=>x.score>0).slice(0,8).map((x:any)=>x.r);
  const recent=rows.slice(0,2).filter((r:any)=>!matched.some((m:any)=>m.shipment_id===r.shipment_id));
- return JSON.stringify({organization_visible_shipments:rows.length,matched, recent, matching_note:'matched records are ranked by exact identifiers, numbers, names, cargo, B/L, client and vessel text. Use only these records as database evidence.'}).slice(0,16000);
+
+ const [reportResult,fileResult,folderResult,customsExtractionResult,shipmentExtractionResult,reminderResult,orderResult]=await Promise.all([
+  sb.from('file_manager_shipment_reports').select('shipment_id,status,stage,report,actor_name,created_at').eq('organization_id',org).order('created_at',{ascending:false}).limit(250),
+  sb.from('file_manager_files').select('id,shipment_id,client_id,folder_id,original_name,mime_type,document_type,tags,operation_sections,file_manager_search_text,created_at').eq('organization_id',org).eq('is_archived',false).order('created_at',{ascending:false}).limit(400),
+  sb.from('file_manager_folders').select('id,display_name,parent_id').eq('organization_id',org).limit(500),
+  sb.from('customs_document_extractions').select('shipment_id,display_name,original_file_name,document_type,operation_section,status,extracted_fields,confidence,completed_at').eq('organization_id',org).order('created_at',{ascending:false}).limit(250),
+  sb.from('shipment_document_extractions').select('shipment_id,document_id,field_key,field_label,extracted_value,source_text,confidence,page_number,updated_at').eq('organization_id',org).order('updated_at',{ascending:false}).limit(500),
+  sb.from('operational_reminders').select('shipment_id,case_id,title,description,due_at,priority,status,kind,entity_type,visibility').eq('organization_id',org).is('deleted_at',null).order('due_at',{ascending:true}).limit(300),
+  sb.from('registration_orders').select('case_id,client_id,order_number,order_date,status,tariff_code,quantity,quantity_unit,value_amount,currency,net_weight_kg,gross_weight_kg,bank_name,bank_branch_code,payment_instrument_code,is_closed,notes').eq('organization_id',org).order('created_at',{ascending:false}).limit(250)
+ ]);
+ const folderNames=new Map((folderResult.data||[]).map((x:any)=>[x.id,x.display_name]));
+ const shipmentIds=new Set([...matched,...recent].map((x:any)=>x.shipment_id).filter(Boolean));
+ const caseIds=new Set([...matched,...recent].map((x:any)=>x.case_id).filter(Boolean));
+ const terms=tokens.map((x:string)=>x.toLowerCase());
+ const relevant=(items:any[],getText:(x:any)=>string,limit:number,_linkField='shipment_id')=>{
+  const selected=items.filter((x:any)=>{
+   const linked=(!!x.shipment_id&&shipmentIds.has(x.shipment_id))||(!!x.case_id&&caseIds.has(x.case_id));
+   const hay=normalizeText(getText(x));
+   return linked||(terms.length>0&&terms.some((t:string)=>hay.includes(t)));
+  });
+  return selected.slice(0,limit);
+ };
+ const relatedSiteData={
+  shipment_reports:relevant(reportResult.data||[],(x:any)=>[x.report,x.stage,x.status,x.actor_name].join(' '),18).map((x:any)=>({...x,report:String(x.report||'').slice(0,1200)})),
+  file_manager_files:relevant(fileResult.data||[],(x:any)=>[x.original_name,x.document_type,(x.tags||[]).join(' '),(x.operation_sections||[]).join(' '),x.file_manager_search_text].join(' '),24).map((x:any)=>({shipment_id:x.shipment_id,client_id:x.client_id,name:x.original_name,folder:folderNames.get(x.folder_id)||null,mime_type:x.mime_type,document_type:x.document_type,tags:x.tags,operation_sections:x.operation_sections,search_text:String(x.file_manager_search_text||'').slice(0,600),created_at:x.created_at})),
+  customs_document_extractions:relevant(customsExtractionResult.data||[],(x:any)=>[x.display_name,x.original_file_name,x.document_type,x.operation_section,JSON.stringify(x.extracted_fields||{})].join(' '),18),
+  shipment_document_extractions:relevant(shipmentExtractionResult.data||[],(x:any)=>[x.field_label,x.field_key,x.extracted_value,x.source_text].join(' '),24).map((x:any)=>({...x,source_text:String(x.source_text||'').slice(0,300)})),
+  operational_reminders:relevant(reminderResult.data||[],(x:any)=>[x.title,x.description,x.status,x.kind].join(' '),18,'shipment_id'),
+  registration_orders:relevant(orderResult.data||[],(x:any)=>[x.order_number,x.tariff_code,x.status,x.bank_name,x.payment_instrument_code,x.notes].join(' '),18,'case_id')
+ };
+
+ return JSON.stringify({organization_visible_shipments:rows.length,matched,recent,related_site_data:relatedSiteData,matching_note:'matched records are ranked by exact identifiers, numbers, names, cargo, B/L, client and vessel text. Reports, files, extracted fields, reminders and registration orders are also scoped to this organization. Use only these records as database evidence.'}).slice(0,16000);
 }
 
 async function buildPlan(sb:any,org:string,query:string,role:string,page:string,g:any,attachmentMeta:any=null){

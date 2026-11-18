@@ -173,4 +173,37 @@ describe('AI Operator security invariants',()=>{
    expect(workspace).toContain("currentFormSchema, file.size");
  });
 
+
+ it('loads live Customs OS website data for ordinary AI chat within the caller organization',()=>{
+  const assistant=readFileSync(new URL('../supabase/functions/ai-assistant/index.ts',import.meta.url),'utf8');
+  const core=readFileSync(new URL('../supabase/functions/ai-core/index.ts',import.meta.url),'utf8');
+  const expectedTables=['file_manager_shipment_reports','file_manager_files','file_manager_folders','customs_document_extractions','shipment_document_extractions','operational_reminders','registration_orders'];
+  for(const table of expectedTables){
+   expect(assistant).toContain("from('"+table+"')");
+   expect(core).toContain("from('"+table+"')");
+  }
+  expect(assistant).toContain("String(b.mode||'')==='agent'");
+  expect(assistant).toContain('!ex&&!sh&&!voice&&q&&profile.organization_id');
+  expect(assistant).toContain('chatContextSuffix');
+  expect(assistant).toContain("from('ai_interactions').insert");
+  expect(core).toContain('getWebsiteContext(sb,profile.organization_id,query,shipmentId)');
+  expect(assistant).toContain(".eq('organization_id',organizationId)");
+  expect(core).toContain(".eq('organization_id',org)");
+ });
+ it('includes reports, files, extractions, reminders and orders in AI Operator evidence with organization scope',()=>{
+  const operator=readFileSync(new URL('../supabase/functions/ai-operator/index.ts',import.meta.url),'utf8');
+  for(const table of ['file_manager_shipment_reports','file_manager_files','file_manager_folders','customs_document_extractions','shipment_document_extractions','operational_reminders','registration_orders']){
+   expect(operator).toContain("from('"+table+"')");
+  }
+  expect(operator).toContain('related_site_data:relatedSiteData');
+  expect(operator).toContain(".eq('organization_id',org)");
+ });
+ it('keeps the mobile folder tree in a fixed, independently scrollable drawer',()=>{
+  const mobile=readFileSync(new URL('../src/styles/mobile-native-workspace.css',import.meta.url),'utf8');
+  expect(mobile).toContain('.fm-workspace-layout > aside.fm-folder-sidebar.is-open');
+  expect(mobile).toContain('position: fixed !important');
+  expect(mobile).toContain('max-height: none !important');
+  expect(mobile).toContain('overflow-y: auto !important');
+ });
+
 });
