@@ -1104,7 +1104,7 @@ async function archiveShipmentDocument(req:Request,p:Profile,user:string,documen
  if(!["owner","admin","broker","accountant","warehouse","client"].includes(p.role))
   return bad("FILE_ARCHIVE_ROLE_FORBIDDEN",403,req);
  const {data:document,error:documentError}=await db.from("shipment_documents")
-  .select("id,organization_id,shipment_id,folder_id,storage_path,document_name,original_file_name,mime_type,document_type,operation_sections,file_size_bytes,storage_backend,file_asset_id,is_archived")
+  .select("id,organization_id,shipment_id,folder_id,storage_path,document_name,original_file_name,mime_type,document_type,tags,operation_sections,file_size_bytes,storage_backend,file_asset_id,is_archived")
   .eq("id",documentId).eq("organization_id",p.organization_id).maybeSingle();
  if(documentError)return bad("SHIPMENT_DOCUMENT_LOOKUP_FAILED",500,req);
  if(!document)return bad("FILE_NOT_FOUND",404,req);
@@ -1154,7 +1154,9 @@ async function archiveShipmentDocument(req:Request,p:Profile,user:string,documen
  const idempotencyKey="customs-os-shipment-document-archive-v1:"+documentId+":"+hash;
  let input:any={};
  try{input=await bodyJson(req);}catch{/* Optional archive tags. */}
- const tags=Array.isArray(input.tags)?[...new Set(input.tags.filter((x:any)=>typeof x==="string").map((x:string)=>x.trim()).filter(Boolean))].slice(0,20):[];
+ const storedTags=Array.isArray(document.tags)?document.tags.filter((x:any)=>typeof x==="string").map((x:string)=>x.trim()).filter(Boolean):[];
+ const requestedTags=Array.isArray(input.tags)?input.tags.filter((x:any)=>typeof x==="string").map((x:string)=>x.trim()).filter(Boolean):[];
+ const tags=[...new Set([...storedTags,...requestedTags])].slice(0,20);
  const name=cleanName(String(document.original_file_name||document.document_name||"document.bin"));
  const mime=cleanMime(String(document.mime_type||file.type||"application/octet-stream"));
  const url=new URL("https://darbandicommercial.ir/api/messenger/uploads/"+String(connection.id));
@@ -1183,6 +1185,7 @@ async function archiveShipmentDocument(req:Request,p:Profile,user:string,documen
   if(!fileRowError&&fileRow){
    const priorMetadata=fileRow.metadata&&typeof fileRow.metadata==="object"?fileRow.metadata:{};
    const {error:sectionSyncError}=await db.from("file_manager_files").update({
+    tags,
     operation_sections:sections,
     metadata:{...priorMetadata,documentName:String(document.document_name||name),documentType:String(document.document_type||"customs_document"),customsOperationSections:sections}
    }).eq("id",fileRow.id).eq("organization_id",p.organization_id);

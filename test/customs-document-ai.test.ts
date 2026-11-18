@@ -4,6 +4,7 @@ import {
   CUSTOMS_OPERATION_SECTIONS,
   customsOperationFieldSchema,
   parseCustomsDocumentExtraction,
+  isCustomsDocumentAssignedToSection,
 } from '../src/lib/customsDocumentAI';
 
 describe('customs document AI operation scopes', () => {
@@ -15,6 +16,12 @@ describe('customs document AI operation scopes', () => {
       expect(customsOperationFieldSchema(section).length).toBeGreaterThan(0);
       expect(CUSTOMS_OPERATION_SECTIONS[section].label).toBeTruthy();
     }
+  });
+
+  it('requires an explicit per-file assignment before extraction in an operation box', () => {
+    expect(isCustomsDocumentAssignedToSection(['evaluation','cashier'],'cashier')).toBe(true);
+    expect(isCustomsDocumentAssignedToSection(['evaluation'],'cashier')).toBe(false);
+    expect(isCustomsDocumentAssignedToSection(undefined,'cashier')).toBe(false);
   });
 
   it('keeps only fields belonging to the selected operation box', () => {

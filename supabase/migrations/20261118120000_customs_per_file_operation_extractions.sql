@@ -6,6 +6,12 @@ alter table public.file_manager_files
   add column if not exists operation_sections text[] not null default '{}';
 
 alter table public.shipment_documents
+  add column if not exists tags text[] not null default '{}';
+
+comment on column public.shipment_documents.tags is
+  'Per-document tags copied into the corresponding File Manager record during background archive.';
+
+alter table public.shipment_documents
   drop constraint if exists shipment_documents_operation_sections_check;
 alter table public.shipment_documents
   add constraint shipment_documents_operation_sections_check

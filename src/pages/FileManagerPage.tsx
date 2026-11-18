@@ -433,7 +433,7 @@ export const FileManagerPage: React.FC = () => {
         if (!priorFile) throw new Error('فایل در تلگرام دریافت شد، اما رکورد فایل‌منیجر هنوز قابل تأیید نیست؛ صف حفظ شده و تلاش مجدد فایل تکراری ایجاد نمی‌کند.');
         const priorMetadata = (priorFile.metadata && typeof priorFile.metadata === 'object') ? priorFile.metadata as Record<string,unknown> : {};
         const { data: linkedFile, error: metadataError } = await supabase.from('file_manager_files')
-          .update({ document_type: documentType, operation_sections: draft.operationSections,
+          .update({ document_type: documentType, tags, operation_sections: draft.operationSections,
             metadata: { ...priorMetadata, documentName: displayName, documentType, customsOperationSections: draft.operationSections } })
           .eq('organization_id', organizationId).eq('id', priorFile.id).select('id').maybeSingle();
         if (metadataError) throw metadataError;

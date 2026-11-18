@@ -22,6 +22,9 @@ export const CUSTOMS_OPERATION_SECTIONS = {
 export type CustomsOperationSection = keyof typeof CUSTOMS_OPERATION_SECTIONS;
 export const CUSTOMS_OPERATION_SECTION_KEYS = Object.keys(CUSTOMS_OPERATION_SECTIONS) as CustomsOperationSection[];
 
+export const isCustomsDocumentAssignedToSection = (operationSections: string[] | null | undefined, section: CustomsOperationSection) =>
+  Array.isArray(operationSections) && operationSections.includes(section);
+
 export const customsOperationFieldSchema = (section: CustomsOperationSection) =>
   CUSTOMS_OPERATION_SECTIONS[section].fields.map(([key,label]) => ({
     key, label, type: 'text', required: false,

@@ -29,7 +29,7 @@ const SHIPMENT_OPERATION_SECTIONS=[
  ['evaluation','ارزیابی'],['expertise','کارشناسی و مجوزها'],['cashier','صندوق'],
  ['loading_permit','مجوز بارگیری'],['exit','درب خروج'],['port_charges','عوارض بندری'],
 ] as const;
-type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;telegram_archive_requested?:boolean;created_at:string};type PendingShipmentDocument={id:string;name:string;displayName:string;documentType:string;operationSections:string[];mimeType:string;sizeBytes:number;pageCount:number;file:File;previewUrl:string;storagePath?:string;uploadStatus:'uploading'|'ready'|'failed';uploadError?:string;uploadedBy:string;extractedFields?:Record<string,string>};
+type Doc={id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;file_size_bytes:number;storage_backend?:'supabase'|'telegram';file_asset_id?:string|null;folder_id?:string|null;telegram_archive_requested?:boolean;created_at:string};type PendingShipmentDocument={id:string;name:string;displayName:string;documentType:string;tags:string[];operationSections:string[];mimeType:string;sizeBytes:number;pageCount:number;file:File;previewUrl:string;storagePath?:string;uploadStatus:'uploading'|'ready'|'failed';uploadError?:string;uploadedBy:string;extractedFields?:Record<string,string>};
 const empty:Form={ownerId:'',registrationOrderId:'',shippingLine:'',billOfLading:'',year:String(new Date().getFullYear()),voyage:'',vessel:'',imo:'',flag:'',originPort:'',destinationPort:'',count:'',unit:'رول',net:'',gross:'',status:'draft',location:'',transportDocumentsStatus:'not_ready',releaseInvoicePaymentStatus:'unpaid'};
 const digits=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 const num=(v:string)=>{const n=Number(digits(v).replace(/[٬,]/g,''));return Number.isFinite(n)?n:null};
@@ -145,7 +145,7 @@ const edit=React.useCallback((r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_i
    const mime=(file.type||(lowerName.endsWith('.pdf')?'application/pdf':lowerName.endsWith('.png')?'image/png':(lowerName.endsWith('.jpg')||lowerName.endsWith('.jpeg'))?'image/jpeg':'')).toLowerCase();
    if(file.size<=0||file.size>FILE_ARCHIVE_MAX_BYTES||(mime!=='application/pdf'&&!['image/png','image/jpeg'].includes(mime))){rejected++;continue;}
    const id=crypto.randomUUID(),previewUrl=URL.createObjectURL(file);
-   const pending:PendingShipmentDocument={id,name:file.name,displayName:file.name,documentType:'OTHER',operationSections:[],mimeType:mime,sizeBytes:file.size,pageCount:1,file,previewUrl,uploadStatus:'uploading',uploadedBy:profile?.id||''};
+   const pending:PendingShipmentDocument={id,name:file.name,displayName:file.name,documentType:'OTHER',tags:[],operationSections:[],mimeType:mime,sizeBytes:file.size,pageCount:1,file,previewUrl,uploadStatus:'uploading',uploadedBy:profile?.id||''};
    setPendingDocuments(previous=>[...previous,pending]);
    setSelectedBillOfLadingId(previous=>previous||id);
    setPreviewBillOfLadingId(id);
@@ -248,7 +248,7 @@ const edit=React.useCallback((r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_i
      try{
       const {data:doc,error:docError}=await supabase.from('shipment_documents').insert({
        organization_id:profile.organization_id,shipment_id:shipmentId,uploaded_by:staged.uploadedBy,
-       document_name:staged.displayName.trim()||staged.name,original_file_name:staged.name,document_type:staged.documentType,operation_sections:staged.operationSections,
+       document_name:staged.displayName.trim()||staged.name,original_file_name:staged.name,document_type:staged.documentType,tags:staged.tags,operation_sections:staged.operationSections,
         storage_path:staged.storagePath!,storage_backend:'supabase',
         folder_id:shipmentFolder.id,telegram_archive_requested:true,
        mime_type:staged.mimeType,file_size_bytes:staged.sizeBytes,
@@ -424,6 +424,7 @@ const edit=React.useCallback((r:Row)=>{const v=vessels.find(x=>x.id===r.vessel_i
       <label className="block text-xs"><span className="mb-1 block app-muted">نام نمایشی مستقل در فایل‌منیجر</span><input value={document.displayName} onChange={e=>setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,displayName:e.target.value}:item))} className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2 text-sm"/></label>
       <label className="block text-xs"><span className="mb-1 block app-muted">نوع سند</span><select value={document.documentType} onChange={e=>setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,documentType:e.target.value}:item))} className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2 text-sm">{SHIPMENT_UPLOAD_DOCUMENT_TYPES.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
      </div>
+     <label className="mt-2 block text-xs"><span className="mb-1 block app-muted">برچسب‌های همین فایل</span><input value={document.tags.join(', ')} onChange={e=>setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,tags:[...new Set(e.target.value.split(',').map(tag=>tag.trim()).filter(Boolean))].slice(0,20)}:item))} placeholder="فاکتور، قبض انبار، بیمه…" className="w-full rounded-lg border app-border bg-[var(--surface-2)] px-3 py-2 text-sm"/></label>
      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">{SHIPMENT_OPERATION_SECTIONS.map(([value,label])=><label key={value} className="inline-flex items-center gap-1.5 text-[11px]"><input type="checkbox" checked={document.operationSections.includes(value)} onChange={e=>setPendingDocuments(previous=>previous.map(item=>item.id===document.id?{...item,operationSections:e.target.checked?[...new Set([...item.operationSections,value])]:item.operationSections.filter(section=>section!==value)}:item))}/>{label}</label>)}</div>
      <div className="text-[10px] app-muted mt-1">نام فایل اصلی برای حفظ سابقه تغییر نمی‌کند: {document.name}</div>
      {document.uploadStatus==='failed'&&<div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-600"><span>{document.uploadError||'ذخیره فایل ناموفق بود.'}</span><button type="button" onClick={()=>retryStagedShipmentDocument(document)} className="rounded-lg border border-rose-500/30 px-3 py-1.5 font-bold">تلاش دوباره برای ذخیره فایل</button></div>}{document.uploadStatus==='ready'&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">نسخه امن فایل ذخیره شد؛ با ثبت محموله، همین سند به محموله متصل و برای آرشیو تلگرام صف می‌شود.</div>}{document.extractedFields&&<div className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">اطلاعات این سند با AI استخراج شده و برای اتصال به محموله آماده است.</div>}

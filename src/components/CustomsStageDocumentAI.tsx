@@ -2,7 +2,7 @@ import React,{useCallback,useEffect,useMemo,useState}from'react';
 import{FileSearch,Loader2,RefreshCw,Sparkles,CheckCircle2,Link2,Unlink2,AlertTriangle}from'lucide-react';
 import{supabase}from'../lib/supabase';
 import{invokeEdgeFunction}from'../lib/edgeFunction';
-import{CUSTOMS_OPERATION_SECTIONS,CUSTOMS_OPERATION_SECTION_KEYS,customsOperationFieldSchema,parseCustomsDocumentExtraction,type CustomsOperationSection}from'../lib/customsDocumentAI';
+import{CUSTOMS_OPERATION_SECTIONS,customsOperationFieldSchema,isCustomsDocumentAssignedToSection,parseCustomsDocumentExtraction,type CustomsOperationSection}from'../lib/customsDocumentAI';
 
 type Props={declarationId:string;shipmentId:string;organizationId:string;section:CustomsOperationSection;editable:boolean};
 type StageFile={
@@ -18,6 +18,7 @@ export const CustomsStageDocumentAI:React.FC<Props>=({declarationId,shipmentId,o
  const[results,setResults]=useState<Record<string,Extraction>>({});
  const[loading,setLoading]=useState(true);
  const[busyId,setBusyId]=useState('');
+ const[bulkExtracting,setBulkExtracting]=useState(false);
  const[error,setError]=useState('');
  const[message,setMessage]=useState('');
  const config=CUSTOMS_OPERATION_SECTIONS[section];
@@ -77,9 +78,10 @@ export const CustomsStageDocumentAI:React.FC<Props>=({declarationId,shipmentId,o
   }catch(reason){setError(reason instanceof Error?reason.message:'ذخیره ارتباط سند با باکس ناموفق بود.');}
  };
 
- const extract=async(file:StageFile)=>{
-  if(!editable)return;
-  if(!file.storagePath&&!file.fileAssetId){setError('برای این فایل مسیر ذخیره‌سازی یا شناسه آرشیو موجود نیست.');return;}
+ const extract=async(file:StageFile):Promise<boolean>=>{
+  if(!editable)return false;
+  if(!isCustomsDocumentAssignedToSection(file.operationSections,section)){setError('ابتدا این فایل را به باکس «'+config.label+'» متصل کنید.');return false;}
+  if(!file.storagePath&&!file.fileAssetId){setError('برای این فایل مسیر ذخیره‌سازی یا شناسه آرشیو موجود نیست.');return false;}
   setBusyId(file.id);setError('');setMessage('استخراج اطلاعات همین سند برای بخش «'+config.label+'» آغاز شد…');
   const pendingRow={
    organization_id:organizationId,declaration_id:declarationId,shipment_id:shipmentId,
@@ -106,12 +108,29 @@ export const CustomsStageDocumentAI:React.FC<Props>=({declarationId,shipmentId,o
    if(saveError)throw saveError;
    setResults(previous=>({...previous,[file.sourceKey]:row as Extraction}));
    setMessage('استخراج تمام شد و نتیجه فقط در باکس «'+config.label+'» ذخیره شد؛ برای ثبت در فرم اصلی آن را بازبینی کنید.');
+   return true;
   }catch(reason){
    const message=reason instanceof Error?reason.message:'استخراج هوشمند سند ناموفق بود.';
    const{data:row}=await supabase.from('customs_document_extractions').upsert({...pendingRow,status:'failed',error:message},{onConflict:'declaration_id,source_key,operation_section'}).select('id,source_key,status,extracted_fields,provider,error,updated_at').maybeSingle();
    if(row)setResults(previous=>({...previous,[file.sourceKey]:row as Extraction}));
    setError(message);setMessage('');
+   return false;
   }finally{setBusyId('');}
+ };
+
+ const assignedFiles=files.filter(file=>isCustomsDocumentAssignedToSection(file.operationSections,section));
+ const extractAllAssigned=async()=>{
+  if(!editable||bulkExtracting||busyId)return;
+  if(!assignedFiles.length){setError('هیچ فایلی به این باکس متصل نشده است.');return;}
+  setBulkExtracting(true);setError('');setMessage('استخراج فایل‌های متصل به «'+config.label+'» به‌ترتیب آغاز شد…');
+  let succeeded=0;let failed=0;
+  try{
+   for(const file of assignedFiles){
+    try{if(await extract(file))succeeded+=1;else failed+=1;}catch{failed+=1;}
+   }
+   setMessage(`${succeeded} فایل با موفقیت استخراج و در باکس «${config.label}» ذخیره شد؛ ${failed} فایل ناموفق بود.`);
+   if(failed)setError('برای فایل‌های ناموفق، خطا در کارت همان فایل نمایش داده می‌شود.');
+  }finally{setBulkExtracting(false);}
  };
 
  if(!shipmentId)return null;
@@ -119,7 +138,10 @@ export const CustomsStageDocumentAI:React.FC<Props>=({declarationId,shipmentId,o
   <header className="flex flex-wrap items-start justify-between gap-2">
    <div><div className="flex items-center gap-2 font-black"><Sparkles size={17}/> اسناد و استخراج هوشمند · {config.label}</div>
    <p className="mt-1 text-xs app-muted">هر فایل به‌صورت مستقل تحلیل می‌شود؛ نتیجه فقط در همین باکس ذخیره می‌شود و قبل از انتقال به فرم باید بازبینی شود.</p></div>
-   <button type="button" onClick={()=>void load()} disabled={loading||!!busyId} className="rounded-lg border app-border p-2" aria-label="بروزرسانی اسناد"><RefreshCw size={15} className={loading?'animate-spin':''}/></button>
+   <div className="flex items-center gap-2">
+    {editable&&<button type="button" onClick={()=>void extractAllAssigned()} disabled={loading||!!busyId||bulkExtracting||assignedFiles.length===0} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-bold text-white disabled:opacity-40"><Sparkles size={14}/>{bulkExtracting?'در حال استخراج همه فایل‌ها…':`استخراج همه فایل‌های متصل (${assignedFiles.length})`}</button>}
+    <button type="button" onClick={()=>void load()} disabled={loading||!!busyId||bulkExtracting} className="rounded-lg border app-border p-2" aria-label="بروزرسانی اسناد"><RefreshCw size={15} className={loading?'animate-spin':''}/></button>
+   </div>
   </header>
   {error&&<div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-600"><AlertTriangle size={14} className="inline ml-1"/>{error}</div>}
   {message&&<p className="text-xs text-emerald-700 dark:text-emerald-300">{message}</p>}
@@ -138,8 +160,8 @@ export const CustomsStageDocumentAI:React.FC<Props>=({declarationId,shipmentId,o
       </button>}
      </div>
      {result?.extracted_fields&&<div className="mt-2 rounded-lg border app-border bg-[var(--surface)] p-2"><b className="text-xs">خروجی استخراج‌شده</b><dl className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">{Object.entries(result.extracted_fields).map(([key,value])=><div key={key} className="min-w-0 text-xs"><dt className="app-muted">{fields.find(f=>f.key===key)?.label||key}</dt><dd className="break-words font-semibold" dir="auto">{String(value)}</dd></div>)}</dl></div>}
-     {editable&&<button type="button" onClick={()=>void extract(file)} disabled={!!busyId} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2.5 text-xs font-bold text-white disabled:opacity-50">
-      {busyId===file.id?<Loader2 size={14} className="animate-spin"/>:<Sparkles size={14}/>} {busyId===file.id?'در حال استخراج…':result?.status==='completed'?'استخراج مجدد این فایل برای این باکس':'استخراج هوشمند این فایل'}
+     {editable&&<button type="button" onClick={()=>void extract(file)} disabled={!!busyId||bulkExtracting||!assigned} title={!assigned?'ابتدا فایل را به این باکس متصل کنید':''} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2.5 text-xs font-bold text-white disabled:opacity-50">
+      {busyId===file.id?<Loader2 size={14} className="animate-spin"/>:<Sparkles size={14}/>} {busyId===file.id?'در حال استخراج…':!assigned?'ابتدا اتصال فایل به این باکس را فعال کنید':result?.status==='completed'?'استخراج مجدد این فایل برای این باکس':'استخراج هوشمند این فایل'}
      </button>}
     </article>;
    })}</div>}
