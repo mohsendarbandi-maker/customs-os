@@ -136,7 +136,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
   }finally{setBusy(false)}
  };
 
- const reviewAction= const reviewAction=async(action:'approve'|'reject')=>{if(!reviewSourceId)return;setBusy(true);setErr('');try{const{data,error}=await supabase.functions.invoke('knowledge-ai',{body:{action,source_id:reviewSourceId,note:action==='reject'?'رد شده در بررسی انسانی':'تأیید و انتشار پس از بررسی انسانی'}});if(error)throw error;if(data?.error)throw new Error(data.error);setReview(null);setReviewSourceId('');await load()}catch(e:any){setErr(e?.message||'عملیات بررسی ناموفق بود.')}finally{setBusy(false)}};
+ const reviewAction=async(action:'approve'|'reject')=>{if(!reviewSourceId)return;setBusy(true);setErr('');try{const{data,error}=await supabase.functions.invoke('knowledge-ai',{body:{action,source_id:reviewSourceId,note:action==='reject'?'رد شده در بررسی انسانی':'تأیید و انتشار پس از بررسی انسانی'}});if(error)throw error;if(data?.error)throw new Error(data.error);setReview(null);setReviewSourceId('');await load()}catch(e:any){setErr(e?.message||'عملیات بررسی ناموفق بود.')}finally{setBusy(false)}};
  const resumeOrReviewSource=(source:Source)=>{
   if(source.status==='draft'){
    setDraftSourceId(source.id);setFile(null);setReview(null);setReviewSourceId('');
@@ -146,7 +146,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
   }
   if(source.ai_extraction){setReview(source.ai_extraction);setReviewSourceId(source.id);}
  };
- const ask=async()=> const ask=async()=>{if(!q.trim())return;setBusy(true);setErr('');setAnswer('');try{const{data,error}=await supabase.functions.invoke('ai-core',{body:{query:q,mode:'chat'}});if(error)throw error;setAnswer(data?.answer||'پاسخی دریافت نشد.')}catch(e:any){setErr(e?.message||'پاسخ‌گویی ناموفق بود.')}finally{setBusy(false)}};
+ const ask=async()=>{if(!q.trim())return;setBusy(true);setErr('');setAnswer('');try{const{data,error}=await supabase.functions.invoke('ai-core',{body:{query:q,mode:'chat'}});if(error)throw error;setAnswer(data?.answer||'پاسخی دریافت نشد.')}catch(e:any){setErr(e?.message||'پاسخ‌گویی ناموفق بود.')}finally{setBusy(false)}};
  return <main dir="rtl" className="min-h-screen p-4 md:p-8" style={{background:'var(--bg)',color:'var(--text)'}}><div className="max-w-6xl mx-auto space-y-5">
   <header><div className="flex items-center gap-2"><BookOpen/><h1 className="text-2xl font-black">دانشنامه گمرکی</h1></div><p className="text-xs app-muted mt-1">آپلود سند → استخراج هوش مصنوعی → بررسی انسانی → انتشار در دانش فعال</p></header>
   {err&&<div className="p-3 rounded-xl bg-red-500/10 border border-red-400/30 text-sm">{err}</div>}
