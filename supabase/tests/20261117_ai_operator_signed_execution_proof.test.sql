@@ -51,7 +51,7 @@ BEGIN
     );
     RAISE EXCEPTION 'Expected direct executing transition to be rejected';
   EXCEPTION WHEN OTHERS THEN
-    IF SQLERRM NOT LIKE '%Direct executing/executed transitions are forbidden%' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE '%Direct executing/terminal transitions are forbidden%' THEN RAISE; END IF;
   END;
 
   -- A mathematically valid but wrong-risk proof cannot begin a different persisted plan.
