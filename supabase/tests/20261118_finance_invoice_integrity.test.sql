@@ -59,6 +59,7 @@ begin
     raise exception 'Issued invoice hard delete was not blocked by the database trigger';
   end if;
 
+  v_failed := false;
   begin
     delete from public.finance_invoices
     where id='10000000-0000-0000-0000-000000000002';
