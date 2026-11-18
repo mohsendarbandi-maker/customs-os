@@ -9,7 +9,7 @@ export type ExtractedDocumentIdentityField = {
 };
 
 const DATE_VALUE = "(?:\\d{4}[./-]\\d{1,2}[./-]\\d{1,2}|\\d{1,2}[./-]\\d{1,2}[./-]\\d{2,4})";
-const NUMBER_VALUE = "([A-Z0-9۰-۹][A-Z0-9۰-۹./_-]{1,39})";
+const NUMBER_VALUE = "([A-Z0-9\\u0600-\\u06FF][A-Z0-9\\u0600-\\u06FF./_-]{1,39})";
 
 export function normalizeDocumentExtractionDigits(value: string): string {
   return String(value ?? "")
@@ -19,12 +19,15 @@ export function normalizeDocumentExtractionDigits(value: string): string {
 
 function firstMatch(text: string, patterns: RegExp[], rejectProforma = false) {
   for (const pattern of patterns) {
-    const match = pattern.exec(text);
-    if (!match) continue;
-    if (rejectProforma && /pro[\\s-]?forma|پروفرما|پروفورما/i.test(text.slice(Math.max(0, match.index - 45), match.index))) {
-      continue;
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      if (rejectProforma && /pro[\\s-]?forma|پروفرما|پروفورما/i.test(text.slice(Math.max(0, match.index - 45), match.index))) {
+        if (!pattern.global) break;
+        continue;
+      }
+      return match;
     }
-    return match;
   }
   return null;
 }
@@ -40,7 +43,7 @@ export function extractProformaInvoiceIdentity(
   source: string,
   confidence: number,
 ): ExtractedDocumentIdentityField[] {
-  const text = String(pageText ?? "").replace(/\\s+/g, " ").trim();
+  const text = String(pageText ?? "").replace(/\s+/g, " ").trim();
   if (!text) return [];
 
   const proformaNumber = firstMatch(text, [
