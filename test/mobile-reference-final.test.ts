@@ -57,11 +57,19 @@ describe('maritime six-screen mobile reference', () => {
     expect(reminders).toContain("const isHome=currentSection==='open'");
   });
 
-  it('opens reminder actions on touch-and-hold and dismisses them on release/cancel', () => {
-    expect(reminders).toContain("window.setTimeout(()=>{const trigger=card.querySelector('.reminder-overflow-trigger')");
+  it('opens reminder actions on touch-and-hold and keeps the menu open after finger release', () => {
+    expect(reminders).toContain("const timer=window.setTimeout(()=>{if(card.dataset.touchMoved==='true')return;const trigger=card.querySelector('.reminder-overflow-trigger')");
     expect(reminders).toContain("card.dataset.longPressMenu='true'");
-    expect(reminders).toContain("if(card.dataset.longPressMenu==='true'){delete card.dataset.longPressMenu;closeCardMenu();}");
+    expect(reminders).toContain("const longPressed=card.dataset.longPressMenu==='true';delete card.dataset.longPressMenu;if(longPressed){");
+    expect(reminders).not.toContain("if(card.dataset.longPressMenu==='true'){delete card.dataset.longPressMenu;closeCardMenu();}");
     expect(reminders).toContain('onPointerCancel={onCardPointerCancel}');
+    expect(reminders).toContain('onPointerMove={onCardPointerMove}');
+    expect(reminders).toContain('onContextMenu={event=>event.preventDefault()}');
+    expect(reminders.match(/onPointerMove={onCardPointerMove}/g)?.length).toBe(2);
+    expect(reminders).toContain("Math.hypot(dx,dy)>12");
+    expect(reminders).toContain("Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.3");
+    expect(reminderTimeline).toContain('.reminders-app-standalone .reminder-card{-webkit-user-select:none!important;user-select:none;-webkit-touch-callout:none;touch-action:pan-y}');
+    expect(reminders).not.toContain('pointerStart');
   });
 
   it('keeps the reminder search panel animated, keyboard-accessible, and explicitly clearable/closable', () => {
