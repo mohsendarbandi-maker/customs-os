@@ -70,6 +70,18 @@ jobs:
       - name: Run two-session concurrent workflow patch test
         run: bash supabase/tests/run_customs_workflow_atomic_concurrency.sh
 
+      - name: Create isolated chat helper ACL test database
+        run: createdb chat_internal_acl_test
+
+      - name: Create chat helper ACL fixture
+        run: PGDATABASE=chat_internal_acl_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/chat_internal_helper_acl_fixture.sql
+
+      - name: Apply direct RPC privilege hardening migration
+        run: PGDATABASE=chat_internal_acl_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261117170000_revoke_direct_chat_helper_rpc.sql
+
+      - name: Verify chat helper direct RPC denial and nested definer access
+        run: PGDATABASE=chat_internal_acl_test psql -v ON_ERROR_STOP=1 -f supabase/tests/20261117_chat_internal_helper_acl.test.sql
+
       - name: Typecheck
         run: npm run typecheck
 
