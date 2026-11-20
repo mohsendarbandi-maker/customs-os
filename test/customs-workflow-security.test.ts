@@ -7,6 +7,7 @@ const readMigration = (name: string) => fs.readFileSync(path.join(root, 'supabas
 const workflowScope = readMigration('20261013142058_customs_workflow_client_scope.sql');
 const auditMigration = readMigration('20261013145845_customs_workflow_audit_history.sql');
 const procedureSnapshotMigration = readMigration('20261013180308_customs_workflow_procedure_state_audit.sql');
+const declarationMetadataBackfill = readMigration('20261017063420_backfill_customs_declaration_metadata_from_predeclaration.sql');
 
 describe('customs workflow security regression — phase 11', () => {
   it('scopes workflow reads to the active organization', () => {
@@ -36,4 +37,13 @@ describe('customs workflow security regression — phase 11', () => {
     expect(procedureSnapshotMigration).toContain("'procedure_state', NEW.procedure_state");
     expect(procedureSnapshotMigration).toContain('previous_snapshot, snapshot, actor_id');
   });
+  it('backfills declaration office and regime only from organization-matched records and skips conflicting office sources', () => {
+    expect(declarationMetadataBackfill).toContain('s.organization_id = d.organization_id');
+    expect(declarationMetadataBackfill).toContain('p.organization_id = s.organization_id');
+    expect(declarationMetadataBackfill).toContain('COALESCE(d.customs_office_id, source.source_customs_office_id)');
+    expect(declarationMetadataBackfill).toContain('COALESCE(d.customs_regime, source.source_customs_regime)');
+    expect(declarationMetadataBackfill).toContain('AND NOT EXISTS');
+    expect(declarationMetadataBackfill).toContain('s.customs_office_id <> p.customs_office_id');
+  });
+
 });
