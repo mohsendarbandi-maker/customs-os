@@ -201,3 +201,62 @@
 @media (prefers-reduced-motion: reduce) {
   .app-mobile-dock.native-bottom-tabs > button { transition: none; }
 }
+
+/* FINAL EDGE-TO-EDGE SAFE-AREA DOCK
+   User requirement: the complete navigation surface reaches the physical
+   bottom edge; the iOS Home Indicator overlays the dock background. The
+   30px tab controls stay at the top of that surface, with only the remaining
+   safe-area strip reserved below them. */
+@media (max-width:1023px),(pointer:coarse) {
+  :root {
+    --cos-tab-height:30px;
+    --cos-bottom-nav-safe-area:env(safe-area-inset-bottom,0px);
+    --cos-tab-reserve:calc(var(--cos-tab-height) + env(safe-area-inset-bottom,0px));
+    --cos-bottom-nav-content-height:var(--cos-tab-height);
+    --cos-bottom-nav-reserve:var(--cos-tab-reserve);
+    --app-mobile-tabbar-height:var(--cos-tab-height);
+    --native-shell-tab-height:var(--cos-tab-height);
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-chat-route) :is(.app-mobile-dock,.app-mobile-viewport-dock).native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-chat-route .chat-standalone[data-chat-selected="true"]) .app-mobile-viewport-dock.native-bottom-tabs {
+    inset-block-end:0!important;
+    bottom:0!important;
+    height:var(--cos-tab-reserve)!important;
+    min-height:var(--cos-tab-reserve)!important;
+    max-height:var(--cos-tab-reserve)!important;
+    padding:0 6px env(safe-area-inset-bottom,0px)!important;
+    box-sizing:border-box!important;
+    align-items:flex-start!important;
+    border-radius:17px 17px 0 0!important;
+    background-clip:border-box!important;
+  }
+
+  html:has(.app-shell.is-touch-layout) .app-mobile-dock.native-bottom-tabs > button,
+  html:has(.app-shell.is-touch-layout) .app-mobile-viewport-dock.native-bottom-tabs > button,
+  html:has(.app-shell.is-touch-layout.is-chat-route) :is(.app-mobile-dock,.app-mobile-viewport-dock).native-bottom-tabs > button {
+    align-self:flex-start!important;
+    height:30px!important;
+    min-height:30px!important;
+    max-height:30px!important;
+    margin-top:0!important;
+  }
+
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) {
+    --cos-tab-reserve:var(--cos-tab-height);
+  }
+
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-mobile-keyboard-open) .app-mobile-viewport-dock.native-bottom-tabs,
+  html:has(.app-shell.is-touch-layout.is-chat-route.is-mobile-keyboard-open) :is(.app-mobile-dock,.app-mobile-viewport-dock).native-bottom-tabs {
+    inset-block-end:var(--mobile-keyboard-bottom-inset,0px)!important;
+    bottom:var(--mobile-keyboard-bottom-inset,0px)!important;
+    height:30px!important;
+    min-height:30px!important;
+    max-height:30px!important;
+    padding:0 6px!important;
+    align-items:center!important;
+  }
+}
