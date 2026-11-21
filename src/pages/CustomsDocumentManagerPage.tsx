@@ -19,14 +19,14 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import PdfDocumentViewer from '../components/PdfDocumentViewer';
 import { supabase } from '../lib/supabase';
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createWorker } from 'tesseract.js';
 import { buildCargoName, formatCount } from '../lib/cargoNaming';
 import { AddReminderButton } from '../features/reminders/AddReminderButton';
 import { extractProformaInvoiceIdentity, normalizeDocumentExtractionDigits } from '../lib/customsDocumentExtraction';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs',
+  'pdfjs-dist/legacy/build/pdf.worker.mjs',
   import.meta.url,
 ).toString();
 
