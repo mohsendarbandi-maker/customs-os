@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight, CheckCircle2, ChevronDown, ChevronLeft, Copy, ClipboardPaste,
   Download, Eye, FileText, Folder, FolderOpen, Loader2, MessageCircle,
-  RefreshCw, Search, Upload, UploadCloud, X, HardDrive, Smartphone, ShieldCheck,
+  RefreshCw, Search, Upload, UploadCloud, X, HardDrive, Smartphone, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createAppFileTransfer, consumeAppFileTransfer } from '../lib/appFileTransfer';
@@ -158,6 +158,7 @@ export const FileManagerPage: React.FC = () => {
   const [copyingFolder, setCopyingFolder] = useState(false);
   const [folderCopyAvailable, setFolderCopyAvailable] = useState(false);
   const [preview, setPreview] = useState<{url:string; name:string; mime:string} | null>(null);
+  const [deletingKnowledgeSourceId, setDeletingKnowledgeSourceId] = useState<string | null>(null);
   const signedStorageUrlCache = useRef(new Map<string, { url: string; expiresAt: number }>());
   const directoryInput = useRef<HTMLInputElement | null>(null);
 
@@ -215,6 +216,15 @@ export const FileManagerPage: React.FC = () => {
           for(const row of fileRows||[]) counts[row.folder_id]=(counts[row.folder_id]||0)+1;
           if((fileRows||[]).length<500) break;
         }
+        const knowledgeFolder = rows.find((folder) => folder.folder_key === 'knowledge-library');
+        if (knowledgeFolder) {
+          const { count: knowledgeCount, error: knowledgeCountError } = await supabase
+            .from('knowledge_sources')
+            .select('id', { count: 'exact', head: true })
+            .eq('organization_id', organizationId);
+          if (knowledgeCountError) throw knowledgeCountError;
+          counts[knowledgeFolder.id] = (counts[knowledgeFolder.id] || 0) + (knowledgeCount || 0);
+        }
         setFolderFileCounts(counts);
       } catch { setFolderFileCounts({}); }
       const requestedFolder = initialRoute.current.folderId;
@@ -250,8 +260,53 @@ export const FileManagerPage: React.FC = () => {
       .eq('is_archived', false)
       .order('created_at', { ascending: false });
     if (filesError) throw filesError;
-    setFiles((data || []) as FileRow[]);
-  }, [organizationId]);
+    const ordinaryFiles = (data || []) as FileRow[];
+    const selectedFolder = folders.find((folder) => folder.id === folderId);
+    if (selectedFolder?.folder_key !== 'knowledge-library') {
+      setFiles(ordinaryFiles);
+      return;
+    }
+    const { data: sources, error: sourcesError } = await supabase
+      .from('knowledge_sources')
+      .select('id,title,status,storage_path,mime_type,metadata,keywords,extracted_text,created_at')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false });
+    if (sourcesError) throw sourcesError;
+    const knowledgeFiles: FileRow[] = (sources || []).map((source: any) => {
+      const sourceMetadata = source.metadata && typeof source.metadata === 'object' ? source.metadata as Record<string, unknown> : {};
+      const originalName = String(sourceMetadata.filename || source.title || 'document.pdf');
+      const storagePath = typeof source.storage_path === 'string' ? source.storage_path : null;
+      const mime = String(source.mime_type || (storagePath?.toLowerCase().endsWith('.pdf') || originalName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream'));
+      return {
+        id: 'knowledge:' + source.id,
+        folder_id: folderId,
+        shipment_id: null,
+        client_id: null,
+        file_asset_id: null,
+        original_name: originalName,
+        mime_type: mime,
+        size_bytes: Math.max(0, Number(sourceMetadata.size || 0)),
+        external_message_id: null,
+        document_type: 'KNOWLEDGE_SOURCE',
+        tags: Array.isArray(source.keywords) ? source.keywords.map(String).slice(0, 20) : [],
+        metadata: {
+          knowledgeSourceId: String(source.id),
+          knowledgeStatus: String(source.status || 'draft'),
+          storageBucket: 'customs-knowledge',
+          extractedChars: String(source.extracted_text || '').length,
+          summary: String(sourceMetadata.summary || ''),
+          originalTitle: String(source.title || originalName),
+        },
+        shipment_document_id: null,
+        customs_document_id: null,
+        storage_path: storagePath,
+        operation_sections: [],
+        is_archived: false,
+        created_at: String(source.created_at),
+      };
+    });
+    setFiles([...ordinaryFiles, ...knowledgeFiles]);
+  }, [organizationId, folders]);
 
   useEffect(() => { void loadFolders(); }, [loadFolders]);
   useEffect(() => {
@@ -493,8 +548,9 @@ export const FileManagerPage: React.FC = () => {
     const copyAliasAssetId = typeof file.metadata?.copyAliasFileAssetId === 'string' ? file.metadata.copyAliasFileAssetId : '';
     const downloadStorageCopy = async (): Promise<Blob> => {
       if (!file.storage_path) throw new Error('نسخه پشتیبان فایل در Supabase Storage ثبت نشده است.');
-      return getCachedPrivateFileBlob('storage:'+profile?.id+':'+organizationId+':'+file.storage_path+':'+file.size_bytes,async()=>{
-        const { data, error: storageError } = await supabase.storage.from('customs_documents').download(file.storage_path!);
+      const storageBucket = file.metadata?.storageBucket === 'customs-knowledge' ? 'customs-knowledge' : 'customs_documents';
+      return getCachedPrivateFileBlob('storage:'+profile?.id+':'+organizationId+':'+storageBucket+':'+file.storage_path+':'+file.size_bytes,async()=>{
+        const { data, error: storageError } = await supabase.storage.from(storageBucket).download(file.storage_path!);
         if (storageError) throw storageError;
         return data;
       });
@@ -527,13 +583,14 @@ export const FileManagerPage: React.FC = () => {
     if (!file.storage_path) return null;
     const name = windowsName(file.original_name || 'document.bin');
     const userKey = profile?.id || 'signed-in-user';
-    const cacheKey = [userKey, organizationId, file.storage_path, download ? 'download:' + name : 'preview'].join(':');
+    const storageBucket = file.metadata?.storageBucket === 'customs-knowledge' ? 'customs-knowledge' : 'customs_documents';
+    const cacheKey = [userKey, organizationId, storageBucket, file.storage_path, download ? 'download:' + name : 'preview'].join(':');
     const cached = signedStorageUrlCache.current.get(cacheKey);
     if (cached && cached.expiresAt > Date.now() + 30_000) return cached.url;
 
     const options = download ? { download: name } : undefined;
     const { data, error } = await supabase.storage
-      .from('customs_documents')
+      .from(storageBucket)
       .createSignedUrl(file.storage_path, 600, options);
     if (error) throw error;
     if (!data?.signedUrl) throw new Error('لینک امن و موقت فایل ساخته نشد.');
@@ -611,6 +668,41 @@ export const FileManagerPage: React.FC = () => {
       setError(e instanceof Error ? e.message : 'نمایش فایل ناموفق بود.');
     }
   };
+  const deleteKnowledgeFile = async (file: FileRow) => {
+    const sourceId = typeof file.metadata?.knowledgeSourceId === 'string' ? file.metadata.knowledgeSourceId : '';
+    if (!sourceId || !['owner', 'admin'].includes(role)) {
+      setError('حذف منابع دانشنامه فقط برای مالک یا مدیر سازمان مجاز است.');
+      return;
+    }
+    const displayName = file.original_name || 'سند دانشنامه';
+    if (!window.confirm('این منبع به‌صورت دائمی حذف می‌شود:\n' + displayName + '\n\nفایل اصلی و تمام قطعه‌های برداری آن نیز پاک خواهند شد. ادامه می‌دهید؟')) return;
+    setDeletingKnowledgeSourceId(sourceId);
+    setError('');
+    setMessage('');
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('knowledge-ai', {
+        body: { action: 'delete', source_id: sourceId },
+      });
+      if (invokeError) {
+        let detail = invokeError.message;
+        try {
+          const body = await (invokeError as any).context?.json?.();
+          if (body?.error) detail = String(body.error);
+        } catch { /* Keep the original Functions error. */ }
+        throw new Error(detail || 'حذف منبع دانشنامه ناموفق بود.');
+      }
+      if (data?.status !== 'deleted') throw new Error(data?.error || 'تأیید حذف از سرور دریافت نشد.');
+      signedStorageUrlCache.current.clear();
+      setMessage('منبع دانشنامه، فایل اصلی و قطعه‌های برداری آن حذف شدند.');
+      await loadFiles(selectedFolderId);
+      await loadFolders();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'حذف منبع دانشنامه ناموفق بود.');
+    } finally {
+      setDeletingKnowledgeSourceId(null);
+    }
+  };
+
   const transferFileFromManager=async(file:FileRow,target:'chat'|'pdf-studio')=>{
     const mime=(file.mime_type||'').toLowerCase();
     if(target==='pdf-studio'&&!(mime==='application/pdf'||mime==='image/png'||mime==='image/jpeg'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))){
@@ -1735,7 +1827,7 @@ export const FileManagerPage: React.FC = () => {
           <div className="fm-file-toolbar"><b className="min-w-0 truncate">{currentFolder?.display_name || 'فایل‌منیجر'} <span className="font-normal app-muted">· {files.length} سند</span></b><span className="fm-branch-count">{childFolders.length} شاخه</span></div>
           <div className="fm-file-content min-h-0 flex-none overflow-visible p-3 md:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {childFolders.length>0&&<div className="mb-4"><div className="mb-2"><h3 className="text-xs font-bold app-muted">محتویات زیرشاخه</h3></div><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{childFolders.map(folder=>{const count=folderDescendantCounts[folder.id]||0;return <div key={folder.id} className="flex min-w-0 items-stretch gap-1 rounded-xl border app-border p-1.5 hover:bg-[var(--surface-2)]"><button type="button" onClick={()=>chooseFolder(folder)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-right"><span className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border '+folderToneClass(folder.folder_type)}>{count>0?<FolderOpen size={24}/>:<Folder size={24}/>}</span><span className="min-w-0 flex-1"><span className="block whitespace-normal break-words text-sm font-bold leading-5">{folder.display_name}</span><span className="mt-1 block text-[10px] app-muted">{folder.folder_type==='accounting_finance'?'حسابداری مالی':folder.is_system?'سیستمی':'سفارشی'}</span><span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] '+(count>0?'bg-emerald-500/10 text-emerald-600':'bg-[var(--surface-2)] app-muted')}>{count>0?count+' سند فعال':'خالی'}</span></span></button>{isCopyableFolder(folder)&&<button type="button" onClick={()=>beginCopyFolder(folder)} disabled={!folderCopyAvailable} aria-label={'کپی شاخه '+folder.display_name} className="self-center rounded-lg border app-border p-2 disabled:opacity-35"><Copy size={15}/></button>}</div>;})}</div></div>}
-            {files.length>0&&<div className="overflow-hidden rounded-xl border app-border"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}{Array.isArray(file.operation_sections)&&file.operation_sections.length>0&&<div className="mt-1 flex flex-wrap gap-1">{file.operation_sections.map(section=><span key={section} className="rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] text-[var(--primary)]">{CUSTOMS_FILE_OPERATION_SECTIONS.find(([key])=>key===section)?.[1]||section}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isTelegram?'text-emerald-600':'text-amber-600'}>{isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span></div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button></div></div>;})}</div>}
+            {files.length>0&&<div className="overflow-hidden rounded-xl border app-border"><div className="hidden grid-cols-[minmax(0,1fr)_94px_118px_210px] items-center gap-2 bg-[var(--surface-2)] px-3 py-2 text-[10px] font-bold app-muted sm:grid"><span>نام و اطلاعات سند</span><span>حجم</span><span>تاریخ</span><span className="text-left">عملیات</span></div>{files.map(file=>{const isKnowledge=typeof file.metadata?.knowledgeSourceId==='string';const knowledgeStatus=String(file.metadata?.knowledgeStatus||'');const knowledgeStatusLabel=({draft:'پیش‌نویس',pending_review:'در انتظار تأیید',active:'فعال',rejected:'رد شده',superseded:'جایگزین‌شده',revoked:'لغوشده'} as Record<string,string>)[knowledgeStatus]||knowledgeStatus;const isTelegram=Boolean(file.file_asset_id || file.metadata?.copyAliasFileAssetId);const displayName=typeof file.metadata?.documentName==='string'?file.metadata.documentName:file.original_name;const tags=Array.isArray(file.tags)?file.tags.slice(0,6):[];return <div key={file.id} className="grid gap-2 border-t app-border px-3 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_94px_118px_210px] sm:items-center sm:gap-2"><div className="flex min-w-0 items-start gap-3"><FileText size={20} className={isTelegram?'mt-0.5 shrink-0 text-emerald-600':'mt-0.5 shrink-0 text-[var(--primary)]'}/><div className="min-w-0"><div className="break-words text-sm font-bold">{displayName}</div>{displayName!==file.original_name&&<div className="mt-0.5 break-words text-[10px] app-muted">نام اصلی: {file.original_name}</div>}{tags.length>0&&<div className="mt-1 flex flex-wrap gap-1">{tags.map(tag=><span key={tag} className="rounded-full border app-border px-2 py-0.5 text-[10px] app-muted">{tag}</span>)}</div>}{Array.isArray(file.operation_sections)&&file.operation_sections.length>0&&<div className="mt-1 flex flex-wrap gap-1">{file.operation_sections.map(section=><span key={section} className="rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] text-[var(--primary)]">{CUSTOMS_FILE_OPERATION_SECTIONS.find(([key])=>key===section)?.[1]||section}</span>)}</div>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] app-muted"><span className={isKnowledge?'text-sky-600':isTelegram?'text-emerald-600':'text-amber-600'}>{isKnowledge?'دانشنامه هوش مصنوعی':isTelegram?'آرشیو تلگرام':'بایگانی قبلی وب‌سایت'}</span><span>·</span><span>{file.mime_type||'نوع نامشخص'}</span>{isKnowledge&&knowledgeStatusLabel&&<><span>·</span><span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-sky-700">{knowledgeStatusLabel}</span><span>·</span><span>{Number(file.metadata?.extractedChars||0).toLocaleString('fa-IR')} نویسه متن</span></>}</div></div></div><span className="text-xs app-muted">{byteLabel(file.size_bytes)}</span><span className="text-xs app-muted">{new Date(file.created_at).toLocaleDateString('fa-IR')}</span><div className="flex flex-wrap items-center gap-1 sm:justify-end"><button type="button" onClick={()=>void previewDocument(file)} disabled={!(file.mime_type||'').startsWith('image/')&&file.mime_type!=='application/pdf'&&file.mime_type!=='text/plain'} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="نمایش"><Eye size={13}/>نمایش</button><button type="button" onClick={()=>void copyFileNameForTelegram(displayName)} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="کپی نام برای جست‌وجو در تلگرام"><Copy size={13}/>نام</button><button type="button" onClick={()=>void transferFileFromManager(file,'pdf-studio')} disabled={!((file.mime_type||'').toLowerCase()==='application/pdf'||(file.mime_type||'').toLowerCase()==='image/jpeg'||(file.mime_type||'').toLowerCase()==='image/png'||/\.(pdf|png|jpe?g)$/i.test(file.original_name))} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs disabled:opacity-35" title="بازکردن در PDF Studio"><FileText size={13}/>PDF</button><button type="button" onClick={()=>void transferFileFromManager(file,'chat')} className="inline-flex items-center gap-1 rounded-lg border app-border px-2 py-1.5 text-xs" title="انتقال به چت"><MessageCircle size={13}/>چت</button><button type="button" onClick={()=>void downloadFile(file)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-xs font-bold text-white" title="دانلود"><Download size={13}/>دانلود</button>{isKnowledge&&<button type="button" onClick={()=>void deleteKnowledgeFile(file)} disabled={!['owner','admin'].includes(role)||deletingKnowledgeSourceId===String(file.metadata?.knowledgeSourceId||'')} className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-2 py-1.5 text-xs font-bold text-red-600 disabled:opacity-40" title="حذف دائمی منبع دانشنامه">{deletingKnowledgeSourceId===String(file.metadata?.knowledgeSourceId||'')?<Loader2 size={13} className="animate-spin"/>:<Trash2 size={13}/>}حذف</button>}</div></div>;})}</div>}
             {childFolders.length===0&&files.length===0&&<div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed app-border p-6 text-center"><FolderOpen size={30} className="mb-2 text-[var(--primary)]"/><b className="text-sm">این مسیر خالی است</b><p className="mt-1 text-xs app-muted">از «آپلود فایل» برای ثبت سند استفاده کنید.</p></div>}
           </div>
         </section>
