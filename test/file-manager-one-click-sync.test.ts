@@ -113,7 +113,10 @@ describe('one-click file manager synchronization', () => {
     expect(page).toContain('if (file.storage_path) {');
     expect(page).toContain('return await downloadStorageCopy();');
     expect(page).toContain('downloadTelegramArchivedFile(fallbackAssetId)');
-    expect(page).toContain("getCachedPrivateFileBlob('storage:'+profile?.id+':'+organizationId+':'+file.storage_path");
+    expect(page).toContain("const storageBucket = file.metadata?.storageBucket === 'customs-knowledge' ? 'customs-knowledge' : 'customs_documents';");
+    expect(page).toContain("getCachedPrivateFileBlob('storage:'+profile?.id+':'+organizationId+':'+storageBucket+':'+file.storage_path");
+    expect(page).toContain(".from(storageBucket)");
+    expect(page).toContain("createSignedUrl(file.storage_path, 600, options)");
     expect(page).not.toContain('if (remote.file_asset_id && Number(remote.size_bytes) > FILE_ARCHIVE_MAX_BYTES)');
   });
 
