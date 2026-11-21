@@ -178,7 +178,7 @@ Deno.serve(async(req)=>{
         copied.forEach(page=>batchPdf.addPage(page));
         const batchBase64=bytesToBase64(await batchPdf.save());
         const extractionResult=await geminiJson(
-          'این فایل فقط شامل بخشی از یک سند حقوقی/گمرکی/تجاری است. صفحات این فایل به ترتیب متناظر با صفحات اصلی PDF از '+startPage+' تا '+endPage+' هستند. شماره page_number را بر اساس شماره صفحه اصلی PDF ثبت کن. فقط اطلاعات صریح سند را استخراج کن و هیچ قانون، شماره، تاریخ یا تفسیر حقوقی نساز. متن قابل استناد همین صفحات را حفظ کن. chunks را به تفکیک صفحه بساز. خلاصه فقط خلاصه همین صفحات باشد. نام فایل: '+filename,
+          'این فایل فقط شامل بخشی از یک سند حقوقی/گمرکی/تجاری است. صفحات این فایل به ترتیب متناظر با صفحات اصلی PDF از '+startPage+' تا '+endPage+' هستند. شماره page_number را بر اساس شماره صفحه اصلی PDF ثبت کن. صفحات اسکن‌شده و تصویرمحور را با خواندن بصری متن، جدول‌ها، مهرها، سربرگ و پاورقی بررسی کن؛ متن ناخوانا را حدس نزن و مقدار ناموجود را خالی بگذار. فقط اطلاعات صریح سند را استخراج کن و هیچ قانون، شماره، تاریخ یا تفسیر حقوقی نساز. متن قابل استناد همین صفحات را حفظ کن. chunks را به تفکیک صفحه بساز. خلاصه فقط خلاصه همین صفحات باشد. نام فایل: '+filename,
           'application/pdf',batchBase64,geminiKey
         );
         const extracted=extractionResult.extraction;
@@ -208,7 +208,7 @@ Deno.serve(async(req)=>{
       }
       if(!data&&fileBlob)data=bytesToBase64(new Uint8Array(await fileBlob.arrayBuffer()));
       if(!data)return reply({error:'محتوای فایل برای استخراج خالی است.'},400,origin);
-      const extractionResult=await geminiJson('این فایل یک سند حقوقی/گمرکی/تجاری است. فقط اطلاعات صریح سند را استخراج کن و هیچ قانون، شماره، تاریخ، مرجع یا تفسیر حقوقی جدید نساز. متن کامل قابل استناد را حفظ کن. chunks را بر اساس صفحه بساز و اگر صفحه مشخص نیست null بگذار. نام فایل: '+filename,mime,data,geminiKey);
+      const extractionResult=await geminiJson('این فایل یک سند حقوقی/گمرکی/تجاری است. اگر PDF اسکن‌شده یا تصویرمحور است، متن را از روی تصویر صفحه نیز بخوان و جدول‌ها، مهرها، سربرگ و پاورقی را بررسی کن؛ هیچ بخش ناخوانایی را حدس نزن. فقط اطلاعات صریح سند را استخراج کن و هیچ قانون، شماره، تاریخ، مرجع یا تفسیر حقوقی جدید نساز. متن کامل قابل استناد را حفظ کن. chunks را بر اساس صفحه بساز و اگر صفحه مشخص نیست null بگذار. نام فایل: '+filename,mime,data,geminiKey);
       return reply({status:'extracted',model:extractionResult.model,extraction:extractionResult.extraction,source_id:sourceId||null,extraction_input:storagePath?'private_storage':'browser_upload'},200,origin);
     }
 
