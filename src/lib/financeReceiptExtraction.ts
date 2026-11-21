@@ -1,7 +1,7 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {createWorker} from 'tesseract.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc=new URL('pdfjs-dist/build/pdf.worker.mjs',import.meta.url).toString();
+pdfjsLib.GlobalWorkerOptions.workerSrc=new URL('pdfjs-dist/legacy/build/pdf.worker.mjs',import.meta.url).toString();
 
 export type FinanceReceiptField={
  key:'amount'|'receipt_number'|'date'|'description'|'currency';
