@@ -9,7 +9,7 @@ function sourceFiles(directory: string): string[] {
     const fullPath = path.join(directory, entry.name);
     return entry.isDirectory()
       ? sourceFiles(fullPath)
-      : /\\.tsx?$/.test(entry.name)
+      : /\.tsx?$/.test(entry.name)
         ? [fullPath]
         : [];
   });
