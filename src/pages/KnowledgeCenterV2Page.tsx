@@ -44,69 +44,63 @@ const knowledgeMime=(filename:string,mime:string)=>{
 };
 
 export const KnowledgeCenterV2Page:React.FC=()=>{
- const[sources,setSources]=useState<Source[]>([]),[pending,setPending]=useState<Source[]>([]),[q,setQ]=useState(''),[answer,setAnswer]=useState(''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[file,setFile]=useState<File|null>(null),[review,setReview]=useState<Extraction|null>(null),[reviewSourceId,setReviewSourceId]=useState(''),[selected,setSelected]=useState<Source|null>(null),[uploadProgress,setUploadProgress]=useState(0),[uploadStage,setUploadStage]=useState(''),[draftSourceId,setDraftSourceId]=useState('');
+ const[sources,setSources]=useState<Source[]>([]),[pending,setPending]=useState<Source[]>([]),[q,setQ]=useState(''),[answer,setAnswer]=useState(''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[files,setFiles]=useState<File[]>([]),[review,setReview]=useState<Extraction|null>(null),[reviewSourceId,setReviewSourceId]=useState(''),[selected,setSelected]=useState<Source|null>(null),[uploadProgress,setUploadProgress]=useState(0),[uploadStage,setUploadStage]=useState(''),[draftSourceId,setDraftSourceId]=useState(''),[queueProgress,setQueueProgress]=useState<{done:number;total:number;current:string}|null>(null);
  const load=async()=>{const{data,error}=await supabase.from('knowledge_sources').select('id,title,source_type,source_number,issued_at,effective_at,issuer,subject,status,metadata,ai_extraction,storage_path,mime_type,created_at').order('updated_at',{ascending:false}).limit(100);if(error){setErr(error.message);return}const rows=(data||[]) as Source[];setSources(rows.filter(x=>x.status==='active'));setPending(rows.filter(x=>x.status==='pending_review'||x.status==='draft'))};
  useEffect(()=>{void load()},[]);
- const extract=async()=>{
-  if(!file&&!draftSourceId)return;
-  setBusy(true);setErr('');setReview(null);setReviewSourceId('');
-  setUploadProgress(draftSourceId?100:0);
-  setUploadStage(draftSourceId?'خواندن نسخه خصوصی ذخیره‌شده':'آماده‌سازی آپلود');
-  let savedSourceId=draftSourceId;
+ const extractOne=async(currentFile:File|null,resumeSourceId:string,userId:string,organizationId:string):Promise<{id:string;extraction:Extraction}>=>{
+  let savedSourceId=resumeSourceId;
   let storedMetadata:any={};
   try{
-   const{data:{user}}=await supabase.auth.getUser();if(!user)throw new Error('کاربر وارد نشده است.');
-   const{data:p,error:pe}=await supabase.from('profiles').select('organization_id').eq('id',user.id).maybeSingle();
-   if(pe||!p?.organization_id)throw new Error(pe?.message||'سازمان کاربر مشخص نیست.');
-
-   let filename=file?.name||'';
-   let mime=knowledgeMime(filename,file?.type||'');
+   let filename=currentFile?.name||'';
+   let mime=knowledgeMime(filename,currentFile?.type||'');
    let storagePath='';
-   let fileSize=Number(file?.size||0);
+   let fileSize=Number(currentFile?.size||0);
 
    if(savedSourceId){
     const{data:saved,error:savedError}=await supabase.from('knowledge_sources')
       .select('id,organization_id,status,storage_path,mime_type,metadata,title')
-      .eq('id',savedSourceId).eq('organization_id',p.organization_id).maybeSingle();
+      .eq('id',savedSourceId).eq('organization_id',organizationId).maybeSingle();
     if(savedError||!saved)throw new Error(savedError?.message||'پیش‌نویس دانشنامه پیدا نشد.');
     if(!['draft','pending_review'].includes(saved.status))throw new Error('وضعیت این منبع برای استخراج مجدد مجاز نیست.');
     storagePath=String(saved.storage_path||'');
     if(!storagePath)throw new Error('مسیر فایل در پیش‌نویس ذخیره نشده است؛ فایل را دوباره آپلود کنید.');
     const savedName=String(saved.metadata?.filename||saved.title||'');
-    if(file&&savedName&&savedName!==file.name)throw new Error('فایل انتخاب‌شده با پیش‌نویس ذخیره‌شده تطابق ندارد: '+savedName);
+    if(currentFile&&savedName&&savedName!==currentFile.name)throw new Error('فایل انتخاب‌شده با پیش‌نویس ذخیره‌شده تطابق ندارد: '+savedName);
     filename=savedName||filename||'document';
     mime=knowledgeMime(filename,String(saved.mime_type||mime||''));
     storedMetadata=saved.metadata||{};
     fileSize=Number(storedMetadata.size||fileSize||0);
    }else{
-    if(!file)throw new Error('فایل موردنظر را انتخاب کنید.');
-    filename=file.name;
-    mime=knowledgeMime(filename,file.type||'');
-    fileSize=file.size;
-    if(!(mime==='application/pdf'||mime==='text/plain'||mime==='text/markdown'||mime.startsWith('image/')))throw new Error('PDF، تصویر، TXT یا Markdown انتخاب کنید.');
-    if(file.size<=0||file.size>25*1024*1024)throw new Error('حجم فایل باید بین ۱ بایت تا ۲۵ مگابایت باشد.');
-    const hash=await sha256(file);
-    const safe=filename.replace(/[^\\w.\\-\\u0600-\\u06ff]+/g,'_');
-    storagePath=p.organization_id+'/'+crypto.randomUUID()+'-'+safe;
-    setUploadStage('آپلود فایل به فضای ذخیره‌سازی');setUploadProgress(0);
-    await uploadKnowledgeFileWithProgress(file,storagePath,setUploadProgress);
-    setUploadStage('ثبت فایل در دانشنامه');
-    storedMetadata={filename,size:file.size,sha256:hash,upload_complete:true};
+    if(!currentFile)throw new Error('فایل موردنظر را انتخاب کنید.');
+    filename=currentFile.name;
+    mime=knowledgeMime(filename,currentFile.type||'');
+    fileSize=currentFile.size;
+    if(mime!=='application/pdf'&&!filename.toLowerCase().endsWith('.pdf'))throw new Error('این صف فقط فایل PDF می‌پذیرد.');
+    if(fileSize<=0||fileSize>25*1024*1024)throw new Error('حجم هر PDF باید بین ۱ بایت تا ۲۵ مگابایت باشد: '+filename);
+    const hash=await sha256(currentFile);
+    const safe=filename.replace(/[^\w.\-\u0600-\u06ff]+/g,'_');
+    storagePath=organizationId+'/'+crypto.randomUUID()+'-'+safe;
+    setUploadStage('آپلود '+filename+' به فضای خصوصی دانشنامه');
+    setUploadProgress(0);
+    await uploadKnowledgeFileWithProgress(currentFile,storagePath,setUploadProgress);
+    setUploadStage('ثبت فایل در دانشنامه: '+filename);
+    storedMetadata={filename,size:fileSize,sha256:hash,upload_complete:true};
     const{data:s,error:se}=await supabase.from('knowledge_sources').insert({
-      organization_id:p.organization_id,title:filename,source_type:'other',status:'draft',
-      storage_path:storagePath,mime_type:mime,created_by:user.id,extracted_text:'',metadata:storedMetadata
+      organization_id:organizationId,title:filename,source_type:'other',status:'draft',
+      storage_path:storagePath,mime_type:mime,created_by:userId,extracted_text:'',metadata:storedMetadata
     }).select('id').single();
     if(se||!s){
       await supabase.storage.from('customs-knowledge').remove([storagePath]);
       throw se||new Error('ثبت مشخصات فایل در دانشنامه ناموفق بود.');
     }
-    savedSourceId=s.id;setDraftSourceId(s.id);
+    savedSourceId=s.id;
+    setDraftSourceId(s.id);
    }
 
-   if(!(mime==='application/pdf'||mime==='text/plain'||mime==='text/markdown'||mime.startsWith('image/')))throw new Error('نوع فایل ذخیره‌شده برای استخراج پشتیبانی نمی‌شود.');
-   if(fileSize>25*1024*1024)throw new Error('حجم فایل ذخیره‌شده بیش از ۲۵ مگابایت است.');
+   if(mime!=='application/pdf')throw new Error('در این بخش فقط PDF پشتیبانی می‌شود: '+filename);
+   if(fileSize>25*1024*1024)throw new Error('حجم PDF ذخیره‌شده بیش از ۲۵ مگابایت است: '+filename);
    setUploadProgress(100);
-   setUploadStage('استخراج هوش مصنوعی از همان فایل ذخیره‌شده');
+   setUploadStage('استخراج PDF با مدل‌های جایگزین AI: '+filename);
    let r:any=null;
    for(let batchAttempt=0;batchAttempt<500;batchAttempt++){
     const response=await supabase.functions.invoke('knowledge-ai',{body:{
@@ -119,34 +113,91 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
     r=response.data;
     if(r?.status==='processing'){
      const progress=r.progress||{};
-     setUploadStage('استخراج مرحله‌ای PDF: '+(progress.processed_pages||0)+' از '+(progress.total_pages||0)+' صفحه');
+     setUploadStage(filename+' — استخراج صفحات '+(progress.processed_pages||0)+' از '+(progress.total_pages||0));
      setUploadProgress(Math.max(1,Math.min(99,Math.round((progress.processed_pages||0)/(progress.total_pages||1)*100))));
      continue;
     }
     break;
    }
-   if(r?.status==='processing')throw new Error('استخراج مرحله‌ای ادامه دارد؛ دوباره «ادامه استخراج از فایل ذخیره‌شده» را بزنید تا از صفحه بعد ادامه یابد.');
+   if(r?.status==='processing')throw new Error('استخراج این PDF هنوز تمام نشده است؛ از فهرست منابع پیش‌نویس، ادامه استخراج را اجرا کنید.');
    if(r?.status!=='extracted')throw new Error(r?.error||'پاسخ استخراج نامعتبر بود.');
    const ex=r?.extraction as Extraction;
-   if(!ex?.title||!Array.isArray(ex.chunks)||!ex.chunks.length)throw new Error('استخراج AI ناقص بود؛ فایل در دانشنامه ذخیره است و می‌توانید استخراج را دوباره اجرا کنید.');
-   setUploadStage('ثبت نتیجه استخراج و آماده‌سازی بررسی');
+   if(!ex?.title||!Array.isArray(ex.chunks)||!ex.chunks.length)throw new Error('استخراج AI ناقص بود؛ فایل ذخیره است و می‌توانید از فهرست پیش‌نویس‌ها ادامه دهید.');
+   setUploadStage('ذخیره متن استخراج‌شده: '+filename);
    const{error:updateError}=await supabase.from('knowledge_sources').update({
     title:ex.title,source_type:typeLabels[ex.source_type]?ex.source_type:'other',
     source_number:ex.source_number||null,issued_at:ex.issued_at||null,effective_at:ex.effective_at||null,
     issuer:ex.issuer||null,subject:ex.subject||null,keywords:Array.isArray(ex.keywords)?ex.keywords:[],
     status:'pending_review',extracted_text:ex.extracted_text||'',ai_extraction:ex,
-    extraction_model:r?.model||'gemini-3.8-flash',
+    extraction_model:r?.model||'gemini-3.5-flash-lite',
     metadata:{...storedMetadata,filename,size:fileSize,upload_complete:true,summary:ex.summary||''}
-   }).eq('id',savedSourceId).eq('organization_id',p.organization_id);
+   }).eq('id',savedSourceId).eq('organization_id',organizationId);
    if(updateError)throw updateError;
-   setReview(ex);setReviewSourceId(savedSourceId);setDraftSourceId('');setFile(null);
-   setUploadStage('استخراج کامل شد');setUploadProgress(100);await load();
-  }catch(e:any){
-   const detail=e?.message||'فرآیند ثبت دانشنامه ناموفق بود.';
-   setErr(savedSourceId?'فایل در دانشنامه ذخیره شده است؛ برای ادامه نیازی به آپلود یا انتخاب مجدد فایل نیست. دوباره «ادامه استخراج از فایل ذخیره‌شده» را بزنید. جزئیات: '+detail:detail);
-   setUploadStage(savedSourceId?'فایل ذخیره شد؛ استخراج از نسخه ذخیره‌شده نیازمند تلاش مجدد است':'آپلود ناموفق بود');
-   if(savedSourceId)setDraftSourceId(savedSourceId);
-  }finally{setBusy(false)}
+   setDraftSourceId('');
+   return {id:savedSourceId,extraction:ex};
+  }catch(error:any){
+   const wrapped=new Error(error?.message||'فرآیند استخراج این PDF ناموفق بود.') as Error&{savedSourceId?:string};
+   wrapped.savedSourceId=savedSourceId||undefined;
+   throw wrapped;
+  }
+ };
+
+ const extract=async()=>{
+  const jobs=draftSourceId?[{file:null as File|null,resumeId:draftSourceId}]:files.map(currentFile=>({file:currentFile,resumeId:''}));
+  if(!jobs.length)return;
+  setBusy(true);setErr('');setReview(null);setReviewSourceId('');
+  setUploadProgress(0);
+  setQueueProgress({done:0,total:jobs.length,current:''});
+  const completed:Array<{id:string;extraction:Extraction}>=[];
+  const failed:Array<{name:string;message:string;savedSourceId?:string}>=[];
+  const retryFiles:File[]=[];
+  try{
+   const{data:{user}}=await supabase.auth.getUser();
+   if(!user)throw new Error('کاربر وارد نشده است.');
+   const{data:p,error:pe}=await supabase.from('profiles').select('organization_id').eq('id',user.id).maybeSingle();
+   if(pe||!p?.organization_id)throw new Error(pe?.message||'سازمان کاربر مشخص نیست.');
+   for(let i=0;i<jobs.length;i++){
+    const job=jobs[i];
+    const name=job.file?.name||'PDF ذخیره‌شده';
+    setQueueProgress({done:i,total:jobs.length,current:name});
+    setUploadProgress(0);
+    setUploadStage('شروع فایل '+(i+1)+' از '+jobs.length+': '+name);
+    try{
+     const result=await extractOne(job.file,job.resumeId,user.id,p.organization_id);
+     completed.push(result);
+    }catch(error:any){
+     failed.push({name,message:error?.message||'استخراج ناموفق بود.',savedSourceId:error?.savedSourceId});
+     if(job.file&&!error?.savedSourceId)retryFiles.push(job.file);
+    }
+    setQueueProgress({done:i+1,total:jobs.length,current:name});
+   }
+   await load();
+   setDraftSourceId(failed.find(x=>x.savedSourceId)?.savedSourceId||'');
+   setFiles(retryFiles);
+   if(completed.length){
+    const last=completed[completed.length-1];
+    setReview(last.extraction);
+    setReviewSourceId(last.id);
+    setUploadProgress(100);
+   }
+   if(failed.length){
+    const succeeded=completed.length;
+    const details=failed.map(x=>'• '+x.name+': '+x.message).join('\n');
+    setErr((succeeded?succeeded+' فایل استخراج شد. ':'')+'استخراج '+failed.length+' فایل ناموفق بود:\n'+details+'\nفایل‌هایی که در دانشنامه ذخیره شده‌اند در فهرست «منابع نیازمند تکمیل» باقی می‌مانند؛ فقط فایل‌هایی را دوباره انتخاب کنید که آپلودشان کامل نشده است.');
+    setUploadStage('صف پایان یافت؛ '+completed.length+' موفق، '+failed.length+' نیازمند بررسی');
+   }else{
+    setErr('');
+    setUploadStage('استخراج '+completed.length+' PDF کامل شد؛ برای قابل‌جست‌وجو شدن، هر منبع را پس از بررسی تأیید کنید.');
+    setUploadProgress(100);
+   }
+  }catch(error:any){
+   setErr(error?.message||'فرآیند ثبت دانشنامه ناموفق بود.');
+   setUploadStage('صف متوقف شد؛ فایل‌های انتخاب‌شده هنوز برای تلاش مجدد نگه داشته شده‌اند.');
+   setFiles(jobs.filter(x=>x.file).map(x=>x.file as File));
+  }finally{
+   setQueueProgress({done:completed.length+failed.length,total:jobs.length,current:''});
+   setBusy(false);
+  }
  };
 
  const reviewAction=async(action:'approve'|'reject')=>{
@@ -187,7 +238,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
  };
  const resumeOrReviewSource=(source:Source)=>{
   if(source.status==='draft'){
-   setDraftSourceId(source.id);setFile(null);setReview(null);setReviewSourceId('');
+   setDraftSourceId(source.id);setFiles([]);setReview(null);setReviewSourceId('');
    setErr('فایل در دانشنامه ذخیره شده است. برای ادامه استخراج، دکمه «ادامه استخراج از فایل ذخیره‌شده» را بزنید؛ آپلود مجدد لازم نیست.');
    setUploadProgress(100);setUploadStage('نسخه خصوصی فایل آماده استخراج است');
    return;
@@ -199,8 +250,10 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
   <header><div className="flex items-center gap-2"><BookOpen/><h1 className="text-2xl font-black">دانشنامه گمرکی</h1></div><p className="text-xs app-muted mt-1">آپلود یک‌باره → استخراج و کنترل کیفیت → ایندکس برداری مرحله‌ای → بازیابی از حافظه AI</p></header>
   {err&&<div className="p-3 rounded-xl bg-red-500/10 border border-red-400/30 text-sm">{err}</div>}
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex items-center gap-2 mb-3"><Upload size={18}/><h2 className="font-bold">افزودن قانون / بخشنامه</h2></div>
-   <label className="block p-6 rounded-xl border border-dashed app-border text-center cursor-pointer"><FileSearch className="mx-auto mb-2" size={28}/><div className="font-bold">{file?file.name:(draftSourceId?'فایل ذخیره‌شده در دانشنامه آماده استخراج':'فایل را انتخاب کنید')}</div><div className="text-xs app-muted mt-1">PDF، تصویر، TXT یا Markdown — حداکثر ۲۵MB</div><input id="knowledge-source-file" type="file" className="hidden" accept="application/pdf,image/*,.txt,.md" onChange={e=>{const selected=e.target.files?.[0]||null;setFile(selected);if(selected)setDraftSourceId('');e.currentTarget.value='';setUploadProgress(0);setUploadStage('')}}/></label>
-   <button className="w-full mt-3 py-3 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50" disabled={(!file&&!draftSourceId)||busy} onClick={extract}>{busy?<span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={17}/>در حال استخراج...</span>:(draftSourceId&&!file?'ادامه استخراج از فایل ذخیره‌شده':'استخراج خودکار با AI')}</button>
+   <label className="block p-6 rounded-xl border border-dashed app-border text-center cursor-pointer"><FileSearch className="mx-auto mb-2" size={28}/><div className="font-bold">{files.length?files.length+' فایل PDF انتخاب شده':(draftSourceId?'فایل ذخیره‌شده در دانشنامه آماده ادامه استخراج':'چند فایل PDF را با هم انتخاب کنید')}</div><div className="text-xs app-muted mt-1">انتخاب هم‌زمان چند PDF؛ پردازش ترتیبی برای جلوگیری از فشار هم‌زمان به سرویس AI — حداکثر ۲۵MB برای هر فایل</div><input id="knowledge-source-file" type="file" multiple className="hidden" accept="application/pdf,.pdf" onChange={e=>{const chosen=Array.from(e.target.files||[]);const invalid=chosen.filter(x=>x.type!=='application/pdf'&&!x.name.toLowerCase().endsWith('.pdf'));if(invalid.length){setErr('فقط فایل PDF انتخاب کنید: '+invalid.map(x=>x.name).join('، '));}else{setErr('');setFiles(chosen);if(chosen.length)setDraftSourceId('');setUploadProgress(0);setUploadStage('');setQueueProgress(null);}e.currentTarget.value='';}}/></label>
+   <div className="mt-3 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2"><button className="w-full py-3 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50" disabled={(!files.length&&!draftSourceId)||busy} onClick={extract}>{busy?<span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={17}/>در حال استخراج صف...</span>:(draftSourceId&&!files.length?'ادامه استخراج از فایل ذخیره‌شده':files.length>1?'آپلود و استخراج '+files.length+' PDF':'آپلود و استخراج PDF')}</button>{files.length>0&&<button type="button" className="px-4 py-3 rounded-xl border app-border font-bold disabled:opacity-50" disabled={busy} onClick={()=>setFiles([])}>پاک‌کردن صف</button>}</div>
+   {files.length>0&&<div className="mt-2 text-xs app-muted">{files.map((item,i)=><div key={i} className="flex justify-between gap-3 py-1"><span className="truncate">{i+1}. {item.name}</span><span className="shrink-0">{(item.size/1024/1024).toFixed(1)} MB</span></div>)}</div>}
+   {queueProgress&&<div className="mt-3 text-xs app-muted">{queueProgress.current?('فایل '+Math.min(queueProgress.done+1,queueProgress.total)+' از '+queueProgress.total+' — '+queueProgress.current):(queueProgress.done+' از '+queueProgress.total+' فایل پردازش شد')}</div>}
    {(busy||uploadProgress>0)&&<div className="mt-3 rounded-xl border app-border bg-[var(--surface-2)] p-3" aria-live="polite">
     <div className="flex items-center justify-between gap-3 text-xs"><b>{uploadStage||'آماده‌سازی فایل'}</b><strong className="tabular-nums">{uploadProgress}%</strong></div>
     <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--border)]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}>
