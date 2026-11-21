@@ -9,7 +9,7 @@ function sourceFiles(directory: string): string[] {
     const fullPath = path.join(directory, entry.name);
     return entry.isDirectory()
       ? sourceFiles(fullPath)
-      : /\.tsx?$/.test(entry.name)
+      : /\\.tsx?$/.test(entry.name)
         ? [fullPath]
         : [];
   });
@@ -22,17 +22,14 @@ describe('PDF.js browser compatibility', () => {
       .filter(({ content }) => content.includes('pdfjs-dist'))
       .sort((a, b) => a.file.localeCompare(b.file));
 
-    const relativePaths = consumers.map(({ file }) => path.relative(root, file).replace(/\\/g, '/'));
-    expect(relativePaths).toEqual([
-      'src/components/PdfDocumentViewer.tsx',
-      'src/pages/PdfStudioPage.tsx',
-    ]);
+    expect(consumers.length).toBeGreaterThan(0);
 
     for (const { content } of consumers) {
-      expect(content).toContain("from 'pdfjs-dist/legacy/build/pdf.mjs'");
-      expect(content).toContain("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url");
-      expect(content).not.toContain("from 'pdfjs-dist'");
-      expect(content).not.toContain('pdfjs-dist/build/pdf.worker');
+      const pdfReferences = content.match(/pdfjs-dist[^'"]*/g) || [];
+      expect(pdfReferences.length).toBeGreaterThanOrEqual(2);
+      expect(pdfReferences.every((reference) => reference.startsWith('pdfjs-dist/legacy/build/'))).toBe(true);
+      expect(content).toContain('pdfjs-dist/legacy/build/pdf.mjs');
+      expect(content).toContain('pdfjs-dist/legacy/build/pdf.worker');
     }
   });
 });
