@@ -217,6 +217,25 @@ Deno.serve(async(req)=>{
     const {data:source,error:se}=await sb.from('knowledge_sources').select('*').eq('id',sourceId).eq('organization_id',profile.organization_id).maybeSingle();
     if(se||!source)return reply({error:'منبع پیدا نشد.'},404,origin);
 
+    if(action==='delete'){
+      if(!['owner','admin'].includes(profile.role))return reply({error:'حذف دائمی اسناد دانشنامه فقط برای مالک یا مدیر سازمان مجاز است.'},403,origin);
+      const storagePath=clean(source.storage_path);
+      if(storagePath){
+        const safePrefix=String(profile.organization_id||'')+'/';
+        if(!safePrefix||!storagePath.startsWith(safePrefix)||storagePath.includes('..')||storagePath.startsWith('/')){
+          return reply({error:'مسیر فایل خارج از فضای سازمان است؛ حذف برای محافظت از داده متوقف شد.'},403,origin);
+        }
+        const {error:storageDeleteError}=await sb.storage.from('customs-knowledge').remove([storagePath]);
+        if(storageDeleteError)throw new Error('حذف فایل اصلی از فضای خصوصی ناموفق بود؛ رکورد دانشنامه دست‌نخورده باقی ماند. '+storageDeleteError.message);
+      }
+      const {data:deletedSource,error:deleteError}=await sb.from('knowledge_sources')
+        .delete().eq('id',sourceId).eq('organization_id',profile.organization_id).select('id').maybeSingle();
+      if(deleteError)throw new Error('فایل اصلی حذف شد، اما حذف رکورد دانشنامه کامل نشد؛ دوباره عملیات حذف را اجرا کنید. '+deleteError.message);
+      if(!deletedSource)return reply({error:'منبع دانشنامه برای حذف پیدا نشد.'},404,origin);
+      // knowledge_chunks are removed automatically by the source_id ON DELETE CASCADE foreign key.
+      return reply({status:'deleted',source_id:sourceId,storage_removed:Boolean(storagePath),vector_chunks_cascaded:true},200,origin);
+    }
+
     if(action==='approve'||action==='reject'){
       if(!['owner','admin'].includes(profile.role))return reply({error:'تأیید/رد منبع فقط برای مالک یا مدیر مجاز است.'},403,origin);
     }
