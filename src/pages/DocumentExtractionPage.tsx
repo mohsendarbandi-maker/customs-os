@@ -3,10 +3,10 @@ import {ArrowRight,Eye,FileSearch,Loader2,Upload,RefreshCw} from 'lucide-react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
 import {safeStorageFilename} from '../lib/safeStorageFilename';
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {createWorker} from 'tesseract.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc=new URL('pdfjs-dist/build/pdf.worker.mjs',import.meta.url).toString();
+pdfjsLib.GlobalWorkerOptions.workerSrc=new URL('pdfjs-dist/legacy/build/pdf.worker.mjs',import.meta.url).toString();
 type Doc={id:string;shipment_id:string;document_name:string;original_file_name:string;storage_path:string;mime_type:string;created_at:string};
 type Field={key:string;value:string;page:number;confidence:number;source:string};
 const norm=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));

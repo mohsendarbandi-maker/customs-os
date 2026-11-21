@@ -5,8 +5,8 @@ import {
   Plus, Printer, Save, Send, ShieldCheck, Stamp, Upload, X,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { buildCompanyLogoSvg, buildCompanyStampSvg, deriveCompanyLogoMark, normalizeBrandColor } from '../lib/companyBranding';
