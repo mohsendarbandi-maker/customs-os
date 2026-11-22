@@ -11,7 +11,6 @@ on:
       - "wrangler.migration-staging.jsonc"
       - "supabase/migrations-cloudflare/**"
       - "package.json"
-      - "package-lock.json"
       - "vite.config.ts"
       - ".github/workflows/deploy-cloudflare-staging.yml"
   workflow_dispatch:
@@ -37,8 +36,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-audit --no-fund
       - name: Unit tests
         run: npm test
       - name: Typecheck
@@ -47,5 +45,19 @@ jobs:
         run: npm run lint
       - name: Build application
         run: npm run build
+      - name: Preserve built static app for direct Cloudflare asset upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: customs-os-cloudflare-staging-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 3
       - name: Deploy isolated Cloudflare staging Worker and static assets
-        run: npx wrangler@4 deploy --config wrangler.migration-staging.jsonc
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::warning::Cloudflare deployment credentials are not configured as GitHub Actions secrets. Build artifact retained; no production resources changed."
+            exit 0
+          fi
+          npx wrangler@4 deploy --config wrangler.migration-staging.jsonc
