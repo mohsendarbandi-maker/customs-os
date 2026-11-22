@@ -8,6 +8,7 @@ on:
       - "src/**"
       - "public/**"
       - "worker/migration-staging.ts"
+      - "test/cloudflare-migration-foundation.test.ts"
       - "wrangler.migration-staging.jsonc"
       - "supabase/migrations-cloudflare/**"
       - "package.json"
