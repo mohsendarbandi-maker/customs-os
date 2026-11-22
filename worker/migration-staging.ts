@@ -112,6 +112,67 @@ export default {
       });
     }
 
+    if (url.pathname === '/health/db' || url.pathname.startsWith('/migration/')) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
+      }
+      if (url.pathname === '/health/db') {
+        try {
+          const manifest = await env.MIGRATION_DB.prepare(
+            "SELECT id, stage, schema_version, updated_at FROM _migration_manifest WHERE id = 'customs-os' LIMIT 1",
+          ).first();
+          return manifest
+            ? json({ ok: true, database: 'customs-os-migration-staging', manifest, operationalDataImported: false })
+            : json({ ok: false, error: 'MIGRATION_MANIFEST_MISSING' }, 503);
+        } catch {
+          return json({ ok: false, error: 'STAGING_DATABASE_UNAVAILABLE' }, 503);
+        }
+      }
+      if (url.pathname === '/migration/status') {
+        try {
+          const [manifest, tableStates, archives] = await Promise.all([
+            env.MIGRATION_DB.prepare(
+              "SELECT id, stage, schema_version, updated_at FROM _migration_manifest WHERE id = 'customs-os' LIMIT 1",
+            ).first(),
+            env.MIGRATION_DB.prepare(
+              'SELECT status, COUNT(*) AS table_count FROM _migration_table_state GROUP BY status ORDER BY status',
+            ).all(),
+            env.MIGRATION_DB.prepare(
+              'SELECT COUNT(*) AS function_count FROM supabase_edge_function_archive',
+            ).first(),
+          ]);
+          const gates = {
+            sourcePostgres: 'blocked_57P03',
+            authoritativeSchemaExport: 'not_verified',
+            operationalRows: 'not_imported',
+            authUsersAndSessions: 'not_imported',
+            storageObjects: 'not_imported',
+            edgeFunctions: 'source_archived_not_ported',
+            productionCutover: 'blocked',
+          };
+          return json({ ok: true, manifest, tableStates: tableStates.results, archivedFunctions: archives?.function_count ?? 0, gates });
+        } catch {
+          return json({ ok: false, error: 'MIGRATION_STATUS_UNAVAILABLE' }, 503);
+        }
+      }
+      if (url.pathname === '/migration/functions') {
+        try {
+          const result = await env.MIGRATION_DB.prepare(
+            'SELECT slug, source_version, source_status, file_count, total_chars, deployed_sha256 FROM supabase_edge_function_archive ORDER BY slug',
+          ).all();
+          return json({
+            ok: true,
+            count: result.results.length,
+            note: 'Source archive only; functions are not deployed as Cloudflare replacements.',
+            functions: result.results,
+          });
+        } catch {
+          return json({ ok: false, error: 'FUNCTION_ARCHIVE_UNAVAILABLE' }, 503);
+        }
+      }
+      return json({ ok: false, error: 'NOT_FOUND' }, 404);
+    }
+
     if (url.pathname === '/api/auth/login') {
       if (request.method !== 'POST') return json({ error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'POST' });
       if (!isSameOrigin(request, url)) return json({ error: 'ORIGIN_FORBIDDEN' }, 403);
