@@ -650,7 +650,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const refreshProfile = useCallback(async () => {
     const currentUserId = user?.id;
 
-    if (typeof window !== 'undefined' && window.location.hostname.endsWith('.workers.dev')) {
+    if (isCloudflareRecoveryHost()) {
       setLoading(true);
       try {
         const response = await fetch('/api/auth/session', { credentials: 'same-origin', cache: 'no-store' });
