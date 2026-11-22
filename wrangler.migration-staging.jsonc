@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "customs-os-migration-staging",
+  "main": "worker/migration-staging.ts",
+  "compatibility_date": "2026-11-22",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "MIGRATION_ENVIRONMENT": "staging",
+    "PRODUCTION_DATA_IMPORTED": "false"
+  },
+  "d1_databases": [
+    {
+      "binding": "MIGRATION_DB",
+      "database_name": "customs-os-migration-staging",
+      "database_id": "b938fa3c-4995-4d27-aeda-f72f2d484a3c",
+      "migrations_dir": "supabase/migrations-cloudflare"
+    }
+  ]
+}
