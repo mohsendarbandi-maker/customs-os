@@ -46,8 +46,8 @@ const knowledgeMime=(filename:string,mime:string)=>{
 export const KnowledgeCenterV2Page:React.FC=()=>{
  const[sources,setSources]=useState<Source[]>([]),[pending,setPending]=useState<Source[]>([]),[q,setQ]=useState(''),[answer,setAnswer]=useState(''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[files,setFiles]=useState<File[]>([]),[review,setReview]=useState<Extraction|null>(null),[reviewSourceId,setReviewSourceId]=useState(''),[selected,setSelected]=useState<Source|null>(null),[uploadProgress,setUploadProgress]=useState(0),[uploadStage,setUploadStage]=useState(''),[draftSourceId,setDraftSourceId]=useState(''),[queueProgress,setQueueProgress]=useState<{done:number;total:number;current:string}|null>(null);
  const load=async()=>{const{data,error}=await supabase.from('knowledge_sources').select('id,title,source_type,source_number,issued_at,effective_at,issuer,subject,status,metadata,ai_extraction,storage_path,mime_type,created_at').order('updated_at',{ascending:false}).limit(100);if(error){setErr(error.message);return}const rows=(data||[]) as Source[];setSources(rows.filter(x=>x.status==='active'));setPending(rows.filter(x=>x.status==='pending_review'||x.status==='draft'))};
- useEffect(()=>{void load()},[]);
- const extractOne=async(currentFile:File|null,resumeSourceId:string,userId:string,organizationId:string):Promise<{id:string;extraction:Extraction}>=>{
+ useEffect(()=>{void load();const timer=window.setInterval(()=>{void load()},20000);return()=>window.clearInterval(timer)},[]);
+ const extractOne=async(currentFile:File|null,resumeSourceId:string,userId:string,organizationId:string):Promise<{id:string;extraction:Extraction;pageMemory:any}>=>{
   let savedSourceId=resumeSourceId;
   let storedMetadata:any={};
   try{
@@ -87,7 +87,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
     storedMetadata={filename,size:fileSize,sha256:hash,upload_complete:true};
     const{data:s,error:se}=await supabase.from('knowledge_sources').insert({
       organization_id:organizationId,title:filename,source_type:'other',status:'draft',
-      storage_path:storagePath,mime_type:mime,created_by:userId,extracted_text:'',metadata:storedMetadata
+      storage_path:storagePath,mime_type:mime,created_by:userId,extracted_text:'',metadata:{...storedMetadata,telegram_archive_requested:true,auto_activation_policy:'quality_gate'}
     }).select('id').single();
     if(se||!s){
       await supabase.storage.from('customs-knowledge').remove([storagePath]);
@@ -134,7 +134,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
    }).eq('id',savedSourceId).eq('organization_id',organizationId);
    if(updateError)throw updateError;
    setDraftSourceId('');
-   return {id:savedSourceId,extraction:ex};
+   return {id:savedSourceId,extraction:ex,pageMemory:r?.page_memory||null};
   }catch(error:any){
    const wrapped=new Error(error?.message||'فرآیند استخراج این PDF ناموفق بود.') as Error&{savedSourceId?:string};
    wrapped.savedSourceId=savedSourceId||undefined;
@@ -148,7 +148,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
   setBusy(true);setErr('');setReview(null);setReviewSourceId('');
   setUploadProgress(0);
   setQueueProgress({done:0,total:jobs.length,current:''});
-  const completed:Array<{id:string;extraction:Extraction}>=[];
+  const completed:Array<{id:string;extraction:Extraction;pageMemory:any}>=[];
   const failed:Array<{name:string;message:string;savedSourceId?:string}>=[];
   const retryFiles:File[]=[];
   try{
@@ -176,8 +176,14 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
    setFiles(retryFiles);
    if(completed.length){
     const last=completed[completed.length-1];
-    setReview(last.extraction);
-    setReviewSourceId(last.id);
+    if(last.pageMemory?.worker_scheduled){
+     setReview(null);
+     setReviewSourceId('');
+     setUploadStage('استخراج اولیه کامل شد؛ OCR تمام صفحات، ایندکس و فعال‌سازی در پس‌زمینه انجام می‌شود.');
+    }else{
+     setReview(last.extraction);
+     setReviewSourceId(last.id);
+    }
     setUploadProgress(100);
    }
    if(failed.length){
@@ -187,7 +193,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
     setUploadStage('صف پایان یافت؛ '+completed.length+' موفق، '+failed.length+' نیازمند بررسی');
    }else{
     setErr('');
-    setUploadStage('استخراج '+completed.length+' PDF کامل شد؛ برای قابل‌جست‌وجو شدن، هر منبع را پس از بررسی تأیید کنید.');
+    setUploadStage('استخراج اولیه '+completed.length+' PDF کامل شد؛ OCR، کنترل کیفیت، ایندکس و فعال‌سازی سالم‌ها خودکار ادامه می‌یابد.');
     setUploadProgress(100);
    }
   }catch(error:any){
@@ -267,7 +273,7 @@ export const KnowledgeCenterV2Page:React.FC=()=>{
    <div className="mt-4"><div className="font-bold text-sm mb-2">بخش‌های قابل استناد: {review.chunks.length}</div><div className="max-h-48 overflow-auto space-y-2">{review.chunks.slice(0,20).map((c,i)=><div key={i} className="rounded-lg bg-[var(--surface-2)] p-3 text-xs"><b>{c.page_number?'صفحه '+c.page_number:'بخش '+(i+1)}</b><div className="mt-1">{c.content}</div></div>)}</div></div>
    <div className="flex gap-2 mt-4"><button className="flex-1 py-3 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50" disabled={busy} onClick={()=>reviewAction('approve')}><Check className="inline ml-1" size={17}/>تأیید و انتشار</button><button className="px-5 py-3 rounded-xl border app-border font-bold disabled:opacity-50" disabled={busy} onClick={()=>reviewAction('reject')}><X className="inline ml-1" size={17}/>رد</button></div>
   </section>}
-  {pending.length>0&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><h2 className="font-bold mb-3">منابع نیازمند تکمیل یا تأیید ({pending.length})</h2><div className="grid md:grid-cols-2 gap-2">{pending.map(s=><button key={s.id} onClick={()=>resumeOrReviewSource(s)} className="text-right p-3 rounded-xl bg-[var(--surface-2)]"><b>{s.title}</b><div className="text-xs app-muted mt-1">{typeLabels[s.source_type]||'سایر'}{s.source_number?' · '+s.source_number:''} · {s.status==='draft'?'فایل ذخیره شده؛ استخراج ناتمام':'آماده بررسی انسانی'}</div></button>)}</div></section>}
+  {pending.length>0&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><h2 className="font-bold mb-3">منابع نیازمند تکمیل یا تأیید ({pending.length})</h2><div className="grid md:grid-cols-2 gap-2">{pending.map(s=><button key={s.id} onClick={()=>resumeOrReviewSource(s)} className="text-right p-3 rounded-xl bg-[var(--surface-2)]"><b>{s.title}</b><div className="text-xs app-muted mt-1">{typeLabels[s.source_type]||'سایر'}{s.source_number?' · '+s.source_number:''} · {s.status==='draft'?'فایل ذخیره شده؛ استخراج ناتمام':((Number(s.metadata?.page_ocr?.pending_pages||0)+Number(s.metadata?.page_ocr?.processing_pages||0))>0?'در حال OCR و ایندکس خودکار':(Number(s.metadata?.page_ocr?.needs_review_pages||0)+Number(s.metadata?.page_ocr?.failed_pages||0)>0?'نیازمند بازبینی صفحه‌ای':'در انتظار تکمیل فرایند'))}</div></button>)}</div></section>}
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex items-center gap-2 mb-3"><MessageCircle size={18}/><h2 className="font-bold">پرسش از دانش فعال</h2></div><div className="flex gap-2"><input className="field flex-1" value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&ask()} placeholder="مثلاً: در این بخشنامه چه الزامی برای قبض انبار آمده؟"/><button className="px-5 rounded-xl bg-[var(--primary)] text-white font-bold disabled:opacity-50" onClick={ask} disabled={busy||!q.trim()}>{busy?<Loader2 className="animate-spin"/>:'پرسش'}</button></div>{answer&&<div className="mt-4 rounded-xl bg-[var(--surface-2)] p-4 whitespace-pre-wrap leading-7 text-sm">{answer}</div>}</section>
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-5"><div className="flex items-center gap-2 mb-3"><ShieldCheck size={18}/><h2 className="font-bold">منابع فعال ({sources.length})</h2></div>{!sources.length?<div className="text-sm app-muted">هنوز منبع تأییدشده‌ای ثبت نشده است.</div>:<div className="grid md:grid-cols-2 gap-2">{sources.map(s=><div key={s.id} className="p-3 rounded-xl bg-[var(--surface-2)]"><b>{s.title}</b><div className="text-xs app-muted mt-1">{typeLabels[s.source_type]||'سایر'}{s.source_number?' · '+s.source_number:''}{s.issuer?' · '+s.issuer:''} · {statusLabels[s.status]||s.status}</div></div>)}</div>}</section>
  </div></main>;
