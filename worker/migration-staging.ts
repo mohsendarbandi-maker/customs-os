@@ -23,7 +23,7 @@ const ADMIN_EMAIL = 'admin@darbandicommercial.ir';
 const SESSION_HOURS = 12;
 const profile = {
   id: 'owner-cloudflare-staging',
-  organization_id: 'darbandi-commercial-staging',
+  organization_id: 'ad95fdf1-e0e2-439b-92b0-c20ab07cacdd',
   role: 'owner',
   full_name: 'مدیر سامانه',
   is_active: true,
@@ -119,11 +119,23 @@ export default {
       }
       if (url.pathname === '/health/db') {
         try {
-          const manifest = await env.MIGRATION_DB.prepare(
-            "SELECT id, stage, schema_version, updated_at FROM _migration_manifest WHERE id = 'customs-os' LIMIT 1",
-          ).first();
+          const [manifest, operationalImport] = await Promise.all([
+            env.MIGRATION_DB.prepare(
+              "SELECT id, stage, schema_version, updated_at FROM _migration_manifest WHERE id = 'customs-os' LIMIT 1",
+            ).first(),
+            env.MIGRATION_DB.prepare(
+              "SELECT status, expected_records, exported_at, imported_at FROM customs_os_organization_imports WHERE organization_id = ? LIMIT 1",
+            ).bind(profile.organization_id).first<{ status: string; expected_records: number; exported_at: string; imported_at: string }>(),
+          ]);
           return manifest
-            ? json({ ok: true, database: 'customs-os-migration-staging', manifest, operationalDataImported: false })
+            ? json({
+                ok: true,
+                database: 'customs-os-migration-staging',
+                manifest,
+                organizationId: profile.organization_id,
+                operationalDataImported: operationalImport?.status === 'imported',
+                operationalImport: operationalImport ?? null,
+              })
             : json({ ok: false, error: 'MIGRATION_MANIFEST_MISSING' }, 503);
         } catch {
           return json({ ok: false, error: 'STAGING_DATABASE_UNAVAILABLE' }, 503);
@@ -145,7 +157,7 @@ export default {
           const gates = {
             sourcePostgres: 'blocked_57P03',
             authoritativeSchemaExport: 'not_verified',
-            operationalRows: 'not_imported',
+            operationalRows: 'imported_from_organization_export',
             authUsersAndSessions: 'not_imported',
             storageObjects: 'not_imported',
             edgeFunctions: 'source_archived_not_ported',
