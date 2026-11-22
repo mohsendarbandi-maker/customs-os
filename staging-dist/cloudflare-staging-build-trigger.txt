@@ -1,1 +1,1 @@
-Build trigger for isolated Customs OS Cloudflare staging deployment. This file has no runtime effect.
+Isolated staging build trigger after production-auth compatibility pass.
