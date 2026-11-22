@@ -10,6 +10,7 @@ import {
   Home, CalendarDays, RefreshCw
 } from 'lucide-react';
 import { useAuth, UserRole } from '../context/AuthContext';
+import { isCloudflareRecoveryHost } from '../lib/recoveryHost';
 import { useAppearance } from '../context/AppearanceContext';
 import { CustomsLogo } from './CustomsLogo';
 import { AIWorkspace } from './AIWorkspace';
@@ -164,7 +165,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const isChatRoute = location.pathname.startsWith('/chat');
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
-  const isRecoveryStaging = typeof window !== 'undefined' && window.location.hostname.endsWith('.workers.dev');
+  const isRecoveryStaging = isCloudflareRecoveryHost();
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
   const [pwaUpdateAvailable, setPwaUpdateAvailable] = useState(false);
   const [pwaUpdating, setPwaUpdating] = useState(false);
