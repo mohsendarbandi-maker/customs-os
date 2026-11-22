@@ -1,6 +1,6 @@
 # Customs OS — Cloudflare Free Rebuild Execution
 
-Status: **Phase 0 started; isolated staging only. No production cutover.**
+Status: **staging rebuild active; source-code archive recovered; production cutover blocked by Supabase PostgreSQL outage.**
 
 ## Non-negotiable invariants
 1. Supabase project `bjngfgiecvihofemptub` is the immutable source of truth until an independently verified full export and parity check exist.
@@ -10,20 +10,29 @@ Status: **Phase 0 started; isolated staging only. No production cutover.**
 5. Never import guessed, synthetic, partial, or schema-incompatible rows as if they were production data.
 6. Every import is resumable, idempotent, checksummed, and count-verified. Preserve source primary keys and relationships.
 
+## Work completed in this rebuild
+- Created isolated branch `rebuild/cloudflare-free-first` and PR #314. No merge to main.
+- Deployed a separate Cloudflare Worker named `customs-os-migration-staging` on the Free/standard usage model. It has a verified D1 binding to `customs-os-migration-staging`, plus staging-only flags. It has no production routes and does not replace the production Worker.
+- Added read-only Worker endpoints: `/health`, `/health/db`, `/migration/status`, and `/migration/functions`. They expose migration status only; they do not perform imports or writes.
+- Recovered all **16 deployed Supabase Edge Function archives (27 source/config files, 505,793 source characters)** from the existing D1 archive and copied them into `archive/supabase-edge-functions/` in this Git branch.
+- Added `MANIFEST.json`, `DEPENDENCIES.json` (350 dependency references), and `PUBLIC_CONFIG.json`. Secret values were not exported.
+- Added a staging build workflow that runs tests, typecheck, lint and Vite build, and retains the built static app as a short-lived GitHub artifact for asset transfer. Cloudflare deploy credentials are not present in GitHub Actions secrets, so the workflow must not pretend that an automatic deploy happened.
+- Added an ESLint ignore for the immutable Deno source archive so archived upstream files do not break the React app's lint checks.
+- Production Worker `customs`, production DNS/routes, Supabase project, and R2 objects were not changed. No production rows, Auth users, or documents have been imported.
+
 ## Verified current state
 - Frontend: React 18 + Vite + TypeScript + PWA.
 - Existing production Worker: `customs`; it proxies Auth, REST, Storage, Realtime and Functions to Supabase.
 - Existing production Worker routes and domains remain unchanged.
-- Isolated D1: `customs-os-migration-staging`, id `b938fa3c-4995-4d27-aeda-f72f2d484a3c`, EU jurisdiction. It currently contains migration-control and function-archive records only.
-- 16 deployed Supabase Edge Function sources / 27 source files are archived in that D1. They are not yet ported or deployed as replacements.
+- Isolated D1: `customs-os-migration-staging`, id `b938fa3c-4995-4d27-aeda-f72f2d484a3c`, EU jurisdiction. It contains migration-control and function-archive records only.
 - Existing R2 bucket `customs-os-migration-staging` is empty. No production documents were copied.
-- PostgreSQL is currently unavailable with repeated WAL recovery / no-space errors. No verified database backup has been located in the available project metadata.
+- Supabase Management API reports `ACTIVE_HEALTHY`, but PostgreSQL continues to fail with `57P03` and repeated `pg_wal/xlogtemp.*: No space left on device` errors. SQL table listing still fails. Management status must not be mistaken for database readiness.
 
 ## Target architecture (Free-first, subject to quota gates)
 | Capability | Target | Rules |
 |---|---|---|
-| Static app / PWA | Existing Worker + Static Assets | Preserve UI and URLs; add API only behind staging Worker until tested |
-| Relational operations | D1 (SQLite) | Partition only along proven transaction boundaries; preserve FK semantics and exact numeric values |
+| Static app / PWA | Cloudflare Worker + Static Assets | Build the existing React app to the isolated staging Worker first; keep production URLs unchanged |
+| Relational operations | D1 (SQLite) | Port PostgreSQL schema, constraints, triggers, RLS and RPC behavior explicitly; no direct PostgreSQL dump import |
 | Authentication | Dedicated Worker auth service + D1 session store | Existing Supabase password hashes/sessions are not assumed portable; existing accounts require a verified migration or secure password-reset flow |
 | Files | Browser local processing first; R2 only after quota/billing safeguards | Do not upload files until enforceable storage and request ceilings are verified; never use R2 as an unbounded sink |
 | Background jobs | Worker scheduled events / Queues only within verified Free quotas | Idempotent jobs, bounded retries, dead-letter reporting, no uncontrolled polling |
@@ -76,6 +85,7 @@ Status: **Phase 0 started; isolated staging only. No production cutover.**
 - Existing repo migration files include compatibility-marker files that contain no schema changes; file count alone is not proof of a complete schema.
 - The handwritten `src/types/supabase.ts` is explicitly marked a manual contract, not generated schema.
 - R2 billing guard cannot currently be verified; no object uploads are permitted.
+- GitHub Actions has no Cloudflare API token/account ID configured as secrets; direct Cloudflare API deployment is available through the connected account, but static assets still require an artifact upload step.
 - Therefore, a functional login/operational cutover cannot yet be claimed. Work may proceed on code and staging scaffolding, but production data and auth parity remain blocked.
 
 ## Operational reporting
