@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { isCloudflareRecoveryHost } from '../lib/recoveryHost';
 import { useAuth } from '../context/AuthContext';
 import { CustomsLogo } from '../components/CustomsLogo';
 import { readReminderLanguage, type ReminderLanguage } from '../features/reminders/reminderI18n';
@@ -34,7 +35,7 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      if (window.location.hostname.endsWith('.workers.dev')) {
+      if (isCloudflareRecoveryHost()) {
         const response = await fetch('/api/auth/login', {
           method: 'POST',
           credentials: 'same-origin',
