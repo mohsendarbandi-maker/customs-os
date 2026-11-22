@@ -605,7 +605,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (isMounted.current) setLoading(true);
 
-    if (typeof window !== 'undefined' && window.location.hostname.endsWith('.workers.dev')) {
+    if (isCloudflareRecoveryHost()) {
       try {
         await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', cache: 'no-store' });
       } catch (err) {
