@@ -2,8 +2,11 @@ name: Customs OS Build
 
 on:
   push:
-    branches: [main, 'fix/**']
+    branches: [main, 'fix/**', 'rebuild/cloudflare-free-first']
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 concurrency:
   group: customs-os-${{ github.workflow }}-${{ github.ref }}
@@ -26,6 +29,23 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+      - name: Publish isolated recovery app assets to staging branch
+        if: github.ref == 'refs/heads/rebuild/cloudflare-free-first'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staging-dist
+          rm -rf staging-dist/*
+          cp -a dist/. staging-dist/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add staging-dist
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(staging): publish verified recovery app assets"
+            git push origin HEAD:rebuild/cloudflare-free-first
+          else
+            echo "Staging assets are already current."
+          fi
       - name: Local Playwright mobile shell geometry smoke test
         if: github.ref == 'refs/heads/fix/mobile-phase1-shell-consistency-2026-11-14' || github.ref == 'refs/heads/fix/mobile-phase2-keyboard-scroll-2026-11-14'
         shell: bash
