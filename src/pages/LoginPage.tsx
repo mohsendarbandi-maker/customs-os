@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { CustomsLogo } from '../components/CustomsLogo';
 import { readReminderLanguage, type ReminderLanguage } from '../features/reminders/reminderI18n';
 
 export const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('admin@darbandicommercial.ir');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,10 +18,12 @@ export const LoginPage: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
+
     if (needsOnboarding) {
       void signOut();
       return;
     }
+
     const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
     navigate(from, { replace: true });
   }, [user, needsOnboarding, navigate, location, signOut]);
@@ -29,26 +32,39 @@ export const LoginPage: React.FC = () => {
     event.preventDefault();
     setError(null);
     setLoading(true);
+
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        credentials: 'same-origin',
-        cache: 'no-store',
-        headers: { 'content-type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
-      });
-      const result = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) {
-        const messages: Record<string, string> = {
-          INVALID_CREDENTIALS: 'ایمیل یا رمز عبور صحیح نیست.',
-          RATE_LIMITED: 'تعداد تلاش‌ها زیاد است. چند دقیقه بعد دوباره امتحان کنید.',
-          AUTH_NOT_CONFIGURED: 'ورود مدیر هنوز پیکربندی نشده است.',
-        };
-        throw new Error(messages[result.error || ''] || 'ورود انجام نشد. دوباره تلاش کنید.');
+      if (window.location.hostname.endsWith('.workers.dev')) {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: { 'content-type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        });
+        const result = await response.json().catch(() => ({})) as { error?: string };
+        if (!response.ok) {
+          const messages: Record<string, string> = {
+            INVALID_CREDENTIALS: 'ایمیل یا رمز عبور صحیح نیست.',
+            RATE_LIMITED: 'تعداد تلاش‌ها زیاد است. چند دقیقه بعد دوباره امتحان کنید.',
+            AUTH_NOT_CONFIGURED: 'ورود مدیر هنوز پیکربندی نشده است.',
+          };
+          throw new Error(messages[result.error || ''] || 'ورود انجام نشد. دوباره تلاش کنید.');
+        }
+        await refreshProfile();
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (signInError) throw signInError;
       }
-      await refreshProfile();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'ورود ناموفق بود.');
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'ورود ناموفق بود. اطلاعات ورود را بررسی کنید.',
+      );
     } finally {
       setLoading(false);
     }
@@ -61,28 +77,72 @@ export const LoginPage: React.FC = () => {
           <div className="flex justify-center mb-5">
             {isRemindersHost ? (
               <img src="/pwa/reminders-icon-180.png?v=20261012-reminders-v1" width="72" height="72" className="rounded-2xl shadow-lg" alt={remindersLanguage === 'en' ? 'Reminders' : 'یادآورها'} />
-            ) : <CustomsLogo size={64} showWordmark />}
+            ) : (
+              <CustomsLogo size={64} showWordmark />
+            )}
           </div>
           <div className="text-[10px] font-black tracking-widest app-muted mb-2">
-            {isRemindersHost ? (remindersLanguage === 'en' ? 'CUSTOMS OS · REMINDERS' : 'یادآورهای عملیاتی · CUSTOMS OS') : 'CUSTOMS OS · CLOUDFLARE STAGING'}
+            {isRemindersHost ? (remindersLanguage === 'en' ? 'CUSTOMS OS · REMINDERS' : 'یادآورهای عملیاتی · CUSTOMS OS') : ''}
           </div>
-          <h1 className="text-2xl font-black mb-2">{isRemindersHost ? (remindersLanguage === 'en' ? 'Sign in to Reminders' : 'ورود به یادآورها') : 'ورود مدیر سامانه'}</h1>
-          <p className="text-sm app-muted">{isRemindersHost ? (remindersLanguage === 'en' ? 'Your operational reminders, connected to your Customs OS account.' : 'یادآورهای عملیاتی شما، متصل به حساب اصلی Customs OS.') : 'ورود موقت مستقل از سرویس دیتابیس قبلی'}</p>
+          <h1 className="text-2xl font-black mb-2">{isRemindersHost ? (remindersLanguage === 'en' ? 'Sign in to Reminders' : 'ورود به یادآورها') : 'ورود به سیستم'}</h1>
+          <p className="text-sm app-muted">
+            {isRemindersHost ? (remindersLanguage === 'en' ? 'Your operational reminders, connected to your Customs OS account.' : 'یادآورهای عملیاتی شما، متصل به حساب اصلی Customs OS.') : 'نرم‌افزار جامع مدیریت ترخیص و لجستیک گمرکی'}
+          </p>
         </div>
-        {error && <div className="future-error text-sm mb-4" role="alert">{error}</div>}
+
+        {error && (
+          <div className="future-error text-sm mb-4" role="alert">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">ایمیل مدیر</label>
-            <input type="email" required disabled={loading} className="future-input w-full px-4 py-3 text-left dir-ltr disabled:opacity-60" value={email} onChange={(event) => setEmail(event.target.value)} autoCapitalize="none" autoComplete="username" />
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              ایمیل
+            </label>
+            <input
+              type="email"
+              required
+              disabled={loading}
+              className="future-input w-full px-4 py-3 text-left dir-ltr disabled:opacity-60"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoCapitalize="none"
+              autoComplete="email"
+              placeholder="name@company.com"
+            />
           </div>
+
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">رمز عبور موقت</label>
-            <input type="password" required disabled={loading} className="future-input w-full px-4 py-3 text-left dir-ltr disabled:opacity-60" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••••••••••" autoComplete="current-password" />
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              رمز عبور
+            </label>
+            <input
+              type="password"
+              required
+              disabled={loading}
+              className="future-input w-full px-4 py-3 text-left dir-ltr disabled:opacity-60"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+            />
           </div>
-          <button type="submit" disabled={loading} className="future-submit w-full font-black py-3.5 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center">
-            {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'ورود'}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="future-submit w-full font-black py-3.5 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
+          >
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              'ورود'
+            )}
           </button>
         </form>
+
       </div>
     </div>
   );
