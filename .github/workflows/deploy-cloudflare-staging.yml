@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: customs-os-cloudflare-free-staging
@@ -24,6 +24,9 @@ concurrency:
 
 jobs:
   build-and-deploy:
+    # Use the existing preview-scoped secrets, never the production environment.
+    environment:
+      name: Preview – customs-os
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -52,28 +55,12 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 3
-      - name: Publish static build to isolated staging branch directory
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p staging-dist
-          rm -rf staging-dist/*
-          cp -a dist/. staging-dist/
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add staging-dist
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(staging): publish static site build"
-            git push origin HEAD:rebuild/cloudflare-free-first
-          else
-            echo "Static staging build is already current."
-          fi
       - name: Deploy isolated Cloudflare staging Worker and static assets
         shell: bash
         run: |
           set -euo pipefail
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            echo "::warning::Cloudflare deployment credentials are not configured as GitHub Actions secrets. Static build remains available in the isolated staging branch; production resources unchanged."
-            exit 0
+            echo "::error::Preview environment secrets CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID are missing."
+            exit 1
           fi
           npx wrangler@4 deploy --config wrangler.migration-staging.jsonc
