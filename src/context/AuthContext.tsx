@@ -8,6 +8,7 @@ import React, {
   useMemo,
 } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { isCloudflareRecoveryHost } from '../lib/recoveryHost';
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
 import { authSessionStorage } from '../lib/authStorage';
 import { readOfflineQueryCache, saveOfflineQueryCache } from '../lib/offlineQueue';
@@ -274,7 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
    * Supabase request there can cause initialization/session races.
    */
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.hostname.endsWith('.workers.dev')) {
+    if (isCloudflareRecoveryHost()) {
       let active = true;
       const loadCloudflareSession = async () => {
         try {
