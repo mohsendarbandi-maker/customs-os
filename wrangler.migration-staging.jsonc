@@ -9,6 +9,13 @@
     "MIGRATION_ENVIRONMENT": "staging",
     "PRODUCTION_DATA_IMPORTED": "false"
   },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/health", "/health/*", "/migration/*"],
+    "html_handling": "none",
+    "not_found_handling": "single-page-application"
+  },
   "d1_databases": [
     {
       "binding": "MIGRATION_DB",
