@@ -28,8 +28,8 @@ Status: staging foundation only. Production remains on the existing Cloudflare W
 - Cloudflare D1 Free: up to 500 MB per database and 5 GB total account storage; daily row-read/write limits apply. Queries can fail after daily limits are reached. Re-check official quotas before cutover.
 - The most recent reported source DB size was about 1.3 GB, with audit history making up most of it. A single Free D1 cannot hold that reported size. Do not delete source audit records merely to fit a destination.
 - Potential design: partition operational tables across D1 databases only where referential consistency and transaction boundaries permit; move immutable audit/event history to compressed, checksummed R2 archives only after retention/legal requirements and replay/query needs are agreed. Keep searchable summaries in D1. This is a proposal, not yet implemented.
-- R2 is not currently enabled for the connected Cloudflare account; API returned 403 code 10042 instructing that R2 must first be enabled in the Cloudflare Dashboard.
-- User requirement: all services remain on Free plan; no paid resource, upgrade, or paid third-party dependency without explicit approval. Implement quota monitoring, bounded retries, upload size limits, and fail-closed behavior.
+- R2 was enabled by the owner on 2026-11-22. A private-by-default empty Standard bucket named `customs-os-migration-staging` was created in WEUR. Bucket metadata was read back successfully; no objects have been uploaded.
+- User requirement: all services remain on Free plan; no paid resource, upgrade, or paid third-party dependency without explicit approval. R2 currently includes 10 GB-month Standard storage, 1 million Class A requests and 10 million Class B requests per month; usage above those allowances can be billed. This connection cannot read account billing usage or configure spend policies (Billing Read permission is absent). Therefore, do not upload objects or run recurring R2 jobs until quota monitoring and an enforced fail-closed guard are in place. Implement bounded retries, upload size limits and hard monthly budget checks.
 
 ## Staging resources created
 - Cloudflare D1 database: customs-os-migration-staging
@@ -43,7 +43,7 @@ Status: staging foundation only. Production remains on the existing Cloudflare W
 2. Inventory source: export PostgreSQL catalog, table counts/sizes, constraints, indexes, triggers, RLS policies, functions, extensions, auth users, storage objects, cron schedules and secrets references. Never export secret values into Git.
 3. Classify data: transactional/operational tables, reference data, append-only audit/history, AI/knowledge content, file metadata and binary objects. Record exact counts and checksums.
 4. Design target: define D1 partition boundaries and SQLite-compatible schemas. Explicitly map UUID, JSONB, arrays, numeric precision, timestamps, Postgres enums, auth.uid(), RLS, RPCs, triggers and transaction semantics.
-5. Prepare R2: user enables R2 in Dashboard; create private bucket only after free quota and jurisdiction are confirmed. Keep files private; use scoped signed URLs.
+5. Prepare R2: R2 is enabled and the empty WEUR Standard staging bucket exists. Before any object upload, add an enforced application-level quota guard, object-size limits, upload/read rate limits, and usage monitoring. Keep files private; use scoped signed URLs. No production files are to be uploaded until these safeguards and a reliable billing/usage view are verified.
 6. Port backend: migrate Edge Functions one by one to Worker modules/Queue consumers/Cron. Do not copy deployed functions blindly: inspect each function's dependencies and secrets, convert Deno/npm imports and Supabase calls, add tests.
 7. Import in resumable chunks: immutable source snapshot, deterministic primary-key order, chunk checksums, checkpoint after each committed batch, idempotent reruns, dead-letter handling.
 8. Validate: compare every source/target table row count, stable checksums, file size/hash, foreign-key integrity, tenant isolation, auth/session behavior, workflows, reminders, chat, PDF Studio, Telegram archiving and mobile PWA.
@@ -53,7 +53,7 @@ Status: staging foundation only. Production remains on the existing Cloudflare W
 ## Current blockers
 - Source PostgreSQL does not accept connections. D1 must not be populated with guessed or incomplete data.
 - Supabase migration list API fails with the same 57P03 error; repository migrations do not prove which exact migrations were applied.
-- R2 has not been enabled on the Cloudflare account.
+- R2 is enabled and the staging bucket is empty; no file migration has started.
 - Auth migration and all Postgres-specific business logic still require a full code and schema audit.
 - A source backup is not yet verified.
 
