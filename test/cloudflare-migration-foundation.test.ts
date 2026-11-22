@@ -37,7 +37,7 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain("url.pathname === '/migration/status'");
     expect(worker).toContain("url.pathname === '/migration/functions'");
     expect(worker).toContain("sourcePostgres: 'blocked_57P03'");
-    expect(worker).toContain("operationalRows: 'not_imported'");
+    expect(worker).toContain("operationalRows: 'imported_from_organization_export'");
     expect(worker).toContain("productionCutover: 'blocked'");
     expect(worker).toContain("CUSTOMS_ADMIN_PASSWORD");
     expect(worker).toContain("customs_admin_sessions");
