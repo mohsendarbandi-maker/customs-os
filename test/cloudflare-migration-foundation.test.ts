@@ -13,26 +13,33 @@ describe('Cloudflare migration foundation', () => {
     expect(config).not.toContain('SUPABASE_SERVICE_ROLE_KEY');
   });
 
+  it('serves the existing Vite/PWA build from isolated staging assets', () => {
+    const config = read('../wrangler.migration-staging.jsonc');
+    expect(config).toContain('"directory": "./dist"');
+    expect(config).toContain('"binding": "ASSETS"');
+    expect(config).toContain('"not_found_handling": "single-page-application"');
+  });
+
   it('uses only resumable migration metadata tables in the initial D1 schema', () => {
     const sql = read('../supabase/migrations-cloudflare/0001_migration_control.sql');
     expect(sql).toContain('_migration_manifest');
     expect(sql).toContain('_migration_table_state');
     expect(sql).toContain('_migration_chunk_checkpoint');
     expect(sql).toContain('ON DELETE RESTRICT');
-    expect(sql).not.toMatch(/\\b(DROP|TRUNCATE|DELETE FROM)\\b/i);
-    expect(sql).not.toMatch(/\\b(shipments|profiles|auth\\.users|storage\\.objects)\\b/i);
+    expect(sql).not.toMatch(/\b(DROP|TRUNCATE|DELETE FROM)\b/i);
+    expect(sql).not.toMatch(/\b(shipments|profiles|auth\.users|storage\.objects)\b/i);
   });
 
   it('exposes read-only staging health and migration gates without claiming operational parity', () => {
     const worker = read('../worker/migration-staging.ts');
-    expect(worker).toContain("request.method !== 'GET'");
+    expect(worker).toContain("request.method !== 'GET' && request.method !== 'HEAD'");
     expect(worker).toContain("'/health/db'");
     expect(worker).toContain("'/migration/status'");
     expect(worker).toContain("'/migration/functions'");
     expect(worker).toContain("sourcePostgres: 'blocked_57P03'");
     expect(worker).toContain("operationalRows: 'not_imported'");
     expect(worker).toContain("productionCutover: 'blocked'");
-    expect(worker).not.toMatch(/\\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE)\\b/i);
+    expect(worker).not.toMatch(/\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE)\b/i);
   });
 
   it('keeps the free-first source and data preservation gates documented', () => {
