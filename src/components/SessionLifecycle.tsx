@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { isCloudflareRecoveryHost } from '../lib/recoveryHost';
 import { supabase } from '../lib/supabase';
 import { describeDevice, getSessionIdFromAccessToken } from '../lib/deviceSessions';
 
@@ -9,6 +10,7 @@ export function SessionLifecycle() {
   const sessionId = getSessionIdFromAccessToken(session?.access_token);
 
   useEffect(() => {
+    if (isCloudflareRecoveryHost()) return;
     if (!userId || !sessionId) return;
 
     let active = true;
