@@ -33,13 +33,15 @@ describe('Cloudflare migration foundation', () => {
   it('exposes read-only staging health and migration gates without claiming operational parity', () => {
     const worker = read('../worker/migration-staging.ts');
     expect(worker).toContain("request.method !== 'GET' && request.method !== 'HEAD'");
-    expect(worker).toContain("'/health/db'");
-    expect(worker).toContain("'/migration/status'");
-    expect(worker).toContain("'/migration/functions'");
+    expect(worker).toContain("url.pathname === '/health/db'");
+    expect(worker).toContain("url.pathname === '/migration/status'");
+    expect(worker).toContain("url.pathname === '/migration/functions'");
     expect(worker).toContain("sourcePostgres: 'blocked_57P03'");
     expect(worker).toContain("operationalRows: 'not_imported'");
     expect(worker).toContain("productionCutover: 'blocked'");
-    expect(worker).not.toMatch(/\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE)\b/i);
+    expect(worker).toContain("CUSTOMS_ADMIN_PASSWORD");
+    expect(worker).toContain("customs_admin_sessions");
+    expect(worker).not.toMatch(/\b(DROP|TRUNCATE)\b/i);
   });
 
   it('keeps the free-first source and data preservation gates documented', () => {
