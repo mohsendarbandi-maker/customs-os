@@ -1,0 +1,1 @@
+const r=o=>{const e=o.split(/[\\/]/).pop()||"",s=e.lastIndexOf("."),t=s>0&&s<e.length-1,c=t?e.slice(0,s):e,l=t?e.slice(s+1):"",a=c.normalize("NFKD").replace(/[^A-Za-z0-9_-]+/g,"_").replace(/_+/g,"_").replace(/^[_-]+|[_-]+$/g,"").slice(0,80)||"document",n=l.replace(/[^A-Za-z0-9]/g,"").slice(0,10).toLowerCase();return n?`${a}.${n}`:a};export{r as s};

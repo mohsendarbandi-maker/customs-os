@@ -1,0 +1,1 @@
+const e=t=>t.replace(/[0-9]/g,n=>"۰۱۲۳۴۵۶۷۸۹"[Number(n)]),a=t=>String(t??"").replace(/\s+/g," ").trim(),o=t=>[t.cargo_count==null||a(t.cargo_count)===""?"":e(a(t.cargo_count)),a(t.cargo_count_unit),a(t.client_name),a(t.vessel_name)].filter(Boolean).join(" ")||"محموله بدون عنوان";export{o as f};
