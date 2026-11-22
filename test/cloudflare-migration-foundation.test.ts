@@ -30,10 +30,12 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain('productionDataImported: false');
   });
 
-  it('documents the source outage, R2 prerequisite, and free-tier capacity blocker', () => {
+  it('documents the source outage, enabled-but-empty R2 bucket, and free-tier capacity blocker', () => {
     const plan = read('../docs/migration/CLOUDFLARE_MIGRATION.md');
     expect(plan).toContain('57P03');
-    expect(plan).toContain('R2 has not been enabled');
+    expect(plan).toContain('R2 was enabled by the owner');
+    expect(plan).toContain('no objects have been uploaded');
+    expect(plan).toContain('do not upload objects');
     expect(plan).toContain('500 MB per database');
     expect(plan).toContain('No DROP, TRUNCATE, DELETE');
   });
