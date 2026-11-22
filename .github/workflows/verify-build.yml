@@ -129,7 +129,7 @@ jobs:
       - name: Check Supabase reminder function
         run: deno check --node-modules-dir=auto supabase/functions/send-reminders/index.ts
       - name: Cloudflare Worker dry run
-        run: npx wrangler@4 deploy --dry-run
+        run: npx wrangler@4 deploy --dry-run --config wrangler.migration-staging.jsonc
 
       - name: Keep AI Operator available without floating over the chat inbox
         run: |
