@@ -19,18 +19,23 @@ describe('Cloudflare migration foundation', () => {
     expect(sql).toContain('_migration_table_state');
     expect(sql).toContain('_migration_chunk_checkpoint');
     expect(sql).toContain('ON DELETE RESTRICT');
-    expect(sql).not.toMatch(/\b(DROP|TRUNCATE|DELETE FROM)\b/i);
-    expect(sql).not.toMatch(/\b(shipments|profiles|auth\.users|storage\.objects)\b/i);
+    expect(sql).not.toMatch(/\\b(DROP|TRUNCATE|DELETE FROM)\\b/i);
+    expect(sql).not.toMatch(/\\b(shipments|profiles|auth\\.users|storage\\.objects)\\b/i);
   });
 
-  it('does not report production data as imported in staging health responses', () => {
+  it('exposes read-only staging health and migration gates without claiming operational parity', () => {
     const worker = read('../worker/migration-staging.ts');
-    expect(worker).toContain('productionTraffic: false');
-    expect(worker).toContain('dataImported: false');
-    expect(worker).toContain('productionDataImported: false');
+    expect(worker).toContain("request.method !== 'GET'");
+    expect(worker).toContain("'/health/db'");
+    expect(worker).toContain("'/migration/status'");
+    expect(worker).toContain("'/migration/functions'");
+    expect(worker).toContain("sourcePostgres: 'blocked_57P03'");
+    expect(worker).toContain("operationalRows: 'not_imported'");
+    expect(worker).toContain("productionCutover: 'blocked'");
+    expect(worker).not.toMatch(/\\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE)\\b/i);
   });
 
-  it('documents the source outage, enabled-but-empty R2 bucket, and free-tier capacity blocker', () => {
+  it('keeps the free-first source and data preservation gates documented', () => {
     const plan = read('../docs/migration/CLOUDFLARE_MIGRATION.md');
     expect(plan).toContain('57P03');
     expect(plan).toContain('R2 was enabled by the owner');
