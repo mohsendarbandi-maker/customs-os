@@ -52,7 +52,7 @@ The above files may remain as migration-era code until a replacement is complete
 
 The staging Worker source `worker/migration-staging.ts` currently exposes:
 - `/health`, `/health/db`
-- read-only D1 diagnostics: `/migration/schema` (SQLite table DDL + row counts), `/migration/parity` (import manifest vs actual table row counts), and `/migration/integrity` (33 hard-coded orphan-reference checks)
+- read-only D1 diagnostics: `/migration/schema` (SQLite table DDL + row counts), `/migration/parity` (import manifest vs actual table row counts), and `/migration/integrity` (34 hard-coded orphan-reference checks)
 - migration/archive diagnostics: `/migration/status`, `/migration/functions`
 - staging bootstrap auth: `/api/auth/login`, `/api/auth/session`, `/api/auth/logout`
 - a preliminary Gemini endpoint at `/api/ai` and compatibility path at `/functions/v1/ai-assistant`
