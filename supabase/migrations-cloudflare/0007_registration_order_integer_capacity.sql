@@ -7,7 +7,9 @@
 
 DROP TRIGGER IF EXISTS registration_order_external_allocation_before_insert;
 DROP TRIGGER IF EXISTS registration_order_external_allocation_before_update;
+DROP TRIGGER IF EXISTS registration_order_master_before_insert;
 DROP TRIGGER IF EXISTS registration_order_master_before_update;
+DROP TRIGGER IF EXISTS registration_order_closed_update_guard;
 
 CREATE TRIGGER registration_order_external_allocation_before_insert
 BEFORE INSERT ON registration_order_external_allocations
@@ -294,10 +296,29 @@ BEGIN
   ) THEN RAISE(ABORT, 'REGISTRATION_ORDER_VALUE_CAPACITY_EXCEEDED') END;
 END;
 
+CREATE TRIGGER registration_order_master_before_insert
+BEFORE INSERT ON registration_orders
+BEGIN
+  SELECT CASE WHEN
+    (NEW.net_weight_kg IS NOT NULL AND NEW.net_weight_kg <> ROUND(NEW.net_weight_kg,3))
+    OR (NEW.gross_weight_kg IS NOT NULL AND NEW.gross_weight_kg <> ROUND(NEW.gross_weight_kg,3))
+    OR (NEW.value_amount IS NOT NULL AND NEW.value_amount <> ROUND(NEW.value_amount,3))
+    THEN RAISE(ABORT, 'REGISTRATION_ORDER_PRECISION_INVALID') END;
+END;
+
+CREATE TRIGGER registration_order_closed_update_guard
+BEFORE UPDATE ON registration_orders
+WHEN OLD.is_closed = 1
+BEGIN
+  SELECT RAISE(ABORT, 'REGISTRATION_ORDER_CLOSED');
+END;
+
 CREATE TRIGGER registration_order_master_before_update
 BEFORE UPDATE OF client_id, net_weight_kg, gross_weight_kg, value_amount, currency, is_closed
 ON registration_orders
 BEGIN
+  SELECT CASE WHEN OLD.is_closed = 1
+    THEN RAISE(ABORT, 'REGISTRATION_ORDER_CLOSED') END;
   SELECT CASE WHEN
     (NEW.net_weight_kg IS NOT NULL AND NEW.net_weight_kg <> ROUND(NEW.net_weight_kg,3))
     OR (NEW.gross_weight_kg IS NOT NULL AND NEW.gross_weight_kg <> ROUND(NEW.gross_weight_kg,3))
