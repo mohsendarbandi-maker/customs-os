@@ -286,6 +286,105 @@ export default {
           return json({ ok: false, error: 'SCHEMA_INSPECTION_UNAVAILABLE' }, 503);
         }
       }
+      if (url.pathname === '/migration/parity') {
+        try {
+          const [importRows, tableRows] = await Promise.all([
+            env.MIGRATION_DB.prepare(
+              'SELECT table_name, expected_rows, imported_rows, status FROM customs_os_import_table_status WHERE organization_id = ? ORDER BY table_name',
+            ).bind(profile.organization_id).all<{
+              table_name: string;
+              expected_rows: number;
+              imported_rows: number;
+              status: string;
+            }>(),
+            env.MIGRATION_DB.prepare(
+              "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+            ).all<{ name: string }>(),
+          ]);
+          const existingTables = new Set(tableRows.results.map((row) => row.name));
+          const results: Array<{
+            table: string;
+            status: string;
+            expectedRows: number;
+            importedRows: number;
+            actualRows: number | null;
+            delta: number | null;
+            verified: boolean;
+          }> = [];
+          let missingTargets = 0;
+          let failedCounts = 0;
+          let expectedTotal = 0;
+          let actualTotal = 0;
+          let mismatchedTables = 0;
+
+          for (const row of importRows.results) {
+            expectedTotal += row.expected_rows;
+            const tableName = row.table_name;
+            if (!existingTables.has(tableName)) {
+              missingTargets += 1;
+              results.push({
+                table: tableName,
+                status: row.status,
+                expectedRows: row.expected_rows,
+                importedRows: row.imported_rows,
+                actualRows: null,
+                delta: null,
+                verified: false,
+              });
+              continue;
+            }
+            const identifier = '"' + tableName.replace(/"/g, '""') + '"';
+            try {
+              const result = await env.MIGRATION_DB.prepare(
+                'SELECT COUNT(*) AS row_count FROM ' + identifier,
+              ).first<{ row_count: number }>();
+              const actualRows = typeof result?.row_count === 'number' ? result.row_count : null;
+              const delta = actualRows === null ? null : actualRows - row.expected_rows;
+              if (actualRows === null) failedCounts += 1;
+              else {
+                actualTotal += actualRows;
+                if (delta !== 0) mismatchedTables += 1;
+              }
+              results.push({
+                table: tableName,
+                status: row.status,
+                expectedRows: row.expected_rows,
+                importedRows: row.imported_rows,
+                actualRows,
+                delta,
+                verified: actualRows !== null,
+              });
+            } catch {
+              failedCounts += 1;
+              results.push({
+                table: tableName,
+                status: row.status,
+                expectedRows: row.expected_rows,
+                importedRows: row.imported_rows,
+                actualRows: null,
+                delta: null,
+                verified: false,
+              });
+            }
+          }
+
+          return json({
+            ok: missingTargets === 0 && failedCounts === 0,
+            database: 'customs-os-migration-staging',
+            inspection: 'read_only_import_manifest_vs_d1_counts',
+            sourceTableCount: results.length,
+            expectedTotal,
+            actualTotal,
+            missingTargets,
+            failedCounts,
+            mismatchedTables,
+            rowCountParity: missingTargets === 0 && failedCounts === 0 && mismatchedTables === 0,
+            tables: results,
+          });
+        } catch {
+          return json({ ok: false, error: 'MIGRATION_PARITY_UNAVAILABLE' }, 503);
+        }
+      }
       if (url.pathname === '/migration/integrity') {
         const checks: Array<{ name: string; sql: string }> = [
           { name: 'cases.client_id -> clients.id', sql: "SELECT COUNT(*) AS n FROM cases c WHERE c.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clients p WHERE p.id = c.client_id)" },
