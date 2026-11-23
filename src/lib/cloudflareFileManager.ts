@@ -87,6 +87,22 @@ export async function listCloudflareFileManagerFiles(
   return request('/api/file-manager/files?' + query.toString());
 }
 
+export async function searchCloudflareFileManager(
+  query: string,
+  limit = 50,
+): Promise<{ items: Array<{
+  entity_type: string;
+  entity_id: string;
+  title: string;
+  details: string | null;
+  folder_id: string | null;
+  shipment_id: string | null;
+  client_id: string | null;
+}>; total: number; normalizedQuery?: string }> {
+  const params = new URLSearchParams({ q: query, limit: String(Math.min(50, Math.max(1, limit))) });
+  return request('/api/file-manager/search?' + params.toString());
+}
+
 export async function createCloudflareFileManagerFolder(input: {
   parent_id: string;
   display_name: string;
