@@ -32,6 +32,7 @@ interface UploadJob {
   size_bytes: number;
   document_type: string;
   tags: string;
+  operation_sections: string;
   status: string;
   telegram_chat_id: string | null;
   telegram_connection_id: string | null;
@@ -252,6 +253,7 @@ const completeUploadJob = async (
     external_message_id: job.external_message_id,
     document_type: job.document_type,
     tags: JSON.parse(job.tags || '[]'),
+    operation_sections: JSON.parse(job.operation_sections || '[]'),
     metadata,
     storage_path: 'telegram://' + job.file_manager_file_id,
     is_archived: false,
@@ -269,7 +271,7 @@ const completeUploadJob = async (
       ).bind(
         job.file_manager_file_id,job.folder_id,job.shipment_id,job.client_id,job.file_manager_file_id,
         job.original_name,job.mime_type,job.size_bytes,job.external_message_id,job.document_type,
-        job.tags,JSON.stringify(metadata),'telegram://' + job.file_manager_file_id,createdAt,
+        job.tags,JSON.stringify(metadata),'telegram://' + job.file_manager_file_id,job.operation_sections,createdAt,
         profile.organization_id,
         relativePath,
         job.folder_id,profile.organization_id,
@@ -309,7 +311,7 @@ const completeUploadJob = async (
 
 const uploadJobSelect =
   'SELECT id,organization_id,idempotency_key,file_manager_file_id,folder_id,shipment_id,client_id,' +
-  'original_name,document_name,mime_type,size_bytes,document_type,tags,status,telegram_chat_id,' +
+  'original_name,document_name,mime_type,size_bytes,document_type,tags,operation_sections,status,telegram_chat_id,' +
   'telegram_connection_id,telegram_file_id,telegram_file_unique_id,external_message_id,error_code,created_by ' +
   'FROM file_manager_upload_jobs WHERE organization_id=? AND idempotency_key=? LIMIT 1';
 
@@ -331,6 +333,12 @@ export const handleFileManagerUpload = async (
   const documentType = normalizeName(url.searchParams.get('document_type') || 'other');
   const requestedDocumentName = (url.searchParams.get('document_name') || '').trim();
   const tags = normalizeTags(url.searchParams.get('tags'));
+  const allowedSections = new Set(['evaluation','expertise','cashier','loading_permit','exit','port_charges']);
+  let operationSections: string[] = [];
+  try {
+    const parsedSections: unknown = JSON.parse(url.searchParams.get('operation_sections') || '[]');
+    if (Array.isArray(parsedSections)) operationSections = [...new Set(parsedSections.filter((value): value is string => typeof value === 'string' && allowedSections.has(value)))].slice(0,20);
+  } catch { return fail('INVALID_OPERATION_SECTIONS',400); }
   const idempotencyKey = (request.headers.get('idempotency-key') || '').trim();
   const rawName = request.headers.get('x-file-name') || '';
   const declaredSizeText = request.headers.get('x-file-size') || request.headers.get('content-length') || '';
@@ -382,7 +390,8 @@ export const handleFileManagerUpload = async (
         Number(job.size_bytes) !== declaredSize ||
         job.document_name !== finalDocumentName ||
         job.document_type !== documentType ||
-        job.tags !== JSON.stringify(tags)
+        job.tags !== JSON.stringify(tags) ||
+        job.operation_sections !== JSON.stringify(operationSections)
       ) return fail('IDEMPOTENCY_KEY_REUSE_MISMATCH',409);
       if (job.status === 'stored') {
         return json({
@@ -415,7 +424,7 @@ export const handleFileManagerUpload = async (
         'created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,\'uploading\',NULL,NULL,NULL,NULL,NULL,NULL,?,?,?)',
       ).bind(
         jobId,profile.organization_id,idempotencyKey,fileId,folderId,shipmentId,clientId,
-        originalName,finalDocumentName,mimeType,declaredSize,documentType,JSON.stringify(tags),
+        originalName,finalDocumentName,mimeType,declaredSize,documentType,JSON.stringify(tags),JSON.stringify(operationSections),
         profile.id,createdAt,createdAt,
       ).run();
       if (!inserted.meta?.changes) {
