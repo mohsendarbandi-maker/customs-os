@@ -19,7 +19,8 @@ interface OrderInput {
   status: 'pending' | 'received' | 'verified' | 'used' | 'cancelled';
   tariff_code: string | null; quantity: number | null; quantity_unit: string | null;
   net_weight_kg: number | null; gross_weight_kg: number | null;
-  value_amount: number | null; currency: string | null;
+  net_weight_milli: number | null; gross_weight_milli: number | null;
+  value_amount: number | null; value_amount_milli: number | null; currency: string | null;
   bank_name: string | null; bank_branch: string | null; bank_branch_code: string | null;
   payment_instrument_code: string | null; notes: string | null;
 }
@@ -28,7 +29,8 @@ interface AllocationInput {
   allocation_reference: string | null;
   status: 'allocated' | 'dispatched' | 'completed' | 'cancelled';
   net_weight_kg: number; gross_weight_kg: number | null;
-  value_amount: number; currency: string; notes: string | null;
+  net_weight_milli: number; gross_weight_milli: number | null;
+  value_amount: number; value_amount_milli: number; currency: string; notes: string | null;
 }
 interface OrderRow extends Record<string, unknown> {
   id: string; organization_id: string; case_id: string | null; client_id: string | null;
@@ -46,6 +48,10 @@ interface OrderRow extends Record<string, unknown> {
   external_allocations_missing_value: number; external_allocations_currency_mismatch: number;
   total_allocated_net_weight_kg: number; total_allocated_gross_weight_kg: number;
   total_allocated_value_amount: number; total_allocation_count: number;
+  shipped_net_weight_milli: number; shipped_gross_weight_milli: number; shipped_value_milli: number;
+  external_allocated_net_weight_milli: number; external_allocated_gross_weight_milli: number;
+  external_allocated_value_milli: number; total_allocated_net_weight_milli: number;
+  total_allocated_gross_weight_milli: number; total_allocated_value_milli: number;
 }
 interface ExternalAllocationRow extends Record<string, unknown> {
   id: string; organization_id: string; registration_order_id: string;
@@ -77,12 +83,56 @@ const normalizeDigits = (value: string) => Array.from(value.normalize('NFKC'), (
   if (n >= 0x0660 && n <= 0x0669) return String(n - 0x0660);
   return ch;
 }).join('');
-const parseNumber = (value: unknown): number | null => {
+const parseMilliUnits = (value: unknown): number | null => {
   if (value == null || value === '') return null;
   const raw = normalizeDigits(String(value)).replace(/[٬,\s]/g, '').trim();
-  if (!raw) return null;
-  const result = Number(raw);
-  return Number.isFinite(result) && Number.isSafeInteger(Math.round(result * 100)) ? result : null;
+  const match = raw.match(/^(-?)(\d+)(?:\.(\d{1,3}))?$/);
+  if (!match) return null;
+  const negative = match[1] === '-';
+  const whole = BigInt(match[2]);
+  const fraction = BigInt((match[3] || '').padEnd(3, '0'));
+  const scaled = (whole * 1000n + fraction) * (negative ? -1n : 1n);
+  const limit = BigInt(Number.MAX_SAFE_INTEGER);
+  if (scaled > limit || scaled < -limit) return null;
+  return Number(scaled);
+};
+const parseNumber = (value: unknown): number | null => {
+  const scaled = parseMilliUnits(value);
+  return scaled == null ? null : scaled / 1000;
+};
+const safeInteger = (value: unknown): number | null => {
+  if (value == null || value === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+};
+const readMilliUnits = (
+  row: Record<string, unknown> | null | undefined,
+  integerField: string,
+  decimalField: string,
+): number | null => {
+  if (!row) return null;
+  const exact = row[integerField];
+  return exact == null ? parseMilliUnits(row[decimalField]) : safeInteger(exact);
+};
+const readMilliOrZero = (
+  row: Record<string, unknown> | null | undefined,
+  integerField: string,
+  decimalField: string,
+): number | null => {
+  if (!row) return 0;
+  const raw = row[integerField] ?? row[decimalField];
+  if (raw == null || raw === '') return 0;
+  return readMilliUnits(row, integerField, decimalField);
+};
+const addMilliUnits = (...values: number[]): number | null => {
+  const total = values.reduce((sum, value) => sum + BigInt(value), 0n);
+  const limit = BigInt(Number.MAX_SAFE_INTEGER);
+  return total > limit || total < -limit ? null : Number(total);
+};
+const subtractMilliUnits = (left: number, right: number): number | null => {
+  const result = BigInt(left) - BigInt(right);
+  const limit = BigInt(Number.MAX_SAFE_INTEGER);
+  return result > limit || result < -limit ? null : Number(result);
 };
 const parseInteger = (value: unknown): number | null => {
   const result = parseNumber(value);
@@ -123,9 +173,12 @@ const parseOrderInput = (raw: Record<string, unknown>): OrderInput | null => {
   const quantityUnit = parseText(raw.quantity_unit, 40);
   const notes = parseText(raw.notes, 10000);
   const quantity = raw.quantity == null || raw.quantity === '' ? null : parseInteger(raw.quantity);
-  const netWeight = raw.net_weight_kg == null || raw.net_weight_kg === '' ? null : parseWeight(raw.net_weight_kg);
-  const grossWeight = raw.gross_weight_kg == null || raw.gross_weight_kg === '' ? null : parseWeight(raw.gross_weight_kg);
-  const valueAmount = raw.value_amount == null || raw.value_amount === '' ? null : parseNumber(raw.value_amount);
+  const netWeightMilli = raw.net_weight_kg == null || raw.net_weight_kg === '' ? null : parseMilliUnits(raw.net_weight_kg);
+  const grossWeightMilli = raw.gross_weight_kg == null || raw.gross_weight_kg === '' ? null : parseMilliUnits(raw.gross_weight_kg);
+  const valueAmountMilli = raw.value_amount == null || raw.value_amount === '' ? null : parseMilliUnits(raw.value_amount);
+  const netWeight = netWeightMilli == null ? null : netWeightMilli / 1000;
+  const grossWeight = grossWeightMilli == null ? null : grossWeightMilli / 1000;
+  const valueAmount = valueAmountMilli == null ? null : valueAmountMilli / 1000;
   const currencyText = parseText(raw.currency, 3);
   const currency = currencyText ? currencyText.toUpperCase() : null;
   const bankName = parseText(raw.bank_name, 200);
@@ -135,9 +188,9 @@ const parseOrderInput = (raw: Record<string, unknown>): OrderInput | null => {
   if (
     !clientId || !orderNumber || !status || !ORDER_STATUSES.has(status) ||
     (raw.quantity != null && raw.quantity !== '' && quantity == null) ||
-    (raw.net_weight_kg != null && raw.net_weight_kg !== '' && netWeight == null) ||
-    (raw.gross_weight_kg != null && raw.gross_weight_kg !== '' && grossWeight == null) ||
-    (raw.value_amount != null && raw.value_amount !== '' && valueAmount == null) ||
+    (raw.net_weight_kg != null && raw.net_weight_kg !== '' && netWeightMilli == null) ||
+    (raw.gross_weight_kg != null && raw.gross_weight_kg !== '' && grossWeightMilli == null) ||
+    (raw.value_amount != null && raw.value_amount !== '' && valueAmountMilli == null) ||
     (raw.order_date != null && orderDate == null) ||
     (raw.tariff_code != null && tariffCode == null) ||
     (raw.quantity_unit != null && quantityUnit == null) ||
@@ -157,7 +210,9 @@ const parseOrderInput = (raw: Record<string, unknown>): OrderInput | null => {
   return {
     client_id: clientId, order_number: normalizeDigits(orderNumber), order_date: orderDate,
     status: status as OrderInput['status'], tariff_code: tariffCode, quantity, quantity_unit: quantityUnit,
-    net_weight_kg: netWeight, gross_weight_kg: grossWeight, value_amount: valueAmount,
+    net_weight_kg: netWeight, gross_weight_kg: grossWeight,
+    net_weight_milli: netWeightMilli, gross_weight_milli: grossWeightMilli,
+    value_amount: valueAmount, value_amount_milli: valueAmountMilli,
     currency: valueAmount === null ? null : currency, bank_name: bankName, bank_branch: bankBranch,
     bank_branch_code: bankBranchCode, payment_instrument_code: paymentCode, notes,
   };
@@ -167,9 +222,12 @@ const parseAllocationInput = (raw: Record<string, unknown>): AllocationInput | n
   const destination = parseText(raw.destination_customs, 200);
   const reference = parseText(raw.allocation_reference, 120);
   const notes = parseText(raw.notes, 5000);
-  const netWeight = parseWeight(raw.net_weight_kg);
-  const grossWeight = raw.gross_weight_kg == null || raw.gross_weight_kg === '' ? null : parseWeight(raw.gross_weight_kg);
-  const valueAmount = parseNumber(raw.value_amount);
+  const netWeightMilli = parseMilliUnits(raw.net_weight_kg);
+  const grossWeightMilli = raw.gross_weight_kg == null || raw.gross_weight_kg === '' ? null : parseMilliUnits(raw.gross_weight_kg);
+  const valueAmountMilli = parseMilliUnits(raw.value_amount);
+  const netWeight = netWeightMilli == null ? null : netWeightMilli / 1000;
+  const grossWeight = grossWeightMilli == null ? null : grossWeightMilli / 1000;
+  const valueAmount = valueAmountMilli == null ? null : valueAmountMilli / 1000;
   const currencyText = parseText(raw.currency, 3, false);
   const status = parseText(raw.status ?? 'allocated', 20, false);
   const currency = currencyText.toUpperCase();
@@ -179,17 +237,18 @@ const parseAllocationInput = (raw: Record<string, unknown>): AllocationInput | n
     (raw.destination_customs != null && destination == null) ||
     (raw.allocation_reference != null && reference == null) ||
     (raw.notes != null && notes == null) ||
-    netWeight == null || netWeight <= 0 ||
-    (raw.gross_weight_kg != null && raw.gross_weight_kg !== '' && grossWeight == null) ||
-    (grossWeight !== null && grossWeight < netWeight) ||
-    valueAmount == null || valueAmount < 0 ||
+    netWeightMilli == null || netWeightMilli <= 0 ||
+    (raw.gross_weight_kg != null && raw.gross_weight_kg !== '' && grossWeightMilli == null) ||
+    (grossWeightMilli !== null && grossWeightMilli < netWeightMilli) ||
+    valueAmountMilli == null || valueAmountMilli < 0 ||
     !/^[A-Z]{3}$/.test(currency) ||
     !status || !ALLOCATION_STATUSES.has(status)
   ) return null;
   return {
     recipient_company: recipient, destination_customs: destination, allocation_reference: reference,
     status: status as AllocationInput['status'], net_weight_kg: netWeight,
-    gross_weight_kg: grossWeight, value_amount: valueAmount, currency, notes,
+    net_weight_milli: netWeightMilli, gross_weight_kg: grossWeight, gross_weight_milli: grossWeightMilli,
+    value_amount: valueAmount, value_amount_milli: valueAmountMilli, currency, notes,
   };
 };
 const ORDER_SELECT = [
@@ -197,27 +256,35 @@ const ORDER_SELECT = [
   'ro.tariff_code, ro.quantity, ro.quantity_unit, ro.value_amount, ro.currency, ro.notes,',
   'ro.net_weight_kg, ro.gross_weight_kg, ro.bank_name, ro.bank_branch, ro.bank_branch_code,',
   'ro.payment_instrument_code, ro.is_closed, ro.closed_at, ro.created_at, ro.updated_at, cl.name AS client_name,',
-  'COALESCE(sa.shipment_count, 0) AS shipment_count, COALESCE(sa.shipped_net_weight_kg, 0) AS shipped_net_weight_kg,',
-  'COALESCE(sa.shipped_gross_weight_kg, 0) AS shipped_gross_weight_kg, COALESCE(sa.shipped_value_amount, 0) AS shipped_value_amount,',
+  'COALESCE(sa.shipment_count, 0) AS shipment_count, COALESCE(sa.shipped_net_weight_milli, 0) AS shipped_net_weight_milli,',
+  'COALESCE(sa.shipped_gross_weight_milli, 0) AS shipped_gross_weight_milli, COALESCE(sa.shipped_value_milli, 0) AS shipped_value_milli,',
+  'COALESCE(sa.shipped_net_weight_milli, 0) / 1000.0 AS shipped_net_weight_kg,',
+  'COALESCE(sa.shipped_gross_weight_milli, 0) / 1000.0 AS shipped_gross_weight_kg, COALESCE(sa.shipped_value_milli, 0) / 1000.0 AS shipped_value_amount,',
   'COALESCE(sa.shipments_missing_invoice_value, 0) AS shipments_missing_invoice_value,',
   'COALESCE(sa.shipments_with_currency_mismatch, 0) AS shipments_with_currency_mismatch,',
   'COALESCE(ea.external_allocation_count, 0) AS external_allocation_count,',
-  'COALESCE(ea.external_allocated_net_weight_kg, 0) AS external_allocated_net_weight_kg,',
-  'COALESCE(ea.external_allocated_gross_weight_kg, 0) AS external_allocated_gross_weight_kg,',
-  'COALESCE(ea.external_allocated_value_amount, 0) AS external_allocated_value_amount,',
+  'COALESCE(ea.external_allocated_net_weight_milli, 0) AS external_allocated_net_weight_milli,',
+  'COALESCE(ea.external_allocated_gross_weight_milli, 0) AS external_allocated_gross_weight_milli,',
+  'COALESCE(ea.external_allocated_value_milli, 0) AS external_allocated_value_milli,',
+  'COALESCE(ea.external_allocated_net_weight_milli, 0) / 1000.0 AS external_allocated_net_weight_kg,',
+  'COALESCE(ea.external_allocated_gross_weight_milli, 0) / 1000.0 AS external_allocated_gross_weight_kg,',
+  'COALESCE(ea.external_allocated_value_milli, 0) / 1000.0 AS external_allocated_value_amount,',
   'COALESCE(ea.external_allocations_missing_value, 0) AS external_allocations_missing_value,',
   'COALESCE(ea.external_allocations_currency_mismatch, 0) AS external_allocations_currency_mismatch,',
-  'COALESCE(sa.shipped_net_weight_kg, 0) + COALESCE(ea.external_allocated_net_weight_kg, 0) AS total_allocated_net_weight_kg,',
-  'COALESCE(sa.shipped_gross_weight_kg, 0) + COALESCE(ea.external_allocated_gross_weight_kg, 0) AS total_allocated_gross_weight_kg,',
-  'COALESCE(sa.shipped_value_amount, 0) + COALESCE(ea.external_allocated_value_amount, 0) AS total_allocated_value_amount,',
+  'COALESCE(sa.shipped_net_weight_milli, 0) + COALESCE(ea.external_allocated_net_weight_milli, 0) AS total_allocated_net_weight_milli,',
+  'COALESCE(sa.shipped_gross_weight_milli, 0) + COALESCE(ea.external_allocated_gross_weight_milli, 0) AS total_allocated_gross_weight_milli,',
+  'COALESCE(sa.shipped_value_milli, 0) + COALESCE(ea.external_allocated_value_milli, 0) AS total_allocated_value_milli,',
+  '(COALESCE(sa.shipped_net_weight_milli, 0) + COALESCE(ea.external_allocated_net_weight_milli, 0)) / 1000.0 AS total_allocated_net_weight_kg,',
+  '(COALESCE(sa.shipped_gross_weight_milli, 0) + COALESCE(ea.external_allocated_gross_weight_milli, 0)) / 1000.0 AS total_allocated_gross_weight_kg,',
+  '(COALESCE(sa.shipped_value_milli, 0) + COALESCE(ea.external_allocated_value_milli, 0)) / 1000.0 AS total_allocated_value_amount,',
   'COALESCE(sa.shipment_count, 0) + COALESCE(ea.external_allocation_count, 0) AS total_allocation_count',
   'FROM registration_orders ro',
   'LEFT JOIN clients cl ON cl.id = ro.client_id AND cl.organization_id = ro.organization_id',
   'LEFT JOIN (',
   ' SELECT ro2.id AS registration_order_id, ro2.organization_id, COUNT(s.id) AS shipment_count,',
-  ' COALESCE(SUM(COALESCE(d.net_weight_kg, s.net_weight_kg)), 0) AS shipped_net_weight_kg,',
-  ' COALESCE(SUM(COALESCE(d.gross_weight_kg, s.gross_weight_kg)), 0) AS shipped_gross_weight_kg,',
-  ' COALESCE(SUM(d.invoice_amount), 0) AS shipped_value_amount,',
+  ' COALESCE(SUM(CAST(ROUND(COALESCE(d.net_weight_kg, s.net_weight_kg, 0) * 1000) AS INTEGER)), 0) AS shipped_net_weight_milli,',
+  ' COALESCE(SUM(CAST(ROUND(COALESCE(d.gross_weight_kg, s.gross_weight_kg, 0) * 1000) AS INTEGER)), 0) AS shipped_gross_weight_milli,',
+  ' COALESCE(SUM(CAST(ROUND(COALESCE(d.invoice_amount, 0) * 1000) AS INTEGER)), 0) AS shipped_value_milli,',
   ' COALESCE(SUM(CASE WHEN s.id IS NOT NULL AND (d.invoice_amount IS NULL OR NULLIF(TRIM(d.invoice_currency), \'\') IS NULL) THEN 1 ELSE 0 END), 0) AS shipments_missing_invoice_value,',
   ' COALESCE(SUM(CASE WHEN d.invoice_amount IS NOT NULL AND (ro2.currency IS NULL OR NULLIF(TRIM(d.invoice_currency), \'\') IS NULL OR UPPER(TRIM(d.invoice_currency)) <> UPPER(ro2.currency)) THEN 1 ELSE 0 END), 0) AS shipments_with_currency_mismatch',
   ' FROM registration_orders ro2',
@@ -227,9 +294,9 @@ const ORDER_SELECT = [
   ') sa ON sa.registration_order_id = ro.id AND sa.organization_id = ro.organization_id',
   'LEFT JOIN (',
   ' SELECT a.organization_id, a.registration_order_id, COUNT(*) AS external_allocation_count,',
-  ' COALESCE(SUM(a.net_weight_kg), 0) AS external_allocated_net_weight_kg,',
-  ' COALESCE(SUM(COALESCE(a.gross_weight_kg, 0)), 0) AS external_allocated_gross_weight_kg,',
-  ' COALESCE(SUM(a.value_amount), 0) AS external_allocated_value_amount,',
+  ' COALESCE(SUM(CAST(ROUND(a.net_weight_kg * 1000) AS INTEGER)), 0) AS external_allocated_net_weight_milli,',
+  ' COALESCE(SUM(CAST(ROUND(COALESCE(a.gross_weight_kg, 0) * 1000) AS INTEGER)), 0) AS external_allocated_gross_weight_milli,',
+  ' COALESCE(SUM(CAST(ROUND(a.value_amount * 1000) AS INTEGER)), 0) AS external_allocated_value_milli,',
   ' COALESCE(SUM(CASE WHEN a.value_amount IS NULL OR a.currency IS NULL THEN 1 ELSE 0 END), 0) AS external_allocations_missing_value,',
   ' COALESCE(SUM(CASE WHEN a.currency IS NOT NULL AND UPPER(a.currency) <> UPPER(ro3.currency) THEN 1 ELSE 0 END), 0) AS external_allocations_currency_mismatch',
   ' FROM registration_order_external_allocations a',
@@ -283,23 +350,27 @@ const shipmentCurrencyMismatchCount = async (
 const validateOrderCapacity = async (
   db: RegistrationOrderD1Database, input: OrderInput, before: OrderRow | null, orderId: string | null, organizationId: string,
 ) => {
-  const shippedNet = Number(before?.shipped_net_weight_kg || 0);
-  const shippedGross = Number(before?.shipped_gross_weight_kg || 0);
-  const shippedValue = Number(before?.shipped_value_amount || 0);
-  const externalNet = Number(before?.external_allocated_net_weight_kg || 0);
-  const externalGross = Number(before?.external_allocated_gross_weight_kg || 0);
-  const externalValue = Number(before?.external_allocated_value_amount || 0);
-  const totalNet = shippedNet + externalNet;
-  const totalGross = shippedGross + externalGross;
-  const totalValue = shippedValue + externalValue;
+  const shippedNet = readMilliOrZero(before, 'shipped_net_weight_milli', 'shipped_net_weight_kg');
+  const shippedGross = readMilliOrZero(before, 'shipped_gross_weight_milli', 'shipped_gross_weight_kg');
+  const shippedValue = readMilliOrZero(before, 'shipped_value_milli', 'shipped_value_amount');
+  const externalNet = readMilliOrZero(before, 'external_allocated_net_weight_milli', 'external_allocated_net_weight_kg');
+  const externalGross = readMilliOrZero(before, 'external_allocated_gross_weight_milli', 'external_allocated_gross_weight_kg');
+  const externalValue = readMilliOrZero(before, 'external_allocated_value_milli', 'external_allocated_value_amount');
+  if ([shippedNet, shippedGross, shippedValue, externalNet, externalGross, externalValue].some(value => value == null)) {
+    return 'REGISTRATION_ORDER_CAPACITY_DATA_INVALID';
+  }
+  const totalNet = addMilliUnits(shippedNet!, externalNet!);
+  const totalGross = addMilliUnits(shippedGross!, externalGross!);
+  const totalValue = addMilliUnits(shippedValue!, externalValue!);
+  if (totalNet == null || totalGross == null || totalValue == null) return 'REGISTRATION_ORDER_CAPACITY_DATA_INVALID';
   if (orderId) {
-    if (input.net_weight_kg == null && totalNet > 0) return 'ORDER_NET_CAPACITY_CANNOT_BE_CLEARED';
-    if (input.gross_weight_kg == null && totalGross > 0) return 'ORDER_GROSS_CAPACITY_CANNOT_BE_CLEARED';
-    if (input.value_amount == null && totalValue > 0) return 'ORDER_VALUE_CAPACITY_CANNOT_BE_CLEARED';
+    if (input.net_weight_milli == null && totalNet > 0) return 'ORDER_NET_CAPACITY_CANNOT_BE_CLEARED';
+    if (input.gross_weight_milli == null && totalGross > 0) return 'ORDER_GROSS_CAPACITY_CANNOT_BE_CLEARED';
+    if (input.value_amount_milli == null && totalValue > 0) return 'ORDER_VALUE_CAPACITY_CANNOT_BE_CLEARED';
     if (input.currency == null && totalValue > 0) return 'ORDER_CURRENCY_CANNOT_BE_CLEARED';
-    if (input.net_weight_kg != null && totalNet > input.net_weight_kg + 0.001) return 'ORDER_NET_WEIGHT_BELOW_ALLOCATED';
-    if (input.gross_weight_kg != null && totalGross > input.gross_weight_kg + 0.001) return 'ORDER_GROSS_WEIGHT_BELOW_ALLOCATED';
-    if (input.value_amount != null && totalValue > input.value_amount + 0.01) return 'ORDER_VALUE_BELOW_ALLOCATED';
+    if (input.net_weight_milli != null && totalNet > input.net_weight_milli) return 'ORDER_NET_WEIGHT_BELOW_ALLOCATED';
+    if (input.gross_weight_milli != null && totalGross > input.gross_weight_milli) return 'ORDER_GROSS_WEIGHT_BELOW_ALLOCATED';
+    if (input.value_amount_milli != null && totalValue > input.value_amount_milli) return 'ORDER_VALUE_BELOW_ALLOCATED';
     if (input.currency && await shipmentCurrencyMismatchCount(db, orderId, organizationId, input.currency) > 0) {
       return 'ORDER_CURRENCY_CONFLICTS_WITH_SHIPMENTS';
     }
@@ -318,12 +389,20 @@ const validateOrderCapacity = async (
 };
 const ensureFinalize = (order: OrderRow) => {
   if (Number(order.total_allocation_count || 0) < 1) return 'ORDER_FINALIZE_REQUIRES_ALLOCATION';
-  if (order.net_weight_kg == null || Math.abs(Number(order.total_allocated_net_weight_kg || 0) - Number(order.net_weight_kg)) > 0.001) return 'ORDER_FINALIZE_NET_WEIGHT_MISMATCH';
-  if (order.gross_weight_kg != null && Math.abs(Number(order.total_allocated_gross_weight_kg || 0) - Number(order.gross_weight_kg)) > 0.001) return 'ORDER_FINALIZE_GROSS_WEIGHT_MISMATCH';
+  const allocatedNet = readMilliUnits(order, 'total_allocated_net_weight_milli', 'total_allocated_net_weight_kg');
+  const registeredNet = parseMilliUnits(order.net_weight_kg);
+  if (allocatedNet == null || registeredNet == null || allocatedNet !== registeredNet) return 'ORDER_FINALIZE_NET_WEIGHT_MISMATCH';
+  if (order.gross_weight_kg != null) {
+    const allocatedGross = readMilliUnits(order, 'total_allocated_gross_weight_milli', 'total_allocated_gross_weight_kg');
+    const registeredGross = parseMilliUnits(order.gross_weight_kg);
+    if (allocatedGross == null || registeredGross == null || allocatedGross !== registeredGross) return 'ORDER_FINALIZE_GROSS_WEIGHT_MISMATCH';
+  }
   if (order.value_amount == null || !order.currency) return 'ORDER_FINALIZE_VALUE_REQUIRED';
   if (Number(order.shipments_missing_invoice_value || 0) + Number(order.external_allocations_missing_value || 0) > 0) return 'ORDER_FINALIZE_MISSING_INVOICE_VALUE';
   if (Number(order.shipments_with_currency_mismatch || 0) + Number(order.external_allocations_currency_mismatch || 0) > 0) return 'ORDER_FINALIZE_CURRENCY_MISMATCH';
-  if (Math.abs(Number(order.total_allocated_value_amount || 0) - Number(order.value_amount)) > 0.01) return 'ORDER_FINALIZE_VALUE_MISMATCH';
+  const allocatedValue = readMilliUnits(order, 'total_allocated_value_milli', 'total_allocated_value_amount');
+  const registeredValue = parseMilliUnits(order.value_amount);
+  if (allocatedValue == null || registeredValue == null || allocatedValue !== registeredValue) return 'ORDER_FINALIZE_VALUE_MISMATCH';
   return null;
 };
 const listOrders = async (
@@ -492,20 +571,33 @@ const validateAllocationCapacity = (
 ) => {
   if (order.is_closed) return 'REGISTRATION_ORDER_CLOSED';
   if (order.net_weight_kg == null || order.value_amount == null || !order.currency) return 'REGISTRATION_ORDER_CAPACITY_REQUIRED';
-  if (order.gross_weight_kg != null && input.status !== 'cancelled' && input.gross_weight_kg == null) return 'REGISTRATION_ORDER_GROSS_WEIGHT_REQUIRED';
+  if (order.gross_weight_kg != null && input.status !== 'cancelled' && input.gross_weight_milli == null) return 'REGISTRATION_ORDER_GROSS_WEIGHT_REQUIRED';
   if (Number(order.shipments_missing_invoice_value || 0) > 0) return 'REGISTRATION_ORDER_SHIPMENT_VALUE_INCOMPLETE';
   if (Number(order.shipments_with_currency_mismatch || 0) > 0) return 'REGISTRATION_ORDER_SHIPMENT_CURRENCY_MISMATCH';
   const subtractOld = Boolean(before && before.status !== 'cancelled');
-  const currentNet = Number(order.total_allocated_net_weight_kg || 0) - (subtractOld ? Number(before?.net_weight_kg || 0) : 0);
-  const currentGross = Number(order.total_allocated_gross_weight_kg || 0) - (subtractOld ? Number(before?.gross_weight_kg || 0) : 0);
-  const currentValue = Number(order.total_allocated_value_amount || 0) - (subtractOld ? Number(before?.value_amount || 0) : 0);
+  const totalNet = readMilliUnits(order, 'total_allocated_net_weight_milli', 'total_allocated_net_weight_kg');
+  const totalGross = readMilliUnits(order, 'total_allocated_gross_weight_milli', 'total_allocated_gross_weight_kg');
+  const totalValue = readMilliUnits(order, 'total_allocated_value_milli', 'total_allocated_value_amount');
+  const oldNet = subtractOld ? parseMilliUnits(before?.net_weight_kg) : 0;
+  const oldGross = subtractOld ? parseMilliUnits(before?.gross_weight_kg) ?? 0 : 0;
+  const oldValue = subtractOld ? parseMilliUnits(before?.value_amount) : 0;
+  if ([totalNet, totalGross, totalValue, oldNet, oldValue].some(value => value == null)) return 'REGISTRATION_ORDER_CAPACITY_DATA_INVALID';
+  const currentNet = subtractMilliUnits(totalNet!, oldNet!);
+  const currentGross = subtractMilliUnits(totalGross!, oldGross!);
+  const currentValue = subtractMilliUnits(totalValue!, oldValue!);
+  if (currentNet == null || currentGross == null || currentValue == null) return 'REGISTRATION_ORDER_CAPACITY_DATA_INVALID';
   const active = input.status !== 'cancelled';
-  const net = currentNet + (active ? input.net_weight_kg : 0);
-  const gross = currentGross + (active ? Number(input.gross_weight_kg || 0) : 0);
-  const value = currentValue + (active ? input.value_amount : 0);
-  if (net > Number(order.net_weight_kg) + 0.001) return 'REGISTRATION_ORDER_NET_CAPACITY_EXCEEDED';
-  if (order.gross_weight_kg != null && gross > Number(order.gross_weight_kg) + 0.001) return 'REGISTRATION_ORDER_GROSS_CAPACITY_EXCEEDED';
-  if (value > Number(order.value_amount) + 0.01) return 'REGISTRATION_ORDER_VALUE_CAPACITY_EXCEEDED';
+  const net = addMilliUnits(currentNet, active ? input.net_weight_milli : 0);
+  const gross = addMilliUnits(currentGross, active ? input.gross_weight_milli ?? 0 : 0);
+  const value = addMilliUnits(currentValue, active ? input.value_amount_milli : 0);
+  const registeredNet = parseMilliUnits(order.net_weight_kg);
+  const registeredGross = order.gross_weight_kg == null ? null : parseMilliUnits(order.gross_weight_kg);
+  const registeredValue = parseMilliUnits(order.value_amount);
+  if ([net, gross, value, registeredNet, registeredValue].some(item => item == null) ||
+      (order.gross_weight_kg != null && registeredGross == null)) return 'REGISTRATION_ORDER_CAPACITY_DATA_INVALID';
+  if (net! > registeredNet!) return 'REGISTRATION_ORDER_NET_CAPACITY_EXCEEDED';
+  if (registeredGross != null && gross! > registeredGross) return 'REGISTRATION_ORDER_GROSS_CAPACITY_EXCEEDED';
+  if (value! > registeredValue!) return 'REGISTRATION_ORDER_VALUE_CAPACITY_EXCEEDED';
   if (active && input.currency !== order.currency) return 'REGISTRATION_ORDER_ALLOCATION_CURRENCY_MISMATCH';
   const previousMismatch = Boolean(before && before.status !== 'cancelled' && before.currency !== order.currency);
   if (Number(order.external_allocations_currency_mismatch || 0) - (previousMismatch ? 1 : 0) > 0) return 'REGISTRATION_ORDER_EXTERNAL_CURRENCY_MISMATCH';
