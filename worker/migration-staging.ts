@@ -243,22 +243,52 @@ export default {
               "SELECT id, stage, schema_version, updated_at FROM _migration_manifest WHERE id = 'customs-os' LIMIT 1",
             ).first(),
             env.MIGRATION_DB.prepare(
-              'SELECT status, COUNT(*) AS table_count FROM _migration_table_state GROUP BY status ORDER BY status',
-            ).all(),
+              'SELECT status, COUNT(*) AS table_count, SUM(expected_rows) AS expected_rows, SUM(imported_rows) AS imported_rows ' +
+              'FROM customs_os_import_table_status WHERE organization_id = ? GROUP BY status ORDER BY status',
+            ).bind(profile.organization_id).all<{
+              status: string;
+              table_count: number;
+              expected_rows: number;
+              imported_rows: number;
+            }>(),
             env.MIGRATION_DB.prepare(
               'SELECT COUNT(*) AS function_count FROM supabase_edge_function_archive',
             ).first(),
           ]);
+          const statusRows = tableStates.results;
+          const migrationTotals = statusRows.reduce((totals, row) => ({
+            sourceTables: totals.sourceTables + row.table_count,
+            expectedRows: totals.expectedRows + row.expected_rows,
+            importedRows: totals.importedRows + row.imported_rows,
+            importedTables: totals.importedTables + (row.status === 'imported' ? row.table_count : 0),
+            emptySourceTables: totals.emptySourceTables + (row.status === 'empty_in_source' ? row.table_count : 0),
+          }), {
+            sourceTables: 0,
+            expectedRows: 0,
+            importedRows: 0,
+            importedTables: 0,
+            emptySourceTables: 0,
+          });
+          const rowCountParity = migrationTotals.sourceTables > 0 &&
+            migrationTotals.expectedRows === migrationTotals.importedRows &&
+            migrationTotals.sourceTables === migrationTotals.importedTables + migrationTotals.emptySourceTables;
           const gates = {
             sourcePostgres: 'blocked_57P03',
             authoritativeSchemaExport: 'not_verified',
-            operationalRows: 'imported_from_organization_export',
+            operationalRows: rowCountParity ? 'row_count_parity_verified' : 'incomplete',
             authUsersAndSessions: 'not_imported',
             storageObjects: 'not_imported',
             edgeFunctions: 'source_archived_not_ported',
             productionCutover: 'blocked',
           };
-          return json({ ok: true, manifest, tableStates: tableStates.results, archivedFunctions: archives?.function_count ?? 0, gates });
+          return json({
+            ok: true,
+            manifest,
+            tableStates: statusRows,
+            migrationTotals: { ...migrationTotals, rowCountParity },
+            archivedFunctions: archives?.function_count ?? 0,
+            gates,
+          });
         } catch {
           return json({ ok: false, error: 'MIGRATION_STATUS_UNAVAILABLE' }, 503);
         }
