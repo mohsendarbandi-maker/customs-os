@@ -60,8 +60,9 @@ class FakeD1 implements ClientD1Database {
       return row ? this.publicRecord(row) as T : null;
     }
     if (sql.includes('AS customs_accounting_vouchers')) {
-      if (values.length !== 2 * 8 || values.some((value, index) =>
-        value !== (index % 2 === 0 ? 'org-a' : String(values[index - 1]))
+      const dependencyId = String(values[1] || '');
+      if (values.length !== 2 * 8 || !dependencyId || values.some((value, index) =>
+        value !== (index % 2 === 0 ? 'org-a' : dependencyId)
       )) {
         throw new Error('Dependency counts must be scoped to organization_id and client_id pairs');
       }
