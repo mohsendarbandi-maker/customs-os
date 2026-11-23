@@ -23,5 +23,7 @@ CREATE INDEX IF NOT EXISTS customs_os_audit_events_entity_idx
 CREATE INDEX IF NOT EXISTS clients_org_created_idx
   ON clients (organization_id, created_at DESC, id DESC);
 
-CREATE INDEX IF NOT EXISTS clients_org_national_id_idx
-  ON clients (organization_id, national_id);
+-- Enforce uniqueness within an organization; source export has 7/7 unique non-empty IDs.
+CREATE UNIQUE INDEX IF NOT EXISTS clients_org_national_id_unique_idx
+  ON clients (organization_id, national_id)
+  WHERE national_id IS NOT NULL AND trim(national_id) <> '';
