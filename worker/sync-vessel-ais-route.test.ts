@@ -14,6 +14,7 @@ class MockStatement implements VesselAisStatement {
     private readonly sessionRow: Record<string, unknown>,
     private readonly vessels: Array<Record<string, unknown>>,
     private readonly updates: Array<{ sql: string; values: unknown[] }>,
+    private readonly queries: Array<{ sql: string; values: unknown[] }>,
   ) {}
 
   bind(...values: unknown[]) {
@@ -29,6 +30,7 @@ class MockStatement implements VesselAisStatement {
   }
 
   async all<T>() {
+    this.queries.push({ sql: this.sql, values: this.values });
     if (this.sql.includes('FROM vessels') && this.sql.includes('SELECT id, name')) {
       return { results: this.vessels as T[] };
     }
@@ -58,6 +60,7 @@ const makeEnv = async (
   const token = 'ais-route-session-token';
   const sessionHash = await hashToken(token);
   const updates: Array<{ sql: string; values: unknown[] }> = [];
+  const queries: Array<{ sql: string; values: unknown[] }> = [];
   const sessionRow = {
     user_id: 'owner-cloudflare-staging',
     expires_at: new Date(Date.now() + 60_000).toISOString(),
@@ -65,11 +68,12 @@ const makeEnv = async (
     revoked_at: null,
   };
   const db = {
-    prepare: (sql: string) => new MockStatement(sql, sessionHash, sessionRow, vessels, updates),
+    prepare: (sql: string) => new MockStatement(sql, sessionHash, sessionRow, vessels, updates, queries),
   };
   return {
     token,
     updates,
+    queries,
     env: { MIGRATION_DB: db } as unknown as Parameters<typeof migrationWorker.fetch>[1],
   };
 };
@@ -182,6 +186,10 @@ describe('Staging Worker Open Waters AIS route', () => {
     expect(payload.failed).toHaveLength(0);
     expect(updates).toHaveLength(1);
     expect(updates[0].sql).toContain('UPDATE vessels SET');
-    expect(updates[0].values.at(-1)).toBe('vessel-1');
+    expect(updates[0].sql).toContain('WHERE id = ? AND organization_id = ?');
+    expect(updates[0].values.at(-2)).toBe('vessel-1');
+    expect(updates[0].values.at(-1)).toBe('ad95fdf1-e0e2-439b-92b0-c20ab07cacdd');
+    expect(queries[0].sql).toContain('WHERE organization_id = ? AND mmsi_number IS NOT NULL');
+    expect(queries[0].values).toEqual(['ad95fdf1-e0e2-439b-92b0-c20ab07cacdd']);
   });
 });
