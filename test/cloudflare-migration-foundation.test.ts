@@ -41,6 +41,15 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain("SCHEMA_INSPECTION_UNAVAILABLE");
   });
 
+  it('blocks unported application routes on the isolated workers.dev staging host', () => {
+    const app = read('../src/App.tsx');
+    const host = read('../src/lib/recoveryHost.ts');
+    expect(host).toContain("endsWith('.workers.dev')");
+    expect(app).toContain('isCloudflareStagingHost() && location.pathname !==');
+    expect(app).toContain('<StagingRouteBoundary><Routes>');
+    expect(app).toContain('</Routes></StagingRouteBoundary>');
+  });
+
   it('exposes read-only staging health and migration gates without claiming operational parity', () => {
     const worker = read('../worker/migration-staging.ts');
     expect(worker).toContain("request.method !== 'GET' && request.method !== 'HEAD'");
