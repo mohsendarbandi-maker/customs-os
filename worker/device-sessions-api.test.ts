@@ -131,12 +131,12 @@ class FakeD1 implements DeviceSessionsDatabase {
 const current = {
   user_id: 'owner-a',
   token_hash: 'token-current-hash',
-  session_id: 'session-current',
+  session_id: '550e8400-e29b-41d4-a716-446655440000',
 };
 const active = (overrides: Partial<SessionRow> = {}): SessionRow => ({
   token_hash: 'token-other-hash',
   user_id: 'owner-a',
-  session_id: 'session-other',
+  session_id: '550e8400-e29b-41d4-a716-446655440001',
   device_label: 'iPhone',
   app_origin: 'https://staging.example',
   created_at: '2026-11-20T10:00:00.000Z',
@@ -164,8 +164,8 @@ describe('Cloudflare D1 device session API', () => {
     db.sessions.push(
       active(),
       active({ token_hash: current.token_hash, session_id: current.session_id, device_label: 'این دستگاه' }),
-      active({ token_hash: 'foreign-token', user_id: 'owner-b', session_id: 'foreign-session' }),
-      active({ token_hash: 'revoked-token', session_id: 'revoked-session', revoked_at: '2026-11-22T00:00:00.000Z' }),
+      active({ token_hash: 'foreign-token', user_id: 'owner-b', session_id: '550e8400-e29b-41d4-a716-446655440002' }),
+      active({ token_hash: 'revoked-token', session_id: '550e8400-e29b-41d4-a716-446655440003', revoked_at: '2026-11-22T00:00:00.000Z' }),
     );
     const url = new URL('https://staging.example/api/auth/devices');
     const response = await handleDeviceSessionsApi(request('GET', url.pathname), db, url, current);
@@ -180,7 +180,7 @@ describe('Cloudflare D1 device session API', () => {
   it('revokes one other device and records a security audit event', async () => {
     const db = new FakeD1();
     db.sessions.push(active());
-    const url = new URL('https://staging.example/api/auth/devices/session-other');
+    const url = new URL('https://staging.example/api/auth/devices/550e8400-e29b-41d4-a716-446655440001');
     const response = await handleDeviceSessionsApi(request('DELETE', url.pathname), db, url, current);
     const body = await response.json() as { ok: boolean; revoked_count: number };
     expect(response.status).toBe(200);
@@ -202,7 +202,7 @@ describe('Cloudflare D1 device session API', () => {
     const db = new FakeD1();
     db.sessions.push(
       active(),
-      active({ token_hash: 'other-2', session_id: 'session-other-2' }),
+      active({ token_hash: 'other-2', session_id: '550e8400-e29b-41d4-a716-446655440004' }),
       active({ token_hash: current.token_hash, session_id: current.session_id }),
     );
     const url = new URL('https://staging.example/api/auth/devices/revoke-others');

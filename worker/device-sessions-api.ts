@@ -42,7 +42,7 @@ const sameOrigin = (request: Request, url: URL) => {
     request.headers.get('sec-fetch-site') !== 'cross-site';
 };
 const readSessionId = (pathname: string): string | null | Response => {
-  if (pathname === COLLECTION) return null;
+  if (pathname === COLLECTION || pathname === COLLECTION + '/revoke-others') return null;
   const prefix = COLLECTION + '/';
   if (!pathname.startsWith(prefix)) return fail('NOT_FOUND', 404);
   const raw = pathname.slice(prefix.length);
