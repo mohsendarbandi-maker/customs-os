@@ -124,7 +124,7 @@ export const useCaseSelectorData=(organizationId?:string)=>{
           if(item.completed)completedCounts.set(item.declaration_id,(completedCounts.get(item.declaration_id)||0)+1);
         });
         setDeclarations((ds||[]) as CaseSelectorDeclaration[]);
-        setCustomsComplete(Object.fromEntries((ds||[]).map((item:any)=>[item.id,(completedCounts.get(item.id)||0)>=11]));
+        setCustomsComplete(Object.fromEntries((ds||[]).map((item:any)=>[item.id,(completedCounts.get(item.id)||0)>=11])));
         setChecklistStatus('available');
       }catch(e:any){
         if(!cancelled)setError(e?.message||'دریافت صاحبان کالا و پرونده‌ها انجام نشد');
