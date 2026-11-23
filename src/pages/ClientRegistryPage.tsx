@@ -8,7 +8,7 @@ import{FormDraftIndicator}from'../components/FormDraftIndicator';
 
 type ClientForm={name:string;nationalId:string;notes:string};
 const emptyForm:ClientForm={name:'',nationalId:'',notes:''};
-const onlyDigits=(v:string)=>v.replace(/[^0-9]/g,'');
+const onlyDigits=(v:string)=>Array.from(v.normalize('NFKC'),c=>{const n=c.codePointAt(0)||0;if(n>=0x06f0&&n<=0x06f9)return String(n-0x06f0);if(n>=0x0660&&n<=0x0669)return String(n-0x0660);return c}).join('').replace(/[^0-9]/g,'');
 
 export const ClientRegistryPage:React.FC=()=>{
  const{profile}=useAuth();
@@ -22,7 +22,7 @@ export const ClientRegistryPage:React.FC=()=>{
   },
  );
  const load=async()=>{try{const result=await cloudflareClientsApi.list({limit:100});setClients(result.items);setMessage('')}catch(e:any){setMessage(e?.message||'دریافت فهرست صاحبان کالا ناموفق بود.');setClients([])}};
- useEffect(()=>{void load();if(!profile?.id)return;try{const x=JSON.parse(localStorage.getItem(`customs_last_client:${profile.id}`)||'null');localStorage.removeItem('customs_last_client_epl');if(x?.id&&!formDraft.hasDraftRef.current){setSelectedId(x.id);setForm({name:x.name||'',nationalId:x.nationalId||'',notes:x.notes||''})}}catch{}},[profile?.id,profile?.organization_id]);
+ useEffect(()=>{void load();if(!profile?.id)return;try{const x=JSON.parse(localStorage.getItem(`customs_last_client:${profile.id}`)||'null');localStorage.removeItem('customs_last_client_epl');if(x?.id&&!formDraft.hasDraftRef.current){setSelectedId(x.id);setForm({name:x.name||'',nationalId:onlyDigits(x.nationalId||''),notes:x.notes||''})}}catch{}},[profile?.id,profile?.organization_id]);
  const startNew=()=>{formDraft.clearDraft(true,{form:emptyForm,selectedId:''});setSelectedId('');setForm(emptyForm);setMessage('فرم ثبت صاحب کالای جدید آماده است.');window.scrollTo({top:0,behavior:'smooth'})};
  const save=async()=>{if(!form.name.trim()||!form.nationalId.trim())return setMessage('نام شرکت و شناسه ملی شرکت الزامی است.');setSaving(true);setMessage('');try{const input={name:form.name.trim(),nationalId:form.nationalId.replace(/[^0-9]/g,''),notes:form.notes};const result=selectedId?await cloudflareClientsApi.update(selectedId,input):await cloudflareClientsApi.create(input);const id=result.client.id;setSelectedId(id);formDraft.clearDraft();try{localStorage.setItem(`customs_last_client:${profile?.id||'unknown'}`,JSON.stringify({id,name:input.name,nationalId:input.nationalId,notes:input.notes}))}catch{}setMessage(selectedId?'اطلاعات صاحب کالا به‌روزرسانی شد.':'صاحب کالا با موفقیت ثبت شد.');await load()}catch(e:any){setMessage(e?.message||'خطای ثبت')}finally{setSaving(false)}};
  const selectClient=(id:string)=>{const c=clients.find(x=>x.id===id);if(!c)return;const nextForm={name:c.name||'',nationalId:c.national_id||'',notes:c.notes||''};formDraft.clearDraft(true,{form:nextForm,selectedId:id});setSelectedId(id);setForm(nextForm);setMessage('')};

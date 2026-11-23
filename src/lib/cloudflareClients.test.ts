@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cloudflareClientsApi } from './cloudflareClients';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('Cloudflare clients frontend adapter', () => {
   it('uses same-origin credentials and the Worker endpoint', async () => {

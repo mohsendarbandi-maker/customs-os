@@ -67,7 +67,21 @@ const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
       INVALID_CLIENT_INPUT: 'نام، شناسه ملی یا یادداشت‌ها معتبر نیستند.',
       ORIGIN_FORBIDDEN: 'درخواست از مبدأ غیرمجاز ارسال شده است.',
     };
-    throw new CloudflareApiError(code, messages[code] || 'عملیات انجام نشد: ' + code, dependencies);
+    const dependencyLabels: Record<string, string> = {
+      cases: 'پرونده',
+      shipments: 'محموله',
+      registration_orders: 'ثبت سفارش',
+      customs_documents: 'سند گمرکی',
+      file_manager_files: 'فایل',
+      file_manager_folders: 'پوشه',
+      finance_cost_items: 'هزینه مالی',
+      customs_accounting_vouchers: 'سند حسابداری',
+    };
+    const dependencyText = Object.entries(dependencies || {})
+      .filter(([, count]) => Number(count) > 0)
+      .map(([key, count]) => (dependencyLabels[key] || key) + ': ' + count);
+    const message = messages[code] || 'عملیات انجام نشد: ' + code;
+    throw new CloudflareApiError(code, message + (dependencyText.length ? ' (' + dependencyText.join('، ') + ')' : ''), dependencies);
   }
   return payload as T;
 };
