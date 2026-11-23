@@ -89,6 +89,21 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain('MIGRATION_PARITY_UNAVAILABLE');
   });
 
+  it('probes one bounded Telegram binary only behind a same-origin staging session', () => {
+    const worker = read('../worker/migration-staging.ts');
+    const config = read('../wrangler.migration-staging.jsonc');
+    expect(worker).toContain("url.pathname === '/api/admin/migration/telegram-probe'");
+    expect(worker).toContain('if (!isSameOrigin(request, url))');
+    expect(worker).toContain('if (!await getSession(request, env))');
+    expect(worker).toContain('TELEGRAM_BOT_TOKEN');
+    expect(worker).toContain("json_extract(metadata, '$.telegramFileId')");
+    expect(worker).toContain('MAX_TELEGRAM_PROBE_BYTES = 8 * 1024 * 1024');
+    expect(worker).toContain('crypto.subtle.digest(\'SHA-256\', bytes)');
+    expect(worker).toContain("stored: false");
+    expect(worker).toContain("contentExposed: false");
+    expect(config).toContain('"TELEGRAM_BOT_TOKEN"');
+  });
+
   it('inspects file metadata key names and counts without returning metadata values', () => {
     const worker = read('../worker/migration-staging.ts');
     expect(worker).toContain("url.pathname === '/migration/file-metadata-keys'");
