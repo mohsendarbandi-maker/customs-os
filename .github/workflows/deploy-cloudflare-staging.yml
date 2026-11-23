@@ -85,6 +85,7 @@ jobs:
             sourceFilesScanned: report.sourceFilesScanned,
             callsiteCount: report.callsiteCount,
             counts: report.counts,
+            categories: report.categories,
             perFileCount: report.perFile.length,
             networkAccess: report.networkAccess,
             environmentVariablesRead: report.environmentVariablesRead,
