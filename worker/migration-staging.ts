@@ -3,6 +3,7 @@ import { handleClientsApi } from './clients-api';
 import { handleCasesApi } from './cases-api';
 import { handleDeviceSessionsApi } from './device-sessions-api';
 import { handleRegistrationOrdersApi } from './registration-orders-api';
+import { handleTelegramFileDownload } from './telegram-files-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -1076,6 +1077,11 @@ export default {
 
     if (url.pathname === '/api/admin/migration/telegram-probe') {
       return handleTelegramArchiveProbe(request, env, url);
+    }
+
+    if (url.pathname.startsWith('/api/files/')) {
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
+      return handleTelegramFileDownload(request, env, url, profile);
     }
 
     if (url.pathname === '/api/ai' || url.pathname === '/functions/v1/ai-assistant') {
