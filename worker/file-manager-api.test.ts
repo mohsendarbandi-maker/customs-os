@@ -29,6 +29,7 @@ class FakeD1 implements FileManagerD1Database {
   folders: Folder[] = [];
   queries: Array<{ sql: string; values: unknown[] }> = [];
   batches: Array<Array<{ sql: string; values: unknown[] }>> = [];
+  searchResults: Array<Record<string, unknown>> = [];
   prepare(sql: string) { return new FakeStatement(sql, this); }
   async first<T>(sql: string, values: unknown[]): Promise<T | null> {
     this.queries.push({ sql, values });
@@ -43,6 +44,9 @@ class FakeD1 implements FileManagerD1Database {
   }
   async all<T>(sql: string, values: unknown[]): Promise<{ results: T[] }> {
     this.queries.push({ sql, values });
+    if (sql.includes('customs_os_file_manager_search MATCH ?')) {
+      return { results: this.searchResults as T[] };
+    }
     return { results: [] };
   }
   async run(): Promise<{ meta?: { changes?: number } }> { return { meta: { changes: 1 } }; }
@@ -147,4 +151,65 @@ describe('Cloudflare D1 File Manager API', () => {
     expect(db.queries).toHaveLength(0);
     expect(db.batches).toHaveLength(0);
   });
+
+  it('searches the FTS5 index with tenant scope and Persian/Arabic digit normalization', async () => {
+    const db = new FakeD1();
+    db.searchResults = [{
+      entity_type: 'file',
+      entity_id: 'file-a',
+      title: 'بارنامه 123.pdf',
+      details: 'bill_of_lading',
+      folder_id: 'folder-a',
+      shipment_id: 'shipment-a',
+      client_id: 'client-a',
+      rank: -1.25,
+    }];
+    const url = new URL('https://staging.example/api/file-manager/search?q=بارنامه%20١٢٣');
+    const response = await handleFileManagerApi(
+      new Request(url, { method: 'GET', headers: { 'sec-fetch-site': 'same-origin' } }),
+      db,
+      url,
+      owner,
+    );
+    const body = await response.json() as { items: Array<{ entity_id: string; title: string }>; total: number };
+    expect(response.status).toBe(200);
+    expect(body.total).toBe(1);
+    expect(body.items[0]).toEqual(expect.objectContaining({ entity_id: 'file-a', title: 'بارنامه 123.pdf' }));
+    expect(db.queries).toHaveLength(2);
+    expect(db.queries.every((query) => query.sql.includes('customs_os_file_manager_search MATCH ?'))).toBe(true);
+    expect(db.queries.every((query) => query.values[1] === 'org-a')).toBe(true);
+    expect(db.queries[0].values[0]).toBe('"بارنامه"* AND "123"*');
+  });
+
+  it('rejects too-short search queries before touching D1', async () => {
+    const db = new FakeD1();
+    const url = new URL('https://staging.example/api/file-manager/search?q=a');
+    const response = await handleFileManagerApi(
+      new Request(url, { method: 'GET', headers: { 'sec-fetch-site': 'same-origin' } }),
+      db,
+      url,
+      owner,
+    );
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('SEARCH_QUERY_TOO_SHORT');
+    expect(db.queries).toHaveLength(0);
+  });
+
+  it('limits client search results to folders and files belonging to that client', async () => {
+    const db = new FakeD1();
+    const url = new URL('https://staging.example/api/file-manager/search?q=بارنامه');
+    const response = await handleFileManagerApi(
+      new Request(url, { method: 'GET', headers: { 'sec-fetch-site': 'same-origin' } }),
+      db,
+      url,
+      { ...owner, role: 'client', client_id: 'client-a' },
+    );
+    expect(response.status).toBe(200);
+    expect(db.queries).toHaveLength(2);
+    expect(db.queries.every((query) => query.sql.includes("scope.folder_type='root' OR scope.client_id=?") ||
+      query.sql.includes("d.folder_type='root' OR d.client_id=?"))).toBe(true);
+    expect(db.queries.every((query) => query.values[2] === 'client-a' && query.values[3] === 'client-a')).toBe(true);
+  });
+
 });
