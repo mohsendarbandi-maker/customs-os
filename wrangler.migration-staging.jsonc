@@ -37,7 +37,8 @@
   "secrets": {
     "required": [
       "CUSTOMS_ADMIN_PASSWORD",
-      "GEMINI_API_KEY"
+      "GEMINI_API_KEY",
+      "TELEGRAM_BOT_TOKEN"
     ]
   },
   "observability": {
