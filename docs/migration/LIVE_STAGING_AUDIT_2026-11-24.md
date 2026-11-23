@@ -308,3 +308,17 @@ For the latest verified AISFriends branch commit `bf5f58e001506114ec5c74c2dc8099
 - [Cloudflare Free Staging — stopped at the D1 migration gate](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45276136732). Unit tests, typecheck, lint, app build, and read-only Staging diagnostics passed. The only failing step was `Apply versioned migrations to the isolated Staging D1`; `CLOUDFLARE_D1_API_TOKEN` is empty. No D1 migrations or Worker deployment were executed.
 
 The active Supabase functions remain available in the source project. None of these new Worker ports deactivates the source functions or replaces Production routing.
+
+### Updated static runtime dependency inventory
+
+A newer Staging workflow run scanned 200 source files and found 727 recognized Supabase callsites. The inventory remains:
+
+- 1 Supabase SDK import
+- 64 database table names and 76 RPC names
+- 6 Edge Function slugs and 5 wrappers
+- 4 Storage buckets
+- 7 Realtime channels
+- 6 Auth methods
+- 5 Supabase environment-variable names
+
+The three AIS compatibility ports, multi-source vessel lookup, maritime D1 reads, weather/marine endpoint, and map tile proxy are branch implementations; they have not replaced the broader Supabase table/RPC, Auth, Storage, Realtime, and Edge Function surface. No Production Supabase object or data was altered.
