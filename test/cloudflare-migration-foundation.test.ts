@@ -95,7 +95,8 @@ describe('Cloudflare migration foundation', () => {
     expect(page).toContain("fetch('/api/admin/migration/telegram-probe'");
     expect(page).toContain('telegramProbeAttempted');
     expect(page).toContain('disabled={telegramProbeLoading || telegramProbeAttempted}');
-    expect(page).toContain('محتوا ذخیره یا نمایش داده نشد');
+    expect(page).toContain('بایت‌ها ذخیره نشدند و محتوا نمایش داده نشد.');
+    expect(page).toContain('هیچ فایلی ذخیره یا نمایش داده نشد.');
   });
 
   it('probes one bounded Telegram binary only behind a same-origin staging session', () => {
