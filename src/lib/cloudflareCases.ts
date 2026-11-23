@@ -17,6 +17,24 @@ export interface CaseDetailResponse {
   declarations: Array<Record<string, unknown>>; documents: Array<Record<string, unknown>>;
   readOnly: true; workflowReadiness: 'not_included'; stageTransitions: 'not_supported';
 }
+export interface CaseStatusHistoryEvent {
+  id: string; case_id: string; changed_by: string; previous_status: string | null;
+  new_status: string; notes: string | null; created_at: string;
+}
+export interface CaseAuditEvent {
+  id: string; user_id: string; action: 'INSERT' | 'UPDATE' | 'DELETE';
+  table_name: string; record_id: string; old_data: string | null;
+  new_data: string | null; created_at: string;
+}
+export interface CaseHistoryResponse {
+  ok: true;
+  case: Pick<CaseRecord, 'id' | 'case_number' | 'status' | 'client_id' | 'created_at'>;
+  history: CaseStatusHistoryEvent[];
+  audit: CaseAuditEvent[];
+  historySource: 'customs_os_audit_events';
+  legacyHistoryBackfill: 'not_imported';
+  dataScope: 'authenticated_organization_only';
+}
 export class CloudflareCasesApiError extends Error {
   readonly code: string;
   constructor(code: string) {
@@ -45,4 +63,5 @@ export const cloudflareCasesApi = {
     return get<CasesListResponse>('/api/cases?' + query.toString());
   },
   get: (id: string) => get<CaseDetailResponse>('/api/cases/' + encodeURIComponent(id)),
+  history: (id: string) => get<CaseHistoryResponse>('/api/cases/' + encodeURIComponent(id) + '/history'),
 };
