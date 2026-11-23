@@ -10,6 +10,7 @@ import { getFileManagerArchiveStatus, handleFileManagerUpload } from './file-man
 import { handleVesselMultiSourceLookup } from './vessel-multi-source-api';
 import { handleSyncVesselAisV2 } from './sync-vessel-ais-api';
 import { handleMaritimeReadApi } from './maritime-read-api';
+import { handleMaritimeConditions } from './maritime-conditions-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -1191,6 +1192,11 @@ export default {
       if (request.method !== 'GET') return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
       if (!await getSession(request, env)) return json({ ok: false, error: 'UNAUTHORIZED' }, 401);
       return handleMaritimeReadApi(request, env.MIGRATION_DB, url, profile);
+    }
+
+    if (url.pathname === '/api/maritime/conditions') {
+      if (!isSameOrigin(request, url)) return json({ success: false, error: 'ORIGIN_FORBIDDEN' }, 403);
+      return handleMaritimeConditions(request);
     }
 
     if (url.pathname.startsWith('/api/')) return json({ error: 'API_NOT_FOUND' }, 404);
