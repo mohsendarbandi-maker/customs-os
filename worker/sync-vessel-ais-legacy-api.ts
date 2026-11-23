@@ -27,6 +27,8 @@ const finite = (value: unknown): number | null => {
 };
 const validPosition = (lat: number | null, lon: number | null): lat is number =>
   lat !== null && lon !== null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+const validImo = (value: unknown) => /^\d{7}$/.test(String(value ?? '').trim());
+const validMmsi = (value: unknown) => /^\d{9}$/.test(String(value ?? '').trim());
 const changedRows = (value: unknown) => {
   if (!value || typeof value !== 'object') return 0;
   const changes = (value as { meta?: { changes?: unknown } }).meta?.changes;
@@ -83,8 +85,7 @@ export const handleLegacySyncVesselAis = async (
     ).bind(organizationId).all<LegacyAisVesselRow>();
 
     targets = result.results
-      .filter((vessel) => Boolean(String(vessel.imo_number || '').trim()) ||
-        /^\d{9}$/.test(String(vessel.mmsi_number || '')))
+      .filter((vessel) => validImo(vessel.imo_number) || validMmsi(vessel.mmsi_number))
       .slice(0, 10);
   } catch {
     return json({ ok: false, error: 'VESSEL_LIST_UNAVAILABLE' }, 503);
@@ -98,9 +99,9 @@ export const handleLegacySyncVesselAis = async (
   const failed: Array<{ id: string; name: string; error: string }> = [];
 
   for (const vessel of targets) {
-    const identifier = vessel.imo_number
-      ? 'imo=' + encodeURIComponent(vessel.imo_number)
-      : 'mmsi=' + encodeURIComponent(String(vessel.mmsi_number));
+    const identifier = validImo(vessel.imo_number)
+      ? 'imo=' + encodeURIComponent(String(vessel.imo_number).trim())
+      : 'mmsi=' + encodeURIComponent(String(vessel.mmsi_number).trim());
     try {
       const row = await fetchPosition(
         'https://www.aisfriends.com/api/vessels/latest-position?' + identifier + '&format=json',
@@ -113,9 +114,11 @@ export const handleLegacySyncVesselAis = async (
       const speed = finite(row.speed ?? row.SPEED);
       const course = finite(row.course ?? row.COURSE);
       const timestampRaw = row.timestamp ?? row.TIMESTAMP;
-      const parsedTime = typeof timestampRaw === 'string' || typeof timestampRaw === 'number'
-        ? Date.parse(String(timestampRaw))
-        : NaN;
+      const parsedTime = typeof timestampRaw === 'number'
+        ? timestampRaw < 1_000_000_000_000 ? timestampRaw * 1000 : timestampRaw
+        : typeof timestampRaw === 'string'
+          ? Date.parse(timestampRaw)
+          : NaN;
       const positionAt = Number.isFinite(parsedTime)
         ? new Date(parsedTime).toISOString()
         : new Date().toISOString();
