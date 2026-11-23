@@ -294,6 +294,22 @@ describe('Cloudflare D1 registration-orders API', () => {
     expect(db.audit).toHaveLength(0);
   });
 
+  it('rejects editing a finalized registration order without writing or auditing', async () => {
+    const db = new FakeD1();
+    db.orders = [baseOrder({ is_closed: 1, closed_at: '2026-11-23T12:00:00.000Z', status: 'used' })];
+    const url = new URL('https://staging.example/api/registration-orders/order-a');
+    const response = await handleRegistrationOrdersApi(
+      makeRequest('PATCH', url.pathname, orderInput({ order_number: 'changed' })), db, url, profile,
+    );
+    const body = await response.json() as { error?: string };
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('REGISTRATION_ORDER_CLOSED');
+    expect(db.orders[0].order_number).toBe('12345');
+    expect(db.orders[0].is_closed).toBe(1);
+    expect(db.audit).toHaveLength(0);
+    expect(db.queries.some(query => query.sql.startsWith('UPDATE registration_orders SET client_id'))).toBe(false);
+  });
+
   it('rejects reducing parent capacity below internal shipments and outside allocations', async () => {
     const db = new FakeD1();
     db.orders = [baseOrder({
