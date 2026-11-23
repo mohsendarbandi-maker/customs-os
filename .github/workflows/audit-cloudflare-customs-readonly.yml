@@ -86,7 +86,7 @@ jobs:
                 host: base, status: page.status, contentType: page.headers.get('content-type'),
                 buildSignature: page.headers.get('x-customs-os-build'),
                 finalUrl: page.url,
-                pageTitle: (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '').replace(/\s+/g, ' ').trim().slice(0, 160),
+                pageTitle: (() => { const a = html.toLowerCase().indexOf('<title'); const b = a < 0 ? -1 : html.indexOf('>', a); const c = b < 0 ? -1 : html.toLowerCase().indexOf('</title>', b); return b < 0 || c < 0 ? '' : html.slice(b + 1, c).replaceAll('\n', ' ').replaceAll('\r', ' ').trim().slice(0, 160); })(),
                 htmlBytes: new TextEncoder().encode(html).length,
                 scriptPaths: scripts, stylePaths: styles, assets,
                 frontendAssetsOk: page.ok && scripts.length > 0 && assets.length > 0 &&
