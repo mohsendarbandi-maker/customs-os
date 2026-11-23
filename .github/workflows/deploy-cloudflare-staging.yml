@@ -166,6 +166,59 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           cat "$GITHUB_STEP_SUMMARY"
 
+      - name: Probe one Telegram archive binary (bounded, in-memory, read-only)
+        continue-on-error: true
+        env:
+          CUSTOMS_ADMIN_PASSWORD: ${{ secrets.CUSTOMS_ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="https://customs-os-migration-staging.mohsen-darbandi.workers.dev"
+          work_dir="$(mktemp -d)"
+          trap 'rm -rf "$work_dir"' EXIT
+          if [ -z "${CUSTOMS_ADMIN_PASSWORD:-}" ]; then
+            echo "::warning::Telegram binary probe skipped: CUSTOMS_ADMIN_PASSWORD is not present in this GitHub Preview environment."
+            exit 0
+          fi
+
+          jq -n --arg email "admin@darbandicommercial.ir" --arg password "$CUSTOMS_ADMIN_PASSWORD" \
+            '{email:$email,password:$password}' > "$work_dir/login.json"
+          login_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/login-response.json" \
+            --cookie-jar "$work_dir/cookies.txt" --write-out '%{http_code}' \
+            --header "Origin: $base_url" --header 'Content-Type: application/json' \
+            --data-binary @"$work_dir/login.json" "$base_url/api/auth/login" || true)"
+          rm -f "$work_dir/login.json"
+          if [ "$login_code" != "200" ] || ! jq -e '.authenticated == true' "$work_dir/login-response.json" >/dev/null 2>&1; then
+            echo "::warning::Telegram binary probe skipped: staging admin session could not be established from the GitHub Preview environment."
+            exit 0
+          fi
+
+          probe_code="$(curl --silent --show-error --max-time 45 --output "$work_dir/probe.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' \
+            --request POST --header "Origin: $base_url" \
+            "$base_url/api/admin/migration/telegram-probe" || true)"
+          if [ -f "$work_dir/probe.json" ] && jq -e 'type == "object"' "$work_dir/probe.json" >/dev/null 2>&1; then
+            {
+              echo
+              echo "### Telegram archive binary probe"
+              jq -r 'if .ok == true then
+                "Result: " + .binaryVerification +
+                "; sample bytes: " + (.downloadedBytes | tostring) +
+                "; source size matches: " + (.sourceSizeMatches | tostring) +
+                "; Telegram size matches: " + (.telegramSizeMatches | tostring) +
+                "; bytes stored: " + (.stored | tostring) +
+                "; content exposed: " + (.contentExposed | tostring)
+              else
+                "Result: " + (.error // "unverified") +
+                "; binary verification: " + (.binaryVerification // "not_performed") +
+                "; bytes stored: " + ((.stored // false) | tostring) +
+                "; content exposed: " + ((.contentExposed // false) | tostring)
+              end' "$work_dir/probe.json"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Telegram binary probe returned HTTP $probe_code without a valid diagnostic JSON response."
+          fi
+
       - name: List staging Worker secret names only (never values)
         continue-on-error: true
         shell: bash
