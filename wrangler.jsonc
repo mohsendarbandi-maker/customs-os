@@ -1,7 +1,5 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // This branch is a migration preview only. Production custom domains remain
-  // owned by main and must never be deployed from the migration branch.
   "name": "customs-os-migration-preview",
   "main": "worker/index.ts",
   "compatibility_date": "2026-09-26",
