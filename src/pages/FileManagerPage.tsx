@@ -8,6 +8,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { createAppFileTransfer, consumeAppFileTransfer } from '../lib/appFileTransfer';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { isCloudflareStagingHost } from '../lib/recoveryHost';
+import {
+  listCloudflareFileManagerFolders,
+  listCloudflareFileManagerFiles,
+  createCloudflareFileManagerFolder,
+} from '../lib/cloudflareFileManager';
 import { useAuth } from '../context/AuthContext';
 import {
   downloadTelegramArchivedFile,
@@ -199,34 +205,45 @@ export const FileManagerPage: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const { data, error: folderError } = await supabase
-        .from('file_manager_folders')
-        .select('id,parent_id,folder_key,folder_type,display_name,client_id,shipment_id,customs_office_id,is_system,created_at')
-        .eq('organization_id', organizationId)
-        .order('display_name', { ascending: true });
-      if (folderError) throw folderError;
-      const rows = (data || []) as FolderRow[];
-      setFolders(rows);
-      try {
-        const counts: Record<string,number> = {};
-        for (let offset=0; ; offset+=500) {
-          const {data:fileRows,error:countError}=await supabase.from('file_manager_files').select('id,folder_id')
-            .eq('organization_id',organizationId).eq('is_archived',false).order('id',{ascending:true}).range(offset,offset+499);
-          if(countError) throw countError;
-          for(const row of fileRows||[]) counts[row.folder_id]=(counts[row.folder_id]||0)+1;
-          if((fileRows||[]).length<500) break;
-        }
-        const knowledgeFolder = rows.find((folder) => folder.folder_key === 'knowledge-library');
-        if (knowledgeFolder) {
-          const { count: knowledgeCount, error: knowledgeCountError } = await supabase
-            .from('knowledge_sources')
-            .select('id', { count: 'exact', head: true })
-            .eq('organization_id', organizationId);
-          if (knowledgeCountError) throw knowledgeCountError;
-          counts[knowledgeFolder.id] = (counts[knowledgeFolder.id] || 0) + (knowledgeCount || 0);
-        }
+      let rows: FolderRow[];
+      if (isCloudflareStagingHost()) {
+        const result = await listCloudflareFileManagerFolders();
+        rows = result.folders;
+        setFolders(rows);
+        const counts: Record<string, number> = {};
+        for (const folder of result.folders) counts[folder.id] = Number(folder.file_count || 0);
         setFolderFileCounts(counts);
-      } catch { setFolderFileCounts({}); }
+      } else {
+        const { data, error: folderError } = await supabase
+          .from('file_manager_folders')
+          .select('id,parent_id,folder_key,folder_type,display_name,client_id,shipment_id,customs_office_id,is_system,created_at')
+          .eq('organization_id', organizationId)
+          .order('display_name', { ascending: true });
+        if (folderError) throw folderError;
+        const rows = (data || []) as FolderRow[];
+        setFolders(rows);
+        try {
+          const counts: Record<string,number> = {};
+          for (let offset=0; ; offset+=500) {
+            const {data:fileRows,error:countError}=await supabase.from('file_manager_files').select('id,folder_id')
+              .eq('organization_id',organizationId).eq('is_archived',false).order('id',{ascending:true}).range(offset,offset+499);
+            if(countError) throw countError;
+            for(const row of fileRows||[]) counts[row.folder_id]=(counts[row.folder_id]||0)+1;
+            if((fileRows||[]).length<500) break;
+          }
+          const knowledgeFolder = rows.find((folder) => folder.folder_key === 'knowledge-library');
+          if (knowledgeFolder) {
+            const { count: knowledgeCount, error: knowledgeCountError } = await supabase
+              .from('knowledge_sources')
+              .select('id', { count: 'exact', head: true })
+              .eq('organization_id', organizationId);
+            if (knowledgeCountError) throw knowledgeCountError;
+            counts[knowledgeFolder.id] = (counts[knowledgeFolder.id] || 0) + (knowledgeCount || 0);
+          }
+          setFolderFileCounts(counts);
+        } catch { setFolderFileCounts({}); }
+  
+      }
       const requestedFolder = initialRoute.current.folderId;
       const requestedShipment = initialRoute.current.shipmentId;
       const requested =
@@ -250,6 +267,11 @@ export const FileManagerPage: React.FC = () => {
   const loadFiles = useCallback(async (folderId: string) => {
     if (!organizationId || !folderId) {
       setFiles([]);
+      return;
+    }
+    if (isCloudflareStagingHost()) {
+      const result = await listCloudflareFileManagerFiles(folderId);
+      setFiles(result.items);
       return;
     }
     const { data, error: filesError } = await supabase
@@ -418,6 +440,22 @@ export const FileManagerPage: React.FC = () => {
   const getOrCreateSubfolder = async (parent: FolderRow, name: string): Promise<FolderRow> => {
     const clean = windowsName(name);
     const key = `custom:${folderSlug(clean)}`;
+    if (isCloudflareStagingHost()) {
+      try {
+        const result = await createCloudflareFileManagerFolder({ parent_id: parent.id, display_name: clean });
+        const folder = result.folder;
+        setFolders((previous) => previous.some((item) => item.id === folder.id) ? previous : [...previous, folder]);
+        return folder;
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('FOLDER_ALREADY_EXISTS')) {
+          const refreshed = await listCloudflareFileManagerFolders();
+          setFolders(refreshed.folders);
+          const raced = refreshed.folders.find((item) => item.parent_id === parent.id && item.folder_key === key);
+          if (raced) return raced;
+        }
+        throw error;
+      }
+    }
     const existing = folders.find((folder) => folder.parent_id === parent.id && folder.folder_key === key);
     if (existing) return existing;
     const { data, error: insertError } = await supabase
