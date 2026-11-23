@@ -345,9 +345,34 @@ const listOrders = async (
     ).bind(...binds, limit, offset).all<OrderRow>();
     const cases = await readCases(db, profile.organization_id);
     const items = rows.results.map((row) => ({ ...row, is_closed: Boolean(row.is_closed) }));
+    const reconciliation = items.map((row) => ({
+      registration_order_id: row.id,
+      order_number: row.order_number,
+      shipment_count: Number(row.shipment_count || 0),
+      registered_net_weight_kg: row.net_weight_kg,
+      shipped_net_weight_kg: Number(row.shipped_net_weight_kg || 0),
+      registered_gross_weight_kg: row.gross_weight_kg,
+      shipped_gross_weight_kg: Number(row.shipped_gross_weight_kg || 0),
+      registered_value_amount: row.value_amount,
+      shipped_value_amount: Number(row.shipped_value_amount || 0),
+      currency: row.currency,
+      shipments_missing_invoice_value: Number(row.shipments_missing_invoice_value || 0),
+      shipments_with_currency_mismatch: Number(row.shipments_with_currency_mismatch || 0),
+      is_closed: Boolean(row.is_closed),
+      external_allocation_count: Number(row.external_allocation_count || 0),
+      external_allocated_net_weight_kg: Number(row.external_allocated_net_weight_kg || 0),
+      external_allocated_gross_weight_kg: Number(row.external_allocated_gross_weight_kg || 0),
+      external_allocated_value_amount: Number(row.external_allocated_value_amount || 0),
+      external_allocations_missing_value: Number(row.external_allocations_missing_value || 0),
+      external_allocations_currency_mismatch: Number(row.external_allocations_currency_mismatch || 0),
+      total_allocated_net_weight_kg: Number(row.total_allocated_net_weight_kg || 0),
+      total_allocated_gross_weight_kg: Number(row.total_allocated_gross_weight_kg || 0),
+      total_allocated_value_amount: Number(row.total_allocated_value_amount || 0),
+      total_allocation_count: Number(row.total_allocation_count || 0),
+    }));
     return json({
       ok: true, items, total: Number(count?.total || 0), limit, offset,
-      cases: cases.results, reconciliation: items,
+      cases: cases.results, reconciliation,
     });
   } catch {
     return fail('REGISTRATION_ORDERS_API_NOT_READY', 503);
