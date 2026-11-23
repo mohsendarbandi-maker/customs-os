@@ -95,6 +95,11 @@ const safeMimeType = (value: string | null) => {
   return 'application/octet-stream';
 };
 
+const hasControlCharacters = (value: string) => Array.from(value).some((character) => {
+  const codePoint = character.codePointAt(0) ?? 0;
+  return codePoint < 0x21 || codePoint === 0x7f;
+});
+
 const encodeFileName = (value: string) =>
   encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
     '%' + character.charCodeAt(0).toString(16).toUpperCase()
@@ -128,7 +133,7 @@ export const handleTelegramFileDownload = async (
   }
   if (!stored) return fail('FILE_NOT_FOUND', 404);
   if (!stored.telegram_file_id || stored.telegram_file_id.length > 1024 ||
-      /[\u0000-\u0020\u007f]/.test(stored.telegram_file_id)) {
+      hasControlCharacters(stored.telegram_file_id)) {
     return fail('TELEGRAM_FILE_ID_MISSING', 409);
   }
   if (stored.size_bytes != null &&
@@ -192,9 +197,10 @@ export const handleTelegramFileDownload = async (
     },
   }));
 
-  const originalName = (stored.original_name || 'telegram-file')
-    .replace(/[\r\n\u0000"]/g, '_')
-    .slice(0, 180);
+  const originalName = Array.from(stored.original_name || 'telegram-file', (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint < 0x20 || codePoint === 0x7f || character === '"' ? '_' : character;
+  }).join('').slice(0, 180);
   const headers = new Headers({
     'content-type': safeMimeType(stored.mime_type),
     'content-disposition': 'attachment; filename="download"; filename*=UTF-8\'\'' + encodeFileName(originalName),
