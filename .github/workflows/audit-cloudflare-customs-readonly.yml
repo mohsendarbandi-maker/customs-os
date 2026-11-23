@@ -70,8 +70,8 @@ jobs:
                 headers: { Accept: 'text/html' }, cache: 'no-store', signal: AbortSignal.timeout(20000),
               });
               const html = await page.text();
-              const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+\\.js)["']/gi)].map((match) => match[1]).slice(0, 3);
-              const styles = [...html.matchAll(/<link[^>]+href=["']([^"']+\\.css)["']/gi)].map((match) => match[1]).slice(0, 3);
+              const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+\.js)["']/gi)].map((match) => match[1]).slice(0, 3);
+              const styles = [...html.matchAll(/<link[^>]+href=["']([^"']+\.css)["']/gi)].map((match) => match[1]).slice(0, 3);
               const assets = await Promise.all([...scripts, ...styles].map(async (assetPath) => {
                 try {
                   const url = new URL(assetPath, base);
