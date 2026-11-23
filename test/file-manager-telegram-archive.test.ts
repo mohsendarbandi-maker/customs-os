@@ -306,7 +306,7 @@ describe('Telegram-backed Customs OS file manager', () => {
 
   it('keeps upload guidance reachable on mobile and shows complete folder-card labels', () => {
     expect(fileManager).toContain('disabled={!currentFolder||(isCloudflareStagingHost()&&cloudflareArchiveStatus?.configured!==true)}');
-    expect(fileManager).toContain("isCloudflareStagingHost()?'مقصد آرشیو D1");
+    expect(fileManager).toContain("isCloudflareStagingHost()&&!cloudflareArchiveStatus?.configured?'مقصد آرشیو D1");
     expect(fileManager).toContain('uploadEnabled?');
     expect(fileManager).toContain('whitespace-normal break-words text-sm font-bold leading-5');
   });
