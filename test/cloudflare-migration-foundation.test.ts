@@ -193,3 +193,32 @@ describe('Cloudflare migration foundation', () => {
     expect(plan).toContain('No DROP, TRUNCATE, DELETE');
   });
 });
+describe('customs office reference restoration migration', () => {
+  it('preserves the two source UUIDs and restores names and codes found in source metadata', () => {
+    const sql = read('../supabase/migrations-cloudflare/0002_restore_customs_offices_reference_rows.sql');
+    expect(sql).toContain("'3aa9da26-3ded-40e4-8772-51c5f4d8385b'");
+    expect(sql).toContain("'20100'");
+    expect(sql).toContain("'منطقه آزاد تجاری صنعتی انزلی'");
+    expect(sql).toContain("'faa23eed-35f3-49e4-be70-7d880edf3f07'");
+    expect(sql).toContain("'20601'");
+    expect(sql).toContain("'منطقه آزاد گمرک حسن رود'");
+    expect(sql.match(/organization_id,[\s\S]*?NULL/g)).not.toBeNull();
+  });
+
+  it('is additive, idempotent, and protects customs-office code uniqueness', () => {
+    const sql = read('../supabase/migrations-cloudflare/0002_restore_customs_offices_reference_rows.sql');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS customs_offices_code_unique_idx');
+    expect(sql.match(/ON CONFLICT\(id\) DO UPDATE SET/g)).toHaveLength(2);
+    expect(sql).not.toMatch(/\b(DROP|TRUNCATE|DELETE FROM)\b/i);
+  });
+
+  it('applies the versioned migration to the explicitly identified Staging D1 before Worker deploy', () => {
+    const workflow = read('../.github/workflows/deploy-cloudflare-staging.yml');
+    const migration = workflow.indexOf('d1 migrations apply customs-os-migration-staging');
+    const deploy = workflow.indexOf('wrangler@4 deploy --config wrangler.migration-staging.jsonc');
+    expect(migration).toBeGreaterThan(-1);
+    expect(deploy).toBeGreaterThan(migration);
+    expect(workflow).toContain('b938fa3c-4995-4d27-aeda-f72f2f484a3c');
+    expect(workflow).toContain('MIGRATION_DB');
+  });
+});
