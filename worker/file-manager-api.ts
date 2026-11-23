@@ -196,6 +196,24 @@ const insertAudit = (
   request.headers.get('cf-ray') || crypto.randomUUID(),
 );
 
+const insertAuditIfChanged = (
+  db: FileManagerD1Database,
+  request: Request,
+  profile: FileManagerApiProfile,
+  action: 'update',
+  entityType: 'file_manager_file',
+  entityId: string,
+  before: unknown,
+  after: unknown,
+) => db.prepare(
+  'INSERT INTO customs_os_audit_events ' +
+  '(id, organization_id, actor_user_id, action, entity_type, entity_id, before_json, after_json, request_id) ' +
+  'SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0',
+).bind(
+  crypto.randomUUID(),profile.organization_id,profile.id,action,entityType,entityId,
+  JSON.stringify(before),JSON.stringify(after),request.headers.get('cf-ray') || crypto.randomUUID(),
+);
+
 const folderById = (db: FileManagerD1Database, id: string, organizationId: string) =>
   db.prepare(
     'SELECT id,parent_id,folder_key,folder_type,display_name,client_id,shipment_id,customs_office_id,' +
@@ -226,6 +244,20 @@ const parseFolderPath = (pathname: string) => {
 const parseFilePath = (pathname: string) => {
   if (!pathname.startsWith(BASE + '/files/')) return null;
   const raw = pathname.slice((BASE + '/files/').length);
+  if (!raw || raw.includes('/')) return null;
+  try {
+    const id = decodeURIComponent(raw);
+    return id.length <= 128 && !id.includes('/') ? id : null;
+  } catch {
+    return null;
+  }
+};
+
+const parseFileActionPath = (pathname: string, action: 'archive' | 'restore') => {
+  const prefix = BASE + '/files/';
+  const suffix = '/' + action;
+  if (!pathname.startsWith(prefix) || !pathname.endsWith(suffix)) return null;
+  const raw = pathname.slice(prefix.length, -suffix.length);
   if (!raw || raw.includes('/')) return null;
   try {
     const id = decodeURIComponent(raw);
@@ -537,6 +569,50 @@ const searchFileManager = async (
   return { items, total: items.length, normalizedQuery: normalized };
 };
 
+const archiveFile = async (
+  db: FileManagerD1Database,
+  request: Request,
+  profile: FileManagerApiProfile,
+  id: string,
+) => {
+  if (profile.role !== 'owner' && profile.role !== 'admin') return fail('FILE_ARCHIVE_FORBIDDEN',403);
+  const before = await fileById(db,id,profile.organization_id);
+  if (!before) return fail('FILE_NOT_FOUND',404);
+  if (Boolean(before.is_archived)) return fail('FILE_ALREADY_ARCHIVED',409);
+  const after = { ...serializeFile(before), is_archived:true };
+  const results = await db.batch([
+    db.prepare(
+      'UPDATE file_manager_files SET is_archived=1 WHERE id=? AND organization_id=? AND COALESCE(is_archived,0)=0',
+    ).bind(id,profile.organization_id),
+    insertAuditIfChanged(db,request,profile,'update','file_manager_file',id,serializeFile(before),after),
+  ]);
+  const update = results[0] as { meta?: { changes?: number } } | undefined;
+  if (!update?.meta?.changes) return fail('FILE_ARCHIVE_CONFLICT',409);
+  return json({ok:true,archived:true,file:after});
+};
+
+const restoreFile = async (
+  db: FileManagerD1Database,
+  request: Request,
+  profile: FileManagerApiProfile,
+  id: string,
+) => {
+  if (profile.role !== 'owner' && profile.role !== 'admin') return fail('FILE_RESTORE_FORBIDDEN',403);
+  const before = await fileById(db,id,profile.organization_id);
+  if (!before) return fail('FILE_NOT_FOUND',404);
+  if (!Boolean(before.is_archived)) return fail('FILE_NOT_ARCHIVED',409);
+  const after = { ...serializeFile(before), is_archived:false };
+  const results = await db.batch([
+    db.prepare(
+      'UPDATE file_manager_files SET is_archived=0 WHERE id=? AND organization_id=? AND COALESCE(is_archived,0)=1',
+    ).bind(id,profile.organization_id),
+    insertAuditIfChanged(db,request,profile,'update','file_manager_file',id,serializeFile(before),after),
+  ]);
+  const update = results[0] as { meta?: { changes?: number } } | undefined;
+  if (!update?.meta?.changes) return fail('FILE_RESTORE_CONFLICT',409);
+  return json({ok:true,restored:true,file:after});
+};
+
 export const handleFileManagerApi = async (
   request: Request,
   db: FileManagerD1Database,
@@ -580,6 +656,14 @@ export const handleFileManagerApi = async (
     }
     if (folderId && request.method === 'DELETE') {
       return await deleteEmptyFolder(db,request,profile,folderId);
+    }
+    const archiveFileId=parseFileActionPath(pathname,'archive');
+    if (archiveFileId && request.method === 'POST') {
+      return await archiveFile(db,request,profile,archiveFileId);
+    }
+    const restoreFileId=parseFileActionPath(pathname,'restore');
+    if (restoreFileId && request.method === 'POST') {
+      return await restoreFile(db,request,profile,restoreFileId);
     }
     const moveFileId=parseMoveFilePath(pathname);
     if (moveFileId && request.method === 'POST') {
