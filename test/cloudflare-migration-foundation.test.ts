@@ -84,7 +84,8 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain('missingEmptySourceTables');
     expect(worker).toContain('missingRequiredTargets');
     expect(worker).toContain("row.status === 'empty_in_source'");
-    expect(worker).toContain('rowCountParity: missingRequiredTargets === 0 && failedCounts === 0 && mismatchedTables === 0');
+    expect(worker).toContain('const rowCountParity = isMigrationParityHealthy({');
+    expect(worker).toContain('ok: rowCountParity');
     expect(worker).toContain('MIGRATION_PARITY_UNAVAILABLE');
   });
 
