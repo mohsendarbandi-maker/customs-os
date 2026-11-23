@@ -239,30 +239,38 @@ export default {
       if (url.pathname === '/migration/schema') {
         try {
           const tableList = await env.MIGRATION_DB.prepare(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-          ).all<{ name: string }>();
-          const tables: Array<{ name: string; rowCount: number | null; columns: string[] }> = [];
+            "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+          ).all<{ name: string; sql: string | null }>();
+          const tables: Array<{ name: string; rowCount: number | null; schemaSql: string | null; countVerified: boolean }> = [];
           let totalRows = 0;
+          let countFailures = 0;
 
-          // Table identifiers are read from sqlite_master and safely quoted. No
-          // caller-provided SQL or identifier is ever executed by this endpoint.
+          // Identifiers originate only from sqlite_master and are safely quoted.
+          // No caller-provided SQL or identifier is ever executed.
           for (const table of tableList.results) {
             const identifier = '"' + table.name.replace(/"/g, '""') + '"';
-            const [count, columns] = await Promise.all([
-              env.MIGRATION_DB.prepare(
+            try {
+              const count = await env.MIGRATION_DB.prepare(
                 'SELECT COUNT(*) AS row_count FROM ' + identifier,
-              ).first<{ row_count: number }>(),
-              env.MIGRATION_DB.prepare(
-                'PRAGMA table_info(' + identifier + ')',
-              ).all<{ name: string }>(),
-            ]);
-            const rowCount = typeof count?.row_count === 'number' ? count.row_count : null;
-            if (rowCount !== null) totalRows += rowCount;
-            tables.push({
-              name: table.name,
-              rowCount,
-              columns: columns.results.map((column) => column.name),
-            });
+              ).first<{ row_count: number }>();
+              const rowCount = typeof count?.row_count === 'number' ? count.row_count : null;
+              if (rowCount === null) countFailures += 1;
+              else totalRows += rowCount;
+              tables.push({
+                name: table.name,
+                rowCount,
+                schemaSql: table.sql,
+                countVerified: rowCount !== null,
+              });
+            } catch {
+              countFailures += 1;
+              tables.push({
+                name: table.name,
+                rowCount: null,
+                schemaSql: table.sql,
+                countVerified: false,
+              });
+            }
           }
 
           return json({
@@ -271,6 +279,7 @@ export default {
             inspection: 'read_only_sqlite_master_and_count',
             tableCount: tables.length,
             totalRows,
+            countFailures,
             tables,
           });
         } catch {
