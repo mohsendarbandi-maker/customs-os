@@ -228,7 +228,21 @@ describe('Cloudflare D1 registration-orders API', () => {
     expect(response.status).toBe(200);
     expect(body.items.map(row => row.id)).toEqual(['org-a-order']);
     expect(body.cases.map(row => row.id)).toEqual(['case-a']);
-    expect(body.reconciliation[0].registration_order_id).toBe('org-a-order');
+    expect(body.reconciliation[0]).toMatchObject({
+      registration_order_id: 'org-a-order',
+      order_number: '12345',
+      registered_net_weight_kg: 1000,
+      shipped_net_weight_kg: 500,
+      registered_gross_weight_kg: 1100,
+      shipped_gross_weight_kg: 550,
+      registered_value_amount: 500,
+      shipped_value_amount: 250,
+      currency: 'USD',
+      total_allocated_net_weight_kg: 500,
+      total_allocated_gross_weight_kg: 550,
+      total_allocated_value_amount: 250,
+    });
+    expect(body.reconciliation).toHaveLength(1);
     expect(db.queries.some(query => query.sql.includes('ro.organization_id = ?') && query.values[0] === 'org-a')).toBe(true);
     expect(body.total).toBe(1);
   });
