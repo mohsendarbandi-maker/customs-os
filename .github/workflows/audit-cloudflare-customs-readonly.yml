@@ -58,6 +58,34 @@ jobs:
             (deployment.versions ?? []).filter((version) => Number(version.percentage ?? 0) > 0).map((version) => version.version_id)
           ))];
           const activeVersions = activeVersionIds.slice(0, 5).map((id) => ({ id }));
+          const activeVersionId = activeVersionIds[0] ?? null;
+          const activeVersion = activeVersionId
+            ? await api('/accounts/' + accountId + '/workers/scripts/customs/versions/' + encodeURIComponent(activeVersionId))
+            : { status: 0, success: false, body: null };
+          const activeVersionText = JSON.stringify(activeVersion.body?.result ?? {});
+          const scriptResponse = await fetch('https://api.cloudflare.com/client/v4/accounts/' + accountId + '/workers/scripts/customs', {
+            headers: { Authorization: 'Bearer ' + token, Accept: '*/*' },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(20000),
+          });
+          const scriptSource = await scriptResponse.text();
+          const activeVersionAudit = {
+            httpStatus: activeVersion.status,
+            success: activeVersion.success,
+            versionId: activeVersionId,
+            resultKeys: Object.keys(activeVersion.body?.result ?? {}),
+            resourcesShape: Array.isArray(activeVersion.body?.result?.resources)
+              ? 'array'
+              : typeof activeVersion.body?.result?.resources,
+            activeVersionHasMobileHostReference: activeVersionText.includes('mobile.darbandicommercial.ir'),
+            activeVersionHasAssetBaseRewrite: activeVersionText.includes('assetBase.hostname'),
+            activeVersionHasBuildSignature: activeVersionText.includes('20261107-ocean-adaptive-mobile-v5'),
+            scriptSourceHttpStatus: scriptResponse.status,
+            scriptSourceBytes: new TextEncoder().encode(scriptSource).length,
+            uploadedSourceHasMobileHostReference: scriptSource.includes('mobile.darbandicommercial.ir'),
+            uploadedSourceHasAssetBaseRewrite: scriptSource.includes('assetBase.hostname'),
+            uploadedSourceHasBuildSignature: scriptSource.includes('20261107-ocean-adaptive-mobile-v5'),
+          };
           const smokeHosts = [
             'https://chat.darbandicommercial.ir',
             'https://reminders.darbandicommercial.ir',
@@ -115,6 +143,7 @@ jobs:
               })),
             },
             activeVersions,
+            activeVersionAudit,
             recentVersions: {
               httpStatus: versions.status, success: versions.success,
               items: versionItems.slice(0, 5).map((item) => ({
