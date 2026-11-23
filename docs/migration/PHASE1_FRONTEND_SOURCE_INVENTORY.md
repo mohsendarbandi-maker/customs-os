@@ -152,7 +152,7 @@ This is not an endorsement to delete those files now. They remain necessary to t
 - Shared component enumeration and review: **COMPLETED (source-level)** — 30/30.
 - Context and Hook enumeration and review: **COMPLETED (source-level)** — 4/4.
 - Library path enumeration: **COMPLETED (source-level)** — 47/47 non-test modules.
-- Static table/RPC/storage/realtime/edge dependency extraction: **PARTIAL** — key operational modules mapped in `FRONTEND_API_DEPENDENCY_MATRIX.md`; dynamic/imported/transitive call graph and every edge case still need executable validation.
+- Static table/RPC/storage/realtime/edge dependency extraction: **PARTIAL** — all 59 page files and key shared modules reviewed; key literal contracts are mapped in `FRONTEND_API_DEPENDENCY_MATRIX.md`; dynamic/imported/transitive call graph and executable validation remain outstanding.
 - Live PostgreSQL schema/migration state: **BLOCKED** — source SQL and repository migrations do not prove the live schema while PostgreSQL returns 57P03.
-- Live D1 schema/counts: **UNVERIFIED** — requires authenticated Cloudflare account read access.
-- Functional API parity: **NOT_STARTED** — staging Worker still exposes only migration/health/auth bootstrap/initial AI endpoints.
+- Live D1 schema/counts: **UNVERIFIED** — Worker code contains read-only `/migration/schema`, `/migration/parity`, and `/migration/integrity` diagnostics, but their responses against the live deployed Worker/D1 have not been retrieved in this audit.
+- Functional API parity: **NOT_STARTED** — staging Worker still lacks operational CRUD/API replacements and deliberately returns `503 BACKEND_MIGRATION_PENDING` for legacy Supabase API paths.
