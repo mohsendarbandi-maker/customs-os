@@ -222,6 +222,11 @@ const completeUploadJob = async (
     !job.external_message_id
   ) return fail('FILE_UPLOAD_RECONCILIATION_REQUIRED', 409);
 
+  const folder = await db.prepare(
+    'SELECT relative_path FROM file_manager_folders WHERE id=? AND organization_id=? LIMIT 1',
+  ).bind(job.folder_id,profile.organization_id).first<{ relative_path: string | null }>();
+  if (!folder) return fail('FILE_ARCHIVE_FOLDER_INVALID',404);
+  const relativePath = [folder.relative_path,job.document_name].filter(Boolean).join('/');
   const createdAt = new Date().toISOString();
   const metadata = {
     source: 'cloudflare_worker_telegram_archive',
@@ -266,7 +271,7 @@ const completeUploadJob = async (
         job.original_name,job.mime_type,job.size_bytes,job.external_message_id,job.document_type,
         job.tags,JSON.stringify(metadata),'telegram://' + job.file_manager_file_id,createdAt,
         profile.organization_id,
-        job.document_name ? null : null,
+        relativePath,
         job.folder_id,profile.organization_id,
       ),
       db.prepare(
