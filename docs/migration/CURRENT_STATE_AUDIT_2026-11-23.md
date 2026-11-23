@@ -52,11 +52,14 @@ The above files may remain as migration-era code until a replacement is complete
 
 The staging Worker source `worker/migration-staging.ts` currently exposes:
 - `/health`, `/health/db`
-- `/migration/status`, `/migration/functions`
-- `/api/auth/login`, `/api/auth/session`, `/api/auth/logout`
-- a preliminary Gemini endpoint at `/api/ai` and a compatibility path at `/functions/v1/ai-assistant`
+- read-only D1 diagnostics: `/migration/schema` (SQLite table DDL + row counts), `/migration/parity` (import manifest vs actual table row counts), and `/migration/integrity` (33 hard-coded orphan-reference checks)
+- migration/archive diagnostics: `/migration/status`, `/migration/functions`
+- staging bootstrap auth: `/api/auth/login`, `/api/auth/session`, `/api/auth/logout`
+- a preliminary Gemini endpoint at `/api/ai` and compatibility path at `/functions/v1/ai-assistant`
 
-It does **not** yet expose the operational CRUD/API surface for clients, cases, shipments, declarations, registration orders, finance, File Manager, document assets, knowledge, maritime, reminders, chat, or messenger connectors.
+The migration diagnostic endpoints are GET/HEAD-only and execute fixed SQL plus quoted table identifiers originating from `sqlite_master` or the import manifest; they do not accept caller-provided SQL. The current automated test asserts their source structure and read-only intent, but it does not execute them against the live D1 database.
+
+The Worker does **not** yet expose operational CRUD/API replacements for clients, cases, shipments, declarations, registration orders, finance, File Manager, document assets, knowledge, maritime, reminders, chat, or messenger connectors. Requests to legacy Supabase-compatible paths (`/auth/v1`, `/rest/v1`, `/storage/v1`, `/functions/v1`, `/realtime/v1`) are explicitly returned as `503 BACKEND_MIGRATION_PENDING`; this is an honest staging boundary, not API parity.
 
 The staging authentication source currently identifies a single hard-coded staging owner profile, uses a 12-hour session lifetime, and stores hashed session tokens in D1. This is a staging bootstrap, not the required multi-user identity/profile/role/device-session implementation.
 
