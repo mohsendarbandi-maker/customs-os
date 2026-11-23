@@ -312,6 +312,8 @@ export default {
             verified: boolean;
           }> = [];
           let missingTargets = 0;
+          let missingEmptySourceTables = 0;
+          let missingRequiredTargets = 0;
           let failedCounts = 0;
           let expectedTotal = 0;
           let actualTotal = 0;
@@ -322,14 +324,18 @@ export default {
             const tableName = row.table_name;
             if (!existingTables.has(tableName)) {
               missingTargets += 1;
+              const emptySource = row.status === 'empty_in_source' &&
+                row.expected_rows === 0 && row.imported_rows === 0;
+              if (emptySource) missingEmptySourceTables += 1;
+              else missingRequiredTargets += 1;
               results.push({
                 table: tableName,
                 status: row.status,
                 expectedRows: row.expected_rows,
                 importedRows: row.imported_rows,
-                actualRows: null,
-                delta: null,
-                verified: false,
+                actualRows: emptySource ? 0 : null,
+                delta: emptySource ? 0 : null,
+                verified: emptySource,
               });
               continue;
             }
@@ -369,16 +375,18 @@ export default {
           }
 
           return json({
-            ok: missingTargets === 0 && failedCounts === 0,
+            ok: missingRequiredTargets === 0 && failedCounts === 0,
             database: 'customs-os-migration-staging',
             inspection: 'read_only_import_manifest_vs_d1_counts',
             sourceTableCount: results.length,
             expectedTotal,
             actualTotal,
             missingTargets,
+            missingEmptySourceTables,
+            missingRequiredTargets,
             failedCounts,
             mismatchedTables,
-            rowCountParity: missingTargets === 0 && failedCounts === 0 && mismatchedTables === 0,
+            rowCountParity: missingRequiredTargets === 0 && failedCounts === 0 && mismatchedTables === 0,
             tables: results,
           });
         } catch {
