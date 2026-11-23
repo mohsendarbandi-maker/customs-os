@@ -74,7 +74,7 @@ describe('mobile visual cohesion regressions', () => {
 
   it('keeps file manager help collapsed instead of occupying the mobile viewport', () => {
     expect(fileManager).toContain('className="file-manager-page');
-    expect(fileManager).toContain('<details className="file-manager-archive-help');
+    expect(fileManager).toContain('<details hidden={isCloudflareStagingHost()} className="file-manager-archive-help');
     expect(fileManager).toContain('placeholder="جست‌وجوی صاحب کالا، محموله یا سند…"');
     expect(fileManager).not.toContain('پوشه‌بندی خودکار بر اساس صاحب کالا، محموله و گمرک؛ آرشیو فایل اصلی در تلگرام.');
     expect(fileManager).not.toContain('فایل‌های جدید به همین گفتگو می‌روند؛ در تلگرام نام فایل یا برچسب را در همان گفتگو جست‌وجو کنید.');

@@ -199,7 +199,8 @@ describe('Cloudflare D1 Telegram File Manager upload', () => {
       fetcher,
     );
     const body = await response.json() as {ok:boolean;fileAssetId:string;externalMessageId:string;folderId:string};
-    expect(response.status).toBe(201);
+    const diagnostic = await response.clone().json() as Record<string, unknown>;
+    expect(response.status, 'Upload API response: ' + JSON.stringify(diagnostic)).toBe(201);
     expect(body.ok).toBe(true);
     expect(body.fileAssetId).toBeDefined();
     expect(body.externalMessageId).toBe('321');
@@ -230,7 +231,7 @@ describe('Cloudflare D1 Telegram File Manager upload', () => {
       async () => { called=true; throw new Error('must not send'); },
     );
     const body = await response.json() as {error:string};
-    expect(response.status).toBe(409);
+    expect(response.status, 'Ambiguous destination response: ' + JSON.stringify(body)).toBe(409);
     expect(body.error).toBe('FILE_ARCHIVE_NOT_CONFIGURED_OR_AMBIGUOUS');
     expect(called).toBe(false);
     expect(db.runs.some((item) => item.sql.startsWith('INSERT OR IGNORE INTO file_manager_upload_jobs'))).toBe(false);
