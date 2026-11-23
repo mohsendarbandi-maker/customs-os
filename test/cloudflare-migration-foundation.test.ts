@@ -247,3 +247,24 @@ describe('Supabase dependency inventory completeness', () => {
     expect(audit).toContain('credentialValuesPrinted: false');
   });
 });
+
+describe('Cloudflare Staging device session workspace', () => {
+  it('exposes only the dedicated security settings page beyond recovery and login', () => {
+    const app = read('../src/App.tsx');
+    expect(app).toContain("location.pathname === '/settings/security'");
+    expect(app).toContain('!isAllowedStagingSecurityRoute');
+    expect(app).toContain("location.pathname !== '/' && location.pathname !== '/login'");
+  });
+
+  it('does not load legacy Supabase settings tables on the Staging security page', () => {
+    const settings = read('../src/pages/SettingsEnterprisePage.tsx');
+    expect(settings).toContain("if(isCloudflareStagingHost()&&current==='security')return;");
+    expect(settings).toContain('<SessionManagementPanel/>');
+  });
+
+  it('provides a direct entry to the D1-backed session management page from recovery workspace', () => {
+    const workspace = read('../src/pages/StagingWorkspacePage.tsx');
+    expect(workspace).toContain("to: '/settings/security'");
+    expect(workspace).toContain('مدیریت دستگاه‌ها و خروج از نشست‌های دیگر');
+  });
+});

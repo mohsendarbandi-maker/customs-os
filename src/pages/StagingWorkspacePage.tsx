@@ -12,6 +12,7 @@ const tools = [
   { to: '/chat', title: 'چت سازمانی', description: 'محیط ارتباطات سازمانی', icon: MessageCircle },
   { to: '/operations', title: 'عملیات گمرکی', description: 'محیط ثبت و پیگیری عملیات', icon: ClipboardList },
   { to: '/settings', title: 'تنظیمات', description: 'تنظیمات محلی محیط کار', icon: Settings },
+  { to: '/settings/security', title: 'امنیت و نشست‌ها', description: 'مدیریت دستگاه‌ها و خروج از نشست‌های دیگر', icon: ShieldCheck },
 ];
 
 export const StagingWorkspacePage: React.FC = () => {

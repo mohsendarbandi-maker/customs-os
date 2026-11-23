@@ -65,7 +65,8 @@ function LegacyMaritimeRedirect(){return <VesselSearchPage/>}function LegacyDocu
 function Settings(){const{profile}=useAuth();const l=useLocation();const s=l.pathname.replace('/settings','').replace(/^\//,'').split('/')[0];if(s==='advanced'&&profile?.role!=='owner')return <Navigate to="/settings" replace/>;if(s==='advanced')return <AdvancedSettingsPage/>;if(admins.has(s)&&!['owner','admin'].includes(profile?.role||''))return <Navigate to="/settings" replace/>;return <SettingsEnterprisePage/>}
 function StagingRouteBoundary({children}:{children:React.ReactNode}) {
   const location = useLocation();
-  if (isCloudflareStagingHost() && location.pathname !== '/' && location.pathname !== '/login') {
+  const isAllowedStagingSecurityRoute = location.pathname === '/settings/security';
+  if (isCloudflareStagingHost() && location.pathname !== '/' && location.pathname !== '/login' && !isAllowedStagingSecurityRoute) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
