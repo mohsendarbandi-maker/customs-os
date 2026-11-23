@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS file_manager_upload_jobs (
   size_bytes INTEGER NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 20971520),
   document_type TEXT NOT NULL,
   tags TEXT NOT NULL DEFAULT '[]',
+  operation_sections TEXT NOT NULL DEFAULT '[]',
   status TEXT NOT NULL CHECK (
     status IN ('uploading', 'receipt_recorded', 'stored', 'failed', 'reconcile_required')
   ),
