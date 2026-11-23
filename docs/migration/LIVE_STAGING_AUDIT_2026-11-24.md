@@ -339,3 +339,12 @@ The original Knowledge Center UI and `knowledge-ai` function still depend on the
 A fresh Supabase `list_tables`, `list_migrations`, and read-only SQL attempt all returned `57P03` (PostgreSQL not accepting connections). As a result, the exact live DDL, source record counts, review-state distribution, and file-byte inventory for the Knowledge Center cannot yet be verified. No new knowledge rows or PDF binaries have been written to D1, Telegram, or any other destination.
 
 **Decision:** Do not deploy a reduced circular ingestor that silently skips PDFs, skips the page-level OCR queue, or stores text while claiming the existing behavior was preserved. Porting this function remains blocked until the authoritative Knowledge Center schema and source inventory can be read, the matching D1 schema and page/OCR queue are defined and tested, and the file bytes can be moved through a verified Telegram archive flow without relying on Supabase Storage.
+
+### Supabase functions confirmed intentionally disabled
+
+Two currently deployed function slugs were inspected so they are not mistaken for active features requiring a port:
+
+- `release-quarantined-chat-files` (version 3) is a one-time maintenance helper. Its deployed code explicitly returns HTTP 410 and says the endpoint is disabled.
+- `scan-chat-file` (version 75) validates its scheduled secret, then returns `enabled: false`, `processed: 0`; the deployed source explicitly says chat attachment scanning is disabled.
+
+These are not active business capabilities to re-enable during migration. The migration must preserve their disabled status unless a separate future requirement explicitly reactivates them. The remaining active Edge Functions still require replacement or verified retirement.
