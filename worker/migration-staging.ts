@@ -400,6 +400,71 @@ export default {
           return json({ ok: false, error: 'MIGRATION_PARITY_UNAVAILABLE' }, 503);
         }
       }
+      if (url.pathname === '/migration/files') {
+        try {
+          const [fileManager, customsDocuments, shipmentDocuments] = await Promise.all([
+            env.MIGRATION_DB.prepare(
+              'SELECT COUNT(*) AS total, ' +
+              'SUM(CASE WHEN external_message_id IS NOT NULL AND external_message_id <> \'\' THEN 1 ELSE 0 END) AS with_external_message_id, ' +
+              'SUM(CASE WHEN file_asset_id IS NOT NULL AND file_asset_id <> \'\' THEN 1 ELSE 0 END) AS with_file_asset_id, ' +
+              'SUM(CASE WHEN storage_path IS NOT NULL AND storage_path <> \'\' THEN 1 ELSE 0 END) AS with_storage_path, ' +
+              'SUM(CASE WHEN size_bytes > 0 THEN 1 ELSE 0 END) AS with_positive_size, ' +
+              'SUM(CASE WHEN mime_type IS NOT NULL AND mime_type <> \'\' THEN 1 ELSE 0 END) AS with_mime_type ' +
+              'FROM file_manager_files',
+            ).first<Record<string, number>>(),
+            env.MIGRATION_DB.prepare(
+              'SELECT COUNT(*) AS total, ' +
+              'SUM(CASE WHEN telegram_message_id IS NOT NULL AND telegram_message_id <> \'\' THEN 1 ELSE 0 END) AS with_telegram_message_id, ' +
+              'SUM(CASE WHEN file_asset_id IS NOT NULL AND file_asset_id <> \'\' THEN 1 ELSE 0 END) AS with_file_asset_id, ' +
+              'SUM(CASE WHEN storage_path IS NOT NULL AND storage_path <> \'\' THEN 1 ELSE 0 END) AS with_storage_path, ' +
+              'SUM(CASE WHEN size_bytes > 0 THEN 1 ELSE 0 END) AS with_positive_size, ' +
+              'SUM(CASE WHEN mime_type IS NOT NULL AND mime_type <> \'\' THEN 1 ELSE 0 END) AS with_mime_type ' +
+              'FROM customs_documents',
+            ).first<Record<string, number>>(),
+            env.MIGRATION_DB.prepare(
+              'SELECT COUNT(*) AS total, ' +
+              'SUM(CASE WHEN telegram_message_id IS NOT NULL AND telegram_message_id <> \'\' THEN 1 ELSE 0 END) AS with_telegram_message_id, ' +
+              'SUM(CASE WHEN file_asset_id IS NOT NULL AND file_asset_id <> \'\' THEN 1 ELSE 0 END) AS with_file_asset_id, ' +
+              'SUM(CASE WHEN storage_path IS NOT NULL AND storage_path <> \'\' THEN 1 ELSE 0 END) AS with_storage_path, ' +
+              'SUM(CASE WHEN file_size_bytes > 0 THEN 1 ELSE 0 END) AS with_positive_size, ' +
+              'SUM(CASE WHEN mime_type IS NOT NULL AND mime_type <> \'\' THEN 1 ELSE 0 END) AS with_mime_type ' +
+              'FROM shipment_documents',
+            ).first<Record<string, number>>(),
+          ]);
+
+          const backendCounts = await Promise.all([
+            env.MIGRATION_DB.prepare(
+              "SELECT COALESCE(NULLIF(storage_backend, ''), '(null)') AS backend, COUNT(*) AS total, " +
+              "SUM(CASE WHEN telegram_message_id IS NOT NULL AND telegram_message_id <> '' THEN 1 ELSE 0 END) AS with_telegram_message_id, " +
+              "SUM(CASE WHEN file_asset_id IS NOT NULL AND file_asset_id <> '' THEN 1 ELSE 0 END) AS with_file_asset_id " +
+              "FROM customs_documents GROUP BY COALESCE(NULLIF(storage_backend, ''), '(null)') ORDER BY backend",
+            ).all(),
+            env.MIGRATION_DB.prepare(
+              "SELECT COALESCE(NULLIF(storage_backend, ''), '(null)') AS backend, COUNT(*) AS total, " +
+              "SUM(CASE WHEN telegram_message_id IS NOT NULL AND telegram_message_id <> '' THEN 1 ELSE 0 END) AS with_telegram_message_id, " +
+              "SUM(CASE WHEN file_asset_id IS NOT NULL AND file_asset_id <> '' THEN 1 ELSE 0 END) AS with_file_asset_id " +
+              "FROM shipment_documents GROUP BY COALESCE(NULLIF(storage_backend, ''), '(null)') ORDER BY backend",
+            ).all(),
+          ]);
+
+          return json({
+            ok: true,
+            database: 'customs-os-migration-staging',
+            inspection: 'read_only_file_metadata_counts_only',
+            note: 'Metadata is not proof of binary availability. No file bytes, names, paths, message IDs or tokens are returned.',
+            fileManagerFiles: fileManager ?? null,
+            customsDocuments: customsDocuments ?? null,
+            shipmentDocuments: shipmentDocuments ?? null,
+            storageBackendBreakdown: {
+              customsDocuments: backendCounts[0].results,
+              shipmentDocuments: backendCounts[1].results,
+            },
+            binaryVerification: 'not_performed',
+          });
+        } catch {
+          return json({ ok: false, error: 'FILE_METADATA_INSPECTION_UNAVAILABLE' }, 503);
+        }
+      }
       if (url.pathname === '/migration/integrity') {
         const checks: Array<{ name: string; sql: string }> = [
           { name: 'cases.client_id -> clients.id', sql: "SELECT COUNT(*) AS n FROM cases c WHERE c.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clients p WHERE p.id = c.client_id)" },
