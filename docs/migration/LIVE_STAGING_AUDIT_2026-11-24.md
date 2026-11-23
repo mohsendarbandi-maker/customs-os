@@ -278,3 +278,33 @@ The existing `/api/maritime/conditions` implementation from the current Worker h
 The existing OpenStreetMap tile proxy has been ported to `worker/map-tiles-api.ts` and `worker/map-tiles-api.test.ts`. Its Staging route validates zoom/tile coordinates, accepts only same-origin requests, forwards a first-party Referer and the app User-Agent, checks that upstream content is an image, limits tile size, supports GET/HEAD, and uses Cloudflare's default Cache API when available. Cache errors do not fail a successful tile fetch. Integration coverage verifies that cross-site requests are rejected before contacting the provider.
 
 All maritime modules and tests are branch-only at this point. They have not been deployed to the Staging Worker because the D1 migration step remains blocked by the missing `CLOUDFLARE_D1_API_TOKEN`. The active Production `customs` Worker and the 16 active Supabase Edge Functions have not been changed by these ports.
+
+### Legacy AISFriends and operational map restoration
+
+A third AIS compatibility function has been ported from the active `sync-vessel-ais` Edge Function (live source version 8):
+
+- `worker/sync-vessel-ais-legacy-api.ts`
+- `worker/sync-vessel-ais-legacy-api.test.ts`
+- `worker/sync-vessel-ais-legacy-route.test.ts`
+- Same-origin Staging route: `POST /functions/v1/sync-vessel-ais`
+
+It selects at most 10 vessels within the active organization, requires a valid 7-digit IMO or 9-digit MMSI, validates returned coordinates and optional speed/course, preserves existing speed/course when providers omit them, bounds the upstream timeout/response size, and updates D1 with both vessel ID and organization ID in the WHERE clause. The route requires a same-origin D1 session and owner/admin/broker role. Tests cover organization isolation, invalid identifiers, individual provider failures, timestamp normalization, and unauthenticated/cross-origin rejection. This compatibility function is also branch-only and is not deployed.
+
+The current branch also contains a port of the public Open-Meteo maritime conditions endpoint and a same-origin OpenStreetMap tile proxy:
+
+- `worker/maritime-conditions-api.ts` + tests preserve the existing weather/marine payload format, validate coordinates, and handle partial provider outages.
+- `worker/map-tiles-api.ts` + tests validate tile z/x/y bounds, require same-origin access at the Worker route, reject non-image or oversized upstream responses, and optionally use Cloudflare's default Cache API.
+- `worker/maritime-read-api.ts` serves the D1 vessels and shipments views, scoped to the session organization.
+- The existing Caspian Maritime and Vessel Tracking pages use these D1 endpoints only on the isolated Staging recovery host; Production keeps its current Supabase path.
+
+### CI status for the AIS and maritime additions
+
+For the latest verified AISFriends branch commit `bf5f58e001506114ec5c74c2dc809922cedb962f`:
+
+- [Customs OS Build — success](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45276136663): tests, TypeScript, ESLint and Vite build all passed.
+- [Chat/Worker full verification — success](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45276154834): full verification including Worker dry-run passed.
+- [Shipment Cost CI — success](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45276154660).
+- [Independent shipment document metadata — success](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45276154815).
+- [Cloudflare Free Staging — stopped at the D1 migration gate](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45276136732). Unit tests, typecheck, lint, app build, and read-only Staging diagnostics passed. The only failing step was `Apply versioned migrations to the isolated Staging D1`; `CLOUDFLARE_D1_API_TOKEN` is empty. No D1 migrations or Worker deployment were executed.
+
+The active Supabase functions remain available in the source project. None of these new Worker ports deactivates the source functions or replaces Production routing.
