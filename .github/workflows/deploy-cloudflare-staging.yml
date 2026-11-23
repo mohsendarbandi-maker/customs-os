@@ -6,6 +6,10 @@ on:
       - rebuild/cloudflare-free-first
     paths:
       - "src/**"
+      - "worker/**"
+      - "test/**"
+      - "scripts/**"
+      - "package-lock.json"
       - "public/**"
       - "worker/migration-staging.ts"
       - "test/registration-order-d1-migration.test.ts"
@@ -41,6 +45,38 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+      - name: Assert isolated Staging target before any D1 write or deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const config = JSON.parse(readFileSync('wrangler.migration-staging.jsonc', 'utf8'));
+          const databases = config.d1_databases ?? [];
+          const database = databases.find((item) => item.binding === 'MIGRATION_DB');
+          const checks = {
+            workerName: config.name === 'customs-os-migration-staging',
+            workersDevOnly: config.workers_dev === true,
+            previewUrlsDisabled: config.preview_urls === false,
+            noCustomRoutes: !Array.isArray(config.routes) || config.routes.length === 0,
+            stagingEnvironment: config.vars?.MIGRATION_ENVIRONMENT === 'staging',
+            productionImportDisabled: config.vars?.PRODUCTION_DATA_IMPORTED === 'false',
+            assetsBinding: config.assets?.binding === 'ASSETS' && config.assets?.directory === './dist',
+            singleD1Binding: databases.length === 1 && database?.binding === 'MIGRATION_DB',
+            databaseName: database?.database_name === 'customs-os-migration-staging',
+            databaseId: String(database?.database_id ?? '').toLowerCase() === 'b938fa3c-4995-4d27-aeda-f72f2d484a3c',
+            noAdditionalStorageOrServiceBindings: !config.r2_buckets && !config.kv_namespaces &&
+              !config.queues && !config.ai && !config.vectorize && !config.services,
+          };
+          console.log(JSON.stringify({
+            worker: config.name,
+            database: database?.database_name,
+            checks,
+          }, null, 2));
+          if (!Object.values(checks).every(Boolean)) {
+            throw new Error('Refusing staging deployment: Worker/D1 isolation or free-first binding checks failed.');
+          }
+          NODE
       - uses: actions/setup-node@v4
         with:
           node-version: 22
