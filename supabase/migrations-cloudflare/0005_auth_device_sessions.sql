@@ -10,7 +10,7 @@ ALTER TABLE customs_admin_sessions ADD COLUMN last_seen_at TEXT;
 ALTER TABLE customs_admin_sessions ADD COLUMN revoked_at TEXT;
 
 UPDATE customs_admin_sessions
-SET session_id = lower(hex(randomblob(16))),
+SET session_id = lower(substr(hex(randomblob(4)), 1, 8) || '-' || substr(hex(randomblob(2)), 1, 4) || '-4' || substr(hex(randomblob(2)), 2, 3) || '-' || substr('89ab', abs(random() % 4) + 1, 1) || substr(hex(randomblob(2)), 2, 3) || '-' || hex(randomblob(6))),
     device_label = COALESCE(device_label, 'دستگاه قبلی'),
     last_seen_at = COALESCE(last_seen_at, created_at)
 WHERE session_id IS NULL;

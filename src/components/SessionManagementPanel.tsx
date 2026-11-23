@@ -3,6 +3,7 @@ import { Monitor, RefreshCw, ShieldCheck, Smartphone, Tablet, Laptop, LogOut, Cl
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { describeDevice, getSessionIdFromAccessToken } from '../lib/deviceSessions';
+import { isCloudflareStagingHost } from '../lib/recoveryHost';
 
 type AuthSessionRow = {
   session_id: string;
@@ -22,16 +23,18 @@ const formatTime = (value: string) => {
     : new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 };
 
-const DeviceIcon = ({ userAgent }: { userAgent: string | null }) => {
-  if (/iPhone|Android/i.test(userAgent || '')) return <Smartphone size={19}/>;
-  if (/iPad|Tablet/i.test(userAgent || '')) return <Tablet size={19}/>;
-  if (/Windows|Macintosh|Mac OS X|Linux/i.test(userAgent || '')) return <Laptop size={19}/>;
+const DeviceIcon = ({ userAgent, deviceLabel }: { userAgent: string | null; deviceLabel?: string | null }) => {
+  const details = (deviceLabel || '') + ' ' + (userAgent || '');
+  if (/iPhone|Android/i.test(details)) return <Smartphone size={19}/>;
+  if (/iPad|Tablet/i.test(details)) return <Tablet size={19}/>;
+  if (/Windows|Macintosh|Mac OS X|Linux|macOS/i.test(details)) return <Laptop size={19}/>;
   return <Monitor size={19}/>;
 };
 
 export function SessionManagementPanel() {
   const { user, session } = useAuth();
-  const currentSessionId = getSessionIdFromAccessToken(session?.access_token);
+  const isStaging = isCloudflareStagingHost();
+  const currentSessionId = isStaging ? null : getSessionIdFromAccessToken(session?.access_token);
   const [sessions, setSessions] = useState<AuthSessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -47,6 +50,31 @@ export function SessionManagementPanel() {
     }
 
     setError(null);
+    if (isStaging) {
+      try {
+        const response = await fetch('/api/auth/devices', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: { Accept: 'application/json' },
+        });
+        const payload = await response.json().catch(() => ({})) as {
+          error?: string;
+          sessions?: AuthSessionRow[];
+        };
+        if (!response.ok) {
+          throw new Error(payload.error === 'UNAUTHORIZED'
+            ? 'نشست ورود معتبر نیست؛ دوباره وارد شوید.'
+            : 'دریافت نشست‌های Cloudflare ناموفق بود: ' + (payload.error || response.status));
+        }
+        setSessions(Array.isArray(payload.sessions) ? payload.sessions : []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'دریافت نشست‌ها ناموفق بود.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     const { data, error: loadError } = await supabase.rpc('list_my_auth_sessions');
     if (loadError) {
       setError(loadError.message || 'دریافت نشست‌ها ناموفق بود.');
@@ -55,14 +83,14 @@ export function SessionManagementPanel() {
     }
     setSessions((Array.isArray(data) ? data : []) as AuthSessionRow[]);
     setLoading(false);
-  }, [user?.id]);
+  }, [user?.id, isStaging]);
 
   useEffect(() => {
     void loadSessions();
   }, [loadSessions]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || isStaging) return;
     const channel = supabase
       .channel(`session-list-${user.id}`)
       .on(
@@ -79,7 +107,7 @@ export function SessionManagementPanel() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [user?.id, loadSessions]);
+  }, [user?.id, loadSessions, isStaging]);
 
   const otherSessions = useMemo(
     () => sessions.filter((item) => !item.is_current && item.session_id !== currentSessionId),
@@ -93,6 +121,18 @@ export function SessionManagementPanel() {
     setError(null);
     setNotice(null);
     try {
+      if (isStaging) {
+        const response = await fetch('/api/auth/devices/' + encodeURIComponent(item.session_id), {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+        const payload = await response.json().catch(() => ({})) as { error?: string };
+        if (!response.ok) throw new Error('خروج از دستگاه ناموفق بود: ' + (payload.error || response.status));
+        setNotice('نشست این دستگاه باطل شد و هنگام درخواست بعدی از حساب خارج می‌شود.');
+        await loadSessions();
+        return;
+      }
       const { data: existing, error: readError } = await supabase
         .from('user_device_sessions')
         .select('session_id, revoked_at')
@@ -137,12 +177,24 @@ export function SessionManagementPanel() {
   };
 
   const revokeOthers = async () => {
-    if (!user?.id || !currentSessionId || otherSessions.length === 0) return;
+    if (!user?.id || (!isStaging && !currentSessionId) || otherSessions.length === 0) return;
 
     setBusyAll(true);
     setError(null);
     setNotice(null);
     try {
+      if (isStaging) {
+        const response = await fetch('/api/auth/devices/revoke-others', {
+          method: 'POST',
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+        const payload = await response.json().catch(() => ({})) as { error?: string; revoked_count?: number };
+        if (!response.ok) throw new Error('خروج از دستگاه‌های دیگر ناموفق بود: ' + (payload.error || response.status));
+        setNotice('نشست‌های دیگر باطل شدند. این دستگاه همچنان وارد حساب می‌ماند.');
+        await loadSessions();
+        return;
+      }
       const { error: signOutError } = await supabase.auth.signOut({ scope: 'others' });
       if (signOutError) throw signOutError;
 
@@ -207,13 +259,13 @@ export function SessionManagementPanel() {
         <div className="space-y-2">
           {sessions.map((item) => {
             const isCurrent = item.is_current || item.session_id === currentSessionId;
-            const deviceName = describeDevice(item.user_agent);
+            const deviceName = item.device_label || describeDevice(item.user_agent);
             const pending = Boolean(item.revoke_requested_at);
             return (
               <article key={item.session_id} className="rounded-2xl border app-border bg-[var(--surface-2)] p-3 sm:p-4">
                 <div className="flex items-start gap-3">
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--surface)]">
-                    <DeviceIcon userAgent={item.user_agent}/>
+                    <DeviceIcon userAgent={item.user_agent} deviceLabel={item.device_label}/>
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -246,7 +298,7 @@ export function SessionManagementPanel() {
 
       <div className="flex items-start gap-2 rounded-xl bg-[var(--surface-2)] p-3 text-[11px] app-muted">
         <ShieldCheck size={15} className="mt-0.5 shrink-0"/>
-        <p>خروج از یک دستگاه، نشست دستگاه‌های دیگر را دست‌نخورده نگه می‌دارد. درخواست خروج تکی از طریق اعلان زنده ارسال می‌شود؛ اگر دستگاه آفلاین باشد، هنگام بازگشت به اینترنت از حساب خارج خواهد شد.</p>
+        <p>{isStaging ? 'خروج از هر دستگاه با ابطال نشست در D1 انجام می‌شود؛ درخواست‌های بعدی آن دستگاه دیگر پذیرفته نخواهند شد. به‌روزرسانی فهرست به‌صورت دستی انجام می‌شود.' : 'خروج از یک دستگاه، نشست دستگاه‌های دیگر را دست‌نخورده نگه می‌دارد. درخواست خروج تکی از طریق اعلان زنده ارسال می‌شود؛ اگر دستگاه آفلاین باشد، هنگام بازگشت به اینترنت از حساب خارج خواهد شد.'}</p>
       </div>
     </section>
   );

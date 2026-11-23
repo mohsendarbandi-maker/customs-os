@@ -1,12 +1,13 @@
 import { isMigrationIntegrityHealthy, isMigrationParityHealthy } from './migration-diagnostics';
 import { handleClientsApi } from './clients-api';
 import { handleCasesApi } from './cases-api';
+import { handleDeviceSessionsApi } from './device-sessions-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
   all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
-  run(): Promise<unknown>;
+  run(): Promise<{ meta?: { changes?: number } }>;
 }
 interface D1Database {
   prepare(sql: string): D1Statement;
@@ -87,21 +88,42 @@ const isSameOrigin = (request: Request, url: URL) => {
     request.headers.get('sec-fetch-site') !== 'cross-site';
 };
 
-const getSession = async (request: Request, env: Env) => {
+interface ActiveStageSession {
+  user_id: string;
+  token_hash: string;
+  session_id: string;
+}
+
+const getSession = async (request: Request, env: Env): Promise<ActiveStageSession | null> => {
   const token = readCookie(request);
-  if (!token) return false;
+  if (!token) return null;
   const tokenHash = await sha256(token);
   const row = await env.MIGRATION_DB.prepare(
-    'SELECT user_id, expires_at FROM customs_admin_sessions WHERE token_hash = ? LIMIT 1',
-  ).bind(tokenHash).first<{ user_id: string; expires_at: string }>();
-  if (!row) return false;
+    'SELECT user_id, expires_at, session_id, revoked_at FROM customs_admin_sessions WHERE token_hash = ? LIMIT 1',
+  ).bind(tokenHash).first<{
+    user_id: string;
+    expires_at: string;
+    session_id: string | null;
+    revoked_at: string | null;
+  }>();
+  if (!row || row.revoked_at || !row.session_id) return null;
   if (Date.parse(row.expires_at) <= Date.now()) {
     await env.MIGRATION_DB.prepare(
       'DELETE FROM customs_admin_sessions WHERE token_hash = ?',
     ).bind(tokenHash).run();
-    return false;
+    return null;
   }
-  return true;
+  return { user_id: row.user_id, token_hash: tokenHash, session_id: row.session_id };
+};
+
+const deviceLabelFromUserAgent = (userAgent: string) => {
+  if (/iPhone/i.test(userAgent)) return 'iPhone';
+  if (/iPad/i.test(userAgent)) return 'iPad';
+  if (/Android/i.test(userAgent)) return 'Android';
+  if (/Windows/i.test(userAgent)) return 'Windows';
+  if (/Macintosh|Mac OS X/i.test(userAgent)) return 'macOS';
+  if (/Linux/i.test(userAgent)) return 'Linux';
+  return 'مرورگر وب';
 };
 
 const handleGemini = async (request: Request, env: Env): Promise<Response> => {
@@ -977,25 +999,46 @@ export default {
 
       const token = createToken();
       const tokenHash = await sha256(token);
+      const sessionId = crypto.randomUUID();
+      const createdAt = new Date(now).toISOString();
       const expiresAt = new Date(now + SESSION_HOURS * 60 * 60 * 1000).toISOString();
-      await env.MIGRATION_DB.prepare(
-        'INSERT INTO customs_admin_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)',
-      ).bind(tokenHash, profile.id, expiresAt).run();
+      const userAgent = (request.headers.get('user-agent') || '').slice(0, 500);
+      const deviceLabel = deviceLabelFromUserAgent(userAgent);
+      const appOrigin = url.origin;
+      const requestId = request.headers.get('cf-ray') || crypto.randomUUID();
+      await env.MIGRATION_DB.batch([
+        env.MIGRATION_DB.prepare(
+          'INSERT INTO customs_admin_sessions ' +
+          '(token_hash, user_id, expires_at, session_id, device_label, app_origin, last_seen_at, revoked_at) ' +
+          'VALUES (?, ?, ?, ?, ?, ?, ?, NULL)',
+        ).bind(tokenHash, profile.id, expiresAt, sessionId, deviceLabel, appOrigin, createdAt),
+        env.MIGRATION_DB.prepare(
+          'INSERT INTO customs_os_auth_events ' +
+          '(id, actor_user_id, target_user_id, event_type, session_id, request_id, details_json, created_at) ' +
+          'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        ).bind(
+          crypto.randomUUID(), profile.id, profile.id, 'login', sessionId, requestId,
+          JSON.stringify({ device_label: deviceLabel }), createdAt,
+        ),
+      ]);
 
       return json({
         authenticated: true,
         user: { id: profile.id, email: ADMIN_EMAIL, full_name: profile.full_name },
         profile,
+        session_id: sessionId,
       }, 200, { 'set-cookie': setCookie(token, SESSION_HOURS * 60 * 60) });
     }
 
     if (url.pathname === '/api/auth/session') {
       if (request.method !== 'GET') return json({ error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'GET' });
-      if (!await getSession(request, env)) return json({ authenticated: false });
+      const activeSession = await getSession(request, env);
+      if (!activeSession) return json({ authenticated: false });
       return json({
         authenticated: true,
         user: { id: profile.id, email: ADMIN_EMAIL, full_name: profile.full_name },
         profile,
+        session_id: activeSession.session_id,
       });
     }
 
@@ -1003,12 +1046,31 @@ export default {
       if (request.method !== 'POST') return json({ error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'POST' });
       if (!isSameOrigin(request, url)) return json({ error: 'ORIGIN_FORBIDDEN' }, 403);
       const token = readCookie(request);
-      if (token) {
-        await env.MIGRATION_DB.prepare(
-          'DELETE FROM customs_admin_sessions WHERE token_hash = ?',
-        ).bind(await sha256(token)).run();
+      const activeSession = await getSession(request, env);
+      if (token && activeSession) {
+        const now = new Date().toISOString();
+        const requestId = request.headers.get('cf-ray') || crypto.randomUUID();
+        await env.MIGRATION_DB.batch([
+          env.MIGRATION_DB.prepare(
+            'DELETE FROM customs_admin_sessions WHERE token_hash = ?',
+          ).bind(activeSession.token_hash),
+          env.MIGRATION_DB.prepare(
+            'INSERT INTO customs_os_auth_events ' +
+            '(id, actor_user_id, target_user_id, event_type, session_id, request_id, details_json, created_at) ' +
+            'SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0',
+          ).bind(
+            crypto.randomUUID(), activeSession.user_id, activeSession.user_id, 'logout',
+            activeSession.session_id, requestId, JSON.stringify({ scope: 'current_device' }), now,
+          ),
+        ]);
       }
       return json({ ok: true }, 200, { 'set-cookie': setCookie('', 0) });
+    }
+
+    if (url.pathname === '/api/auth/devices' || url.pathname.startsWith('/api/auth/devices/')) {
+      const activeSession = await getSession(request, env);
+      if (!activeSession) return json({ error: 'UNAUTHORIZED' }, 401);
+      return handleDeviceSessionsApi(request, env.MIGRATION_DB, url, activeSession);
     }
 
     if (url.pathname === '/api/admin/migration/telegram-probe') {
