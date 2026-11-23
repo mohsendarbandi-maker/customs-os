@@ -1,6 +1,6 @@
 import React,{lazy,Suspense} from 'react';
 import { LoginPage } from './pages/LoginPage';
-import { isCloudflareRecoveryHost, isCloudflareStagingHost } from './lib/recoveryHost';
+import { isCloudflareStagingHost } from './lib/recoveryHost';
 import { StagingWorkspacePage } from './pages/StagingWorkspacePage';
 import { DesktopHomePage } from './pages/DesktopHomePage';
 import { BrowserRouter,Routes,Route,Navigate,useSearchParams,useLocation } from 'react-router-dom';
@@ -61,7 +61,7 @@ import{PwaLifecycle}from'./features/reminders/PwaLifecycle';
 
 const qc=new QueryClient({defaultOptions:{queries:{staleTime:2*60*1000,gcTime:24*60*60*1000,refetchOnWindowFocus:false,refetchOnReconnect:true,retry:1}}});const operational:UserRole[]=['owner','admin','broker','warehouse','client'];const staff:UserRole[]=['owner','admin','broker','accountant','warehouse'];const management:UserRole[]=['owner','admin','broker'];const finance:UserRole[]=['owner','admin','accountant'];const admins=new Set(['organization','users','roles','integrations','webhooks','storage','backup','audit','advanced']);
 function Ops(){const[p]=useSearchParams();const t=p.get('tab'),shipmentId=p.get('shipmentId'),declarationId=p.get('declarationId');if(t==='pre-declaration')return shipmentId?<PreDeclarationPage/>:<Navigate to="/operations" replace/>;if(t==='declaration')return shipmentId?<DeclarationRegistrationPage/>:<Navigate to="/operations" replace/>;if(t==='stage5')return declarationId?<DeclarationOperationsChecklistPage/>:<Navigate to={shipmentId?`/operations?tab=declaration&shipmentId=${encodeURIComponent(shipmentId)}`:'/operations'} replace/>;if(t==='exit')return declarationId?<ExitPage/>:<Navigate to={shipmentId?`/operations?tab=declaration&shipmentId=${encodeURIComponent(shipmentId)}`:'/operations'} replace/>;return <ShipmentStartPage/>}
-function LegacyMaritimeRedirect(){return <VesselSearchPage/>}function LegacyDocumentsExtractRedirect(){const[p]=useSearchParams();const q=p.toString();return <Navigate to={`/documents${q?`?${q}`:''}`} replace/>}function LegacyExitRedirect(){const[p]=useSearchParams();const q=p.toString();return <Navigate to={`/operations?tab=exit${q?`&${q}`:''}`} replace/>}function HomeRoute(){return <ProtectedRoute>{isCloudflareRecoveryHost() ? <StagingWorkspacePage/> : <DesktopHomePage/>}</ProtectedRoute>}
+function LegacyMaritimeRedirect(){return <VesselSearchPage/>}function LegacyDocumentsExtractRedirect(){const[p]=useSearchParams();const q=p.toString();return <Navigate to={`/documents${q?`?${q}`:''}`} replace/>}function LegacyExitRedirect(){const[p]=useSearchParams();const q=p.toString();return <Navigate to={`/operations?tab=exit${q?`&${q}`:''}`} replace/>}function HomeRoute(){return <ProtectedRoute>{isCloudflareStagingHost() ? <StagingWorkspacePage/> : <DesktopHomePage/>}</ProtectedRoute>}
 function Settings(){const{profile}=useAuth();const l=useLocation();const s=l.pathname.replace('/settings','').replace(/^\//,'').split('/')[0];if(s==='advanced'&&profile?.role!=='owner')return <Navigate to="/settings" replace/>;if(s==='advanced')return <AdvancedSettingsPage/>;if(admins.has(s)&&!['owner','admin'].includes(profile?.role||''))return <Navigate to="/settings" replace/>;return <SettingsEnterprisePage/>}
 function StagingRouteBoundary({children}:{children:React.ReactNode}) {
   const location = useLocation();
