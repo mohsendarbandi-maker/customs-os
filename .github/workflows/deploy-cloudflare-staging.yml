@@ -67,6 +67,12 @@ jobs:
             '|---|---:|',
             ...Object.entries(report.counts).map(([name, count]) => `| ${name} | ${count} |`),
             '',
+            ...Object.entries(report.categories).flatMap(([name, values]) => [
+              `### ${name}`,
+              '',
+              ...(values.length ? values.map((value) => `- \`${value}\``) : ['- none']),
+              '',
+            ]),
             '### Files with runtime dependencies',
             '',
             ...report.perFile.map((item) => `- \`${item.file}\`: ${Object.keys(item.dependencies).join(', ')}`),
