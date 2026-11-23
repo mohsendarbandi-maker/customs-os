@@ -272,10 +272,6 @@ export const handleSyncVesselAisV2 = async (
     return json({ ok: false, code: 'ORGANIZATION_SCOPE_REQUIRED' }, 403);
   }
 
-  if (!organizationId) {
-    return json({ ok: false, code: 'ORGANIZATION_REQUIRED' }, 403);
-  }
-
   let targets: VesselAisRow[];
   try {
     const rows = await db.prepare(
