@@ -85,6 +85,8 @@ jobs:
               return {
                 host: base, status: page.status, contentType: page.headers.get('content-type'),
                 buildSignature: page.headers.get('x-customs-os-build'),
+                finalUrl: page.url,
+                pageTitle: (html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i)?.[1] ?? '').replace(/\\s+/g, ' ').trim().slice(0, 160),
                 htmlBytes: new TextEncoder().encode(html).length,
                 scriptPaths: scripts, stylePaths: styles, assets,
                 frontendAssetsOk: page.ok && scripts.length > 0 && assets.length > 0 &&
