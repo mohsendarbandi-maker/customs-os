@@ -7,6 +7,7 @@ import { handleRegistrationOrdersApi } from './registration-orders-api';
 import { handleTelegramFileDownload } from './telegram-files-api';
 import { handleFileManagerApi } from './file-manager-api';
 import { getFileManagerArchiveStatus, handleFileManagerUpload } from './file-manager-upload-api';
+import { handleVesselMultiSourceLookup } from './vessel-multi-source-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -1100,6 +1101,29 @@ export default {
     if (url.pathname === '/api/file-manager' || url.pathname.startsWith('/api/file-manager/')) {
       if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
       return handleFileManagerApi(request, env.MIGRATION_DB, url, profile);
+    }
+
+    if (url.pathname === '/functions/v1/vessel-multi-source') {
+      const corsHeaders = {
+        'Access-Control-Allow-Origin': url.origin,
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Vary': 'Origin',
+      };
+      if (!isSameOrigin(request, url)) return json({ error: 'ORIGIN_FORBIDDEN' }, 403, corsHeaders);
+      if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
+      if (request.method !== 'POST') return json({ error: 'METHOD_NOT_ALLOWED' }, 405, corsHeaders);
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401, corsHeaders);
+
+      const lookup = await handleVesselMultiSourceLookup(request);
+      const headers = new Headers(lookup.headers);
+      for (const [name, value] of Object.entries(corsHeaders)) headers.set(name, value);
+      headers.set('cache-control', 'no-store, private');
+      return new Response(lookup.body, {
+        status: lookup.status,
+        statusText: lookup.statusText,
+        headers,
+      });
     }
 
     if (url.pathname === '/api/ai' || url.pathname === '/functions/v1/ai-assistant') {
