@@ -87,6 +87,19 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain('MIGRATION_PARITY_UNAVAILABLE');
   });
 
+  it('reports file archive metadata counts without exposing content or identifiers', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("url.pathname === '/migration/files'");
+    expect(worker).toContain("inspection: 'read_only_file_metadata_counts_only'");
+    expect(worker).toContain('FROM file_manager_files');
+    expect(worker).toContain('FROM customs_documents');
+    expect(worker).toContain('FROM shipment_documents');
+    expect(worker).toContain('storageBackendBreakdown');
+    expect(worker).toContain("binaryVerification: 'not_performed'");
+    expect(worker).toContain('FILE_METADATA_INSPECTION_UNAVAILABLE');
+    expect(worker).not.toContain('TELEGRAM_BOT_TOKEN');
+  });
+
   it('exposes read-only orphan-reference diagnostics for operational tables', () => {
     const worker = read('../worker/migration-staging.ts');
     expect(worker).toContain("url.pathname === '/migration/integrity'");
