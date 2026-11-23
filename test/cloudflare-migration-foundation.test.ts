@@ -30,6 +30,17 @@ describe('Cloudflare migration foundation', () => {
     expect(sql).not.toMatch(/\b(shipments|profiles|auth\.users|storage\.objects)\b/i);
   });
 
+  it('exposes a read-only D1 schema and row-count inventory', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("url.pathname === '/migration/schema'");
+    expect(worker).toContain("SELECT name FROM sqlite_master WHERE type = 'table'");
+    expect(worker).toContain('SELECT COUNT(*) AS row_count FROM ');
+    expect(worker).toContain('PRAGMA table_info(');
+    expect(worker).toContain('inspection: \'read_only_sqlite_master_and_count\'');
+    expect(worker).toContain("request.method !== 'GET' && request.method !== 'HEAD'");
+    expect(worker).toContain("SCHEMA_INSPECTION_UNAVAILABLE");
+  });
+
   it('exposes read-only staging health and migration gates without claiming operational parity', () => {
     const worker = read('../worker/migration-staging.ts');
     expect(worker).toContain("request.method !== 'GET' && request.method !== 'HEAD'");
