@@ -142,7 +142,6 @@ jobs:
           if-no-files-found: error
           retention-days: 3
       - name: Read-only audit of live Cloudflare Worker routes and domains
-        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -152,7 +151,7 @@ jobs:
           const zoneId = 'cadeaeb6deb10539476b7acf2b3ebf63';
           if (!token || !accountId) {
             console.log(JSON.stringify({ audit: 'unavailable', reason: 'Cloudflare API token or account ID is not configured' }));
-            process.exit(0);
+            throw new Error('Cloudflare route inventory is unavailable; refusing to proceed with Staging writes or deployment.');
           }
 
           const endpoints = [
@@ -220,6 +219,34 @@ jobs:
 
           console.log('Cloudflare read-only route/domain audit (no configuration changes):');
           console.log(JSON.stringify(report, null, 2));
+
+          const routeReport = report.find((item) => item.resource === 'zone_worker_routes');
+          const domainReport = report.find((item) => item.resource === 'account_worker_domains');
+          if (!routeReport?.success || !domainReport?.success) {
+            throw new Error('Cloudflare route/domain inventory is incomplete; refusing Staging D1 writes and deployment.');
+          }
+          const stagingWorker = 'customs-os-migration-staging';
+          const productionHosts = new Set(['darbandicommercial.ir', 'mobile.darbandicommercial.ir']);
+          const unsafeDomains = (domainReport.items || []).filter((item) =>
+            productionHosts.has(String(item.hostname || '').toLowerCase()) &&
+            item.service === stagingWorker &&
+            item.enabled !== false
+          );
+          const unsafeRoutes = (routeReport.items || []).filter((item) => {
+            const patternHost = String(item.pattern || '').split('/')[0].toLowerCase();
+            const targetsProductionHost = productionHosts.has(patternHost) ||
+              (patternHost === '*.darbandicommercial.ir' &&
+                [...productionHosts].some((hostname) => hostname.endsWith('.darbandicommercial.ir')));
+            return item.script === stagingWorker && targetsProductionHost;
+          });
+          if (unsafeDomains.length || unsafeRoutes.length) {
+            console.log(JSON.stringify({
+              stagingProductionDomains: unsafeDomains.map(({hostname, service, environment, enabled}) =>
+                ({hostname, service, environment, enabled})),
+              stagingProductionRoutes: unsafeRoutes.map(({pattern, script}) => ({pattern, script})),
+            }, null, 2));
+            throw new Error('Production hostnames still target the Staging Worker; refusing D1 writes and deployment.');
+          }
           NODE
       - name: Apply versioned migrations to the isolated Staging D1
         env:
