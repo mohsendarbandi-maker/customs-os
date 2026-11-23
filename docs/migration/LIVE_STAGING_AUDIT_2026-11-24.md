@@ -348,3 +348,23 @@ Two currently deployed function slugs were inspected so they are not mistaken fo
 - `scan-chat-file` (version 75) validates its scheduled secret, then returns `enabled: false`, `processed: 0`; the deployed source explicitly says chat attachment scanning is disabled.
 
 These are not active business capabilities to re-enable during migration. The migration must preserve their disabled status unless a separate future requirement explicitly reactivates them. The remaining active Edge Functions still require replacement or verified retirement.
+
+### Customs circular parser groundwork and latest verification
+
+The public-source parsing/classification layer has been separated into `worker/customs-circular-parser.ts` with tests in `worker/customs-circular-parser.test.ts`. It provides:
+- RSS item parsing for title/link/date/GUID/description.
+- Telegram public-preview post parsing, deduplication, attachment-name and PDF-link extraction.
+- Persian/Arabic digit normalization, customs document classification and authority/subject-area hints.
+- Strict HTTPS host/path checks for IranImpex articles and explicitly permitted PDF hosts.
+- Filename sanitization without weakening the ESLint control-character rule.
+
+A first test run found a real parser defect: the generic HTML-tag cleanup removed the CDATA section before decoding it, leaving RSS titles empty. The order was corrected so CDATA/entities are decoded before any remaining inline tags are stripped. A subsequent Lint run also identified the forbidden control-character regex; filename sanitization was rewritten as code-point checks rather than disabling the lint rule.
+
+Latest branch verification after these fixes:
+- [Customs OS Build — success](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45278711740): all 159 test files / 937 tests passed, TypeScript, ESLint and Vite build completed successfully.
+- [Chat/Worker full verification — success](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45278724036).
+- [Shipment Cost CI — success](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45278724054).
+- [Independent shipment document metadata — success](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45278724138).
+- [Cloudflare Free Staging — blocked only at D1 migrations](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45278710634); read-only checks passed, but `CLOUDFLARE_D1_API_TOKEN` remains empty so no migrations or Worker deployment ran.
+
+This is parser groundwork only. No production or staging circular-ingestor endpoint has been enabled and no public feed, Telegram post, PDF, or knowledge record has been downloaded or written by this new parser module.
