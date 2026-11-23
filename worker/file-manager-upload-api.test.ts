@@ -30,6 +30,7 @@ type Job = {
   size_bytes: number;
   document_type: string;
   tags: string;
+  operation_sections: string;
   status: string;
   telegram_chat_id: string | null;
   telegram_connection_id: string | null;
@@ -97,14 +98,14 @@ class FakeD1 implements FileManagerD1Database {
       if (this.job) return { meta: { changes: 0 } };
       const [
         id,organizationId,idempotencyKey,fileId,folderId,shipmentId,clientId,
-        originalName,documentName,mimeType,sizeBytes,documentType,tags,createdBy,
+        originalName,documentName,mimeType,sizeBytes,documentType,tags,operationSections,createdBy,
       ] = values;
       this.job = {
         id:String(id),organization_id:String(organizationId),idempotency_key:String(idempotencyKey),
         file_manager_file_id:String(fileId),folder_id:String(folderId),shipment_id:shipmentId as string|null,
         client_id:clientId as string|null,original_name:String(originalName),document_name:String(documentName),
         mime_type:String(mimeType),size_bytes:Number(sizeBytes),document_type:String(documentType),
-        tags:String(tags),status:'uploading',telegram_chat_id:null,telegram_connection_id:null,
+        tags:String(tags),operation_sections:String(operationSections),status:'uploading',telegram_chat_id:null,telegram_connection_id:null,
         telegram_file_id:null,telegram_file_unique_id:null,external_message_id:null,error_code:null,
         created_by:String(createdBy),
       };
