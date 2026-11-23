@@ -1,7 +1,31 @@
 import { describe, expect, it } from 'vitest';
+import { isMigrationIntegrityHealthy, isMigrationParityHealthy } from '../worker/migration-diagnostics';
 import { readFileSync } from 'node:fs';
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+
+describe('Cloudflare migration diagnostic result semantics', () => {
+  it('marks parity unhealthy when required targets are missing, row counts fail, or counts mismatch', () => {
+    expect(isMigrationParityHealthy({ missingRequiredTargets: 0, failedCounts: 0, mismatchedTables: 0 })).toBe(true);
+    expect(isMigrationParityHealthy({ missingRequiredTargets: 1, failedCounts: 0, mismatchedTables: 0 })).toBe(false);
+    expect(isMigrationParityHealthy({ missingRequiredTargets: 0, failedCounts: 1, mismatchedTables: 0 })).toBe(false);
+    expect(isMigrationParityHealthy({ missingRequiredTargets: 0, failedCounts: 0, mismatchedTables: 1 })).toBe(false);
+  });
+
+  it('marks integrity unhealthy when any orphan reference or failed check exists', () => {
+    const healthy = {
+      failedChecks: 0,
+      orphanTotal: 0,
+      customsOfficeReferenceQueryFailed: false,
+      orphanCustomsOfficeReferenceCount: 0,
+    };
+    expect(isMigrationIntegrityHealthy(healthy)).toBe(true);
+    expect(isMigrationIntegrityHealthy({ ...healthy, orphanTotal: 1 })).toBe(false);
+    expect(isMigrationIntegrityHealthy({ ...healthy, failedChecks: 1 })).toBe(false);
+    expect(isMigrationIntegrityHealthy({ ...healthy, customsOfficeReferenceQueryFailed: true })).toBe(false);
+    expect(isMigrationIntegrityHealthy({ ...healthy, orphanCustomsOfficeReferenceCount: 1 })).toBe(false);
+  });
+});
 
 describe('Cloudflare migration foundation', () => {
   it('keeps staging Worker isolated from production routes and Supabase secrets', () => {
