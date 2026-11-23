@@ -402,12 +402,21 @@ export default {
       }
       if (url.pathname === '/migration/file-metadata-keys') {
         try {
-          const keys = await env.MIGRATION_DB.prepare(
-            "SELECT j.key AS metadata_key, COUNT(DISTINCT f.id) AS record_count " +
-            "FROM file_manager_files f, json_each(" +
-            "CASE WHEN json_valid(f.metadata) THEN f.metadata ELSE '{}' END" +
-            ") j GROUP BY j.key ORDER BY j.key",
-          ).all<{ metadata_key: string; record_count: number }>();
+          const [metadataSummary, keys] = await Promise.all([
+            env.MIGRATION_DB.prepare(
+              "SELECT COUNT(*) AS total, " +
+              "SUM(CASE WHEN json_valid(metadata) = 1 THEN " +
+              "CASE WHEN json_type(metadata) = 'object' AND metadata <> '{}' THEN 1 ELSE 0 END " +
+              "ELSE 0 END) AS records_with_non_empty_metadata " +
+              "FROM file_manager_files",
+            ).first<{ total: number; records_with_non_empty_metadata: number }>(),
+            env.MIGRATION_DB.prepare(
+              "SELECT j.key AS metadata_key, COUNT(DISTINCT f.id) AS record_count " +
+              "FROM file_manager_files f, json_each(" +
+              "CASE WHEN json_valid(f.metadata) THEN f.metadata ELSE '{}' END" +
+              ") j GROUP BY j.key ORDER BY j.key",
+            ).all<{ metadata_key: string; record_count: number }>(),
+          ]);
 
           const identifiers = keys.results.filter((row) =>
             /file.?id|unique.?id|message.?id|chat.?id|document|telegram/i.test(row.metadata_key),
@@ -418,11 +427,12 @@ export default {
             database: 'customs-os-migration-staging',
             inspection: 'read_only_metadata_key_names_and_counts',
             sourceTable: 'file_manager_files',
-            metadataRows: keys.results.reduce((sum, row) => Math.max(sum, row.record_count), 0),
+            fileRecords: metadataSummary?.total ?? 0,
+            recordsWithNonEmptyMetadata: metadataSummary?.records_with_non_empty_metadata ?? 0,
             keyCount: keys.results.length,
             candidateIdentifierKeyCount: identifiers.length,
             candidateIdentifierKeys: identifiers,
-            note: 'Key names and record counts only. No metadata values, file IDs, message IDs, names or paths are returned.',
+            note: 'Key names and aggregate record counts only. No metadata values, file IDs, message IDs, names or paths are returned.',
             telegramFileIdAvailability: 'not_assessed_until_identifier_key_semantics_are_reviewed',
           });
         } catch {

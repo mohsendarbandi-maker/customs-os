@@ -95,6 +95,9 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain('json_each(');
     expect(worker).toContain('json_valid(f.metadata)');
     expect(worker).toContain('candidateIdentifierKeys');
+    expect(worker).toContain('records_with_non_empty_metadata');
+    expect(worker).toContain('recordsWithNonEmptyMetadata');
+    expect(worker).not.toContain('Math.max(sum, row.record_count)');
     expect(worker).toContain('telegramFileIdAvailability');
     expect(worker).toContain('FILE_METADATA_KEY_INSPECTION_UNAVAILABLE');
   });

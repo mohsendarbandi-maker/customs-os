@@ -124,7 +124,10 @@ Some client `notes` fields contain credential-like plaintext. No such values are
 - `.github/workflows/deploy-cloudflare-staging.yml` builds the app, runs tests/typecheck/lint, uploads a short-lived artifact, and then requires the GitHub environment secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; it exits with an error if either is missing.
 - That workflow still injects `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` at build time. This is another indication that the existing Frontend bundle is still Supabase-configured.
 - `verify-build.yml` currently runs PostgreSQL fixture/migration tests and a Wrangler dry run, but a dry run is not a deployed Worker API test. It also checks archived Supabase Deno functions.
-- The latest observed run `45149625383` has `action_required` and zero reported jobs; no new successful CI result is recorded by this audit.
+- Staging Worker `customs-os-migration-staging` successfully deployed from commit `e4e639d81128c16db64b71fd3fb88f605855601b` in GitHub Actions run `45156784280`; Cloudflare reported version ID `987e72b9-450e-48d9-a09a-05f9d6062d66` and URL `https://customs-os-migration-staging.mohsen-darbandi.workers.dev`. The deployment log confirmed D1 binding `MIGRATION_DB`, Static Assets binding `ASSETS`, and staging flags `MIGRATION_ENVIRONMENT=staging`, `PRODUCTION_DATA_IMPORTED=false`.
+- The same run passed Unit Tests, TypeScript, ESLint, Vite Build, asset upload, the Worker deployment step, a read-only GET diagnostic step through the Worker, and a Secret-name-only listing. The schema endpoint was required to return HTTP 200 with `.ok=true`. The diagnostic output was written to GitHub Step Summary, but the connected read-only GitHub interface did not expose the Step Summary values in the job log, so exact D1 table counts, parity totals, orphan totals, and file-metadata counts are not copied into this audit as verified numbers.
+- Direct `wrangler d1 info` previously failed with Cloudflare API authentication error code `10000` because the GitHub Actions API token lacks D1 read permission. No token permissions or Secret values were changed. The read-only Worker diagnostics avoid that account-level D1 API permission.
+- Secret names were listed successfully without values: `CUSTOMS_ADMIN_PASSWORD`, `GEMINI_API_KEY`, and `TELEGRAM_BOT_TOKEN`.
 
 ## Phase status from this audit
 | Area | Status | Evidence / blocking condition |
@@ -132,8 +135,8 @@ Some client `notes` fields contain credential-like plaintext. No such values are
 | GitHub migration branch and PR isolation | COMPLETED | Branch exists; PR #314 remains open and unmerged |
 | Frontend path inventory | PARTIAL | Tree-level file counts and route entry points recorded; every module's imports/query/RPC contract not yet exhaustively mapped |
 | Historical Postgres schema inventory | PARTIAL | 294 migration files counted; current live catalog and full semantic port not verified |
-| D1 operational schema | NOT_STARTED / UNVERIFIED | Cloudflare D1 schema was not read live; checked-in D1 migration is migration-control only |
-| Operational data parity | BLOCKED | Attached export has 371 rows; File Manager tables absent; customs-office references unresolved; live D1 counts inaccessible |
+| D1 operational schema | PARTIAL | Deployed Worker read-only `/migration/schema` returned `.ok=true`; exact table counts/DDL could not be captured from the Step Summary through the connected GitHub interface; checked-in D1 migration is still migration-control only |
+| Operational data parity | BLOCKED / UNVERIFIED | The Worker successfully executed the read-only parity and integrity diagnostics, but their exact summary values were not available for this audit; attached export has 371 rows, File Manager tables absent, and 46 customs-office references cannot be resolved within the export |
 | Independent backend API | NOT_STARTED | Staging Worker has only health/migration/auth bootstrap/preliminary AI endpoints |
 | Independent authentication | PARTIAL | Single staging owner bootstrap only; no real D1 users/profiles and multi-device controls verified |
 | File content migration | BLOCKED | Metadata only; Telegram retrieval and bytes/checksums not verified; Supabase-backed rows remain |
@@ -142,8 +145,8 @@ Some client `notes` fields contain credential-like plaintext. No such values are
 | Production cutover | NOT_STARTED (correctly isolated) | No Production changes were made |
 
 ## Required next verification gates
-1. Read Cloudflare account state and Worker bindings without exposing Secret values.
-2. Read-only query the actual staging D1 schema, migration manifest, imported table states, exact row counts, and referential checks. Take a D1 backup before any schema write.
+1. Capture the read-only D1 diagnostic Step Summary values (table counts, parity, integrity, and file metadata) from the next staging workflow run; the Worker endpoint itself has now been exercised successfully.
+2. Reconcile the diagnostic counts against the complete source export and recover the missing File Manager export; take a D1 backup before any schema write.
 3. Reconcile the JSON export against D1 and the missing File Manager export; do not import this JSON blindly or double-import its rows.
 4. Verify real Telegram retrieval for representative old file IDs and verify bytes/checksums before marking any file recoverable.
 5. Complete a full Frontend dependency inventory and map every old query/RPC/Function/Storage/Realtime call to a versioned Worker API contract.

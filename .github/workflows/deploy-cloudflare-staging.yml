@@ -104,6 +104,7 @@ jobs:
           fetch_json parity /migration/parity
           fetch_json integrity /migration/integrity
           fetch_json files /migration/files
+          fetch_json metadata_keys /migration/file-metadata-keys
           fetch_json status /migration/status
 
           if [[ "$(cat "$work_dir/schema.http")" != "200" ]] || ! jq -e '.ok == true' "$work_dir/schema.json" >/dev/null 2>&1; then
@@ -144,6 +145,15 @@ jobs:
               echo "Unavailable; see workflow warning."
             fi
             echo
+            echo "### File metadata key inventory"
+            if [[ -f "$work_dir/metadata_keys.json" ]]; then
+              jq -r '"File records: \(.fileRecords), records with non-empty metadata: \(.recordsWithNonEmptyMetadata), distinct metadata keys: \(.keyCount)"' "$work_dir/metadata_keys.json"
+              jq -r '.candidateIdentifierKeys[] | "- " + .metadata_key + ": " + (.record_count | tostring)' "$work_dir/metadata_keys.json"
+              jq -r '"Telegram file-ID status: \(.telegramFileIdAvailability)"' "$work_dir/metadata_keys.json"
+            else
+              echo "Unavailable; see workflow warning."
+            fi
+            echo
             echo "### Migration gates"
             if [[ -f "$work_dir/status.json" ]]; then
               jq -r '.gates' "$work_dir/status.json"
@@ -154,6 +164,7 @@ jobs:
             echo
             echo "Note: metadata counts and HTTP responses do not establish binary recoverability or operational API parity."
           } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"
 
       - name: List staging Worker secret names only (never values)
         continue-on-error: true
