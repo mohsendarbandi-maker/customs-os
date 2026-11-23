@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typegen": "supabase gen types typescript --local > src/types/supabase.ts",
-    "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs"
+    "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
+    "audit:cloudflare-deps": "node scripts/audit-cloudflare-dependencies.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
