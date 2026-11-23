@@ -45,7 +45,8 @@ class FakeD1 implements FileManagerD1Database {
   async all<T>(sql: string, values: unknown[]): Promise<{ results: T[] }> {
     this.queries.push({ sql, values });
     if (sql.includes('customs_os_file_manager_search MATCH ?')) {
-      return { results: this.searchResults as T[] };
+      const entityType = sql.includes("SELECT 'file' AS entity_type") ? 'file' : 'folder';
+      return { results: this.searchResults.filter((item) => item.entity_type === entityType) as T[] };
     }
     return { results: [] };
   }
