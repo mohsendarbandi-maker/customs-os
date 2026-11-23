@@ -107,6 +107,16 @@ jobs:
           fetch_json metadata_keys /migration/file-metadata-keys
           fetch_json status /migration/status
 
+          if [[ "$(cat "$work_dir/health.http")" != "200" ]] || ! jq -e '.ok == true and .environment == "staging" and .productionTraffic == false and .productionDataImported == false' "$work_dir/health.json" >/dev/null 2>&1; then
+            echo "::error::Refusing diagnostics: the target Worker did not positively identify itself as isolated Staging."
+            exit 1
+          fi
+
+          if [[ "$(cat "$work_dir/health_db.http")" != "200" ]] || ! jq -e '.ok == true and .database == "customs-os-migration-staging" and .operationalDataImported == true' "$work_dir/health_db.json" >/dev/null 2>&1; then
+            echo "::error::Refusing diagnostics: the target database is not the expected imported Staging D1."
+            exit 1
+          fi
+
           if [[ "$(cat "$work_dir/schema.http")" != "200" ]] || ! jq -e '.ok == true' "$work_dir/schema.json" >/dev/null 2>&1; then
             echo "::error::Staging D1 schema inventory could not be verified through the Worker."
             exit 1
@@ -121,6 +131,9 @@ jobs:
             jq -r '"Tables: \(.tableCount), total rows: \(.totalRows), count failures: \(.countFailures)"' "$work_dir/schema.json"
             jq -r '.tables[] | "- " + .name + ": " + (if .rowCount == null then "unverified" else (.rowCount | tostring) end)' "$work_dir/schema.json"
             echo
+            echo "### D1 schema snapshot (DDL only; no row contents)"
+            jq -r '.tables[] | "#### " + .name + "\\n\\n```sql\\n" + (.schemaSql // "-- schema unavailable") + "\\n```\\n"' "$work_dir/schema.json"
+            echo
             echo "### Import parity"
             if [[ -f "$work_dir/parity.json" ]]; then
               jq -r '"HTTP result: \(.ok), manifest tables: \(.sourceTableCount), expected rows: \(.expectedTotal), actual rows: \(.actualTotal), missing required targets: \(.missingRequiredTargets), mismatched tables: \(.mismatchedTables), failed counts: \(.failedCounts)"' "$work_dir/parity.json"
@@ -131,6 +144,8 @@ jobs:
             echo "### Referential integrity"
             if [[ -f "$work_dir/integrity.json" ]]; then
               jq -r '"HTTP result: \(.ok), orphan references: \(.orphanTotal), failed checks: \(.failedChecks), customs-office reference query failed: \(.customsOfficeReferenceQueryFailed)"' "$work_dir/integrity.json"
+              jq -r '.results[] | select((.orphanCount // 0) > 0 or .verified == false) | "- " + .name + ": " + (if .orphanCount == null then "unverified" else (.orphanCount | tostring) end)' "$work_dir/integrity.json"
+              jq -r '.orphanCustomsOfficeReferences[]? | "- Missing office reference: " + .officeId + " via " + .table + " (" + (.referenceCount | tostring) + ")"' "$work_dir/integrity.json"
             else
               echo "Unavailable; see workflow warning."
             fi
@@ -165,6 +180,15 @@ jobs:
             echo "Note: metadata counts and HTTP responses do not establish binary recoverability or operational API parity."
           } >> "$GITHUB_STEP_SUMMARY"
           cat "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$(cat "$work_dir/parity.http")" != "200" ]] || ! jq -e '.ok == true' "$work_dir/parity.json" >/dev/null 2>&1; then
+            echo "::error::Staging import parity gate failed; deployment is not considered verified."
+            exit 1
+          fi
+          if [[ "$(cat "$work_dir/integrity.http")" != "200" ]] || ! jq -e '.ok == true' "$work_dir/integrity.json" >/dev/null 2>&1; then
+            echo "::error::Staging referential-integrity gate failed; inspect relation-level details in the step summary."
+            exit 1
+          fi
 
       - name: Probe one Telegram archive binary (bounded, in-memory, read-only)
         continue-on-error: true
