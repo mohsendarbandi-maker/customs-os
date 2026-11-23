@@ -257,6 +257,7 @@ jobs:
               'file_manager_files',
               'knowledge_page_extractions',
               'knowledge_sources',
+              'knowledge_chunks',
             ]);
             stagingSchemaAudit = {
               checked: true,
