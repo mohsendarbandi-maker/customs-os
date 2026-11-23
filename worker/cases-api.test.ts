@@ -12,6 +12,7 @@ class FakeD1 implements CasesD1Database {
   list: CaseRecord[] = [];
   detail: CaseRecord | null = null;
   related = { shipments: [] as unknown[], declarations: [] as unknown[], documents: [] as unknown[] };
+  auditEvents: Array<Record<string, unknown>> = [];
   queries: Array<{ sql: string; values: unknown[] }> = [];
   prepare(sql: string) { return new FakeStatement(sql, this); }
   first<T>(sql: string, values: unknown[]): T | null {
@@ -30,6 +31,7 @@ class FakeD1 implements CasesD1Database {
     if (sql.includes('FROM shipments s LEFT JOIN vessels v')) return { results: this.related.shipments as T[] };
     if (sql.includes('FROM customs_declarations WHERE case_id')) return { results: this.related.declarations as T[] };
     if (sql.includes('FROM customs_documents WHERE case_id')) return { results: this.related.documents as T[] };
+    if (sql.includes('FROM customs_os_audit_events')) return { results: this.auditEvents as T[] };
     throw new Error('Unexpected query: ' + sql);
   }
 }
@@ -93,6 +95,58 @@ describe('Cloudflare D1 cases read API', () => {
     expect(body.declarations).toHaveLength(1);
     expect(body.documents).toHaveLength(1);
     expect(body.readOnly).toBe(true);
+  });
+
+  it('returns D1 audit events and derives only recorded case status changes', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    db.auditEvents = [{
+      id: 'event-a',
+      actor_user_id: 'user-a',
+      action: 'update',
+      entity_type: 'case',
+      entity_id: 'case-a',
+      before_json: JSON.stringify({ status: 'draft', case_number: '1405-1' }),
+      after_json: JSON.stringify({ status: 'documents', notes: 'اسناد دریافت شد' }),
+      created_at: '2026-11-23T10:00:00.000Z',
+    }];
+    const url = new URL('https://staging.example/api/cases/case-a/history');
+    const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
+    const body = await response.json() as {
+      case: { id: string };
+      history: Array<{ previous_status: string | null; new_status: string; notes: string | null }>;
+      audit: Array<{ action: string; table_name: string; user_id: string; record_id: string }>;
+      historySource: string;
+      legacyHistoryBackfill: string;
+    };
+    expect(response.status).toBe(200);
+    expect(body.case.id).toBe('case-a');
+    expect(body.history).toEqual([expect.objectContaining({
+      previous_status: 'draft',
+      new_status: 'documents',
+      notes: 'اسناد دریافت شد',
+    })]);
+    expect(body.audit).toEqual([expect.objectContaining({
+      action: 'UPDATE',
+      table_name: 'case',
+      user_id: 'user-a',
+      record_id: 'case-a',
+    })]);
+    expect(body.historySource).toBe('customs_os_audit_events');
+    expect(body.legacyHistoryBackfill).toBe('not_imported');
+    const auditQuery = db.queries.find(query => query.sql.includes('FROM customs_os_audit_events'));
+    expect(auditQuery?.sql).toContain('organization_id=?');
+    expect(auditQuery?.values).toEqual(['org-a', 'case', 'case-a']);
+  });
+
+  it('does not query audit history for a case outside the current organization', async () => {
+    const db = new FakeD1();
+    const url = new URL('https://staging.example/api/cases/foreign-case/history');
+    const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
+    expect(response.status).toBe(404);
+    expect(db.queries).toHaveLength(1);
+    expect(db.queries[0].values).toEqual(['foreign-case', 'org-a']);
+    expect(db.queries.some(query => query.sql.includes('customs_os_audit_events'))).toBe(false);
   });
 
   it('rejects client role because client-specific record scoping is not migrated', async () => {
