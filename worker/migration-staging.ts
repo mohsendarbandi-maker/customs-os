@@ -286,6 +286,71 @@ export default {
           return json({ ok: false, error: 'SCHEMA_INSPECTION_UNAVAILABLE' }, 503);
         }
       }
+      if (url.pathname === '/migration/integrity') {
+        const checks: Array<{ name: string; sql: string }> = [
+          { name: 'cases.client_id -> clients.id', sql: "SELECT COUNT(*) AS n FROM cases c WHERE c.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clients p WHERE p.id = c.client_id)" },
+          { name: 'cases.customs_office_id -> customs_offices.id', sql: "SELECT COUNT(*) AS n FROM cases c WHERE c.customs_office_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM customs_offices p WHERE p.id = c.customs_office_id)" },
+          { name: 'shipments.case_id -> cases.id', sql: "SELECT COUNT(*) AS n FROM shipments c WHERE c.case_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cases p WHERE p.id = c.case_id)" },
+          { name: 'shipments.client_id -> clients.id', sql: "SELECT COUNT(*) AS n FROM shipments c WHERE c.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clients p WHERE p.id = c.client_id)" },
+          { name: 'shipments.vessel_id -> vessels.id', sql: "SELECT COUNT(*) AS n FROM shipments c WHERE c.vessel_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM vessels p WHERE p.id = c.vessel_id)" },
+          { name: 'shipments.registration_order_id -> registration_orders.id', sql: "SELECT COUNT(*) AS n FROM shipments c WHERE c.registration_order_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM registration_orders p WHERE p.id = c.registration_order_id)" },
+          { name: 'shipments.customs_office_id -> customs_offices.id', sql: "SELECT COUNT(*) AS n FROM shipments c WHERE c.customs_office_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM customs_offices p WHERE p.id = c.customs_office_id)" },
+          { name: 'shipment_customs_data.shipment_id -> shipments.id', sql: "SELECT COUNT(*) AS n FROM shipment_customs_data c WHERE NOT EXISTS (SELECT 1 FROM shipments p WHERE p.id = c.shipment_id)" },
+          { name: 'shipment_customs_data.customs_office_id -> customs_offices.id', sql: "SELECT COUNT(*) AS n FROM shipment_customs_data c WHERE c.customs_office_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM customs_offices p WHERE p.id = c.customs_office_id)" },
+          { name: 'customs_declarations.case_id -> cases.id', sql: "SELECT COUNT(*) AS n FROM customs_declarations c WHERE c.case_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cases p WHERE p.id = c.case_id)" },
+          { name: 'customs_declarations.shipment_id -> shipments.id', sql: "SELECT COUNT(*) AS n FROM customs_declarations c WHERE c.shipment_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM shipments p WHERE p.id = c.shipment_id)" },
+          { name: 'customs_declarations.customs_office_id -> customs_offices.id', sql: "SELECT COUNT(*) AS n FROM customs_declarations c WHERE c.customs_office_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM customs_offices p WHERE p.id = c.customs_office_id)" },
+          { name: 'shipment_documents.shipment_id -> shipments.id', sql: "SELECT COUNT(*) AS n FROM shipment_documents c WHERE c.shipment_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM shipments p WHERE p.id = c.shipment_id)" },
+          { name: 'file_manager_files.folder_id -> file_manager_folders.id', sql: "SELECT COUNT(*) AS n FROM file_manager_files c WHERE c.folder_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM file_manager_folders p WHERE p.id = c.folder_id)" },
+          { name: 'file_manager_files.shipment_id -> shipments.id', sql: "SELECT COUNT(*) AS n FROM file_manager_files c WHERE c.shipment_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM shipments p WHERE p.id = c.shipment_id)" },
+          { name: 'file_manager_files.client_id -> clients.id', sql: "SELECT COUNT(*) AS n FROM file_manager_files c WHERE c.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clients p WHERE p.id = c.client_id)" },
+          { name: 'file_manager_folders.parent_id -> file_manager_folders.id', sql: "SELECT COUNT(*) AS n FROM file_manager_folders c WHERE c.parent_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM file_manager_folders p WHERE p.id = c.parent_id)" },
+          { name: 'file_manager_folders.client_id -> clients.id', sql: "SELECT COUNT(*) AS n FROM file_manager_folders c WHERE c.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clients p WHERE p.id = c.client_id)" },
+          { name: 'file_manager_folders.shipment_id -> shipments.id', sql: "SELECT COUNT(*) AS n FROM file_manager_folders c WHERE c.shipment_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM shipments p WHERE p.id = c.shipment_id)" },
+          { name: 'file_manager_folders.customs_office_id -> customs_offices.id', sql: "SELECT COUNT(*) AS n FROM file_manager_folders c WHERE c.customs_office_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM customs_offices p WHERE p.id = c.customs_office_id)" },
+          { name: 'customs_documents.case_id -> cases.id', sql: "SELECT COUNT(*) AS n FROM customs_documents c WHERE c.case_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cases p WHERE p.id = c.case_id)" },
+          { name: 'customs_documents.shipment_id -> shipments.id', sql: "SELECT COUNT(*) AS n FROM customs_documents c WHERE c.shipment_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM shipments p WHERE p.id = c.shipment_id)" },
+          { name: 'customs_documents.client_id -> clients.id', sql: "SELECT COUNT(*) AS n FROM customs_documents c WHERE c.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clients p WHERE p.id = c.client_id)" },
+          { name: 'customs_documents.folder_id -> file_manager_folders.id', sql: "SELECT COUNT(*) AS n FROM customs_documents c WHERE c.folder_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM file_manager_folders p WHERE p.id = c.folder_id)" },
+          { name: 'registration_orders.case_id -> cases.id', sql: "SELECT COUNT(*) AS n FROM registration_orders c WHERE c.case_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cases p WHERE p.id = c.case_id)" },
+          { name: 'registration_orders.client_id -> clients.id', sql: "SELECT COUNT(*) AS n FROM registration_orders c WHERE c.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clients p WHERE p.id = c.client_id)" },
+          { name: 'financial_transactions.case_id -> cases.id', sql: "SELECT COUNT(*) AS n FROM financial_transactions c WHERE c.case_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cases p WHERE p.id = c.case_id)" },
+          { name: 'finance_cost_items.shipment_id -> shipments.id', sql: "SELECT COUNT(*) AS n FROM finance_cost_items c WHERE c.shipment_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM shipments p WHERE p.id = c.shipment_id)" },
+          { name: 'finance_cost_items.case_id -> cases.id', sql: "SELECT COUNT(*) AS n FROM finance_cost_items c WHERE c.case_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cases p WHERE p.id = c.case_id)" },
+          { name: 'finance_cost_items.client_id -> clients.id', sql: "SELECT COUNT(*) AS n FROM finance_cost_items c WHERE c.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clients p WHERE p.id = c.client_id)" },
+          { name: 'finance_cost_items.category_id -> finance_cost_categories.id', sql: "SELECT COUNT(*) AS n FROM finance_cost_items c WHERE c.category_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM finance_cost_categories p WHERE p.id = c.category_id)" },
+          { name: 'customs_accounting_vouchers.case_id -> cases.id', sql: "SELECT COUNT(*) AS n FROM customs_accounting_vouchers c WHERE c.case_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cases p WHERE p.id = c.case_id)" },
+          { name: 'customs_accounting_vouchers.client_id -> clients.id', sql: "SELECT COUNT(*) AS n FROM customs_accounting_vouchers c WHERE c.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clients p WHERE p.id = c.client_id)" },
+          { name: 'customs_accounting_vouchers.declaration_id -> customs_declarations.id', sql: "SELECT COUNT(*) AS n FROM customs_accounting_vouchers c WHERE c.declaration_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM customs_declarations p WHERE p.id = c.declaration_id)" },
+        ];
+
+        const results: Array<{ name: string; orphanCount: number | null; verified: boolean }> = [];
+        let failedChecks = 0;
+        let orphanTotal = 0;
+        for (const check of checks) {
+          try {
+            const result = await env.MIGRATION_DB.prepare(check.sql).first<{ n: number }>();
+            const orphanCount = typeof result?.n === 'number' ? result.n : null;
+            if (orphanCount === null) failedChecks += 1;
+            else orphanTotal += orphanCount;
+            results.push({ name: check.name, orphanCount, verified: orphanCount !== null });
+          } catch {
+            failedChecks += 1;
+            results.push({ name: check.name, orphanCount: null, verified: false });
+          }
+        }
+
+        return json({
+          ok: failedChecks === 0,
+          database: 'customs-os-migration-staging',
+          inspection: 'read_only_orphan_reference_counts',
+          checks: results.length,
+          failedChecks,
+          orphanTotal,
+          checksWithOrphans: results.filter((item) => item.orphanCount !== null && item.orphanCount > 0).length,
+          results,
+        });
+      }
       if (url.pathname === '/migration/status') {
         try {
           const [manifest, tableStates, archives] = await Promise.all([
