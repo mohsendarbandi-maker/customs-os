@@ -89,6 +89,16 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain('MIGRATION_PARITY_UNAVAILABLE');
   });
 
+  it('inspects file metadata key names and counts without returning metadata values', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("url.pathname === '/migration/file-metadata-keys'");
+    expect(worker).toContain('json_each(');
+    expect(worker).toContain('json_valid(f.metadata)');
+    expect(worker).toContain('candidateIdentifierKeys');
+    expect(worker).toContain('telegramFileIdAvailability');
+    expect(worker).toContain('FILE_METADATA_KEY_INSPECTION_UNAVAILABLE');
+  });
+
   it('reports file archive metadata counts without exposing content or identifiers', () => {
     const worker = read('../worker/migration-staging.ts');
     expect(worker).toContain("url.pathname === '/migration/files'");
