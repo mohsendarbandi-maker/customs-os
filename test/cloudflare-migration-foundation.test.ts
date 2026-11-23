@@ -284,3 +284,42 @@ describe('Cloudflare Staging session revocation lifecycle', () => {
     expect(lifecycle).toContain('A network interruption is not proof');
   });
 });
+
+
+describe('Cloudflare registration orders vertical slice', () => {
+  it('routes registration-order APIs through the authenticated Staging Worker', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("import { handleRegistrationOrdersApi } from './registration-orders-api'");
+    expect(worker).toContain("url.pathname === '/api/registration-orders'");
+    expect(worker).toContain("url.pathname.startsWith('/api/registration-orders/')");
+    expect(worker).toContain('return handleRegistrationOrdersApi(request, env.MIGRATION_DB, url, profile)');
+  });
+
+  it('defines additive D1 order-allocation storage and hard capacity/finalization triggers', () => {
+    const sql = read('../supabase/migrations-cloudflare/0006_registration_orders_api.sql');
+    expect(sql).toContain('registration_order_external_allocations');
+    expect(sql).toContain('registration_orders_org_number_unique_idx');
+    expect(sql).toContain('registration_order_external_allocation_before_insert');
+    expect(sql).toContain('registration_order_external_allocation_before_update');
+    expect(sql).toContain('registration_order_master_before_update');
+    expect(sql).toContain('ORDER_FINALIZE_NET_WEIGHT_MISMATCH');
+    expect(sql).toContain('ORDER_FINALIZE_GROSS_WEIGHT_MISMATCH');
+    expect(sql).toContain('ORDER_FINALIZE_VALUE_MISMATCH');
+    expect(sql).toContain('ON DELETE RESTRICT');
+    expect(sql).not.toMatch(/\b(DROP|TRUNCATE|DELETE FROM)\b/i);
+  });
+
+  it('uses the Worker registration-order contract from the page, without Supabase calls', () => {
+    const page = read('../src/pages/RegistrationOrdersPage.tsx');
+    const clientApi = read('../src/lib/cloudflareRegistrationOrders.ts');
+    const workerApi = read('../worker/registration-orders-api.ts');
+    expect(page).toContain('cloudflareRegistrationOrdersApi.list');
+    expect(page).toContain('cloudflareRegistrationOrdersApi.create');
+    expect(page).toContain('cloudflareRegistrationOrdersApi.updateExternalAllocation');
+    expect(page).not.toContain('supabase.');
+    expect(clientApi).toContain('/api/registration-orders');
+    expect(workerApi).toContain('handleRegistrationOrdersApi');
+    expect(workerApi).toContain('WHERE ro.id = ? AND ro.organization_id = ?');
+    expect(workerApi).toContain('customs_os_audit_events');
+  });
+});
