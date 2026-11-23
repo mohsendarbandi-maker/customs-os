@@ -74,7 +74,7 @@ jobs:
             'This inventory is static evidence only; dynamic names and indirect imports may require additional tracing.',
             '',
           ];
-          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\\n'));
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n'));
           console.log(JSON.stringify({
             sourceFilesScanned: report.sourceFilesScanned,
             callsiteCount: report.callsiteCount,
