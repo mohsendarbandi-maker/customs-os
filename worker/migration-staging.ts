@@ -348,9 +348,13 @@ const handleTelegramArchiveProbe = async (request: Request, env: Env, url: URL):
 
     const chunks: Uint8Array[] = [];
     let downloadedBytes = 0;
-    while (true) {
+    let streamFinished = false;
+    while (!streamFinished) {
       const part = await reader.read();
-      if (part.done) break;
+      if (part.done) {
+        streamFinished = true;
+        continue;
+      }
       if (!part.value) continue;
       downloadedBytes += part.value.byteLength;
       if (downloadedBytes > MAX_TELEGRAM_PROBE_BYTES) {
