@@ -15,6 +15,10 @@ import {
   createCloudflareFileManagerFolder,
   searchCloudflareFileManager,
   archiveCloudflareFileManagerFile,
+  createCloudflareFileManagerUploadIdempotencyKey,
+  downloadCloudflareFileManagerFile,
+  getCloudflareFileManagerArchiveStatus,
+  uploadCloudflareFileManagerFile,
 } from '../lib/cloudflareFileManager';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -498,12 +502,19 @@ export const FileManagerPage: React.FC = () => {
     if (!pendingFiles.length) return;
     setUploading(true); setError(''); setMessage('');
     let completed = 0; let attemptingFile = '';
+    const cloudflareStaging = isCloudflareStagingHost();
     setProgress('در حال بررسی مقصد آرشیو تلگرام…');
     try {
       const target = await getUploadTarget();
-      const destination = await getFileArchiveDestination();
+      const archiveStatus = cloudflareStaging ? await getCloudflareFileManagerArchiveStatus() : null;
+      const destination = cloudflareStaging ? null : await getFileArchiveDestination();
+      if (cloudflareStaging && !archiveStatus?.configured) {
+        throw new Error('مقصد یکتای آرشیو تلگرام از Metadata اسناد قدیمی قابل تأیید نیست؛ برای جلوگیری از ارسال به گروه اشتباه، آپلود متوقف شد.');
+      }
       const queue = [...pendingFiles];
-      setProgress('مقصد «' + destination.displayName + '» آماده است؛ هر فایل با نام و مشخصات مستقل ارسال می‌شود.');
+      setProgress(cloudflareStaging
+        ? 'مقصد قدیمی تلگرام به‌صورت امن در Worker شناسایی شد؛ شناسه مقصد در مرورگر نمایش داده نمی‌شود.'
+        : 'مقصد «' + destination!.displayName + '» آماده است؛ هر فایل با نام و مشخصات مستقل ارسال می‌شود.');
       for (const draft of queue) {
         const file = draft.file;
         const displayName = windowsName(draft.displayName.trim() || file.name);
@@ -511,35 +522,66 @@ export const FileManagerPage: React.FC = () => {
         setProgress('در حال بهینه‌سازی فایل: ' + displayName);
         const optimized = await optimizeFileForUpload(file);
         const fileToUpload = optimized.file;
-        if (fileToUpload.size > FILE_ARCHIVE_MAX_BYTES) throw new Error(`فایل «${displayName}» پس از بهینه‌سازی هنوز بیشتر از ۲۰ مگابایت است؛ مقصد فعلی آرشیو تلگرام این محدودیت را دارد.`);
+        if (fileToUpload.size > FILE_ARCHIVE_MAX_BYTES) {
+          throw new Error(`فایل «${displayName}» پس از بهینه‌سازی هنوز بیشتر از ۲۰ مگابایت است؛ مقصد فعلی آرشیو تلگرام این محدودیت را دارد.`);
+        }
         const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || '';
         const segments = relativePath.split('/').filter(Boolean).slice(0, -1);
         let parent = target;
         for (const segment of segments) parent = await getOrCreateSubfolder(parent, segment);
         const documentType = draft.documentType || (parent.shipment_id ? parent.folder_type : 'TECHNICAL_SPEC_CATALOG');
         const tags = [...new Set([...uploadTags, ...draft.tags].map(tag=>tag.trim()).filter(Boolean))].slice(0,20);
-        const idempotencyKey = await createTelegramArchiveIdempotencyKey(fileToUpload, {
-          folderId: parent.id, ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
-          documentType, documentName: displayName, destination,
-        });
+        const idempotencyKey = cloudflareStaging
+          ? await createCloudflareFileManagerUploadIdempotencyKey(fileToUpload, {
+              folderId: parent.id,
+              ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+              documentType,
+              documentName: displayName,
+              tags,
+              operationSections: draft.operationSections,
+            })
+          : await createTelegramArchiveIdempotencyKey(fileToUpload, {
+              folderId: parent.id,
+              ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+              documentType,
+              documentName: displayName,
+              destination: destination!,
+            });
         setProgress(optimized.optimized
           ? `حجم فایل ${optimized.savedPercent}٪ کاهش یافت؛ در حال ذخیره مستقل: ${displayName}`
           : 'در حال ذخیره مستقل در تلگرام: ' + displayName);
-        const archived = await uploadTelegramArchivedFile(fileToUpload, {
-          folderId: parent.id, ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
-          documentType, documentName: displayName, tags, destination, idempotencyKey,
-        });
-        const { data: priorFile, error: lookupError } = await supabase.from('file_manager_files')
-          .select('id,metadata').eq('organization_id', organizationId).eq('file_asset_id', archived.fileAssetId).maybeSingle();
-        if (lookupError) throw lookupError;
-        if (!priorFile) throw new Error('فایل در تلگرام دریافت شد، اما رکورد فایل‌منیجر هنوز قابل تأیید نیست؛ صف حفظ شده و تلاش مجدد فایل تکراری ایجاد نمی‌کند.');
-        const priorMetadata = (priorFile.metadata && typeof priorFile.metadata === 'object') ? priorFile.metadata as Record<string,unknown> : {};
-        const { data: linkedFile, error: metadataError } = await supabase.from('file_manager_files')
-          .update({ document_type: documentType, tags, operation_sections: draft.operationSections,
-            metadata: { ...priorMetadata, documentName: displayName, documentType, customsOperationSections: draft.operationSections } })
-          .eq('organization_id', organizationId).eq('id', priorFile.id).select('id').maybeSingle();
-        if (metadataError) throw metadataError;
-        if (!linkedFile) throw new Error('فایل در تلگرام ذخیره شد، اما اطلاعات مستقل فایل‌منیجر تأیید نشد؛ صف حفظ شده و تلاش مجدد فایل تکراری ایجاد نمی‌کند.');
+        if (cloudflareStaging) {
+          await uploadCloudflareFileManagerFile(fileToUpload, {
+            folderId: parent.id,
+            ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+            documentType,
+            documentName: displayName,
+            tags,
+            operationSections: draft.operationSections,
+            idempotencyKey,
+          });
+        } else {
+          const archived = await uploadTelegramArchivedFile(fileToUpload, {
+            folderId: parent.id,
+            ...(parent.shipment_id ? { shipmentId: parent.shipment_id } : {}),
+            documentType,
+            documentName: displayName,
+            tags,
+            destination: destination!,
+            idempotencyKey,
+          });
+          const { data: priorFile, error: lookupError } = await supabase.from('file_manager_files')
+            .select('id,metadata').eq('organization_id', organizationId).eq('file_asset_id', archived.fileAssetId).maybeSingle();
+          if (lookupError) throw lookupError;
+          if (!priorFile) throw new Error('فایل در تلگرام دریافت شد، اما رکورد فایل‌منیجر هنوز قابل تأیید نیست؛ صف حفظ شده و تلاش مجدد فایل تکراری ایجاد نمی‌کند.');
+          const priorMetadata = (priorFile.metadata && typeof priorFile.metadata === 'object') ? priorFile.metadata as Record<string,unknown> : {};
+          const { data: linkedFile, error: metadataError } = await supabase.from('file_manager_files')
+            .update({ document_type: documentType, tags, operation_sections: draft.operationSections,
+              metadata: { ...priorMetadata, documentName: displayName, documentType, customsOperationSections: draft.operationSections } })
+            .eq('organization_id', organizationId).eq('id', priorFile.id).select('id').maybeSingle();
+          if (metadataError) throw metadataError;
+          if (!linkedFile) throw new Error('فایل در تلگرام ذخیره شد، اما اطلاعات مستقل فایل‌منیجر تأیید نشد؛ صف حفظ شده و تلاش مجدد فایل تکراری ایجاد نمی‌کند.');
+        }
         completed += 1;
         setPendingFiles(previous => previous.filter(item => item.id !== draft.id));
         setProgress(`فایل‌های ذخیره‌شده: ${completed} از ${queue.length}`);
@@ -591,6 +633,13 @@ export const FileManagerPage: React.FC = () => {
 
   const getFileBlob = async (file: FileRow): Promise<Blob> => {
     const copyAliasAssetId = typeof file.metadata?.copyAliasFileAssetId === 'string' ? file.metadata.copyAliasFileAssetId : '';
+    if (isCloudflareStagingHost()) {
+      const assetId = copyAliasAssetId || file.file_asset_id;
+      if (!assetId || !String(file.storage_path || '').startsWith('telegram://')) {
+        throw new Error('باینری این فایل در D1/تلگرام قابل بازیابی نیست؛ Metadata به‌تنهایی نسخه واقعی فایل محسوب نمی‌شود.');
+      }
+      return downloadCloudflareFileManagerFile(assetId);
+    }
     const downloadStorageCopy = async (): Promise<Blob> => {
       if (!file.storage_path) throw new Error('نسخه پشتیبان فایل در Supabase Storage ثبت نشده است.');
       const storageBucket = file.metadata?.storageBucket === 'customs-knowledge' ? 'customs-knowledge' : 'customs_documents';
@@ -625,7 +674,7 @@ export const FileManagerPage: React.FC = () => {
   };
 
   const getPrivateStorageUrl = async (file: FileRow, download = false): Promise<string | null> => {
-    if (!file.storage_path) return null;
+    if (isCloudflareStagingHost() || !file.storage_path) return null;
     const name = windowsName(file.original_name || 'document.bin');
     const userKey = profile?.id || 'signed-in-user';
     const storageBucket = file.metadata?.storageBucket === 'customs-knowledge' ? 'customs-knowledge' : 'customs_documents';
