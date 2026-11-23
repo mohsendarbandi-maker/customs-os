@@ -1,5 +1,6 @@
 import { isMigrationIntegrityHealthy, isMigrationParityHealthy } from './migration-diagnostics';
 import { handleClientsApi } from './clients-api';
+import { handleCasesApi } from './cases-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -1022,6 +1023,11 @@ export default {
       if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
       if (!profile.is_active || !['owner', 'admin', 'broker'].includes(profile.role)) return json({ error: 'FORBIDDEN' }, 403);
       return handleClientsApi(request, env, url, profile);
+    }
+
+    if (url.pathname === '/api/cases' || url.pathname.startsWith('/api/cases/')) {
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
+      return handleCasesApi(request, env.MIGRATION_DB, url, profile);
     }
 
     if (url.pathname.startsWith('/api/')) return json({ error: 'API_NOT_FOUND' }, 404);
