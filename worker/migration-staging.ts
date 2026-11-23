@@ -5,6 +5,7 @@ import { handleDeviceSessionsApi } from './device-sessions-api';
 import { handleRegistrationOrdersApi } from './registration-orders-api';
 import { handleTelegramFileDownload } from './telegram-files-api';
 import { handleFileManagerApi } from './file-manager-api';
+import { getFileManagerArchiveStatus, handleFileManagerUpload } from './file-manager-upload-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -1083,6 +1084,16 @@ export default {
     if (url.pathname.startsWith('/api/files/')) {
       if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
       return handleTelegramFileDownload(request, env, url, profile);
+    }
+
+    if (url.pathname === '/api/file-manager/archive-status' && request.method === 'GET') {
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
+      return getFileManagerArchiveStatus(env.MIGRATION_DB, profile);
+    }
+
+    if (url.pathname === '/api/file-manager/uploads' && request.method === 'POST') {
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
+      return handleFileManagerUpload(request, env, url, profile);
     }
 
     if (url.pathname === '/api/file-manager' || url.pathname.startsWith('/api/file-manager/')) {
