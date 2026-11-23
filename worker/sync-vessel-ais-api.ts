@@ -164,6 +164,7 @@ export const handleSyncVesselAisV2 = async (
   db: VesselAisDatabase,
   token?: string,
   fetchImpl: FetchLike = fetch,
+  organizationId?: string,
 ): Promise<Response> => {
   if (request.method !== 'POST') {
     return json({ ok: false, code: 'METHOD_NOT_ALLOWED' }, 405);
@@ -267,12 +268,16 @@ export const handleSyncVesselAisV2 = async (
     return json({ ok: false, code: 'UNSUPPORTED_MODE' }, 400);
   }
 
+  if (!organizationId) {
+    return json({ ok: false, code: 'ORGANIZATION_SCOPE_REQUIRED' }, 403);
+  }
+
   let targets: VesselAisRow[];
   try {
     const rows = await db.prepare(
       'SELECT id, name, imo_number, mmsi_number FROM vessels ' +
-      'WHERE mmsi_number IS NOT NULL ORDER BY name LIMIT 50',
-    ).all<VesselAisRow>();
+      'WHERE organization_id = ? AND mmsi_number IS NOT NULL ORDER BY name LIMIT 50',
+    ).bind(organizationId).all<VesselAisRow>();
 
     targets = rows.results
       .filter((vessel) => MMSI_PATTERN.test(String(vessel.mmsi_number ?? '')))
@@ -355,8 +360,8 @@ export const handleSyncVesselAisV2 = async (
 
     try {
       const result = await db.prepare(
-        'UPDATE vessels SET ' + updates.join(', ') + ' WHERE id = ?',
-      ).bind(...values).run();
+        'UPDATE vessels SET ' + updates.join(', ') + ' WHERE id = ? AND organization_id = ?',
+      ).bind(...values, organizationId).run();
 
       if (changedRows(result) <= 0) {
         failed.push({
