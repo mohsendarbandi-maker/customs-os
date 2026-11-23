@@ -55,7 +55,7 @@ describe('Cloudflare D1 cases read API', () => {
     expect(body.items[0].id).toBe('case-a');
     expect(body.total).toBe(1);
     expect(body.dataScope).toBe('authenticated_organization_only');
-    expect(db.queries[0].sql).toContain('c.organization_id = ?');
+    expect(db.queries[0].sql).toMatch(/c\\.organization_id\\s*=\\s*\\?/);
     expect(db.queries[0].values).toContain('org-a');
   });
 
