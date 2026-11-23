@@ -224,6 +224,13 @@ describe('customs office reference restoration migration', () => {
     expect(workflow).toContain('liveDatabaseIdMatchesConfig');
     expect(workflow).toContain('configuredDatabaseId');
     expect(workflow).toContain('MIGRATION_DB');
+    const auditStep = workflow.slice(
+      workflow.indexOf('Audit remaining Supabase runtime dependencies'),
+      workflow.indexOf('Build application'),
+    );
+    expect(auditStep).toContain('report.categories');
+    expect(auditStep).toContain('report.counts');
+    expect(auditStep).toContain('report.perFile');
     const d1Step = workflow.slice(workflow.indexOf('Apply versioned migrations'), migration);
     expect(d1Step).toContain('secrets.CLOUDFLARE_D1_API_TOKEN');
     expect(d1Step).toContain('Account D1 Write permission');
