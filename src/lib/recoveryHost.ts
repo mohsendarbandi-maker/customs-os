@@ -1,13 +1,9 @@
-export const isCloudflareRecoveryHost = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const hostname = window.location.hostname.toLowerCase();
-  return hostname.endsWith('.workers.dev') ||
-    hostname === 'darbandicommercial.ir' ||
-    hostname === 'mobile.darbandicommercial.ir';
-};
+export const isCloudflareRecoveryHost = (): boolean => isCloudflareStagingHost();
 
 // Only the isolated workers.dev migration hostname uses the temporary staging
-// workspace. Production/custom domains are deliberately excluded from this gate.
+// workspace and its single-admin D1 session. Production custom domains continue
+// using the current production authentication flow until multi-user D1 Auth passes
+// its import, authorization, session, and regression gates.
 export const isCloudflareStagingHost = (): boolean => {
   if (typeof window === 'undefined') return false;
   const hostname = window.location.hostname.toLowerCase();
