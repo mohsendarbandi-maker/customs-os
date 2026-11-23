@@ -155,9 +155,23 @@ The migration is not Supabase-independent yet. In particular:
 
 The Staging Worker currently has only a limited subset of domain APIs. A successful build or 668-row import is not evidence that all Frontend modules are operational on D1.
 
-## Next safety gate
+## Current production-domain recovery and remaining deployment gate
 
-Before any Staging D1 migration or Worker deployment, the owner must explicitly decide how the two production hostnames should be served. The current binding is inconsistent with the required isolation policy. Do not silently detach or rebind production hostnames as part of a Staging deployment workflow.
+The root and mobile production domains were explicitly reassigned to the existing `customs` Worker through the controlled Cloudflare custom-domain API workflow. No DNS records, Worker script, production D1 database, or Production application data were changed by that operation.
+
+A subsequent read-only Cloudflare API audit verified all four custom domains enabled on the existing `customs` Worker:
+
+- `darbandicommercial.ir`
+- `mobile.darbandicommercial.ir`
+- `chat.darbandicommercial.ir`
+- `reminders.darbandicommercial.ir`
+
+All four hosts returned the current Customs OS HTML and the app JavaScript/CSS assets with HTTP 200. The post-cutover audit is recorded in GitHub Actions run [45270314080](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45270314080). This proves page/asset delivery, not a full interactive login or every business workflow.
+
+The current `customs` Worker still has `ASSETS`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SECRET_KEY` bindings. A runtime audit of the currently served JavaScript found the existing Supabase password-grant flow, not the D1 staging login endpoints. The production website therefore continues using its current Supabase-backed authentication path. The staging-only recovery gate is now restricted to `customs-os-migration-staging.*.workers.dev`.
+
+The Staging D1 migration workflow is currently blocked before applying migrations because the Preview environment's `CLOUDFLARE_D1_API_TOKEN` resolves to an empty value. The existing Worker/domain API token successfully reads Worker settings and reassigns custom domains, but the D1 read-permission probe with that token returned HTTP 401 / Cloudflare error 10000. The D1-specific write token is deliberately separate from the Worker deployment token. Do not remove this gate or bypass the D1 migration step: migration `0005_auth_device_sessions.sql` adds columns used by the D1 session code, so deploying that code before applying the schema could break staging authentication.
+
 
 
 ## Additional Frontend dependency scan
@@ -179,4 +193,53 @@ The read-only static scanner ran as part of the same Staging workflow against 19
 
 The scan itself made no network requests, read no environment-variable values, and printed no credential values. Zero literal Supabase host strings does not mean there are no runtime Supabase dependencies: the Frontend imports the SDK, the Worker reads its configured Supabase URL, and the scanner found 727 callsites across the categories above. This is a static inventory, not a proof of complete discovery of dynamic or indirect use.
 
-The Frontend recovery-host helper returns true for both `darbandicommercial.ir` and `mobile.darbandicommercial.ir`. The login page and AuthContext consequently select the Cloudflare `/api/auth/login` and `/api/auth/session` paths on those hostnames. The current Staging Worker source implements this recovery login around a single fixed administrator identity and `CUSTOMS_ADMIN_PASSWORD`; it is not yet a complete D1-backed multi-user authentication system. The currently deployed Worker revision was not compared byte-for-byte with the branch source in this audit, so this is a source-level finding, not a claim about the exact deployed bundle.
+The staging-only recovery-host helper now returns true only for `customs-os-migration-staging.*.workers.dev`. Production root/mobile domains therefore stay on the existing Worker/Supabase login flow until multi-user D1 Auth is complete. The currently served production JS was inspected read-only and contains the Supabase password-grant flow; a GET to `/api/auth/session` returned the SPA HTML fallback rather than a JSON session response, confirming that route is not the active production auth contract.
+
+The live Staging D1 schema contains 34 tables and 1,097 countable rows (one system table count is unavailable). Auth-related inventory:
+
+- `profiles`: 1 row
+- `customs_admin_credentials`: 0 rows
+- `customs_admin_sessions`: 2 rows
+
+The Staging `profiles` table is not a migrated copy of all Supabase users, and its fixed owner/session model is not equivalent to the production roles and tenant-scoped access. Source PostgreSQL access remained blocked by `57P03` during the direct schema/user export attempt; no user records or password hashes have been imported. This is not yet a complete D1-backed multi-user authentication system.
+
+
+## Additional work completed after the first audit
+
+### Production domain restoration
+
+- Root and mobile domains now target the original `customs` Worker.
+- Chat and reminders remain on `customs`.
+- Read-only post-cutover verification succeeded for the domain bindings and frontend static assets.
+- The production Worker code and its current Supabase bindings were not redeployed or modified.
+
+### First Supabase Edge Function port in the migration branch
+
+The source for `vessel-multi-source` was retrieved from the live Supabase project (version 8). It reads VesselFinder, MyShipTracking, Maritime Optima, and MagicPort public pages and performs no Supabase table or RPC operations. A compatible Worker implementation now exists at:
+
+- `worker/vessel-multi-source-api.ts`
+- `worker/vessel-multi-source-api.test.ts`
+- `worker/vessel-multi-source-route.test.ts`
+
+The staging Worker branch registers `POST /functions/v1/vessel-multi-source`, verifies the same-origin D1 session cookie before making outbound provider requests, and returns no-store JSON. The existing Frontend SDK invocation path is compatible with same-origin Worker routing because production/staging hosts use their own origin as the Supabase-compatible API base. The function port is branch code only; it has not been deployed to the Staging Worker because the D1 migration gate is still blocked. The original 16 Supabase Edge Functions remain active in Supabase until each replacement is deployed and verified; this one port does not imply their removal.
+
+### CI evidence
+
+For branch commit `fe575093ace56ee1b4c41034295f476ca2d29186`, the following completed successfully:
+
+- [Customs OS Build](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45273008375)
+- [Chat and full verification](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45273021718)
+- [Shipment Cost CI](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45273021634)
+- [Independent shipment document metadata](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45273021590)
+
+The matching Staging workflow passed its earlier tests and read-only D1 diagnostics, but stopped at `Apply versioned migrations to the isolated Staging D1` because `CLOUDFLARE_D1_API_TOKEN` was empty. No D1 migration or Worker deployment was performed by that run. The later `1e2120de` branch-head commit only published generated `staging-dist/` assets; it did not deploy the Worker.
+
+### Current remaining migration gates
+
+- Add a narrowly scoped Cloudflare D1 API token to the GitHub `Preview – customs-os` environment as `CLOUDFLARE_D1_API_TOKEN` with Account D1 Write permission. Do not send its value in chat.
+- Restore/read the authoritative Supabase schema and user/session inventory once the source Postgres service accepts connections; the last direct read attempt was blocked by `57P03`.
+- Design and verify D1 multi-user authentication, roles, tenant scoping, and session lifecycle. Do not enable the single-admin staging login on production domains.
+- Reconcile 155 D1 orphan references, including the two missing customs-office IDs.
+- Port and test the remaining active Edge Functions, Storage, Realtime, scheduled work, and all data APIs.
+- Verify file bytes and checksums for both Telegram-backed and Supabase-backed objects.
+- Keep Production cutover blocked until all parity, authorization, operational regression, and rollback gates pass.
