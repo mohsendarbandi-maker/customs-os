@@ -33,7 +33,7 @@ describe('Cloudflare migration foundation', () => {
   it('exposes a read-only D1 schema and row-count inventory', () => {
     const worker = read('../worker/migration-staging.ts');
     expect(worker).toContain("url.pathname === '/migration/schema'");
-    expect(worker).toContain("SELECT name FROM sqlite_master WHERE type = 'table'");
+    expect(worker).toContain("SELECT name, sql FROM sqlite_master WHERE type = 'table'");
     expect(worker).toContain('SELECT COUNT(*) AS row_count FROM ');
     expect(worker).toContain('schemaSql: table.sql');
     expect(worker).toContain('inspection: \'read_only_sqlite_master_and_count\'');
