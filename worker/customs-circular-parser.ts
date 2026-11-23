@@ -65,8 +65,12 @@ export const toLatinDigits = (value: string): string => value
   .replace(/[٠-٩]/g, (character) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(character)));
 
 export const safeFilename = (value: string): string => {
-  const raw = value.normalize('NFKC')
-    .replace(/[\\/\r\n\u0000-\u001f]/g, '_')
+  const raw = Array.from(value.normalize('NFKC'), (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint < 0x20 || codePoint === 0x7f || character === '/' || character === '\\'
+      ? '_'
+      : character;
+  }).join('')
     .replace(/[^\p{L}\p{N}._ -]/gu, '_')
     .trim();
   return (raw || 'customs-circular.pdf').slice(-170);
