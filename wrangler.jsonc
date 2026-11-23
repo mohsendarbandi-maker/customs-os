@@ -1,8 +1,12 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "customs",
+  // This branch is a migration preview only. Production custom domains remain
+  // owned by main and must never be deployed from the migration branch.
+  "name": "customs-os-migration-preview",
   "main": "worker/index.ts",
   "compatibility_date": "2026-09-26",
+  "workers_dev": true,
+  "preview_urls": false,
   "vars": {
     "SUPABASE_URL": "https://bjngfgiecvihofemptub.supabase.co",
     "SUPABASE_ANON_KEY": "sb_publishable_pIh0yF6SQcQ-IAa_FkbjWA_qTSm83Sr"
@@ -36,23 +40,5 @@
     ],
     "html_handling": "none",
     "not_found_handling": "single-page-application"
-  },
-  "routes": [
-    {
-      "pattern": "darbandicommercial.ir",
-      "custom_domain": true
-    },
-    {
-      "pattern": "chat.darbandicommercial.ir",
-      "custom_domain": true
-    },
-    {
-      "pattern": "reminders.darbandicommercial.ir",
-      "custom_domain": true
-    },
-    {
-      "pattern": "mobile.darbandicommercial.ir",
-      "custom_domain": true
-    }
-  ]
+  }
 }
