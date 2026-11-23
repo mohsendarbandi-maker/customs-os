@@ -58,19 +58,40 @@ jobs:
             (deployment.versions ?? []).filter((version) => Number(version.percentage ?? 0) > 0).map((version) => version.version_id)
           ))];
           const activeVersions = activeVersionIds.slice(0, 5).map((id) => ({ id }));
-          const workerBase = 'https://customs.mohsen-darbandi.workers.dev';
-          const pageResponse = await fetch(workerBase + '/', { headers: { Accept: 'text/html' }, cache: 'no-store', signal: AbortSignal.timeout(20000) });
-          const pageText = await pageResponse.text();
-          const scripts = [...pageText.matchAll(/<script[^>]+src=["']([^"']+\.js)["']/gi)].map((match) => match[1]).slice(0, 3);
-          const styles = [...pageText.matchAll(/<link[^>]+href=["']([^"']+\.css)["']/gi)].map((match) => match[1]).slice(0, 3);
-          const assetChecks = await Promise.all([...scripts, ...styles].map(async (assetPath) => {
+          const smokeHosts = [
+            'https://chat.darbandicommercial.ir',
+            'https://reminders.darbandicommercial.ir',
+            'https://darbandicommercial.ir',
+            'https://mobile.darbandicommercial.ir',
+          ];
+          const frontendChecks = await Promise.all(smokeHosts.map(async (base) => {
             try {
-              const url = new URL(assetPath, workerBase);
-              const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
-              const body = await response.arrayBuffer();
-              return { path: url.pathname, status: response.status, contentType: response.headers.get('content-type'), bytes: body.byteLength };
+              const page = await fetch(base + '/', {
+                headers: { Accept: 'text/html' }, cache: 'no-store', signal: AbortSignal.timeout(20000),
+              });
+              const html = await page.text();
+              const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+\\.js)["']/gi)].map((match) => match[1]).slice(0, 3);
+              const styles = [...html.matchAll(/<link[^>]+href=["']([^"']+\\.css)["']/gi)].map((match) => match[1]).slice(0, 3);
+              const assets = await Promise.all([...scripts, ...styles].map(async (assetPath) => {
+                try {
+                  const url = new URL(assetPath, base);
+                  const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+                  const bytes = (await response.arrayBuffer()).byteLength;
+                  return { path: url.pathname, status: response.status, contentType: response.headers.get('content-type'), bytes };
+                } catch (error) {
+                  return { path: assetPath, error: error instanceof Error ? error.message : 'request failed' };
+                }
+              }));
+              return {
+                host: base, status: page.status, contentType: page.headers.get('content-type'),
+                buildSignature: page.headers.get('x-customs-os-build'),
+                htmlBytes: new TextEncoder().encode(html).length,
+                scriptPaths: scripts, stylePaths: styles, assets,
+                frontendAssetsOk: page.ok && scripts.length > 0 && assets.length > 0 &&
+                  assets.every((asset) => asset.status === 200 && asset.bytes > 0),
+              };
             } catch (error) {
-              return { path: assetPath, error: error instanceof Error ? error.message : 'request failed' };
+              return { host: base, error: error instanceof Error ? error.message : 'request failed' };
             }
           }));
           const result = {
@@ -104,13 +125,7 @@ jobs:
                 ['darbandicommercial.ir','mobile.darbandicommercial.ir','chat.darbandicommercial.ir','reminders.darbandicommercial.ir'].includes(item.hostname)
               ).map((item) => ({ hostname: item.hostname, service: item.service, enabled: item.enabled })),
             },
-            liveWorkerFrontend: {
-              url: workerBase + '/', status: pageResponse.status,
-              contentType: pageResponse.headers.get('content-type'),
-              buildSignature: pageResponse.headers.get('x-customs-os-build'),
-              htmlBytes: new TextEncoder().encode(pageText).length,
-              scriptPaths: scripts, stylePaths: styles, assets: assetChecks,
-            },
+            liveWorkerFrontends: frontendChecks,
           };
           console.log(JSON.stringify(result, null, 2));
           if (!settings.success || !deployments.success || !versions.success || !domains.success) {
