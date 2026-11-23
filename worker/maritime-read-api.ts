@@ -19,6 +19,20 @@ const json = (body: unknown, status = 200): Response => Response.json(body, {
   },
 });
 
+const nullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeVessel = (row: Record<string, unknown>) => ({
+  ...row,
+  last_latitude: nullableNumber(row.last_latitude),
+  last_longitude: nullableNumber(row.last_longitude),
+  last_speed_knots: nullableNumber(row.last_speed_knots),
+  last_course_deg: nullableNumber(row.last_course_deg),
+});
+
 const VESSELS_SQL =
   'SELECT id, name, imo_number, mmsi_number, flag_code, last_latitude, last_longitude, ' +
   'last_position_at, last_position_source, last_speed_knots, last_course_deg ' +
@@ -50,7 +64,7 @@ export const handleMaritimeReadApi = async (
       return json({
         ok: true,
         count: rows.results.length,
-        vessels: rows.results,
+        vessels: rows.results.map((row) => normalizeVessel(row as Record<string, unknown>)),
       });
     } catch {
       return json({ ok: false, error: 'MARITIME_VESSELS_UNAVAILABLE' }, 503);
