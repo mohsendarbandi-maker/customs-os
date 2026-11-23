@@ -378,7 +378,7 @@ jobs:
             authRuntime,
             authSessionEndpoint,
             stagingSchemaAudit,
-            stagingSelectedBusinessSchemas: stagingSchemaAudit.authRelatedTables?.filter((table) => table.name === 'vessels') ?? [],
+            stagingSelectedBusinessSchemas: stagingSchemaAudit.authRelatedTables?.filter((table) => ['vessels', 'shipments', 'clients', 'shipping_lines', 'shipping_line_contacts'].includes(table.name)) ?? [],
           };
           console.log(JSON.stringify(result, null, 2));
           if (!settings.success || !deployments.success || !versions.success || !domains.success) {
