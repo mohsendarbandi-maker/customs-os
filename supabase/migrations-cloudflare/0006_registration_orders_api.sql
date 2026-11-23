@@ -355,7 +355,7 @@ BEGIN
       SELECT SUM(a.net_weight_kg) FROM registration_order_external_allocations a
       WHERE a.organization_id=OLD.organization_id AND a.registration_order_id=OLD.id AND a.status<>'cancelled'
     ),0)
-  ) > 0) THEN RAISE(ABORT, 'ORDER_NET_CAPACITY_CANNOT_BE_CLEARED') END;
+  > 0) THEN RAISE(ABORT, 'ORDER_NET_CAPACITY_CANNOT_BE_CLEARED') END;
 
   SELECT CASE WHEN NEW.net_weight_kg IS NOT NULL AND (
     COALESCE((
@@ -374,7 +374,7 @@ BEGIN
       SELECT SUM(a.net_weight_kg) FROM registration_order_external_allocations a
       WHERE a.organization_id=OLD.organization_id AND a.registration_order_id=OLD.id AND a.status<>'cancelled'
     ),0)
-  ) > NEW.net_weight_kg + 0.001) THEN RAISE(ABORT, 'ORDER_NET_WEIGHT_BELOW_ALLOCATED') END;
+  > NEW.net_weight_kg + 0.001) THEN RAISE(ABORT, 'ORDER_NET_WEIGHT_BELOW_ALLOCATED') END;
 
   SELECT CASE WHEN NEW.gross_weight_kg IS NOT NULL AND (
     COALESCE((
@@ -393,7 +393,7 @@ BEGIN
       SELECT SUM(COALESCE(a.gross_weight_kg,0)) FROM registration_order_external_allocations a
       WHERE a.organization_id=OLD.organization_id AND a.registration_order_id=OLD.id AND a.status<>'cancelled'
     ),0)
-  ) > NEW.gross_weight_kg + 0.001) THEN RAISE(ABORT, 'ORDER_GROSS_WEIGHT_BELOW_ALLOCATED') END;
+  > NEW.gross_weight_kg + 0.001) THEN RAISE(ABORT, 'ORDER_GROSS_WEIGHT_BELOW_ALLOCATED') END;
 
   SELECT CASE WHEN NEW.value_amount IS NULL AND (
     COALESCE((
@@ -412,7 +412,7 @@ BEGIN
       SELECT SUM(a.value_amount) FROM registration_order_external_allocations a
       WHERE a.organization_id=OLD.organization_id AND a.registration_order_id=OLD.id AND a.status<>'cancelled'
     ),0)
-  ) > 0) THEN RAISE(ABORT, 'ORDER_VALUE_CAPACITY_CANNOT_BE_CLEARED') END;
+  > 0) THEN RAISE(ABORT, 'ORDER_VALUE_CAPACITY_CANNOT_BE_CLEARED') END;
 
   SELECT CASE WHEN NEW.value_amount IS NOT NULL AND (
     COALESCE((
@@ -431,7 +431,7 @@ BEGIN
       SELECT SUM(a.value_amount) FROM registration_order_external_allocations a
       WHERE a.organization_id=OLD.organization_id AND a.registration_order_id=OLD.id AND a.status<>'cancelled'
     ),0)
-  ) > NEW.value_amount + 0.01) THEN RAISE(ABORT, 'ORDER_VALUE_BELOW_ALLOCATED') END;
+  > NEW.value_amount + 0.01) THEN RAISE(ABORT, 'ORDER_VALUE_BELOW_ALLOCATED') END;
 
   SELECT CASE WHEN NEW.is_closed=1 AND (
     NEW.net_weight_kg IS NULL OR (
@@ -471,7 +471,7 @@ BEGIN
       SELECT SUM(COALESCE(a.gross_weight_kg,0)) FROM registration_order_external_allocations a
       WHERE a.organization_id=OLD.organization_id AND a.registration_order_id=OLD.id AND a.status<>'cancelled'
     ),0)
-  ) <> NEW.gross_weight_kg) THEN RAISE(ABORT, 'ORDER_FINALIZE_GROSS_WEIGHT_MISMATCH') END;
+  ) <> NEW.gross_weight_kg THEN RAISE(ABORT, 'ORDER_FINALIZE_GROSS_WEIGHT_MISMATCH') END;
 
   SELECT CASE WHEN NEW.is_closed=1 AND (
     NEW.value_amount IS NULL OR NEW.currency IS NULL OR
