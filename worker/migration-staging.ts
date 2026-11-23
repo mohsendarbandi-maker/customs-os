@@ -1,4 +1,5 @@
 import { isMigrationIntegrityHealthy, isMigrationParityHealthy } from './migration-diagnostics';
+import { handleClientsApi } from './clients-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -8,6 +9,7 @@ interface D1Statement {
 }
 interface D1Database {
   prepare(sql: string): D1Statement;
+  batch(statements: D1Statement[]): Promise<unknown[]>;
 }
 interface StaticAssets {
   fetch(request: Request): Promise<Response>;
@@ -1014,6 +1016,12 @@ export default {
 
     if (url.pathname === '/api/ai' || url.pathname === '/functions/v1/ai-assistant') {
       return handleGemini(request, env);
+    }
+
+    if (url.pathname === '/api/clients' || url.pathname.startsWith('/api/clients/')) {
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
+      if (!profile.is_active || !['owner', 'admin', 'broker'].includes(profile.role)) return json({ error: 'FORBIDDEN' }, 403);
+      return handleClientsApi(request, env, url, profile);
     }
 
     if (url.pathname.startsWith('/api/')) return json({ error: 'API_NOT_FOUND' }, 404);
