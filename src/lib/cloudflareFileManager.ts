@@ -112,3 +112,15 @@ export async function createCloudflareFileManagerFolder(input: {
     body: JSON.stringify(input),
   });
 }
+
+export async function archiveCloudflareFileManagerFile(fileId: string): Promise<{ archived: boolean }> {
+  return request('/api/file-manager/files/' + encodeURIComponent(fileId) + '/archive', {
+    method: 'POST',
+  });
+}
+
+export async function restoreCloudflareFileManagerFile(fileId: string): Promise<{ restored: boolean }> {
+  return request('/api/file-manager/files/' + encodeURIComponent(fileId) + '/restore', {
+    method: 'POST',
+  });
+}
