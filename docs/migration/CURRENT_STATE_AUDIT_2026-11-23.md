@@ -224,3 +224,69 @@ The mismatches between Telegram backend flags and Telegram path classifications 
 | AI + knowledge + AI Operator | PARTIAL | Preliminary Gemini endpoint only; no D1 retrieval, evidence persistence, knowledge integration, or guarded operator parity |
 | Production cutover | NOT_STARTED (correctly isolated) | No Production route, DNS, Worker, or data mutation |
 
+
+## Latest revalidation — 2026-11-23 13:52 UTC
+
+This section supersedes earlier counts/statuses above where they conflict. It records the latest read-only diagnostics and CI evidence from the migration branch. No Production resources were modified.
+
+### Current D1 import and reference integrity evidence
+
+- The live Staging D1 inventory reported **34 tables**, **1,097 rows**, and **1 count failure**. The count failure is Cloudflare's internal `_cf_KV` table; it is not included as a verified application-table count.
+- Import parity reported **26 manifest tables**, **668 expected rows**, **668 actual rows**, **0 missing required targets**, **0 mismatched tables**, and **0 failed counts**.
+- Referential integrity reported **155 orphan references** across five checks, all targeting the empty `customs_offices` table:
+  - `3aa9da26-3ded-40e4-8772-51c5f4d8385b`: 103 references.
+  - `faa23eed-35f3-49e4-be70-7d880edf3f07`: 52 references.
+- The organization export's File Manager metadata preserves the reference values:
+  - First ID: `منطقه آزاد تجاری صنعتی انزلی`, code `20100`.
+  - Second ID: `منطقه آزاد گمرک حسن رود`, code `20601`.
+- A single additive, idempotent D1 migration `0002_restore_customs_office_reference_rows.sql` has been committed to the migration branch. It preserves the original UUIDs and adds the two shared reference rows. **It has not been applied**; the 155 orphan references remain until the D1 migration step succeeds.
+- The D1 database UUID in `wrangler.migration-staging.jsonc` was re-read as `b938fa3c-4995-4d27-aeda-f72f2f484a3c`, matching the requested Staging D1 ID. No ID correction is required.
+
+### User and authentication data
+
+- Current D1 diagnostics reported one `organizations` row and one `profiles` row.
+- The uploaded organization JSON export contains 24 exported tables but no `profiles` table. The existing Staging profile is therefore not evidence that real user accounts, password verifiers, Auth sessions, or device sessions were migrated.
+- Full multi-user authentication, role parity, password migration/reset, session refresh, and multi-device management remain incomplete.
+
+### Static Supabase dependency audit
+
+The latest CI read-only scan on the migration branch inspected 181 source files and identified 747 syntactically recognizable callsites across 94 files:
+
+| Category | Distinct literal references |
+|---|---:|
+| Supabase SDK imports | 1 |
+| Table names | 68 |
+| RPC names | 78 |
+| Direct Edge Function invokes | 6 |
+| Edge Function wrapper invokes | 5 |
+| Storage buckets | 4 |
+| Realtime channels | 7 |
+| Auth methods | 6 |
+| Literal `*.supabase.co` host references | 0 |
+| Supabase environment-variable names | 5 |
+
+The inventory is a static scan of `src/` and `worker/`; dynamic names and indirect aliases may not be detected. It is not proof of live network traffic. The audit made no network calls, read no environment-variable values, and printed no credential values. It confirms that the Supabase SDK and runtime dependencies remain; complete Supabase independence has **not** been achieved.
+
+### Dependency and CI revalidation
+
+- `@tanstack/react-query` is pinned to `5.108.2` so the Deno minimum-dependency-age policy remains enabled without rejecting the package as too new.
+- On commit `835acebbfcfe71b5b0f1a2a81e4a9e623bc9dff3`, the Customs OS Build, verify-chat-modern-final, and Shipment Cost CI checks completed successfully.
+- The Staging workflow passed install, unit tests, TypeScript, lint, dependency audit, and Vite build; it uploaded the static artifact (about 2.39 MB).
+- The Staging workflow then stopped before D1 changes because GitHub Environment secret `CLOUDFLARE_D1_API_TOKEN` was absent. The existing Worker deploy token returned Cloudflare API authentication error 10000 when used for D1 control-plane access. No D1 migration, Worker deployment, Telegram binary probe, or post-deploy diagnostics ran in that workflow.
+- A dedicated D1 token with Account-level **D1 Write** permission must be configured as the GitHub Environment secret `CLOUDFLARE_D1_API_TOKEN` in `Preview – customs-os`. Its value must never be placed in repository files, logs, or chat. The existing Worker deploy token remains separate.
+
+### Updated phase status
+
+| Area | Status | Evidence / remaining condition |
+|---|---|---|
+| Migration branch isolation | COMPLETED | PR #314 remains open/unmerged; no main, DNS, or Production changes |
+| Staging build and static asset artifact | COMPLETED | Build and artifact upload passed |
+| Imported D1 row parity | COMPLETED | 668/668 rows across 26 manifest tables |
+| Referential integrity | PARTIAL / BLOCKED | 155 references await the additive customs-office migration |
+| D1 migration execution | BLOCKED | Missing GitHub Environment secret `CLOUDFLARE_D1_API_TOKEN` with D1 Write permission |
+| Authentication/user migration | PARTIAL | One profile row only; export lacks profiles; no complete Auth migration evidence |
+| Supabase runtime dependency removal | NOT_COMPLETED | 1 SDK import, 68 table references, 78 RPCs, Edge Functions, Storage, Realtime, and Auth callsites remain |
+| Telegram binary recovery | NOT_VERIFIED | Metadata is present, but no new successful binary-retrieval probe is evidenced |
+| Full independent operational backend | NOT_COMPLETED | Existing Worker is still migration/auth bootstrap/diagnostics, not full module CRUD parity |
+| Production cutover | NOT_STARTED | Correctly withheld pending Staging completion and explicit approval |
+
