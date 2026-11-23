@@ -258,3 +258,23 @@ The implementation preserves the existing three modes (`health`, `lookup-mmsi`, 
 A security review found the first draft selected all organizations' vessels because the Supabase service-role implementation bypassed RLS. The Worker implementation was tightened to require an organization scope, include it in both the D1 SELECT and UPDATE predicates, and test that scope. An omitted organization now fails closed with `ORGANIZATION_SCOPE_REQUIRED`.
 
 The function is implemented and CI-verified in the branch, but not yet deployed to the Staging Worker or Production Worker because the D1 session-schema migration is still blocked. The original Supabase function remains active.
+
+### Maritime D1 read paths, weather, and map tiles
+
+A read-only D1 schema audit (GitHub Actions run [45274455091](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45274455091)) confirmed the live Staging schema used by the maritime pages:
+
+- `vessels`: 14 rows; includes `organization_id`, IMO/MMSI, coordinates, position timestamp/source, speed, and course.
+- `shipments`: 22 rows; includes `organization_id`, vessel ID, shipping line, bill of lading, current status, origin/destination ports, and creation timestamp.
+
+The migration branch now contains organization-scoped read endpoints:
+
+- `GET /api/maritime/vessels`
+- `GET /api/maritime/shipments`
+
+Both require an active same-origin D1 session, filter on the session profile's organization ID, return no-store JSON, and fail with 503 rather than fabricating empty results if D1 is unavailable. The maritime UI and Vessel Tracking page switch to these endpoints only on the isolated Staging recovery host; Production continues using its current Supabase reads. Vessel coordinate/speed/course text values are normalized to numbers before map rendering.
+
+The existing `/api/maritime/conditions` implementation from the current Worker has also been ported to `worker/maritime-conditions-api.ts`. It validates coordinates, calls the public Open-Meteo Weather and Marine endpoints with bounded time/response sizes and retries, and preserves the current `weather`/`marine` response shape including partial-source availability. A same-origin-only Staging route now handles this endpoint.
+
+The existing OpenStreetMap tile proxy has been ported to `worker/map-tiles-api.ts` and `worker/map-tiles-api.test.ts`. Its Staging route validates zoom/tile coordinates, accepts only same-origin requests, forwards a first-party Referer and the app User-Agent, checks that upstream content is an image, limits tile size, supports GET/HEAD, and uses Cloudflare's default Cache API when available. Cache errors do not fail a successful tile fetch. Integration coverage verifies that cross-site requests are rejected before contacting the provider.
+
+All maritime modules and tests are branch-only at this point. They have not been deployed to the Staging Worker because the D1 migration step remains blocked by the missing `CLOUDFLARE_D1_API_TOKEN`. The active Production `customs` Worker and the 16 active Supabase Edge Functions have not been changed by these ports.
