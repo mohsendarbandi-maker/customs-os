@@ -243,3 +243,18 @@ The matching Staging workflow passed its earlier tests and read-only D1 diagnost
 - Port and test the remaining active Edge Functions, Storage, Realtime, scheduled work, and all data APIs.
 - Verify file bytes and checksums for both Telegram-backed and Supabase-backed objects.
 - Keep Production cutover blocked until all parity, authorization, operational regression, and rollback gates pass.
+
+### Second vessel-tracking function port: Open Waters AIS v2
+
+The active `CaspianMaritimePage` invokes `sync-vessel-ais-v2` for the live Caspian list, tracked-vessel updates, and direct MMSI lookup. A compatible Cloudflare implementation is now present in the migration branch:
+
+- `worker/sync-vessel-ais-api.ts`
+- `worker/sync-vessel-ais-api.test.ts`
+- `worker/sync-vessel-ais-route.test.ts`
+- Worker route: `POST /functions/v1/sync-vessel-ais-v2`
+
+The implementation preserves the existing three modes (`health`, `lookup-mmsi`, `live-caspian`, plus default tracked sync), uses the same-origin D1 session, enforces owner/admin/broker authorization, limits provider responses and request time, validates MMSI/coordinates, and scopes tracked-vessel SELECT and UPDATE statements to the active `organization_id`. The live D1 schema was read-only checked before porting; `vessels` has the required MMSI, position, speed, course, and organization columns.
+
+A security review found the first draft selected all organizations' vessels because the Supabase service-role implementation bypassed RLS. The Worker implementation was tightened to require an organization scope, include it in both the D1 SELECT and UPDATE predicates, and test that scope. An omitted organization now fails closed with `ORGANIZATION_SCOPE_REQUIRED`.
+
+The function is implemented and CI-verified in the branch, but not yet deployed to the Staging Worker or Production Worker because the D1 session-schema migration is still blocked. The original Supabase function remains active.
