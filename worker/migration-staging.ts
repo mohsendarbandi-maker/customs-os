@@ -13,6 +13,7 @@ import { handleLegacySyncVesselAis } from './sync-vessel-ais-legacy-api';
 import { handleMaritimeReadApi } from './maritime-read-api';
 import { handleMaritimeConditions } from './maritime-conditions-api';
 import { serveMapTile, type MapTileCache } from './map-tiles-api';
+import { handleCircularSourcePreview } from './customs-circular-preview-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -1232,6 +1233,18 @@ export default {
         caches?: { default?: MapTileCache };
       }).caches;
       return serveMapTile(request, fetch, workerCaches?.default);
+    }
+
+    if (url.pathname === '/api/knowledge/circular-preview') {
+      if (!isSameOrigin(request, url)) return json({ error: 'ORIGIN_FORBIDDEN' }, 403);
+      if (request.method !== 'GET') {
+        return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'GET' });
+      }
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
+      if (!profile.is_active || !['owner', 'admin'].includes(profile.role)) {
+        return json({ error: 'FORBIDDEN' }, 403);
+      }
+      return handleCircularSourcePreview(request);
     }
 
     if (url.pathname === '/api/maritime/conditions') {
