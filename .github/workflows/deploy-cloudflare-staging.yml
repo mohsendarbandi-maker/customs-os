@@ -62,21 +62,46 @@ jobs:
           set -euo pipefail
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
           const config = JSON.parse(readFileSync('wrangler.migration-staging.jsonc', 'utf8'));
           const dbs = config.d1_databases ?? [];
-          const db = dbs.find((item) => String(item.binding ?? '').normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim() === 'MIGRATION_DB');
-          const normalizeIdentity = (value) => String(value ?? '').normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+          const normalizeIdentity = (value) => String(value ?? '').normalize('NFKC')
+            .replace(/[\u200B-\u200D\uFEFF]/g, '')
+            .trim();
+          const db = dbs.find((item) => normalizeIdentity(item.binding) === 'MIGRATION_DB');
+          if (
+            normalizeIdentity(config.name) !== 'customs-os-migration-staging' ||
+            normalizeIdentity(db?.database_name) !== 'customs-os-migration-staging'
+          ) {
+            throw new Error('Refusing D1 migration: Worker, binding or database name did not match the isolated Staging target.');
+          }
+          const infoText = execFileSync(
+            'npx',
+            ['wrangler@4', 'd1', 'info', 'customs-os-migration-staging', '--json', '--config', 'wrangler.migration-staging.jsonc'],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
+          );
+          const remoteInfo = JSON.parse(infoText);
+          const remoteDatabaseId = normalizeIdentity(
+            remoteInfo.uuid ?? remoteInfo.database_id ?? remoteInfo.databaseId ?? remoteInfo.id,
+          ).toLowerCase();
+          const configuredDatabaseId = normalizeIdentity(db?.database_id).toLowerCase();
           const identityChecks = {
             worker: normalizeIdentity(config.name) === 'customs-os-migration-staging',
             binding: normalizeIdentity(db?.binding) === 'MIGRATION_DB',
             databaseName: normalizeIdentity(db?.database_name) === 'customs-os-migration-staging',
-            databaseId: normalizeIdentity(db?.database_id).toLowerCase() === 'b938fa3c-4995-4d27-aeda-f72f2f484a3c',
+            configuredDatabaseIdIsUuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(configuredDatabaseId),
+            liveDatabaseIdMatchesConfig: Boolean(remoteDatabaseId) && remoteDatabaseId === configuredDatabaseId,
           };
-          console.log('Staging config identity checks:', JSON.stringify(identityChecks));
+          console.log('Staging D1 live identity:', JSON.stringify({
+            checks: identityChecks,
+            configuredDatabaseId,
+            liveDatabaseId: remoteDatabaseId,
+            infoFields: Object.keys(remoteInfo).sort(),
+          }));
           if (!Object.values(identityChecks).every(Boolean)) {
-            throw new Error('Refusing D1 migration: normalized isolated Staging identity did not match.');
+            throw new Error('Refusing D1 migration: live Cloudflare D1 identity did not match the named Staging config.');
           }
-          console.log('Verified exact Staging Worker and D1 identity; Production identifiers are not accepted.');
+          console.log('Verified exact live Cloudflare Staging D1 identity; Production identifiers are not accepted.');
           NODE
           npx wrangler@4 d1 migrations list customs-os-migration-staging --remote --config wrangler.migration-staging.jsonc
           npx wrangler@4 d1 migrations apply customs-os-migration-staging --remote --config wrangler.migration-staging.jsonc
