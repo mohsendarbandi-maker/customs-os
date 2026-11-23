@@ -106,6 +106,82 @@ const readRelated = async (db: CasesD1Database, id: string, organizationId: stri
   return { shipments: shipments.results, declarations: declarations.results, documents: documents.results };
 };
 
+const parseSnapshot = (value: unknown): Record<string, unknown> => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value !== 'string' || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+const readCaseHistory = async (db: CasesD1Database, id: string, organizationId: string) => {
+  const record = await readCase(db, id, organizationId);
+  if (!record) return fail('CASE_NOT_FOUND', 404);
+  const events = await db.prepare(
+    'SELECT id,actor_user_id,action,entity_type,entity_id,before_json,after_json,created_at ' +
+    'FROM customs_os_audit_events WHERE organization_id=? AND entity_type=? AND entity_id=? ' +
+    'ORDER BY created_at DESC,id DESC LIMIT 200',
+  ).bind(organizationId, 'case', id).all<{
+    id: string;
+    actor_user_id: string;
+    action: string;
+    entity_type: string;
+    entity_id: string;
+    before_json: string | null;
+    after_json: string | null;
+    created_at: string;
+  }>();
+  const audit = events.results.map((event) => ({
+    id: event.id,
+    user_id: event.actor_user_id,
+    action: event.action === 'create' ? 'INSERT' : event.action === 'delete' ? 'DELETE' : 'UPDATE',
+    table_name: event.entity_type,
+    record_id: event.entity_id,
+    old_data: event.before_json,
+    new_data: event.after_json,
+    created_at: event.created_at,
+  }));
+  const history = events.results.flatMap((event) => {
+    const before = parseSnapshot(event.before_json);
+    const after = parseSnapshot(event.after_json);
+    const previousStatus = typeof before.status === 'string' ? before.status
+      : typeof before.case_status === 'string' ? before.case_status : null;
+    const newStatus = typeof after.status === 'string' ? after.status
+      : typeof after.case_status === 'string' ? after.case_status : null;
+    if (!newStatus || previousStatus === newStatus) return [];
+    return [{
+      id: event.id,
+      case_id: id,
+      changed_by: event.actor_user_id,
+      previous_status: previousStatus,
+      new_status: newStatus,
+      notes: typeof after.notes === 'string' ? after.notes
+        : typeof after.change_notes === 'string' ? after.change_notes : null,
+      created_at: event.created_at,
+    }];
+  });
+  return json({
+    ok: true,
+    case: {
+      id: record.id,
+      case_number: record.case_number,
+      status: record.status,
+      client_id: record.client_id,
+      created_at: record.created_at,
+    },
+    history,
+    audit,
+    historySource: 'customs_os_audit_events',
+    legacyHistoryBackfill: 'not_imported',
+    dataScope: 'authenticated_organization_only',
+  });
+};
+
 export const handleCasesApi = async (
   request: Request,
   db: CasesD1Database,
@@ -114,6 +190,19 @@ export const handleCasesApi = async (
 ): Promise<Response> => {
   if (!profile.is_active || !roles.has(profile.role)) return fail('FORBIDDEN', 403);
   if (!profile.id || !profile.organization_id) return fail('INVALID_SESSION_PROFILE', 401);
+  const historyRoute = url.pathname.startsWith(collection + '/') && url.pathname.endsWith('/history');
+  if (historyRoute) {
+    if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: ['GET'] });
+    const rawId = url.pathname.slice(collection.length + 1, -'/history'.length);
+    if (!rawId || rawId.includes('/')) return fail('INVALID_CASE_ID', 400);
+    let historyId: string;
+    try { historyId = decodeURIComponent(rawId); }
+    catch { return fail('INVALID_CASE_ID', 400); }
+    if (!historyId || historyId.length > 128 || historyId.includes('/')) return fail('INVALID_CASE_ID', 400);
+    try { return await readCaseHistory(db, historyId, profile.organization_id); }
+    catch { return fail('CASE_HISTORY_API_NOT_READY', 503); }
+  }
+
   const id = readId(url.pathname);
   if (id instanceof Response) return id;
   if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: ['GET'] });
