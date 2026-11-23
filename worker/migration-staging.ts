@@ -19,6 +19,7 @@ interface Env {
   PRODUCTION_DATA_IMPORTED?: string;
   CUSTOMS_ADMIN_PASSWORD?: string;
   GEMINI_API_KEY?: string;
+  TELEGRAM_BOT_TOKEN?: string;
 }
 
 const COOKIE = 'customs_os_stage_session';
@@ -191,6 +192,219 @@ const handleGemini = async (request: Request, env: Env): Promise<Response> => {
     return json({ error: aborted ? 'AI_TIMEOUT' : 'AI_REQUEST_FAILED' }, aborted ? 504 : 502);
   } finally {
     clearTimeout(timer);
+  }
+};
+
+
+const MAX_TELEGRAM_PROBE_BYTES = 8 * 1024 * 1024;
+const TELEGRAM_PROBE_TIMEOUT_MS = 15_000;
+
+interface TelegramGetFileResponse {
+  ok: boolean;
+  result?: {
+    file_size?: number;
+    file_path?: string;
+  };
+}
+
+const handleTelegramArchiveProbe = async (request: Request, env: Env, url: URL): Promise<Response> => {
+  if (request.method !== 'POST') {
+    return json({ error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'POST' });
+  }
+  if (!isSameOrigin(request, url)) return json({ error: 'ORIGIN_FORBIDDEN' }, 403);
+  if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
+  if (!env.TELEGRAM_BOT_TOKEN) return json({ error: 'TELEGRAM_NOT_CONFIGURED' }, 503);
+
+  const candidate = await env.MIGRATION_DB.prepare(
+    "SELECT id, size_bytes, json_extract(metadata, '$.telegramFileId') AS telegram_file_id " +
+    "FROM file_manager_files " +
+    "WHERE organization_id = ? " +
+    "AND storage_path IS NOT NULL AND lower(storage_path) LIKE 'telegram://%' " +
+    "AND size_bytes > 0 AND size_bytes <= ? " +
+    "AND json_valid(metadata) = 1 " +
+    "AND json_type(metadata, '$.telegramFileId') = 'text' " +
+    "AND length(json_extract(metadata, '$.telegramFileId')) > 0 " +
+    "ORDER BY size_bytes ASC LIMIT 1",
+  ).bind(profile.organization_id, MAX_TELEGRAM_PROBE_BYTES).first<{
+    id: string;
+    size_bytes: number;
+    telegram_file_id: string;
+  }>();
+
+  if (!candidate?.telegram_file_id || !Number.isSafeInteger(candidate.size_bytes)) {
+    return json({
+      ok: false,
+      error: 'TELEGRAM_PROBE_SAMPLE_NOT_FOUND',
+      binaryVerification: 'not_performed',
+      stored: false,
+      contentExposed: false,
+    }, 404);
+  }
+
+  const apiBase = 'https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN;
+  const getFileController = new AbortController();
+  const getFileTimer = setTimeout(() => getFileController.abort(), TELEGRAM_PROBE_TIMEOUT_MS);
+  let filePath = '';
+  let telegramReportedSize: number | null = null;
+
+  try {
+    const lookupResponse = await fetch(
+      apiBase + '/getFile?file_id=' + encodeURIComponent(candidate.telegram_file_id),
+      { method: 'GET', signal: getFileController.signal, cache: 'no-store' },
+    );
+    if (!lookupResponse.ok) {
+      return json({
+        ok: false,
+        error: lookupResponse.status === 401 || lookupResponse.status === 403
+          ? 'TELEGRAM_BOT_AUTH_FAILED'
+          : 'TELEGRAM_FILE_LOOKUP_FAILED',
+        binaryVerification: 'failed',
+        stored: false,
+        contentExposed: false,
+      }, 502);
+    }
+
+    const lookup = await lookupResponse.json() as TelegramGetFileResponse;
+    filePath = typeof lookup.result?.file_path === 'string' ? lookup.result.file_path : '';
+    telegramReportedSize = typeof lookup.result?.file_size === 'number' &&
+      Number.isSafeInteger(lookup.result.file_size) ? lookup.result.file_size : null;
+
+    if (!lookup.ok || !filePath || filePath.startsWith('/') || filePath.split('/').includes('..')) {
+      return json({
+        ok: false,
+        error: 'TELEGRAM_FILE_PATH_UNAVAILABLE',
+        binaryVerification: 'failed',
+        stored: false,
+        contentExposed: false,
+      }, 502);
+    }
+    if (telegramReportedSize !== null && telegramReportedSize > MAX_TELEGRAM_PROBE_BYTES) {
+      return json({
+        ok: false,
+        error: 'TELEGRAM_FILE_EXCEEDS_PROBE_LIMIT',
+        maxBytes: MAX_TELEGRAM_PROBE_BYTES,
+        telegramReportedSizeBytes: telegramReportedSize,
+        binaryVerification: 'not_performed',
+        stored: false,
+        contentExposed: false,
+      }, 413);
+    }
+  } catch (error) {
+    return json({
+      ok: false,
+      error: error instanceof Error && error.name === 'AbortError'
+        ? 'TELEGRAM_FILE_LOOKUP_TIMEOUT'
+        : 'TELEGRAM_FILE_LOOKUP_FAILED',
+      binaryVerification: 'failed',
+      stored: false,
+      contentExposed: false,
+    }, 502);
+  } finally {
+    clearTimeout(getFileTimer);
+  }
+
+  const encodedFilePath = filePath.split('/').map((segment) => encodeURIComponent(segment)).join('/');
+  const downloadController = new AbortController();
+  const downloadTimer = setTimeout(() => downloadController.abort(), TELEGRAM_PROBE_TIMEOUT_MS);
+  try {
+    const downloadResponse = await fetch(
+      'https://api.telegram.org/file/bot' + env.TELEGRAM_BOT_TOKEN + '/' + encodedFilePath,
+      { method: 'GET', signal: downloadController.signal, cache: 'no-store' },
+    );
+    if (!downloadResponse.ok) {
+      return json({
+        ok: false,
+        error: 'TELEGRAM_FILE_DOWNLOAD_FAILED',
+        binaryVerification: 'failed',
+        stored: false,
+        contentExposed: false,
+      }, 502);
+    }
+
+    const declaredLength = Number(downloadResponse.headers.get('content-length') || 0);
+    if (declaredLength > MAX_TELEGRAM_PROBE_BYTES) {
+      await downloadResponse.body?.cancel();
+      return json({
+        ok: false,
+        error: 'TELEGRAM_FILE_EXCEEDS_PROBE_LIMIT',
+        maxBytes: MAX_TELEGRAM_PROBE_BYTES,
+        telegramReportedSizeBytes: telegramReportedSize,
+        binaryVerification: 'not_performed',
+        stored: false,
+        contentExposed: false,
+      }, 413);
+    }
+
+    const reader = downloadResponse.body?.getReader();
+    if (!reader) {
+      return json({
+        ok: false,
+        error: 'TELEGRAM_FILE_BODY_UNAVAILABLE',
+        binaryVerification: 'failed',
+        stored: false,
+        contentExposed: false,
+      }, 502);
+    }
+
+    const chunks: Uint8Array[] = [];
+    let downloadedBytes = 0;
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      if (!part.value) continue;
+      downloadedBytes += part.value.byteLength;
+      if (downloadedBytes > MAX_TELEGRAM_PROBE_BYTES) {
+        await reader.cancel();
+        return json({
+          ok: false,
+          error: 'TELEGRAM_FILE_EXCEEDS_PROBE_LIMIT',
+          maxBytes: MAX_TELEGRAM_PROBE_BYTES,
+          binaryVerification: 'not_performed',
+          stored: false,
+          contentExposed: false,
+        }, 413);
+      }
+      chunks.push(part.value);
+    }
+
+    const bytes = new Uint8Array(downloadedBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    const sourceSizeMatches = downloadedBytes === candidate.size_bytes;
+    const telegramSizeMatches = telegramReportedSize === null
+      ? null
+      : downloadedBytes === telegramReportedSize;
+
+    return json({
+      ok: true,
+      binaryVerification: 'downloaded_and_sha256_computed_in_memory',
+      sampleCount: 1,
+      sourceMetadataSizeBytes: candidate.size_bytes,
+      telegramReportedSizeBytes: telegramReportedSize,
+      downloadedBytes,
+      sourceSizeMatches,
+      telegramSizeMatches,
+      sha256Computed: digest.byteLength === 32,
+      stored: false,
+      contentExposed: false,
+    }, 200);
+  } catch (error) {
+    return json({
+      ok: false,
+      error: error instanceof Error && error.name === 'AbortError'
+        ? 'TELEGRAM_FILE_DOWNLOAD_TIMEOUT'
+        : 'TELEGRAM_FILE_DOWNLOAD_FAILED',
+      binaryVerification: 'failed',
+      stored: false,
+      contentExposed: false,
+    }, 502);
+  } finally {
+    clearTimeout(downloadTimer);
   }
 };
 
@@ -788,6 +1002,10 @@ export default {
         ).bind(await sha256(token)).run();
       }
       return json({ ok: true }, 200, { 'set-cookie': setCookie('', 0) });
+    }
+
+    if (url.pathname === '/api/admin/migration/telegram-probe') {
+      return handleTelegramArchiveProbe(request, env, url);
     }
 
     if (url.pathname === '/api/ai' || url.pathname === '/functions/v1/ai-assistant') {
