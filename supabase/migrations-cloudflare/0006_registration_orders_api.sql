@@ -452,7 +452,7 @@ BEGIN
         WHERE a.organization_id=OLD.organization_id AND a.registration_order_id=OLD.id AND a.status<>'cancelled'
       ),0)
     ) <> NEW.net_weight_kg
-  )) THEN RAISE(ABORT, 'ORDER_FINALIZE_NET_WEIGHT_MISMATCH') END;
+  ) THEN RAISE(ABORT, 'ORDER_FINALIZE_NET_WEIGHT_MISMATCH') END;
   
   SELECT CASE WHEN NEW.is_closed=1 AND NEW.gross_weight_kg IS NOT NULL AND (
     COALESCE((
