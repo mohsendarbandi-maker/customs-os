@@ -79,6 +79,26 @@ jobs:
               httpStatus: response.status,
             };
           }));
+          const latestUploadedVersionId = versionItems[0]?.id ?? null;
+          const latestUploadedVersionDetails = latestUploadedVersionId
+            ? await api('/accounts/' + accountId + '/workers/scripts/customs/versions/' + encodeURIComponent(latestUploadedVersionId))
+            : { status: 0, success: false, body: null };
+          const latestUploadedVersion = latestUploadedVersionDetails.body?.result ?? {};
+          const latestUploadedResources = latestUploadedVersion.resources ?? {};
+          const latestUploadedVersionAudit = {
+            httpStatus: latestUploadedVersionDetails.status,
+            success: latestUploadedVersionDetails.success,
+            id: latestUploadedVersion.id ?? latestUploadedVersionId,
+            number: latestUploadedVersion.number ?? null,
+            createdOn: latestUploadedVersion.metadata?.created_on ?? null,
+            source: latestUploadedVersion.metadata?.source ?? null,
+            scriptEtag: latestUploadedResources.script?.etag ?? null,
+            bindings: Array.isArray(latestUploadedResources.bindings)
+              ? latestUploadedResources.bindings.map((binding) => ({ name: binding.name, type: binding.type }))
+              : latestUploadedResources.bindings ?? null,
+            compatibilityDate: latestUploadedResources.script_runtime?.compatibility_date ?? null,
+            usageModel: latestUploadedResources.script_runtime?.usage_model ?? null,
+          };
           const activeVersionId = activeVersionIds[0] ?? null;
           const activeVersion = activeVersionId
             ? await api('/accounts/' + accountId + '/workers/scripts/customs/versions/' + encodeURIComponent(activeVersionId))
@@ -225,6 +245,7 @@ jobs:
             activeVersions,
             activeVersionDetails,
             activeVersionAudit,
+            latestUploadedVersionAudit,
             versionContentAudit,
             versionUrlChecks,
             recentVersions: {
