@@ -71,3 +71,34 @@ File content is not represented by a Storage path or Telegram file ID alone. The
 
 ## Completion gate
 This file only captures statically visible dependencies in the named critical modules. Phase 1 is not complete until all 59 page modules, all 30 components, all 70 library modules, all hooks/contexts/features, all archived functions, and all historical migrations have been traversed and reconciled into a complete inventory with acceptance tests. No D1 schema migration or Supabase removal is authorized merely by the presence of this map.
+
+
+## Shared workflow / AI / session components
+Static literal calls in the following shared components add further backend requirements:
+
+| Component | Tables / resources observed | RPC / function calls observed | Other dependencies |
+|---|---|---|---|
+| `CustomsDeclarationWorkflow` | `customs_declaration_workflow_events`, `customs_declarations`, `shipment_customs_data`, `customs_declaration_workflow` | `rollback_customs_declaration_workflow`, `complete_customs_declaration_workflow`, `patch_customs_declaration_workflow_activity` | Workflow event history and rollback are part of the same backend contract |
+| Regime workflow components | `customs_declaration_workflow` | — | Export, other regime, temporary import, and transit/re-import components share workflow-state persistence |
+| `CustomsStageDocumentAI` | `shipment_documents`, `file_manager_files`, `customs_document_extractions` | Edge Function `ai-assistant` | Must use a canonical reusable file reference |
+| `AIOperatorPanel` | `shipments` | Edge Function `ai-operator` | Storage bucket `customs_documents`; operations need server-side action authorization |
+| `AIWorkspace` | `shipment_documents`, `shipment_document_extractions`, `shipment_customs_data`, `profiles`, `ai_evidence` | Edge Functions `ai-assistant`, `ai-operator`, `ai-core` | Storage bucket `customs_documents` |
+| `SessionManagementPanel` | `user_device_sessions` | `list_my_auth_sessions` | Staging token sessions are not a substitute for the existing multi-device UI contract |
+| `SessionLifecycle` | `user_device_sessions` | — | Requires session registration/rotation/revocation lifecycle |
+| `LatestShipmentStatuses` | `shipments`, `vessels`, `clients`, `customs_declarations`, `declaration_checklist_items`, `declaration_exit_checklist_items` | — | Dashboard summaries must be sourced from D1 |
+| `OperationalAlertsDropdown` | `cases`, `customs_documents`, `customs_declarations`, `permits` | — | Alerts must reflect backend-computed missing/overdue state |
+| `MaritimeTab` | `shipments`, `vessels`, `shipment_tracking_events` | `update_shipment_maritime_data`, `set_shipment_tracking_status` | Tracking history must remain auditable |
+| `ShipmentCostsPanel` | `finance_cost_items`, `finance_cost_categories`, `financial_permissions` | `submit_finance_shipment_cost`, `create_finance_shipment_cost`, `approve_finance_expense`, `archive_finance_shipment_cost` | Storage bucket `finance-receipts` |
+| `RemindersHomeCard` | `operational_reminders` | — | Reads from the same reminder records as the full reminders page |
+| `FileManagerFilePicker` | `file_manager_files`, `file_manager_folders` | — | Selection must pass references, not force re-upload |
+
+## Expanded static scan coverage
+All 59 files under `src/pages` were inspected for literal Supabase table/RPC/Storage/Realtime/Edge Function calls. The high-risk shared workflow, AI, session, maritime, dashboard, and alert components were also inspected. This is still not a full transitive import/dataflow analysis: some helper modules, dynamically built names, messenger connector internals, and the full set of feature components remain to be traversed.
+
+The key cross-cutting contracts that cannot be omitted are:
+- `customs_declaration_workflow` + `customs_declaration_workflow_events` and their complete/patch/rollback RPC semantics.
+- `user_device_sessions` and `list_my_auth_sessions` for the multi-device UI.
+- `ai_evidence`, document extraction records, and the three AI functions used by AIWorkspace/AI Operator.
+- `shipment_tracking_events` and maritime update RPCs.
+- Finance receipt Storage, shipment cost approval/archive RPCs, and voucher line relations.
+- Shared File Manager references used by customs docs, PDF Studio, knowledge, chat, and shipment forms.
