@@ -1139,11 +1139,16 @@ export default {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
       if (request.method !== 'POST') return json({ error: 'METHOD_NOT_ALLOWED' }, 405, corsHeaders);
       if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401, corsHeaders);
+      if (!profile.is_active || !['owner', 'admin', 'broker'].includes(profile.role)) {
+        return json({ error: 'FORBIDDEN' }, 403, corsHeaders);
+      }
 
       const result = await handleSyncVesselAisV2(
         request,
         env.MIGRATION_DB,
         env.OPENWATERS_API_TOKEN,
+        undefined,
+        profile.organization_id,
       );
       const headers = new Headers(result.headers);
       for (const [name, value] of Object.entries(corsHeaders)) headers.set(name, value);
