@@ -238,6 +238,7 @@ jobs:
             const payload = await response.json();
             const tables = Array.isArray(payload.tables) ? payload.tables : [];
             const relevant = new Set([
+              'vessels',
               'profiles',
               'customs_admin_sessions',
               'customs_admin_credentials',
@@ -254,7 +255,7 @@ jobs:
               totalRows: payload.totalRows ?? null,
               countFailures: payload.countFailures ?? null,
               authRelatedTables: tables
-                .filter((table) => /auth|user|profile|session|credential|login/i.test(String(table.name || '')))
+                .filter((table) => relevant.has(String(table.name || '')) || /auth|user|profile|session|credential|login/i.test(String(table.name || '')))
                 .map((table) => ({
                   name: table.name,
                   rowCount: table.rowCount ?? null,
@@ -373,6 +374,7 @@ jobs:
             authRuntime,
             authSessionEndpoint,
             stagingSchemaAudit,
+            stagingSelectedBusinessSchemas: stagingSchemaAudit.authRelatedTables?.filter((table) => table.name === 'vessels') ?? [],
           };
           console.log(JSON.stringify(result, null, 2));
           if (!settings.success || !deployments.success || !versions.success || !domains.success) {
