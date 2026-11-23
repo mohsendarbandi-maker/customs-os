@@ -65,6 +65,15 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain("SCHEMA_INSPECTION_UNAVAILABLE");
   });
 
+  it('shows the recovery workspace only on the dedicated migration worker host', () => {
+    const app = read('../src/App.tsx');
+    const host = read('../src/lib/recoveryHost.ts');
+    expect(app).toContain('isCloudflareStagingHost() ? <StagingWorkspacePage/> : <DesktopHomePage/>');
+    expect(app).not.toContain('isCloudflareRecoveryHost() ? <StagingWorkspacePage/>');
+    expect(host).toContain("hostname.startsWith('customs-os-migration-staging.')");
+    expect(host).toContain("hostname === 'darbandicommercial.ir'");
+  });
+
   it('blocks unported application routes on the isolated workers.dev staging host', () => {
     const app = read('../src/App.tsx');
     const host = read('../src/lib/recoveryHost.ts');
