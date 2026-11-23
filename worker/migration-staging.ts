@@ -1,6 +1,7 @@
 import { isMigrationIntegrityHealthy, isMigrationParityHealthy, isProductionTrafficHost } from './migration-diagnostics';
 import { handleClientsApi } from './clients-api';
 import { handleCasesApi } from './cases-api';
+import { handleCaseSelectorApi } from './case-selector-api';
 import { handleDeviceSessionsApi } from './device-sessions-api';
 import { handleRegistrationOrdersApi } from './registration-orders-api';
 import { handleTelegramFileDownload } from './telegram-files-api';
@@ -1109,6 +1110,11 @@ export default {
       if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
       if (!profile.is_active || !['owner', 'admin', 'broker'].includes(profile.role)) return json({ error: 'FORBIDDEN' }, 403);
       return handleClientsApi(request, env, url, profile);
+    }
+
+    if (url.pathname === '/api/case-selector-data') {
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
+      return handleCaseSelectorApi(request, env.MIGRATION_DB, profile);
     }
 
     if (url.pathname === '/api/cases' || url.pathname.startsWith('/api/cases/')) {
