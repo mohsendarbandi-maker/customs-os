@@ -113,6 +113,145 @@ export async function createCloudflareFileManagerFolder(input: {
   });
 }
 
+
+export type CloudflareFileManagerArchiveStatus = {
+  configured: boolean;
+  sourceRecords: number;
+  distinctChatIds: number;
+  distinctConnections: number;
+  maxUploadBytes: number;
+  binaryStorage: 'telegram' | string;
+};
+
+export type CloudflareFileManagerUpload = {
+  fileAssetId: string;
+  externalMessageId: string;
+  sizeBytes: number;
+  folderId: string;
+  uploadJobId: string;
+  alreadyStored: boolean;
+};
+
+export async function getCloudflareFileManagerArchiveStatus(): Promise<CloudflareFileManagerArchiveStatus> {
+  return request('/api/file-manager/archive-status');
+}
+
+export async function createCloudflareFileManagerUploadIdempotencyKey(
+  file: File,
+  input: {
+    folderId: string;
+    shipmentId?: string;
+    documentType: string;
+    documentName: string;
+    tags: string[];
+    operationSections: string[];
+  },
+): Promise<string> {
+  if (file.size <= 0 || file.size > 20 * 1024 * 1024) {
+    throw new Error('حجم فایل برای آرشیو تلگرام باید بین ۱ بایت تا ۲۰ مگابایت باشد.');
+  }
+  if (!globalThis.crypto?.subtle) {
+    throw new Error('مرورگر امکان ساخت کلید امن آپلود را ندارد؛ از مرورگر به‌روز روی HTTPS استفاده کنید.');
+  }
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const context = [
+    'customs-os-d1-telegram-upload-v1',
+    input.folderId,
+    input.shipmentId || '',
+    input.documentType,
+    input.documentName,
+    file.name,
+    file.type || 'application/octet-stream',
+    String(file.size),
+    [...input.tags].sort().join('|'),
+    [...input.operationSections].sort().join('|'),
+    hash,
+  ].join('\\n');
+  const key = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(context));
+  return 'customs-os-upload-v1:' +
+    Array.from(new Uint8Array(key), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function uploadCloudflareFileManagerFile(
+  file: File,
+  input: {
+    folderId: string;
+    shipmentId?: string;
+    documentType: string;
+    documentName: string;
+    tags: string[];
+    operationSections: string[];
+    idempotencyKey: string;
+  },
+): Promise<CloudflareFileManagerUpload> {
+  if (file.size <= 0 || file.size > 20 * 1024 * 1024) {
+    throw new Error('حجم فایل برای آرشیو تلگرام باید حداکثر ۲۰ مگابایت باشد.');
+  }
+  const query = new URLSearchParams({
+    folder_id: input.folderId,
+    ...(input.shipmentId ? { shipment_id: input.shipmentId } : {}),
+    document_type: input.documentType,
+    document_name: input.documentName,
+    tags: JSON.stringify(input.tags.slice(0, 20)),
+    operation_sections: JSON.stringify(input.operationSections.slice(0, 20)),
+  });
+  let response: Response;
+  try {
+    response = await fetch('/api/file-manager/uploads?' + query.toString(), {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-File-Name': encodeURIComponent(file.name),
+        'X-File-Size': String(file.size),
+        'Idempotency-Key': input.idempotencyKey,
+      },
+      body: file,
+    });
+  } catch {
+    throw new Error('ارسال فایل به Worker ناموفق بود؛ وضعیت آرشیو را پیش از تلاش مجدد بررسی کنید.');
+  }
+  const body = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok || body?.ok !== true) {
+    const code = typeof body?.error === 'string' ? body.error : 'FILE_UPLOAD_FAILED';
+    const messages: Record<string, string> = {
+      FILE_ARCHIVE_NOT_CONFIGURED_OR_AMBIGUOUS: 'شناسه مقصد آرشیو از فایل‌های قدیمی یکتا نیست؛ برای جلوگیری از ارسال به گروه اشتباه، آپلود متوقف شد.',
+      FILE_UPLOAD_RECONCILIATION_REQUIRED: 'تلگرام ممکن است فایل را دریافت کرده باشد، اما رسید D1 قطعی نیست؛ ارسال مجدد خودکار مسدود شد تا فایل تکراری ایجاد نشود.',
+      FILE_ARCHIVE_FOLDER_INVALID: 'پوشه انتخابی در D1 معتبر نیست یا به این محموله/صاحب کالا تعلق ندارد.',
+      FILE_ACCESS_DENIED: 'برای این پوشه مجوز آپلود ندارید.',
+      TELEGRAM_NOT_CONFIGURED: 'توکن ربات تلگرام روی Worker تنظیم نشده است.',
+      TELEGRAM_UPLOAD_FAILED: 'تلگرام فایل را نپذیرفت؛ هیچ رکورد موفقی ثبت نشد.',
+      FILE_ARCHIVE_METADATA_SAVE_FAILED: 'تلگرام رسید فایل را برگرداند، اما ثبت نهایی D1 کامل نشد؛ بازیابی همان Job لازم است.',
+      FILE_TOO_LARGE_FOR_DESTINATION: 'حجم فایل از سقف ۲۰ مگابایت بیشتر است.',
+    };
+    throw new CloudflareFileManagerError(messages[code] || code, response.status);
+  }
+  if (
+    typeof body.fileAssetId !== 'string' ||
+    typeof body.externalMessageId !== 'string' ||
+    typeof body.folderId !== 'string' ||
+    typeof body.uploadJobId !== 'string'
+  ) throw new CloudflareFileManagerError('INVALID_FILE_MANAGER_UPLOAD_RECEIPT', 502);
+  return body as unknown as CloudflareFileManagerUpload;
+}
+
+export async function downloadCloudflareFileManagerFile(fileAssetId: string): Promise<Blob> {
+  if (!fileAssetId) throw new Error('شناسه فایل معتبر نیست.');
+  const response = await fetch('/api/files/' + encodeURIComponent(fileAssetId) + '/download', {
+    method: 'GET',
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const code = typeof body.error === 'string' ? body.error : 'TELEGRAM_DOWNLOAD_FAILED';
+    throw new CloudflareFileManagerError(code, response.status);
+  }
+  return response.blob();
+}
+
 export async function archiveCloudflareFileManagerFile(fileId: string): Promise<{ archived: boolean }> {
   return request('/api/file-manager/files/' + encodeURIComponent(fileId) + '/archive', {
     method: 'POST',
