@@ -378,6 +378,35 @@ jobs:
           if (!settings.success || !deployments.success || !versions.success || !domains.success) {
             throw new Error('One or more read-only Cloudflare inventory requests failed.');
           }
+          const requiredProductionHosts = [
+            'darbandicommercial.ir',
+            'mobile.darbandicommercial.ir',
+            'chat.darbandicommercial.ir',
+            'reminders.darbandicommercial.ir',
+          ];
+          const actualDomainMap = asList(domains.body);
+          const wrongDomainBindings = requiredProductionHosts.filter((hostname) =>
+            actualDomainMap.find((item) => item.hostname === hostname)?.service !== 'customs' ||
+            actualDomainMap.find((item) => item.hostname === hostname)?.enabled !== true
+          );
+          if (wrongDomainBindings.length) {
+            throw new Error('Production domain binding safety check failed: ' + wrongDomainBindings.join(', '));
+          }
+          const failedFrontendHosts = frontendChecks
+            .filter((item) => !item.frontendAssetsOk)
+            .map((item) => item.host);
+          if (failedFrontendHosts.length) {
+            throw new Error('Production frontend/asset smoke test failed: ' + failedFrontendHosts.join(', '));
+          }
+          if (
+            authRuntime.checked !== true ||
+            authRuntime.status !== 200 ||
+            authRuntime.containsSupabasePasswordGrant !== true ||
+            authRuntime.usesCloudflareLoginEndpoint === true ||
+            authRuntime.usesCloudflareSessionEndpoint === true
+          ) {
+            throw new Error('Production Auth safety gate failed: the live bundle is not verified to use the current Supabase proxy login flow. Do not route Staging Auth to production.');
+          }
           NODE
 
 # Post-cutover verification trigger: confirm live mappings and frontend assets after domain reassignment.
