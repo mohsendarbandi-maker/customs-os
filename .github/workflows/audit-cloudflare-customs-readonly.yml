@@ -267,3 +267,5 @@ jobs:
             throw new Error('One or more read-only Cloudflare inventory requests failed.');
           }
           NODE
+
+# Post-cutover verification trigger: confirm live mappings and frontend assets after domain reassignment.
