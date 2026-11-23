@@ -38,6 +38,11 @@ jobs:
             try { body = await response.json(); } catch {}
             return { status: response.status, success: response.ok && body?.success === true, body };
           };
+          const tokenVerification = await api('/user/tokens/verify');
+          const tokenPolicies = tokenVerification.body?.result?.policies ?? [];
+          const tokenPermissionNames = [...new Set(tokenPolicies.flatMap((policy) =>
+            (policy.permission_groups ?? []).map((group) => group.name).filter(Boolean)
+          ))].sort();
           const [settings, deployments, versions, domains] = await Promise.all([
             api('/accounts/' + accountId + '/workers/scripts/customs/settings'),
             api('/accounts/' + accountId + '/workers/scripts/customs/deployments'),
@@ -310,6 +315,13 @@ jobs:
           }
           const result = {
             credentials: { cloudflareApiTokenPresent: Boolean(token), accountIdPresent: Boolean(accountId) },
+            cloudflareTokenPermissions: {
+              httpStatus: tokenVerification.status,
+              success: tokenVerification.success,
+              permissionGroupNames: tokenPermissionNames,
+              d1WritePermissionPresent: tokenPermissionNames.some((name) => /D1.*(?:Edit|Write)|(?:Edit|Write).*D1/i.test(name)),
+              workersScriptsEditPresent: tokenPermissionNames.some((name) => /Workers Scripts.*Edit/i.test(name)),
+            },
             stagingD1ReadPermissionProbe: {
               httpStatus: stagingD1.status,
               success: stagingD1.success,
