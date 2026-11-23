@@ -84,8 +84,12 @@ const sameOrigin = (request: Request, url: URL) => {
   return (!origin || origin === url.origin) && request.headers.get('sec-fetch-site') !== 'cross-site';
 };
 const normalizeName = (value: string, fallback = 'document.bin') => {
-  const safe = value.normalize('NFKC').replace(/[\/\\]/g, '_')
-    .replace(/[\u0000-\u001f\u007f]/g, '_')
+  const normalized = value.normalize('NFKC');
+  const withoutControlCharacters = Array.from(normalized, (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f ? '_' : character;
+  }).join('');
+  const safe = withoutControlCharacters.replace(/[\/\\]/g, '_')
     .replace(/^\.+/, '').trim().slice(0, 180);
   return safe || fallback;
 };
@@ -123,15 +127,15 @@ const readBodyBounded = async (request: Request, declaredSize: number): Promise<
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
-    while (true) {
-      const part = await reader.read();
-      if (part.done) break;
+    let part = await reader.read();
+    while (!part.done) {
       total += part.value.byteLength;
       if (total > MAX_ARCHIVE_BYTES || total > declaredSize) {
         await reader.cancel();
         throw new Error('FILE_SIZE_MISMATCH');
       }
       chunks.push(part.value);
+      part = await reader.read();
     }
   } finally {
     try { reader.releaseLock(); } catch { /* stream already closed */ }
