@@ -10,5 +10,7 @@ export const isCloudflareRecoveryHost = (): boolean => {
 // workspace. Production/custom domains are deliberately excluded from this gate.
 export const isCloudflareStagingHost = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return window.location.hostname.toLowerCase().endsWith('.workers.dev');
+  const hostname = window.location.hostname.toLowerCase();
+  return hostname.startsWith('customs-os-migration-staging.') &&
+    hostname.endsWith('.workers.dev');
 };
