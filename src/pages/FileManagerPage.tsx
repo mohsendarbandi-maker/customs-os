@@ -13,6 +13,7 @@ import {
   listCloudflareFileManagerFolders,
   listCloudflareFileManagerFiles,
   createCloudflareFileManagerFolder,
+  searchCloudflareFileManager,
 } from '../lib/cloudflareFileManager';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -400,12 +401,17 @@ export const FileManagerPage: React.FC = () => {
       setLoading(true);
       setError('');
       try {
-        const { data, error: searchError } = await supabase.rpc('search_file_manager', {
-          p_query: term,
-          p_limit: 50,
-        });
-        if (searchError) throw searchError;
-        if (!cancelled) setHits((data || []) as SearchHit[]);
+        if (isCloudflareStagingHost()) {
+          const result = await searchCloudflareFileManager(term, 50);
+          if (!cancelled) setHits(result.items);
+        } else {
+          const { data, error: searchError } = await supabase.rpc('search_file_manager', {
+            p_query: term,
+            p_limit: 50,
+          });
+          if (searchError) throw searchError;
+          if (!cancelled) setHits((data || []) as SearchHit[]);
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'جست‌وجو ناموفق بود.');
       } finally {
