@@ -71,7 +71,9 @@ describe('Cloudflare migration foundation', () => {
     expect(app).toContain('isCloudflareStagingHost() ? <StagingWorkspacePage/> : <DesktopHomePage/>');
     expect(app).not.toContain('isCloudflareRecoveryHost() ? <StagingWorkspacePage/>');
     expect(host).toContain("hostname.startsWith('customs-os-migration-staging.')");
-    expect(host).toContain("hostname === 'darbandicommercial.ir'");
+    expect(host).toContain("isCloudflareRecoveryHost = (): boolean => isCloudflareStagingHost()");
+    expect(host).not.toContain("hostname === 'darbandicommercial.ir'");
+    expect(host).not.toContain("hostname === 'mobile.darbandicommercial.ir'");
   });
 
   it('blocks unported application routes on the isolated workers.dev staging host', () => {
