@@ -239,6 +239,10 @@ jobs:
             const tables = Array.isArray(payload.tables) ? payload.tables : [];
             const relevant = new Set([
               'vessels',
+              'shipments',
+              'clients',
+              'shipping_lines',
+              'shipping_line_contacts',
               'profiles',
               'customs_admin_sessions',
               'customs_admin_credentials',
