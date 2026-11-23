@@ -153,7 +153,7 @@ describe('Staging Worker Open Waters AIS route', () => {
   });
 
   it('updates tracked MMSI positions through D1 and keeps the same invocation URL contract', async () => {
-    const { token, env, updates } = await makeEnv([
+    const { token, env, updates, queries } = await makeEnv([
       { id: 'vessel-1', name: 'Vessel One', imo_number: '1234567', mmsi_number: '123456789' },
     ]);
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
