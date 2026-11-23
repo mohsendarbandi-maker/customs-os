@@ -84,23 +84,6 @@ jobs:
       - name: Production build (final messenger)
         run: npm run build
 
-      - name: Publish verified recovery app assets
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p staging-dist
-          rm -rf staging-dist/*
-          cp -a dist/. staging-dist/
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add staging-dist
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(staging): publish verified recovery app assets"
-            git push origin HEAD:rebuild/cloudflare-free-first
-          else
-            echo "Recovery app assets are already current."
-          fi
       - name: Mobile chat and reminders keyboard viewport smoke
         if: github.head_ref == 'ui/mobile-phase2-chat-reminders-2026-11-14'
         shell: bash
