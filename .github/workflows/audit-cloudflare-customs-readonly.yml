@@ -58,6 +58,27 @@ jobs:
             (deployment.versions ?? []).filter((version) => Number(version.percentage ?? 0) > 0).map((version) => version.version_id)
           ))];
           const activeVersions = activeVersionIds.slice(0, 5).map((id) => ({ id }));
+          const activeVersionDetails = await Promise.all(activeVersionIds.slice(0, 3).map(async (id) => {
+            const response = await api('/accounts/' + accountId + '/workers/scripts/customs/versions/' + encodeURIComponent(id));
+            const version = response.body?.result ?? {};
+            const resources = version.resources ?? {};
+            return {
+              id: version.id ?? id,
+              number: version.number ?? null,
+              metadata: version.metadata ?? null,
+              script: resources.script ? {
+                etag: resources.script.etag ?? null,
+                handlers: resources.script.handlers ?? [],
+                lastDeployedFrom: resources.script.last_deployed_from ?? null,
+              } : null,
+              bindings: Array.isArray(resources.bindings)
+                ? resources.bindings.map((binding) => ({ name: binding.name, type: binding.type }))
+                : resources.bindings ?? null,
+              resourceKeys: Object.keys(resources),
+              success: response.success,
+              httpStatus: response.status,
+            };
+          }));
           const activeVersionId = activeVersionIds[0] ?? null;
           const activeVersion = activeVersionId
             ? await api('/accounts/' + accountId + '/workers/scripts/customs/versions/' + encodeURIComponent(activeVersionId))
@@ -171,6 +192,7 @@ jobs:
               })),
             },
             activeVersions,
+            activeVersionDetails,
             activeVersionAudit,
             versionUrlChecks,
             recentVersions: {
