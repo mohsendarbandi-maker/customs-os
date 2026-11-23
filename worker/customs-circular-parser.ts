@@ -57,7 +57,7 @@ export const htmlText = (value: string): string => clean(decodeHtmlEntities(valu
 const tagValue = (block: string, tag: string): string => {
   const pattern = new RegExp('<' + tag + '(?:\\s[^>]*)?>([\\s\\S]*?)</' + tag + '>', 'i');
   const match = block.match(pattern);
-  return match ? clean(decodeHtmlEntities(match[1].replace(/<[^>]+>/g, ' '))) : '';
+  return match ? clean(decodeHtmlEntities(match[1]).replace(/<[^>]+>/g, ' ')) : '';
 };
 
 export const toLatinDigits = (value: string): string => value
