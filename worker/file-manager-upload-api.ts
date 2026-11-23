@@ -84,9 +84,9 @@ const sameOrigin = (request: Request, url: URL) => {
   return (!origin || origin === url.origin) && request.headers.get('sec-fetch-site') !== 'cross-site';
 };
 const normalizeName = (value: string, fallback = 'document.bin') => {
-  const safe = value.normalize('NFKC').replace(/[\\/\\\\]/g, '_')
-    .replace(/[\\u0000-\\u001f\\u007f]/g, '_')
-    .replace(/^\\.+/, '').trim().slice(0, 180);
+  const safe = value.normalize('NFKC').replace(/[\/\\]/g, '_')
+    .replace(/[\u0000-\u001f\u007f]/g, '_')
+    .replace(/^\.+/, '').trim().slice(0, 180);
   return safe || fallback;
 };
 const normalizeTags = (raw: string | null) => {
@@ -102,10 +102,10 @@ const normalizeTags = (raw: string | null) => {
 };
 const normalizeMime = (value: string | null) => {
   const mime = (value || 'application/octet-stream').split(';')[0].trim().toLowerCase();
-  return /^[a-z0-9.+_-]+\\/[a-z0-9.+_-]+$/i.test(mime) ? mime : 'application/octet-stream';
+  return /^[a-z0-9.+_-]+\/[a-z0-9.+_-]+$/i.test(mime) ? mime : 'application/octet-stream';
 };
 const withExtension = (name: string, mime: string) => {
-  if (/\\.[a-z0-9]{1,12}$/i.test(name)) return name;
+  if (/\.[a-z0-9]{1,12}$/i.test(name)) return name;
   const extensions: Record<string, string> = {
     'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png',
     'image/gif': 'gif', 'image/webp': 'webp', 'image/heic': 'heic',
@@ -166,7 +166,7 @@ const resolveDestination = async (db: FileManagerD1Database, organizationId: str
     Number(destination.distinct_chat_ids) !== 1 ||
     Number(destination.distinct_connection_ids) !== 1 ||
     !destination.chat_id ||
-    !/^-?\\d{1,20}$/.test(destination.chat_id) ||
+    !/^-?\d{1,20}$/.test(destination.chat_id) ||
     !destination.connection_id ||
     !UUID.test(destination.connection_id)
   ) return null;
@@ -190,7 +190,7 @@ export const getFileManagerArchiveStatus = async (
       Number(row.distinct_chat_ids) === 1 &&
       Number(row.distinct_connection_ids) === 1 &&
       row.chat_id &&
-      /^-?\\d{1,20}$/.test(row.chat_id) &&
+      /^-?\d{1,20}$/.test(row.chat_id) &&
       row.connection_id &&
       UUID.test(row.connection_id),
     );
@@ -266,7 +266,7 @@ const completeUploadJob = async (
         '(id,folder_id,shipment_id,client_id,file_asset_id,original_name,mime_type,size_bytes,' +
         'external_message_id,document_type,tags,metadata,shipment_document_id,customs_document_id,' +
         'storage_path,operation_sections,is_archived,created_at,organization_id,relative_path) ' +
-        'SELECT ?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?,\'[]\',0,?,?,? ' +
+        'SELECT ?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?,?,0,?,?,? ' +
         'WHERE EXISTS (SELECT 1 FROM file_manager_folders WHERE id=? AND organization_id=?)',
       ).bind(
         job.file_manager_file_id,job.folder_id,job.shipment_id,job.client_id,job.file_manager_file_id,
@@ -345,7 +345,7 @@ export const handleFileManagerUpload = async (
   const mimeType = normalizeMime(request.headers.get('content-type'));
 
   if (!UUID.test(folderId) || !idempotencyKey || idempotencyKey.length > 180 ||
-      !rawName || !/^\\d+$/.test(declaredSizeText)) {
+      !rawName || !/^\d+$/.test(declaredSizeText)) {
     return fail('INVALID_FILE_ARCHIVE_INPUT',400);
   }
   const declaredSize = Number(declaredSizeText);
@@ -419,9 +419,9 @@ export const handleFileManagerUpload = async (
       const inserted = await env.MIGRATION_DB.prepare(
         'INSERT OR IGNORE INTO file_manager_upload_jobs ' +
         '(id,organization_id,idempotency_key,file_manager_file_id,folder_id,shipment_id,client_id,' +
-        'original_name,document_name,mime_type,size_bytes,document_type,tags,status,telegram_chat_id,' +
+        'original_name,document_name,mime_type,size_bytes,document_type,tags,operation_sections,status,telegram_chat_id,' +
         'telegram_connection_id,telegram_file_id,telegram_file_unique_id,external_message_id,error_code,' +
-        'created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,\'uploading\',NULL,NULL,NULL,NULL,NULL,NULL,?,?,?)',
+        'created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,\'uploading\',NULL,NULL,NULL,NULL,NULL,NULL,?,?,?)',
       ).bind(
         jobId,profile.organization_id,idempotencyKey,fileId,folderId,shipmentId,clientId,
         originalName,finalDocumentName,mimeType,declaredSize,documentType,JSON.stringify(tags),JSON.stringify(operationSections),
@@ -457,7 +457,7 @@ export const handleFileManagerUpload = async (
       finalDocumentName,
       'Type: ' + documentType,
       'Folder: ' + String(folder.relative_path || folder.display_name || folderId).slice(0,160),
-      ...tags.slice(0,8).map(tag => '#' + tag.normalize('NFKC').replace(/\\s+/g,'_').replace(/[^\\p{L}\\p{N}_-]/gu,'').slice(0,32)),
+      ...tags.slice(0,8).map(tag => '#' + tag.normalize('NFKC').replace(/\s+/g,'_').replace(/[^\p{L}\p{N}_-]/gu,'').slice(0,32)),
       '#CustomsOS',
     ].join('\\n').slice(0,950);
 
