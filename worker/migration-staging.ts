@@ -432,6 +432,36 @@ export default {
             ).first<Record<string, number>>(),
           ]);
 
+          const storagePathBreakdown = await Promise.all([
+            env.MIGRATION_DB.prepare(
+              "SELECT CASE " +
+              "WHEN lower(storage_path) LIKE 'telegram://%' THEN 'telegram' " +
+              "WHEN lower(storage_path) LIKE 'supabase://%' THEN 'supabase' " +
+              "WHEN lower(storage_path) LIKE 'http://%' OR lower(storage_path) LIKE 'https://%' THEN 'http' " +
+              "WHEN storage_path IS NULL OR storage_path = '' THEN '(missing)' " +
+              "ELSE 'other' END AS path_type, COUNT(*) AS total " +
+              "FROM file_manager_files GROUP BY path_type ORDER BY path_type",
+            ).all(),
+            env.MIGRATION_DB.prepare(
+              "SELECT CASE " +
+              "WHEN lower(storage_path) LIKE 'telegram://%' THEN 'telegram' " +
+              "WHEN lower(storage_path) LIKE 'supabase://%' THEN 'supabase' " +
+              "WHEN lower(storage_path) LIKE 'http://%' OR lower(storage_path) LIKE 'https://%' THEN 'http' " +
+              "WHEN storage_path IS NULL OR storage_path = '' THEN '(missing)' " +
+              "ELSE 'other' END AS path_type, COUNT(*) AS total " +
+              "FROM customs_documents GROUP BY path_type ORDER BY path_type",
+            ).all(),
+            env.MIGRATION_DB.prepare(
+              "SELECT CASE " +
+              "WHEN lower(storage_path) LIKE 'telegram://%' THEN 'telegram' " +
+              "WHEN lower(storage_path) LIKE 'supabase://%' THEN 'supabase' " +
+              "WHEN lower(storage_path) LIKE 'http://%' OR lower(storage_path) LIKE 'https://%' THEN 'http' " +
+              "WHEN storage_path IS NULL OR storage_path = '' THEN '(missing)' " +
+              "ELSE 'other' END AS path_type, COUNT(*) AS total " +
+              "FROM shipment_documents GROUP BY path_type ORDER BY path_type",
+            ).all(),
+          ]);
+
           const backendCounts = await Promise.all([
             env.MIGRATION_DB.prepare(
               "SELECT COALESCE(NULLIF(storage_backend, ''), '(null)') AS backend, COUNT(*) AS total, " +
@@ -458,6 +488,11 @@ export default {
             storageBackendBreakdown: {
               customsDocuments: backendCounts[0].results,
               shipmentDocuments: backendCounts[1].results,
+            },
+            storagePathBreakdown: {
+              fileManagerFiles: storagePathBreakdown[0].results,
+              customsDocuments: storagePathBreakdown[1].results,
+              shipmentDocuments: storagePathBreakdown[2].results,
             },
             binaryVerification: 'not_performed',
           });
