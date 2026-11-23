@@ -156,7 +156,7 @@ Some client `notes` fields contain credential-like plaintext. No such values are
 This addendum supersedes the earlier **unverified** D1 counts and the export-only estimate of broken customs-office references above. All figures below came from the deployed Worker’s read-only D1 diagnostics, not from assumptions or test fixtures.
 
 ### Deployed Staging revision and isolation
-- Latest verified source application revision deployed by Workflow run `45159263529`: branch source commit `d296b5b9f4ef1c9e93204e27a35a36afcf3bf685` was not recorded here; the exact Worker version returned by Wrangler is `89b2df0e-5dc7-400e-a4fc-c76c488c5fd3`.
+- Latest verified source application revision deployed by Workflow run `45159263529`: branch source commit `d296b5b9f4ef1c9e93204e27a35a36e1ead696e5e` was not recorded here; the exact Worker version returned by Wrangler is `89b2df0e-5dc7-400e-a4fc-c76c488c5fd3`.
 - Worker URL: `https://customs-os-migration-staging.mohsen-darbandi.workers.dev`.
 - Wrangler uploaded 86 static assets (41 already uploaded), then deployed the Worker; reported startup time was 8 ms.
 - The live `/health` response reports `environment=staging`, `database=d1`, `productionTraffic=false`, and `productionDataImported=false`.
