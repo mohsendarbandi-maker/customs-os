@@ -447,14 +447,39 @@ export default {
           }
         }
 
+        let orphanCustomsOfficeReferences: Array<{ table: string; officeId: string; referenceCount: number }> = [];
+        let customsOfficeReferenceQueryFailed = false;
+        try {
+          const officeReferences = await env.MIGRATION_DB.prepare(
+            "SELECT table_name, office_id, COUNT(*) AS reference_count FROM (" +
+            "SELECT 'cases' AS table_name, customs_office_id AS office_id FROM cases WHERE customs_office_id IS NOT NULL " +
+            "UNION ALL SELECT 'shipments', customs_office_id FROM shipments WHERE customs_office_id IS NOT NULL " +
+            "UNION ALL SELECT 'shipment_customs_data', customs_office_id FROM shipment_customs_data WHERE customs_office_id IS NOT NULL " +
+            "UNION ALL SELECT 'customs_declarations', customs_office_id FROM customs_declarations WHERE customs_office_id IS NOT NULL " +
+            "UNION ALL SELECT 'file_manager_folders', customs_office_id FROM file_manager_folders WHERE customs_office_id IS NOT NULL" +
+            ") refs WHERE NOT EXISTS (SELECT 1 FROM customs_offices o WHERE o.id = refs.office_id) " +
+            "GROUP BY table_name, office_id ORDER BY office_id, table_name",
+          ).all<{ table_name: string; office_id: string; reference_count: number }>();
+          orphanCustomsOfficeReferences = officeReferences.results.map((row) => ({
+            table: row.table_name,
+            officeId: row.office_id,
+            referenceCount: row.reference_count,
+          }));
+        } catch {
+          customsOfficeReferenceQueryFailed = true;
+        }
+
         return json({
-          ok: failedChecks === 0,
+          ok: failedChecks === 0 && !customsOfficeReferenceQueryFailed,
           database: 'customs-os-migration-staging',
           inspection: 'read_only_orphan_reference_counts',
           checks: results.length,
           failedChecks,
           orphanTotal,
           checksWithOrphans: results.filter((item) => item.orphanCount !== null && item.orphanCount > 0).length,
+          orphanCustomsOfficeDistinctIds: new Set(orphanCustomsOfficeReferences.map((item) => item.officeId)).size,
+          orphanCustomsOfficeReferences,
+          customsOfficeReferenceQueryFailed,
           results,
         });
       }
