@@ -68,6 +68,7 @@ describe('Cloudflare migration foundation', () => {
   it('blocks unported application routes on the isolated workers.dev staging host', () => {
     const app = read('../src/App.tsx');
     const host = read('../src/lib/recoveryHost.ts');
+    expect(host).toContain("startsWith('customs-os-migration-staging.')");
     expect(host).toContain("endsWith('.workers.dev')");
     expect(app).toContain('isCloudflareStagingHost() && location.pathname !==');
     expect(app).toContain('<StagingRouteBoundary><Routes>');
