@@ -50,6 +50,16 @@ describe('Cloudflare migration foundation', () => {
     expect(app).toContain('</Routes></StagingRouteBoundary>');
   });
 
+  it('compares the migration import manifest with actual D1 table row counts', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("url.pathname === '/migration/parity'");
+    expect(worker).toContain('FROM customs_os_import_table_status WHERE organization_id = ? ORDER BY table_name');
+    expect(worker).toContain('SELECT COUNT(*) AS row_count FROM ');
+    expect(worker).toContain('inspection: \'read_only_import_manifest_vs_d1_counts\'');
+    expect(worker).toContain('rowCountParity: missingTargets === 0 && failedCounts === 0 && mismatchedTables === 0');
+    expect(worker).toContain('MIGRATION_PARITY_UNAVAILABLE');
+  });
+
   it('exposes read-only orphan-reference diagnostics for operational tables', () => {
     const worker = read('../worker/migration-staging.ts');
     expect(worker).toContain("url.pathname === '/migration/integrity'");
