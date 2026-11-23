@@ -47,6 +47,44 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
+      - name: Audit remaining Supabase runtime dependencies (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/audit-cloudflare-dependencies.mjs > "$RUNNER_TEMP/customs-os-supabase-runtime-audit.json"
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/customs-os-supabase-runtime-audit.json', 'utf8'));
+          const lines = [
+            '## Supabase runtime dependency inventory',
+            '',
+            'Read-only static scan; no network access, environment values, or credentials were read.',
+            '',
+            `- Source files scanned: **${report.sourceFilesScanned}**`,
+            `- Recognized callsites: **${report.callsiteCount}**`,
+            '',
+            '| Dependency category | Distinct literal references |',
+            '|---|---:|',
+            ...Object.entries(report.counts).map(([name, count]) => `| ${name} | ${count} |`),
+            '',
+            '### Files with runtime dependencies',
+            '',
+            ...report.perFile.map((item) => `- \`${item.file}\`: ${Object.keys(item.dependencies).join(', ')}`),
+            '',
+            'This inventory is static evidence only; dynamic names and indirect imports may require additional tracing.',
+            '',
+          ];
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\\n'));
+          console.log(JSON.stringify({
+            sourceFilesScanned: report.sourceFilesScanned,
+            callsiteCount: report.callsiteCount,
+            counts: report.counts,
+            perFileCount: report.perFile.length,
+            networkAccess: report.networkAccess,
+            environmentVariablesRead: report.environmentVariablesRead,
+            credentialValuesPrinted: report.credentialValuesPrinted,
+          }, null, 2));
+          NODE
       - name: Build application
         run: npm run build
       - name: Preserve built static app for direct Cloudflare asset upload
