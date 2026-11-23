@@ -74,6 +74,32 @@ export interface ExternalRegistrationOrderAllocation extends ExternalRegistratio
   updated_at: string;
 }
 
+export interface RegistrationOrderReconciliation {
+  registration_order_id: string;
+  order_number: string;
+  shipment_count: number;
+  registered_net_weight_kg: number | null;
+  shipped_net_weight_kg: number;
+  registered_gross_weight_kg: number | null;
+  shipped_gross_weight_kg: number;
+  registered_value_amount: number | null;
+  shipped_value_amount: number;
+  currency: string | null;
+  shipments_missing_invoice_value: number;
+  shipments_with_currency_mismatch: number;
+  is_closed: boolean;
+  external_allocation_count: number;
+  external_allocated_net_weight_kg: number;
+  external_allocated_gross_weight_kg: number;
+  external_allocated_value_amount: number;
+  external_allocations_missing_value: number;
+  external_allocations_currency_mismatch: number;
+  total_allocated_net_weight_kg: number;
+  total_allocated_gross_weight_kg: number;
+  total_allocated_value_amount: number;
+  total_allocation_count: number;
+}
+
 export interface RegistrationOrdersListResponse {
   ok: true;
   items: RegistrationOrderRecord[];
@@ -81,7 +107,7 @@ export interface RegistrationOrdersListResponse {
   limit: number;
   offset: number;
   cases: RegistrationOrderCaseReference[];
-  reconciliation: RegistrationOrderRecord[];
+  reconciliation: RegistrationOrderReconciliation[];
 }
 
 export class CloudflareRegistrationOrdersError extends Error {
