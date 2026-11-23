@@ -158,3 +158,25 @@ The Staging Worker currently has only a limited subset of domain APIs. A success
 ## Next safety gate
 
 Before any Staging D1 migration or Worker deployment, the owner must explicitly decide how the two production hostnames should be served. The current binding is inconsistent with the required isolation policy. Do not silently detach or rebind production hostnames as part of a Staging deployment workflow.
+
+
+## Additional Frontend dependency scan
+
+The read-only static scanner ran as part of the same Staging workflow against 192 source files. It found 727 recognized literal callsites, with 91 files containing direct literal dependency references.
+
+| Dependency type | Distinct literal references |
+|---|---:|
+| Supabase SDK imports | 1 |
+| Database tables | 64 |
+| RPC names | 76 |
+| Edge Function slugs | 6 |
+| Edge Function wrappers | 5 |
+| Storage buckets | 4 |
+| Realtime channels | 7 |
+| Auth methods | 6 |
+| Literal Supabase hosts | 0 |
+| Supabase environment-variable names | 5 |
+
+The scan itself made no network requests, read no environment-variable values, and printed no credential values. Zero literal Supabase host strings does not mean there are no runtime Supabase dependencies: the Frontend imports the SDK, the Worker reads its configured Supabase URL, and the scanner found 727 callsites across the categories above. This is a static inventory, not a proof of complete discovery of dynamic or indirect use.
+
+The Frontend recovery-host helper returns true for both `darbandicommercial.ir` and `mobile.darbandicommercial.ir`. The login page and AuthContext consequently select the Cloudflare `/api/auth/login` and `/api/auth/session` paths on those hostnames. The current Staging Worker source implements this recovery login around a single fixed administrator identity and `CUSTOMS_ADMIN_PASSWORD`; it is not yet a complete D1-backed multi-user authentication system. The currently deployed Worker revision was not compared byte-for-byte with the branch source in this audit, so this is a source-level finding, not a claim about the exact deployed bundle.
