@@ -61,7 +61,7 @@ jobs:
           const serviceFor = (domains, hostname) =>
             domains.find((item) => item.hostname === hostname)?.service ?? null;
           const attach = (hostname, service) => api('/accounts/' + accountId + '/workers/domains', 'PUT', {
-            hostname, service, enabled: true, zone_id: zoneId,
+            hostname, service, enabled: true, zone_id: zoneId, override_existing_origin: true,
           });
 
           const [settings, deployments, initialDomains] = await Promise.all([
@@ -179,11 +179,11 @@ jobs:
                 }));
                 throw new Error('Cloudflare did not accept in-place reassignment for ' + hostname + '.');
               }
+              changed.push(hostname);
               const after = await domainList();
               if (serviceFor(after, hostname) !== target) {
                 throw new Error('Cloudflare did not confirm the new Worker mapping for ' + hostname + '.');
               }
-              changed.push(hostname);
               const result = await smoke(hostname);
               if (!result.ok) throw new Error('Frontend smoke test failed for ' + hostname + '.');
             }
