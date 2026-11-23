@@ -69,6 +69,78 @@ File content is not represented by a Storage path or Telegram file ID alone. The
 6. Preserve customs workflow preconditions (especially declaration exit) in a single atomic backend transition with immutable history/audit.
 7. Apply the same financial constraints to internal and cross-company/external registration-order allocations.
 
+
+## Page-by-page source map — all 59 page files reviewed
+Literal table/RPC references below are those found directly in each page source. A dash means no direct literal `.from()`/`.rpc()` match in that page file; it does **not** mean the page is backend-independent, because data may be delegated to imported components/hooks/helpers or constructed dynamically.
+
+| Page source | Directly observed tables / backend contracts |
+|---|---|
+| `AdvancedSettingsPage` | profiles |
+| `CaseAlertPanel` | cases, customs_documents, customs_declarations, permits |
+| `CaseAlertsPage` | cases, customs_documents, customs_declarations, permits |
+| `CaseDeletePage` | shipments, cases, vessels, clients; RPC `delete_case_safely` |
+| `CaseDocumentManagementPage` | shipments, vessels, clients, cases |
+| `CaseHistoryPage` | cases, case_status_history, audit_logs |
+| `CaseOperationsPage` | case_display_context, customs_documents, customs_declarations, permits, case_exit_operations, cases; RPCs `get_case_completion_readiness`, `delete_case_safely` |
+| `CaseRegistryPage` | customs_declarations, declaration_checklist_items |
+| `CaseStagePage` | case_display_context, shipments, shipment_customs_data, customs_declarations |
+| `CaspianMaritimePage` | vessels, shipments |
+| `ClientDocumentManagerPage` | profiles, clients, customs_documents |
+| `ClientRegistryPage` | clients; RPCs `create_client_workflow`, `delete_client_workflow` |
+| `ControlCenterPage` | cases, clients, permits, case_exit_operations, financial_transactions, operational_reminders; RPCs `get_control_center_shipments`, `create_operational_reminder` |
+| `ControlCenterWithAlertsPage` | no direct literal query found; inspect imported control/alert components |
+| `CustomsAccountingVoucherPage` | finance_cost_categories, customs_accounting_vouchers, voucher_line_items, finance_cost_items; RPCs `create_customs_accounting_voucher`, `save_customs_accounting_voucher`, `void_customs_voucher_line` |
+| `CustomsAccountingVoucherPrintPage` | customs_accounting_vouchers, voucher_line_items, organizations |
+| `CustomsDocumentManagerPage` | profiles, shipments, cases, vessels, clients, shipment_customs_data, customs_offices, shipment_documents, customs_documents, file_manager_files, shipment_document_extractions |
+| `CustomsOfficesPage` | customs_offices |
+| `CustomsPendingReportPage` | customs_declaration_workflow, customs_declarations, shipments, cases, declaration_checklist_items, declaration_exit_checklist_items, clients, permits, finance_cost_items |
+| `DashboardPage` | RPCs `create_case_workflow`, `attach_registration_order`, `update_case_operational_data`, `register_shipment_workflow`, `calculate_case_valuation`, `register_declaration_workflow` |
+| `DeclarationChecklistPage` | cases, customs_declarations; RPC `register_declaration_workflow` |
+| `DeclarationOperationsChecklistPage` | customs_declarations, shipments, cases, clients, customs_offices, shipment_customs_data, registration_orders, customs_declaration_workflow, declaration_checklist_items; checklist/stage RPCs |
+| `DeclarationRegistrationPage` | shipments, customs_declarations, shipment_customs_data, customs_offices, customs_documents; RPCs `register_shipment_declaration`, `set_declaration_file`, `initialize_declaration_checklist`; Storage `customs_documents` |
+| `DesktopHomePage` | shipments, clients, cases |
+| `DocumentExtractionPage` | profiles, shipments, customs_documents, shipment_document_extractions; Storage `customs_documents` |
+| `DutiesCalculationPage` | cases; RPC `complete_case_duties` |
+| `EnterpriseERPPage` | shipments, clients, finance_invoices, finance_payments |
+| `ExitPage` | profiles, customs_declarations, shipment_customs_data, shipments, declaration_exit_checklist_items, declaration_checklist_items, customs_documents, customs_declaration_workflow; RPCs `update_declaration_checklist_item`, `complete_customs_declaration_exit` |
+| `FileManagerPage` | file_manager_folders, file_manager_files, knowledge_sources; RPCs `copy_file_manager_folder`, `search_file_manager` |
+| `FinancePage` | finance cost, invoice, payment, voucher, petty-cash, permissions and settings tables; 11 Finance RPCs; Storage `finance-receipts` |
+| `FinanceShipmentPage` | shipments, finance_invoice_shipments, finance_payment_requests, finance_payments, customs_accounting_vouchers, clients, cases |
+| `KnowledgeCenterPage` | knowledge_sources, profiles, knowledge_chunks; Storage `customs-knowledge` |
+| `KnowledgeCenterV2Page` | knowledge_sources, profiles; Storage `customs-knowledge` |
+| `LoginPage` | Supabase Auth import; no direct table/RPC literal |
+| `MainMenuPage` | cases, shipments, permits, case_exit_operations, financial_transactions |
+| `MaritimePage` | clients, shipments, vessels, shipping_lines, shipping_line_contacts, profiles; RPCs `update_shipment_maritime_data`, `delete_shipment_workflow`, `set_shipment_tracking_status` |
+| `MessengerIntegrationsPage` | no direct literal table/RPC; integration API/worker calls require imported dependency review |
+| `OfficeAutomationPage` | organizations, clients |
+| `OperationsPage` | clients, cases, shipments, registration_orders, documents, permits; workflow/valuation/declaration RPCs; Storage `customs_documents` |
+| `OrgConnectionsPage` | no direct literal table/RPC; inspect feature API and connection modules |
+| `PaymentRequestPrintPage` | finance_payment_requests, organizations, clients, shipments, finance_payment_request_lines |
+| `PdfStudioPage` | file_manager_folders, file_manager_files; Storage `customs_documents` |
+| `PermitRulesPage` | permit_rules, customs_operation_rules |
+| `PreDeclarationPage` | profiles, shipments, shipment_documents, customs_documents, shipment_customs_data, customs_offices, registration_orders, cases, clients, shipment_document_extractions; Storage `customs_documents` |
+| `RegistrationOrdersPage` | registration_orders, clients, cases, registration_order_reconciliation, registration_order_external_allocations |
+| `RemindersPage` | operational_reminders, shipments, profiles, reminder_checklist_items, cases, customs_documents, shipment_documents, documents, finance_invoices, clients, notification_preferences; RPC `complete_operational_reminder`; Realtime `reminders-live` |
+| `SettingsEnterprisePage` | user_settings, organization_settings, profiles, organizations |
+| `SettingsPage` | no direct literal table/RPC |
+| `ShareImportPage` | file_manager_folders |
+| `ShipmentCaseLinkPage` | cases; RPCs `get_control_center_shipments`, `link_shipment_to_case` |
+| `ShipmentFirstPage` | shipment_documents, clients, shipments, vessels, shipping_lines, registration_orders, cases, customs_offices, shipment_document_extractions, file_manager_files; shipment/case/tracking/ship-pass RPCs; Edge Function `ai-assistant` |
+| `ShipmentReportsPage` | shipments |
+| `ShipmentShowcasePage` | shipments, operational_reminders |
+| `ShippingManagementPage` | shipping_lines, vessels, shipments |
+| `StagingWorkspacePage` | no direct literal table/RPC |
+| `ValuationPage` | cases; RPC `complete_case_valuation` |
+| `VesselMultiSourcePage` | Supabase import observed; no direct literal table/RPC |
+| `VesselSearchPage` | Supabase import observed; no direct literal table/RPC |
+| `VesselTrackingPage` | vessels |
+
+### Page-map caveats
+- Several pages import a common Supabase client even when table calls live in shared components, feature modules, or hooks. Those imports remain operational dependencies.
+- The full set of dynamic table names, constructed RPC names, Edge Function invocations, shared hooks, Storage policies, and trigger side effects still requires call-graph tracing and integration tests.
+- The page map must be joined with the component/library/feature inventory; it is not a backend implementation contract on its own.
+- Static route/page presence does not prove the route is enabled for every role or responsive layout, and does not prove CRUD acceptance.
+
 ## Completion gate
 This file only captures statically visible dependencies in the named critical modules. Phase 1 is not complete until all 59 page modules, all 30 components, all 70 library modules, all hooks/contexts/features, all archived functions, and all historical migrations have been traversed and reconciled into a complete inventory with acceptance tests. No D1 schema migration or Supabase removal is authorized merely by the presence of this map.
 
