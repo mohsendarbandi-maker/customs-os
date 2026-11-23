@@ -25,7 +25,7 @@ const finite = (value: unknown): number | null => {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 };
-const validPosition = (lat: number | null, lon: number | null): lat is number =>
+const validPosition = (lat: number | null, lon: number | null): boolean =>
   lat !== null && lon !== null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
 const validImo = (value: unknown) => /^\d{7}$/.test(String(value ?? '').trim());
 const validMmsi = (value: unknown) => /^\d{9}$/.test(String(value ?? '').trim());
@@ -109,7 +109,9 @@ export const handleLegacySyncVesselAis = async (
       );
       const lat = finite(row.latitude ?? row.LAT ?? row.lat);
       const lon = finite(row.longitude ?? row.LON ?? row.lon);
-      if (!validPosition(lat, lon)) throw new Error('AISFriends returned invalid coordinates');
+      if (lat === null || lon === null || !validPosition(lat, lon)) {
+        throw new Error('AISFriends returned invalid coordinates');
+      }
 
       const speed = finite(row.speed ?? row.SPEED);
       const course = finite(row.course ?? row.COURSE);
