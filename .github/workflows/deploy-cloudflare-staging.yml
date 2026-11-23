@@ -65,3 +65,10 @@ jobs:
             exit 1
           fi
           npx wrangler@4 deploy --config wrangler.migration-staging.jsonc
+      - name: Verify staging D1 database size and state (read-only)
+        run: npx wrangler@4 d1 info customs-os-migration-staging --config wrangler.migration-staging.jsonc --json
+      - name: List staging Worker secret names only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler@4 secret list --config wrangler.migration-staging.jsonc --format json | jq -r '.[].name' | sort
