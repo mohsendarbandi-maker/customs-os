@@ -489,7 +489,7 @@ const listAllocations = async (db: RegistrationOrderD1Database, orderId: string,
 const validateAllocationCapacity = (
   order: OrderRow, input: AllocationInput, before: ExternalAllocationRow | null,
 ) => {
-  if (Boolean(order.is_closed)) return 'REGISTRATION_ORDER_CLOSED';
+  if (order.is_closed) return 'REGISTRATION_ORDER_CLOSED';
   if (order.net_weight_kg == null || order.value_amount == null || !order.currency) return 'REGISTRATION_ORDER_CAPACITY_REQUIRED';
   if (order.gross_weight_kg != null && input.status !== 'cancelled' && input.gross_weight_kg == null) return 'REGISTRATION_ORDER_GROSS_WEIGHT_REQUIRED';
   if (Number(order.shipments_missing_invoice_value || 0) > 0) return 'REGISTRATION_ORDER_SHIPMENT_VALUE_INCOMPLETE';
