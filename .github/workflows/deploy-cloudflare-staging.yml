@@ -65,9 +65,102 @@ jobs:
             exit 1
           fi
           npx wrangler@4 deploy --config wrangler.migration-staging.jsonc
-      - name: Attempt read-only staging D1 size and state inspection
+      - name: Verify deployed staging D1 through read-only Worker diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="https://customs-os-migration-staging.mohsen-darbandi.workers.dev"
+          work_dir="$(mktemp -d)"
+          trap 'rm -rf "$work_dir"' EXIT
+
+          fetch_json() {
+            local name="$1"
+            local path="$2"
+            local file="$work_dir/$name.json"
+            local code_file="$work_dir/$name.http"
+            local http_code="000"
+
+            if http_code="$(curl --silent --show-error --retry 2 --retry-all-errors --retry-delay 2 --max-time 45 \
+              --output "$file" --write-out '%{http_code}' "$base_url$path")"; then
+              :
+            else
+              http_code="000"
+            fi
+            printf '%s' "$http_code" > "$code_file"
+
+            if [[ "$http_code" != "200" ]]; then
+              echo "::warning title=Staging diagnostic unavailable::$path returned HTTP $http_code"
+              return 0
+            fi
+            if ! jq -e 'type == "object"' "$file" >/dev/null; then
+              echo "::warning title=Staging diagnostic invalid::$path did not return a JSON object"
+              printf 'invalid' > "$code_file"
+            fi
+          }
+
+          fetch_json health /health
+          fetch_json health_db /health/db
+          fetch_json schema /migration/schema
+          fetch_json parity /migration/parity
+          fetch_json integrity /migration/integrity
+          fetch_json files /migration/files
+          fetch_json status /migration/status
+
+          if [[ "$(cat "$work_dir/schema.http")" != "200" ]] || ! jq -e '.ok == true' "$work_dir/schema.json" >/dev/null 2>&1; then
+            echo "::error::Staging D1 schema inventory could not be verified through the Worker."
+            exit 1
+          fi
+
+          {
+            echo "## Cloudflare Staging — read-only D1 diagnostics"
+            echo
+            echo "Worker: $base_url"
+            echo
+            echo "### Database schema and row counts"
+            jq -r '"Tables: \(.tableCount), total rows: \(.totalRows), count failures: \(.countFailures)"' "$work_dir/schema.json"
+            jq -r '.tables[] | "- " + .name + ": " + (if .rowCount == null then "unverified" else (.rowCount | tostring) end)' "$work_dir/schema.json"
+            echo
+            echo "### Import parity"
+            if [[ -f "$work_dir/parity.json" ]]; then
+              jq -r '"HTTP result: \(.ok), manifest tables: \(.sourceTableCount), expected rows: \(.expectedTotal), actual rows: \(.actualTotal), missing required targets: \(.missingRequiredTargets), mismatched tables: \(.mismatchedTables), failed counts: \(.failedCounts)"' "$work_dir/parity.json"
+            else
+              echo "Unavailable; see workflow warning."
+            fi
+            echo
+            echo "### Referential integrity"
+            if [[ -f "$work_dir/integrity.json" ]]; then
+              jq -r '"HTTP result: \(.ok), orphan references: \(.orphanTotal), failed checks: \(.failedChecks), customs-office reference query failed: \(.customsOfficeReferenceQueryFailed)"' "$work_dir/integrity.json"
+            else
+              echo "Unavailable; see workflow warning."
+            fi
+            echo
+            echo "### File archive metadata (not binary verification)"
+            if [[ -f "$work_dir/files.json" ]]; then
+              jq -r '"File Manager files: \(.fileManagerFiles.total // "unknown"), customs documents: \(.customsDocuments.total // "unknown"), shipment documents: \(.shipmentDocuments.total // "unknown"), binary verification: \(.binaryVerification)"' "$work_dir/files.json"
+              jq -r '"Customs document backends: " + ((.storageBackendBreakdown.customsDocuments // []) | map("\(.backend)=\(.total)") | join(", "))' "$work_dir/files.json"
+              jq -r '"Shipment document backends: " + ((.storageBackendBreakdown.shipmentDocuments // []) | map("\(.backend)=\(.total)") | join(", "))' "$work_dir/files.json"
+              jq -r '"File Manager path classes: " + ((.storagePathBreakdown.fileManagerFiles // []) | map("\(.path_type)=\(.total)") | join(", "))' "$work_dir/files.json"
+            else
+              echo "Unavailable; see workflow warning."
+            fi
+            echo
+            echo "### Migration gates"
+            if [[ -f "$work_dir/status.json" ]]; then
+              jq -r '.gates' "$work_dir/status.json"
+              jq -r '"Archived function sources: \(.archivedFunctions // "unknown")"' "$work_dir/status.json"
+            else
+              echo "Unavailable; see workflow warning."
+            fi
+            echo
+            echo "Note: metadata counts and HTTP responses do not establish binary recoverability or operational API parity."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: List staging Worker secret names only (never values)
         continue-on-error: true
-        run: npx wrangler@4 d1 info customs-os-migration-staging --config wrangler.migration-staging.jsonc --json
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler@4 secret list --config wrangler.migration-staging.jsonc --format json | jq -r '.[].name' | sort
       - name: List staging Worker secret names only (never values)
         continue-on-error: true
         shell: bash
