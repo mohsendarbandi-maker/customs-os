@@ -129,7 +129,7 @@ export function SessionManagementPanel() {
         });
         const payload = await response.json().catch(() => ({})) as { error?: string };
         if (!response.ok) throw new Error('خروج از دستگاه ناموفق بود: ' + (payload.error || response.status));
-        setNotice('نشست این دستگاه باطل شد و هنگام درخواست بعدی از حساب خارج می‌شود.');
+        setNotice('نشست این دستگاه باطل شد؛ حداکثر در یک دقیقه یا هنگام بازگشت به صفحه از حساب خارج می‌شود.');
         await loadSessions();
         return;
       }

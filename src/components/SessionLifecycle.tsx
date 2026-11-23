@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { isCloudflareRecoveryHost } from '../lib/recoveryHost';
+import { isCloudflareRecoveryHost, isCloudflareStagingHost } from '../lib/recoveryHost';
 import { supabase } from '../lib/supabase';
 import { describeDevice, getSessionIdFromAccessToken } from '../lib/deviceSessions';
 
@@ -10,6 +10,47 @@ export function SessionLifecycle() {
   const sessionId = getSessionIdFromAccessToken(session?.access_token);
 
   useEffect(() => {
+    if (isCloudflareStagingHost()) {
+      if (!userId) return;
+      let active = true;
+      let checking = false;
+
+      const verifyCloudflareSession = async () => {
+        if (!active || checking || document.visibilityState === 'hidden') return;
+        checking = true;
+        try {
+          const response = await fetch('/api/auth/session', {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: { Accept: 'application/json' },
+          });
+          if (!active || !response.ok) return;
+          const payload = await response.json().catch(() => ({})) as { authenticated?: boolean };
+          if (active && payload.authenticated === false) await signOut();
+        } catch {
+          // A network interruption is not proof that the server revoked this session.
+        } finally {
+          checking = false;
+        }
+      };
+
+      const handleCloudflareVisibility = () => {
+        if (document.visibilityState === 'visible') void verifyCloudflareSession();
+      };
+      void verifyCloudflareSession();
+      const sessionCheck = window.setInterval(() => void verifyCloudflareSession(), 60_000);
+      document.addEventListener('visibilitychange', handleCloudflareVisibility);
+      window.addEventListener('focus', handleCloudflareVisibility);
+
+      return () => {
+        active = false;
+        window.clearInterval(sessionCheck);
+        document.removeEventListener('visibilitychange', handleCloudflareVisibility);
+        window.removeEventListener('focus', handleCloudflareVisibility);
+      };
+    }
+
     if (isCloudflareRecoveryHost()) return;
     if (!userId || !sessionId) return;
 

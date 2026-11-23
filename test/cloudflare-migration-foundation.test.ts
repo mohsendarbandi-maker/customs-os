@@ -268,3 +268,19 @@ describe('Cloudflare Staging device session workspace', () => {
     expect(workspace).toContain('مدیریت دستگاه‌ها و خروج از نشست‌های دیگر');
   });
 });
+
+describe('Cloudflare Staging session revocation lifecycle', () => {
+  it('checks the D1-backed session on foreground and at a bounded interval', () => {
+    const lifecycle = read('../src/components/SessionLifecycle.tsx');
+    expect(lifecycle).toContain('isCloudflareStagingHost()');
+    expect(lifecycle).toContain("fetch('/api/auth/session'");
+    expect(lifecycle).toContain('60_000');
+    expect(lifecycle).toContain("payload.authenticated === false");
+    expect(lifecycle).toContain('await signOut()');
+  });
+
+  it('does not treat a temporary network failure as a revoked session', () => {
+    const lifecycle = read('../src/components/SessionLifecycle.tsx');
+    expect(lifecycle).toContain('A network interruption is not proof');
+  });
+});
