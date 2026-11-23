@@ -16,7 +16,12 @@
       "/api/*",
       "/health",
       "/health/*",
-      "/migration/*"
+      "/migration/*",
+      "/functions/*",
+      "/auth/*",
+      "/rest/*",
+      "/storage/*",
+      "/realtime/*"
     ],
     "html_handling": "none",
     "not_found_handling": "single-page-application"
@@ -31,7 +36,8 @@
   ],
   "secrets": {
     "required": [
-      "CUSTOMS_ADMIN_PASSWORD"
+      "CUSTOMS_ADMIN_PASSWORD",
+      "GEMINI_API_KEY"
     ]
   },
   "observability": {
