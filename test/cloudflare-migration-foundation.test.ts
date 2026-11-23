@@ -35,7 +35,7 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain("url.pathname === '/migration/schema'");
     expect(worker).toContain("SELECT name FROM sqlite_master WHERE type = 'table'");
     expect(worker).toContain('SELECT COUNT(*) AS row_count FROM ');
-    expect(worker).toContain('PRAGMA table_info(');
+    expect(worker).toContain('schemaSql: table.sql');
     expect(worker).toContain('inspection: \'read_only_sqlite_master_and_count\'');
     expect(worker).toContain("request.method !== 'GET' && request.method !== 'HEAD'");
     expect(worker).toContain("SCHEMA_INSPECTION_UNAVAILABLE");
