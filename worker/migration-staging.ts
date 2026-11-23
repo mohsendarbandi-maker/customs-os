@@ -9,6 +9,7 @@ import { handleFileManagerApi } from './file-manager-api';
 import { getFileManagerArchiveStatus, handleFileManagerUpload } from './file-manager-upload-api';
 import { handleVesselMultiSourceLookup } from './vessel-multi-source-api';
 import { handleSyncVesselAisV2 } from './sync-vessel-ais-api';
+import { handleMaritimeReadApi } from './maritime-read-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -1183,6 +1184,13 @@ export default {
     if (url.pathname === '/api/registration-orders' || url.pathname.startsWith('/api/registration-orders/')) {
       if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
       return handleRegistrationOrdersApi(request, env.MIGRATION_DB, url, profile);
+    }
+
+    if (url.pathname === '/api/maritime/vessels' || url.pathname === '/api/maritime/shipments') {
+      if (!isSameOrigin(request, url)) return json({ ok: false, error: 'ORIGIN_FORBIDDEN' }, 403);
+      if (request.method !== 'GET') return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
+      if (!await getSession(request, env)) return json({ ok: false, error: 'UNAUTHORIZED' }, 401);
+      return handleMaritimeReadApi(request, env.MIGRATION_DB, url, profile);
     }
 
     if (url.pathname.startsWith('/api/')) return json({ error: 'API_NOT_FOUND' }, 404);
