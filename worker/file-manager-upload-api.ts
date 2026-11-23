@@ -277,6 +277,10 @@ const completeUploadJob = async (
         job.folder_id,profile.organization_id,
       ),
       db.prepare(
+        'UPDATE file_manager_upload_jobs SET status=\'stored\',error_code=NULL,updated_at=? ' +
+        'WHERE id=? AND organization_id=? AND status=\'receipt_recorded\' AND EXISTS (SELECT 1 FROM file_manager_files WHERE id=? AND organization_id=? AND file_asset_id=?)',
+      ).bind(createdAt,job.id,profile.organization_id,job.file_manager_file_id,profile.organization_id,job.file_manager_file_id),
+      db.prepare(
         'INSERT INTO customs_os_audit_events ' +
         '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
         'SELECT ?,?,?,?,?,?,?,?,? WHERE changes() > 0',
@@ -284,10 +288,6 @@ const completeUploadJob = async (
         crypto.randomUUID(),profile.organization_id,profile.id,'create','file_manager_file',
         job.file_manager_file_id,null,JSON.stringify(after),'telegram-upload:' + job.id,
       ),
-      db.prepare(
-        'UPDATE file_manager_upload_jobs SET status=\'stored\',error_code=NULL,updated_at=? ' +
-        'WHERE id=? AND organization_id=? AND status=\'receipt_recorded\'',
-      ).bind(createdAt,job.id,profile.organization_id),
     ]);
     const stored = await db.prepare(
       'SELECT id,file_asset_id,external_message_id,size_bytes FROM file_manager_files ' +
