@@ -5,7 +5,10 @@ import sqlite3
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations-cloudflare/0006_registration_orders_api.sql"
+MIGRATIONS = (
+    ROOT / "supabase/migrations-cloudflare/0006_registration_orders_api.sql",
+    ROOT / "supabase/migrations-cloudflare/0007_registration_order_integer_capacity.sql",
+)
 
 def expect_integrity(action, marker):
     try:
@@ -17,7 +20,6 @@ def expect_integrity(action, marker):
     raise AssertionError(f"Expected SQLite integrity error containing {marker!r}")
 
 def main():
-    sql = MIGRATION.read_text(encoding="utf-8")
     db = sqlite3.connect(":memory:")
     db.execute("PRAGMA foreign_keys=ON")
     db.executescript("""
@@ -83,27 +85,30 @@ def main():
         created_at TEXT NOT NULL
       );
     """)
-    statement = ""
-    statement_start = 1
-    statement_number = 0
-    try:
-        for line_number, line in enumerate(sql.splitlines(keepends=True), start=1):
-            if not statement.strip():
-                statement_start = line_number
-            statement += line
-            if sqlite3.complete_statement(statement):
-                statement_number += 1
-                db.execute(statement)
-                statement = ""
-        if statement.strip():
-            raise AssertionError("D1 migration ended with an incomplete SQL statement.")
-    except sqlite3.Error as exc:
-        excerpt = " ".join(statement.strip().split())[:420]
-        raise AssertionError(
-            "D1 migration SQL failed in SQLite at "
-            f"statement {statement_number + 1}, lines {statement_start}-{line_number}: "
-            f"{exc}. SQL: {excerpt}"
-        ) from exc
+    for migration in MIGRATIONS:
+        sql = migration.read_text(encoding="utf-8")
+        statement = ""
+        statement_start = 1
+        statement_number = 0
+        line_number = 0
+        try:
+            for line_number, line in enumerate(sql.splitlines(keepends=True), start=1):
+                if not statement.strip():
+                    statement_start = line_number
+                statement += line
+                if sqlite3.complete_statement(statement):
+                    statement_number += 1
+                    db.execute(statement)
+                    statement = ""
+            if statement.strip():
+                raise AssertionError(f"{migration.name} ended with an incomplete SQL statement.")
+        except sqlite3.Error as exc:
+            excerpt = " ".join(statement.strip().split())[:420]
+            raise AssertionError(
+                f"{migration.name} failed in SQLite at "
+                f"statement {statement_number + 1}, lines {statement_start}-{line_number}: "
+                f"{exc}. SQL: {excerpt}"
+            ) from exc
 
     # Parent order + one internal shipment at half capacity.
     db.execute("""
@@ -211,6 +216,51 @@ def main():
       UPDATE registration_orders SET client_id='client-b'
       WHERE id='order-a' AND organization_id='org-a'
     """), "REGISTRATION_ORDER_CLIENT_CONFLICT")
+
+    # Decimal capacity is compared after converting each operand to integer milli-units.
+    db.execute("""
+      INSERT INTO registration_orders
+      (id, organization_id, order_number, status, value_amount, currency,
+       client_id, net_weight_kg, gross_weight_kg, is_closed, created_at, updated_at)
+      VALUES ('order-c','org-a','DECIMAL-001','received',0.300,'USD',
+              'client-a',0.300,0.300,0,'2026-01-01','2026-01-01')
+    """)
+    db.execute("""
+      INSERT INTO shipments
+      (id, organization_id, registration_order_id, client_id, net_weight_kg, gross_weight_kg)
+      VALUES ('shipment-c','org-a','order-c','client-a',0.100,0.100)
+    """)
+    db.execute("""
+      INSERT INTO shipment_customs_data
+      (shipment_id, organization_id, invoice_amount, invoice_currency)
+      VALUES ('shipment-c','org-a',0.100,'USD')
+    """)
+    db.execute("""
+      INSERT INTO registration_order_external_allocations
+      (id, organization_id, registration_order_id, recipient_company, status,
+       net_weight_kg, gross_weight_kg, value_amount, currency)
+      VALUES ('alloc-c','org-a','order-c','Decimal broker','allocated',0.200,0.200,0.200,'USD')
+    """)
+    expect_integrity(lambda: db.execute("""
+      INSERT INTO registration_order_external_allocations
+      (id, organization_id, registration_order_id, recipient_company, status,
+       net_weight_kg, gross_weight_kg, value_amount, currency)
+      VALUES ('alloc-c-over','org-a','order-c','Over capacity','allocated',0.001,0.001,0.001,'USD')
+    """), "REGISTRATION_ORDER_NET_CAPACITY_EXCEEDED")
+    expect_integrity(lambda: db.execute("""
+      INSERT INTO registration_order_external_allocations
+      (id, organization_id, registration_order_id, recipient_company, status,
+       net_weight_kg, gross_weight_kg, value_amount, currency)
+      VALUES ('alloc-c-precision','org-a','order-c','Too precise','allocated',0.0001,0.0001,0.0001,'USD')
+    """), "REGISTRATION_ORDER_PRECISION_INVALID")
+    db.execute("""
+      UPDATE registration_orders SET is_closed=1, closed_at='2026-01-03', status='used'
+      WHERE id='order-c' AND organization_id='org-a'
+    """)
+    expect_integrity(lambda: db.execute("""
+      UPDATE registration_orders SET net_weight_kg=0.301
+      WHERE id='order-c' AND organization_id='org-a'
+    """), "REGISTRATION_ORDER_CLOSED")
 
     print("SQLite D1 registration-order migration checks passed.")
     db.close()
