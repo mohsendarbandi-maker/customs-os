@@ -218,8 +218,8 @@ const ORDER_SELECT = [
   ' COALESCE(SUM(COALESCE(d.net_weight_kg, s.net_weight_kg)), 0) AS shipped_net_weight_kg,',
   ' COALESCE(SUM(COALESCE(d.gross_weight_kg, s.gross_weight_kg)), 0) AS shipped_gross_weight_kg,',
   ' COALESCE(SUM(d.invoice_amount), 0) AS shipped_value_amount,',
-  ' COALESCE(SUM(CASE WHEN s.id IS NOT NULL AND (d.invoice_amount IS NULL OR NULLIF(TRIM(d.invoice_currency), \\'\\') IS NULL) THEN 1 ELSE 0 END), 0) AS shipments_missing_invoice_value,',
-  ' COALESCE(SUM(CASE WHEN d.invoice_amount IS NOT NULL AND (ro2.currency IS NULL OR NULLIF(TRIM(d.invoice_currency), \\'\\') IS NULL OR UPPER(TRIM(d.invoice_currency)) <> UPPER(ro2.currency)) THEN 1 ELSE 0 END), 0) AS shipments_with_currency_mismatch',
+  ' COALESCE(SUM(CASE WHEN s.id IS NOT NULL AND (d.invoice_amount IS NULL OR NULLIF(TRIM(d.invoice_currency), \'\') IS NULL) THEN 1 ELSE 0 END), 0) AS shipments_missing_invoice_value,',
+  ' COALESCE(SUM(CASE WHEN d.invoice_amount IS NOT NULL AND (ro2.currency IS NULL OR NULLIF(TRIM(d.invoice_currency), \'\') IS NULL OR UPPER(TRIM(d.invoice_currency)) <> UPPER(ro2.currency)) THEN 1 ELSE 0 END), 0) AS shipments_with_currency_mismatch',
   ' FROM registration_orders ro2',
   ' LEFT JOIN shipments s ON s.organization_id = ro2.organization_id AND (s.registration_order_id = ro2.id OR (s.registration_order_id IS NULL AND (s.case_id = ro2.case_id OR EXISTS (SELECT 1 FROM cases sc WHERE sc.id = s.case_id AND sc.organization_id = s.organization_id AND sc.registration_order_no = ro2.order_number))))',
   ' LEFT JOIN shipment_customs_data d ON d.shipment_id = s.id AND d.organization_id = s.organization_id',
@@ -234,7 +234,7 @@ const ORDER_SELECT = [
   ' COALESCE(SUM(CASE WHEN a.currency IS NOT NULL AND UPPER(a.currency) <> UPPER(ro3.currency) THEN 1 ELSE 0 END), 0) AS external_allocations_currency_mismatch',
   ' FROM registration_order_external_allocations a',
   ' LEFT JOIN registration_orders ro3 ON ro3.id = a.registration_order_id AND ro3.organization_id = a.organization_id',
-  ' WHERE a.status <> \\'cancelled\\'',
+  ' WHERE a.status <> \'cancelled\'',
   ' GROUP BY a.organization_id, a.registration_order_id',
   ') ea ON ea.registration_order_id = ro.id AND ea.organization_id = ro.organization_id',
 ].join(' ');
@@ -305,7 +305,7 @@ const validateOrderCapacity = async (
     }
     if (input.currency) {
       const externalCurrency = await db.prepare(
-        'SELECT COUNT(*) AS total FROM registration_order_external_allocations WHERE registration_order_id = ? AND organization_id = ? AND status <> \\'cancelled\\' AND UPPER(currency) <> ?',
+        'SELECT COUNT(*) AS total FROM registration_order_external_allocations WHERE registration_order_id = ? AND organization_id = ? AND status <> \'cancelled\' AND UPPER(currency) <> ?',
       ).bind(orderId, organizationId, input.currency).first<{ total: number }>();
       if (Number(externalCurrency?.total || 0) > 0) return 'ORDER_CURRENCY_CONFLICTS_WITH_EXTERNAL_ALLOCATIONS';
     }
