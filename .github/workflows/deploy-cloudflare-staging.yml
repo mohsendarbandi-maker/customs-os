@@ -141,6 +141,86 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 3
+      - name: Read-only audit of live Cloudflare Worker routes and domains
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const zoneId = 'cadeaeb6deb10539476b7acf2b3ebf63';
+          if (!token || !accountId) {
+            console.log(JSON.stringify({ audit: 'unavailable', reason: 'Cloudflare API token or account ID is not configured' }));
+            process.exit(0);
+          }
+
+          const endpoints = [
+            {
+              name: 'zone_worker_routes',
+              url: `https://api.cloudflare.com/client/v4/zones/${zoneId}/workers/routes`,
+              fields: ['id', 'pattern', 'script', 'zone_id'],
+            },
+            {
+              name: 'account_worker_domains',
+              url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/domains`,
+              fields: ['id', 'hostname', 'service', 'environment', 'zone_name', 'zone_id', 'enabled'],
+            },
+            {
+              name: 'account_worker_scripts',
+              url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts`,
+              fields: ['id', 'modified_on', 'created_on', 'usage_model'],
+            },
+          ];
+
+          const report = [];
+          for (const endpoint of endpoints) {
+            try {
+              const response = await fetch(endpoint.url, {
+                method: 'GET',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  Accept: 'application/json',
+                },
+                signal: AbortSignal.timeout(15000),
+                cache: 'no-store',
+              });
+              let payload = null;
+              try { payload = await response.json(); } catch {}
+              if (!response.ok || payload?.success !== true) {
+                report.push({
+                  resource: endpoint.name,
+                  httpStatus: response.status,
+                  success: false,
+                  errorCodes: Array.isArray(payload?.errors)
+                    ? payload.errors.map((item) => Number(item?.code)).filter(Number.isFinite).slice(0, 10)
+                    : [],
+                });
+                continue;
+              }
+              const items = Array.isArray(payload.result) ? payload.result : [];
+              report.push({
+                resource: endpoint.name,
+                httpStatus: response.status,
+                success: true,
+                count: items.length,
+                items: items.map((item) => Object.fromEntries(
+                  endpoint.fields.filter((field) => item?.[field] !== undefined)
+                    .map((field) => [field, item[field]]),
+                )),
+              });
+            } catch (error) {
+              report.push({
+                resource: endpoint.name,
+                success: false,
+                error: error instanceof Error && error.name === 'TimeoutError' ? 'TIMEOUT' : 'REQUEST_FAILED',
+              });
+            }
+          }
+
+          console.log('Cloudflare read-only route/domain audit (no configuration changes):');
+          console.log(JSON.stringify(report, null, 2));
+          NODE
       - name: Apply versioned migrations to the isolated Staging D1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
