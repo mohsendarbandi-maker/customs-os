@@ -69,6 +69,32 @@ jobs:
             signal: AbortSignal.timeout(20000),
           });
           const scriptSource = await scriptResponse.text();
+          const candidateVersionIds = [
+            activeVersionId,
+            versionItems[0]?.id ?? null,
+          ].filter((value, index, all) => value && all.indexOf(value) === index);
+          const versionUrlChecks = await Promise.all(candidateVersionIds.map(async (id) => {
+            const versionUrl = 'https://' + id.slice(0, 8) + '-customs.mohsen-darbandi.workers.dev/';
+            try {
+              const response = await fetch(versionUrl, {
+                headers: { Accept: 'text/html' },
+                cache: 'no-store',
+                signal: AbortSignal.timeout(15000),
+              });
+              const html = await response.text();
+              return {
+                versionId: id,
+                url: versionUrl,
+                status: response.status,
+                finalUrl: response.url,
+                titleFound: html.includes('<title'),
+                hasMobileHostCodeInHtml: html.includes('mobile.darbandicommercial.ir'),
+                bytes: new TextEncoder().encode(html).length,
+              };
+            } catch (error) {
+              return { versionId: id, url: versionUrl, error: error instanceof Error ? error.message : 'request failed' };
+            }
+          }));
           const activeVersionAudit = {
             httpStatus: activeVersion.status,
             success: activeVersion.success,
@@ -132,6 +158,8 @@ jobs:
               compatibilityDate: settings.body?.result?.compatibility_date ?? null,
               usageModel: settings.body?.result?.usage_model ?? null,
               lastDeployedVersionId: settings.body?.result?.last_deployed_version_id ?? null,
+            workersDev: settings.body?.result?.workers_dev ?? null,
+            previewUrls: settings.body?.result?.preview_urls ?? null,
             },
             deployments: {
               httpStatus: deployments.status, success: deployments.success,
@@ -144,6 +172,7 @@ jobs:
             },
             activeVersions,
             activeVersionAudit,
+            versionUrlChecks,
             recentVersions: {
               httpStatus: versions.status, success: versions.success,
               items: versionItems.slice(0, 5).map((item) => ({
