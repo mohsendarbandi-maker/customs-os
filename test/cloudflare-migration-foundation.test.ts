@@ -97,6 +97,9 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain('FROM customs_documents');
     expect(worker).toContain('FROM shipment_documents');
     expect(worker).toContain('storageBackendBreakdown');
+    expect(worker).toContain('storagePathBreakdown');
+    expect(worker).toContain("WHEN lower(storage_path) LIKE 'telegram://%' THEN 'telegram'");
+    expect(worker).toContain("WHEN lower(storage_path) LIKE 'supabase://%' THEN 'supabase'");
     expect(worker).toContain("binaryVerification: 'not_performed'");
     expect(worker).toContain('FILE_METADATA_INSPECTION_UNAVAILABLE');
     expect(worker).not.toContain('TELEGRAM_BOT_TOKEN');
