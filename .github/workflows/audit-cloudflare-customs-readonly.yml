@@ -57,19 +57,7 @@ jobs:
           const activeVersionIds = [...new Set(deploymentItems.flatMap((deployment) =>
             (deployment.versions ?? []).filter((version) => Number(version.percentage ?? 0) > 0).map((version) => version.version_id)
           ))];
-          const activeVersions = await Promise.all(activeVersionIds.slice(0, 5).map(async (id) => {
-            const result = await api('/accounts/' + accountId + '/workers/scripts/customs/versions/' + encodeURIComponent(id));
-            const item = result.body?.result ?? {};
-            return {
-              httpStatus: result.status,
-              success: result.success,
-              id: item.id ?? id,
-              number: item.number ?? null,
-              createdOn: item.metadata?.created_on ?? null,
-              source: item.metadata?.source ?? null,
-              resources: (item.resources ?? []).map((resource) => ({ type: resource.type, name: resource.name, size: resource.size ?? null })),
-            };
-          }));
+          const activeVersions = activeVersionIds.slice(0, 5).map((id) => ({ id }));
           const workerBase = 'https://customs.mohsen-darbandi.workers.dev';
           const pageResponse = await fetch(workerBase + '/', { headers: { Accept: 'text/html' }, cache: 'no-store', signal: AbortSignal.timeout(20000) });
           const pageText = await pageResponse.text();
