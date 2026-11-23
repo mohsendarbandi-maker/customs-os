@@ -236,3 +236,14 @@ describe('customs office reference restoration migration', () => {
     expect(d1Step).toContain('Account D1 Write permission');
   });
 });
+describe('Supabase dependency inventory completeness', () => {
+  it('emits literal object names and callsite files without network or credential reads', () => {
+    const workflow = read('../.github/workflows/deploy-cloudflare-staging.yml');
+    const audit = read('../scripts/audit-cloudflare-dependencies.mjs');
+    expect(workflow).toContain('categories: report.categories');
+    expect(workflow).toContain('perFileCount: report.perFile.length');
+    expect(audit).toContain('networkAccess: false');
+    expect(audit).toContain('environmentVariablesRead: false');
+    expect(audit).toContain('credentialValuesPrinted: false');
+  });
+});
