@@ -56,7 +56,7 @@ class FakeD1 implements FileManagerD1Database {
       const prepared = statement as FakeStatement;
       return { sql: prepared.sql, values: prepared.values };
     }));
-    return [];
+    return [{ meta: { changes: 1 } }];
   }
 }
 const owner = { id: 'user-a', organization_id: 'org-a', role: 'owner', is_active: true };
@@ -211,6 +211,61 @@ describe('Cloudflare D1 File Manager API', () => {
     expect(db.queries.every((query) => query.sql.includes("scope.folder_type='root' OR scope.client_id=?") ||
       query.sql.includes("d.folder_type='root' OR d.client_id=?"))).toBe(true);
     expect(db.queries.every((query) => query.values[2] === 'client-a' && query.values[3] === 'client-a')).toBe(true);
+  });
+
+  it('archives a file without deleting its Telegram asset and records an audit event', async () => {
+    const db = new FakeD1();
+    db.file = storedFile;
+    const url = new URL('https://staging.example/api/file-manager/files/file-a/archive');
+    const response = await handleFileManagerApi(
+      new Request(url, { method: 'POST', headers: { origin: url.origin, 'sec-fetch-site': 'same-origin' } }),
+      db,
+      url,
+      owner,
+    );
+    const body = await response.json() as { ok: boolean; archived: boolean; error?: string };
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.archived).toBe(true);
+    expect(db.batches).toHaveLength(1);
+    expect(db.batches[0][0].sql).toContain('UPDATE file_manager_files SET is_archived=1');
+    expect(db.batches[0][0].sql).not.toContain('DELETE FROM');
+    expect(db.batches[0][1].sql).toContain('INSERT INTO customs_os_audit_events');
+    expect(db.batches[0][1].sql).toContain('WHERE changes() > 0');
+  });
+
+  it('allows only owner/admin to archive files', async () => {
+    const db = new FakeD1();
+    db.file = storedFile;
+    const url = new URL('https://staging.example/api/file-manager/files/file-a/archive');
+    const response = await handleFileManagerApi(
+      new Request(url, { method: 'POST', headers: { origin: url.origin, 'sec-fetch-site': 'same-origin' } }),
+      db,
+      url,
+      { ...owner, role: 'broker' },
+    );
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(403);
+    expect(body.error).toBe('FILE_ARCHIVE_FORBIDDEN');
+    expect(db.batches).toHaveLength(0);
+  });
+
+  it('restores an archived file without changing its Telegram storage reference', async () => {
+    const db = new FakeD1();
+    db.file = { ...storedFile, is_archived: 1 };
+    const url = new URL('https://staging.example/api/file-manager/files/file-a/restore');
+    const response = await handleFileManagerApi(
+      new Request(url, { method: 'POST', headers: { origin: url.origin, 'sec-fetch-site': 'same-origin' } }),
+      db,
+      url,
+      owner,
+    );
+    const body = await response.json() as { ok: boolean; restored: boolean; error?: string };
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.restored).toBe(true);
+    expect(db.batches[0][0].sql).toContain('UPDATE file_manager_files SET is_archived=0');
+    expect(db.batches[0][1].sql).toContain('WHERE changes() > 0');
   });
 
 });
