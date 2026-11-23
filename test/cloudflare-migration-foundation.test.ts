@@ -56,7 +56,10 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain('FROM customs_os_import_table_status WHERE organization_id = ? ORDER BY table_name');
     expect(worker).toContain('SELECT COUNT(*) AS row_count FROM ');
     expect(worker).toContain('inspection: \'read_only_import_manifest_vs_d1_counts\'');
-    expect(worker).toContain('rowCountParity: missingTargets === 0 && failedCounts === 0 && mismatchedTables === 0');
+    expect(worker).toContain('missingEmptySourceTables');
+    expect(worker).toContain('missingRequiredTargets');
+    expect(worker).toContain("row.status === 'empty_in_source'");
+    expect(worker).toContain('rowCountParity: missingRequiredTargets === 0 && failedCounts === 0 && mismatchedTables === 0');
     expect(worker).toContain('MIGRATION_PARITY_UNAVAILABLE');
   });
 
