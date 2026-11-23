@@ -221,7 +221,7 @@ export const FileManagerPage: React.FC = () => {
           .eq('organization_id', organizationId)
           .order('display_name', { ascending: true });
         if (folderError) throw folderError;
-        const rows = (data || []) as FolderRow[];
+        rows = (data || []) as FolderRow[];
         setFolders(rows);
         try {
           const counts: Record<string,number> = {};
