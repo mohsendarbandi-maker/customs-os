@@ -329,7 +329,7 @@ export const handleFileManagerUpload = async (
   const folderId = (url.searchParams.get('folder_id') || '').trim();
   const requestedShipmentId = (url.searchParams.get('shipment_id') || '').trim();
   const documentType = normalizeName(url.searchParams.get('document_type') || 'other');
-  const documentName = normalizeName(url.searchParams.get('document_name') || '');
+  const requestedDocumentName = (url.searchParams.get('document_name') || '').trim();
   const tags = normalizeTags(url.searchParams.get('tags'));
   const idempotencyKey = (request.headers.get('idempotency-key') || '').trim();
   const rawName = request.headers.get('x-file-name') || '';
@@ -351,7 +351,7 @@ export const handleFileManagerUpload = async (
   try { originalName = normalizeName(decodeURIComponent(rawName)); }
   catch { return fail('INVALID_FILE_NAME',400); }
   originalName = withExtension(originalName,mimeType);
-  const finalDocumentName = withExtension(normalizeName(documentName || originalName),mimeType);
+  const finalDocumentName = withExtension(requestedDocumentName ? normalizeName(requestedDocumentName) : originalName,mimeType);
 
   try {
     const folder = await env.MIGRATION_DB.prepare(
