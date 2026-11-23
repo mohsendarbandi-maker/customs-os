@@ -111,7 +111,7 @@ The file does not contain `file_manager_folders` or `file_manager_files`. The st
 ### Export relationship checks
 Within this JSON export:
 - Case-to-client references, shipment-to-case/client/vessel/registration-order references, shipment-customs-data-to-shipment references, declaration-to-shipment/case references, and the inspected document-to-client/case/shipment references resolve against the corresponding exported ID sets.
-- `customs_offices` has zero exported rows, while 12 cases, 12 shipments, and 10 declarations contain a non-empty `customs_office_id` (34 references in total, using two distinct IDs). Those references cannot be verified against this export and must not be treated as valid until the customs-office source rows are recovered.
+- `customs_offices` has zero exported rows, while 12 cases, 12 shipments, 12 `shipment_customs_data` rows, and 10 declarations contain a non-empty `customs_office_id` (**46 references in total**, using two distinct IDs). Those references cannot be verified against this export and must not be treated as valid until the customs-office source rows are recovered. `file_manager_folders` is absent from the JSON, so any folder-level customs-office references are additionally unobservable in this export.
 - These checks are limited to non-null IDs and the tables present in this JSON. They are not a D1 foreign-key/integrity check.
 
 ### Document metadata is not file-content proof
