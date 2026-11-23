@@ -391,6 +391,7 @@ const createOrUpdateOrder = async (
     if (!client) return fail('CLIENT_NOT_FOUND', 404);
     const before = orderId ? await readOrder(db, orderId, profile.organization_id) : null;
     if (orderId && !before) return fail('REGISTRATION_ORDER_NOT_FOUND', 404);
+    if (before?.is_closed) return fail('REGISTRATION_ORDER_CLOSED', 409);
     if (await duplicateOrder(db, profile.organization_id, input.order_number, orderId)) return fail('REGISTRATION_ORDER_EXISTS', 409);
     const capacityError = await validateOrderCapacity(db, input, before, orderId, profile.organization_id);
     if (capacityError) return fail(capacityError, 409);
