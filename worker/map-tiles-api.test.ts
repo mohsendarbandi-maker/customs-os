@@ -100,7 +100,7 @@ describe('Cloudflare OpenStreetMap tile proxy', () => {
     const response = await serveMapTile(requestFor('/api/map/tiles/8/145/99.png', 'HEAD'), fetchMock);
 
     expect(response.status).toBe(200);
-    expect(await response.arrayBuffer()).toHaveLength(0);
+    expect((await response.arrayBuffer()).byteLength).toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
