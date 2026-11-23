@@ -223,6 +223,47 @@ jobs:
               return { host: base, error: error instanceof Error ? error.message : 'request failed' };
             }
           }));
+          let stagingSchemaAudit = { checked: false, error: 'not_requested' };
+          try {
+            const response = await fetch('https://customs-os-migration-staging.mohsen-darbandi.workers.dev/migration/schema', {
+              headers: { Accept: 'application/json' },
+              cache: 'no-store',
+              signal: AbortSignal.timeout(20000),
+            });
+            const payload = await response.json();
+            const tables = Array.isArray(payload.tables) ? payload.tables : [];
+            const relevant = new Set([
+              'profiles',
+              'customs_admin_sessions',
+              'customs_admin_credentials',
+              'customs_admin_login_attempts',
+              'customs_os_auth_events',
+              'customs_os_import_table_status',
+              'customs_os_organization_imports',
+            ]);
+            stagingSchemaAudit = {
+              checked: true,
+              status: response.status,
+              ok: response.ok && payload.ok === true,
+              tableCount: payload.tableCount ?? tables.length,
+              totalRows: payload.totalRows ?? null,
+              countFailures: payload.countFailures ?? null,
+              authRelatedTables: tables
+                .filter((table) => /auth|user|profile|session|credential|login/i.test(String(table.name || '')))
+                .map((table) => ({
+                  name: table.name,
+                  rowCount: table.rowCount ?? null,
+                  countVerified: table.countVerified === true,
+                  schemaSql: relevant.has(table.name) ? table.schemaSql : undefined,
+                })),
+            };
+          } catch (error) {
+            stagingSchemaAudit = {
+              checked: true,
+              ok: false,
+              error: error instanceof Error ? error.message : 'staging schema probe failed',
+            };
+          }
           const rootHtml = frontendChecks.find((item) => item.host === 'https://darbandicommercial.ir');
           const appScriptPath = rootHtml?.scriptPaths?.find((path) => path.startsWith('/assets/') && path.endsWith('.js'));
           let authRuntime = { scriptPath: appScriptPath ?? null, checked: false };
@@ -319,6 +360,7 @@ jobs:
             liveWorkerFrontends: frontendChecks,
             authRuntime,
             authSessionEndpoint,
+            stagingSchemaAudit,
           };
           console.log(JSON.stringify(result, null, 2));
           if (!settings.success || !deployments.success || !versions.success || !domains.success) {
