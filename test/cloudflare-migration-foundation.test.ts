@@ -218,7 +218,9 @@ describe('customs office reference restoration migration', () => {
     const deploy = workflow.indexOf('wrangler@4 deploy --config wrangler.migration-staging.jsonc');
     expect(migration).toBeGreaterThan(-1);
     expect(deploy).toBeGreaterThan(migration);
-    expect(workflow).toContain('b938fa3c-4995-4d27-aeda-f72f2f484a3c');
+    expect(workflow).toContain('d1 info customs-os-migration-staging');
+    expect(workflow).toContain('liveDatabaseIdMatchesConfig');
+    expect(workflow).toContain('configuredDatabaseId');
     expect(workflow).toContain('MIGRATION_DB');
   });
 });
