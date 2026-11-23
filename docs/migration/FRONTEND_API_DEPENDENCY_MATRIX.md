@@ -102,3 +102,45 @@ The key cross-cutting contracts that cannot be omitted are:
 - `shipment_tracking_events` and maritime update RPCs.
 - Finance receipt Storage, shipment cost approval/archive RPCs, and voucher line relations.
 - Shared File Manager references used by customs docs, PDF Studio, knowledge, chat, and shipment forms.
+
+
+## Shared components, session lifecycle, and helper modules (supplemental static scan)
+| Source module | Observed data / RPC dependencies | Notes |
+|---|---|---|
+| `AuthContext` | `profiles` | Directly imports Supabase Auth/session client; uses persisted session and profile resolution |
+| `SessionLifecycle`, `SessionManagementPanel` | `user_device_sessions`; RPC `list_my_auth_sessions` | Device session UI currently depends on the old auth/data service; staging Worker has only its separate bootstrap session table |
+| `useCaseSelectorData` | `clients`, `shipments`, `vessels`, `cases` | Shared selectors feed operational forms |
+| `CloudSyncStatus` | `profiles` | Profile-dependent sync status |
+| `LatestShipmentStatuses` | `shipments`, `vessels`, `clients`, `customs_declarations`, `declaration_checklist_items`, `declaration_exit_checklist_items` | Cross-domain summary component |
+| `OperationalAlertsDropdown` | `cases`, `customs_documents`, `customs_declarations`, `permits` | Shared alert aggregation |
+| `MaritimeDirectoryPanel` | `shipping_lines`, `vessels`, `shipping_line_contacts`, `profiles` | Directory and permission-aware editing |
+| `MaritimeTab` | `shipments`, `vessels`, `shipment_tracking_events`; RPC `update_shipment_maritime_data`, `set_shipment_tracking_status` | Maritime status update contract |
+| `AIWorkspaceUploadQueue` | `profiles`, `shipment_documents`; Storage `customs_documents` | Upload queue references existing document storage |
+| `CustomsDeclarationWorkflow` | `customs_declaration_workflow_events`, `customs_declarations`, `shipment_customs_data`, `customs_declaration_workflow`; RPC `rollback_customs_declaration_workflow`, `complete_customs_declaration_workflow`, `patch_customs_declaration_workflow_activity` | Must preserve atomic state transition and immutable workflow events |
+| `CustomsWorkflowAuditHistory` | `customs_declaration_workflow_events` | Historical activity display |
+| `CustomsStageDocumentAI` | `shipment_documents`, `file_manager_files`, `customs_document_extractions`; Edge Function `ai-assistant` | Per-file extraction linked into operational stage |
+| `AIOperatorPanel` | `shipments`; Edge Function `ai-operator`; Storage `customs_documents` | AI actions must be authorization-checked server-side |
+| `AIWorkspace` | `shipment_documents`, `shipment_document_extractions`, `shipment_customs_data`, `profiles`, `ai_evidence`; Edge Functions `ai-assistant`, `ai-operator`, `ai-core`; Storage `customs_documents` | Additional AI evidence and workflow context dependencies |
+| `SettingsPersistenceBridge` | `user_settings` | Profile-scoped preference persistence |
+| `src/lib/fileManagerPortableSyncService.ts` | `file_manager_folders`, `file_manager_files` | Portable import/export synchronization must keep conflict and duplicate semantics |
+| `src/lib/ownerConsole.ts` | Edge Function `owner-console` | Administrative operations require strict owner authorization |
+| `src/lib/fileManager.ts` | `profiles`, `file_manager_folders` | Worker routes include messenger archive destination, upload, archive, and file download |
+| `src/lib/offlineQueue.ts` | Uses Supabase client contract | Offline RPC queue is coupled to legacy RPC replay semantics; must be redesigned around explicit idempotent Worker commands |
+
+## Additional operational RPC contracts found in selected pages
+The static scan found these further named operations that must be ported only after their exact SQL definitions, grants, RLS interactions, and dependent callers are reviewed:
+- Case: `delete_case_safely`, `get_case_completion_readiness`
+- Control center / shipment: `get_control_center_shipments`, `create_operational_reminder`
+- Dashboard and shipment intake: `attach_registration_order`, `update_case_operational_data`, `register_shipment_workflow`, `calculate_case_valuation`, `register_declaration_workflow`
+- Exit/checklist: `advance_declaration_to_exit_stage`, `complete_customs_declaration_exit`
+- Workflow history and transitions: `rollback_customs_declaration_workflow`, `complete_customs_declaration_workflow`, `patch_customs_declaration_workflow_activity`
+- Finance: the RPC set listed above, including `approve_finance_expense`, `record_petty_cash_entry`, and voucher/expense archive/restore operations
+- Chat: 22 named RPC contracts listed under `src/features/chat/api.ts`
+- Push: `get_push_vapid_public_key`, `upsert_push_subscription`, `get_reminder_vapid_public_key`
+- Sessions: `list_my_auth_sessions`
+
+## Interpretation
+These results reveal shared data-service contracts across pages and components. A complete Worker migration therefore needs a typed API and repository layer for each bounded context, not a generic table proxy. It must also port authorization decisions and transaction rules from PostgreSQL functions, triggers, and RLS. The existing static source inventory of 15 initial tables is insufficient to define this API or schema.
+
+## Scan boundary
+The tree lists 59 page files, 30 component files, 70 library files, 2 context files, and 2 hooks. The static checks above inspected the critical modules named in this document and many additional shared components. Import-based/dynamic access patterns, generated SQL, string-built queries, all archive source references, and the full behavior of every non-listed library/component have not been proven exhaustively. This matrix remains a partial dependency inventory until all callers are traced and each API is linked to acceptance tests.
