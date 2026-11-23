@@ -135,9 +135,16 @@ describe('Cloudflare D1 File Manager API', () => {
     db.file = storedFile;
     db.folders = [folder('folder-target')];
     const url = new URL('https://staging.example/api/file-manager/files/file-a/move');
-    const response = await handleFileManagerApi(makeRequest({ folder_id: 'folder-target' }), db, url, owner,);
+    const response = await handleFileManagerApi(
+      makeRequest({ folder_id: 'folder-target' }),
+      db,
+      url,
+      { ...owner, role: 'client' },
+    );
     const body = await response.json() as { error: string };
-    expect(response.status).toBe(200);
-    expect(body.error).toBeUndefined();
+    expect(response.status).toBe(403);
+    expect(body.error).toBe('FILE_MOVE_FORBIDDEN');
+    expect(db.queries).toHaveLength(0);
+    expect(db.batches).toHaveLength(0);
   });
 });
