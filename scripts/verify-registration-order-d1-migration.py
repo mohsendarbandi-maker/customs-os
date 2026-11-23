@@ -83,10 +83,27 @@ def main():
         created_at TEXT NOT NULL
       );
     """)
+    statement = ""
+    statement_start = 1
+    statement_number = 0
     try:
-        db.executescript(sql)
+        for line_number, line in enumerate(sql.splitlines(keepends=True), start=1):
+            if not statement.strip():
+                statement_start = line_number
+            statement += line
+            if sqlite3.complete_statement(statement):
+                statement_number += 1
+                db.execute(statement)
+                statement = ""
+        if statement.strip():
+            raise AssertionError("D1 migration ended with an incomplete SQL statement.")
     except sqlite3.Error as exc:
-        raise AssertionError(f"D1 migration SQL did not execute in SQLite: {exc}") from exc
+        excerpt = " ".join(statement.strip().split())[:420]
+        raise AssertionError(
+            "D1 migration SQL failed in SQLite at "
+            f"statement {statement_number + 1}, lines {statement_start}-{line_number}: "
+            f"{exc}. SQL: {excerpt}"
+        ) from exc
 
     # Parent order + one internal shipment at half capacity.
     db.execute("""
