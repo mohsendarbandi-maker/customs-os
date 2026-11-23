@@ -41,6 +41,7 @@ class MockStatement implements VesselAisStatement {
     private readonly sql: string,
     private readonly rows: Array<Record<string, unknown>>,
     private readonly updates: Array<{ sql: string; values: unknown[] }>,
+    private readonly queries: Array<{ sql: string; values: unknown[] }>,
   ) {}
 
   bind(...values: unknown[]) {
@@ -49,6 +50,7 @@ class MockStatement implements VesselAisStatement {
   }
 
   async all<T>() {
+    this.queries.push({ sql: this.sql, values: this.values });
     if (this.sql.includes('FROM vessels') && this.sql.includes('SELECT id, name')) {
       return { results: this.rows as T[] };
     }
@@ -63,11 +65,12 @@ class MockStatement implements VesselAisStatement {
 
 class MockDatabase implements VesselAisDatabase {
   readonly updates: Array<{ sql: string; values: unknown[] }> = [];
+  readonly queries: Array<{ sql: string; values: unknown[] }> = [];
 
   constructor(readonly rows: Array<Record<string, unknown>>) {}
 
   prepare(sql: string) {
-    return new MockStatement(sql, this.rows, this.updates);
+    return new MockStatement(sql, this.rows, this.updates, this.queries);
   }
 }
 
@@ -156,6 +159,18 @@ describe('Cloudflare Open Waters AIS sync', () => {
     ]);
   });
 
+  it('refuses tracked writes when no organization scope is supplied', async () => {
+    const fetchMock = vi.fn();
+    const db = new MockDatabase([
+      { id: 'vessel-1', name: 'Vessel One', imo_number: '1234567', mmsi_number: '123456789' },
+    ]);
+    const response = await handleSyncVesselAisV2(requestFor({}), db, undefined, fetchMock);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: 'ORGANIZATION_SCOPE_REQUIRED' });
+    expect(db.queries).toHaveLength(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('updates tracked vessel positions using the verified D1 vessels schema', async () => {
     const db = new MockDatabase([
       { id: 'vessel-1', name: 'Vessel One', imo_number: '1234567', mmsi_number: '123456789' },
@@ -168,7 +183,7 @@ describe('Cloudflare Open Waters AIS sync', () => {
       ],
     }), { status: 200 }));
 
-    const response = await handleSyncVesselAisV2(requestFor({}), db, undefined, fetchMock);
+    const response = await handleSyncVesselAisV2(requestFor({}), db, undefined, fetchMock, 'org-1');
     const payload = await response.json() as {
       checked: number;
       updated: Array<{ id: string; mmsi: string }>;
@@ -187,14 +202,18 @@ describe('Cloudflare Open Waters AIS sync', () => {
     expect(db.updates[0].sql).toContain('UPDATE vessels SET');
     expect(db.updates[0].sql).toContain('last_latitude = ?');
     expect(db.updates[0].sql).toContain('last_position_source = ?');
+    expect(db.queries[0].sql).toContain('WHERE organization_id = ?');
+    expect(db.queries[0].values).toEqual(['org-1']);
+    expect(db.updates[0].sql).toContain('WHERE id = ? AND organization_id = ?');
     expect(db.updates[1].sql).not.toContain('last_speed_knots = ?');
     expect(db.updates[1].sql).not.toContain('last_course_deg = ?');
-    expect(db.updates[0].values.at(-1)).toBe('vessel-1');
+    expect(db.updates[0].values.at(-2)).toBe('vessel-1');
+    expect(db.updates[0].values.at(-1)).toBe('org-1');
   });
 
   it('returns MMSI_REQUIRED without calling the AIS provider when no tracked vessels exist', async () => {
     const fetchMock = vi.fn();
-    const response = await handleSyncVesselAisV2(requestFor({}), new MockDatabase([]), undefined, fetchMock);
+    const response = await handleSyncVesselAisV2(requestFor({}), new MockDatabase([]), undefined, fetchMock, 'org-1');
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ code: 'MMSI_REQUIRED', checked: 0 });
