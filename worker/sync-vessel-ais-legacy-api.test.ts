@@ -86,6 +86,41 @@ describe('Cloudflare AISFriends legacy sync', () => {
     expect(db.updates[0].values.slice(-2)).toEqual(['vessel-1', 'org-1']);
   });
 
+  it('ignores malformed IMO and MMSI identifiers without contacting AISFriends', async () => {
+    const db = new MockDatabase([
+      { id: 'bad-imo', name: 'Bad IMO', imo_number: 'IMO-123', mmsi_number: null },
+      { id: 'bad-mmsi', name: 'Bad MMSI', imo_number: null, mmsi_number: '12345' },
+    ]);
+    const fetchMock = vi.fn();
+    const response = await handleLegacySyncVesselAis(request(), db, 'org-1', fetchMock);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      checked: 0,
+      updated: [],
+      failed: [],
+    });
+    expect(db.queries[0].values).toEqual(['org-1']);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(db.updates).toHaveLength(0);
+  });
+
+  it('normalizes numeric Unix-second timestamps to ISO milliseconds', async () => {
+    const db = new MockDatabase([
+      { id: 'vessel-1', name: 'TEST VESSEL', imo_number: '1234567', mmsi_number: null },
+    ]);
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      latitude: 31.1234,
+      longitude: 50.5678,
+      timestamp: 1_700_000_000,
+    }), { status: 200 }));
+    const response = await handleLegacySyncVesselAis(request(), db, 'org-1', fetchMock);
+
+    expect(response.status).toBe(200);
+    expect(db.updates[0].values[2]).toBe('2023-11-14T22:13:20.000Z');
+  });
+
   it('isolates one provider failure and continues processing the remaining vessels', async () => {
     const db = new MockDatabase([
       { id: 'vessel-1', name: 'Vessel One', imo_number: '1234567', mmsi_number: null },
