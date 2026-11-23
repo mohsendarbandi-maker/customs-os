@@ -64,8 +64,8 @@ jobs:
           import { readFileSync } from 'node:fs';
           const config = JSON.parse(readFileSync('wrangler.migration-staging.jsonc', 'utf8'));
           const dbs = config.d1_databases ?? [];
-          const db = dbs.find((item) => String(item.binding ?? '').normalize('NFKC').replace(/[\\u200B-\\u200D\\uFEFF]/g, '').trim() === 'MIGRATION_DB');
-          const normalizeIdentity = (value) => String(value ?? '').normalize('NFKC').replace(/[\\u200B-\\u200D\\uFEFF]/g, '').trim();
+          const db = dbs.find((item) => String(item.binding ?? '').normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim() === 'MIGRATION_DB');
+          const normalizeIdentity = (value) => String(value ?? '').normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
           const identityChecks = {
             worker: normalizeIdentity(config.name) === 'customs-os-migration-staging',
             binding: normalizeIdentity(db?.binding) === 'MIGRATION_DB',
