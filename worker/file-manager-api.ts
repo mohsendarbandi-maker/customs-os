@@ -578,7 +578,7 @@ const archiveFile = async (
   if (profile.role !== 'owner' && profile.role !== 'admin') return fail('FILE_ARCHIVE_FORBIDDEN',403);
   const before = await fileById(db,id,profile.organization_id);
   if (!before) return fail('FILE_NOT_FOUND',404);
-  if (Boolean(before.is_archived)) return fail('FILE_ALREADY_ARCHIVED',409);
+  if (before.is_archived) return fail('FILE_ALREADY_ARCHIVED',409);
   const after = { ...serializeFile(before), is_archived:true };
   const results = await db.batch([
     db.prepare(
@@ -600,7 +600,7 @@ const restoreFile = async (
   if (profile.role !== 'owner' && profile.role !== 'admin') return fail('FILE_RESTORE_FORBIDDEN',403);
   const before = await fileById(db,id,profile.organization_id);
   if (!before) return fail('FILE_NOT_FOUND',404);
-  if (!Boolean(before.is_archived)) return fail('FILE_NOT_ARCHIVED',409);
+  if (!before.is_archived) return fail('FILE_NOT_ARCHIVED',409);
   const after = { ...serializeFile(before), is_archived:false };
   const results = await db.batch([
     db.prepare(
