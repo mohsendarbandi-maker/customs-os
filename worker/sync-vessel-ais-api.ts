@@ -67,7 +67,7 @@ const normalizedVessel = (feature: OpenWatersFeature): OpenWatersVessel | null =
 
   const lon = finiteNumber(coordinates[0]);
   const lat = finiteNumber(coordinates[1]);
-  if (!validCoordinates(lat, lon)) return null;
+  if (lat === null || lon === null || !validCoordinates(lat, lon)) return null;
 
   const speed = finiteNumber(properties.sog);
   const course = finiteNumber(properties.cog);
