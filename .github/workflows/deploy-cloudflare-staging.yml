@@ -161,9 +161,3 @@ jobs:
         run: |
           set -euo pipefail
           npx wrangler@4 secret list --config wrangler.migration-staging.jsonc --format json | jq -r '.[].name' | sort
-      - name: List staging Worker secret names only (never values)
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler@4 secret list --config wrangler.migration-staging.jsonc --format json | jq -r '.[].name' | sort
