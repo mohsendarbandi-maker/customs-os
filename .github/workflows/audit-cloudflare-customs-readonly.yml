@@ -90,6 +90,37 @@ jobs:
             signal: AbortSignal.timeout(20000),
           });
           const scriptSource = await scriptResponse.text();
+          const latestVersionId = versionItems[0]?.id ?? null;
+          const latestVersion = latestVersionId
+            ? await api('/accounts/' + accountId + '/workers/scripts/customs/versions/' + encodeURIComponent(latestVersionId))
+            : { status: 0, success: false, body: null };
+          const activeVersionResource = activeVersion.body?.result?.resources ?? {};
+          const latestVersionResource = latestVersion.body?.result?.resources ?? {};
+          const versionContentAudit = {
+            activeVersion: {
+              id: activeVersionId,
+              number: activeVersion.body?.result?.number ?? null,
+              createdOn: activeVersion.body?.result?.metadata?.created_on ?? null,
+              scriptEtag: activeVersionResource.script?.etag ?? null,
+              bindings: Array.isArray(activeVersionResource.bindings)
+                ? activeVersionResource.bindings.map((binding) => ({ name: binding.name, type: binding.type }))
+                : Object.keys(activeVersionResource.bindings ?? {}),
+            },
+            latestUploadedVersion: {
+              id: latestVersionId,
+              number: latestVersion.body?.result?.number ?? null,
+              createdOn: latestVersion.body?.result?.metadata?.created_on ?? null,
+              source: latestVersion.body?.result?.metadata?.source ?? null,
+              scriptEtag: latestVersionResource.script?.etag ?? null,
+              bindings: Array.isArray(latestVersionResource.bindings)
+                ? latestVersionResource.bindings.map((binding) => ({ name: binding.name, type: binding.type }))
+                : Object.keys(latestVersionResource.bindings ?? {}),
+            },
+            downloadedScriptEtag: scriptResponse.headers.get('etag'),
+            activeMatchesLatestScript: Boolean(activeVersionResource.script?.etag) &&
+              activeVersionResource.script.etag === (scriptResponse.headers.get('etag') ?? latestVersionResource.script?.etag),
+            latestVersionHasPreview: latestVersion.body?.result?.metadata?.has_preview ?? null,
+          };
           const candidateVersionIds = [
             activeVersionId,
             versionItems[0]?.id ?? null,
@@ -194,6 +225,7 @@ jobs:
             activeVersions,
             activeVersionDetails,
             activeVersionAudit,
+            versionContentAudit,
             versionUrlChecks,
             recentVersions: {
               httpStatus: versions.status, success: versions.success,
