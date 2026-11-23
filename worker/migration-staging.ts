@@ -1,4 +1,4 @@
-import { isMigrationIntegrityHealthy, isMigrationParityHealthy } from './migration-diagnostics';
+import { isMigrationIntegrityHealthy, isMigrationParityHealthy, isProductionTrafficHost } from './migration-diagnostics';
 import { handleClientsApi } from './clients-api';
 import { handleCasesApi } from './cases-api';
 import { handleDeviceSessionsApi } from './device-sessions-api';
@@ -452,7 +452,7 @@ export default {
         environment: env.MIGRATION_ENVIRONMENT ?? 'staging',
         database: 'd1',
         authentication: 'cloudflare-d1-session',
-        productionTraffic: false,
+        productionTraffic: isProductionTrafficHost(url.hostname),
         productionDataImported: env.PRODUCTION_DATA_IMPORTED === 'true',
       });
     }

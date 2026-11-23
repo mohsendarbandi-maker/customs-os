@@ -28,3 +28,13 @@ export const isMigrationIntegrityHealthy = ({
   orphanTotal === 0 &&
   !customsOfficeReferenceQueryFailed &&
   orphanCustomsOfficeReferenceCount === 0;
+
+
+const PRODUCTION_TRAFFIC_HOSTS = new Set([
+  'darbandicommercial.ir',
+  'mobile.darbandicommercial.ir',
+]);
+
+/** Detects whether this request was served on a production application hostname. */
+export const isProductionTrafficHost = (hostname: string): boolean =>
+  PRODUCTION_TRAFFIC_HOSTS.has(hostname.trim().toLowerCase());

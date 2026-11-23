@@ -141,6 +141,64 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 3
+      - name: Read-only staging Worker and D1 runtime diagnostics
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url='https://customs-os-migration-staging.mohsen-darbandi.workers.dev'
+          output_dir="$(mktemp -d)"
+          trap 'rm -rf "$output_dir"' EXIT
+          declare -A endpoints=(
+            [health]='/health'
+            [health_db]='/health/db'
+            [schema]='/migration/schema'
+            [files]='/migration/files'
+            [integrity]='/migration/integrity'
+            [status]='/migration/status'
+          )
+          for name in health health_db schema files integrity status; do
+            http_status="$(curl --silent --show-error --max-time 35 --output "$output_dir/$name.json" --write-out '%{http_code}' "$base_url${endpoints[$name]}" || true)"
+            printf '%s' "$http_status" > "$output_dir/$name.status"
+          done
+          export OUTPUT_DIR="$output_dir"
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const dir = process.env.OUTPUT_DIR;
+          const read = (name) => {
+            try { return JSON.parse(readFileSync(`${dir}/${name}.json`, 'utf8')); }
+            catch { return null; }
+          };
+          const status = (name) => {
+            try { return readFileSync(`${dir}/${name}.status`, 'utf8') || 'unavailable'; }
+            catch { return 'unavailable'; }
+          };
+          const health = read('health');
+          const dbHealth = read('health_db');
+          const schema = read('schema');
+          const files = read('files');
+          const integrity = read('integrity');
+          const migration = read('status');
+          const summary = {
+            workerUrl: 'workers.dev staging hostname',
+            endpoints: Object.fromEntries(['health','health_db','schema','files','integrity','status'].map((name) => {
+              const payload = read(name);
+              return [name, { httpStatus: status(name), ok: payload?.ok === true, error: payload?.error || null }];
+            })),
+            health: health ? { service: health.service, environment: health.environment, database: health.database, productionTraffic: health.productionTraffic, productionDataImported: health.productionDataImported } : null,
+            database: schema ? {
+              tableCount: schema.tableCount, totalRows: schema.totalRows, countFailures: schema.countFailures,
+              tables: Array.isArray(schema.tables) ? schema.tables.map((item) => ({ name: item.name, rowCount: item.rowCount, countVerified: item.countVerified })) : [],
+            } : null,
+            migration: migration ? { manifest: migration.manifest ? { stage: migration.manifest.stage, schema_version: migration.manifest.schema_version } : null, tableStates: migration.tableStates, totals: migration.migrationTotals, archivedFunctions: migration.archivedFunctions, gates: migration.gates } : null,
+            files: files ? { fileManagerFiles: files.fileManagerFiles, customsDocuments: files.customsDocuments, shipmentDocuments: files.shipmentDocuments, storageBackendBreakdown: files.storageBackendBreakdown, storagePathBreakdown: files.storagePathBreakdown, binaryVerification: files.binaryVerification } : null,
+            integrity: integrity ? { ok: integrity.ok, checks: integrity.checks, failedChecks: integrity.failedChecks, orphanTotal: integrity.orphanTotal, checksWithOrphans: integrity.checksWithOrphans, orphanCustomsOfficeDistinctIds: integrity.orphanCustomsOfficeDistinctIds, customsOfficeReferenceQueryFailed: integrity.customsOfficeReferenceQueryFailed } : null,
+            databaseHealth: dbHealth ? { ok: dbHealth.ok, operationalDataImported: dbHealth.operationalDataImported, manifest: dbHealth.manifest ? { stage: dbHealth.manifest.stage, schema_version: dbHealth.manifest.schema_version } : null, importStatus: dbHealth.operationalImport?.status || null, expectedRecords: dbHealth.operationalImport?.expected_records ?? null } : null,
+          };
+          const rendered = JSON.stringify(summary, null, 2);
+          console.log(rendered);
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n### Read-only staging Worker and D1 diagnostics\n\n\`\`\`json\n${rendered}\n\`\`\`\n`);
+          NODE
       - name: Read-only audit of live Cloudflare Worker routes and domains
         shell: bash
         run: |
