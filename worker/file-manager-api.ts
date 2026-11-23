@@ -461,6 +461,82 @@ const moveFile = async (
   return json({ok:true,file:after});
 };
 
+type FileManagerSearchHit = {
+  entity_type: 'file' | 'folder';
+  entity_id: string;
+  title: string;
+  details: string | null;
+  folder_id: string | null;
+  shipment_id: string | null;
+  client_id: string | null;
+};
+
+const normalizeFileManagerSearch = (value: string) => value
+  .normalize('NFKC')
+  .replace(/[٠-٩۰-۹]/g, (digit) => {
+    const arabic = '٠١٢٣٤٥٦٧٨٩';
+    const persian = '۰۱۲۳۴۵۶۷۸۹';
+    const index = arabic.indexOf(digit);
+    return String(index >= 0 ? index : persian.indexOf(digit));
+  })
+  .replace(/ي/g, 'ی')
+  .replace(/ك/g, 'ک')
+  .trim()
+  .slice(0, 160);
+
+const searchFileManager = async (
+  db: FileManagerD1Database,
+  profile: FileManagerApiProfile,
+  query: string,
+  limit: number,
+) => {
+  const normalized = normalizeFileManagerSearch(query);
+  const terms = normalized.split(/[^\p{L}\p{N}]+/u).filter(Boolean).slice(0, 8);
+  if (!terms.length) return { items: [] as FileManagerSearchHit[], total: 0 };
+  // Every token is quoted and escaped before it is passed to FTS5. The user
+  // cannot inject FTS operators, column selectors, or SQL through the query.
+  const matchExpression = terms.map((term) => '"' + term.replace(/"/g, '""') + '"*').join(' AND ');
+  const clientScope = profile.role === 'client' ? profile.client_id || '' : '';
+
+  const [files, folders] = await Promise.all([
+    db.prepare(
+      'SELECT \'file\' AS entity_type,f.id AS entity_id,f.original_name AS title,' +
+      'f.document_type AS details,f.folder_id,f.shipment_id,f.client_id,' +
+      'bm25(customs_os_file_manager_search) AS rank ' +
+      'FROM customs_os_file_manager_search ' +
+      'JOIN file_manager_files f ON f.id=customs_os_file_manager_search.entity_id ' +
+      'AND f.organization_id=customs_os_file_manager_search.organization_id ' +
+      'JOIN file_manager_folders scope ON scope.id=f.folder_id AND scope.organization_id=f.organization_id ' +
+      'WHERE customs_os_file_manager_search MATCH ? ' +
+      'AND customs_os_file_manager_search.organization_id=? ' +
+      'AND customs_os_file_manager_search.entity_type=\'file\' ' +
+      'AND COALESCE(f.is_archived,0)=0 ' +
+      'AND (?=\'\' OR scope.folder_type=\'root\' OR scope.client_id=?) ' +
+      'ORDER BY rank LIMIT ?',
+    ).bind(matchExpression,profile.organization_id,clientScope,clientScope,limit)
+      .all<FileManagerSearchHit & { rank: number }>(),
+    db.prepare(
+      'SELECT \'folder\' AS entity_type,d.id AS entity_id,d.display_name AS title,' +
+      'd.folder_type AS details,d.id AS folder_id,d.shipment_id,d.client_id,' +
+      'bm25(customs_os_file_manager_search) AS rank ' +
+      'FROM customs_os_file_manager_search ' +
+      'JOIN file_manager_folders d ON d.id=customs_os_file_manager_search.entity_id ' +
+      'AND d.organization_id=customs_os_file_manager_search.organization_id ' +
+      'WHERE customs_os_file_manager_search MATCH ? ' +
+      'AND customs_os_file_manager_search.organization_id=? ' +
+      'AND customs_os_file_manager_search.entity_type=\'folder\' ' +
+      'AND (?=\'\' OR d.folder_type=\'root\' OR d.client_id=?) ' +
+      'ORDER BY rank LIMIT ?',
+    ).bind(matchExpression,profile.organization_id,clientScope,clientScope,limit)
+      .all<FileManagerSearchHit & { rank: number }>(),
+  ]);
+  const items = [...files.results, ...folders.results]
+    .sort((a,b) => Number(a.rank || 0) - Number(b.rank || 0))
+    .slice(0,limit)
+    .map(({rank: _rank, ...hit}) => hit);
+  return { items, total: items.length, normalizedQuery: normalized };
+};
+
 export const handleFileManagerApi = async (
   request: Request,
   db: FileManagerD1Database,
@@ -472,6 +548,14 @@ export const handleFileManagerApi = async (
   const pathname = url.pathname;
 
   try {
+    if (pathname === BASE + '/search' && request.method === 'GET') {
+      const query = url.searchParams.get('q') || '';
+      if (query.trim().length < 2) return fail('SEARCH_QUERY_TOO_SHORT',400);
+      const requestedLimit = Number(url.searchParams.get('limit') || 50);
+      const limit = Number.isSafeInteger(requestedLimit) ? Math.min(50,Math.max(1,requestedLimit)) : 50;
+      const result = await searchFileManager(db,profile,query,limit);
+      return json({ok:true,...result});
+    }
     if (pathname === BASE + '/folders' && request.method === 'GET') {
       return json({ok:true,folders:await listFolders(db,profile)});
     }
