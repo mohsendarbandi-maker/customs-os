@@ -8,6 +8,7 @@ import { handleTelegramFileDownload } from './telegram-files-api';
 import { handleFileManagerApi } from './file-manager-api';
 import { getFileManagerArchiveStatus, handleFileManagerUpload } from './file-manager-upload-api';
 import { handleVesselMultiSourceLookup } from './vessel-multi-source-api';
+import { handleSyncVesselAisV2 } from './sync-vessel-ais-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -30,6 +31,7 @@ interface Env {
   CUSTOMS_ADMIN_PASSWORD?: string;
   GEMINI_API_KEY?: string;
   TELEGRAM_BOT_TOKEN?: string;
+  OPENWATERS_API_TOKEN?: string;
 }
 
 const COOKIE = 'customs_os_stage_session';
@@ -1122,6 +1124,33 @@ export default {
       return new Response(lookup.body, {
         status: lookup.status,
         statusText: lookup.statusText,
+        headers,
+      });
+    }
+
+    if (url.pathname === '/functions/v1/sync-vessel-ais-v2') {
+      const corsHeaders = {
+        'Access-Control-Allow-Origin': url.origin,
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Vary': 'Origin',
+      };
+      if (!isSameOrigin(request, url)) return json({ error: 'ORIGIN_FORBIDDEN' }, 403, corsHeaders);
+      if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
+      if (request.method !== 'POST') return json({ error: 'METHOD_NOT_ALLOWED' }, 405, corsHeaders);
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401, corsHeaders);
+
+      const result = await handleSyncVesselAisV2(
+        request,
+        env.MIGRATION_DB,
+        env.OPENWATERS_API_TOKEN,
+      );
+      const headers = new Headers(result.headers);
+      for (const [name, value] of Object.entries(corsHeaders)) headers.set(name, value);
+      headers.set('cache-control', 'no-store, private');
+      return new Response(result.body, {
+        status: result.status,
+        statusText: result.statusText,
         headers,
       });
     }
