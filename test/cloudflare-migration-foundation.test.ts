@@ -50,6 +50,18 @@ describe('Cloudflare migration foundation', () => {
     expect(app).toContain('</Routes></StagingRouteBoundary>');
   });
 
+  it('exposes read-only orphan-reference diagnostics for operational tables', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("url.pathname === '/migration/integrity'");
+    expect(worker).toContain("inspection: 'read_only_orphan_reference_counts'");
+    expect(worker).toContain('cases.customs_office_id -> customs_offices.id');
+    expect(worker).toContain('shipments.registration_order_id -> registration_orders.id');
+    expect(worker).toContain('customs_documents.folder_id -> file_manager_folders.id');
+    expect(worker).toContain('finance_cost_items.category_id -> finance_cost_categories.id');
+    expect(worker).toContain('checksWithOrphans');
+    expect(worker).toContain('failedChecks');
+  });
+
   it('exposes read-only staging health and migration gates without claiming operational parity', () => {
     const worker = read('../worker/migration-staging.ts');
     expect(worker).toContain("request.method !== 'GET' && request.method !== 'HEAD'");
