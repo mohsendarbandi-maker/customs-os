@@ -214,7 +214,7 @@ def main():
     # A linked shipment's owner cannot be changed through the master record.
     expect_integrity(lambda: db.execute("""
       UPDATE registration_orders SET client_id='client-b'
-      WHERE id='order-a' AND organization_id='org-a'
+      WHERE id='order-b' AND organization_id='org-a'
     """), "REGISTRATION_ORDER_CLIENT_CONFLICT")
 
     # Decimal capacity is compared after converting each operand to integer milli-units.
