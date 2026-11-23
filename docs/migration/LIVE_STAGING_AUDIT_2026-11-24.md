@@ -322,3 +322,20 @@ A newer Staging workflow run scanned 200 source files and found 727 recognized S
 - 5 Supabase environment-variable names
 
 The three AIS compatibility ports, multi-source vessel lookup, maritime D1 reads, weather/marine endpoint, and map tile proxy are branch implementations; they have not replaced the broader Supabase table/RPC, Auth, Storage, Realtime, and Edge Function surface. No Production Supabase object or data was altered.
+
+### Customs circular ingestion and Knowledge Center — not yet ported
+
+The live Supabase `customs-circular-ingestor` Edge Function (version 5) was inspected. It is not a metadata-only task. Its current contract:
+- Reads the IranImpex RSS feed and the public `@Gomrok_news` Telegram channel.
+- Fetches and validates original PDF bytes, parses page counts, computes SHA-256, and classifies customs/legal documents.
+- Inserts `knowledge_sources` records and `knowledge_page_extractions` pending rows; on PDF insert failure it attempts to roll back the source row and remove the uploaded binary.
+- Uploads PDF binaries to the Supabase Storage bucket `customs-knowledge`.
+- Saves text-only Telegram posts as `pending_review` records and marks PDFs as pending OCR/review; the metadata requests Telegram archiving but this function's binary write itself is to Supabase Storage.
+
+The live D1 schema audit (Workflow run [45277196168](https://github.com/mohsendarbandi-maker/customs-os/actions/runs/45277196168)) confirmed that `knowledge_sources`, `knowledge_chunks`, and `knowledge_page_extractions` are absent from the 34-table Staging D1. The D1 table `file_manager_upload_jobs` is also absent; its additive D1 migration `0009_file_manager_telegram_upload_jobs.sql` exists in the branch but has not been applied because the dedicated D1 token is missing. The existing Worker upload API needs that job ledger and an organization-scoped File Manager folder before it can archive a PDF to Telegram.
+
+The original Knowledge Center UI and `knowledge-ai` function still depend on the Supabase `customs-knowledge` Storage bucket, the source/page-extraction records, and further `knowledge_chunks` indexing. The old base migration files for the Knowledge Center are only history-compatibility markers in the current Git branch; they do not contain the authoritative DDL.
+
+A fresh Supabase `list_tables`, `list_migrations`, and read-only SQL attempt all returned `57P03` (PostgreSQL not accepting connections). As a result, the exact live DDL, source record counts, review-state distribution, and file-byte inventory for the Knowledge Center cannot yet be verified. No new knowledge rows or PDF binaries have been written to D1, Telegram, or any other destination.
+
+**Decision:** Do not deploy a reduced circular ingestor that silently skips PDFs, skips the page-level OCR queue, or stores text while claiming the existing behavior was preserved. Porting this function remains blocked until the authoritative Knowledge Center schema and source inventory can be read, the matching D1 schema and page/OCR queue are defined and tested, and the file bytes can be moved through a verified Telegram archive flow without relying on Supabase Storage.
