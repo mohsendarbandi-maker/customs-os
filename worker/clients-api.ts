@@ -147,11 +147,12 @@ const audit = (
 );
 
 const dependenciesSql = 'SELECT ' + DEPENDENCIES.map((table) =>
-  '(SELECT COUNT(*) FROM ' + table + ' WHERE client_id = ?) AS ' + table
+  '(SELECT COUNT(*) FROM ' + table + ' WHERE organization_id = ? AND client_id = ?) AS ' + table
 ).join(', ');
 
-const getDependencies = (db: ClientD1Database, id: string) =>
-  db.prepare(dependenciesSql).bind(...DEPENDENCIES.map(() => id))
+const getDependencies = (db: ClientD1Database, id: string, organizationId: string) =>
+  db.prepare(dependenciesSql)
+    .bind(...DEPENDENCIES.flatMap(() => [organizationId, id]))
     .first<Record<string, number>>();
 
 const dependencyTotal = (value: Record<string, number>) =>
@@ -304,24 +305,28 @@ export const handleClientsApi = async (
     try {
       const before = await getClient(db, id, profile.organization_id);
       if (!before) return fail('CLIENT_NOT_FOUND', 404);
-      const dependencies = await getDependencies(db, id);
+      const dependencies = await getDependencies(db, id, profile.organization_id);
       if (!dependencies) return fail('CLIENT_DEPENDENCIES_UNAVAILABLE', 503);
       if (dependencyTotal(dependencies) > 0) {
         return fail('CLIENT_HAS_DEPENDENCIES', 409, { dependencies });
       }
       const noReferences = DEPENDENCIES.map((table) =>
-        'NOT EXISTS (SELECT 1 FROM ' + table + ' WHERE client_id = ?)'
+        'NOT EXISTS (SELECT 1 FROM ' + table + ' WHERE organization_id = ? AND client_id = ?)'
       ).join(' AND ');
       const now = new Date().toISOString();
       await db.batch([
         db.prepare(
           'DELETE FROM clients WHERE id = ? AND organization_id = ? AND ' + noReferences,
-        ).bind(id, profile.organization_id, ...DEPENDENCIES.map(() => id)),
+        ).bind(
+          id,
+          profile.organization_id,
+          ...DEPENDENCIES.flatMap(() => [profile.organization_id, id]),
+        ),
         audit(db, request, profile, 'delete', id, before, null, now),
       ]);
       const remaining = await getClient(db, id, profile.organization_id);
       if (remaining) {
-        const currentDependencies = await getDependencies(db, id);
+        const currentDependencies = await getDependencies(db, id, profile.organization_id);
         return fail('CLIENT_DELETE_BLOCKED', 409, { dependencies: currentDependencies || {} });
       }
       return new Response(null, { status: 204, headers: { 'cache-control': 'no-store, private' } });

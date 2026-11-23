@@ -59,7 +59,14 @@ class FakeD1 implements ClientD1Database {
       );
       return row ? this.publicRecord(row) as T : null;
     }
-    if (sql.includes('AS customs_accounting_vouchers')) return { ...this.dependencies } as T;
+    if (sql.includes('AS customs_accounting_vouchers')) {
+      if (values.length !== 2 * 8 || values.some((value, index) =>
+        value !== (index % 2 === 0 ? 'org-a' : String(values[index - 1]))
+      )) {
+        throw new Error('Dependency counts must be scoped to organization_id and client_id pairs');
+      }
+      return { ...this.dependencies } as T;
+    }
     throw new Error('Unexpected first query: ' + sql);
   }
 
@@ -111,7 +118,11 @@ class FakeD1 implements ClientD1Database {
       return 1;
     }
     if (sql.startsWith('DELETE FROM clients')) {
-      const [id, orgId] = values;
+      const [id, orgId, ...dependencyBindings] = values;
+      if (dependencyBindings.length !== 2 * 8) throw new Error('Expected tenant-scoped dependency guards');
+      for (let index = 0; index < dependencyBindings.length; index += 2) {
+        if (dependencyBindings[index] !== orgId) throw new Error('Dependency guard leaked across organizations');
+      }
       if (Object.values(this.dependencies).some((count) => count > 0)) return 0;
       const index = this.clients.findIndex((item) => item.id === id && item.organization_id === orgId);
       if (index < 0) return 0;
@@ -228,7 +239,7 @@ describe('Cloudflare D1 clients API', () => {
     expect(db.clients).toHaveLength(1);
   });
 
-  it('deletes an unreferenced client and records the delete audit event', async () => {
+  it('deletes an unreferenced client with tenant-scoped dependency guards and records the delete audit event', async () => {
     const db = new FakeD1();
     db.clients.push({ id: 'client-a', organization_id: 'org-a', name: 'صاحب کالا', national_id: '12345', notes: null, created_at: null, updated_at: null, file_manager_search_text: '' });
     const url = new URL('https://staging.example/api/clients/client-a');
