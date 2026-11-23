@@ -49,6 +49,9 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Inventory remaining Supabase runtime dependencies
+        run: npm run audit:cloudflare-deps
+
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
