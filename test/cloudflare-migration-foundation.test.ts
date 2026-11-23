@@ -72,6 +72,9 @@ describe('Cloudflare migration foundation', () => {
     expect(worker).toContain('customs_documents.folder_id -> file_manager_folders.id');
     expect(worker).toContain('finance_cost_items.category_id -> finance_cost_categories.id');
     expect(worker).toContain('checksWithOrphans');
+    expect(worker).toContain('orphanCustomsOfficeDistinctIds');
+    expect(worker).toContain('orphanCustomsOfficeReferences');
+    expect(worker).toContain("GROUP BY table_name, office_id ORDER BY office_id, table_name");
     expect(worker).toContain('failedChecks');
   });
 
