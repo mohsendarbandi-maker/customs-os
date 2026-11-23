@@ -64,14 +64,17 @@ jobs:
           import { readFileSync } from 'node:fs';
           const config = JSON.parse(readFileSync('wrangler.migration-staging.jsonc', 'utf8'));
           const dbs = config.d1_databases ?? [];
-          const db = dbs.find((item) => item.binding === 'MIGRATION_DB');
-          console.log('Staging config identity:', JSON.stringify({ worker: config.name, databases: dbs.map(({ binding, database_name, database_id, migrations_dir }) => ({ binding, database_name, database_id, migrations_dir })) }));
-          if (
-            config.name !== 'customs-os-migration-staging' ||
-            db?.database_name !== 'customs-os-migration-staging' ||
-            db?.database_id !== 'b938fa3c-4995-4d27-aeda-f72f2f484a3c'
-          ) {
-            throw new Error('Refusing D1 migration: exact isolated Staging database identity did not match.');
+          const db = dbs.find((item) => String(item.binding ?? '').normalize('NFKC').replace(/[\\u200B-\\u200D\\uFEFF]/g, '').trim() === 'MIGRATION_DB');
+          const normalizeIdentity = (value) => String(value ?? '').normalize('NFKC').replace(/[\\u200B-\\u200D\\uFEFF]/g, '').trim();
+          const identityChecks = {
+            worker: normalizeIdentity(config.name) === 'customs-os-migration-staging',
+            binding: normalizeIdentity(db?.binding) === 'MIGRATION_DB',
+            databaseName: normalizeIdentity(db?.database_name) === 'customs-os-migration-staging',
+            databaseId: normalizeIdentity(db?.database_id).toLowerCase() === 'b938fa3c-4995-4d27-aeda-f72f2f484a3c',
+          };
+          console.log('Staging config identity checks:', JSON.stringify(identityChecks));
+          if (!Object.values(identityChecks).every(Boolean)) {
+            throw new Error('Refusing D1 migration: normalized isolated Staging identity did not match.');
           }
           console.log('Verified exact Staging Worker and D1 identity; Production identifiers are not accepted.');
           NODE
