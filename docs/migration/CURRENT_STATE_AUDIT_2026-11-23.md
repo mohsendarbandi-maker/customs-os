@@ -151,3 +151,76 @@ Some client `notes` fields contain credential-like plaintext. No such values are
 4. Verify real Telegram retrieval for representative old file IDs and verify bytes/checksums before marking any file recoverable.
 5. Complete a full Frontend dependency inventory and map every old query/RPC/Function/Storage/Realtime call to a versioned Worker API contract.
 6. Only then add an operational D1 migration and port a vertical slice with automated tests. Keep Production untouched and do not merge PR #314 without explicit authorization.
+
+## Live Staging verification addendum — 2026-11-23 10:49 UTC
+This addendum supersedes the earlier **unverified** D1 counts and the export-only estimate of broken customs-office references above. All figures below came from the deployed Worker’s read-only D1 diagnostics, not from assumptions or test fixtures.
+
+### Deployed Staging revision and isolation
+- Latest verified source application revision deployed by Workflow run `45159263529`: branch source commit `d296b5b9f4ef1c9e93204e27a35a36afcf3bf685` was not recorded here; the exact Worker version returned by Wrangler is `89b2df0e-5dc7-400e-a4fc-c76c488c5fd3`.
+- Worker URL: `https://customs-os-migration-staging.mohsen-darbandi.workers.dev`.
+- Wrangler uploaded 86 static assets (41 already uploaded), then deployed the Worker; reported startup time was 8 ms.
+- The live `/health` response reports `environment=staging`, `database=d1`, `productionTraffic=false`, and `productionDataImported=false`.
+- PR #314 is still open and unmerged. No `main` merge, Production Worker change, custom-domain route, DNS change, or Production data write was performed.
+- An Actions-generated artifact-only commit `187c4495112674b43b34e27a35a36afcfaf20b30` subsequently advanced the PR head by publishing `staging-dist`; it does not represent an operational backend migration. Its PR check run returned `action_required` with no jobs reported by the read-only GitHub interface. The last source-code test/deploy run for revision `d296b5b9f4ef1c9e93204e27a35a36afcf3bf685` completed successfully.
+
+### D1 import row-count parity — verified
+The live `GET /migration/parity` result was:
+- `ok=true`, `sourceTableCount=26`
+- `expectedTotal=668`, `actualTotal=668`
+- `missingTargets=8`, all `missingEmptySourceTables=8`
+- `missingRequiredTargets=0`, `failedCounts=0`, `mismatchedTables=0`
+- `rowCountParity=true`
+
+All 17 source tables containing records matched their imported counts exactly. Nine source tables were empty; eight of those did not need a target table to be created. No imported rows were missing or duplicated according to these count checks. This verifies **row-count parity only**; it is not a byte-for-byte source checksum or a financial/weight aggregate comparison.
+
+The live `/migration/schema` response lists 34 application/migration tables and 1,097 rows across those countable tables. The internal Cloudflare `_cf_KV` table was visible but its BLOB-backed row count was not queryable by this diagnostic, so it is excluded from 1,097. This count includes import-control/archive/staging-support rows in addition to the 668 imported business rows; do not interpret 1,097 as imported operational records.
+
+### Referential integrity — verified with unresolved data defects
+The live `GET /migration/integrity` result reports:
+- 34 relation checks executed; `failedChecks=0`
+- 29 checks have zero orphan rows.
+- Five checks have orphan rows, totaling **155**.
+- All 155 are references to `customs_offices`, whose D1 table currently has zero rows.
+- Two distinct missing office IDs account for the orphans:
+  - `3aa9da26-3ded-40e4-8772-51c5f4d8385b`: 103 references (8 cases, 8 shipments, 8 shipment-customs-data rows, 6 declarations, 73 File Manager folders).
+  - `faa23eed-35f3-49e4-be70-7d880edf3f07`: 52 references (4 cases, 4 shipments, 4 shipment-customs-data rows, 4 declarations, 36 File Manager folders).
+
+The earlier 46-reference figure applied only to tables present in the attached JSON export and did not include the 109 folder references because File Manager folders were absent from that export. The live D1 result is the authoritative current count. Neither missing office row has been fabricated or recreated.
+
+### File archive metadata — verified; binary content still unverified
+The live `GET /migration/files` and `GET /migration/file-metadata-keys` results report:
+- File Manager: 89 rows; 84 have an external message ID, 84 have a `file_asset_id`, 75 have a `telegram://` path, and 14 paths classify as other.
+- Customs documents: 141 rows; 84 are marked Telegram-backed (with Telegram message ID and file asset ID); 57 remain Supabase-backed. The path breakdown is 73 Telegram and 68 other.
+- Shipment documents: 90 rows; 61 are marked Telegram-backed; 29 remain Supabase-backed. The path breakdown is 50 Telegram and 40 other.
+- Metadata key names/counts show `telegramFileId`, `telegramFileUniqueId`, `telegramChatId`, and `telegramMessageId` present on 84 File Manager records. The diagnostic returned key names and counts only; it did not expose identifier values.
+
+The mismatches between Telegram backend flags and Telegram path classifications (11 Customs documents and 11 Shipment documents) remain unresolved metadata cases. **No binary was marked recovered**: actual retrieval, downloaded-byte length, MIME validation, and content checksum against a trusted source remain unverified.
+
+### Bounded Telegram binary probe
+- The migration Worker now contains `POST /api/admin/migration/telegram-probe`. It requires same-origin and a valid Staging admin session, selects one smallest eligible Telegram-backed File Manager record up to 8 MiB, downloads in memory with a 15-second timeout, computes SHA-256 in memory, and returns only byte-size comparisons and booleans. It does not store or return file bytes or identifiers.
+- The Staging Workspace includes a one-shot button visible only to the Staging `owner` role. After one attempt it disables itself for that page session.
+- The latest successful deployment includes this UI and Worker route. The automated GitHub Actions probe was **skipped**, not executed, because `CUSTOMS_ADMIN_PASSWORD` is not configured in the GitHub Preview Environment. The Worker Secret name exists, and the Worker’s Telegram bot token Secret name exists; no Secret value was read or printed.
+- Therefore the next binary verification action must be initiated by an authenticated Staging owner in the Staging Workspace. Until that one-shot action returns a successful download and size comparison, old Telegram metadata must not be counted as recovered file content.
+
+### CI, cost and security observations
+- The Staging deploy run `45159263529` completed successfully: Unit Tests, TypeScript, ESLint, Vite Build, asset upload, Wrangler deployment, read-only Worker diagnostics, and Secret-name-only listing all succeeded.
+- The GitHub Actions control-plane command `wrangler d1 info` still fails with Cloudflare API error `10000` because the connected deploy token lacks D1 read permission. The workflow marks this optional diagnostic non-blocking; it does not alter D1. D1 database size/quota therefore remains unverified.
+- Secret names observed without values: `CUSTOMS_ADMIN_PASSWORD`, `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`.
+- No paid add-on or paid Worker plan was enabled by these changes.
+
+### Updated phase status
+| Area | Updated status | Evidence / remaining condition |
+|---|---|---|
+| GitHub branch / PR isolation | COMPLETED | PR #314 remains open and unmerged; changes stayed on the migration branch |
+| Static Frontend dependency map | PARTIAL | Critical modules mapped; full dynamic/import-based scan and all callsites not certified exhaustive |
+| D1 imported row-count parity | COMPLETED | 668/668 rows across 17 populated source tables; 8 missing targets are empty-source tables |
+| D1 referential integrity | PARTIAL / BLOCKED | 29/34 checks clean; 155 orphan references to 2 missing customs-office IDs |
+| D1 quota/capacity verification | BLOCKED | Wrangler control-plane read fails with error 10000; no DB size result |
+| Independent operational API | NOT_STARTED | Health/migration/auth bootstrap/diagnostics only; no full operational CRUD surface |
+| Authentication | PARTIAL | Single Staging admin session only; real multi-user Auth and device-session parity absent |
+| Telegram metadata migration | PARTIAL | Telegram IDs and metadata keys present; 11+11 backend/path mismatches require review |
+| Telegram binary retrieval | BLOCKED / NOT_VERIFIED | One-shot owner probe deployed, but automated probe skipped due missing GitHub Preview admin password; no binary yet verified |
+| Supabase execution dependency removal | NOT_STARTED | Frontend, legacy production Worker, package and function compatibility paths still depend on Supabase |
+| AI + knowledge + AI Operator | PARTIAL | Preliminary Gemini endpoint only; no D1 retrieval, evidence persistence, knowledge integration, or guarded operator parity |
+| Production cutover | NOT_STARTED (correctly isolated) | No Production route, DNS, Worker, or data mutation |
+
