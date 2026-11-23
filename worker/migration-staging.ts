@@ -400,6 +400,35 @@ export default {
           return json({ ok: false, error: 'MIGRATION_PARITY_UNAVAILABLE' }, 503);
         }
       }
+      if (url.pathname === '/migration/file-metadata-keys') {
+        try {
+          const keys = await env.MIGRATION_DB.prepare(
+            "SELECT j.key AS metadata_key, COUNT(DISTINCT f.id) AS record_count " +
+            "FROM file_manager_files f, json_each(" +
+            "CASE WHEN json_valid(f.metadata) THEN f.metadata ELSE '{}' END" +
+            ") j GROUP BY j.key ORDER BY j.key",
+          ).all<{ metadata_key: string; record_count: number }>();
+
+          const identifiers = keys.results.filter((row) =>
+            /file.?id|unique.?id|message.?id|chat.?id|document|telegram/i.test(row.metadata_key),
+          );
+
+          return json({
+            ok: true,
+            database: 'customs-os-migration-staging',
+            inspection: 'read_only_metadata_key_names_and_counts',
+            sourceTable: 'file_manager_files',
+            metadataRows: keys.results.reduce((sum, row) => Math.max(sum, row.record_count), 0),
+            keyCount: keys.results.length,
+            candidateIdentifierKeyCount: identifiers.length,
+            candidateIdentifierKeys: identifiers,
+            note: 'Key names and record counts only. No metadata values, file IDs, message IDs, names or paths are returned.',
+            telegramFileIdAvailability: 'not_assessed_until_identifier_key_semantics_are_reviewed',
+          });
+        } catch {
+          return json({ ok: false, error: 'FILE_METADATA_KEY_INSPECTION_UNAVAILABLE' }, 503);
+        }
+      }
       if (url.pathname === '/migration/files') {
         try {
           const [fileManager, customsDocuments, shipmentDocuments] = await Promise.all([
