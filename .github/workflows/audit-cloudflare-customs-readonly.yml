@@ -44,7 +44,16 @@ jobs:
             api('/accounts/' + accountId + '/workers/scripts/customs/versions?per_page=10'),
             api('/accounts/' + accountId + '/workers/domains'),
           ]);
-          const deploymentItems = deployments.body?.result ?? [];
+          const asList = (payload) => {
+            const value = payload?.result;
+            if (Array.isArray(value)) return value;
+            if (value && typeof value === 'object') {
+              for (const candidate of Object.values(value)) if (Array.isArray(candidate)) return candidate;
+            }
+            return [];
+          };
+          const deploymentItems = asList(deployments.body);
+          const versionItems = asList(versions.body);
           const activeVersionIds = [...new Set(deploymentItems.flatMap((deployment) =>
             (deployment.versions ?? []).filter((version) => Number(version.percentage ?? 0) > 0).map((version) => version.version_id)
           ))];
@@ -88,6 +97,7 @@ jobs:
             deployments: {
               httpStatus: deployments.status, success: deployments.success,
               count: deploymentItems.length,
+              responseKeys: Object.keys(deployments.body?.result ?? {}),
               latest: deploymentItems.slice(0, 5).map((item) => ({
                 id: item.id, createdOn: item.created_on, strategy: item.strategy,
                 versions: (item.versions ?? []).map((v) => ({ versionId: v.version_id, percentage: v.percentage })),
@@ -96,13 +106,13 @@ jobs:
             activeVersions,
             recentVersions: {
               httpStatus: versions.status, success: versions.success,
-              items: (versions.body?.result ?? []).slice(0, 5).map((item) => ({
+              items: versionItems.slice(0, 5).map((item) => ({
                 id: item.id, number: item.number, createdOn: item.metadata?.created_on, source: item.metadata?.source,
               })),
             },
             domains: {
               httpStatus: domains.status, success: domains.success,
-              items: (domains.body?.result ?? []).filter((item) =>
+              items: asList(domains.body).filter((item) =>
                 ['darbandicommercial.ir','mobile.darbandicommercial.ir','chat.darbandicommercial.ir','reminders.darbandicommercial.ir'].includes(item.hostname)
               ).map((item) => ({ hostname: item.hostname, service: item.service, enabled: item.enabled })),
             },
