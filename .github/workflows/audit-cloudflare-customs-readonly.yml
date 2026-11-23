@@ -250,6 +250,13 @@ jobs:
               'customs_os_auth_events',
               'customs_os_import_table_status',
               'customs_os_organization_imports',
+              'messenger_chats',
+              'messenger_connections',
+              'file_manager_upload_jobs',
+              'file_manager_folders',
+              'file_manager_files',
+              'knowledge_page_extractions',
+              'knowledge_sources',
             ]);
             stagingSchemaAudit = {
               checked: true,
