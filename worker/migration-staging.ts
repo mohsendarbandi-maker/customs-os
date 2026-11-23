@@ -16,6 +16,7 @@ interface Env {
   MIGRATION_ENVIRONMENT?: string;
   PRODUCTION_DATA_IMPORTED?: string;
   CUSTOMS_ADMIN_PASSWORD?: string;
+  GEMINI_API_KEY?: string;
 }
 
 const COOKIE = 'customs_os_stage_session';
@@ -95,6 +96,100 @@ const getSession = async (request: Request, env: Env) => {
     return false;
   }
   return true;
+};
+
+const handleGemini = async (request: Request, env: Env): Promise<Response> => {
+  if (request.method !== 'POST') return json({ error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'POST' });
+  const url = new URL(request.url);
+  if (!isSameOrigin(request, url)) return json({ error: 'ORIGIN_FORBIDDEN' }, 403);
+  if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
+  if (!env.GEMINI_API_KEY) return json({ error: 'AI_NOT_CONFIGURED' }, 503);
+  const length = Number(request.headers.get('content-length') || 0);
+  if (length > 18 * 1024 * 1024) return json({ error: 'DOCUMENT_TOO_LARGE', limit_mb: 18 }, 413);
+  let body: Record<string, unknown>;
+  try { body = await request.json() as Record<string, unknown>; }
+  catch { return json({ error: 'INVALID_REQUEST' }, 400); }
+
+  const query = String(body.query || '').slice(0, 12000);
+  const documentText = String(body.document_text || '').slice(0, 30000);
+  const mimeType = String(body.document_mime_type || '').toLowerCase();
+  let documentData = String(body.document_data || '').replace(/^data:[^;]+;base64,/, '');
+  const extraction = Boolean(body.extraction || body.extract || body.formFill);
+  const shipExtraction = Boolean(body.shipmentExtraction || body.shipment_extraction);
+  const formSchema = Array.isArray(body.formSchema) ? body.formSchema.slice(0, 100) as Array<Record<string, unknown>> : [];
+  const keys = formSchema.length
+    ? formSchema.map((field) => String(field.key || '')).filter(Boolean)
+    : shipExtraction
+      ? ['ownerName','shippingLine','vesselName','imo','count','unit','net','gross','billOfLading','billOfLadingYear','voyageNo','originPort','destinationPort']
+      : extraction
+        ? ['vesselType','regNumber','regDate','packageCount','warehouseReceiptNo','warehouseReceiptDate','cargoDescription','originCountry','transactionCountry','deliveryTerm','invoiceAmount','invoiceCurrency','bankBranchCode','bankName','bankBranch','lcNumber','dutyRate','tariffCode','netWeight','grossWeight','billOfLading','insuranceIrr','requiredDocuments']
+        : [];
+  const options = new Map(formSchema.map((field) => [String(field.key || ''), Array.isArray(field.options)
+    ? field.options.map((option: unknown) => typeof option === 'object' && option !== null ? String((option as Record<string, unknown>).value || '') : String(option)).filter(Boolean)
+    : []]));
+  const fields = keys.map((key) => {
+    const field = formSchema.find((item) => String(item.key || '') === key);
+    const label = String(field?.label || key);
+    const allowed = options.get(key) || [];
+    return `"${key}": ${label}${allowed.length ? ` (مقادیر مجاز: ${allowed.join('، ')})` : ''}`;
+  }).join('\n');
+  const task = extraction
+    ? `از سند ورودی فقط اطلاعات قابل مشاهده را استخراج کن. هیچ مقدار یا شناسه‌ای را حدس نزن. اعداد، تاریخ‌ها، شماره بارنامه، شماره کوتاژ، وزن خالص و ناخالص را دقیقاً حفظ کن. اگر مقدار موجود نیست رشته خالی بده. فقط یک JSON object با کلیدهای زیر و مقادیر رشته‌ای برگردان:\n${fields}`
+    : `تو دستیار فارسی سامانه عملیات گمرکی هستی. دقیق، کوتاه و مبتنی بر ورودی پاسخ بده؛ هیچ شماره، تاریخ یا مقدار مالی را حدس نزن.\nپرسش: ${query || 'سند ورودی را تحلیل کن.'}`;
+  const prompt = [task, documentText ? `متن سند:\n${documentText}` : '', String(body.page_context || '')].filter(Boolean).join('\n\n');
+  const parts: Array<Record<string, unknown>> = [{ text: prompt }];
+  if (documentData && (mimeType === 'application/pdf' || mimeType.startsWith('image/'))) {
+    if (documentData.length > 16 * 1024 * 1024) return json({ error: 'DOCUMENT_TOO_LARGE', limit_mb: 12 }, 413);
+    parts.push({ inlineData: { mimeType, data: documentData } });
+  } else if (documentData) {
+    documentData = '';
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  try {
+    const generationConfig: Record<string, unknown> = { temperature: 0.1, maxOutputTokens: extraction ? 3000 : 1800 };
+    if (extraction) {
+      generationConfig.responseMimeType = 'application/json';
+      generationConfig.responseSchema = {
+        type: 'OBJECT',
+        properties: Object.fromEntries(keys.map((key) => [key, {
+          type: 'STRING',
+          ...(options.get(key)?.length ? { enum: options.get(key) } : {}),
+        }])),
+        required: keys,
+      };
+    }
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+      body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig }),
+      signal: controller.signal,
+    });
+    const raw = await response.text();
+    let result: Record<string, unknown> = {};
+    try { result = JSON.parse(raw) as Record<string, unknown>; } catch { /* handled below */ }
+    if (!response.ok) {
+      const detail = (result.error as Record<string, unknown> | undefined)?.message;
+      const message = typeof detail === 'string' ? detail.slice(0, 500) : `Gemini HTTP ${response.status}`;
+      return json({ error: response.status === 429 ? 'AI_RATE_LIMITED' : 'AI_PROVIDER_ERROR', message }, response.status === 429 ? 429 : 502);
+    }
+    const candidates = Array.isArray(result.candidates) ? result.candidates as Array<Record<string, unknown>> : [];
+    const content = candidates[0]?.content as Record<string, unknown> | undefined;
+    const responseParts = Array.isArray(content?.parts) ? content.parts as Array<Record<string, unknown>> : [];
+    const answer = responseParts.map((part) => typeof part.text === 'string' ? part.text : '').filter(Boolean).join('\n').trim();
+    if (!answer) return json({ error: 'AI_EMPTY_RESPONSE' }, 502);
+    let extracted: unknown = null;
+    if (extraction) {
+      try { extracted = JSON.parse(answer); }
+      catch { return json({ error: 'AI_INVALID_JSON', answer: answer.slice(0, 3000) }, 502); }
+    }
+    return json({ answer, data: extracted, provider: 'Gemini', model: 'gemini-2.5-flash', status: 'completed', context_loaded: false });
+  } catch (error) {
+    const aborted = error instanceof Error && error.name === 'AbortError';
+    return json({ error: aborted ? 'AI_TIMEOUT' : 'AI_REQUEST_FAILED' }, aborted ? 504 : 502);
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 export default {
@@ -263,6 +358,10 @@ export default {
         ).bind(await sha256(token)).run();
       }
       return json({ ok: true }, 200, { 'set-cookie': setCookie('', 0) });
+    }
+
+    if (url.pathname === '/api/ai' || url.pathname === '/functions/v1/ai-assistant') {
+      return handleGemini(request, env);
     }
 
     if (url.pathname.startsWith('/api/')) return json({ error: 'API_NOT_FOUND' }, 404);
