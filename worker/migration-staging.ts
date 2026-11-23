@@ -9,6 +9,7 @@ import { handleFileManagerApi } from './file-manager-api';
 import { getFileManagerArchiveStatus, handleFileManagerUpload } from './file-manager-upload-api';
 import { handleVesselMultiSourceLookup } from './vessel-multi-source-api';
 import { handleSyncVesselAisV2 } from './sync-vessel-ais-api';
+import { handleLegacySyncVesselAis } from './sync-vessel-ais-legacy-api';
 import { handleMaritimeReadApi } from './maritime-read-api';
 import { handleMaritimeConditions } from './maritime-conditions-api';
 import { serveMapTile, type MapTileCache } from './map-tiles-api';
@@ -1127,6 +1128,36 @@ export default {
       return new Response(lookup.body, {
         status: lookup.status,
         statusText: lookup.statusText,
+        headers,
+      });
+    }
+
+    if (url.pathname === '/functions/v1/sync-vessel-ais') {
+      const corsHeaders = {
+        'Access-Control-Allow-Origin': url.origin,
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Vary': 'Origin',
+      };
+      if (!isSameOrigin(request, url)) return json({ error: 'ORIGIN_FORBIDDEN' }, 403, corsHeaders);
+      if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
+      if (request.method !== 'POST') return json({ error: 'METHOD_NOT_ALLOWED' }, 405, corsHeaders);
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401, corsHeaders);
+      if (!profile.is_active || !['owner', 'admin', 'broker'].includes(profile.role)) {
+        return json({ error: 'FORBIDDEN' }, 403, corsHeaders);
+      }
+
+      const result = await handleLegacySyncVesselAis(
+        request,
+        env.MIGRATION_DB,
+        profile.organization_id,
+      );
+      const headers = new Headers(result.headers);
+      for (const [name, value] of Object.entries(corsHeaders)) headers.set(name, value);
+      headers.set('cache-control', 'no-store, private');
+      return new Response(result.body, {
+        status: result.status,
+        statusText: result.statusText,
         headers,
       });
     }
