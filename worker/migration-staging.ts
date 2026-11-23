@@ -11,6 +11,7 @@ import { handleVesselMultiSourceLookup } from './vessel-multi-source-api';
 import { handleSyncVesselAisV2 } from './sync-vessel-ais-api';
 import { handleMaritimeReadApi } from './maritime-read-api';
 import { handleMaritimeConditions } from './maritime-conditions-api';
+import { serveMapTile, type MapTileCache } from './map-tiles-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -1192,6 +1193,14 @@ export default {
       if (request.method !== 'GET') return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
       if (!await getSession(request, env)) return json({ ok: false, error: 'UNAUTHORIZED' }, 401);
       return handleMaritimeReadApi(request, env.MIGRATION_DB, url, profile);
+    }
+
+    if (url.pathname.startsWith('/api/map/tiles/')) {
+      if (!isSameOrigin(request, url)) return json({ error: 'ORIGIN_FORBIDDEN' }, 403);
+      const workerCaches = (globalThis as unknown as {
+        caches?: { default?: MapTileCache };
+      }).caches;
+      return serveMapTile(request, fetch, workerCaches?.default);
     }
 
     if (url.pathname === '/api/maritime/conditions') {
