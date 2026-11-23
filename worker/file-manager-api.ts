@@ -235,6 +235,20 @@ const parseFilePath = (pathname: string) => {
   }
 };
 
+const parseMoveFilePath = (pathname: string) => {
+  const prefix = BASE + '/files/';
+  const suffix = '/move';
+  if (!pathname.startsWith(prefix) || !pathname.endsWith(suffix)) return null;
+  const raw = pathname.slice(prefix.length, -suffix.length);
+  if (!raw || raw.includes('/')) return null;
+  try {
+    const id = decodeURIComponent(raw);
+    return id.length <= 128 && !id.includes('/') ? id : null;
+  } catch {
+    return null;
+  }
+};
+
 const listFolders = async (db: FileManagerD1Database, profile: FileManagerApiProfile) => {
   const scope = profile.role === 'client' ? " AND (f.folder_type='root' OR f.client_id=?)" : '';
   const values: unknown[] = [profile.organization_id];
@@ -483,14 +497,15 @@ export const handleFileManagerApi = async (
     if (folderId && request.method === 'DELETE') {
       return await deleteEmptyFolder(db,request,profile,folderId);
     }
+    const moveFileId=parseMoveFilePath(pathname);
+    if (moveFileId && request.method === 'POST') {
+      const body=await readBody(request);
+      return body ? await moveFile(db,request,profile,moveFileId,body) : fail('INVALID_JSON_BODY',400);
+    }
     const fileId=parseFilePath(pathname);
     if (fileId && request.method === 'PATCH') {
       const body=await readBody(request);
       return body ? await updateFileMetadata(db,request,profile,fileId,body) : fail('INVALID_JSON_BODY',400);
-    }
-    if (fileId && pathname.endsWith('/move') && request.method === 'POST') {
-      const body=await readBody(request);
-      return body ? await moveFile(db,request,profile,fileId,body) : fail('INVALID_JSON_BODY',400);
     }
     return fail('NOT_FOUND',404);
   } catch {

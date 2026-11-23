@@ -4,6 +4,7 @@ import { handleCasesApi } from './cases-api';
 import { handleDeviceSessionsApi } from './device-sessions-api';
 import { handleRegistrationOrdersApi } from './registration-orders-api';
 import { handleTelegramFileDownload } from './telegram-files-api';
+import { handleFileManagerApi } from './file-manager-api';
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -1082,6 +1083,11 @@ export default {
     if (url.pathname.startsWith('/api/files/')) {
       if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
       return handleTelegramFileDownload(request, env, url, profile);
+    }
+
+    if (url.pathname === '/api/file-manager' || url.pathname.startsWith('/api/file-manager/')) {
+      if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
+      return handleFileManagerApi(request, env.MIGRATION_DB, url, profile);
     }
 
     if (url.pathname === '/api/ai' || url.pathname === '/functions/v1/ai-assistant') {
