@@ -16,6 +16,58 @@ const tools = [
 
 export const StagingWorkspacePage: React.FC = () => {
   const { profile, signOut } = useAuth();
+  const [telegramProbeLoading, setTelegramProbeLoading] = React.useState(false);
+  const [telegramProbeAttempted, setTelegramProbeAttempted] = React.useState(false);
+  const [telegramProbeMessage, setTelegramProbeMessage] = React.useState<string | null>(null);
+
+  const runTelegramArchiveProbe = async () => {
+    if (telegramProbeLoading || telegramProbeAttempted) return;
+    setTelegramProbeLoading(true);
+    setTelegramProbeAttempted(true);
+    setTelegramProbeMessage('در حال بررسی یک فایل کوچک از آرشیو تلگرام…');
+    try {
+      const response = await fetch('/api/admin/migration/telegram-probe', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const result = await response.json() as {
+        ok?: boolean;
+        error?: string;
+        downloadedBytes?: number;
+        sourceSizeMatches?: boolean;
+        telegramSizeMatches?: boolean | null;
+        sha256Computed?: boolean;
+        stored?: boolean;
+        contentExposed?: boolean;
+      };
+      if (!response.ok || result.ok !== true) {
+        setTelegramProbeMessage(
+          'آزمایش انجام نشد: ' + (result.error || 'PROBE_FAILED') +
+          '؛ هیچ فایلی ذخیره یا نمایش داده نشد.',
+        );
+        return;
+      }
+      const sourceMatch = result.sourceSizeMatches === true
+        ? 'اندازه با Metadata برابر است'
+        : result.sourceSizeMatches === false ? 'اندازه با Metadata مطابقت ندارد' : 'اندازه مبدأ نامشخص است';
+      const telegramMatch = result.telegramSizeMatches === true
+        ? 'اندازه تلگرام نیز برابر است'
+        : result.telegramSizeMatches === false ? 'اندازه تلگرام متفاوت است' : 'اندازه تلگرام گزارش نشده است';
+      setTelegramProbeMessage(
+        'بازیابی واقعی انجام شد؛ ' + String(result.downloadedBytes || 0) +
+        ' بایت دریافت شد. ' + sourceMatch + '؛ ' + telegramMatch +
+        (result.sha256Computed ? '؛ SHA-256 در حافظه محاسبه شد.' : '') +
+        ' بایت‌ها ذخیره نشدند و محتوا نمایش داده نشد.',
+      );
+    } catch {
+      setTelegramProbeMessage('ارتباط با سرویس آزمایش ناموفق بود؛ هیچ فایلی ذخیره یا نمایش داده نشد.');
+    } finally {
+      setTelegramProbeLoading(false);
+    }
+  };
   return (
     <main dir="rtl" className="min-h-screen p-4 md:p-8" style={{background:'var(--bg)',color:'var(--text)'}}>
       <div className="mx-auto max-w-6xl space-y-6">
@@ -49,6 +101,32 @@ export const StagingWorkspacePage: React.FC = () => {
               <div className="mt-1 text-xs app-muted">در انتظار واردسازی نسخه‌های پشتیبان و آرشیوها</div>
             </div>
           </div>
+          {profile?.role === 'owner' && (
+            <div className="mt-4 rounded-xl border p-3" style={{borderColor:'var(--border)',background:'var(--bg)'}}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-bold">آزمایش بازیابی واقعی تلگرام</div>
+                  <div className="mt-1 text-xs app-muted leading-6">
+                    فقط یک فایل دارای file_id معتبر و حداکثر ۸ مگابایت دریافت می‌شود؛ محتوا ذخیره یا نمایش داده نمی‌شود.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void runTelegramArchiveProbe()}
+                  disabled={telegramProbeLoading || telegramProbeAttempted}
+                  className="rounded-xl px-4 py-2 text-sm font-bold disabled:opacity-50"
+                  style={{background:'var(--primary)',color:'white'}}
+                >
+                  {telegramProbeLoading ? 'در حال بررسی…' : telegramProbeAttempted ? 'آزمایش انجام شد' : 'اجرای آزمایش یک‌باره'}
+                </button>
+              </div>
+              {telegramProbeMessage && (
+                <p role="status" aria-live="polite" className="mt-3 text-xs app-muted leading-6">
+                  {telegramProbeMessage}
+                </p>
+              )}
+            </div>
+          )}
         </section>
 
         <section>
