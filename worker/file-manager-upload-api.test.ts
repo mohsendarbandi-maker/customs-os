@@ -68,7 +68,7 @@ class FakeD1 implements FileManagerD1Database {
     id: '22222222-2222-4222-8222-222222222222',
     organization_id: 'org-a',
     client_id: 'client-a',
-    shipment_id: 'shipment-a',
+    shipment_id: '33333333-3333-4333-8333-333333333333',
     folder_type: 'other',
     display_name: 'اسناد محموله',
     relative_path: 'صاحب کالا/محموله/اسناد محموله',
@@ -144,6 +144,7 @@ class FakeD1 implements FileManagerD1Database {
         file_asset_id:insert.values[4],
         external_message_id:insert.values[8],
         size_bytes:insert.values[7],
+        operation_sections:insert.values[13],
       };
     }
     if (this.job) this.job.status='stored';
@@ -154,7 +155,7 @@ class FakeD1 implements FileManagerD1Database {
 const profile = { id:'user-a',organization_id:'org-a',role:'owner',is_active:true };
 const makeRequest = (body: Uint8Array, options: { origin?: string; key?: string; name?: string } = {}) => {
   const url = new URL(
-    'https://staging.example/api/file-manager/uploads?folder_id=22222222-2222-4222-8222-222222222222&shipment_id=shipment-a&document_type=bill_of_lading&tags=%5B%22بارنامه%22%5D',
+    'https://staging.example/api/file-manager/uploads?folder_id=22222222-2222-4222-8222-222222222222&shipment_id=33333333-3333-4333-8333-333333333333&document_type=bill_of_lading&tags=%5B%22بارنامه%22%5D',
   );
   return new Request(url, {
     method:'POST',
@@ -208,7 +209,10 @@ describe('Cloudflare D1 Telegram File Manager upload', () => {
     expect(db.job?.telegram_file_id).toBe('telegram-file-a');
     expect(db.batches).toHaveLength(1);
     expect(db.batches[0].some((statement) => statement.sql.includes('INSERT INTO customs_os_audit_events'))).toBe(true);
+    expect(db.job?.operation_sections).toBe(JSON.stringify([]));
     expect(db.storedFile?.file_asset_id).toBe(body.fileAssetId);
+    expect(db.storedFile?.operation_sections).toBe(JSON.stringify([]));
+    expect(db.batches[0][0].sql).toContain('operation_sections,is_archived');
   });
 
   it('refuses an ambiguous legacy Telegram destination before sending any bytes', async () => {

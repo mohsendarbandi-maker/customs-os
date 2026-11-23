@@ -19,7 +19,10 @@ describe('per-file customs document lifecycle', () => {
   it('archives File Manager drafts one-by-one and persists each row’s own tags and operation sections', () => {
     expect(manager).toContain('type PendingFileDraft={id:string;file:File;displayName:string;documentType:string;tags:string[];operationSections:string[]}');
     expect(manager).toContain('for (const draft of queue)');
-    expect(manager).toContain('documentName: displayName, tags, destination, idempotencyKey');
+    expect(manager).toContain('uploadTelegramArchivedFile(fileToUpload, {');
+    expect(manager).toContain('destination: destination!,');
+    expect(manager).toContain('uploadCloudflareFileManagerFile(fileToUpload, {');
+    expect(manager).toContain('operationSections: draft.operationSections,');
     expect(manager).toContain('update({ document_type: documentType, tags, operation_sections: draft.operationSections');
   });
   it('stores each file’s section extraction separately and prevents extraction before assignment', () => {
