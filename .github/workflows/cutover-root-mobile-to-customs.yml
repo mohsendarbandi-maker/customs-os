@@ -1,0 +1,209 @@
+name: Controlled root and mobile recovery to customs Worker
+
+on:
+  push:
+    branches:
+      - rebuild/cloudflare-free-first
+    paths:
+      - ".github/workflows/cutover-root-mobile-to-customs.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customs-os-root-mobile-cutover
+  cancel-in-progress: false
+
+jobs:
+  cutover:
+    runs-on: ubuntu-24.04
+    environment:
+      name: Preview – customs-os
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Rebind production custom domains with automatic rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const zoneId = 'cadeaeb6deb10539476b7acf2b3ebf63';
+          const staging = 'customs-os-migration-staging';
+          const target = 'customs';
+          const hosts = ['darbandicommercial.ir', 'mobile.darbandicommercial.ir'];
+          if (!token || !accountId) throw new Error('Cloudflare credentials unavailable; no changes attempted.');
+
+          const api = async (path, method = 'GET', body = undefined) => {
+            const response = await fetch('https://api.cloudflare.com/client/v4' + path, {
+              method,
+              headers: {
+                Authorization: 'Bearer ' + token,
+                Accept: 'application/json',
+                ...(body ? { 'Content-Type': 'application/json' } : {}),
+              },
+              ...(body ? { body: JSON.stringify(body) } : {}),
+              cache: 'no-store',
+              signal: AbortSignal.timeout(20000),
+            });
+            let payload = null;
+            try { payload = await response.json(); } catch {}
+            return { status: response.status, ok: response.ok && payload?.success === true, payload };
+          };
+          const domainList = async () => {
+            const result = await api('/accounts/' + accountId + '/workers/domains');
+            if (!result.ok) throw new Error('Cloudflare domain inventory unavailable; no further action.');
+            return result.payload.result ?? [];
+          };
+          const serviceFor = (domains, hostname) =>
+            domains.find((item) => item.hostname === hostname)?.service ?? null;
+          const attach = (hostname, service) => api('/accounts/' + accountId + '/workers/domains', 'PUT', {
+            hostname, service, enabled: true, zone_id: zoneId,
+          });
+
+          const [settings, deployments, initialDomains] = await Promise.all([
+            api('/accounts/' + accountId + '/workers/scripts/' + target + '/settings'),
+            api('/accounts/' + accountId + '/workers/scripts/' + target + '/deployments'),
+            domainList(),
+          ]);
+          if (!settings.ok || !deployments.ok) throw new Error('Could not verify target Worker; no domain changes attempted.');
+          const bindings = settings.payload.result?.bindings ?? [];
+          if (!bindings.some((binding) => binding.name === 'ASSETS' && binding.type === 'assets')) {
+            throw new Error('Target customs Worker has no ASSETS binding; no domain changes attempted.');
+          }
+          const deployList = deployments.payload.result?.deployments ?? [];
+          const latest = deployList[0];
+          if (!latest || !(latest.versions ?? []).some((version) => Number(version.percentage) === 100)) {
+            throw new Error('Target customs Worker does not have a 100% active deployment; no domain changes attempted.');
+          }
+          for (const hostname of hosts) {
+            if (serviceFor(initialDomains, hostname) !== staging) {
+              throw new Error('Preflight binding changed for ' + hostname + '; expected Staging. No changes attempted.');
+            }
+          }
+          for (const hostname of ['chat.darbandicommercial.ir', 'reminders.darbandicommercial.ir']) {
+            if (serviceFor(initialDomains, hostname) !== target) {
+              throw new Error('Existing customs alias changed for ' + hostname + '; no changes attempted.');
+            }
+          }
+          console.log('Preflight passed:', JSON.stringify({
+            targetWorker: target,
+            assetsBindingVerified: true,
+            latestDeploymentCreatedOn: latest.created_on,
+            activeVersions: latest.versions,
+            originalBindings: hosts.map((hostname) => ({ hostname, service: staging })),
+            aliasesKeptOnCustoms: true,
+          }));
+
+          const changed = [];
+          const smoke = async (hostname) => {
+            const base = 'https://' + hostname;
+            const userAgent = hostname.startsWith('mobile.')
+              ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+              : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36';
+            const page = await fetch(base + '/', {
+              headers: { Accept: 'text/html', 'User-Agent': userAgent },
+              cache: 'no-store',
+              redirect: 'follow',
+              signal: AbortSignal.timeout(20000),
+            });
+            const html = await page.text();
+            const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+\.js)["']/gi)]
+              .map((match) => match[1]).filter((path) => path.startsWith('/assets/')).slice(0, 5);
+            const styles = [...html.matchAll(/<link[^>]+href=["']([^"']+\.css)["']/gi)]
+              .map((match) => match[1]).filter((path) => path.startsWith('/assets/')).slice(0, 5);
+            const assets = await Promise.all([...scripts, ...styles].map(async (path) => {
+              try {
+                const response = await fetch(new URL(path, base), {
+                  cache: 'no-store',
+                  signal: AbortSignal.timeout(15000),
+                });
+                const bytes = (await response.arrayBuffer()).byteLength;
+                const contentType = response.headers.get('content-type') || '';
+                const rightType = path.endsWith('.js')
+                  ? /javascript|ecmascript/i.test(contentType)
+                  : /text\/css/i.test(contentType);
+                return { path, status: response.status, contentType, bytes, ok: response.status === 200 && bytes > 0 && rightType };
+              } catch (error) {
+                return { path, ok: false, error: error instanceof Error ? error.message : 'request failed' };
+              }
+            }));
+            const result = {
+              hostname,
+              status: page.status,
+              finalUrl: page.url,
+              title: (() => {
+                const start = html.toLowerCase().indexOf('<title');
+                const open = start < 0 ? -1 : html.indexOf('>', start);
+                const close = open < 0 ? -1 : html.toLowerCase().indexOf('</title>', open);
+                return open < 0 || close < 0 ? '' : html.slice(open + 1, close).trim().slice(0, 120);
+              })(),
+              buildSignature: page.headers.get('x-customs-os-build'),
+              scriptCount: scripts.length,
+              styleCount: styles.length,
+              assets,
+              ok: page.status === 200 && scripts.length > 0 && styles.length > 0 &&
+                assets.length === scripts.length + styles.length && assets.every((asset) => asset.ok),
+            };
+            console.log('Frontend smoke:', JSON.stringify(result));
+            return result;
+          };
+          const restoreAll = async () => {
+            const results = [];
+            for (const hostname of [...changed].reverse()) {
+              const result = await attach(hostname, staging);
+              const domains = await domainList();
+              const restored = serviceFor(domains, hostname) === staging;
+              results.push({
+                hostname,
+                apiSuccess: result.ok,
+                restored,
+                errors: (result.payload?.errors ?? []).map((item) => ({ code: item.code, message: item.message })),
+              });
+            }
+            console.log('Automatic rollback:', JSON.stringify(results));
+            return results.every((item) => item.restored);
+          };
+
+          try {
+            for (const hostname of hosts) {
+              const response = await attach(hostname, target);
+              if (!response.ok) {
+                console.log('Cloudflare rebind response:', JSON.stringify({
+                  hostname,
+                  status: response.status,
+                  errors: (response.payload?.errors ?? []).map((item) => ({ code: item.code, message: item.message })),
+                }));
+                throw new Error('Cloudflare did not accept in-place reassignment for ' + hostname + '.');
+              }
+              const after = await domainList();
+              if (serviceFor(after, hostname) !== target) {
+                throw new Error('Cloudflare did not confirm the new Worker mapping for ' + hostname + '.');
+              }
+              changed.push(hostname);
+              const result = await smoke(hostname);
+              if (!result.ok) throw new Error('Frontend smoke test failed for ' + hostname + '.');
+            }
+            const finalDomains = await domainList();
+            const finalResult = hosts.map((hostname) => ({
+              hostname,
+              service: serviceFor(finalDomains, hostname),
+            }));
+            const aliases = ['chat.darbandicommercial.ir', 'reminders.darbandicommercial.ir'].map((hostname) => ({
+              hostname,
+              service: serviceFor(finalDomains, hostname),
+            }));
+            if (finalResult.some((item) => item.service !== target) ||
+                aliases.some((item) => item.service !== target)) {
+              throw new Error('Final domain inventory did not match the expected Worker assignments.');
+            }
+            console.log('CUTOVER_SUCCESS:', JSON.stringify({ primaryDomains: finalResult, aliasesUnchanged: aliases }));
+          } catch (error) {
+            const rolledBack = changed.length ? await restoreAll() : true;
+            throw new Error((error instanceof Error ? error.message : String(error)) +
+              (rolledBack ? ' All changed domains are back on Staging.' : ' ROLLBACK INCOMPLETE: inspect rollback output immediately.'));
+          }
+          NODE
