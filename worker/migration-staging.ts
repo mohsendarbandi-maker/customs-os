@@ -1,3 +1,5 @@
+import { isMigrationIntegrityHealthy, isMigrationParityHealthy } from './migration-diagnostics';
+
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
@@ -374,8 +376,13 @@ export default {
             }
           }
 
+          const rowCountParity = isMigrationParityHealthy({
+            missingRequiredTargets,
+            failedCounts,
+            mismatchedTables,
+          });
           return json({
-            ok: missingRequiredTargets === 0 && failedCounts === 0,
+            ok: rowCountParity,
             database: 'customs-os-migration-staging',
             inspection: 'read_only_import_manifest_vs_d1_counts',
             sourceTableCount: results.length,
@@ -386,7 +393,7 @@ export default {
             missingRequiredTargets,
             failedCounts,
             mismatchedTables,
-            rowCountParity: missingRequiredTargets === 0 && failedCounts === 0 && mismatchedTables === 0,
+            rowCountParity,
             tables: results,
           });
         } catch {
@@ -469,8 +476,15 @@ export default {
           customsOfficeReferenceQueryFailed = true;
         }
 
+        const customsOfficeReferenceCount = orphanCustomsOfficeReferences.length;
+        const integrityHealthy = isMigrationIntegrityHealthy({
+          failedChecks,
+          orphanTotal,
+          customsOfficeReferenceQueryFailed,
+          orphanCustomsOfficeReferenceCount: customsOfficeReferenceCount,
+        });
         return json({
-          ok: failedChecks === 0 && !customsOfficeReferenceQueryFailed,
+          ok: integrityHealthy,
           database: 'customs-os-migration-staging',
           inspection: 'read_only_orphan_reference_counts',
           checks: results.length,
