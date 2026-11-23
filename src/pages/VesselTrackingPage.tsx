@@ -4,12 +4,13 @@ import {Link} from 'react-router-dom';
 import {MapContainer,TileLayer,CircleMarker,Popup} from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import {supabase} from '../lib/supabase';
+import {isCloudflareRecoveryHost} from '../lib/recoveryHost';
 
 type Vessel={id:string;name:string;imo_number:string|null;flag_code:string|null;last_latitude:number|null;last_longitude:number|null;last_position_at:string|null;last_position_source:string|null;last_speed_knots:number|null;last_course_deg:number|null};
 const n=(v:any)=>v==null||v===''?'—':new Intl.NumberFormat('fa-IR').format(Number(v));
 export const VesselTrackingPage:React.FC=()=>{
  const [rows,setRows]=useState<Vessel[]>([]),[selected,setSelected]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const load=async()=>{setBusy(true);setError('');try{const {data,error}=await supabase.from('vessels').select('id,name,imo_number,flag_code,last_latitude,last_longitude,last_position_at,last_position_source,last_speed_knots,last_course_deg').order('last_position_at',{ascending:false}).order('name');if(error)throw error;setRows((data||[]) as Vessel[]);if(!selected&&data?.[0])setSelected(data[0].id)}catch(e:any){setError(e?.message||'دریافت اطلاعات کشتی ناموفق بود')}finally{setBusy(false)}};
+ const load=async()=>{setBusy(true);setError('');try{let rows:Vessel[];if(isCloudflareRecoveryHost()){const response=await fetch('/api/maritime/vessels',{headers:{Accept:'application/json'},cache:'no-store',credentials:'same-origin'});const payload=await response.json();if(!response.ok||!Array.isArray(payload?.vessels))throw new Error(payload?.error||'دریافت اطلاعات کشتی ناموفق بود');rows=payload.vessels as Vessel[]}else{const{data,error}=await supabase.from('vessels').select('id,name,imo_number,flag_code,last_latitude,last_longitude,last_position_at,last_position_source,last_speed_knots,last_course_deg').order('last_position_at',{ascending:false}).order('name');if(error)throw error;rows=(data||[]) as Vessel[]}rows.sort((a,b)=>String(b.last_position_at||'').localeCompare(String(a.last_position_at||''))||a.name.localeCompare(b.name));setRows(rows);if(!selected&&rows[0])setSelected(rows[0].id)}catch(e:any){setError(e?.message||'دریافت اطلاعات کشتی ناموفق بود')}finally{setBusy(false)}};
  useEffect(()=>{load()},[]);
  const vessel=useMemo(()=>rows.find(x=>x.id===selected)||rows[0], [rows,selected]);
  const hasPos=Number.isFinite(vessel?.last_latitude)&&Number.isFinite(vessel?.last_longitude);
