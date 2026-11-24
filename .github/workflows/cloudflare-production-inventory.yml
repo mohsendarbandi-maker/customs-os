@@ -22,15 +22,14 @@ jobs:
     timeout-minutes: 5
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_D1_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Inspect production Cloudflare resources without changing them
+      - name: Verify the existing token and inspect production resources
         shell: bash
         run: |
           set -euo pipefail
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            echo "::error::Production Cloudflare credentials are not configured in the GitHub production environment."
+            echo "::error::The existing Cloudflare API token or account ID is missing from the production environment."
             exit 1
           fi
 
@@ -52,20 +51,18 @@ jobs:
             fi
           }
 
-          # Use a dedicated D1 token when configured; the Worker deploy token may not include D1 access.
-          if [ -n "${CLOUDFLARE_D1_API_TOKEN:-}" ]; then
-            d1_token="$CLOUDFLARE_D1_API_TOKEN"
-            d1_token_source="dedicated D1 token"
-          else
-            d1_token="$CLOUDFLARE_API_TOKEN"
-            d1_token_source="Worker deployment token fallback"
+          # Verify that the exact existing GitHub production Secret is active.
+          request token_verify "$api/user/tokens/verify"
+          verify_status="$(cat "$work/token_verify.status")"
+          if [ "$verify_status" != "200" ] || ! jq -e '.success == true and .result.status == "active"' "$work/token_verify.json" >/dev/null; then
+            echo "::error::The existing CLOUDFLARE_API_TOKEN did not pass Cloudflare token verification."
+            jq -c '{success, errors: [.errors[]? | {code, message}], result: {status: .result.status}}' "$work/token_verify.json" || true
+            exit 1
           fi
-          d1_code="$(curl --silent --show-error --max-time 25 -o "$work/d1.json" -w '%{http_code}' \
-            -H "Authorization: Bearer ${d1_token}" -H 'Accept: application/json' \
-            "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database?per_page=100")"
-          printf '%s' "$d1_code" > "$work/d1.status"
-          if [ "$d1_code" = "200" ]; then jq -e '.success == true' "$work/d1.json" >/dev/null; fi
-          echo "D1 inventory auth source: $d1_token_source"
+          echo "Cloudflare API token verification: active"
+
+          # Use the same existing token for D1, Workers and DNS. This workflow is read-only.
+          request d1 "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database?per_page=100"
           request workers "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts"
           request zone "$api/zones?name=darbandicommercial.ir"
 
@@ -76,10 +73,11 @@ jobs:
           {
             echo "## Cloudflare Production Inventory"
             echo
-            echo "Read-only account inspection. No Worker, route, database, DNS, secret, or data was modified."
+            echo "Read-only inspection using the existing CLOUDFLARE_API_TOKEN Secret. No Worker, route, database, DNS, secret, or data was modified."
             echo
             echo "| Resource | HTTP |"
             echo "|---|---:|"
+            echo "| Token verification | $verify_status (active) |"
             echo "| D1 databases | $d1_status |"
             echo "| Workers scripts | $workers_status |"
             echo "| darbandicommercial.ir zone | $zone_status |"
@@ -91,15 +89,24 @@ jobs:
             jq -r '.result[] | "- **\(.name)** — \(.uuid) — jurisdiction: \(.jurisdiction // "unspecified")"' \
               "$work/d1.json" >> "$GITHUB_STEP_SUMMARY"
             prod_count="$(jq '[.result[] | select(.name == "customs-os-production")] | length' "$work/d1.json")"
-            staging_count="$(jq '[.result[] | select(.name == "customs-os-migration-staging")] | length' "$work/d1.json")"
+            migration_count="$(jq '[.result[] | select(.name == "customs-os-migration-staging")] | length' "$work/d1.json")"
             echo >> "$GITHUB_STEP_SUMMARY"
             echo "- Production D1 database exists: **$([ "$prod_count" = "1" ] && echo yes || echo no)**" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Previous migration database exists: **$([ "$staging_count" = "1" ] && echo yes || echo no)**" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Existing migration D1 database exists: **$([ "$migration_count" = "1" ] && echo yes || echo no)**" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "::error::The production deployment token cannot read the D1 database inventory (HTTP $d1_status)."
-            echo "Cloudflare response (sanitized):" >> "$GITHUB_STEP_SUMMARY"
-            jq -c '{success, errors: [.errors[]? | {code, message}]}' "$work/d1.json" | tee -a "$GITHUB_STEP_SUMMARY" || true
-            echo "::error::Production Cloudflare credentials do not have D1 read permission. A D1 Edit-scoped token is required before provisioning production data."
+            d1_error_code="$(jq -r '.errors[0].code // "unknown"' "$work/d1.json")"
+            d1_error_message="$(jq -r '.errors[0].message // "No error message returned"' "$work/d1.json")"
+            {
+              echo "### D1 access diagnostic"
+              echo
+              echo "- Cloudflare error code: **$d1_error_code**"
+              echo "- Cloudflare message: **$d1_error_message**"
+            } >> "$GITHUB_STEP_SUMMARY"
+            if [ "$d1_error_code" = "10000" ]; then
+              echo "::error::Cloudflare confirms the token is active, but it lacks the D1 permission required to list databases. Add D1 Read (or D1 Write) to this same API token."
+            else
+              echo "::error::Cloudflare rejected the D1 inventory request (HTTP $d1_status, code $d1_error_code)."
+            fi
             exit 1
           fi
 
@@ -112,7 +119,7 @@ jobs:
               exit 1
             fi
           else
-            echo "::error::The production deployment token cannot read the Workers script inventory (HTTP $workers_status)."
+            echo "::error::The existing API token cannot read the Workers script inventory (HTTP $workers_status)."
             jq -c '{success, errors: [.errors[]? | {code, message}]}' "$work/workers.json" >> "$GITHUB_STEP_SUMMARY" || true
             exit 1
           fi
@@ -121,7 +128,7 @@ jobs:
             jq -r '.result[] | "- Zone: **" + .name + "** — status: **" + .status + "**"' \
               "$work/zone.json" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "::error::The production deployment token cannot inspect the primary zone (HTTP $zone_status)."
+            echo "::error::The existing API token cannot inspect the primary zone (HTTP $zone_status)."
             jq -c '{success, errors: [.errors[]? | {code, message}]}' "$work/zone.json" >> "$GITHUB_STEP_SUMMARY" || true
             exit 1
           fi
