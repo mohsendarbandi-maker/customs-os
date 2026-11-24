@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { FileStack, Folder, FileText, BookOpen, Ship, MessageCircle, ClipboardList, Settings, RefreshCw, ShieldCheck, Database } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { StagingShipmentsPanel } from '../components/StagingShipmentsPanel';
 
 const tools = [
   { to: '/pdf-studio', title: 'PDF Studio', description: 'بازکردن و پردازش اسناد PDF در مرورگر', icon: FileStack },
@@ -76,13 +77,15 @@ export const StagingWorkspacePage: React.FC = () => {
           <div>
             <div className="text-xs font-black tracking-widest app-muted">CUSTOMS OS · RECOVERY WORKSPACE</div>
             <h1 className="mt-2 text-2xl md:text-3xl font-black">فضای کاری Customs OS</h1>
-            <p className="mt-2 text-sm app-muted">ورود مستقل برقرار است؛ بازیابی اطلاعات عملیاتی در مرحله بعد انجام می‌شود.</p>
+            <p className="mt-2 text-sm app-muted">ورود مستقل Cloudflare فعال است؛ ثبت و مدیریت محموله‌ها اکنون مستقیماً با D1 انجام می‌شود.</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="rounded-xl border app-border px-3 py-2 text-sm">{profile?.full_name || 'مدیر سامانه'}</div>
             <button onClick={() => void signOut()} className="rounded-xl border app-border px-3 py-2 text-sm font-bold">خروج</button>
           </div>
         </header>
+
+        <StagingShipmentsPanel />
 
         <section className="rounded-2xl border p-4 md:p-5" style={{borderColor:'var(--border)',background:'var(--surface)'}}>
           <div className="flex items-start gap-3">
@@ -95,11 +98,11 @@ export const StagingWorkspacePage: React.FC = () => {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl p-3" style={{background:'var(--bg)'}}>
               <div className="flex items-center gap-2 text-sm font-bold"><Database size={16}/> پایگاه داده جدید</div>
-              <div className="mt-1 text-xs app-muted">D1 متصل؛ فعلاً فقط اطلاعات ورود و وضعیت مهاجرت</div>
+              <div className="mt-1 text-xs app-muted">D1 متصل؛ اطلاعات مشتریان، پرونده‌ها و ۲۲ محموله موجود</div>
             </div>
             <div className="rounded-xl p-3" style={{background:'var(--bg)'}}>
               <div className="flex items-center gap-2 text-sm font-bold"><RefreshCw size={16}/> انتقال اطلاعات</div>
-              <div className="mt-1 text-xs app-muted">در انتظار واردسازی نسخه‌های پشتیبان و آرشیوها</div>
+              <div className="mt-1 text-xs app-muted">فهرست، ثبت و ویرایش محموله‌ها از مسیر Worker API</div>
             </div>
           </div>
           {profile?.role === 'owner' && (
