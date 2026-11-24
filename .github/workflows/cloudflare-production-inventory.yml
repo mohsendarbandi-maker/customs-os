@@ -99,7 +99,7 @@ jobs:
             jq -r '.result[] | "- **\(.name)** — \(.uuid) — jurisdiction: \(.jurisdiction // "unspecified")"' \
               "$work/d1.json" >> "$GITHUB_STEP_SUMMARY"
             echo "D1_DATABASE_INVENTORY_BEGIN"
-            jq -r '.result[] | "D1_DATABASE name=\(.name) uuid=\(.uuid) jurisdiction=\(.jurisdiction // \"unspecified\")"' "$work/d1.json"
+            jq -r '.result[] | "D1_DATABASE name=\(.name) uuid=\(.uuid) jurisdiction=\(.jurisdiction // "unspecified")"' "$work/d1.json"
             echo "D1_DATABASE_INVENTORY_END"
             prod_count="$(jq '[.result[] | select(.name == "customs-os-production")] | length' "$work/d1.json")"
             migration_count="$(jq '[.result[] | select(.name == "customs-os-migration-staging")] | length' "$work/d1.json")"
