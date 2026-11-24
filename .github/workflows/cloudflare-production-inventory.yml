@@ -60,6 +60,10 @@ jobs:
             exit 1
           fi
           echo "Cloudflare API token verification: active"
+          echo "### Verified token permission groups (names only)" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '[.result.policies[]?.permission_groups[]?.name] | unique | sort | .[] | "- " + .' \
+            "$work/token_verify.json" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
 
           # Use the same existing token for D1, Workers and DNS. This workflow is read-only.
           request d1 "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database?per_page=100"
