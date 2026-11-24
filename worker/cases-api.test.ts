@@ -42,7 +42,7 @@ const caseRow: CaseRecord = {
   client_name: 'بازرگانی الف', customs_office_id: null, registration_order_no: 'RO-1', proforma_no: null,
   cargo_description: 'خوراک دام', cargo_count: 20, cargo_count_unit: 'تن', net_weight_kg: 20000,
   gross_weight_kg: 20200, warehouse_receipt_no: 'WH-1405-01', warehouse_receipt_date: '2026-11-02',
-  release_status: 'pending', valuation_status: 'in_progress', unloading_date: '2026-11-03',
+  release_status: 'pending', valuation_status: 'calculated', unloading_date: '2026-11-03',
   vessel_type: 'foreign', customs_regime: 'definitive_import',
   display_name: 'محموله الف', created_at: '2026-11-01', updated_at: null,
   shipment_count: 1, latest_shipment_id: 'shipment-a', shipment_display_name: 'محموله الف',
