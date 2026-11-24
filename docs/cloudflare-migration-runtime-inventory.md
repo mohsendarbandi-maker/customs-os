@@ -154,3 +154,20 @@ The existing `worker/shipments-api.ts` is not a substitute for these workflows: 
 - Do not change `/operations` to use D1 until every operation it invokes has a tested D1 equivalent.
 
 This page-level dependency inventory is based on the actual TypeScript source files on `main`; it is not evidence that the D1 APIs are wired into those pages.
+
+
+## Case API read-projection implementation (PR317)
+
+The D1 case read API now selects and returns the following fields that were verified in the captured staging schema and were previously omitted from `CaseRecord`:
+
+- `warehouse_receipt_no`
+- `warehouse_receipt_date`
+- `release_status`
+- `valuation_status`
+- `unloading_date`
+- `vessel_type`
+- `customs_regime`
+
+Both collection and detail queries share the same explicit projection. Existing organization-scoped predicates remain unchanged. Tests were extended to assert these values are present in list and detail responses. This is a read-only additive API change; PATCH/POST/DELETE remain rejected with HTTP 405. The existing React page has not yet been switched to this API, and no production or staging deployment was performed for this code change.
+
+CI for the latest commit is still running at the time of this documentation update; do not treat the added tests as passed until the corresponding workflow run completes successfully.
