@@ -8,6 +8,7 @@ on:
       - "scripts/audit-cloudflare-dependencies.mjs"
       - "src/**"
       - "worker/**"
+      - "docs/**"
       - ".github/workflows/cloudflare-runtime-inventory.yml"
   pull_request:
     branches:
@@ -62,7 +63,7 @@ jobs:
             '',
             'Static scan limitations: dynamic names and indirect calls may be missed; this is not runtime traffic proof.',
           ];
-          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\\n'));
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n'));
           console.log(JSON.stringify({
             mode: report.mode,
             sourceFilesScanned: report.sourceFilesScanned,
