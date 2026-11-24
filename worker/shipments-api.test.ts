@@ -127,6 +127,9 @@ class FakeD1 implements ShipmentsD1Database {
     if (sql.includes('SELECT COUNT(*) AS total FROM shipments')) {
       return { total: this.shipments.filter(row => row.organization_id === values[0]).length } as T;
     }
+    if (sql.startsWith('SELECT COUNT(*) AS total FROM registration_orders')) {
+      return { total: this.orders.filter(row => row.organization_id === values[0]).length } as T;
+    }
     if (sql.startsWith('SELECT id FROM clients WHERE id=? AND organization_id=?')) {
       const row = this.clients.find(item => item.id === values[0] && item.organization_id === values[1]);
       return row ? { id: row.id } as T : null;
@@ -179,6 +182,17 @@ class FakeD1 implements ShipmentsD1Database {
   }
   all<T>(sql: string, values: unknown[]): { results: T[] } {
     this.queries.push({ sql, values });
+    if (sql.startsWith('SELECT id,client_id,order_number,case_id,is_closed,bank_name')) {
+      const organization = String(values[0]);
+      const limit = Number(values[1]);
+      const offset = Number(values[2]);
+      const results = this.orders
+        .filter(row => row.organization_id === organization)
+        .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+        .slice(offset, offset + limit)
+        .map(row => ({ ...row }));
+      return { results: results as T[] };
+    }
     if (sql.startsWith('SELECT s.id,s.organization_id')) {
       const organization = String(values[0]);
       const results = this.shipments
@@ -242,6 +256,25 @@ class FakeD1 implements ShipmentsD1Database {
   }
 }
 describe('Cloudflare D1 shipments API', () => {
+  it('lists only the current organization registration orders without external allocation tables', async () => {
+    const db = new FakeD1();
+    db.orders = [
+      { id: 'order-a', organization_id: organizationId, client_id: 'client-a', order_number: 'ORD-1',
+        case_id: 'case-a', is_closed: 0, bank_name: 'Bank A', bank_branch: 'Main',
+        bank_branch_code: '001', payment_instrument_code: 'LC-1', created_at: '2026-01-01' },
+      { id: 'order-private', organization_id: 'another-org', client_id: 'client-private', order_number: 'PRIVATE',
+        case_id: null, is_closed: 0, bank_name: null, bank_branch: null,
+        bank_branch_code: null, payment_instrument_code: null, created_at: '2026-01-02' },
+    ];
+    const url = urlFor('/api/shipments/registration-orders?limit=10&offset=0');
+    const response = await handleShipmentsApi(request('GET', url.pathname + url.search), db, url, profile);
+    const body = await response.json() as { ok: boolean; total: number; items: Array<{ id: string; is_closed: boolean }> };
+    expect(response.status).toBe(200);
+    expect(body.total).toBe(1);
+    expect(body.items).toEqual([expect.objectContaining({ id: 'order-a', is_closed: false })]);
+    expect(db.queries.every(query => query.values.includes(organizationId))).toBe(true);
+    expect(db.queries.every(query => !query.sql.includes('registration_order_external_allocations'))).toBe(true);
+  });
   it('blocks inactive and unsupported roles before any query', async () => {
     const db = new FakeD1();
     const url = urlFor('/api/shipments');
