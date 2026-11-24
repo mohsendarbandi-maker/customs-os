@@ -1,0 +1,684 @@
+name: Customs OS Cloudflare Free Staging
+
+on:
+  push:
+    branches:
+      - rebuild/cloudflare-free-first
+    paths:
+      - "src/**"
+      - "worker/**"
+      - "test/**"
+      - "scripts/**"
+      - "package-lock.json"
+      - "public/**"
+      - "worker/migration-staging.ts"
+      - "test/registration-order-d1-migration.test.ts"
+      - "scripts/verify-registration-order-d1-migration.py"
+      - "worker/registration-orders-api.test.ts"
+      - "worker/registration-orders-api.ts"
+      - "test/cloudflare-migration-foundation.test.ts"
+      - "wrangler.migration-staging.jsonc"
+      - "supabase/migrations-cloudflare/**"
+      - "package.json"
+      - "vite.config.ts"
+      - ".github/workflows/deploy-cloudflare-staging.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customs-os-cloudflare-free-staging
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    # Use the existing preview-scoped secrets, never the production environment.
+    environment:
+      name: Preview – customs-os
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      VITE_SUPABASE_URL: https://bjngfgiecvihofemptub.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_pIh0yF6SQcQ-IAa_FkbjWA_qTSm83Sr
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert isolated Staging target before any D1 write or deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const config = JSON.parse(readFileSync('wrangler.migration-staging.jsonc', 'utf8'));
+          const databases = config.d1_databases ?? [];
+          const database = databases.find((item) => item.binding === 'MIGRATION_DB');
+          const checks = {
+            workerName: config.name === 'customs-os-migration-staging',
+            workersDevOnly: config.workers_dev === true,
+            previewUrlsDisabled: config.preview_urls === false,
+            noCustomRoutes: !Array.isArray(config.routes) || config.routes.length === 0,
+            stagingEnvironment: config.vars?.MIGRATION_ENVIRONMENT === 'staging',
+            productionImportDisabled: config.vars?.PRODUCTION_DATA_IMPORTED === 'false',
+            assetsBinding: config.assets?.binding === 'ASSETS' && config.assets?.directory === './dist',
+            singleD1Binding: databases.length === 1 && database?.binding === 'MIGRATION_DB',
+            databaseName: database?.database_name === 'customs-os-migration-staging',
+            databaseId: String(database?.database_id ?? '').toLowerCase() === 'b938fa3c-4995-4d27-aeda-f72f2d484a3c',
+            noAdditionalStorageOrServiceBindings: !config.r2_buckets && !config.kv_namespaces &&
+              !config.queues && !config.ai && !config.vectorize && !config.services,
+          };
+          console.log(JSON.stringify({
+            worker: config.name,
+            database: database?.database_name,
+            checks,
+          }, null, 2));
+          if (!Object.values(checks).every(Boolean)) {
+            throw new Error('Refusing staging deployment: Worker/D1 isolation or free-first binding checks failed.');
+          }
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Unit tests
+        run: npm test
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Audit remaining Supabase runtime dependencies (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/audit-cloudflare-dependencies.mjs > "$RUNNER_TEMP/customs-os-supabase-runtime-audit.json"
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/customs-os-supabase-runtime-audit.json', 'utf8'));
+          const lines = [
+            '## Supabase runtime dependency inventory',
+            '',
+            'Read-only static scan; no network access, environment values, or credentials were read.',
+            '',
+            `- Source files scanned: **${report.sourceFilesScanned}**`,
+            `- Recognized callsites: **${report.callsiteCount}**`,
+            '',
+            '| Dependency category | Distinct literal references |',
+            '|---|---:|',
+            ...Object.entries(report.counts).map(([name, count]) => `| ${name} | ${count} |`),
+            '',
+            ...Object.entries(report.categories).flatMap(([name, values]) => [
+              `### ${name}`,
+              '',
+              ...(values.length ? values.map((value) => `- \`${value}\``) : ['- none']),
+              '',
+            ]),
+            '### Files with runtime dependencies',
+            '',
+            ...report.perFile.map((item) => `- \`${item.file}\`: ${Object.keys(item.dependencies).join(', ')}`),
+            '',
+            'This inventory is static evidence only; dynamic names and indirect imports may require additional tracing.',
+            '',
+          ];
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n'));
+          console.log(JSON.stringify({
+            sourceFilesScanned: report.sourceFilesScanned,
+            callsiteCount: report.callsiteCount,
+            counts: report.counts,
+            categories: report.categories,
+            perFileCount: report.perFile.length,
+            networkAccess: report.networkAccess,
+            environmentVariablesRead: report.environmentVariablesRead,
+            credentialValuesPrinted: report.credentialValuesPrinted,
+          }, null, 2));
+          NODE
+      - name: Build application
+        run: npm run build
+      - name: Preserve built static app for direct Cloudflare asset upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: customs-os-cloudflare-staging-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 3
+      - name: Read-only staging Worker and D1 runtime diagnostics
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url='https://customs-os-migration-staging.mohsen-darbandi.workers.dev'
+          output_dir="$(mktemp -d)"
+          trap 'rm -rf "$output_dir"' EXIT
+          declare -A endpoints=(
+            [health]='/health'
+            [health_db]='/health/db'
+            [schema]='/migration/schema'
+            [files]='/migration/files'
+            [integrity]='/migration/integrity'
+            [status]='/migration/status'
+          )
+          for name in health health_db schema files integrity status; do
+            http_status="$(curl --silent --show-error --max-time 35 --output "$output_dir/$name.json" --write-out '%{http_code}' "$base_url${endpoints[$name]}" || true)"
+            printf '%s' "$http_status" > "$output_dir/$name.status"
+          done
+          export OUTPUT_DIR="$output_dir"
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const dir = process.env.OUTPUT_DIR;
+          const read = (name) => {
+            try { return JSON.parse(readFileSync(`${dir}/${name}.json`, 'utf8')); }
+            catch { return null; }
+          };
+          const status = (name) => {
+            try { return readFileSync(`${dir}/${name}.status`, 'utf8') || 'unavailable'; }
+            catch { return 'unavailable'; }
+          };
+          const health = read('health');
+          const dbHealth = read('health_db');
+          const schema = read('schema');
+          const files = read('files');
+          const integrity = read('integrity');
+          const migration = read('status');
+          const summary = {
+            workerUrl: 'workers.dev staging hostname',
+            endpoints: Object.fromEntries(['health','health_db','schema','files','integrity','status'].map((name) => {
+              const payload = read(name);
+              return [name, { httpStatus: status(name), ok: payload?.ok === true, error: payload?.error || null }];
+            })),
+            health: health ? { service: health.service, environment: health.environment, database: health.database, productionTraffic: health.productionTraffic, productionDataImported: health.productionDataImported } : null,
+            database: schema ? {
+              tableCount: schema.tableCount, totalRows: schema.totalRows, countFailures: schema.countFailures,
+              tables: Array.isArray(schema.tables) ? schema.tables.map((item) => ({ name: item.name, rowCount: item.rowCount, countVerified: item.countVerified })) : [],
+            } : null,
+            migration: migration ? { manifest: migration.manifest ? { stage: migration.manifest.stage, schema_version: migration.manifest.schema_version } : null, tableStates: migration.tableStates, totals: migration.migrationTotals, archivedFunctions: migration.archivedFunctions, gates: migration.gates } : null,
+            files: files ? { fileManagerFiles: files.fileManagerFiles, customsDocuments: files.customsDocuments, shipmentDocuments: files.shipmentDocuments, storageBackendBreakdown: files.storageBackendBreakdown, storagePathBreakdown: files.storagePathBreakdown, binaryVerification: files.binaryVerification } : null,
+            integrity: integrity ? { ok: integrity.ok, checks: integrity.checks, failedChecks: integrity.failedChecks, orphanTotal: integrity.orphanTotal, checksWithOrphans: integrity.checksWithOrphans, orphanCustomsOfficeDistinctIds: integrity.orphanCustomsOfficeDistinctIds, customsOfficeReferenceQueryFailed: integrity.customsOfficeReferenceQueryFailed } : null,
+            databaseHealth: dbHealth ? { ok: dbHealth.ok, operationalDataImported: dbHealth.operationalDataImported, manifest: dbHealth.manifest ? { stage: dbHealth.manifest.stage, schema_version: dbHealth.manifest.schema_version } : null, importStatus: dbHealth.operationalImport?.status || null, expectedRecords: dbHealth.operationalImport?.expected_records ?? null } : null,
+          };
+          const rendered = JSON.stringify(summary, null, 2);
+          console.log(rendered);
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n### Read-only staging Worker and D1 diagnostics\n\n\`\`\`json\n${rendered}\n\`\`\`\n`);
+          NODE
+      - name: Read-only audit of live Cloudflare Worker routes and domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const zoneId = 'cadeaeb6deb10539476b7acf2b3ebf63';
+          if (!token || !accountId) {
+            console.log(JSON.stringify({ audit: 'unavailable', reason: 'Cloudflare API token or account ID is not configured' }));
+            throw new Error('Cloudflare route inventory is unavailable; refusing to proceed with Staging writes or deployment.');
+          }
+
+          const endpoints = [
+            {
+              name: 'zone_worker_routes',
+              url: `https://api.cloudflare.com/client/v4/zones/${zoneId}/workers/routes`,
+              fields: ['id', 'pattern', 'script', 'zone_id'],
+            },
+            {
+              name: 'account_worker_domains',
+              url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/domains`,
+              fields: ['id', 'hostname', 'service', 'environment', 'zone_name', 'zone_id', 'enabled'],
+            },
+            {
+              name: 'account_worker_scripts',
+              url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts`,
+              fields: ['id', 'modified_on', 'created_on', 'usage_model'],
+            },
+          ];
+
+          const report = [];
+          for (const endpoint of endpoints) {
+            try {
+              const response = await fetch(endpoint.url, {
+                method: 'GET',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  Accept: 'application/json',
+                },
+                signal: AbortSignal.timeout(15000),
+                cache: 'no-store',
+              });
+              let payload = null;
+              try { payload = await response.json(); } catch {}
+              if (!response.ok || payload?.success !== true) {
+                report.push({
+                  resource: endpoint.name,
+                  httpStatus: response.status,
+                  success: false,
+                  errorCodes: Array.isArray(payload?.errors)
+                    ? payload.errors.map((item) => Number(item?.code)).filter(Number.isFinite).slice(0, 10)
+                    : [],
+                });
+                continue;
+              }
+              const items = Array.isArray(payload.result) ? payload.result : [];
+              report.push({
+                resource: endpoint.name,
+                httpStatus: response.status,
+                success: true,
+                count: items.length,
+                items: items.map((item) => Object.fromEntries(
+                  endpoint.fields.filter((field) => item?.[field] !== undefined)
+                    .map((field) => [field, item[field]]),
+                )),
+              });
+            } catch (error) {
+              report.push({
+                resource: endpoint.name,
+                success: false,
+                error: error instanceof Error && error.name === 'TimeoutError' ? 'TIMEOUT' : 'REQUEST_FAILED',
+              });
+            }
+          }
+
+          console.log('Cloudflare read-only route/domain audit (no configuration changes):');
+          console.log(JSON.stringify(report, null, 2));
+
+          const routeReport = report.find((item) => item.resource === 'zone_worker_routes');
+          const domainReport = report.find((item) => item.resource === 'account_worker_domains');
+          if (!routeReport?.success || !domainReport?.success) {
+            throw new Error('Cloudflare route/domain inventory is incomplete; refusing Staging D1 writes and deployment.');
+          }
+          const stagingWorker = 'customs-os-migration-staging';
+          const productionHosts = new Set(['darbandicommercial.ir', 'mobile.darbandicommercial.ir']);
+          const unsafeDomains = (domainReport.items || []).filter((item) =>
+            productionHosts.has(String(item.hostname || '').toLowerCase()) &&
+            item.service === stagingWorker &&
+            item.enabled !== false
+          );
+          const unsafeRoutes = (routeReport.items || []).filter((item) => {
+            const patternHost = String(item.pattern || '').split('/')[0].toLowerCase();
+            const targetsProductionHost = productionHosts.has(patternHost) ||
+              (patternHost === '*.darbandicommercial.ir' &&
+                [...productionHosts].some((hostname) => hostname.endsWith('.darbandicommercial.ir')));
+            return item.script === stagingWorker && targetsProductionHost;
+          });
+          if (unsafeDomains.length || unsafeRoutes.length) {
+            console.log(JSON.stringify({
+              stagingProductionDomains: unsafeDomains.map(({hostname, service, environment, enabled}) =>
+                ({hostname, service, environment, enabled})),
+              stagingProductionRoutes: unsafeRoutes.map(({pattern, script}) => ({pattern, script})),
+            }, null, 2));
+            throw new Error('Production hostnames still target the Staging Worker; refusing D1 writes and deployment.');
+          }
+          NODE
+      - name: Apply versioned migrations to the isolated Staging D1
+        env:
+          # Prefer a dedicated D1-scoped token; fall back to the existing Staging deploy token.
+          # The selected token must have Account D1 Write permission; the migration command fails closed if absent.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::No Cloudflare API token is available for the isolated Staging D1 migration."
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const config = JSON.parse(readFileSync('wrangler.migration-staging.jsonc', 'utf8'));
+          const dbs = config.d1_databases ?? [];
+          const normalizeIdentity = (value) => String(value ?? '').normalize('NFKC')
+            .replace(/[\u200B-\u200D\uFEFF]/g, '')
+            .trim();
+          const db = dbs.find((item) => normalizeIdentity(item.binding) === 'MIGRATION_DB');
+          if (
+            normalizeIdentity(config.name) !== 'customs-os-migration-staging' ||
+            normalizeIdentity(db?.database_name) !== 'customs-os-migration-staging'
+          ) {
+            throw new Error('Refusing D1 migration: Worker, binding or database name did not match the isolated Staging target.');
+          }
+          const infoText = execFileSync(
+            'npx',
+            ['wrangler@4', 'd1', 'info', 'customs-os-migration-staging', '--json', '--config', 'wrangler.migration-staging.jsonc'],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
+          );
+          const remoteInfo = JSON.parse(infoText);
+          const remoteDatabaseId = normalizeIdentity(
+            remoteInfo.uuid ?? remoteInfo.database_id ?? remoteInfo.databaseId ?? remoteInfo.id,
+          ).toLowerCase();
+          const configuredDatabaseId = normalizeIdentity(db?.database_id).toLowerCase();
+          const identityChecks = {
+            worker: normalizeIdentity(config.name) === 'customs-os-migration-staging',
+            binding: normalizeIdentity(db?.binding) === 'MIGRATION_DB',
+            databaseName: normalizeIdentity(db?.database_name) === 'customs-os-migration-staging',
+            configuredDatabaseIdIsUuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(configuredDatabaseId),
+            liveDatabaseIdMatchesConfig: Boolean(remoteDatabaseId) && remoteDatabaseId === configuredDatabaseId,
+          };
+          console.log('Staging D1 live identity:', JSON.stringify({
+            checks: identityChecks,
+            configuredDatabaseId,
+            liveDatabaseId: remoteDatabaseId,
+            infoFields: Object.keys(remoteInfo).sort(),
+          }));
+          if (!Object.values(identityChecks).every(Boolean)) {
+            throw new Error('Refusing D1 migration: live Cloudflare D1 identity did not match the named Staging config.');
+          }
+          console.log('Verified exact live Cloudflare Staging D1 identity; Production identifiers are not accepted.');
+          NODE
+          npx wrangler@4 d1 migrations list customs-os-migration-staging --remote --config wrangler.migration-staging.jsonc
+          npx wrangler@4 d1 migrations apply customs-os-migration-staging --remote --config wrangler.migration-staging.jsonc
+
+      - name: Deploy isolated Cloudflare staging Worker and static assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::error::Preview environment secrets CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID are missing."
+            exit 1
+          fi
+          npx wrangler@4 deploy --config wrangler.migration-staging.jsonc
+      - name: Verify deployed staging D1 through read-only Worker diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="https://customs-os-migration-staging.mohsen-darbandi.workers.dev"
+          work_dir="$(mktemp -d)"
+          trap 'rm -rf "$work_dir"' EXIT
+
+          fetch_json() {
+            local name="$1"
+            local path="$2"
+            local file="$work_dir/$name.json"
+            local code_file="$work_dir/$name.http"
+            local http_code="000"
+
+            if http_code="$(curl --silent --show-error --retry 2 --retry-all-errors --retry-delay 2 --max-time 45 \
+              --output "$file" --write-out '%{http_code}' "$base_url$path")"; then
+              :
+            else
+              http_code="000"
+            fi
+            printf '%s' "$http_code" > "$code_file"
+
+            if [[ "$http_code" != "200" ]]; then
+              echo "::warning title=Staging diagnostic unavailable::$path returned HTTP $http_code"
+              return 0
+            fi
+            if ! jq -e 'type == "object"' "$file" >/dev/null; then
+              echo "::warning title=Staging diagnostic invalid::$path did not return a JSON object"
+              printf 'invalid' > "$code_file"
+            fi
+          }
+
+          fetch_json health /health
+          fetch_json health_db /health/db
+          fetch_json schema /migration/schema
+          fetch_json parity /migration/parity
+          fetch_json integrity /migration/integrity
+          fetch_json files /migration/files
+          fetch_json metadata_keys /migration/file-metadata-keys
+          fetch_json status /migration/status
+
+          if [[ "$(cat "$work_dir/health.http")" != "200" ]] || ! jq -e '.ok == true and .environment == "staging" and .productionTraffic == false and .productionDataImported == false' "$work_dir/health.json" >/dev/null 2>&1; then
+            echo "::error::Refusing diagnostics: the target Worker did not positively identify itself as isolated Staging."
+            exit 1
+          fi
+
+          if [[ "$(cat "$work_dir/health_db.http")" != "200" ]] || ! jq -e '.ok == true and .database == "customs-os-migration-staging" and .operationalDataImported == true' "$work_dir/health_db.json" >/dev/null 2>&1; then
+            echo "::error::Refusing diagnostics: the target database is not the expected imported Staging D1."
+            exit 1
+          fi
+
+          if [[ "$(cat "$work_dir/schema.http")" != "200" ]] || ! jq -e '.ok == true' "$work_dir/schema.json" >/dev/null 2>&1; then
+            echo "::error::Staging D1 schema inventory could not be verified through the Worker."
+            exit 1
+          fi
+
+          {
+            echo "## Cloudflare Staging — read-only D1 diagnostics"
+            echo
+            echo "Worker: $base_url"
+            echo
+            echo "### Database schema and row counts"
+            jq -r '"Tables: \(.tableCount), total rows: \(.totalRows), count failures: \(.countFailures)"' "$work_dir/schema.json"
+            jq -r '.tables[] | "- " + .name + ": " + (if .rowCount == null then "unverified" else (.rowCount | tostring) end)' "$work_dir/schema.json"
+            echo
+            echo "### D1 schema snapshot (DDL only; no row contents)"
+            jq -r '.tables[] | "#### " + .name + "\\n\\n```sql\\n" + (.schemaSql // "-- schema unavailable") + "\\n```\\n"' "$work_dir/schema.json"
+            echo
+            echo "### Import parity"
+            if [[ -f "$work_dir/parity.json" ]]; then
+              jq -r '"HTTP result: \(.ok), manifest tables: \(.sourceTableCount), expected rows: \(.expectedTotal), actual rows: \(.actualTotal), missing required targets: \(.missingRequiredTargets), mismatched tables: \(.mismatchedTables), failed counts: \(.failedCounts)"' "$work_dir/parity.json"
+            else
+              echo "Unavailable; see workflow warning."
+            fi
+            echo
+            echo "### Referential integrity"
+            if [[ -f "$work_dir/integrity.json" ]]; then
+              jq -r '"HTTP result: \(.ok), orphan references: \(.orphanTotal), failed checks: \(.failedChecks), customs-office reference query failed: \(.customsOfficeReferenceQueryFailed)"' "$work_dir/integrity.json"
+              jq -r '.results[] | select((.orphanCount // 0) > 0 or .verified == false) | "- " + .name + ": " + (if .orphanCount == null then "unverified" else (.orphanCount | tostring) end)' "$work_dir/integrity.json"
+              jq -r '.orphanCustomsOfficeReferences[]? | "- Missing office reference: " + .officeId + " via " + .table + " (" + (.referenceCount | tostring) + ")"' "$work_dir/integrity.json"
+            else
+              echo "Unavailable; see workflow warning."
+            fi
+            echo
+            echo "### File archive metadata (not binary verification)"
+            if [[ -f "$work_dir/files.json" ]]; then
+              jq -r '"File Manager files: \(.fileManagerFiles.total // "unknown"), customs documents: \(.customsDocuments.total // "unknown"), shipment documents: \(.shipmentDocuments.total // "unknown"), binary verification: \(.binaryVerification)"' "$work_dir/files.json"
+              jq -r '"Customs document backends: " + ((.storageBackendBreakdown.customsDocuments // []) | map("\(.backend)=\(.total)") | join(", "))' "$work_dir/files.json"
+              jq -r '"Shipment document backends: " + ((.storageBackendBreakdown.shipmentDocuments // []) | map("\(.backend)=\(.total)") | join(", "))' "$work_dir/files.json"
+              jq -r '"File Manager path classes: " + ((.storagePathBreakdown.fileManagerFiles // []) | map("\(.path_type)=\(.total)") | join(", "))' "$work_dir/files.json"
+            else
+              echo "Unavailable; see workflow warning."
+            fi
+            echo
+            echo "### File metadata key inventory"
+            if [[ -f "$work_dir/metadata_keys.json" ]]; then
+              jq -r '"File records: \(.fileRecords), records with non-empty metadata: \(.recordsWithNonEmptyMetadata), distinct metadata keys: \(.keyCount)"' "$work_dir/metadata_keys.json"
+              jq -r '.candidateIdentifierKeys[] | "- " + .metadata_key + ": " + (.record_count | tostring)' "$work_dir/metadata_keys.json"
+              jq -r '"Telegram file-ID status: \(.telegramFileIdAvailability)"' "$work_dir/metadata_keys.json"
+            else
+              echo "Unavailable; see workflow warning."
+            fi
+            echo
+            echo "### Migration gates"
+            if [[ -f "$work_dir/status.json" ]]; then
+              jq -r '.gates' "$work_dir/status.json"
+              jq -r '"Archived function sources: \(.archivedFunctions // "unknown")"' "$work_dir/status.json"
+            else
+              echo "Unavailable; see workflow warning."
+            fi
+            echo
+            echo "Note: metadata counts and HTTP responses do not establish binary recoverability or operational API parity."
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$(cat "$work_dir/parity.http")" != "200" ]] || ! jq -e '.ok == true' "$work_dir/parity.json" >/dev/null 2>&1; then
+            echo "::error::Staging import parity gate failed; deployment is not considered verified."
+            exit 1
+          fi
+          if [[ "$(cat "$work_dir/integrity.http")" != "200" ]] || ! jq -e '.ok == true' "$work_dir/integrity.json" >/dev/null 2>&1; then
+            echo "::error::Staging referential-integrity gate failed; inspect relation-level details in the step summary."
+            exit 1
+          fi
+
+      - name: Probe one Telegram archive binary (bounded, in-memory, read-only)
+        continue-on-error: true
+        env:
+          CUSTOMS_ADMIN_PASSWORD: ${{ secrets.CUSTOMS_ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="https://customs-os-migration-staging.mohsen-darbandi.workers.dev"
+          work_dir="$(mktemp -d)"
+          trap 'rm -rf "$work_dir"' EXIT
+          if [ -z "${CUSTOMS_ADMIN_PASSWORD:-}" ]; then
+            echo "::warning::Telegram binary probe skipped: CUSTOMS_ADMIN_PASSWORD is not present in this GitHub Preview environment."
+            exit 0
+          fi
+
+          jq -n --arg email "admin@darbandicommercial.ir" --arg password "$CUSTOMS_ADMIN_PASSWORD" \
+            '{email:$email,password:$password}' > "$work_dir/login.json"
+          login_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/login-response.json" \
+            --cookie-jar "$work_dir/cookies.txt" --write-out '%{http_code}' \
+            --header "Origin: $base_url" --header 'Content-Type: application/json' \
+            --data-binary @"$work_dir/login.json" "$base_url/api/auth/login" || true)"
+          rm -f "$work_dir/login.json"
+          if [ "$login_code" != "200" ] || ! jq -e '.authenticated == true' "$work_dir/login-response.json" >/dev/null 2>&1; then
+            echo "::warning::Telegram binary probe skipped: staging admin session could not be established from the GitHub Preview environment."
+            exit 0
+          fi
+
+          probe_code="$(curl --silent --show-error --max-time 45 --output "$work_dir/probe.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' \
+            --request POST --header "Origin: $base_url" \
+            "$base_url/api/admin/migration/telegram-probe" || true)"
+          if [ -f "$work_dir/probe.json" ] && jq -e 'type == "object"' "$work_dir/probe.json" >/dev/null 2>&1; then
+            {
+              echo
+              echo "### Telegram archive binary probe"
+              jq -r 'if .ok == true then
+                "Result: " + .binaryVerification +
+                "; sample bytes: " + (.downloadedBytes | tostring) +
+                "; source size matches: " + (.sourceSizeMatches | tostring) +
+                "; Telegram size matches: " + (.telegramSizeMatches | tostring) +
+                "; bytes stored: " + (.stored | tostring) +
+                "; content exposed: " + (.contentExposed | tostring)
+              else
+                "Result: " + (.error // "unverified") +
+                "; binary verification: " + (.binaryVerification // "not_performed") +
+                "; bytes stored: " + ((.stored // false) | tostring) +
+                "; content exposed: " + ((.contentExposed // false) | tostring)
+              end' "$work_dir/probe.json"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Telegram binary probe returned HTTP $probe_code without a valid diagnostic JSON response."
+          fi
+
+      - name: List staging Worker secret names only (never values)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler@4 secret list --config wrangler.migration-staging.jsonc --format json | jq -r '.[].name' | sort
+
+  # Independent priority lane: it deploys only the current D1-compatible API
+  # and static app. It intentionally does not apply migrations or alter D1 rows.
+  priority-login-shipments:
+    environment:
+      name: Preview – customs-os
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CUSTOMS_ADMIN_PASSWORD: ${{ secrets.CUSTOMS_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert Staging-only Worker and D1 configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const config = JSON.parse(readFileSync('wrangler.migration-staging.jsonc', 'utf8'));
+          const databases = config.d1_databases ?? [];
+          const db = databases.find(item => item.binding === 'MIGRATION_DB');
+          const checks = {
+            worker: config.name === 'customs-os-migration-staging',
+            workersDevOnly: config.workers_dev === true,
+            previewUrlsDisabled: config.preview_urls === false,
+            noCustomRoutes: !Array.isArray(config.routes) || config.routes.length === 0,
+            staging: config.vars?.MIGRATION_ENVIRONMENT === 'staging',
+            productionDataDisabled: config.vars?.PRODUCTION_DATA_IMPORTED === 'false',
+            assets: config.assets?.binding === 'ASSETS' && config.assets?.directory === './dist',
+            onlyExpectedD1: databases.length === 1 && db?.database_name === 'customs-os-migration-staging' &&
+              String(db?.database_id ?? '').toLowerCase() === 'b938fa3c-4995-4d27-aeda-f72f2d484a3c',
+            noPaidBindings: !config.r2_buckets && !config.kv_namespaces && !config.queues &&
+              !config.ai && !config.vectorize && !config.services,
+          };
+          console.log(JSON.stringify({ worker: config.name, database: db?.database_name, checks }, null, 2));
+          if (!Object.values(checks).every(Boolean)) throw new Error('Staging isolation assertion failed.');
+          NODE
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::error::Preview Cloudflare Worker deployment credentials are missing."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Unit tests
+        run: npm test
+      - name: TypeScript
+        run: npm run typecheck
+      - name: ESLint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+
+      - name: Deploy Staging Worker without D1 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler@4 deploy --config wrangler.migration-staging.jsonc
+
+      - name: Verify live Staging D1 API and authorization boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://customs-os-migration-staging.mohsen-darbandi.workers.dev'
+          work_dir="$(mktemp -d)"
+          trap 'rm -rf "$work_dir"' EXIT
+
+          curl --silent --show-error --fail --max-time 30 "$base/health" -o "$work_dir/health.json"
+          jq -e '.ok == true and .environment == "staging" and .productionTraffic == false and .productionDataImported == false and .authenticationConfigured == true' "$work_dir/health.json" >/dev/null
+
+          curl --silent --show-error --fail --max-time 30 "$base/health/db" -o "$work_dir/db.json"
+          jq -e '.ok == true and .database == "customs-os-migration-staging" and .operationalDataImported == true' "$work_dir/db.json" >/dev/null
+
+          # Confirm the deployed SPA shell and its actual compiled JavaScript asset,
+          # rather than treating a healthy Worker API as proof that the website loads.
+          page_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/login.html" --write-out '%{http_code}' "$base/login")"
+          test "$page_code" = "200"
+          grep -qi '<title>Customs OS' "$work_dir/login.html"
+          asset_path="$(grep -oE 'src="/assets/[^"]+\.js"' "$work_dir/login.html" | head -1 | cut -d'"' -f2)"
+          test -n "$asset_path"
+          case "$asset_path" in /assets/*) ;; *) echo "::error::Unexpected SPA asset path"; exit 1 ;; esac
+          asset_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/app.js" --write-out '%{http_code}' "$base$asset_path")"
+          test "$asset_code" = "200"
+          test -s "$work_dir/app.js"
+          echo "SPA login shell and compiled JavaScript asset returned HTTP 200."
+
+          session_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/session.json" --write-out '%{http_code}' "$base/api/auth/session")"
+          test "$session_code" = "200"
+          jq -e '.authenticated == false' "$work_dir/session.json" >/dev/null
+
+          shipments_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/unauthenticated.json" --write-out '%{http_code}' "$base/api/shipments")"
+          test "$shipments_code" = "401"
+          jq -e '.error == "UNAUTHORIZED"' "$work_dir/unauthenticated.json" >/dev/null
+
+          if [ -z "${CUSTOMS_ADMIN_PASSWORD:-}" ]; then
+            echo "::warning::The Worker confirms its admin password is configured. Real credential login, cookie restoration and the authenticated 22-row list remain unverified because this GitHub Preview environment has no separate test credential; no secret value was read, printed, or changed."
+            exit 0
+          fi
+
+          jq -n --arg password "$CUSTOMS_ADMIN_PASSWORD" \
+            '{email:"admin@darbandicommercial.ir",password:$password}' > "$work_dir/login.json"
+          login_code="$(curl --silent --show-error --max-time 25 --output "$work_dir/login-response.json" \
+            --cookie-jar "$work_dir/cookies.txt" --write-out '%{http_code}' \
+            --header "Origin: $base" --header 'Content-Type: application/json' \
+            --data-binary @"$work_dir/login.json" "$base/api/auth/login")"
+          rm -f "$work_dir/login.json"
+          test "$login_code" = "200"
+          jq -e '.authenticated == true and .profile.role == "owner"' "$work_dir/login-response.json" >/dev/null
+
+          restore_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/restored-session.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/auth/session")"
+          test "$restore_code" = "200"
+          jq -e '.authenticated == true and .profile.organization_id == "ad95fdf1-e0e2-439b-92b0-c20ab07cacdd"' "$work_dir/restored-session.json" >/dev/null
+
+          list_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/shipments.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/shipments?limit=200&offset=0")"
+          test "$list_code" = "200"
+          jq -e '.ok == true and .total == 22 and (.items | length) == 22' "$work_dir/shipments.json" >/dev/null
+          echo "Login, cookie restoration and 22 existing D1 shipments verified. No data rows were created or modified by this smoke test."
+

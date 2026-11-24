@@ -10,6 +10,7 @@ import {
   Home, CalendarDays, RefreshCw
 } from 'lucide-react';
 import { useAuth, UserRole } from '../context/AuthContext';
+import { isCloudflareRecoveryHost } from '../lib/recoveryHost';
 import { useAppearance } from '../context/AppearanceContext';
 import { CustomsLogo } from './CustomsLogo';
 import { AIWorkspace } from './AIWorkspace';
@@ -164,6 +165,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const isChatRoute = location.pathname.startsWith('/chat');
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
+  const isRecoveryStaging = isCloudflareRecoveryHost();
   const { theme, setTheme, comfort, setComfort, sidebarCollapsed, setSidebarCollapsed } = useAppearance();
   const [pwaUpdateAvailable, setPwaUpdateAvailable] = useState(false);
   const [pwaUpdating, setPwaUpdating] = useState(false);
@@ -793,7 +795,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             </div>
             <div className="flex-1" />
             <div className="flex items-center gap-2">
-              {profile && <OperationalAlertsDropdown refreshKey={location.pathname} />}
+              {!isRecoveryStaging && profile && <OperationalAlertsDropdown refreshKey={location.pathname} />}
               {pwaUpdateAvailable && (
                 <button
                   type="button"
@@ -806,7 +808,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                   <RefreshCw size={17} className={pwaUpdating ? 'animate-spin' : ''} />
                 </button>
               )}
-              <CloudSyncStatus online={online} enabled={Boolean(profile)} />
+              {!isRecoveryStaging && <CloudSyncStatus online={online} enabled={Boolean(profile)} />}
               <button className="theme-cycle-btn" title="تغییر حالت نمایش" onClick={cycleTheme}>
                 {comfort === 'reading' ? (
                   <BookOpen size={16} />
@@ -938,7 +940,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           <Layers3 size={22} strokeWidth={1.75} /><span>بیشتر</span>
         </button>
       </nav>, document.body)}
-      {!location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />}
+      {!isRecoveryStaging && !location.pathname.startsWith('/chat') && <AIWorkspace pageContext={location.pathname + location.search} />}
     </div>
   );
 };

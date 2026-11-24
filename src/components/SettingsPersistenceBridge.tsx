@@ -1,5 +1,6 @@
 import React,{useEffect,useRef}from'react';
 import{supabase}from'../lib/supabase';
+import{isCloudflareRecoveryHost}from'../lib/recoveryHost';
 import{useAuth}from'../context/AuthContext';
 import{readUserSettings,writeUserSettings}from'../lib/userSettingsStorage';
 
@@ -12,6 +13,13 @@ export const SettingsPersistenceBridge:React.FC=()=>{
   let cancelled=false;
   ready.current=false;
   lastSerialized.current='';
+
+  if(isCloudflareRecoveryHost()){
+   const local=readUserSettings<Record<string,unknown>>(user?.id||'cloudflare-staging',{});
+   window.dispatchEvent(new CustomEvent('customs-settings-loaded',{detail:local}));
+   ready.current=true;
+   return;
+  }
 
   const load=async()=>{
    if(!user?.id)return;

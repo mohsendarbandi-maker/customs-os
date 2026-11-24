@@ -1,7 +1,8 @@
 import React,{useEffect,useMemo,useState}from'react';
 import{CheckCircle2,FileText,Lock,Unlock,Plus,RefreshCw,Save}from'lucide-react';
 import{Link}from'react-router-dom';
-import{supabase}from'../lib/supabase';
+import { cloudflareClientsApi } from '../lib/cloudflareClients';
+import { cloudflareRegistrationOrdersApi } from '../lib/cloudflareRegistrationOrders';
 import{buildExternalRegistrationOrderAllocationPayload,calculateRegistrationOrderCapacity}from'../lib/registrationOrderAllocations';
 import{useAuth}from'../context/AuthContext';
 
@@ -67,27 +68,32 @@ export const RegistrationOrdersPage:React.FC=()=>{
   if(!profile?.organization_id)return;
   setBusy(true);setError('');
   try{
-   const[{data:o,error:oe},{data:c,error:ce},{data:legacy,error:le},{data:r,error:re}]=await Promise.all([
-    supabase.from('registration_orders').select('id,organization_id,case_id,client_id,order_number,order_date,status,tariff_code,quantity,quantity_unit,value_amount,currency,notes,net_weight_kg,gross_weight_kg,bank_name,bank_branch,bank_branch_code,payment_instrument_code,is_closed,closed_at').eq('organization_id',profile.organization_id).order('created_at',{ascending:false}),
-    supabase.from('clients').select('id,name').eq('organization_id',profile.organization_id).order('name'),
-    supabase.from('cases').select('id,registration_order_no,net_weight_kg,gross_weight_kg').eq('organization_id',profile.organization_id),
-    supabase.from('registration_order_reconciliation').select('*').eq('organization_id',profile.organization_id)
+   const [ordersResponse,clientsResponse]=await Promise.all([
+    cloudflareRegistrationOrdersApi.list({limit:100}),
+    cloudflareClientsApi.list({limit:100})
    ]);
-   if(oe||ce||le||re)throw oe||ce||le||re;
-   setOrders((o||[]) as RegistrationOrder[]);setClients((c||[]) as Client[]);setCases((legacy||[]) as CaseLegacy[]);setReconciliation((r||[]) as Reconciliation[]);
-   const selectedOrder=(o||[]).find(x=>x.id===selected);
-   if(selectedOrder&&!editing)selectOrder(selectedOrder,(legacy||[]) as CaseLegacy[]);
-   if(!selectedOrder&&!selected&&o?.length&&!editing){selectOrder(o[0] as RegistrationOrder,(legacy||[]) as CaseLegacy[])}
+   const o=ordersResponse.items as RegistrationOrder[];
+   const legacy=ordersResponse.cases as CaseLegacy[];
+   setOrders(o);
+   setClients(clientsResponse.items.map(client=>({id:client.id,name:client.name})));
+   setCases(legacy);
+   setReconciliation(ordersResponse.reconciliation as Reconciliation[]);
+   const selectedOrder=o.find(x=>x.id===selected);
+   if(selectedOrder&&!editing)selectOrder(selectedOrder,legacy);
+   if(!selectedOrder&&!selected&&o.length&&!editing)selectOrder(o[0],legacy);
   }catch(e:any){setError(e?.message||'بارگذاری ثبت سفارش‌ها ناموفق بود')}
   finally{setBusy(false)}
  };
  const loadExternalAllocations=async()=>{
   if(!selected||!profile?.organization_id){setExternalAllocations([]);return}
-  const{data,error:e}=await supabase.from('registration_order_external_allocations')
-   .select('id,organization_id,registration_order_id,recipient_company,destination_customs,allocation_reference,status,net_weight_kg,gross_weight_kg,value_amount,currency,notes,created_at,updated_at')
-   .eq('organization_id',profile.organization_id).eq('registration_order_id',selected).order('created_at',{ascending:false});
-  if(e){setAllocationError(e.message||'بارگذاری سهم‌های واگذارشده ناموفق بود');return}
-  setExternalAllocations((data||[]) as ExternalAllocation[]);
+  try{
+   const result=await cloudflareRegistrationOrdersApi.listExternalAllocations(selected);
+   setExternalAllocations(result.items as ExternalAllocation[]);
+   setAllocationError('');
+  }catch(e:any){
+   setExternalAllocations([]);
+   setAllocationError(e?.message||'بارگذاری سهم‌های واگذارشده ناموفق بود');
+  }
  };
  useEffect(()=>{void loadExternalAllocations();const selectedCurrency=orders.find(order=>order.id===selected)?.currency||'USD';setAllocationForm({...blankExternalAllocation,currency:selectedCurrency});setAllocationEditingId('');setAllocationError('')},[selected,profile?.organization_id,orders]);
  const caseFor=(order:RegistrationOrder,allCases=cases)=>allCases.find(c=>c.id===order.case_id)||allCases.find(c=>c.registration_order_no===order.order_number);
@@ -117,14 +123,12 @@ export const RegistrationOrdersPage:React.FC=()=>{
   if(expectedNet!==null&&expectedNet<0||expectedGross!==null&&expectedGross<0||value!==null&&value<0)return setError('وزن و ارزش نمی‌توانند منفی باشند.');
   setBusy(true);setError('');setMessage('');
   try{
-   const payload={organization_id:profile.organization_id,client_id:form.client_id,order_number:form.order_number.trim(),order_date:form.order_date||null,status:form.status,tariff_code:form.tariff_code.trim()||null,quantity:number(form.quantity),quantity_unit:form.quantity_unit.trim()||null,net_weight_kg:expectedNet,gross_weight_kg:expectedGross,value_amount:value,currency:value===null?null:form.currency,bank_name:form.bank_name.trim()||null,bank_branch:form.bank_branch.trim()||null,bank_branch_code:form.bank_branch_code.trim()||null,payment_instrument_code:form.payment_instrument_code.trim()||null,notes:form.notes.trim()||null};
+   const payload={client_id:form.client_id,order_number:form.order_number.trim(),order_date:form.order_date||null,status:form.status as 'pending'|'received'|'verified'|'used'|'cancelled',tariff_code:form.tariff_code.trim()||null,quantity:number(form.quantity),quantity_unit:form.quantity_unit.trim()||null,net_weight_kg:expectedNet,gross_weight_kg:expectedGross,value_amount:value,currency:value===null?null:form.currency,bank_name:form.bank_name.trim()||null,bank_branch:form.bank_branch.trim()||null,bank_branch_code:form.bank_branch_code.trim()||null,payment_instrument_code:form.payment_instrument_code.trim()||null,notes:form.notes.trim()||null};
    if(selected){
-    const{error:e}=await supabase.from('registration_orders').update(payload).eq('id',selected).eq('organization_id',profile.organization_id);
-    if(e)throw e;
+    await cloudflareRegistrationOrdersApi.update(selected,payload);
    }else{
-    const{data,error:e}=await supabase.from('registration_orders').insert(payload).select('id').single();
-    if(e)throw e;
-    setSelected(data.id);
+    const created=await cloudflareRegistrationOrdersApi.create(payload);
+    setSelected(created.order.id);
    }
    setEditing(false);setMessage('اطلاعات ثبت سفارش ذخیره شد. مشخصات بانکی و ابزار پرداخت از این پس برای تمام محموله‌های متصل به همین ثبت سفارش مشترک خواهد بود.');
    await load();
@@ -135,8 +139,7 @@ export const RegistrationOrdersPage:React.FC=()=>{
   if(!current)return;
   setBusy(true);setError('');setMessage('');
   try{
-   const{error:e}=await supabase.from('registration_orders').update({is_closed:closed,...(closed?{status:'used'}:{})}).eq('id',current.id).eq('organization_id',profile?.organization_id);
-   if(e)throw e;
+   await cloudflareRegistrationOrdersApi.setClosed(current.id,closed);
    setMessage(closed?'ثبت سفارش نهایی شد؛ افزودن یا تغییر محموله برای این ثبت سفارش قفل شد.':'ثبت سفارش باز شد و امکان اتصال یا اصلاح محموله‌ها دوباره فعال است.');
    await load();
   }catch(e:any){setError(e?.message||'نهایی‌سازی ثبت سفارش انجام نشد')}
@@ -173,21 +176,12 @@ export const RegistrationOrdersPage:React.FC=()=>{
   if(validation.ok===false)return setAllocationError(validation.error);
   setAllocationBusy(true);setAllocationError('');setError('');setMessage('');
   try{
-   const payload={
-    ...validation.payload,
-    organization_id:profile.organization_id,
-    registration_order_id:current.id
-   };
+   const payload=validation.payload;
    if(allocationEditingId){
-    const{data,error:e}=await supabase.from('registration_order_external_allocations').update(payload)
-     .eq('id',allocationEditingId).eq('organization_id',profile.organization_id).select('id').maybeSingle();
-    if(e)throw e;
-    if(!data?.id)throw new Error('سهم واگذارشده به‌روزرسانی نشد؛ دسترسی یا وضعیت ثبت سفارش را بررسی کنید.');
-    setMessage(validation.payload.status==='cancelled'?'سهم واگذارشده لغو شد و ظرفیت آن آزاد شد.':'سهم واگذارشده به‌روزرسانی شد؛ سقف وزن و ارزش دوباره کنترل شد.');
+    await cloudflareRegistrationOrdersApi.updateExternalAllocation(current.id,allocationEditingId,payload);
+    setMessage(payload.status==='cancelled'?'سهم واگذارشده لغو شد و ظرفیت آن آزاد شد.':'سهم واگذارشده به‌روزرسانی شد؛ سقف وزن و ارزش دوباره کنترل شد.');
    }else{
-    const{data,error:e}=await supabase.from('registration_order_external_allocations').insert(payload).select('id').single();
-    if(e)throw e;
-    if(!data?.id)throw new Error('سهم واگذارشده ثبت نشد.');
+    await cloudflareRegistrationOrdersApi.createExternalAllocation(current.id,payload);
     setMessage('سهم خارج از دسترس ثبت شد و وزن و ارزش آن از مانده ثبت سفارش کسر شد.');
    }
    resetExternalAllocation();
@@ -199,10 +193,17 @@ export const RegistrationOrdersPage:React.FC=()=>{
   if(!current||current.is_closed)return setAllocationError('ابتدا ثبت سفارش را باز کنید.');
   setAllocationBusy(true);setAllocationError('');
   try{
-   const{data,error:e}=await supabase.from('registration_order_external_allocations')
-    .update({status:'cancelled'}).eq('id',allocation.id).eq('organization_id',profile?.organization_id).select('id').maybeSingle();
-   if(e)throw e;
-   if(!data?.id)throw new Error('لغو سهم تأیید نشد.');
+   await cloudflareRegistrationOrdersApi.updateExternalAllocation(current.id,allocation.id,{
+    recipient_company:allocation.recipient_company,
+    destination_customs:allocation.destination_customs,
+    allocation_reference:allocation.allocation_reference,
+    status:'cancelled',
+    net_weight_kg:allocation.net_weight_kg,
+    gross_weight_kg:allocation.gross_weight_kg,
+    value_amount:allocation.value_amount,
+    currency:allocation.currency,
+    notes:allocation.notes
+   });
    setMessage('سهم واگذارشده لغو شد؛ وزن و ارزش آن دوباره به مانده قابل تخصیص برگشت.');
    await Promise.all([loadExternalAllocations(),load()]);
   }catch(e:any){setAllocationError(e?.message||'لغو سهم واگذارشده ناموفق بود')}

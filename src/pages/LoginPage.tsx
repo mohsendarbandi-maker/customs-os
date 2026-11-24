@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { isCloudflareRecoveryHost } from '../lib/recoveryHost';
 import { useAuth } from '../context/AuthContext';
 import { CustomsLogo } from '../components/CustomsLogo';
 import { readReminderLanguage, type ReminderLanguage } from '../features/reminders/reminderI18n';
@@ -12,7 +13,7 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const isRemindersHost = typeof window !== 'undefined' && window.location.hostname.toLowerCase() === 'reminders.darbandicommercial.ir';
   const [remindersLanguage] = useState<ReminderLanguage>(() => readReminderLanguage());
-  const { user, needsOnboarding, signOut } = useAuth();
+  const { user, needsOnboarding, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,12 +35,31 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-
-      if (signInError) throw signInError;
+      if (isCloudflareRecoveryHost()) {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: { 'content-type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        });
+        const result = await response.json().catch(() => ({})) as { error?: string };
+        if (!response.ok) {
+          const messages: Record<string, string> = {
+            INVALID_CREDENTIALS: 'ایمیل یا رمز عبور صحیح نیست.',
+            RATE_LIMITED: 'تعداد تلاش‌ها زیاد است. چند دقیقه بعد دوباره امتحان کنید.',
+            AUTH_NOT_CONFIGURED: 'ورود مدیر هنوز پیکربندی نشده است.',
+          };
+          throw new Error(messages[result.error || ''] || 'ورود انجام نشد. دوباره تلاش کنید.');
+        }
+        await refreshProfile();
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (signInError) throw signInError;
+      }
     } catch (err: unknown) {
       setError(
         err instanceof Error

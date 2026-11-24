@@ -8,6 +8,7 @@ import React, {
   useMemo,
 } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { isCloudflareRecoveryHost } from '../lib/recoveryHost';
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
 import { authSessionStorage } from '../lib/authStorage';
 import { readOfflineQueryCache, saveOfflineQueryCache } from '../lib/offlineQueue';
@@ -274,6 +275,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
    * Supabase request there can cause initialization/session races.
    */
   useEffect(() => {
+    if (isCloudflareRecoveryHost()) {
+      let active = true;
+      const loadCloudflareSession = async () => {
+        try {
+          const response = await fetch('/api/auth/session', { credentials: 'same-origin', cache: 'no-store' });
+          if (!response.ok) throw new Error('سرویس ورود موقتاً در دسترس نیست.');
+          const data = await response.json() as {
+            authenticated?: boolean;
+            user?: { id: string; email: string; full_name: string };
+            profile?: UserProfile;
+          };
+          if (!active) return;
+          if (data.authenticated && data.user && data.profile) {
+            const stagingUser = {
+              id: data.user.id,
+              email: data.user.email,
+              app_metadata: { provider: 'cloudflare', providers: ['cloudflare'] },
+              user_metadata: { full_name: data.user.full_name },
+              aud: 'authenticated',
+              created_at: new Date().toISOString(),
+              role: 'authenticated',
+            } as unknown as User;
+            const stagingSession = {
+              access_token: 'cloudflare-http-only-session',
+              token_type: 'bearer',
+              expires_in: 12 * 60 * 60,
+              expires_at: Math.floor(Date.now() / 1000) + 12 * 60 * 60,
+              refresh_token: 'cloudflare-http-only-session',
+              user: stagingUser,
+            } as Session;
+            setUser(stagingUser);
+            setSession(stagingSession);
+            setProfile(data.profile);
+            setNeedsOnboarding(false);
+            setError(null);
+          } else {
+            setUser(null);
+            setSession(null);
+            setProfile(null);
+            setNeedsOnboarding(false);
+            setError(null);
+          }
+        } catch (cause) {
+          if (!active) return;
+          setUser(null);
+          setSession(null);
+          setProfile(null);
+          setNeedsOnboarding(false);
+          setError(cause instanceof Error ? cause.message : 'خطا در بازیابی نشست');
+        } finally {
+          if (active) setLoading(false);
+        }
+      };
+      void loadCloudflareSession();
+      return () => { active = false; };
+    }
+
     let active = true;
     let subscription: { unsubscribe: () => void } | null = null;
 
@@ -545,8 +603,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const signOut = useCallback(async () => {
     currentFetchId.current++;
 
-    if (isMounted.current) {
-      setLoading(true);
+    if (isMounted.current) setLoading(true);
+
+    if (isCloudflareRecoveryHost()) {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', cache: 'no-store' });
+      } catch (err) {
+        console.warn('[Auth] Cloudflare staging logout failed:', err);
+      } finally {
+        clearLocalAuthStorage();
+        if (isMounted.current) {
+          setUser(null); setSession(null); setProfile(null);
+          setNeedsOnboarding(false); setError(null); setLoading(false);
+        }
+      }
+      return;
     }
 
     try {
@@ -578,6 +649,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const refreshProfile = useCallback(async () => {
     const currentUserId = user?.id;
+
+    if (isCloudflareRecoveryHost()) {
+      setLoading(true);
+      try {
+        const response = await fetch('/api/auth/session', { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok) throw new Error('سرویس ورود موقتاً در دسترس نیست.');
+        const data = await response.json() as {
+          authenticated?: boolean;
+          user?: { id: string; email: string; full_name: string };
+          profile?: UserProfile;
+        };
+        if (data.authenticated && data.user && data.profile) {
+          const stagingUser = {
+            id: data.user.id, email: data.user.email,
+            app_metadata: { provider: 'cloudflare', providers: ['cloudflare'] },
+            user_metadata: { full_name: data.user.full_name },
+            aud: 'authenticated', created_at: new Date().toISOString(), role: 'authenticated',
+          } as unknown as User;
+          const stagingSession = {
+            access_token: 'cloudflare-http-only-session', token_type: 'bearer',
+            expires_in: 12 * 60 * 60, expires_at: Math.floor(Date.now() / 1000) + 12 * 60 * 60,
+            refresh_token: 'cloudflare-http-only-session', user: stagingUser,
+          } as Session;
+          setUser(stagingUser); setSession(stagingSession); setProfile(data.profile);
+          setNeedsOnboarding(false); setError(null);
+        } else {
+          setUser(null); setSession(null); setProfile(null); setNeedsOnboarding(false); setError(null);
+        }
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'خطا در بازیابی نشست');
+      } finally { setLoading(false); }
+      return;
+    }
 
     setLoading(true);
     setError(null);

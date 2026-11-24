@@ -1,0 +1,27 @@
+{
+  "source_project": "bjngfgiecvihofemptub",
+  "exported_at": "2026-11-22",
+  "records": [
+    {
+      "config_key": "legacy_anon_public_key",
+      "config_value": "[omitted]",
+      "config_type": "public_client_key",
+      "source_project_ref": "bjngfgiecvihofemptub",
+      "exported_at": "2026-11-22T19:25:45.503Z"
+    },
+    {
+      "config_key": "project_url",
+      "config_value": "[omitted]",
+      "config_type": "public_api_url",
+      "source_project_ref": "bjngfgiecvihofemptub",
+      "exported_at": "2026-11-22T19:25:45.503Z"
+    },
+    {
+      "config_key": "publishable_key",
+      "config_value": "[omitted]",
+      "config_type": "public_client_key",
+      "source_project_ref": "bjngfgiecvihofemptub",
+      "exported_at": "2026-11-22T19:25:45.503Z"
+    }
+  ]
+}

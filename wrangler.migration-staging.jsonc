@@ -9,6 +9,23 @@
     "MIGRATION_ENVIRONMENT": "staging",
     "PRODUCTION_DATA_IMPORTED": "false"
   },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*",
+      "/health",
+      "/health/*",
+      "/migration/*",
+      "/functions/*",
+      "/auth/*",
+      "/rest/*",
+      "/storage/*",
+      "/realtime/*"
+    ],
+    "html_handling": "none",
+    "not_found_handling": "single-page-application"
+  },
   "d1_databases": [
     {
       "binding": "MIGRATION_DB",
@@ -16,5 +33,25 @@
       "database_id": "b938fa3c-4995-4d27-aeda-f72f2d484a3c",
       "migrations_dir": "supabase/migrations-cloudflare"
     }
-  ]
+  ],
+  "secrets": {
+    "required": [
+      "CUSTOMS_ADMIN_PASSWORD",
+      "GEMINI_API_KEY",
+      "TELEGRAM_BOT_TOKEN"
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
+  }
 }

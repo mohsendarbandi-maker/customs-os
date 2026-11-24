@@ -1,7 +1,31 @@
 import { describe, expect, it } from 'vitest';
+import { isMigrationIntegrityHealthy, isMigrationParityHealthy } from '../worker/migration-diagnostics';
 import { readFileSync } from 'node:fs';
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+
+describe('Cloudflare migration diagnostic result semantics', () => {
+  it('marks parity unhealthy when required targets are missing, row counts fail, or counts mismatch', () => {
+    expect(isMigrationParityHealthy({ missingRequiredTargets: 0, failedCounts: 0, mismatchedTables: 0 })).toBe(true);
+    expect(isMigrationParityHealthy({ missingRequiredTargets: 1, failedCounts: 0, mismatchedTables: 0 })).toBe(false);
+    expect(isMigrationParityHealthy({ missingRequiredTargets: 0, failedCounts: 1, mismatchedTables: 0 })).toBe(false);
+    expect(isMigrationParityHealthy({ missingRequiredTargets: 0, failedCounts: 0, mismatchedTables: 1 })).toBe(false);
+  });
+
+  it('marks integrity unhealthy when any orphan reference or failed check exists', () => {
+    const healthy = {
+      failedChecks: 0,
+      orphanTotal: 0,
+      customsOfficeReferenceQueryFailed: false,
+      orphanCustomsOfficeReferenceCount: 0,
+    };
+    expect(isMigrationIntegrityHealthy(healthy)).toBe(true);
+    expect(isMigrationIntegrityHealthy({ ...healthy, orphanTotal: 1 })).toBe(false);
+    expect(isMigrationIntegrityHealthy({ ...healthy, failedChecks: 1 })).toBe(false);
+    expect(isMigrationIntegrityHealthy({ ...healthy, customsOfficeReferenceQueryFailed: true })).toBe(false);
+    expect(isMigrationIntegrityHealthy({ ...healthy, orphanCustomsOfficeReferenceCount: 1 })).toBe(false);
+  });
+});
 
 describe('Cloudflare migration foundation', () => {
   it('keeps staging Worker isolated from production routes and Supabase secrets', () => {
@@ -11,6 +35,13 @@ describe('Cloudflare migration foundation', () => {
     expect(config).toContain('"preview_urls": false');
     expect(config).not.toContain('"routes"');
     expect(config).not.toContain('SUPABASE_SERVICE_ROLE_KEY');
+  });
+
+  it('serves the existing Vite/PWA build from isolated staging assets', () => {
+    const config = read('../wrangler.migration-staging.jsonc');
+    expect(config).toContain('"directory": "./dist"');
+    expect(config).toContain('"binding": "ASSETS"');
+    expect(config).toContain('"not_found_handling": "single-page-application"');
   });
 
   it('uses only resumable migration metadata tables in the initial D1 schema', () => {
@@ -23,14 +54,138 @@ describe('Cloudflare migration foundation', () => {
     expect(sql).not.toMatch(/\b(shipments|profiles|auth\.users|storage\.objects)\b/i);
   });
 
-  it('does not report production data as imported in staging health responses', () => {
+  it('exposes a read-only D1 schema and row-count inventory', () => {
     const worker = read('../worker/migration-staging.ts');
-    expect(worker).toContain('productionTraffic: false');
-    expect(worker).toContain('dataImported: false');
-    expect(worker).toContain('productionDataImported: false');
+    expect(worker).toContain("url.pathname === '/migration/schema'");
+    expect(worker).toContain("SELECT name, sql FROM sqlite_master WHERE type = 'table'");
+    expect(worker).toContain('SELECT COUNT(*) AS row_count FROM ');
+    expect(worker).toContain('schemaSql: table.sql');
+    expect(worker).toContain('inspection: \'read_only_sqlite_master_and_count\'');
+    expect(worker).toContain("request.method !== 'GET' && request.method !== 'HEAD'");
+    expect(worker).toContain("SCHEMA_INSPECTION_UNAVAILABLE");
   });
 
-  it('documents the source outage, enabled-but-empty R2 bucket, and free-tier capacity blocker', () => {
+  it('shows the recovery workspace only on the dedicated migration worker host', () => {
+    const app = read('../src/App.tsx');
+    const host = read('../src/lib/recoveryHost.ts');
+    expect(app).toContain('isCloudflareStagingHost() ? <StagingWorkspacePage/> : <DesktopHomePage/>');
+    expect(app).not.toContain('isCloudflareRecoveryHost() ? <StagingWorkspacePage/>');
+    expect(host).toContain("hostname.startsWith('customs-os-migration-staging.')");
+    expect(host).toContain("isCloudflareRecoveryHost = (): boolean => isCloudflareStagingHost()");
+    expect(host).not.toContain("hostname === 'darbandicommercial.ir'");
+    expect(host).not.toContain("hostname === 'mobile.darbandicommercial.ir'");
+  });
+
+  it('blocks unported application routes on the isolated workers.dev staging host', () => {
+    const app = read('../src/App.tsx');
+    const host = read('../src/lib/recoveryHost.ts');
+    expect(host).toContain("startsWith('customs-os-migration-staging.')");
+    expect(host).toContain("endsWith('.workers.dev')");
+    expect(app).toContain('isCloudflareStagingHost() && location.pathname !==');
+    expect(app).toContain('<StagingRouteBoundary><Routes>');
+    expect(app).toContain('</Routes></StagingRouteBoundary>');
+  });
+
+  it('compares the migration import manifest with actual D1 table row counts', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("url.pathname === '/migration/parity'");
+    expect(worker).toContain('FROM customs_os_import_table_status WHERE organization_id = ? ORDER BY table_name');
+    expect(worker).toContain('SELECT COUNT(*) AS row_count FROM ');
+    expect(worker).toContain('inspection: \'read_only_import_manifest_vs_d1_counts\'');
+    expect(worker).toContain('missingEmptySourceTables');
+    expect(worker).toContain('missingRequiredTargets');
+    expect(worker).toContain("row.status === 'empty_in_source'");
+    expect(worker).toContain('const rowCountParity = isMigrationParityHealthy({');
+    expect(worker).toContain('ok: rowCountParity');
+    expect(worker).toContain('MIGRATION_PARITY_UNAVAILABLE');
+  });
+
+  it('shows the one-shot Telegram archive probe only to the staging owner', () => {
+    const page = read('../src/pages/StagingWorkspacePage.tsx');
+    expect(page).toContain("profile?.role === 'owner'");
+    expect(page).toContain("fetch('/api/admin/migration/telegram-probe'");
+    expect(page).toContain('telegramProbeAttempted');
+    expect(page).toContain('disabled={telegramProbeLoading || telegramProbeAttempted}');
+    expect(page).toContain('بایت‌ها ذخیره نشدند و محتوا نمایش داده نشد.');
+    expect(page).toContain('هیچ فایلی ذخیره یا نمایش داده نشد.');
+  });
+
+  it('probes one bounded Telegram binary only behind a same-origin staging session', () => {
+    const worker = read('../worker/migration-staging.ts');
+    const config = read('../wrangler.migration-staging.jsonc');
+    expect(worker).toContain("url.pathname === '/api/admin/migration/telegram-probe'");
+    expect(worker).toContain('if (!isSameOrigin(request, url))');
+    expect(worker).toContain('if (!await getSession(request, env))');
+    expect(worker).toContain('TELEGRAM_BOT_TOKEN');
+    expect(worker).toContain("json_extract(metadata, '$.telegramFileId')");
+    expect(worker).toContain('MAX_TELEGRAM_PROBE_BYTES = 8 * 1024 * 1024');
+    expect(worker).toContain('crypto.subtle.digest(\'SHA-256\', bytes)');
+    expect(worker).toContain("stored: false");
+    expect(worker).toContain("contentExposed: false");
+    expect(config).toContain('"TELEGRAM_BOT_TOKEN"');
+  });
+
+  it('inspects file metadata key names and counts without returning metadata values', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("url.pathname === '/migration/file-metadata-keys'");
+    expect(worker).toContain('json_each(');
+    expect(worker).toContain('json_valid(f.metadata)');
+    expect(worker).toContain('candidateIdentifierKeys');
+    expect(worker).toContain('records_with_non_empty_metadata');
+    expect(worker).toContain('recordsWithNonEmptyMetadata');
+    expect(worker).not.toContain('Math.max(sum, row.record_count)');
+    expect(worker).toContain('telegramFileIdAvailability');
+    expect(worker).toContain('FILE_METADATA_KEY_INSPECTION_UNAVAILABLE');
+  });
+
+  it('reports file archive metadata counts without exposing content or identifiers', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("url.pathname === '/migration/files'");
+    expect(worker).toContain("inspection: 'read_only_file_metadata_counts_only'");
+    expect(worker).toContain('FROM file_manager_files');
+    expect(worker).toContain('FROM customs_documents');
+    expect(worker).toContain('FROM shipment_documents');
+    expect(worker).toContain('storageBackendBreakdown');
+    expect(worker).toContain('storagePathBreakdown');
+    expect(worker).toContain("WHEN lower(storage_path) LIKE 'telegram://%' THEN 'telegram'");
+    expect(worker).toContain("WHEN lower(storage_path) LIKE 'supabase://%' THEN 'supabase'");
+    expect(worker).toContain("binaryVerification: 'not_performed'");
+    expect(worker).toContain('FILE_METADATA_INSPECTION_UNAVAILABLE');
+    expect(worker).toContain("telegramFileIdAvailability: 'not_assessed_until_identifier_key_semantics_are_reviewed'");
+  });
+
+  it('exposes read-only orphan-reference diagnostics for operational tables', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("url.pathname === '/migration/integrity'");
+    expect(worker).toContain("inspection: 'read_only_orphan_reference_counts'");
+    expect(worker).toContain('cases.customs_office_id -> customs_offices.id');
+    expect(worker).toContain('shipments.registration_order_id -> registration_orders.id');
+    expect(worker).toContain('customs_documents.folder_id -> file_manager_folders.id');
+    expect(worker).toContain('finance_cost_items.category_id -> finance_cost_categories.id');
+    expect(worker).toContain('checksWithOrphans');
+    expect(worker).toContain('orphanCustomsOfficeDistinctIds');
+    expect(worker).toContain('orphanCustomsOfficeReferences');
+    expect(worker).toContain("GROUP BY table_name, office_id ORDER BY office_id, table_name");
+    expect(worker).toContain('failedChecks');
+  });
+
+  it('exposes read-only staging health and migration gates without claiming operational parity', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("request.method !== 'GET' && request.method !== 'HEAD'");
+    expect(worker).toContain("url.pathname === '/health/db'");
+    expect(worker).toContain("url.pathname === '/migration/status'");
+    expect(worker).toContain("url.pathname === '/migration/functions'");
+    expect(worker).toContain("sourcePostgres: 'blocked_57P03'");
+    expect(worker).toContain('FROM customs_os_import_table_status WHERE organization_id = ? GROUP BY status ORDER BY status');
+    expect(worker).toContain("operationalRows: rowCountParity ? 'row_count_parity_verified' : 'incomplete'");
+    expect(worker).toContain('migrationTotals: { ...migrationTotals, rowCountParity }');
+    expect(worker).toContain("productionCutover: 'blocked'");
+    expect(worker).toContain("CUSTOMS_ADMIN_PASSWORD");
+    expect(worker).toContain("customs_admin_sessions");
+    expect(worker).not.toMatch(/\b(DROP|TRUNCATE)\b/i);
+  });
+
+  it('keeps the free-first source and data preservation gates documented', () => {
     const plan = read('../docs/migration/CLOUDFLARE_MIGRATION.md');
     expect(plan).toContain('57P03');
     expect(plan).toContain('R2 was enabled by the owner');
@@ -38,5 +193,135 @@ describe('Cloudflare migration foundation', () => {
     expect(plan).toContain('do not upload objects');
     expect(plan).toContain('500 MB per database');
     expect(plan).toContain('No DROP, TRUNCATE, DELETE');
+  });
+});
+describe('customs office reference restoration migration', () => {
+  it('preserves the two source UUIDs and restores names and codes found in source metadata', () => {
+    const sql = read('../supabase/migrations-cloudflare/0002_restore_customs_offices_reference_rows.sql');
+    expect(sql).toContain("'3aa9da26-3ded-40e4-8772-51c5f4d8385b'");
+    expect(sql).toContain("'20100'");
+    expect(sql).toContain("'منطقه آزاد تجاری صنعتی انزلی'");
+    expect(sql).toContain("'faa23eed-35f3-49e4-be70-7d880edf3f07'");
+    expect(sql).toContain("'20601'");
+    expect(sql).toContain("'منطقه آزاد گمرک حسن رود'");
+    expect(sql.match(/organization_id,[\s\S]*?NULL/g)).not.toBeNull();
+  });
+
+  it('is additive, idempotent, and protects customs-office code uniqueness', () => {
+    const sql = read('../supabase/migrations-cloudflare/0002_restore_customs_offices_reference_rows.sql');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS customs_offices_code_unique_idx');
+    expect(sql.match(/ON CONFLICT\(id\) DO UPDATE SET/g)).toHaveLength(2);
+    expect(sql).not.toMatch(/\b(DROP|TRUNCATE|DELETE FROM)\b/i);
+  });
+
+  it('applies the versioned migration to the explicitly identified Staging D1 before Worker deploy', () => {
+    const workflow = read('../.github/workflows/deploy-cloudflare-staging.yml');
+    const migration = workflow.indexOf('d1 migrations apply customs-os-migration-staging');
+    const deploy = workflow.indexOf('wrangler@4 deploy --config wrangler.migration-staging.jsonc');
+    expect(migration).toBeGreaterThan(-1);
+    expect(deploy).toBeGreaterThan(migration);
+    const liveInfo = workflow.indexOf("'d1', 'info', 'customs-os-migration-staging', '--json'");
+    expect(liveInfo).toBeGreaterThan(-1);
+    expect(liveInfo).toBeLessThan(migration);
+    expect(workflow).toContain('liveDatabaseIdMatchesConfig');
+    expect(workflow).toContain('configuredDatabaseId');
+    expect(workflow).toContain('MIGRATION_DB');
+    const auditStep = workflow.slice(
+      workflow.indexOf('Audit remaining Supabase runtime dependencies'),
+      workflow.indexOf('Build application'),
+    );
+    expect(auditStep).toContain('report.categories');
+    expect(auditStep).toContain('report.counts');
+    expect(auditStep).toContain('report.perFile');
+    const d1Step = workflow.slice(workflow.indexOf('Apply versioned migrations'), migration);
+    expect(d1Step).toContain('secrets.CLOUDFLARE_D1_API_TOKEN');
+    expect(d1Step).toContain('Account D1 Write permission');
+  });
+});
+describe('Supabase dependency inventory completeness', () => {
+  it('emits literal object names and callsite files without network or credential reads', () => {
+    const workflow = read('../.github/workflows/deploy-cloudflare-staging.yml');
+    const audit = read('../scripts/audit-cloudflare-dependencies.mjs');
+    expect(workflow).toContain('categories: report.categories');
+    expect(workflow).toContain('perFileCount: report.perFile.length');
+    expect(audit).toContain('networkAccess: false');
+    expect(audit).toContain('environmentVariablesRead: false');
+    expect(audit).toContain('credentialValuesPrinted: false');
+  });
+});
+
+describe('Cloudflare Staging device session workspace', () => {
+  it('exposes only the dedicated security settings page beyond recovery and login', () => {
+    const app = read('../src/App.tsx');
+    expect(app).toContain("location.pathname === '/settings/security'");
+    expect(app).toContain('!isAllowedStagingSecurityRoute');
+    expect(app).toContain("location.pathname !== '/' && location.pathname !== '/login'");
+  });
+
+  it('does not load legacy Supabase settings tables on the Staging security page', () => {
+    const settings = read('../src/pages/SettingsEnterprisePage.tsx');
+    expect(settings).toContain("if(isCloudflareStagingHost()&&current==='security')return;");
+    expect(settings).toContain('<SessionManagementPanel/>');
+  });
+
+  it('provides a direct entry to the D1-backed session management page from recovery workspace', () => {
+    const workspace = read('../src/pages/StagingWorkspacePage.tsx');
+    expect(workspace).toContain("to: '/settings/security'");
+    expect(workspace).toContain('مدیریت دستگاه‌ها و خروج از نشست‌های دیگر');
+  });
+});
+
+describe('Cloudflare Staging session revocation lifecycle', () => {
+  it('checks the D1-backed session on foreground and at a bounded interval', () => {
+    const lifecycle = read('../src/components/SessionLifecycle.tsx');
+    expect(lifecycle).toContain('isCloudflareStagingHost()');
+    expect(lifecycle).toContain("fetch('/api/auth/session'");
+    expect(lifecycle).toContain('60_000');
+    expect(lifecycle).toContain("payload.authenticated === false");
+    expect(lifecycle).toContain('await signOut()');
+  });
+
+  it('does not treat a temporary network failure as a revoked session', () => {
+    const lifecycle = read('../src/components/SessionLifecycle.tsx');
+    expect(lifecycle).toContain('A network interruption is not proof');
+  });
+});
+
+
+describe('Cloudflare registration orders vertical slice', () => {
+  it('routes registration-order APIs through the authenticated Staging Worker', () => {
+    const worker = read('../worker/migration-staging.ts');
+    expect(worker).toContain("import { handleRegistrationOrdersApi } from './registration-orders-api'");
+    expect(worker).toContain("url.pathname === '/api/registration-orders'");
+    expect(worker).toContain("url.pathname.startsWith('/api/registration-orders/')");
+    expect(worker).toContain('return handleRegistrationOrdersApi(request, env.MIGRATION_DB, url, profile)');
+  });
+
+  it('defines additive D1 order-allocation storage and hard capacity/finalization triggers', () => {
+    const sql = read('../supabase/migrations-cloudflare/0006_registration_orders_api.sql');
+    expect(sql).toContain('registration_order_external_allocations');
+    expect(sql).toContain('registration_orders_org_number_unique_idx');
+    expect(sql).toContain('registration_order_external_allocation_before_insert');
+    expect(sql).toContain('registration_order_external_allocation_before_update');
+    expect(sql).toContain('registration_order_master_before_update');
+    expect(sql).toContain('ORDER_FINALIZE_NET_WEIGHT_MISMATCH');
+    expect(sql).toContain('ORDER_FINALIZE_GROSS_WEIGHT_MISMATCH');
+    expect(sql).toContain('ORDER_FINALIZE_VALUE_MISMATCH');
+    expect(sql).toContain('ON DELETE RESTRICT');
+    expect(sql).not.toMatch(/\b(DROP|TRUNCATE|DELETE FROM)\b/i);
+  });
+
+  it('uses the Worker registration-order contract from the page, without Supabase calls', () => {
+    const page = read('../src/pages/RegistrationOrdersPage.tsx');
+    const clientApi = read('../src/lib/cloudflareRegistrationOrders.ts');
+    const workerApi = read('../worker/registration-orders-api.ts');
+    expect(page).toContain('cloudflareRegistrationOrdersApi.list');
+    expect(page).toContain('cloudflareRegistrationOrdersApi.create');
+    expect(page).toContain('cloudflareRegistrationOrdersApi.updateExternalAllocation');
+    expect(page).not.toContain('supabase.');
+    expect(clientApi).toContain('/api/registration-orders');
+    expect(workerApi).toContain('handleRegistrationOrdersApi');
+    expect(workerApi).toContain('WHERE ro.id = ? AND ro.organization_id = ?');
+    expect(workerApi).toContain('customs_os_audit_events');
   });
 });

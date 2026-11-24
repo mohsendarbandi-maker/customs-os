@@ -1,25 +1,26 @@
 import React,{useEffect,useState} from 'react';
 import {ArrowRight,History,RefreshCw,ShieldCheck,X} from 'lucide-react';
 import {Link,useSearchParams,useNavigate} from 'react-router-dom';
-import {supabase} from '../lib/supabase';
+import {cloudflareCasesApi} from '../lib/cloudflareCases';
 
 const statusLabels:Record<string,string>={draft:'پیش‌نویس',registration_order:'ثبت سفارش',documents_ready:'اسناد آماده',epl_submitted:'اظهار ثبت شد',kottaj_received:'کوتاژ دریافت شد',path_green:'مسیر سبز',path_yellow:'مسیر زرد',path_red:'مسیر قرمز',valuation:'ارزش‌گذاری',duties_calculation:'محاسبه حقوق',exit_permit:'مجوز خروج',completed:'تکمیل‌شده',archived:'بایگانی',stage_5_checklist:'چک‌لیست مرحله ۵'};
 const actionLabels:Record<string,string>={INSERT:'ایجاد',UPDATE:'ویرایش',DELETE:'حذف'};
 const fmtDate=(v?:string)=>v?new Intl.DateTimeFormat('fa-IR',{dateStyle:'short',timeStyle:'short'}).format(new Date(v)):'—';
 const pretty=(v:any)=>{if(v===null||v===undefined||v==='')return '—';if(typeof v==='object')return JSON.stringify(v,null,2);return String(v)};
 
-type CaseOption={id:string;case_number:string|null;status:string;created_at:string};
+type CaseOption={id:string;case_number:string|null;status:string|null;created_at:string|null};
 
 export const CaseHistoryPage:React.FC=()=>{
  const[params]=useSearchParams();const navigate=useNavigate();const requested=params.get('caseId')||'';
  const[cases,setCases]=useState<CaseOption[]>([]);const[caseId,setCaseId]=useState(requested);
  const[caseRow,setCaseRow]=useState<any>(null),[history,setHistory]=useState<any[]>([]),[audit,setAudit]=useState<any[]>([]);
  const[loading,setLoading]=useState(false),[error,setError]=useState('');
+ const[legacyHistoryBackfill,setLegacyHistoryBackfill]=useState(false);
 
  const loadCases=async()=>{
-  const{data,error}=await supabase.from('cases').select('id,case_number,status,created_at').order('created_at',{ascending:false});
-  if(error)throw error;
-  const rows=(data||[]) as CaseOption[];setCases(rows);
+  const result=await cloudflareCasesApi.list({limit:100,offset:0});
+  const rows=result.items.map(({id,case_number,status,created_at})=>({id,case_number,status,created_at})) as CaseOption[];
+  setCases(rows);
   const next=requested&&rows.some(x=>x.id===requested)?requested:(caseId&&rows.some(x=>x.id===caseId)?caseId:(rows[0]?.id||''));
   if(next!==caseId)setCaseId(next);
   return next;
@@ -27,19 +28,17 @@ export const CaseHistoryPage:React.FC=()=>{
  const load=async(id?:string)=>{
   setLoading(true);setError('');
   try{
-   const id2=id||caseId||await loadCases();
-   if(!id2){setCaseRow(null);setHistory([]);setAudit([]);setError('هیچ پرونده‌ای برای نمایش وجود ندارد.');return}
-   const{data:cr,error:ce}=await supabase.from('cases').select('id,case_number,status,client_id,created_at').eq('id',id2).maybeSingle();
-   if(ce)throw ce;if(!cr){setError('پرونده انتخاب‌شده پیدا نشد.');return}
-   const{data:hr,error:he}=await supabase.from('case_status_history').select('id,case_id,changed_by,previous_status,new_status,notes,created_at').eq('case_id',id2).order('created_at',{ascending:false});
-   if(he)throw he;
-   const{data:ar,error:ae}=await supabase.from('audit_logs').select('id,user_id,action,table_name,record_id,old_data,new_data,created_at').eq('record_id',id2).order('created_at',{ascending:false});
-   if(ae)throw ae;
-   setCaseRow(cr);setHistory(hr||[]);setAudit(ar||[]);
+   const available=await loadCases();
+   const id2=id||available;
+   if(!id2){setCaseRow(null);setHistory([]);setAudit([]);setLegacyHistoryBackfill(false);setError('هیچ پرونده‌ای برای نمایش وجود ندارد.');return}
+   const result=await cloudflareCasesApi.history(id2);
+   setCaseRow(result.case);
+   setHistory(result.history);
+   setAudit(result.audit);
+   setLegacyHistoryBackfill(result.legacyHistoryBackfill==='not_imported');
   }catch(e:any){setError(e?.message||'خطا در خواندن تاریخچه')}finally{setLoading(false)}
  };
- useEffect(()=>{void load(requested||undefined)},[]);
- useEffect(()=>{if(caseId&&!loading)void load(caseId)},[caseId]);
+ useEffect(()=>{void load(requested||undefined)},[requested]);
 
  const selectCase=(id:string)=>{setCaseId(id);navigate('/history?caseId='+encodeURIComponent(id),{replace:true})};
 
@@ -49,6 +48,7 @@ export const CaseHistoryPage:React.FC=()=>{
   <section className="rounded-2xl border app-border bg-[var(--surface)] p-4 mb-5"><div className="text-xs app-muted mb-2">انتخاب پرونده</div><select value={caseId} onChange={e=>selectCase(e.target.value)} disabled={!cases.length||loading} className="w-full rounded-xl border app-border bg-[var(--surface-2)] p-3 text-sm"><option value="">— انتخاب پرونده —</option>{cases.map(c=><option key={c.id} value={c.id}>{c.case_number||'بدون شماره'} · {statusLabels[c.status]||c.status}</option>)}</select></section>
 
   {error&&<div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">{error}</div>}
+  {legacyHistoryBackfill&&<div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">سوابق قدیمی جدول‌های قبلی هنوز به D1 منتقل نشده‌اند؛ موارد زیر فقط رویدادهایی هستند که واقعاً در Audit جدید Cloudflare ثبت شده‌اند.</div>}
   {caseRow&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 mb-5"><div className="grid md:grid-cols-4 gap-4"><div><div className="text-xs app-muted">شماره پرونده</div><div className="font-bold mt-1">{caseRow.case_number||'—'}</div></div><div><div className="text-xs app-muted">شناسه</div><div className="font-mono text-[11px] mt-1 break-all" dir="ltr">{caseRow.id}</div></div><div><div className="text-xs app-muted">وضعیت فعلی</div><div className="font-bold mt-1">{statusLabels[caseRow.status]||caseRow.status||'—'}</div></div><div><div className="text-xs app-muted">ایجاد</div><div className="mt-1">{fmtDate(caseRow.created_at)}</div></div></div></section>}
 
   <div className="grid lg:grid-cols-2 gap-5">

@@ -5,6 +5,7 @@ import {supabase} from '../lib/supabase';
 import {useAuth} from '../context/AuthContext';
 import {SessionManagementPanel} from '../components/SessionManagementPanel';
 import {useAppearance} from '../context/AppearanceContext';
+import {isCloudflareStagingHost} from '../lib/recoveryHost';
 import ShippingManagementPage from './ShippingManagementPage';
 import{readUserSettings,writeUserSettings}from'../lib/userSettingsStorage';
 
@@ -27,6 +28,7 @@ const Field=({label,children}:{label:string;children:React.ReactNode})=><label c
 const Toggle=({label,value,onChange}:{label:string;value:boolean;onChange:(v:boolean)=>void})=><label className="flex items-center justify-between rounded-xl bg-[var(--surface-2)] px-4 py-3 text-xs"><span>{label}</span><input type="checkbox" checked={value} onChange={e=>onChange(e.target.checked)}/></label>;
 export const SettingsEnterprisePage:React.FC=()=>{const loc=useLocation(),nav=useNavigate(),{user,profile}=useAuth(),appearance=useAppearance();const role=(profile?.role||'client') as Role,admin=role==='owner'||role==='admin',current=loc.pathname.replace('/settings','').replace(/^\//,'');const[openGroups,setOpenGroups]=useState<Record<string,boolean>>({حساب:true,سازمان:true,عملیات:false,مالی:false,سیستم:false});const[q,setQ]=useState('');const[settings,setSettings]=useState<Record<string,any>>(base);const[org,setOrg]=useState({name:'',economic_code:''});const[users,setUsers]=useState<any[]>([]);const[saved,setSaved]=useState(false);const[busy,setBusy]=useState(false);const[userServerSettings,setUserServerSettings]=useState<Record<string,any>>({});const[orgServerSettings,setOrgServerSettings]=useState<Record<string,any>>({});const visible=useMemo(()=>sections.filter(s=>(!s.admin||admin)&&(!s.ownerOnly||role==='owner')&&(!q||s.title.includes(q))),[q,admin,role]);
  useEffect(()=>{const load=async()=>{
+  if(isCloudflareStagingHost()&&current==='security')return;
   if(!user?.id)return;
   const[us,o,u,od]=await Promise.all([
    supabase.from('user_settings').select('settings').eq('user_id',user.id).maybeSingle(),
