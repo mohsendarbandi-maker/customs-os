@@ -95,7 +95,9 @@ describe('Cloudflare D1 cases read API', () => {
     };
     const url = new URL('https://staging.example/api/cases/case-a');
     const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
-    const body = await response.json() as { shipments: unknown[]; declarations: unknown[]; documents: unknown[]; readOnly: boolean };
+    const body = await response.json() as {
+      case: CaseRecord; shipments: unknown[]; declarations: unknown[]; documents: unknown[]; readOnly: boolean;
+    };
     expect(response.status).toBe(200);
     expect(body.shipments).toHaveLength(1);
     expect(body.declarations).toHaveLength(1);
