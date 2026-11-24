@@ -1,6 +1,6 @@
 # Customs OS — Cloudflare migration runtime dependency inventory
 
-Evidence date: 2026-11-24
+Evidence date: 2026-11-25
 Source revision: 71f03bf63ad743eb4c649340f9eb1802504927f3
 Method: read-only scanner, GitHub Actions run 45505899105.
 Full machine-readable report: artifact customs-os-read-only-runtime-inventory (7-day retention).
@@ -81,27 +81,55 @@ A direct comparison of `src/pages/CaseOperationsPage.tsx` with `worker/cases-api
 | Existing case page operation | Existing source contract | Current D1 case API |
 |---|---|---|
 | Case list | `case_display_context` view | `GET /api/cases` returns a narrower `cases` + `clients` projection |
-| Case detail fields | Includes `warehouse_receipt_no`, `release_status`, `valuation_status`, shipment-derived display fields | Those three case fields are absent from the D1 `CaseRecord` projection |
+| Case detail fields | Includes `warehouse_receipt_no`, `release_status`, `valuation_status`, shipment-derived display fields | These three columns exist in the staging `cases` table but are absent from the D1 `CaseRecord` projection |
 | Linked documents | `customs_documents` | D1 returns a limited customs-document projection |
 | Declaration | Latest `customs_declarations` row | D1 returns declaration rows, but response shape is not yet proven identical |
-| Permits | `permits` table, ordered by creation time | Not included in D1 case detail response |
-| Exit operations | `case_exit_operations` table, latest updated row | Not included in D1 case detail response |
+| Permits | Legacy page queries `permits` | No `permits` table exists in the inspected staging D1 schema; no D1 equivalent is demonstrated |
+| Exit operations | Legacy page queries `case_exit_operations` | No `case_exit_operations` table exists in the inspected staging D1 schema; no D1 equivalent is demonstrated |
 | Readiness | `get_case_completion_readiness(p_case_id)` RPC | No D1 replacement demonstrated |
 | Edit case | `UPDATE cases` with case number, order/proforma, cargo, weight, warehouse receipt, release and valuation fields | D1 API deliberately rejects PATCH with HTTP 405 |
 | Delete case | `delete_case_safely(p_case_id)` RPC | No D1 safe-delete equivalent demonstrated |
 
 The existing D1 test explicitly asserts that PATCH returns 405 and executes no SQL. This is intentional fail-closed behavior, not a working edit feature.
 
+### Verified staging D1 schema evidence (2026-11-24)
+
+The isolated read-only schema workflow completed successfully:
+
+- Workflow run: 45506810361 — `Customs OS Staging D1 Schema Inventory`, conclusion `success`.
+- Artifact: `customs-os-staging-d1-schema`, artifact ID 14971529607, SHA-256 `66b6bc91d9e0bd4639e1bc68272d6439e8717ad967b09f5245f11a86a4e41cb1`.
+- Database identity in response: `customs-os-migration-staging`.
+- SQLite schema inspection found 45 tables and 2,084 counted rows; one count failed for Cloudflare's internal `_cf_KV` table. Therefore 44 table counts were verified; 2,084 is the sum of successful counts, not a guaranteed complete physical total.
+- The schema artifact contains DDL and aggregate counts only; no row contents were queried.
+
+Relevant verified table facts:
+
+| D1 table | Rows | Verified fields / notes |
+|---|---:|---|
+| `cases` | 19 | Includes `warehouse_receipt_no`, `warehouse_receipt_date`, `release_status`, `valuation_status`, `cargo_count`, `cargo_description`, `net_weight_kg`, `gross_weight_kg`, `display_name`, `customs_regime` |
+| `customs_declarations` | 19 | Includes `case_id`, `shipment_id`, `kottaj_number`, `declaration_date`, `workflow_stage`, `customs_regime`, declaration file metadata |
+| `customs_documents` | 141 | Includes `case_id`, `shipment_id`, document metadata, archive state, storage backend, file asset and Telegram message references |
+| `customs_offices` | 2 | Reference rows exist in staging |
+| `shipments` | 22 | Includes `case_id`, release and ship-pass fields, shipment state and customs-office references |
+| `customs_os_audit_events` | 0 | Audit table exists, but it is currently empty |
+| `profiles` | 1 | One staging profile row |
+| `organizations` | 1 | One staging organization row |
+| `file_manager_folders` | 208 | Folder metadata rows exist |
+| `file_manager_files` | 89 | File metadata rows exist; this does not prove binary availability |
+
+No table named `permits` or `case_exit_operations` appears in the 45-table schema inventory. The source frontend's dependencies therefore cannot be satisfied by assuming those legacy tables were imported under the same names. Their data model and lifecycle must be mapped to existing D1 structures or deliberately redesigned with explicit business-rule approval.
+
 ### Safe implementation sequence for case parity
 
-1. Confirm the exact D1 `cases`, `permits`, and `case_exit_operations` schema from the staging schema inspection; do not infer columns from the old frontend alone.
-2. Add organization-scoped, validated read projections for the missing case fields and related permit/exit data.
-3. Implement audited case PATCH with an explicit allowlist, numeric validation, same-origin protection, tenant scoping, and atomic audit insertion. Preserve status/workflow fields as immutable until the workflow API exists.
-4. Implement safe delete only after checking every foreign-key/dependency table and porting the source RPC's exact business rules. Do not substitute a generic DELETE.
-5. Port readiness calculation only after its source RPC definition and all required inputs are understood.
-6. Replace the existing page's Supabase reads/writes in-place and add regression tests for each field and action. Do not switch the whole app auth host before this and other module contracts pass.
+1. Use the captured staging D1 schema as the authoritative description of the current staging database only. It is not a complete source-schema export and does not prove production data parity.
+2. Extend the D1 case read projection with the verified warehouse receipt, release and valuation columns, preserving organization scope and existing API response compatibility.
+3. Map permits and exit-operation data from the original checked-in SQL/function definitions and actual source-page behavior. Do not create placeholder tables or infer replacement business rules.
+4. Implement audited case PATCH with an explicit allowlist, numeric/date validation, same-origin protection, tenant scoping, and atomic audit insertion. Preserve status/workflow fields as immutable until the workflow API exists.
+5. Implement safe delete only after checking every foreign-key/dependency table and porting the source RPC's exact business rules. Do not substitute a generic DELETE.
+6. Port readiness calculation only after its source RPC definition and all required inputs are understood.
+7. Replace the existing page's Supabase reads/writes in-place and add regression tests for each field and action. Do not switch the whole app auth host before this and other module contracts pass.
 
-No case API code was changed as part of this audit because the full D1 schema and the source delete/readiness business rules have not been verified.
+No case API code was changed as part of this audit because permit/exit contracts, source delete/readiness rules, and complete dependency semantics are still unverified.
 
 ## Deep contract finding: operational lifecycle still calls legacy tables and RPCs
 
