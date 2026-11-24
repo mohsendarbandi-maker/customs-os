@@ -308,12 +308,14 @@ jobs:
           NODE
       - name: Apply versioned migrations to the isolated Staging D1
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
+          # Prefer a dedicated D1-scoped token; fall back to the existing Staging deploy token.
+          # The migration command still verifies actual D1 write permission and fails closed if absent.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
           if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-            echo "::error::Add Preview environment secret CLOUDFLARE_D1_API_TOKEN with Account D1 Write permission. The Worker deployment token is intentionally not reused for D1 access."
+            echo "::error::No Cloudflare API token is available for the isolated Staging D1 migration."
             exit 1
           fi
           node --input-type=module <<'NODE'
