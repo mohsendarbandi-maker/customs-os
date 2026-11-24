@@ -43,6 +43,14 @@ interface Env {
 const COOKIE = 'customs_os_stage_session';
 const ADMIN_EMAIL = 'admin@darbandicommercial.ir';
 const SESSION_HOURS = 12;
+
+// These two shared customs-office reference rows are intentionally restored by
+// migration 0002 and are not part of the source operational-row snapshot.
+// Their exact IDs and codes are verified before excluding them from import parity.
+const CUSTOMS_OFFICE_REFERENCE_ROWS = [
+  { id: '3aa9da26-3ded-40e4-8772-51c5f4d8385b', code: '20100' },
+  { id: 'faa23eed-35f3-49e4-be70-7d880edf3f07', code: '20601' },
+] as const;
 const profile = {
   id: 'owner-cloudflare-staging',
   organization_id: 'ad95fdf1-e0e2-439b-92b0-c20ab07cacdd',
@@ -569,6 +577,8 @@ export default {
             expectedRows: number;
             importedRows: number;
             actualRows: number | null;
+            referenceRowsExcluded: number;
+            parityRows: number | null;
             delta: number | null;
             verified: boolean;
           }> = [];
@@ -578,6 +588,7 @@ export default {
           let failedCounts = 0;
           let expectedTotal = 0;
           let actualTotal = 0;
+          let physicalActualTotal = 0;
           let mismatchedTables = 0;
 
           for (const row of importRows.results) {
@@ -595,6 +606,8 @@ export default {
                 expectedRows: row.expected_rows,
                 importedRows: row.imported_rows,
                 actualRows: emptySource ? 0 : null,
+                referenceRowsExcluded: 0,
+                parityRows: emptySource ? 0 : null,
                 delta: emptySource ? 0 : null,
                 verified: emptySource,
               });
@@ -606,10 +619,26 @@ export default {
                 'SELECT COUNT(*) AS row_count FROM ' + identifier,
               ).first<{ row_count: number }>();
               const actualRows = typeof result?.row_count === 'number' ? result.row_count : null;
-              const delta = actualRows === null ? null : actualRows - row.expected_rows;
-              if (actualRows === null) failedCounts += 1;
+              let referenceRowsExcluded = 0;
+              let referenceRowsVerified = true;
+              if (tableName === 'customs_offices') {
+                const references = await env.MIGRATION_DB.prepare(
+                  'SELECT COUNT(*) AS row_count FROM customs_offices WHERE (id = ? AND code = ?) OR (id = ? AND code = ?)',
+                ).bind(
+                  CUSTOMS_OFFICE_REFERENCE_ROWS[0].id,
+                  CUSTOMS_OFFICE_REFERENCE_ROWS[0].code,
+                  CUSTOMS_OFFICE_REFERENCE_ROWS[1].id,
+                  CUSTOMS_OFFICE_REFERENCE_ROWS[1].code,
+                ).first<{ row_count: number }>();
+                referenceRowsExcluded = typeof references?.row_count === 'number' ? references.row_count : 0;
+                referenceRowsVerified = referenceRowsExcluded === CUSTOMS_OFFICE_REFERENCE_ROWS.length;
+              }
+              const parityRows = actualRows === null ? null : actualRows - referenceRowsExcluded;
+              const delta = parityRows === null ? null : parityRows - row.expected_rows;
+              if (actualRows === null || !referenceRowsVerified) failedCounts += 1;
               else {
-                actualTotal += actualRows;
+                physicalActualTotal += actualRows;
+                actualTotal += parityRows as number;
                 if (delta !== 0) mismatchedTables += 1;
               }
               results.push({
@@ -618,8 +647,10 @@ export default {
                 expectedRows: row.expected_rows,
                 importedRows: row.imported_rows,
                 actualRows,
+                referenceRowsExcluded,
+                parityRows,
                 delta,
-                verified: actualRows !== null,
+                verified: actualRows !== null && referenceRowsVerified,
               });
             } catch {
               failedCounts += 1;
@@ -629,6 +660,8 @@ export default {
                 expectedRows: row.expected_rows,
                 importedRows: row.imported_rows,
                 actualRows: null,
+                referenceRowsExcluded: 0,
+                parityRows: null,
                 delta: null,
                 verified: false,
               });
@@ -647,6 +680,8 @@ export default {
             sourceTableCount: results.length,
             expectedTotal,
             actualTotal,
+            physicalActualTotal,
+            referenceRowsExcluded: results.reduce((sum, item) => sum + item.referenceRowsExcluded, 0),
             missingTargets,
             missingEmptySourceTables,
             missingRequiredTargets,
