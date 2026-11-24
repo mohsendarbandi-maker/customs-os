@@ -338,9 +338,36 @@ jobs:
           else
             echo "is_latest=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Validate explicit production Worker target
+        if: steps.freshness.outputs.is_latest == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const config = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
+          const expectedRoutes = [
+            'darbandicommercial.ir',
+            'chat.darbandicommercial.ir',
+            'reminders.darbandicommercial.ir',
+            'mobile.darbandicommercial.ir',
+          ];
+          const actualRoutes = (config.routes ?? []).map((route) => route.pattern).sort();
+          const checks = {
+            workerName: config.name === 'customs',
+            entrypoint: config.main === 'worker/index.ts',
+            productionRoutes: JSON.stringify(actualRoutes) === JSON.stringify([...expectedRoutes].sort()),
+            assetsBinding: config.assets?.binding === 'ASSETS' && config.assets?.directory === './dist',
+            noStagingD1Binding: !(config.d1_databases ?? []).some((db) => db.database_name === 'customs-os-migration-staging'),
+          };
+          console.log(JSON.stringify({ worker: config.name, routes: actualRoutes, checks }, null, 2));
+          if (!Object.values(checks).every(Boolean)) {
+            throw new Error('Refusing production deployment: explicit Worker target validation failed.');
+          }
+          NODE
       - name: Deploy Worker to Cloudflare
         if: steps.freshness.outputs.is_latest == 'true'
-        run: npx wrangler@4 deploy
+        run: npx wrangler@4 deploy --config wrangler.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
