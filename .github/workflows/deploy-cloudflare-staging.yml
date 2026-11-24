@@ -555,3 +555,115 @@ jobs:
         run: |
           set -euo pipefail
           npx wrangler@4 secret list --config wrangler.migration-staging.jsonc --format json | jq -r '.[].name' | sort
+
+  # Independent priority lane: it deploys only the current D1-compatible API
+  # and static app. It intentionally does not apply migrations or alter D1 rows.
+  priority-login-shipments:
+    environment:
+      name: Preview – customs-os
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CUSTOMS_ADMIN_PASSWORD: ${{ secrets.CUSTOMS_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert Staging-only Worker and D1 configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const config = JSON.parse(readFileSync('wrangler.migration-staging.jsonc', 'utf8'));
+          const databases = config.d1_databases ?? [];
+          const db = databases.find(item => item.binding === 'MIGRATION_DB');
+          const checks = {
+            worker: config.name === 'customs-os-migration-staging',
+            workersDevOnly: config.workers_dev === true,
+            previewUrlsDisabled: config.preview_urls === false,
+            noCustomRoutes: !Array.isArray(config.routes) || config.routes.length === 0,
+            staging: config.vars?.MIGRATION_ENVIRONMENT === 'staging',
+            productionDataDisabled: config.vars?.PRODUCTION_DATA_IMPORTED === 'false',
+            assets: config.assets?.binding === 'ASSETS' && config.assets?.directory === './dist',
+            onlyExpectedD1: databases.length === 1 && db?.database_name === 'customs-os-migration-staging' &&
+              String(db?.database_id ?? '').toLowerCase() === 'b938fa3c-4995-4d27-aeda-f72f2d484a3c',
+            noPaidBindings: !config.r2_buckets && !config.kv_namespaces && !config.queues &&
+              !config.ai && !config.vectorize && !config.services,
+          };
+          console.log(JSON.stringify({ worker: config.name, database: db?.database_name, checks }, null, 2));
+          if (!Object.values(checks).every(Boolean)) throw new Error('Staging isolation assertion failed.');
+          NODE
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::error::Preview Cloudflare Worker deployment credentials are missing."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Unit tests
+        run: npm test
+      - name: TypeScript
+        run: npm run typecheck
+      - name: ESLint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+
+      - name: Deploy Staging Worker without D1 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler@4 deploy --config wrangler.migration-staging.jsonc
+
+      - name: Verify live Staging D1 API and authorization boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://customs-os-migration-staging.mohsen-darbandi.workers.dev'
+          work_dir="$(mktemp -d)"
+          trap 'rm -rf "$work_dir"' EXIT
+
+          curl --silent --show-error --fail --max-time 30 "$base/health" -o "$work_dir/health.json"
+          jq -e '.ok == true and .environment == "staging" and .productionTraffic == false and .productionDataImported == false' "$work_dir/health.json" >/dev/null
+
+          curl --silent --show-error --fail --max-time 30 "$base/health/db" -o "$work_dir/db.json"
+          jq -e '.ok == true and .database == "customs-os-migration-staging" and .operationalDataImported == true' "$work_dir/db.json" >/dev/null
+
+          session_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/session.json" --write-out '%{http_code}' "$base/api/auth/session")"
+          test "$session_code" = "200"
+          jq -e '.authenticated == false' "$work_dir/session.json" >/dev/null
+
+          shipments_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/unauthenticated.json" --write-out '%{http_code}' "$base/api/shipments")"
+          test "$shipments_code" = "401"
+          jq -e '.error == "UNAUTHORIZED"' "$work_dir/unauthenticated.json" >/dev/null
+
+          if [ -z "${CUSTOMS_ADMIN_PASSWORD:-}" ]; then
+            echo "::warning::Authenticated iPhone/PWA persistence and the 22-row live list were not testable: CUSTOMS_ADMIN_PASSWORD is not configured in the GitHub Preview environment. The secret value was not read, printed, or changed."
+            exit 0
+          fi
+
+          jq -n --arg password "$CUSTOMS_ADMIN_PASSWORD" \
+            '{email:"admin@darbandicommercial.ir",password:$password}' > "$work_dir/login.json"
+          login_code="$(curl --silent --show-error --max-time 25 --output "$work_dir/login-response.json" \
+            --cookie-jar "$work_dir/cookies.txt" --write-out '%{http_code}' \
+            --header "Origin: $base" --header 'Content-Type: application/json' \
+            --data-binary @"$work_dir/login.json" "$base/api/auth/login")"
+          rm -f "$work_dir/login.json"
+          test "$login_code" = "200"
+          jq -e '.authenticated == true and .profile.role == "owner"' "$work_dir/login-response.json" >/dev/null
+
+          restore_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/restored-session.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/auth/session")"
+          test "$restore_code" = "200"
+          jq -e '.authenticated == true and .profile.organization_id == "ad95fdf1-e0e2-439b-92b0-c20ab07cacdd"' "$work_dir/restored-session.json" >/dev/null
+
+          list_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/shipments.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/shipments?limit=200&offset=0")"
+          test "$list_code" = "200"
+          jq -e '.ok == true and .total == 22 and (.items | length) == 22' "$work_dir/shipments.json" >/dev/null
+          echo "Login, cookie restoration and 22 existing D1 shipments verified. No data rows were created or modified by this smoke test."
+
