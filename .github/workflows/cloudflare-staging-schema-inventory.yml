@@ -52,7 +52,7 @@ jobs:
             '|---|---:|---|',
             ...report.tables.map(table => `| ${table.name} | ${table.rowCount ?? 'unknown'} | ${table.countVerified ? 'yes' : 'no'} |`),
           ];
-          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\\n'));
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n'));
           console.log(JSON.stringify({
             database: report.database,
             inspection: report.inspection,
