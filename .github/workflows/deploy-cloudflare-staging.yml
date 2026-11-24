@@ -633,6 +633,19 @@ jobs:
           curl --silent --show-error --fail --max-time 30 "$base/health/db" -o "$work_dir/db.json"
           jq -e '.ok == true and .database == "customs-os-migration-staging" and .operationalDataImported == true' "$work_dir/db.json" >/dev/null
 
+          # Confirm the deployed SPA shell and its actual compiled JavaScript asset,
+          # rather than treating a healthy Worker API as proof that the website loads.
+          page_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/login.html" --write-out '%{http_code}' "$base/login")"
+          test "$page_code" = "200"
+          grep -qi '<title>Customs OS' "$work_dir/login.html"
+          asset_path="$(grep -oE 'src="[^"]+\\.js"' "$work_dir/login.html" | head -1 | cut -d'"' -f2)"
+          test -n "$asset_path"
+          case "$asset_path" in /assets/*) ;; *) echo "::error::Unexpected SPA asset path"; exit 1 ;; esac
+          asset_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/app.js" --write-out '%{http_code}' "$base$asset_path")"
+          test "$asset_code" = "200"
+          test -s "$work_dir/app.js"
+          echo "SPA login shell and compiled JavaScript asset returned HTTP 200."
+
           session_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/session.json" --write-out '%{http_code}' "$base/api/auth/session")"
           test "$session_code" = "200"
           jq -e '.authenticated == false' "$work_dir/session.json" >/dev/null
