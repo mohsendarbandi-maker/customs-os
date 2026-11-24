@@ -1,6 +1,7 @@
 import { isMigrationIntegrityHealthy, isMigrationParityHealthy, isProductionTrafficHost } from './migration-diagnostics';
 import { handleClientsApi } from './clients-api';
 import { handleCasesApi } from './cases-api';
+import { handleShipmentsApi } from './shipments-api';
 import { handleCaseSelectorApi } from './case-selector-api';
 import { handleDeviceSessionsApi } from './device-sessions-api';
 import { handleRegistrationOrdersApi } from './registration-orders-api';
@@ -1203,6 +1204,12 @@ export default {
       if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
       if (!profile.is_active || !['owner', 'admin', 'broker'].includes(profile.role)) return json({ error: 'FORBIDDEN' }, 403);
       return handleClientsApi(request, env, url, profile);
+    }
+
+    if (url.pathname === '/api/shipments' || url.pathname.startsWith('/api/shipments/')) {
+      if (!isSameOrigin(request, url)) return json({ ok: false, error: 'ORIGIN_FORBIDDEN' }, 403);
+      if (!await getSession(request, env)) return json({ ok: false, error: 'UNAUTHORIZED' }, 401);
+      return handleShipmentsApi(request, env.MIGRATION_DB, url, profile);
     }
 
     if (url.pathname === '/api/case-selector-data') {
