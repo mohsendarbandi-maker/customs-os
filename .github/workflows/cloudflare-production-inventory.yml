@@ -127,9 +127,9 @@ jobs:
             echo >> "$GITHUB_STEP_SUMMARY"
             echo "### Existing Workers scripts" >> "$GITHUB_STEP_SUMMARY"
             jq -r '.result[] | "- " + .id' "$work/workers.json" >> "$GITHUB_STEP_SUMMARY"
-  echo "WORKER_INVENTORY_BEGIN"
-  jq -r '.result[] | "WORKER_SCRIPT id=\(.id)"' "$work/workers.json"
-  echo "WORKER_INVENTORY_END"
+            echo "WORKER_INVENTORY_BEGIN"
+            jq -r '.result[] | "WORKER_SCRIPT id=\(.id)"' "$work/workers.json"
+            echo "WORKER_INVENTORY_END"
             if ! jq -e '[.result[].id] | index("customs") != null' "$work/workers.json" >/dev/null; then
               echo "::error::The production Worker named customs was not found in this account."
               exit 1
@@ -143,9 +143,9 @@ jobs:
           if [ "$zone_status" = "200" ]; then
             jq -r '.result[] | "- Zone: **" + .name + "** — status: **" + .status + "**"' \
               "$work/zone.json" >> "$GITHUB_STEP_SUMMARY"
-  echo "ZONE_INVENTORY_BEGIN"
-  jq -r '.result[] | "ZONE name=\(.name) status=\(.status) id=\(.id)"' "$work/zone.json"
-  echo "ZONE_INVENTORY_END"
+            echo "ZONE_INVENTORY_BEGIN"
+            jq -r '.result[] | "ZONE name=\(.name) status=\(.status) id=\(.id)"' "$work/zone.json"
+            echo "ZONE_INVENTORY_END"
           else
             echo "::error::The existing API token cannot inspect the primary zone (HTTP $zone_status)."
             jq -c '{success, errors: [.errors[]? | {code, message}]}' "$work/zone.json" >> "$GITHUB_STEP_SUMMARY" || true
