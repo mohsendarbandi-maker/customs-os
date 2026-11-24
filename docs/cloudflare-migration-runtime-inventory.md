@@ -102,3 +102,27 @@ The existing D1 test explicitly asserts that PATCH returns 405 and executes no S
 6. Replace the existing page's Supabase reads/writes in-place and add regression tests for each field and action. Do not switch the whole app auth host before this and other module contracts pass.
 
 No case API code was changed as part of this audit because the full D1 schema and the source delete/readiness business rules have not been verified.
+
+## Deep contract finding: operational lifecycle still calls legacy tables and RPCs
+
+A source-level scan of the four primary operational pages shows these exact contracts:
+
+| Existing page | Direct table/view dependencies | RPC dependencies |
+|---|---|---|
+| `ShipmentFirstPage.tsx` | shipment_documents, clients, shipments, vessels, shipping_lines, registration_orders, cases, customs_offices, shipment_document_extractions, file_manager_files | create_case_workflow, link_shipment_to_case, set_shipment_tracking_status, set_shipment_ship_pass |
+| `OperationsPage.tsx` | clients, cases, shipments, registration_orders, documents, permits | create_case_workflow, attach_registration_order, update_case_operational_data, update_shipment_maritime_data, calculate_case_valuation, register_declaration_workflow, delete_case_workflow |
+| `DeclarationRegistrationPage.tsx` | shipments, customs_declarations, shipment_customs_data, customs_offices, customs_documents | register_shipment_declaration, set_declaration_file, initialize_declaration_checklist |
+| `ExitPage.tsx` | shipment_customs_data | update_declaration_checklist_item, complete_customs_declaration_exit |
+
+The existing `worker/shipments-api.ts` is not a substitute for these workflows: its collection/detail/create/update operations do not by themselves prove shipment-document extraction, case linking, tracking transitions, ship-pass, declaration registration, checklist initialization, or exit completion parity.
+
+### Operational porting gates
+
+- Build an explicit request/response contract for each listed RPC from the checked-in source migrations/functions and its current UI caller.
+- Implement each contract as a D1 Worker operation with organization scoping, role authorization, input validation, audit history and atomic writes.
+- For shipment/case/order links, verify cross-organization and cross-company allocation rules; never trust a client-supplied organization ID.
+- Keep declaration registration and exit as guarded state transitions. Reject out-of-order transitions and duplicate completion; do not emulate them with unguarded row updates.
+- Replace each caller in-place and test the complete ShipmentFirst → PreDeclaration → Declaration → Checklist → Exit path against staging data.
+- Do not change `/operations` to use D1 until every operation it invokes has a tested D1 equivalent.
+
+This page-level dependency inventory is based on the actual TypeScript source files on `main`; it is not evidence that the D1 APIs are wired into those pages.
