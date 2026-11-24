@@ -60,15 +60,12 @@ jobs:
             exit 1
           fi
           echo "Cloudflare API token verification: active"
-          permission_groups="$(jq -r '[.result.policies[]?.permission_groups[]?.name] | unique | sort | join(", ")' "$work/token_verify.json")"
-          echo "Cloudflare token permission groups: ${permission_groups:-none reported}"
+          token_id="$(jq -r '.result.id // "unknown"' "$work/token_verify.json")"
+          echo "Cloudflare API token ID: $token_id"
           {
-            echo "### Verified token permission groups (names only)"
-            if [ -n "$permission_groups" ]; then
-              jq -r '[.result.policies[]?.permission_groups[]?.name] | unique | sort | .[] | "- " + .' "$work/token_verify.json"
-            else
-              echo "- none reported"
-            fi
+            echo "### Token verification"
+            echo "- Token ID: **$token_id**"
+            echo "- Token policy details are not included in the verification response; the D1 endpoint response below is the permission check."
             echo
           } >> "$GITHUB_STEP_SUMMARY"
 
