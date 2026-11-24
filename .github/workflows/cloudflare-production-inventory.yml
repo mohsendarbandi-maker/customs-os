@@ -60,8 +60,8 @@ jobs:
             d1_token="$CLOUDFLARE_API_TOKEN"
             d1_token_source="Worker deployment token fallback"
           fi
-          d1_code="$(curl --silent --show-error --max-time 25 -o "$work/d1.json" -w '%{http_code}' \\
-            -H "Authorization: Bearer ${d1_token}" -H 'Accept: application/json' \\
+          d1_code="$(curl --silent --show-error --max-time 25 -o "$work/d1.json" -w '%{http_code}' \
+            -H "Authorization: Bearer ${d1_token}" -H 'Accept: application/json' \
             "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database?per_page=100")"
           printf '%s' "$d1_code" > "$work/d1.status"
           if [ "$d1_code" = "200" ]; then jq -e '.success == true' "$work/d1.json" >/dev/null; fi
@@ -88,7 +88,7 @@ jobs:
 
           if [ "$d1_status" = "200" ]; then
             echo "### D1 databases" >> "$GITHUB_STEP_SUMMARY"
-            jq -r '.result[] | "- **" + .name + "** — (.uuid) — jurisdiction: (.jurisdiction // "unspecified")"' \
+            jq -r '.result[] | "- **\(.name)** — \(.uuid) — jurisdiction: \(.jurisdiction // "unspecified")"' \
               "$work/d1.json" >> "$GITHUB_STEP_SUMMARY"
             prod_count="$(jq '[.result[] | select(.name == "customs-os-production")] | length' "$work/d1.json")"
             staging_count="$(jq '[.result[] | select(.name == "customs-os-migration-staging")] | length' "$work/d1.json")"
