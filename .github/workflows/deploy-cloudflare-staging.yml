@@ -640,7 +640,7 @@ jobs:
           page_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/login.html" --write-out '%{http_code}' "$base/login")"
           test "$page_code" = "200"
           grep -qi '<title>Customs OS' "$work_dir/login.html"
-          asset_path="$(grep -oE 'src="[^"]+\\.js"' "$work_dir/login.html" | head -1 | cut -d'"' -f2)"
+          asset_path="$(grep -oE 'src="[^"]+\.js"' "$work_dir/login.html" | head -1 | cut -d'"' -f2)"
           test -n "$asset_path"
           case "$asset_path" in /assets/*) ;; *) echo "::error::Unexpected SPA asset path"; exit 1 ;; esac
           asset_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/app.js" --write-out '%{http_code}' "$base$asset_path")"
