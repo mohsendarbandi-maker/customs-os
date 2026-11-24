@@ -287,6 +287,32 @@ export const handleShipmentsApi = async (
   if (!profile.is_active || !ALLOWED_ROLES.has(profile.role)) return fail('FORBIDDEN', 403);
   if (!profile.id || !profile.organization_id) return fail('INVALID_SESSION_PROFILE', 401);
   if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  if (request.method === 'GET' && url.pathname === COLLECTION + '/registration-orders') {
+    const limit = boundedInteger(url.searchParams.get('limit'), 100, 1, 100);
+    const offset = boundedInteger(url.searchParams.get('offset'), 0, 0, 1000000);
+    try {
+      const count = await db.prepare(
+        'SELECT COUNT(*) AS total FROM registration_orders WHERE organization_id=?',
+      ).bind(profile.organization_id).first<{ total: number }>();
+      const rows = await db.prepare(
+        'SELECT id,client_id,order_number,case_id,is_closed,bank_name,bank_branch,bank_branch_code,payment_instrument_code ' +
+        'FROM registration_orders WHERE organization_id=? ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?',
+      ).bind(profile.organization_id, limit, offset).all<{
+        id: string; client_id: string | null; order_number: string; case_id: string | null;
+        is_closed: number | boolean; bank_name: string | null; bank_branch: string | null;
+        bank_branch_code: string | null; payment_instrument_code: string | null;
+      }>();
+      return json({
+        ok: true,
+        items: rows.results.map(order => ({ ...order, is_closed: Boolean(order.is_closed) })),
+        total: Number(count?.total || 0),
+        limit,
+        offset,
+      });
+    } catch {
+      return fail('SHIPMENT_OPTIONS_NOT_READY', 503);
+    }
+  }
   const id = routeId(url.pathname);
   if (id instanceof Response) return id;
   if (request.method === 'GET' && id === null) {
