@@ -75,7 +75,7 @@ const regimes = [
 const inputClass = 'w-full min-h-11 rounded-xl border app-border bg-[var(--surface-2)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]';
 const labelClass = 'block text-xs font-bold app-muted mb-1.5';
 const toNumber = (value: string) => Number(value.replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replace(/[٬,]/g, '').trim());
-const messageFor = (code: string) => ({
+const errorMessages: Record<string, string> = {
   UNAUTHORIZED: 'نشست ورود معتبر نیست؛ دوباره وارد شوید.',
   FORBIDDEN: 'اجازه ثبت محموله برای این حساب وجود ندارد.',
   CLIENT_NOT_FOUND: 'صاحب کالا در همین سازمان پیدا نشد.',
@@ -85,7 +85,8 @@ const messageFor = (code: string) => ({
   DUPLICATE_BILL_OF_LADING: 'این شماره بارنامه با همین خط کشتیرانی و سال قبلاً ثبت شده است.',
   GROSS_WEIGHT_BELOW_NET_WEIGHT: 'وزن ناخالص نمی‌تواند از وزن خالص کمتر باشد.',
   SHIPMENTS_API_NOT_READY: 'سرویس محموله یا ساختار D1 آماده نیست.',
-}[code] || code || 'عملیات انجام نشد.');
+};
+const messageFor = (code: string) => errorMessages[code] || code || 'عملیات انجام نشد.';
 const requestJson = async <T,>(url: string, init: RequestInit = {}): Promise<T> => {
   const response = await fetch(url, {
     ...init,
