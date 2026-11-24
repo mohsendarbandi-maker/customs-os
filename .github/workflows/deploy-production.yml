@@ -177,8 +177,7 @@ jobs:
             assert.equal(compact.dockRight, 390, JSON.stringify(compact));
             assert.equal(compact.dockBottom, 600, JSON.stringify(compact));
             assert.ok(compact.contentReserve >= compact.dockHeight, JSON.stringify(compact));
-            assert.ok(compact.composerClearance >= 0, JSON.stringify(compact));
-            // Simulate the iOS visual viewport shrinking after an editable field
+            assert.ok(compact.composerClearance >= 0, JSON.stringify(compact));            // Simulate the iOS visual viewport shrinking after an editable field
             // receives focus. This verifies the dock remains visible on a non-chat
             // route, and that the app-content scroller keeps its reserved clearance.
             const keyboardPage = await browser.newPage({
@@ -338,9 +337,36 @@ jobs:
           else
             echo "is_latest=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Validate explicit production Worker target
+        if: steps.freshness.outputs.is_latest == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const config = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
+          const expectedRoutes = [
+            'darbandicommercial.ir',
+            'chat.darbandicommercial.ir',
+            'reminders.darbandicommercial.ir',
+            'mobile.darbandicommercial.ir',
+          ];
+          const actualRoutes = (config.routes ?? []).map((route) => route.pattern).sort();
+          const checks = {
+            workerName: config.name === 'customs',
+            entrypoint: config.main === 'worker/index.ts',
+            productionRoutes: JSON.stringify(actualRoutes) === JSON.stringify([...expectedRoutes].sort()),
+            assetsBinding: config.assets?.binding === 'ASSETS' && config.assets?.directory === './dist',
+            noStagingD1Binding: !(config.d1_databases ?? []).some((db) => db.database_name === 'customs-os-migration-staging'),
+          };
+          console.log(JSON.stringify({ worker: config.name, routes: actualRoutes, checks }, null, 2));
+          if (!Object.values(checks).every(Boolean)) {
+            throw new Error('Refusing production deployment: explicit Worker target validation failed.');
+          }
+          NODE
       - name: Deploy Worker to Cloudflare
         if: steps.freshness.outputs.is_latest == 'true'
-        run: npx wrangler@4 deploy
+        run: npx wrangler@4 deploy --config wrangler.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -357,8 +383,7 @@ jobs:
             --data-urlencode "name=darbandicommercial.ir" "${api}/zones")"
           if [ "$zone_code" != "200" ]; then
             echo "::warning::Cloudflare Zone read unavailable to the deployment token (HTTP ${zone_code}); skipping redirect diagnostics."
-            exit 0
-          fi
+            exit 0          fi
           zone_id="$(jq -r '.result[0].id // empty' /tmp/cf-zones.json)"
           if [ -z "$zone_id" ]; then
             echo "::warning::Cloudflare did not return the darbandicommercial.ir zone."
@@ -537,7 +562,6 @@ jobs:
               echo "Mobile auth bridge must rely on its narrow CSP frame-ancestors allowlist."
               exit 1
             fi
-
             echo "Checking service worker script availability"
             sw_status="$(curl --silent --show-error --max-time 20 -D /tmp/sw.headers -o /tmp/sw.js -w '%{http_code}' "$base/sw.js?__sw_smoke=${GITHUB_SHA}-${GITHUB_RUN_ID}")"
             test "$sw_status" = "200"
@@ -717,8 +741,7 @@ jobs:
               test "$pwa_location" = "$base/?__legacy_pwa_smoke=${GITHUB_RUN_ID}"
             else
               echo "Checking PWA launch query remains usable on the dedicated mobile host"
-              mobile_pwa_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/mobile-pwa.headers -o /tmp/mobile-pwa.html -w '%{http_code}' "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"
-              test "$mobile_pwa_status" = "200"
+              mobile_pwa_status="$(curl --silent --show-error --location --max-time 20 -D /tmp/mobile-pwa.headers -o /tmp/mobile-pwa.html -w '%{http_code}' "$base/?source=pwa&__legacy_pwa_smoke=${GITHUB_RUN_ID}")"              test "$mobile_pwa_status" = "200"
               grep -Fq '<div id="root">' /tmp/mobile-pwa.html
             fi
 
@@ -897,8 +920,7 @@ jobs:
                   const conversationHeader = document.createElement('header');
                   conversationHeader.className = 'chat-conversation-header';
                   const messages = document.createElement('div');
-                  messages.className = 'chat-message-area';
-                  const composer = document.createElement('div');
+                  messages.className = 'chat-message-area';                  const composer = document.createElement('div');
                   composer.className = 'chat-composer';
                   composer.style.height = '58px';
                   conversation.append(conversationHeader, messages, composer);
@@ -1077,8 +1099,7 @@ jobs:
                     (await navigator.serviceWorker?.getRegistrations() || []).some((registration) => registration.active?.state === 'activated'),
                   ),
                   { timeout: 20000, message: `Service worker did not activate: ${JSON.stringify(registrationState)}; errors: ${errors.join(' | ') || 'none'}` },
-                ).toBe(true);
-                await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                ).toBe(true);                await offlinePage.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
                 await expect.poll(
                   async () => await offlinePage.evaluate(() => Boolean(navigator.serviceWorker?.controller)),
                   { timeout: 20000, message: `Service worker did not control the reloaded app shell; errors: ${errors.join(' | ') || 'none'}` },
@@ -1257,8 +1278,7 @@ jobs:
                 }
                 console.log('Touch-first layout retained at a wide viewport:', JSON.stringify(touchLayout));
               } finally {
-                await touchContext.close();
-              }
+                await touchContext.close();              }
 
               // Verify the primary domain hands an iPhone browser to the mobile
               // hostname, retaining the deep link and transferring auth only through
@@ -1437,8 +1457,7 @@ jobs:
 
               if (errors.length) {
                 throw new Error(errors.join('\n'));
-              }
-            });
+              }            });
           }
           EOF
           npx playwright test live-runtime-smoke.spec.mjs --reporter=line
