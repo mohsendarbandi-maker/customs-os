@@ -630,7 +630,7 @@ jobs:
           trap 'rm -rf "$work_dir"' EXIT
 
           curl --silent --show-error --fail --max-time 30 "$base/health" -o "$work_dir/health.json"
-          jq -e '.ok == true and .environment == "staging" and .productionTraffic == false and .productionDataImported == false' "$work_dir/health.json" >/dev/null
+          jq -e '.ok == true and .environment == "staging" and .productionTraffic == false and .productionDataImported == false and .authenticationConfigured == true' "$work_dir/health.json" >/dev/null
 
           curl --silent --show-error --fail --max-time 30 "$base/health/db" -o "$work_dir/db.json"
           jq -e '.ok == true and .database == "customs-os-migration-staging" and .operationalDataImported == true' "$work_dir/db.json" >/dev/null
@@ -657,7 +657,7 @@ jobs:
           jq -e '.error == "UNAUTHORIZED"' "$work_dir/unauthenticated.json" >/dev/null
 
           if [ -z "${CUSTOMS_ADMIN_PASSWORD:-}" ]; then
-            echo "::warning::Authenticated iPhone/PWA persistence and the 22-row live list were not testable: CUSTOMS_ADMIN_PASSWORD is not configured in the GitHub Preview environment. The secret value was not read, printed, or changed."
+            echo "::warning::The Worker confirms its admin password is configured. Real credential login, cookie restoration and the authenticated 22-row list remain unverified because this GitHub Preview environment has no separate test credential; no secret value was read, printed, or changed."
             exit 0
           fi
 

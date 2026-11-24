@@ -462,6 +462,8 @@ export default {
         environment: env.MIGRATION_ENVIRONMENT ?? 'staging',
         database: 'd1',
         authentication: 'cloudflare-d1-session',
+        // Reports presence only; never expose or log the credential value.
+        authenticationConfigured: Boolean(env.CUSTOMS_ADMIN_PASSWORD),
         productionTraffic: isProductionTrafficHost(url.hostname),
         productionDataImported: env.PRODUCTION_DATA_IMPORTED === 'true',
       });
