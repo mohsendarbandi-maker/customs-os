@@ -81,7 +81,7 @@ A direct comparison of `src/pages/CaseOperationsPage.tsx` with `worker/cases-api
 | Existing case page operation | Existing source contract | Current D1 case API |
 |---|---|---|
 | Case list | `case_display_context` view | `GET /api/cases` returns a narrower `cases` + `clients` projection |
-| Case detail fields | Includes `warehouse_receipt_no`, `release_status`, `valuation_status`, shipment-derived display fields | These three columns exist in the staging `cases` table but are absent from the D1 `CaseRecord` projection |
+| Case detail fields | Includes warehouse receipt, release, valuation, vessel, unloading and regime fields plus shipment-derived display fields | The D1 projection now includes the seven verified operational fields listed below; shipment-derived display fields still need parity review |
 | Linked documents | `customs_documents` | D1 returns a limited customs-document projection |
 | Declaration | Latest `customs_declarations` row | D1 returns declaration rows, but response shape is not yet proven identical |
 | Permits | Legacy page queries `permits` | No `permits` table exists in the inspected staging D1 schema; no D1 equivalent is demonstrated |
@@ -129,7 +129,7 @@ No table named `permits` or `case_exit_operations` appears in the 45-table schem
 6. Port readiness calculation only after its source RPC definition and all required inputs are understood.
 7. Replace the existing page's Supabase reads/writes in-place and add regression tests for each field and action. Do not switch the whole app auth host before this and other module contracts pass.
 
-No case API code was changed as part of this audit because permit/exit contracts, source delete/readiness rules, and complete dependency semantics are still unverified.
+The D1 case API was extended additively in PR317 to expose seven schema-verified operational fields. This does not complete case parity: permit/exit contracts, source delete/readiness rules, and complete dependency semantics remain unverified. The API remains read-only; no UI switch or production/staging deployment has occurred.
 
 ## Deep contract finding: operational lifecycle still calls legacy tables and RPCs
 
@@ -170,4 +170,13 @@ The D1 case read API now selects and returns the following fields that were veri
 
 Both collection and detail queries share the same explicit projection. Existing organization-scoped predicates remain unchanged. Tests were extended to assert these values are present in list and detail responses. This is a read-only additive API change; PATCH/POST/DELETE remain rejected with HTTP 405. The existing React page has not yet been switched to this API, and no production or staging deployment was performed for this code change.
 
-CI for the latest commit is still running at the time of this documentation update; do not treat the added tests as passed until the corresponding workflow run completes successfully.
+CI run 45508681720 completed successfully for commit c6cc7a2b52a927f7b0b4be85c05a887480850332: unit tests, isolated PostgreSQL workflow contracts, typecheck, lint, production build, Deno static checks, and Cloudflare Worker dry-run passed. Mobile viewport smoke was skipped by its branch-only condition. A subsequent test-fixture-only correction changed the valuation status from an invalid sample value to the source-defined `calculated` value; its new CI run must also pass before this latest commit is considered validated.
+
+
+## Latest static runtime inventory artifact (2026-11-24)
+
+- Workflow run: 45508681894, conclusion `success`; artifact ID 14973902471.
+- Scanner mode: `static-source-scan`; `networkAccess=false`, `environmentVariablesRead=false`, and `credentialValuesPrinted=false`.
+- Scanned 204 files under `src/` and `worker/`; the artifact records 727 recognized callsites across 64 table names, 76 RPC names, 6 Edge Function names, 5 Edge Function wrapper names, 4 storage buckets, 7 realtime channel patterns, and 6 auth method names.
+- This is a static inventory, not runtime traffic or data-parity evidence.
+- The scanner confirms the case detail page still directly uses the `case_display_context` view, `permits`, `case_exit_operations`, and the `delete_case_safely` and `get_case_completion_readiness` RPCs. It also confirms the main operational path still depends on several legacy workflow RPCs; these remain cutover blockers.
