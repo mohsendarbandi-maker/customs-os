@@ -1,0 +1,79 @@
+name: Customs OS Read-only Runtime Dependency Inventory
+
+on:
+  push:
+    branches:
+      - audit/read-only-supabase-runtime-inventory
+    paths:
+      - "scripts/audit-cloudflare-dependencies.mjs"
+      - "src/**"
+      - "worker/**"
+      - ".github/workflows/cloudflare-runtime-inventory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customs-os-read-only-runtime-inventory
+  cancel-in-progress: true
+
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Run static dependency inventory (no network, no secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/audit-cloudflare-dependencies.mjs > "$RUNNER_TEMP/customs-os-runtime-inventory.json"
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/customs-os-runtime-inventory.json', 'utf8'));
+          const lines = [
+            '## Static runtime dependency inventory',
+            '',
+            '- Read-only source scan; no network calls or environment variables.',
+            '- Credential values are never read or printed.',
+            `- Source files scanned: **${report.sourceFilesScanned}**`,
+            `- Recognized callsites: **${report.callsiteCount}**`,
+            '',
+            '| Category | Distinct references |',
+            '|---|---:|',
+            ...Object.entries(report.counts).map(([name, count]) => `| ${name} | ${count} |`),
+            '',
+            ...Object.entries(report.categories).flatMap(([name, values]) => [
+              `### ${name}`,
+              '',
+              ...(values.length ? values.map(value => `- \`${value}\``) : ['- none']),
+              '',
+            ]),
+            '### Files and dependencies',
+            '',
+            ...report.perFile.map(item => `- \`${item.file}\`: ${Object.keys(item.dependencies).join(', ')}`),
+            '',
+            'Static scan limitations: dynamic names and indirect calls may be missed; this is not runtime traffic proof.',
+          ];
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\\n'));
+          console.log(JSON.stringify({
+            mode: report.mode,
+            sourceFilesScanned: report.sourceFilesScanned,
+            callsiteCount: report.callsiteCount,
+            counts: report.counts,
+            perFileCount: report.perFile.length,
+            networkAccess: report.networkAccess,
+            environmentVariablesRead: report.environmentVariablesRead,
+            credentialValuesPrinted: report.credentialValuesPrinted,
+          }, null, 2));
+          NODE
+      - name: Preserve complete machine-readable report
+        uses: actions/upload-artifact@v4
+        with:
+          name: customs-os-read-only-runtime-inventory
+          path: ${{ runner.temp }}/customs-os-runtime-inventory.json
+          if-no-files-found: error
+          retention-days: 7
