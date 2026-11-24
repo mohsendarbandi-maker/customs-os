@@ -2,6 +2,7 @@ import React from 'react';
 import { RefreshCw, Plus, Save, Pencil, X, Ship, Search, AlertCircle } from 'lucide-react';
 
 type ClientOption = { id: string; name: string; national_id?: string | null };
+type RegistrationOrderOption = { id: string; client_id: string | null; order_number: string; is_closed: boolean; case_id: string | null; bank_name?: string | null; bank_branch?: string | null; bank_branch_code?: string | null; payment_instrument_code?: string | null };
 type Shipment = {
   id: string;
   organization_id: string;
@@ -47,6 +48,7 @@ type ShipmentForm = {
   grossWeightKg: string;
   currentStatus: string;
   currentLocation: string;
+  registrationOrderId: string;
   registrationOrderNo: string;
   customsRegime: string;
   sataCode: string;
@@ -58,7 +60,7 @@ const emptyForm: ShipmentForm = {
   clientId: '', shippingLine: '', billOfLading: '', billOfLadingYear: String(new Date().getFullYear()),
   voyageNo: '', vesselName: '', vesselImo: '', vesselFlag: '', originPort: '', destinationPort: '',
   cargoCount: '', cargoCountUnit: 'رول', netWeightKg: '', grossWeightKg: '',
-  currentStatus: 'draft', currentLocation: '', registrationOrderNo: '',
+  currentStatus: 'draft', currentLocation: '', registrationOrderId: '', registrationOrderNo: '',
   customsRegime: 'definitive_import', sataCode: '', cargoDescription: '',
 };
 const statusOptions = [
@@ -122,6 +124,7 @@ const Field = ({ label, value, onChange, placeholder = '', type = 'text', dir = 
 export const StagingShipmentsPanel: React.FC = () => {
   const [clients, setClients] = React.useState<ClientOption[]>([]);
   const [shipments, setShipments] = React.useState<Shipment[]>([]);
+  const [registrationOrders, setRegistrationOrders] = React.useState<RegistrationOrderOption[]>([]);
   const [total, setTotal] = React.useState(0);
   const [form, setForm] = React.useState<ShipmentForm>(emptyForm);
   const [selectedId, setSelectedId] = React.useState('');
@@ -139,13 +142,15 @@ export const StagingShipmentsPanel: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [shipmentData, clientData] = await Promise.all([
+      const [shipmentData, clientData, orderData] = await Promise.all([
         requestJson<ApiList<Shipment>>('/api/shipments?limit=200&offset=0'),
         requestJson<ApiList<ClientOption>>('/api/clients?limit=100&offset=0'),
+        requestJson<ApiList<RegistrationOrderOption>>('/api/registration-orders?limit=100&offset=0'),
       ]);
       setShipments(shipmentData.items || []);
       setTotal(shipmentData.total || 0);
       setClients(clientData.items || []);
+      setRegistrationOrders(orderData.items || []);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'بارگذاری اطلاعات محموله‌ها ناموفق بود.');
     } finally {
@@ -173,6 +178,8 @@ export const StagingShipmentsPanel: React.FC = () => {
   };
 
   const startEdit = (shipment: Shipment) => {
+    const linkedOrder = registrationOrders.find(order => order.id === shipment.registration_order_id ||
+      (Boolean(shipment.registration_order_no) && order.order_number === shipment.registration_order_no));
     setSelectedId(shipment.id);
     setForm({
       clientId: shipment.client_id || '',
@@ -191,7 +198,8 @@ export const StagingShipmentsPanel: React.FC = () => {
       grossWeightKg: shipment.gross_weight_kg == null ? '' : String(shipment.gross_weight_kg),
       currentStatus: shipment.current_status || 'draft',
       currentLocation: shipment.current_location || '',
-      registrationOrderNo: shipment.registration_order_no || '',
+      registrationOrderId: linkedOrder?.id || '',
+      registrationOrderNo: linkedOrder?.order_number || shipment.registration_order_no || '',
       customsRegime: shipment.customs_regime || 'definitive_import',
       sataCode: shipment.sata_code || '',
       cargoDescription: shipment.cargo_description || '',
@@ -235,6 +243,7 @@ export const StagingShipmentsPanel: React.FC = () => {
       currentStatus: form.currentStatus,
       currentLocation: form.currentLocation,
       registrationOrderNo: form.registrationOrderNo,
+      registrationOrderId: form.registrationOrderId || null,
       customsRegime: form.customsRegime,
       sataCode: form.sataCode,
       cargoDescription: form.cargoDescription,
@@ -256,6 +265,8 @@ export const StagingShipmentsPanel: React.FC = () => {
       setSaving(false);
     }
   };
+
+  const selectedRegistrationOrder = registrationOrders.find(order => order.id === form.registrationOrderId);
 
   return (
     <section className="rounded-2xl border app-border p-4 md:p-5 space-y-4" dir="rtl" aria-label="مدیریت محموله‌ها">
@@ -310,6 +321,27 @@ export const StagingShipmentsPanel: React.FC = () => {
                 <option value="">انتخاب صاحب کالا</option>
                 {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
               </select>
+            </label>
+            <label className="block min-w-0">
+              <span className={labelClass}>ثبت سفارش</span>
+              <select className={inputClass} value={form.registrationOrderId} disabled={Boolean(selectedId)}
+                onChange={event => {
+                  const order = registrationOrders.find(item => item.id === event.target.value);
+                  setForm(previous => ({
+                    ...previous,
+                    registrationOrderId: order?.id || '',
+                    registrationOrderNo: order?.order_number || '',
+                    clientId: order?.client_id || previous.clientId,
+                  }));
+                }}>
+                <option value="">بدون اتصال به ثبت سفارش</option>
+                {registrationOrders.map(order => <option key={order.id} value={order.id} disabled={order.is_closed && order.id !== form.registrationOrderId}>
+                  {order.order_number}{order.is_closed ? ' · نهایی‌شده' : ''}
+                </option>)}
+              </select>
+              {selectedRegistrationOrder && <span className="mt-1 block text-[10px] app-muted">
+                {selectedRegistrationOrder.bank_name || 'بانک ثبت نشده'} · {selectedRegistrationOrder.bank_branch_code || 'کد شعبه ندارد'} · {selectedRegistrationOrder.payment_instrument_code || 'کد ابزار پرداخت ندارد'}
+              </span>}
             </label>
             <Field label="خط کشتیرانی" value={form.shippingLine} onChange={value => set('shippingLine', value)} placeholder="نام شرکت کشتیرانی" />
             <Field label="نام کشتی *" value={form.vesselName} onChange={value => set('vesselName', value)} placeholder="نام کشتی" />
