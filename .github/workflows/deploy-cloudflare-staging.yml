@@ -444,7 +444,8 @@ jobs:
             echo
             echo "### Import parity"
             if [[ -f "$work_dir/parity.json" ]]; then
-              jq -r '"HTTP result: \(.ok), manifest tables: \(.sourceTableCount), expected rows: \(.expectedTotal), actual rows: \(.actualTotal), missing required targets: \(.missingRequiredTargets), mismatched tables: \(.mismatchedTables), failed counts: \(.failedCounts)"' "$work_dir/parity.json"
+              jq -r '"HTTP result: \(.ok), manifest tables: \(.sourceTableCount), expected imported rows: \(.expectedTotal), parity rows: \(.actualTotal), physical rows counted: \(.physicalActualTotal), verified reference rows excluded: \(.referenceRowsExcluded), missing required targets: \(.missingRequiredTargets), mismatched tables: \(.mismatchedTables), failed counts: \(.failedCounts)"' "$work_dir/parity.json"
+              jq -r '.tables[] | select((.delta // 0) != 0 or .verified == false) | "- " + .table + ": expected=" + (.expectedRows | tostring) + ", actual=" + (if .actualRows == null then "unverified" else (.actualRows | tostring) end) + ", verified reference rows excluded=" + (.referenceRowsExcluded | tostring) + ", parity rows=" + (if .parityRows == null then "unverified" else (.parityRows | tostring) end) + ", delta=" + (if .delta == null then "unverified" else (.delta | tostring) end)' "$work_dir/parity.json"
             else
               echo "Unavailable; see workflow warning."
             fi
