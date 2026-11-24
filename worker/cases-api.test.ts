@@ -60,7 +60,7 @@ describe('Cloudflare D1 cases read API', () => {
     expect(body.items[0].id).toBe('case-a');
     expect(body.items[0].warehouse_receipt_no).toBe('WH-1405-01');
     expect(body.items[0].release_status).toBe('pending');
-    expect(body.items[0].valuation_status).toBe('in_progress');
+    expect(body.items[0].valuation_status).toBe('calculated');
     expect(body.total).toBe(1);
     expect(body.dataScope).toBe('authenticated_organization_only');
     expect(db.queries[0].sql.replace(/\s/g, '')).toContain('c.organization_id=?');
