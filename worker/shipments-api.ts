@@ -141,6 +141,7 @@ const parseInput = async (request: Request): Promise<ShipmentInput | Response> =
   if (!clientId) return fail('CLIENT_REQUIRED', 400);
   if (!vesselName) return fail('VESSEL_REQUIRED', 400);
   if (cargoCount instanceof Response) return cargoCount;
+  if (!Number.isSafeInteger(cargoCount) || cargoCount <= 0) return fail('INVALID_CARGO_COUNT', 400);
   if (netWeightKg instanceof Response) return netWeightKg;
   if (grossWeightKg instanceof Response) return grossWeightKg;
   if (grossWeightKg < netWeightKg) return fail('GROSS_WEIGHT_BELOW_NET_WEIGHT', 400);
