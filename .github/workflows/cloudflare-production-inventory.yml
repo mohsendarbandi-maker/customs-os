@@ -77,6 +77,8 @@ jobs:
           d1_status="$(cat "$work/d1.status")"
           workers_status="$(cat "$work/workers.status")"
           zone_status="$(cat "$work/zone.status")"
+          echo "Cloudflare account ID used for inventory: $CLOUDFLARE_ACCOUNT_ID"
+          echo "Cloudflare API HTTP statuses: D1=$d1_status Workers=$workers_status Zone=$zone_status"
 
           {
             echo "## Cloudflare Production Inventory"
