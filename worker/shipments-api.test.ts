@@ -7,6 +7,7 @@ import {
 } from './shipments-api';
 
 type Row = Record<string, unknown>;
+type ShipmentRow = Row & { id: string; organization_id: string; case_id: string | null; vessel_id: string | null; cargo_count: number | null };
 class FakeStatement implements ShipmentsD1Statement {
   values: unknown[] = [];
   constructor(readonly sql: string, private readonly db: FakeD1) {}
