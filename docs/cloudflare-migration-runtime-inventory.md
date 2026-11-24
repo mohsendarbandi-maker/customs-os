@@ -73,3 +73,32 @@ The scanner and workflow log networkAccess=false, environmentVariablesRead=false
 - Edge Function wrappers can overlap with direct function calls; do not add those categories as independent functions.
 - Dynamic table/RPC/bucket/channel names may be missed.
 - This is a migration inventory, not a claim of feature parity or cutover readiness.
+
+## Deep contract finding: case management is not yet portable
+
+A direct comparison of `src/pages/CaseOperationsPage.tsx` with `worker/cases-api.ts` and `worker/cases-api.test.ts` shows a concrete contract gap:
+
+| Existing case page operation | Existing source contract | Current D1 case API |
+|---|---|---|
+| Case list | `case_display_context` view | `GET /api/cases` returns a narrower `cases` + `clients` projection |
+| Case detail fields | Includes `warehouse_receipt_no`, `release_status`, `valuation_status`, shipment-derived display fields | Those three case fields are absent from the D1 `CaseRecord` projection |
+| Linked documents | `customs_documents` | D1 returns a limited customs-document projection |
+| Declaration | Latest `customs_declarations` row | D1 returns declaration rows, but response shape is not yet proven identical |
+| Permits | `permits` table, ordered by creation time | Not included in D1 case detail response |
+| Exit operations | `case_exit_operations` table, latest updated row | Not included in D1 case detail response |
+| Readiness | `get_case_completion_readiness(p_case_id)` RPC | No D1 replacement demonstrated |
+| Edit case | `UPDATE cases` with case number, order/proforma, cargo, weight, warehouse receipt, release and valuation fields | D1 API deliberately rejects PATCH with HTTP 405 |
+| Delete case | `delete_case_safely(p_case_id)` RPC | No D1 safe-delete equivalent demonstrated |
+
+The existing D1 test explicitly asserts that PATCH returns 405 and executes no SQL. This is intentional fail-closed behavior, not a working edit feature.
+
+### Safe implementation sequence for case parity
+
+1. Confirm the exact D1 `cases`, `permits`, and `case_exit_operations` schema from the staging schema inspection; do not infer columns from the old frontend alone.
+2. Add organization-scoped, validated read projections for the missing case fields and related permit/exit data.
+3. Implement audited case PATCH with an explicit allowlist, numeric validation, same-origin protection, tenant scoping, and atomic audit insertion. Preserve status/workflow fields as immutable until the workflow API exists.
+4. Implement safe delete only after checking every foreign-key/dependency table and porting the source RPC's exact business rules. Do not substitute a generic DELETE.
+5. Port readiness calculation only after its source RPC definition and all required inputs are understood.
+6. Replace the existing page's Supabase reads/writes in-place and add regression tests for each field and action. Do not switch the whole app auth host before this and other module contracts pass.
+
+No case API code was changed as part of this audit because the full D1 schema and the source delete/readiness business rules have not been verified.
