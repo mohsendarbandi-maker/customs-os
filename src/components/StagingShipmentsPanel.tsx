@@ -145,7 +145,7 @@ export const StagingShipmentsPanel: React.FC = () => {
       const [shipmentData, clientData, orderData] = await Promise.all([
         requestJson<ApiList<Shipment>>('/api/shipments?limit=200&offset=0'),
         requestJson<ApiList<ClientOption>>('/api/clients?limit=100&offset=0'),
-        requestJson<ApiList<RegistrationOrderOption>>('/api/registration-orders?limit=100&offset=0'),
+        requestJson<ApiList<RegistrationOrderOption>>('/api/shipments/registration-orders?limit=100&offset=0'),
       ]);
       setShipments(shipmentData.items || []);
       setTotal(shipmentData.total || 0);
