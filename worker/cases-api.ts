@@ -10,6 +10,9 @@ export interface CaseRecord {
   client_name: string | null; customs_office_id: string | null; registration_order_no: string | null;
   proforma_no: string | null; cargo_description: string | null; cargo_count: number | null;
   cargo_count_unit: string | null; net_weight_kg: number | null; gross_weight_kg: number | null;
+  warehouse_receipt_no: string | null; warehouse_receipt_date: string | null;
+  release_status: string | null; valuation_status: string | null;
+  unloading_date: string | null; vessel_type: string | null; customs_regime: string | null;
   display_name: string | null; created_at: string | null; updated_at: string | null;
   shipment_count: number; latest_shipment_id: string | null; shipment_display_name: string | null;
   bill_of_lading_no: string | null; vessel_name: string | null; kottaj_number: string | null;
@@ -21,6 +24,8 @@ const selectColumns = [
   'c.id', 'c.case_number', 'c.status', 'c.client_id', 'cl.name AS client_name',
   'c.customs_office_id', 'c.registration_order_no', 'c.proforma_no', 'c.cargo_description',
   'c.cargo_count', 'c.cargo_count_unit', 'c.net_weight_kg', 'c.gross_weight_kg',
+  'c.warehouse_receipt_no', 'c.warehouse_receipt_date', 'c.release_status', 'c.valuation_status',
+  'c.unloading_date', 'c.vessel_type', 'c.customs_regime',
   'c.display_name', 'c.created_at', 'c.updated_at',
   '(SELECT COUNT(*) FROM shipments s WHERE s.case_id=c.id AND s.organization_id=c.organization_id) AS shipment_count',
   '(SELECT s.id FROM shipments s WHERE s.case_id=c.id AND s.organization_id=c.organization_id ORDER BY s.created_at DESC,s.id DESC LIMIT 1) AS latest_shipment_id',
