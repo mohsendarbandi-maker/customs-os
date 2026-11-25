@@ -7,6 +7,7 @@ class FakeStatement implements CasesD1Statement {
   bind(...values: unknown[]) { this.values = values; return this; }
   async first<T = Record<string, unknown>>(): Promise<T | null> { return this.db.first<T>(this.sql, this.values); }
   async all<T = Record<string, unknown>>(): Promise<{ results: T[] }> { return this.db.all<T>(this.sql, this.values); }
+  async run(): Promise<{ meta?: { changes?: number } }> { return this.db.run(this.sql, this.values); }
 }
 class FakeD1 implements CasesD1Database {
   list: CaseRecord[] = [];
@@ -20,6 +21,17 @@ class FakeD1 implements CasesD1Database {
     if (sql.includes('COUNT(*) AS total FROM cases c')) return { total: this.list.length } as T;
     if (sql.includes('FROM cases c LEFT JOIN clients cl')) return this.detail as T | null;
     throw new Error('Unexpected query: ' + sql);
+  }
+  run(sql: string, values: unknown[]): { meta?: { changes?: number } } {
+    this.queries.push({ sql, values });
+    if (sql.startsWith('UPDATE cases SET')) {
+      if (!this.detail || this.detail.id !== values[values.length - 2]) return { meta: { changes: 0 } };
+      const setSql = sql.slice(sql.indexOf(' SET ') + 5, sql.lastIndexOf(' WHERE '));
+      const columns = setSql.split(',').filter(part => part.includes('=?')).map(part => part.slice(0, part.indexOf('=')).trim());
+      columns.forEach((column, index) => { (this.detail as unknown as Record<string, unknown>)[column] = values[index]; });
+      return { meta: { changes: 1 } };
+    }
+    throw new Error('Unexpected run query: ' + sql);
   }
   all<T>(sql: string, values: unknown[]): { results: T[] } {
     this.queries.push({ sql, values });
@@ -83,6 +95,77 @@ describe('Cloudflare D1 cases read API', () => {
     expect(response.status).toBe(404);
     expect(db.queries[0].sql.replace(/\s/g, '')).toContain('c.organization_id=?');
     expect(db.queries[0].values).toEqual(['foreign-case', 'org-a']);
+  });
+
+  it('updates only allowlisted case operational fields within the active organization', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow };
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({
+        warehouse_receipt_no: 'WH-1405-2',
+        release_status: 'released',
+        valuation_status: 'approved',
+        net_weight_kg: 21000,
+        gross_weight_kg: 21200,
+      }),
+    }), db, url, owner);
+    const body = await response.json() as { case: CaseRecord; ok: boolean };
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.case.warehouse_receipt_no).toBe('WH-1405-2');
+    expect(body.case.release_status).toBe('released');
+    expect(body.case.valuation_status).toBe('approved');
+    const update = db.queries.find(query => query.sql.startsWith('UPDATE cases SET'));
+    expect(update?.sql).toContain('WHERE id=? AND organization_id=?');
+    expect(update?.values.slice(-2)).toEqual(['case-a', 'org-a']);
+  });
+
+  it('does not update a case outside the active organization', async () => {
+    const db = new FakeD1();
+    const url = new URL('https://staging.example/api/cases/foreign-case');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ warehouse_receipt_no: 'WH-1' }),
+    }), db, url, owner);
+    expect(response.status).toBe(404);
+    expect(db.queries.some(query => query.sql.startsWith('UPDATE cases SET'))).toBe(false);
+  });
+
+  it('rejects invalid release status and gross weight below net weight before SQL', async () => {
+    const db = new FakeD1();
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const invalidStatus = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ release_status: 'completed' }),
+    }), db, url, owner);
+    expect(invalidStatus.status).toBe(422);
+    expect(db.queries).toHaveLength(0);
+
+    const invalidWeight = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ net_weight_kg: 20000, gross_weight_kg: 19000 }),
+    }), db, url, owner);
+    expect(invalidWeight.status).toBe(422);
+    expect(db.queries).toHaveLength(0);
+  });
+
+  it('rejects case writes for roles without edit permissions', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow };
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ warehouse_receipt_no: 'WH-1' }),
+    }), db, url, { ...owner, role: 'warehouse' });
+    expect(response.status).toBe(403);
+    expect(db.queries).toHaveLength(0);
   });
 
   it('returns actual linked shipment, declaration and document rows', async () => {
