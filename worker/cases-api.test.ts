@@ -112,7 +112,12 @@ class FakeD1 implements CasesD1Database {
     if (sql.includes('FROM shipments s LEFT JOIN vessels v')) return { results: this.related.shipments as T[] };
     if (sql.includes('FROM customs_declarations WHERE case_id')) return { results: this.related.declarations as T[] };
     if (sql.includes('FROM customs_documents WHERE case_id')) return { results: this.related.documents as T[] };
-    if (sql.includes('FROM permits WHERE case_id')) return { results: this.related.permits as T[] };
+    if (sql.includes('FROM permits WHERE case_id')) {
+      const rows = [...this.related.permits, ...this.permits].filter(
+        row => row.case_id === values[0] && row.organization_id === values[1],
+      );
+      return { results: rows as T[] };
+    }
     if (sql.includes('FROM permits WHERE case_id=? AND organization_id=?')) {
       return { results: this.permits.filter(row => row.case_id === values[0] && row.organization_id === values[1]) as T[] };
     }
