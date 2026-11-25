@@ -56,6 +56,7 @@ class FakeD1 implements CustomsWorkflowD1Database {
   workflow: Row | null = null;
   events: Row[] = [];
   queries: string[] = [];
+  simulateUnrelatedConcurrentEdit = false;
   prepare(sql: string) { return new FakeStatement(this, sql); }
   async batch(statements: CustomsWorkflowD1Statement[]) {
     const results = [];
@@ -113,6 +114,12 @@ class FakeD1 implements CustomsWorkflowD1Database {
     }
     if (sql.includes('UPDATE customs_declaration_workflow SET')) {
       if (!this.workflow) return { meta: { changes: 0 } };
+      if (this.simulateUnrelatedConcurrentEdit) {
+        const concurrentState = JSON.parse(String(this.workflow.expertise_state)) as Row;
+        this.workflow.expertise_state = jsonText({ ...concurrentState, changedByOtherOperator: true });
+        this.workflow.updated_at = '2026-11-25T08:00:00.001Z';
+        this.simulateUnrelatedConcurrentEdit = false;
+      }
       const where = values.slice(-3);
       const [id, organizationId, previousUpdatedAt] = where;
       if (this.workflow.id !== id || this.workflow.organization_id !== organizationId ||
@@ -233,6 +240,30 @@ describe('Cloudflare D1 customs declaration workflow API', () => {
     expect(body.workflow.evaluation_state.evaluator_number).toBe('3');
     expect(body.workflow.current_stage).toBe('expertise');
     expect(db.events[0].event_type).toBe('saved');
+  });
+
+  it('retries a stale CAS after a disjoint activity edit without losing either operator update', async () => {
+    const db = new FakeD1();
+    db.workflow = makeWorkflow();
+    db.simulateUnrelatedConcurrentEdit = true;
+    const url = new URL('https://staging.example/api/customs-declaration-workflows/decl-1/activity');
+    const response = await handleCustomsDeclarationWorkflowApi(
+      request('PATCH', url.pathname, {
+        activity: 'evaluation',
+        patch: { evaluator_number: '3' },
+        baseState: {
+          status: 'required', evaluator_number: '', expert_requested: true, expert_request_note: '',
+        },
+        expectedCurrentStage: 'evaluation',
+      }),
+      db, url, owner,
+    );
+    const body = await parse(response);
+    expect(response.status).toBe(200);
+    expect(body.workflow.evaluation_state.evaluator_number).toBe('3');
+    expect(body.workflow.expertise_state.changedByOtherOperator).toBe(true);
+    expect(db.workflow?.current_stage).toBe('evaluation');
+    expect(db.queries.filter(sql => sql.includes('UPDATE customs_declaration_workflow SET'))).toHaveLength(2);
   });
 
   it('keeps nested parallel edits when undoing a saved JSON patch', () => {
