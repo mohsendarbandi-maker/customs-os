@@ -41,7 +41,10 @@ const caseRow: CaseRecord = {
   id: 'case-a', case_number: '۱۴۰۵-۱', status: 'documents', client_id: 'client-a',
   client_name: 'بازرگانی الف', customs_office_id: null, registration_order_no: 'RO-1', proforma_no: null,
   cargo_description: 'خوراک دام', cargo_count: 20, cargo_count_unit: 'تن', net_weight_kg: 20000,
-  gross_weight_kg: 20200, display_name: 'محموله الف', created_at: '2026-11-01', updated_at: null,
+  gross_weight_kg: 20200, warehouse_receipt_no: 'WH-1405-01', warehouse_receipt_date: '2026-11-02',
+  release_status: 'pending', valuation_status: 'calculated', unloading_date: '2026-11-03',
+  vessel_type: 'foreign', customs_regime: 'definitive_import',
+  display_name: 'محموله الف', created_at: '2026-11-01', updated_at: null,
   shipment_count: 1, latest_shipment_id: 'shipment-a', shipment_display_name: 'محموله الف',
   bill_of_lading_no: 'BL-1', vessel_name: 'Vessel A', kottaj_number: null,
 };
@@ -55,6 +58,9 @@ describe('Cloudflare D1 cases read API', () => {
     const body = await response.json() as { items: CaseRecord[]; total: number; dataScope: string };
     expect(response.status).toBe(200);
     expect(body.items[0].id).toBe('case-a');
+    expect(body.items[0].warehouse_receipt_no).toBe('WH-1405-01');
+    expect(body.items[0].release_status).toBe('pending');
+    expect(body.items[0].valuation_status).toBe('calculated');
     expect(body.total).toBe(1);
     expect(body.dataScope).toBe('authenticated_organization_only');
     expect(db.queries[0].sql.replace(/\s/g, '')).toContain('c.organization_id=?');
@@ -89,12 +95,18 @@ describe('Cloudflare D1 cases read API', () => {
     };
     const url = new URL('https://staging.example/api/cases/case-a');
     const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
-    const body = await response.json() as { shipments: unknown[]; declarations: unknown[]; documents: unknown[]; readOnly: boolean };
+    const body = await response.json() as {
+      case: CaseRecord; shipments: unknown[]; declarations: unknown[]; documents: unknown[]; readOnly: boolean;
+    };
     expect(response.status).toBe(200);
     expect(body.shipments).toHaveLength(1);
     expect(body.declarations).toHaveLength(1);
     expect(body.documents).toHaveLength(1);
     expect(body.readOnly).toBe(true);
+    expect(body.case.warehouse_receipt_date).toBe('2026-11-02');
+    expect(body.case.unloading_date).toBe('2026-11-03');
+    expect(body.case.vessel_type).toBe('foreign');
+    expect(body.case.customs_regime).toBe('definitive_import');
   });
 
   it('returns D1 audit events and derives only recorded case status changes', async () => {

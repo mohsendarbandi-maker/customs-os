@@ -1,0 +1,70 @@
+name: Customs OS Staging D1 Schema Inventory
+
+on:
+  push:
+    branches:
+      - audit/read-only-supabase-runtime-inventory
+    paths:
+      - ".github/workflows/cloudflare-staging-schema-inventory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customs-os-staging-d1-schema-inventory
+  cancel-in-progress: true
+
+jobs:
+  inspect-staging-schema:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Read schema and aggregate row counts from isolated staging D1
+        shell: bash
+        env:
+          STAGING_SCHEMA_URL: https://customs-os-migration-staging.mohsen-darbandi.workers.dev/migration/schema
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/customs-os-staging-d1-schema.json"
+          curl --fail --silent --show-error --location --max-time 30 \
+            "$STAGING_SCHEMA_URL" --output "$output"
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const path = process.env.RUNNER_TEMP + '/customs-os-staging-d1-schema.json';
+          const report = JSON.parse(readFileSync(path, 'utf8'));
+          if (report.ok !== true || report.database !== 'customs-os-migration-staging' ||
+              report.inspection !== 'read_only_sqlite_master_and_count' ||
+              !Array.isArray(report.tables)) {
+            throw new Error('Unexpected response; refusing to publish schema artifact.');
+          }
+          const lines = [
+            '## Isolated staging D1 schema inventory',
+            '',
+            '- Source: the staging Worker read-only `/migration/schema` endpoint.',
+            '- Scope: SQLite table definitions and aggregate row counts only.',
+            '- No row contents, credentials, environment variables, or Supabase endpoints are accessed.',
+            `- Tables: **${report.tableCount}**`,
+            `- Aggregate rows counted: **${report.totalRows}**`,
+            `- Count failures: **${report.countFailures}**`,
+            '',
+            '| Table | Rows | Count verified |',
+            '|---|---:|---|',
+            ...report.tables.map(table => `| ${table.name} | ${table.rowCount ?? 'unknown'} | ${table.countVerified ? 'yes' : 'no'} |`),
+          ];
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n'));
+          console.log(JSON.stringify({
+            database: report.database,
+            inspection: report.inspection,
+            tableCount: report.tableCount,
+            totalRows: report.totalRows,
+            countFailures: report.countFailures,
+          }, null, 2));
+          NODE
+      - name: Preserve schema definitions for migration parity review
+        uses: actions/upload-artifact@v4
+        with:
+          name: customs-os-staging-d1-schema
+          path: ${{ runner.temp }}/customs-os-staging-d1-schema.json
+          if-no-files-found: error
+          retention-days: 7
