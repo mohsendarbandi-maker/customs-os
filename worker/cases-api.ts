@@ -90,7 +90,7 @@ const readCase = (db: CasesD1Database, id: string, organizationId: string) =>
   ).bind(id, organizationId).first<CaseRecord>();
 
 const readRelated = async (db: CasesD1Database, id: string, organizationId: string) => {
-  const [shipments, declarations, documents] = await Promise.all([
+  const [shipments, declarations, documents, permits] = await Promise.all([
     db.prepare(
       'SELECT s.id,s.case_id,s.client_id,s.vessel_id,v.name AS vessel_name,s.bill_of_lading_no,s.bill_of_lading_year,' +
       's.voyage_no,s.cargo_count,s.cargo_count_unit,s.net_weight_kg,s.gross_weight_kg,s.current_status,' +
@@ -116,8 +116,17 @@ const readRelated = async (db: CasesD1Database, id: string, organizationId: stri
       'issue_date_shamsi,is_archived,created_at FROM customs_documents WHERE case_id=? AND organization_id=? ' +
       'ORDER BY created_at DESC,id DESC LIMIT 200',
     ).bind(id, organizationId).all(),
+    db.prepare(
+      'SELECT id,case_id,permit_type,permit_number,issuing_authority,status,issued_at,expires_at,created_at,updated_at ' +
+      'FROM permits WHERE case_id=? AND organization_id=? ORDER BY created_at DESC,id DESC LIMIT 200',
+    ).bind(id, organizationId).all(),
   ]);
-  return { shipments: shipments.results, declarations: declarations.results, documents: documents.results };
+  return {
+    shipments: shipments.results,
+    declarations: declarations.results,
+    documents: documents.results,
+    permits: permits.results,
+  };
 };
 
 const sameOrigin = (request: Request, url: URL) => {
