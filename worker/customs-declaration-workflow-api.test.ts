@@ -185,6 +185,84 @@ describe('Cloudflare D1 customs declaration workflow API', () => {
     expect(customsWorkflowDefaults(declaration).expertise.plant_quarantine_status).toBe('pending');
   });
 
+  it('creates and patches procedure_state for non-definitive customs regimes', async () => {
+    const db = new FakeD1();
+    db.declaration = { ...declaration, customs_regime: 'export_definitive' };
+    const initial = {
+      documents: { invoiceNo: 'INV-1', goodsDescription: 'کالا' },
+      permits: { status: 'pending' },
+      declaration: { kottajNumber: '', declarationDate: '' },
+    };
+    const createUrl = new URL('https://staging.example/api/customs-declaration-workflows/decl-1');
+    const createResponse = await handleCustomsDeclarationWorkflowApi(
+      request('POST', createUrl.pathname, { currentStage: 'documents', procedureState: initial }),
+      db, createUrl, owner,
+    );
+    const created = await parse(createResponse);
+    expect(createResponse.status).toBe(201);
+    expect(created.workflow.current_stage).toBe('documents');
+    expect(created.workflow.procedure_state).toEqual(initial);
+
+    const patchUrl = new URL('https://staging.example/api/customs-declaration-workflows/decl-1/procedure');
+    const patchResponse = await handleCustomsDeclarationWorkflowApi(
+      request('PATCH', patchUrl.pathname, {
+        baseState: initial,
+        patch: { documents: { invoiceNo: 'INV-2' }, permits: { status: 'approved' } },
+        expectedCurrentStage: 'documents',
+        nextStage: 'permits',
+      }),
+      db, patchUrl, owner,
+    );
+    const saved = await parse(patchResponse);
+    expect(patchResponse.status).toBe(200);
+    expect(saved.workflow.current_stage).toBe('permits');
+    expect(saved.workflow.procedure_state.documents.invoiceNo).toBe('INV-2');
+    expect(saved.workflow.procedure_state.permits.status).toBe('approved');
+    expect(saved.workflow.procedure_state.documents.goodsDescription).toBe('کالا');
+    expect(db.events[db.events.length - 1].event_type).toBe('stage_changed');
+  });
+
+  it('rejects stale procedure-state changes to the same field but preserves disjoint edits', async () => {
+    const db = new FakeD1();
+    db.declaration = { ...declaration, customs_regime: 'external_transit' };
+    db.workflow = makeWorkflow();
+    db.workflow.current_stage = 'documents';
+    db.workflow.procedure_state = jsonText({
+      documents: { billOfLading: 'BL-2', goodsDescription: 'کالا' },
+      permits: { status: 'pending' },
+    });
+    const url = new URL('https://staging.example/api/customs-declaration-workflows/decl-1/procedure');
+    const response = await handleCustomsDeclarationWorkflowApi(
+      request('PATCH', url.pathname, {
+        baseState: {
+          documents: { billOfLading: 'BL-1', goodsDescription: 'کالا' },
+          permits: { status: 'pending' },
+        },
+        patch: { documents: { billOfLading: 'BL-3' } },
+        expectedCurrentStage: 'documents',
+        nextStage: 'permits',
+      }),
+      db, url, owner,
+    );
+    const body = await parse(response);
+    expect(response.status).toBe(409);
+    expect(body.conflicts).toEqual(['documents.billOfLading']);
+  });
+
+  it('rejects procedure state keys outside the supported stage model', async () => {
+    const db = new FakeD1();
+    db.declaration = { ...declaration, customs_regime: 'export_definitive' };
+    const url = new URL('https://staging.example/api/customs-declaration-workflows/decl-1');
+    const response = await handleCustomsDeclarationWorkflowApi(
+      request('POST', url.pathname, {
+        currentStage: 'documents',
+        procedureState: { unknown_stage: { value: 'not permitted' } },
+      }),
+      db, url, owner,
+    );
+    expect(response.status).toBe(422);
+  });
+
   it('rejects cross-tenant writes and disallowed user roles', async () => {
     const db = new FakeD1();
     db.workflow = makeWorkflow();
