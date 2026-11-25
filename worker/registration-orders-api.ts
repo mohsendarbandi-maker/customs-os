@@ -474,17 +474,18 @@ const createOrUpdateOrder = async (
     const before = orderId ? await readOrder(db, orderId, profile.organization_id) : null;
     if (orderId && !before) return fail('REGISTRATION_ORDER_NOT_FOUND', 404);
     if (before?.is_closed) return fail('REGISTRATION_ORDER_CLOSED', 409);
-    if (input.case_id) {
+    if (before?.case_id && input.case_id && before.case_id !== input.case_id) {
+      return fail('REGISTRATION_ORDER_CASE_LINK_CHANGE_FORBIDDEN', 409);
+    }
+    const effectiveCaseId = before?.case_id ?? input.case_id ?? null;
+    if (effectiveCaseId) {
       const linkedCase = await db.prepare(
         'SELECT id,client_id FROM cases WHERE id=? AND organization_id=? LIMIT 1',
-      ).bind(input.case_id, profile.organization_id).first<{ id: string; client_id: string | null }>();
+      ).bind(effectiveCaseId, profile.organization_id).first<{ id: string; client_id: string | null }>();
       if (!linkedCase) return fail('CASE_NOT_FOUND', 404);
       if (linkedCase.client_id && linkedCase.client_id !== input.client_id) {
         return fail('REGISTRATION_ORDER_CASE_CLIENT_MISMATCH', 409);
       }
-    }
-    if (before?.case_id && input.case_id && before.case_id !== input.case_id) {
-      return fail('REGISTRATION_ORDER_CASE_LINK_CHANGE_FORBIDDEN', 409);
     }
     if (await duplicateOrder(db, profile.organization_id, input.order_number, orderId)) return fail('REGISTRATION_ORDER_EXISTS', 409);
     const capacityError = await validateOrderCapacity(db, input, before, orderId, profile.organization_id);
