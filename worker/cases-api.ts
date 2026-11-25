@@ -94,12 +94,20 @@ const readRelated = async (db: CasesD1Database, id: string, organizationId: stri
     db.prepare(
       'SELECT s.id,s.case_id,s.client_id,s.vessel_id,v.name AS vessel_name,s.bill_of_lading_no,s.bill_of_lading_year,' +
       's.voyage_no,s.cargo_count,s.cargo_count_unit,s.net_weight_kg,s.gross_weight_kg,s.current_status,' +
-      's.transport_documents_status,s.finance_status,s.ship_passed,s.created_at FROM shipments s ' +
-      'LEFT JOIN vessels v ON v.id=s.vessel_id AND v.organization_id=s.organization_id ' +
+      's.transport_documents_status,s.finance_status,s.ship_passed,s.created_at,' +
+      'sc.vessel_type,sc.registration_order_no,sc.registration_order_date_shamsi,sc.package_count,' +
+      'sc.warehouse_receipt_no,sc.warehouse_receipt_date_shamsi,sc.cargo_description AS customs_cargo_description,' +
+      'sc.origin_country,sc.transaction_country,sc.delivery_term,sc.invoice_amount,sc.invoice_currency,' +
+      'sc.bank_branch_code,sc.bank_name,sc.bank_branch,sc.lc_number,sc.duty_rate,sc.tariff_code,' +
+      'sc.net_weight_kg AS customs_net_weight_kg,sc.gross_weight_kg AS customs_gross_weight_kg,' +
+      'sc.bill_of_lading AS customs_bill_of_lading,sc.insurance_irr,sc.required_documents,' +
+      'sc.customs_office_id AS customs_data_office_id,sc.customs_regime,sc.sata_code ' +
+      'FROM shipments s LEFT JOIN vessels v ON v.id=s.vessel_id AND v.organization_id=s.organization_id ' +
+      'LEFT JOIN shipment_customs_data sc ON sc.shipment_id=s.id AND sc.organization_id=s.organization_id ' +
       'WHERE s.case_id=? AND s.organization_id=? ORDER BY s.created_at DESC,s.id DESC',
     ).bind(id, organizationId).all(),
     db.prepare(
-      'SELECT id,shipment_id,kottaj_number,declaration_date,customs_path,assessed_value_irr,total_duties_irr,' +
+      'SELECT id,shipment_id,kottaj_number,declaration_date,customs_path,assessed_value_irr,total_duties_irr,payment_reference,' +
       'workflow_stage,customs_regime,created_at FROM customs_declarations WHERE case_id=? AND organization_id=? ' +
       'ORDER BY created_at DESC,id DESC',
     ).bind(id, organizationId).all(),
