@@ -58,9 +58,11 @@ export interface CloudflareCaseCreateInput {
   registration_order_no?: string | null;
 }
 export interface CloudflareCaseValuationInput {
-  customs_fx_rate_irr: number | string;
-  import_duty_rate: number | string;
-  vat_rate?: number | string;
+  customs_value_irr: number | string;
+  import_duty_rate?: number | string | null;
+  import_duty_irr?: number | string | null;
+  vat_irr?: number | string | null;
+  total_payable_irr?: number | string | null;
 }
 
 
@@ -106,6 +108,9 @@ export class CloudflareCasesApiError extends Error {
       : code === 'FORBIDDEN' ? 'دسترسی لازم برای مشاهده پرونده‌ها وجود ندارد.'
       : code === 'CASE_NOT_FOUND' ? 'پرونده پیدا نشد یا به آن دسترسی ندارید.'
       : code === 'INVALID_CASE_PATCH' || code === 'INVALID_RELEASE_STATUS' || code === 'INVALID_VALUATION_STATUS' || code === 'INVALID_CASE_NUMBER_VALUE' || code === 'INVALID_CASE_NUMBER' || code === 'GROSS_WEIGHT_BELOW_NET_WEIGHT' ? 'اطلاعات ویرایش پرونده معتبر نیست.'
+      : code === 'VALUATION_STAGE_NOT_READY' ? 'ارزش‌گذاری فقط پس از تعیین مسیر گمرکی و در مرحله مجاز امکان‌پذیر است.'
+      : code === 'CUSTOMS_VALUE_REQUIRED' ? 'ارزش گمرکی الزامی است.'
+      : code === 'INVALID_VALUATION_AMOUNT' ? 'مقادیر مالی واردشده معتبر نیستند.'
       : code === 'CASE_NUMBER_EXISTS' ? 'شماره پرونده قبلاً در این سازمان ثبت شده است.'
       : code === 'CASE_UPDATE_CONFLICT' || code === 'CASE_CREATE_CONFLICT' || code === 'CASE_NUMBER_EXISTS' ||
         code === 'PERMIT_UPDATE_CONFLICT' || code === 'PERMIT_DELETE_CONFLICT' ? 'اطلاعات هم‌زمان توسط کاربر دیگری تغییر کرده است؛ دوباره بارگذاری کنید.'
@@ -170,12 +175,12 @@ export const cloudflareCasesApi = {
     );
     return body as { ok: true; case: CaseRecord; unchanged?: boolean; stageAdvanced?: boolean };
   },
-  calculateValuation: (id: string, input: CloudflareCaseValuationInput) =>
+  completeValuation: (id: string, input: CloudflareCaseValuationInput) =>
     write<{
       ok: true; case: CaseRecord;
       valuation: {
-        customs_value_irr: string; import_duty_irr: string; vat_irr: string;
-        total_payable_irr: string; customs_fx_rate_irr: string; import_duty_rate: string; vat_rate: string;
+        customs_value_irr: string; import_duty_rate: string | null; import_duty_irr: string | null;
+        vat_irr: string | null; total_payable_irr: string | null; status: 'valuation';
       };
     }>('/api/cases/' + encodeURIComponent(id) + '/valuation', 'POST', input as unknown as Record<string, unknown>),
 };
