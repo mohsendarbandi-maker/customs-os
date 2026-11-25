@@ -53,4 +53,40 @@ describe('Cloudflare cases API adapter', () => {
       .rejects.toMatchObject({ code: 'GROSS_WEIGHT_BELOW_NET_WEIGHT' });
   });
 
+  it('creates, updates and deletes case permits using same-origin D1 requests', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, permit: { id: 'permit-1' } }), {
+        status: 201, headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, permit: { id: 'permit-1', status: 'approved' } }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, deleted: true, permitId: 'permit-1' }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+    await cloudflareCasesApi.createPermit('case/a', {
+      permit_type: 'health', issuing_authority: 'Health Authority', status: 'pending',
+    });
+    await cloudflareCasesApi.updatePermit('case/a', 'permit/1', { status: 'approved' });
+    await cloudflareCasesApi.deletePermit('case/a', 'permit/1');
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      '/api/cases/case%2Fa/permits',
+      '/api/cases/case%2Fa/permits/permit%2F1',
+      '/api/cases/case%2Fa/permits/permit%2F1',
+    ]);
+    expect(fetchMock.mock.calls.map(call => (call[1] as RequestInit).method)).toEqual(['POST','PATCH','DELETE']);
+    expect(fetchMock.mock.calls.every(call => (call[1] as RequestInit).credentials === 'same-origin')).toBe(true);
+  });
+
+  it('loads case permits without caching', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, permits: [] }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    await cloudflareCasesApi.permits('case-1');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/cases/case-1/permits');
+    expect((fetchMock.mock.calls[0][1] as RequestInit).cache).toBe('no-store');
+  });
+
 });
