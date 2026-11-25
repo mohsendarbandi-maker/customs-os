@@ -17,6 +17,12 @@ export interface CaseRecord {
   warehouse_receipt_no: string | null; warehouse_receipt_date: string | null;
   release_status: string | null; valuation_status: string | null;
   unloading_date: string | null; vessel_type: string | null; customs_regime: string | null;
+  origin_country_code: string | null; transaction_country_code: string | null; delivery_term: string | null;
+  invoice_amount: number | string | null; invoice_currency: string | null;
+  insurance_amount_irr: number | string | null; tariff_code: string | null;
+  import_duty_rate: number | string | null; customs_fx_rate_irr: number | string | null;
+  customs_value_irr: number | string | null; import_duty_irr: number | string | null;
+  vat_irr: number | string | null; total_payable_irr: number | string | null;
   display_name: string | null; created_at: string | null; updated_at: string | null;
   shipment_count: number; latest_shipment_id: string | null; shipment_display_name: string | null;
   bill_of_lading_no: string | null; vessel_name: string | null; kottaj_number: string | null;
@@ -30,6 +36,10 @@ const selectColumns = [
   'c.cargo_count', 'c.cargo_count_unit', 'c.net_weight_kg', 'c.gross_weight_kg',
   'c.warehouse_receipt_no', 'c.warehouse_receipt_date', 'c.release_status', 'c.valuation_status',
   'c.unloading_date', 'c.vessel_type', 'c.customs_regime',
+  'c.origin_country_code', 'c.transaction_country_code', 'c.delivery_term',
+  'c.invoice_amount', 'c.invoice_currency', 'c.insurance_amount_irr', 'c.tariff_code',
+  'c.import_duty_rate', 'c.customs_fx_rate_irr', 'c.customs_value_irr',
+  'c.import_duty_irr', 'c.vat_irr', 'c.total_payable_irr',
   'c.display_name', 'c.created_at', 'c.updated_at',
   '(SELECT COUNT(*) FROM shipments s WHERE s.case_id=c.id AND s.organization_id=c.organization_id) AS shipment_count',
   '(SELECT s.id FROM shipments s WHERE s.case_id=c.id AND s.organization_id=c.organization_id ORDER BY s.created_at DESC,s.id DESC LIMIT 1) AS latest_shipment_id',
@@ -137,29 +147,53 @@ const sameOrigin = (request: Request, url: URL) => {
   return (!origin || origin === url.origin) && request.headers.get('sec-fetch-site') !== 'cross-site';
 };
 const stringFields = new Set([
-  'case_number','registration_order_no','proforma_no','cargo_description',
-  'cargo_count_unit','warehouse_receipt_no',
+  'case_number','registration_order_no','proforma_no','cargo_description','cargo_count_unit',
+  'warehouse_receipt_no','vessel_type','origin_country_code','transaction_country_code',
+  'delivery_term','tariff_code',
 ]);
-const numericFields = new Set(['cargo_count','net_weight_kg','gross_weight_kg']);
+const dateFields = new Set(['unloading_date','warehouse_receipt_date']);
+const numericFields = new Set([
+  'cargo_count','net_weight_kg','gross_weight_kg','invoice_amount','insurance_amount_irr','import_duty_rate',
+]);
 const releaseStatuses = new Set(['pending','invoice_received','paid','released']);
 const valuationStatuses = new Set(['pending','calculated','reviewed','approved']);
-const patchCase = async (request: Request, db: CasesD1Database, id: string, organizationId: string, actorId: string, url: URL) => {
-  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+const maxBodyBytes = 32 * 1024;
+
+const readJsonBody = async (request: Request): Promise<Record<string, unknown> | Response> => {
   const length = Number(request.headers.get('content-length') || 0);
-  if (length > 32 * 1024) return fail('REQUEST_TOO_LARGE', 413);
-  let body: unknown;
+  if (Number.isFinite(length) && length > maxBodyBytes) return fail('REQUEST_TOO_LARGE', 413);
   try {
     const raw = await request.text();
-    if (new TextEncoder().encode(raw).byteLength > 32 * 1024) return fail('REQUEST_TOO_LARGE', 413);
-    body = JSON.parse(raw);
-  } catch { return fail('INVALID_JSON', 400); }
-  if (!body || typeof body !== 'object' || Array.isArray(body)) return fail('INVALID_CASE_PATCH', 422);
-  const input = body as Record<string, unknown>;
-  const allowed = new Set([...stringFields, ...numericFields, 'release_status', 'valuation_status']);
+    if (new TextEncoder().encode(raw).byteLength > maxBodyBytes) return fail('REQUEST_TOO_LARGE', 413);
+    const body: unknown = JSON.parse(raw);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return fail('INVALID_JSON_BODY', 400);
+    return body as Record<string, unknown>;
+  } catch {
+    return fail('INVALID_JSON', 400);
+  }
+};
+const isIsoDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+};
+const decimalNumber = (value: unknown): number | null => {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const raw = normalizeDigits(String(value)).replace(/[٬,\s]/g, '').trim();
+  if (!/^\d+(?:\.\d{1,6})?$/.test(raw)) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed <= Number.MAX_SAFE_INTEGER ? parsed : null;
+};
+const patchCase = async (request: Request, db: CasesD1Database, id: string, organizationId: string, actorId: string, url: URL) => {
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  const parsed = await readJsonBody(request);
+  if (parsed instanceof Response) return parsed;
+  const input = parsed;
+  const allowed = new Set([...stringFields, ...dateFields, ...numericFields, 'invoice_currency', 'release_status', 'valuation_status']);
   const keys = Object.keys(input);
   if (!keys.length || keys.some(key => !allowed.has(key))) return fail('INVALID_CASE_PATCH', 422);
-  const sets: string[] = [];
-  const values: unknown[] = [];
+
   const normalized: Record<string, unknown> = {};
   for (const key of keys) {
     const value = input[key];
@@ -167,14 +201,27 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
       if (value !== null && typeof value !== 'string') return fail('INVALID_CASE_PATCH', 422);
       const text = typeof value === 'string' ? value.trim() : null;
       if (key === 'case_number' && (!text || text.length > 100)) return fail('INVALID_CASE_NUMBER', 422);
-      const max = key === 'cargo_description' ? 4000 : key === 'cargo_count_unit' ? 40 : 200;
+      const max = key === 'cargo_description' ? 4000 : key === 'cargo_count_unit' ? 40 : 255;
       if (text !== null && text.length > max) return fail('INVALID_CASE_PATCH', 422);
-      normalized[key] = text;
-    } else if (numericFields.has(key)) {
-      if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
-        return fail('INVALID_CASE_NUMBER_VALUE', 422);
-      }
+      normalized[key] = ['origin_country_code','transaction_country_code','delivery_term','tariff_code'].includes(key)
+        ? (text ? text.toUpperCase() : text)
+        : text;
+    } else if (dateFields.has(key)) {
+      if (value !== null && (typeof value !== 'string' || !isIsoDate(value))) return fail('INVALID_CASE_DATE', 422);
       normalized[key] = value;
+    } else if (numericFields.has(key)) {
+      if (value === null) {
+        normalized[key] = null;
+      } else {
+        const parsedValue = decimalNumber(value);
+        if (parsedValue === null) return fail('INVALID_CASE_NUMBER_VALUE', 422);
+        normalized[key] = parsedValue;
+      }
+    } else if (key === 'invoice_currency') {
+      if (value !== null && (typeof value !== 'string' || !/^[A-Za-z]{3,4}$/.test(value.trim()))) {
+        return fail('INVALID_INVOICE_CURRENCY', 422);
+      }
+      normalized[key] = typeof value === 'string' ? value.trim().toUpperCase() : null;
     } else if (key === 'release_status') {
       if (value !== null && (typeof value !== 'string' || !releaseStatuses.has(value))) return fail('INVALID_RELEASE_STATUS', 422);
       normalized[key] = value;
@@ -182,6 +229,11 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
       if (value !== null && (typeof value !== 'string' || !valuationStatuses.has(value))) return fail('INVALID_VALUATION_STATUS', 422);
       normalized[key] = value;
     }
+  }
+
+  for (const key of ['cargo_count','net_weight_kg','gross_weight_kg','invoice_amount','insurance_amount_irr','import_duty_rate']) {
+    const value = normalized[key];
+    if (typeof value === 'number' && value < 0) return fail('INVALID_CASE_NUMBER_VALUE', 422);
   }
   const before = await readCase(db, id, organizationId).catch(() => null);
   if (!before) return fail('CASE_NOT_FOUND', 404);
@@ -191,15 +243,37 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
       Number(nextGrossWeight) < Number(nextNetWeight)) {
     return fail('GROSS_WEIGHT_BELOW_NET_WEIGHT', 422);
   }
+
+  const sets: string[] = [];
+  const values: unknown[] = [];
   const beforeSnapshot: Record<string, unknown> = {};
   const afterSnapshot: Record<string, unknown> = {};
   const currentRecord = before as unknown as Record<string, unknown>;
   for (const key of keys) {
-    beforeSnapshot[key] = currentRecord[key] ?? null;
-    afterSnapshot[key] = normalized[key];
-    if (Object.is(beforeSnapshot[key], afterSnapshot[key])) continue;
+    const previous = currentRecord[key] ?? null;
+    const next = normalized[key];
+    beforeSnapshot[key] = previous;
+    afterSnapshot[key] = next;
+    if (Object.is(previous, next)) continue;
     sets.push(key + '=?');
-    values.push(normalized[key]);
+    values.push(next);
+  }
+
+  // The source workflow advances a draft/registration-order case once unloading
+  // or the warehouse receipt has been recorded. Never move a later case backward.
+  const nextReceipt = normalized.warehouse_receipt_no !== undefined
+    ? normalized.warehouse_receipt_no : before.warehouse_receipt_no;
+  const nextUnloading = normalized.unloading_date !== undefined
+    ? normalized.unloading_date : before.unloading_date;
+  const advanceToDocuments = ['draft','registration_order'].includes(String(before.status || '')) &&
+    (Boolean(nextReceipt) || Boolean(nextUnloading));
+  if (advanceToDocuments) {
+    beforeSnapshot.status = before.status;
+    afterSnapshot.status = 'documents_ready';
+    if (before.status !== 'documents_ready') {
+      sets.push('status=?');
+      values.push('documents_ready');
+    }
   }
   if (!sets.length) return json({ ok: true, case: before, unchanged: true });
   sets.push("updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')");
@@ -225,11 +299,206 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
       return current ? fail('CASE_UPDATE_CONFLICT', 409) : fail('CASE_NOT_FOUND', 404);
     }
     const saved = await readCase(db, id, organizationId);
-    return saved ? json({ ok: true, case: saved }) : fail('CASE_UPDATE_NOT_CONFIRMED', 500);
+    return saved ? json({ ok: true, case: saved, stageAdvanced: advanceToDocuments })
+      : fail('CASE_UPDATE_NOT_CONFIRMED', 500);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (/UNIQUE constraint failed/i.test(message)) return fail('CASE_NUMBER_EXISTS', 409);
     return fail('CASE_UPDATE_FAILED', 500);
+  }
+};
+
+const createCase = async (
+  request: Request, db: CasesD1Database, organizationId: string, actorId: string, url: URL,
+) => {
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  const parsed = await readJsonBody(request);
+  if (parsed instanceof Response) return parsed;
+  const clientId = typeof parsed.client_id === 'string' ? parsed.client_id.trim() : '';
+  const registrationOrderNo = typeof parsed.registration_order_no === 'string'
+    ? parsed.registration_order_no.trim() : '';
+  if (!clientId || clientId.length > 128) return fail('CLIENT_REQUIRED', 422);
+  if (parsed.registration_order_no !== undefined &&
+      (typeof parsed.registration_order_no !== 'string' || registrationOrderNo.length > 100)) {
+    return fail('INVALID_REGISTRATION_ORDER_NUMBER', 422);
+  }
+
+  // Preserve the legacy idempotency rule: an existing order number in this
+  // organization resolves to its current case rather than creating a second one.
+  if (registrationOrderNo) {
+    const existing = await db.prepare(
+      'SELECT id FROM cases WHERE organization_id=? AND registration_order_no=? ORDER BY created_at,id LIMIT 1',
+    ).bind(organizationId, registrationOrderNo).first<{ id: string }>();
+    if (existing?.id) {
+      const record = await readCase(db, existing.id, organizationId);
+      return record ? json({ ok: true, case: record, created: false }) : fail('CASE_NOT_FOUND', 404);
+    }
+  }
+
+  const client = await db.prepare(
+    'SELECT id FROM clients WHERE id=? AND organization_id=? LIMIT 1',
+  ).bind(clientId, organizationId).first<{ id: string }>();
+  if (!client) return fail('CLIENT_NOT_FOUND', 404);
+
+  const id = crypto.randomUUID();
+  const randomSuffix = id.replace(/-/g, '').slice(0, 8).toUpperCase();
+  const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+  const caseNumber = 'CASE-' + timestamp + '-' + randomSuffix;
+  const status = registrationOrderNo ? 'registration_order' : 'draft';
+  const now = new Date().toISOString();
+  try {
+    const results = await db.batch([
+      db.prepare(
+        'INSERT INTO cases (id,organization_id,client_id,case_number,status,registration_order_no,created_at,updated_at) ' +
+        'SELECT ?,?,?,?,?,?,?,? WHERE ? IS NULL OR NOT EXISTS ' +
+        '(SELECT 1 FROM cases WHERE organization_id=? AND registration_order_no=?)',
+      ).bind(
+        id, organizationId, clientId, caseNumber, status, registrationOrderNo || null, now, now,
+        registrationOrderNo || null, organizationId, registrationOrderNo || null,
+      ),
+      db.prepare(
+        'INSERT INTO customs_os_audit_events ' +
+        '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
+        'SELECT ?,?,?,?,?,?,?,?,? WHERE changes()>0',
+      ).bind(
+        crypto.randomUUID(), organizationId, actorId, 'create', 'case', id, null,
+        JSON.stringify({ case_number: caseNumber, client_id: clientId, status, registration_order_no: registrationOrderNo || null }),
+        request.headers.get('cf-ray') || request.headers.get('x-request-id') || null,
+      ),
+    ]);
+    const inserted = Number((results[0] as { meta?: { changes?: number } } | undefined)?.meta?.changes || 0) === 1;
+    if (!inserted && registrationOrderNo) {
+      const existing = await db.prepare(
+        'SELECT id FROM cases WHERE organization_id=? AND registration_order_no=? ORDER BY created_at,id LIMIT 1',
+      ).bind(organizationId, registrationOrderNo).first<{ id: string }>();
+      if (existing?.id) {
+        const record = await readCase(db, existing.id, organizationId);
+        return record ? json({ ok: true, case: record, created: false }) : fail('CASE_NOT_FOUND', 404);
+      }
+    }
+    if (!inserted) return fail('CASE_CREATE_CONFLICT', 409);
+    const saved = await readCase(db, id, organizationId);
+    return saved ? json({ ok: true, case: saved, created: true }, 201) : fail('CASE_CREATE_NOT_CONFIRMED', 500);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/UNIQUE constraint failed/i.test(message)) return fail('CASE_NUMBER_EXISTS', 409);
+    if (/FOREIGN KEY constraint failed/i.test(message)) return fail('CLIENT_NOT_FOUND', 404);
+    return fail('CASE_CREATE_FAILED', 500);
+  }
+};
+
+const decimalToScaled = (value: unknown, decimalPlaces: number): bigint | null => {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const raw = normalizeDigits(String(value)).replace(/[٬,\s]/g, '').trim();
+  const match = raw.match(/^(\d+)(?:\.(\d+))?$/);
+  if (!match || (match[2]?.length || 0) > decimalPlaces) return null;
+  const scale = 10n ** BigInt(decimalPlaces);
+  const fraction = (match[2] || '').padEnd(decimalPlaces, '0');
+  try { return BigInt(match[1]) * scale + BigInt(fraction || '0'); }
+  catch { return null; }
+};
+const roundedDivide = (numerator: bigint, denominator: bigint) =>
+  (numerator + denominator / 2n) / denominator;
+const formatScaled = (value: bigint, decimalPlaces: number) => {
+  const scale = 10n ** BigInt(decimalPlaces);
+  const integer = value / scale;
+  const fraction = (value % scale).toString().padStart(decimalPlaces, '0').replace(/0+$/, '');
+  return fraction ? integer.toString() + '.' + fraction : integer.toString();
+};
+const calculateCaseValuation = async (
+  request: Request, db: CasesD1Database, id: string, organizationId: string, actorId: string, url: URL,
+) => {
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  const parsed = await readJsonBody(request);
+  if (parsed instanceof Response) return parsed;
+  const keys = Object.keys(parsed);
+  if (keys.some(key => !['customs_fx_rate_irr','import_duty_rate','vat_rate'].includes(key))) {
+    return fail('INVALID_VALUATION_INPUT', 422);
+  }
+  const fx = decimalToScaled(parsed.customs_fx_rate_irr, 6);
+  const dutyRate = decimalToScaled(parsed.import_duty_rate, 6);
+  const vatRate = decimalToScaled(parsed.vat_rate === undefined ? 10 : parsed.vat_rate, 6);
+  if (fx === null || fx <= 0n || dutyRate === null || vatRate === null) {
+    return fail('INVALID_VALUATION_RATE', 422);
+  }
+  const before = await readCase(db, id, organizationId).catch(() => null);
+  if (!before) return fail('CASE_NOT_FOUND', 404);
+  if (['exit_permit','completed','archived'].includes(String(before.status || ''))) {
+    return fail('VALUATION_STAGE_CLOSED', 409);
+  }
+  const invoice = decimalToScaled(before.invoice_amount, 6);
+  const insurance = decimalToScaled(before.insurance_amount_irr, 6);
+  if (invoice === null || invoice <= 0n) return fail('INVOICE_AMOUNT_REQUIRED', 422);
+  if (!before.invoice_currency) return fail('INVOICE_CURRENCY_REQUIRED', 422);
+  if (insurance === null) return fail('INSURANCE_AMOUNT_REQUIRED', 422);
+
+  const scale = 1_000_000n;
+  const customsValue = roundedDivide(invoice * (before.invoice_currency.toUpperCase() === 'IRR' ? scale : fx), scale) + insurance;
+  const duty = roundedDivide(customsValue * dutyRate, scale * 100n);
+  const vat = roundedDivide((customsValue + duty) * vatRate, scale * 100n);
+  const total = duty + vat;
+  const after = {
+    customs_fx_rate_irr: formatScaled(fx, 6),
+    import_duty_rate: formatScaled(dutyRate, 6),
+    customs_value_irr: formatScaled(customsValue, 6),
+    import_duty_irr: formatScaled(duty, 6),
+    vat_irr: formatScaled(vat, 6),
+    total_payable_irr: formatScaled(total, 6),
+    valuation_status: 'calculated',
+    status: 'duties_calculation',
+  };
+  const beforeSnapshot = {
+    customs_fx_rate_irr: before.customs_fx_rate_irr,
+    import_duty_rate: before.import_duty_rate,
+    customs_value_irr: before.customs_value_irr,
+    import_duty_irr: before.import_duty_irr,
+    vat_irr: before.vat_irr,
+    total_payable_irr: before.total_payable_irr,
+    valuation_status: before.valuation_status,
+    status: before.status,
+  };
+  try {
+    const results = await db.batch([
+      db.prepare(
+        'UPDATE cases SET customs_fx_rate_irr=?,import_duty_rate=?,customs_value_irr=?,import_duty_irr=?,' +
+        'vat_irr=?,total_payable_irr=?,valuation_status=?,status=?,updated_at=strftime(\'%Y-%m-%dT%H:%M:%fZ\',\'now\') ' +
+        'WHERE id=? AND organization_id=? AND updated_at IS ?',
+      ).bind(
+        after.customs_fx_rate_irr, after.import_duty_rate, after.customs_value_irr,
+        after.import_duty_irr, after.vat_irr, after.total_payable_irr,
+        after.valuation_status, after.status, id, organizationId, before.updated_at,
+      ),
+      db.prepare(
+        'INSERT INTO customs_os_audit_events ' +
+        '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
+        'SELECT ?,?,?,?,?,?,?,?,? WHERE changes()>0',
+      ).bind(
+        crypto.randomUUID(), organizationId, actorId, 'update', 'case', id,
+        JSON.stringify(beforeSnapshot), JSON.stringify(after),
+        request.headers.get('cf-ray') || request.headers.get('x-request-id') || null,
+      ),
+    ]);
+    const updateResult = results[0] as { meta?: { changes?: number } } | undefined;
+    if (Number(updateResult?.meta?.changes || 0) !== 1) {
+      const current = await readCase(db, id, organizationId);
+      return current ? fail('CASE_UPDATE_CONFLICT', 409) : fail('CASE_NOT_FOUND', 404);
+    }
+    const saved = await readCase(db, id, organizationId);
+    return saved ? json({
+      ok: true,
+      case: saved,
+      valuation: {
+        customs_value_irr: after.customs_value_irr,
+        import_duty_irr: after.import_duty_irr,
+        vat_irr: after.vat_irr,
+        total_payable_irr: after.total_payable_irr,
+        customs_fx_rate_irr: after.customs_fx_rate_irr,
+        import_duty_rate: after.import_duty_rate,
+        vat_rate: formatScaled(vatRate, 6),
+      },
+    }) : fail('CASE_UPDATE_NOT_CONFIRMED', 500);
+  } catch {
+    return fail('CASE_VALUATION_FAILED', 500);
   }
 };
 
@@ -330,6 +599,24 @@ export const handleCasesApi = async (
     catch { return fail('CASE_HISTORY_API_NOT_READY', 503); }
   }
 
+  const valuationRoute = url.pathname.startsWith(collection + '/') && url.pathname.endsWith('/valuation');
+  if (valuationRoute) {
+    if (request.method !== 'POST') return fail('METHOD_NOT_ALLOWED', 405, { allowed: ['POST'] });
+    if (!['owner','admin','broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
+    const rawId = url.pathname.slice(collection.length + 1, -'/valuation'.length);
+    if (!rawId || rawId.includes('/')) return fail('INVALID_CASE_ID', 400);
+    let valuationId: string;
+    try { valuationId = decodeURIComponent(rawId); }
+    catch { return fail('INVALID_CASE_ID', 400); }
+    if (!valuationId || valuationId.length > 128 || valuationId.includes('/')) return fail('INVALID_CASE_ID', 400);
+    return calculateCaseValuation(request, db, valuationId, profile.organization_id, profile.id, url);
+  }
+
+  if (url.pathname === collection && request.method === 'POST') {
+    if (!['owner','admin','broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
+    return createCase(request, db, profile.organization_id, profile.id, url);
+  }
+
   const id = readId(url.pathname);
   if (id instanceof Response) return id;
   if (request.method === 'PATCH') {
@@ -337,7 +624,7 @@ export const handleCasesApi = async (
     if (!['owner','admin','broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
     return patchCase(request, db, id, profile.organization_id, profile.id, url);
   }
-  if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: id === null ? ['GET'] : ['GET', 'PATCH'] });
+  if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: id === null ? ['GET','POST'] : ['GET','PATCH'] });
 
   try {
     if (id !== null) {
