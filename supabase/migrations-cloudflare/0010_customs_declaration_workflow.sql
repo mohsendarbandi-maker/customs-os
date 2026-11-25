@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS customs_declaration_workflow (
   current_stage TEXT NOT NULL DEFAULT 'evaluation'
     CHECK (current_stage IN (
       'evaluation','expertise','cashier','loading_permit','exit','port_charges',
-      'abandoned','completed','documents','permits','declaration','valuation','loading'
+      'abandoned','completed','documents','permits','declaration','valuation','loading',
+      'guarantee','use_period','re_export'
     )),
   evaluation_state TEXT NOT NULL DEFAULT '{"status":"not_required","evaluator_number":"","expert_requested":false,"expert_request_note":""}'
     CHECK (json_valid(evaluation_state) AND json_type(evaluation_state) = 'object'),
