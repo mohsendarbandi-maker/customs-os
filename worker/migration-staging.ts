@@ -3,6 +3,7 @@ import { handleClientsApi } from './clients-api';
 import { handleCasesApi } from './cases-api';
 import { handleCustomsDeclarationWorkflowApi } from './customs-declaration-workflow-api';
 import { handleShipmentsApi } from './shipments-api';
+import { handlePreDeclarationApi } from './pre-declaration-api';
 import { handleCaseSelectorApi } from './case-selector-api';
 import { handleDeviceSessionsApi } from './device-sessions-api';
 import { handleRegistrationOrdersApi } from './registration-orders-api';
@@ -1248,6 +1249,12 @@ export default {
       if (!isSameOrigin(request, url)) return json({ ok: false, error: 'ORIGIN_FORBIDDEN' }, 403);
       if (!await getSession(request, env)) return json({ ok: false, error: 'UNAUTHORIZED' }, 401);
       return handleShipmentsApi(request, env.MIGRATION_DB, url, profile);
+    }
+
+    if (url.pathname.startsWith('/api/pre-declaration/')) {
+      if (!isSameOrigin(request, url)) return json({ ok: false, error: 'ORIGIN_FORBIDDEN' }, 403);
+      if (!await getSession(request, env)) return json({ ok: false, error: 'UNAUTHORIZED' }, 401);
+      return handlePreDeclarationApi(request, env.MIGRATION_DB, url, profile);
     }
 
     if (url.pathname === '/api/case-selector-data') {
