@@ -2,8 +2,12 @@ export interface CasesD1Statement {
   bind(...values: unknown[]): CasesD1Statement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
   all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
+  run(): Promise<{ meta?: { changes?: number } }>;
 }
-export interface CasesD1Database { prepare(sql: string): CasesD1Statement; }
+export interface CasesD1Database {
+  prepare(sql: string): CasesD1Statement;
+  batch(statements: CasesD1Statement[]): Promise<unknown[]>;
+}
 export interface CasesApiProfile { id: string; organization_id: string; role: string; is_active: boolean; }
 export interface CaseRecord {
   id: string; case_number: string | null; status: string | null; client_id: string | null;
@@ -89,16 +93,24 @@ const readCase = (db: CasesD1Database, id: string, organizationId: string) =>
   ).bind(id, organizationId).first<CaseRecord>();
 
 const readRelated = async (db: CasesD1Database, id: string, organizationId: string) => {
-  const [shipments, declarations, documents] = await Promise.all([
+  const [shipments, declarations, documents, permits] = await Promise.all([
     db.prepare(
       'SELECT s.id,s.case_id,s.client_id,s.vessel_id,v.name AS vessel_name,s.bill_of_lading_no,s.bill_of_lading_year,' +
       's.voyage_no,s.cargo_count,s.cargo_count_unit,s.net_weight_kg,s.gross_weight_kg,s.current_status,' +
-      's.transport_documents_status,s.finance_status,s.ship_passed,s.created_at FROM shipments s ' +
-      'LEFT JOIN vessels v ON v.id=s.vessel_id AND v.organization_id=s.organization_id ' +
+      's.transport_documents_status,s.finance_status,s.ship_passed,s.created_at,' +
+      'sc.vessel_type,sc.registration_order_no,sc.registration_order_date_shamsi,sc.package_count,' +
+      'sc.warehouse_receipt_no,sc.warehouse_receipt_date_shamsi,sc.cargo_description AS customs_cargo_description,' +
+      'sc.origin_country,sc.transaction_country,sc.delivery_term,sc.invoice_amount,sc.invoice_currency,' +
+      'sc.bank_branch_code,sc.bank_name,sc.bank_branch,sc.lc_number,sc.duty_rate,sc.tariff_code,' +
+      'sc.net_weight_kg AS customs_net_weight_kg,sc.gross_weight_kg AS customs_gross_weight_kg,' +
+      'sc.bill_of_lading AS customs_bill_of_lading,sc.insurance_irr,sc.required_documents,' +
+      'sc.customs_office_id AS customs_data_office_id,sc.customs_regime,sc.sata_code ' +
+      'FROM shipments s LEFT JOIN vessels v ON v.id=s.vessel_id AND v.organization_id=s.organization_id ' +
+      'LEFT JOIN shipment_customs_data sc ON sc.shipment_id=s.id AND sc.organization_id=s.organization_id ' +
       'WHERE s.case_id=? AND s.organization_id=? ORDER BY s.created_at DESC,s.id DESC',
     ).bind(id, organizationId).all(),
     db.prepare(
-      'SELECT id,shipment_id,kottaj_number,declaration_date,customs_path,assessed_value_irr,total_duties_irr,' +
+      'SELECT id,shipment_id,kottaj_number,declaration_date,customs_path,assessed_value_irr,total_duties_irr,payment_reference,' +
       'workflow_stage,customs_regime,created_at FROM customs_declarations WHERE case_id=? AND organization_id=? ' +
       'ORDER BY created_at DESC,id DESC',
     ).bind(id, organizationId).all(),
@@ -107,8 +119,118 @@ const readRelated = async (db: CasesD1Database, id: string, organizationId: stri
       'issue_date_shamsi,is_archived,created_at FROM customs_documents WHERE case_id=? AND organization_id=? ' +
       'ORDER BY created_at DESC,id DESC LIMIT 200',
     ).bind(id, organizationId).all(),
+    db.prepare(
+      'SELECT id,case_id,permit_type,permit_number,issuing_authority,status,issued_at,expires_at,created_at,updated_at ' +
+      'FROM permits WHERE case_id=? AND organization_id=? ORDER BY created_at DESC,id DESC LIMIT 200',
+    ).bind(id, organizationId).all(),
   ]);
-  return { shipments: shipments.results, declarations: declarations.results, documents: documents.results };
+  return {
+    shipments: shipments.results,
+    declarations: declarations.results,
+    documents: documents.results,
+    permits: permits.results,
+  };
+};
+
+const sameOrigin = (request: Request, url: URL) => {
+  const origin = request.headers.get('origin');
+  return (!origin || origin === url.origin) && request.headers.get('sec-fetch-site') !== 'cross-site';
+};
+const stringFields = new Set([
+  'case_number','registration_order_no','proforma_no','cargo_description',
+  'cargo_count_unit','warehouse_receipt_no',
+]);
+const numericFields = new Set(['cargo_count','net_weight_kg','gross_weight_kg']);
+const releaseStatuses = new Set(['pending','invoice_received','paid','released']);
+const valuationStatuses = new Set(['pending','calculated','reviewed','approved']);
+const patchCase = async (request: Request, db: CasesD1Database, id: string, organizationId: string, actorId: string, url: URL) => {
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  const length = Number(request.headers.get('content-length') || 0);
+  if (length > 32 * 1024) return fail('REQUEST_TOO_LARGE', 413);
+  let body: unknown;
+  try {
+    const raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > 32 * 1024) return fail('REQUEST_TOO_LARGE', 413);
+    body = JSON.parse(raw);
+  } catch { return fail('INVALID_JSON', 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return fail('INVALID_CASE_PATCH', 422);
+  const input = body as Record<string, unknown>;
+  const allowed = new Set([...stringFields, ...numericFields, 'release_status', 'valuation_status']);
+  const keys = Object.keys(input);
+  if (!keys.length || keys.some(key => !allowed.has(key))) return fail('INVALID_CASE_PATCH', 422);
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  const normalized: Record<string, unknown> = {};
+  for (const key of keys) {
+    const value = input[key];
+    if (stringFields.has(key)) {
+      if (value !== null && typeof value !== 'string') return fail('INVALID_CASE_PATCH', 422);
+      const text = typeof value === 'string' ? value.trim() : null;
+      if (key === 'case_number' && (!text || text.length > 100)) return fail('INVALID_CASE_NUMBER', 422);
+      const max = key === 'cargo_description' ? 4000 : key === 'cargo_count_unit' ? 40 : 200;
+      if (text !== null && text.length > max) return fail('INVALID_CASE_PATCH', 422);
+      normalized[key] = text;
+    } else if (numericFields.has(key)) {
+      if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
+        return fail('INVALID_CASE_NUMBER_VALUE', 422);
+      }
+      normalized[key] = value;
+    } else if (key === 'release_status') {
+      if (value !== null && (typeof value !== 'string' || !releaseStatuses.has(value))) return fail('INVALID_RELEASE_STATUS', 422);
+      normalized[key] = value;
+    } else if (key === 'valuation_status') {
+      if (value !== null && (typeof value !== 'string' || !valuationStatuses.has(value))) return fail('INVALID_VALUATION_STATUS', 422);
+      normalized[key] = value;
+    }
+  }
+  const before = await readCase(db, id, organizationId).catch(() => null);
+  if (!before) return fail('CASE_NOT_FOUND', 404);
+  const nextNetWeight = normalized.net_weight_kg !== undefined ? normalized.net_weight_kg : before.net_weight_kg;
+  const nextGrossWeight = normalized.gross_weight_kg !== undefined ? normalized.gross_weight_kg : before.gross_weight_kg;
+  if (nextNetWeight !== null && nextGrossWeight !== null &&
+      Number(nextGrossWeight) < Number(nextNetWeight)) {
+    return fail('GROSS_WEIGHT_BELOW_NET_WEIGHT', 422);
+  }
+  const beforeSnapshot: Record<string, unknown> = {};
+  const afterSnapshot: Record<string, unknown> = {};
+  const currentRecord = before as unknown as Record<string, unknown>;
+  for (const key of keys) {
+    beforeSnapshot[key] = currentRecord[key] ?? null;
+    afterSnapshot[key] = normalized[key];
+    if (Object.is(beforeSnapshot[key], afterSnapshot[key])) continue;
+    sets.push(key + '=?');
+    values.push(normalized[key]);
+  }
+  if (!sets.length) return json({ ok: true, case: before, unchanged: true });
+  sets.push("updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')");
+  values.push(id, organizationId);
+  try {
+    const results = await db.batch([
+      db.prepare(
+        'UPDATE cases SET ' + sets.join(', ') + ' WHERE id=? AND organization_id=? AND updated_at IS ?',
+      ).bind(...values, before.updated_at),
+      db.prepare(
+        'INSERT INTO customs_os_audit_events ' +
+        '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
+        'SELECT ?,?,?,?,?,?,?,?,? WHERE changes()>0',
+      ).bind(
+        crypto.randomUUID(), organizationId, actorId, 'update', 'case', id,
+        JSON.stringify(beforeSnapshot), JSON.stringify(afterSnapshot),
+        request.headers.get('cf-ray') || request.headers.get('x-request-id') || null,
+      ),
+    ]);
+    const updateResult = results[0] as { meta?: { changes?: number } } | undefined;
+    if (Number(updateResult?.meta?.changes || 0) !== 1) {
+      const current = await readCase(db, id, organizationId);
+      return current ? fail('CASE_UPDATE_CONFLICT', 409) : fail('CASE_NOT_FOUND', 404);
+    }
+    const saved = await readCase(db, id, organizationId);
+    return saved ? json({ ok: true, case: saved }) : fail('CASE_UPDATE_NOT_CONFIRMED', 500);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/UNIQUE constraint failed/i.test(message)) return fail('CASE_NUMBER_EXISTS', 409);
+    return fail('CASE_UPDATE_FAILED', 500);
+  }
 };
 
 const parseSnapshot = (value: unknown): Record<string, unknown> => {
@@ -210,7 +332,12 @@ export const handleCasesApi = async (
 
   const id = readId(url.pathname);
   if (id instanceof Response) return id;
-  if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: ['GET'] });
+  if (request.method === 'PATCH') {
+    if (id === null) return fail('CASE_ID_REQUIRED', 400);
+    if (!['owner','admin','broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
+    return patchCase(request, db, id, profile.organization_id, profile.id, url);
+  }
+  if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: id === null ? ['GET'] : ['GET', 'PATCH'] });
 
   try {
     if (id !== null) {
