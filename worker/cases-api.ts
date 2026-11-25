@@ -409,68 +409,62 @@ const formatScaled = (value: bigint, decimalPlaces: number) => {
   const fraction = (value % scale).toString().padStart(decimalPlaces, '0').replace(/0+$/, '');
   return fraction ? integer.toString() + '.' + fraction : integer.toString();
 };
-const calculateCaseValuation = async (
+const completeCaseValuation = async (
   request: Request, db: CasesD1Database, id: string, organizationId: string, actorId: string, url: URL,
 ) => {
   if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
   const parsed = await readJsonBody(request);
   if (parsed instanceof Response) return parsed;
-  const keys = Object.keys(parsed);
-  if (keys.some(key => !['customs_fx_rate_irr','import_duty_rate','vat_rate'].includes(key))) {
-    return fail('INVALID_VALUATION_INPUT', 422);
+  const allowedFields = new Set([
+    'customs_value_irr', 'import_duty_rate', 'import_duty_irr', 'vat_irr', 'total_payable_irr',
+  ]);
+  if (Object.keys(parsed).some(key => !allowedFields.has(key))) return fail('INVALID_VALUATION_INPUT', 422);
+
+  const customsValue = decimalToScaled(parsed.customs_value_irr, 6);
+  if (customsValue === null) return fail('CUSTOMS_VALUE_REQUIRED', 422);
+  const optional = (value: unknown): bigint | null | false => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsedValue = decimalToScaled(value, 6);
+    return parsedValue === null ? false : parsedValue;
+  };
+  const dutyRate = optional(parsed.import_duty_rate);
+  const duty = optional(parsed.import_duty_irr);
+  const vat = optional(parsed.vat_irr);
+  const total = optional(parsed.total_payable_irr);
+  if ([dutyRate, duty, vat, total].some(value => value === false)) {
+    return fail('INVALID_VALUATION_AMOUNT', 422);
   }
-  const fx = decimalToScaled(parsed.customs_fx_rate_irr, 6);
-  const dutyRate = decimalToScaled(parsed.import_duty_rate, 6);
-  const vatRate = decimalToScaled(parsed.vat_rate === undefined ? 10 : parsed.vat_rate, 6);
-  if (fx === null || fx <= 0n || dutyRate === null || vatRate === null) {
-    return fail('INVALID_VALUATION_RATE', 422);
-  }
+
   const before = await readCase(db, id, organizationId).catch(() => null);
   if (!before) return fail('CASE_NOT_FOUND', 404);
-  if (['exit_permit','completed','archived'].includes(String(before.status || ''))) {
-    return fail('VALUATION_STAGE_CLOSED', 409);
-  }
-  const invoice = decimalToScaled(before.invoice_amount, 6);
-  const insurance = decimalToScaled(before.insurance_amount_irr, 6);
-  if (invoice === null || invoice <= 0n) return fail('INVOICE_AMOUNT_REQUIRED', 422);
-  if (!before.invoice_currency) return fail('INVOICE_CURRENCY_REQUIRED', 422);
-  if (insurance === null) return fail('INSURANCE_AMOUNT_REQUIRED', 422);
+  const allowedStages = new Set(['path_green', 'path_yellow', 'path_red', 'valuation']);
+  if (!allowedStages.has(String(before.status || ''))) return fail('VALUATION_STAGE_NOT_READY', 409);
 
-  const scale = 1_000_000n;
-  const customsValue = roundedDivide(invoice * (before.invoice_currency.toUpperCase() === 'IRR' ? scale : fx), scale) + insurance;
-  const duty = roundedDivide(customsValue * dutyRate, scale * 100n);
-  const vat = roundedDivide((customsValue + duty) * vatRate, scale * 100n);
-  const total = duty + vat;
   const after = {
-    customs_fx_rate_irr: formatScaled(fx, 6),
-    import_duty_rate: formatScaled(dutyRate, 6),
     customs_value_irr: formatScaled(customsValue, 6),
-    import_duty_irr: formatScaled(duty, 6),
-    vat_irr: formatScaled(vat, 6),
-    total_payable_irr: formatScaled(total, 6),
-    valuation_status: 'calculated',
-    status: 'duties_calculation',
+    import_duty_rate: dutyRate === null ? null : formatScaled(dutyRate, 6),
+    import_duty_irr: duty === null ? null : formatScaled(duty, 6),
+    vat_irr: vat === null ? null : formatScaled(vat, 6),
+    total_payable_irr: total === null ? null : formatScaled(total, 6),
+    status: 'valuation',
   };
   const beforeSnapshot = {
-    customs_fx_rate_irr: before.customs_fx_rate_irr,
-    import_duty_rate: before.import_duty_rate,
     customs_value_irr: before.customs_value_irr,
+    import_duty_rate: before.import_duty_rate,
     import_duty_irr: before.import_duty_irr,
     vat_irr: before.vat_irr,
     total_payable_irr: before.total_payable_irr,
-    valuation_status: before.valuation_status,
     status: before.status,
   };
   try {
     const results = await db.batch([
       db.prepare(
-        'UPDATE cases SET customs_fx_rate_irr=?,import_duty_rate=?,customs_value_irr=?,import_duty_irr=?,' +
-        'vat_irr=?,total_payable_irr=?,valuation_status=?,status=?,updated_at=strftime(\'%Y-%m-%dT%H:%M:%fZ\',\'now\') ' +
+        'UPDATE cases SET customs_value_irr=?,import_duty_rate=?,import_duty_irr=?,vat_irr=?,' +
+        'total_payable_irr=?,status=?,updated_at=strftime(\'%Y-%m-%dT%H:%M:%fZ\',\'now\') ' +
         'WHERE id=? AND organization_id=? AND updated_at IS ?',
       ).bind(
-        after.customs_fx_rate_irr, after.import_duty_rate, after.customs_value_irr,
-        after.import_duty_irr, after.vat_irr, after.total_payable_irr,
-        after.valuation_status, after.status, id, organizationId, before.updated_at,
+        after.customs_value_irr, after.import_duty_rate, after.import_duty_irr,
+        after.vat_irr, after.total_payable_irr, after.status, id, organizationId, before.updated_at,
       ),
       db.prepare(
         'INSERT INTO customs_os_audit_events ' +
@@ -491,21 +485,12 @@ const calculateCaseValuation = async (
     return saved ? json({
       ok: true,
       case: saved,
-      valuation: {
-        customs_value_irr: after.customs_value_irr,
-        import_duty_irr: after.import_duty_irr,
-        vat_irr: after.vat_irr,
-        total_payable_irr: after.total_payable_irr,
-        customs_fx_rate_irr: after.customs_fx_rate_irr,
-        import_duty_rate: after.import_duty_rate,
-        vat_rate: formatScaled(vatRate, 6),
-      },
+      valuation: after,
     }) : fail('CASE_UPDATE_NOT_CONFIRMED', 500);
   } catch {
     return fail('CASE_VALUATION_FAILED', 500);
   }
 };
-
 
 interface PermitRecord {
   id: string;
@@ -865,7 +850,7 @@ export const handleCasesApi = async (
     try { valuationId = decodeURIComponent(rawId); }
     catch { return fail('INVALID_CASE_ID', 400); }
     if (!valuationId || valuationId.length > 128 || valuationId.includes('/')) return fail('INVALID_CASE_ID', 400);
-    return calculateCaseValuation(request, db, valuationId, profile.organization_id, profile.id, url);
+    return completeCaseValuation(request, db, valuationId, profile.organization_id, profile.id, url);
   }
   const historyRoute = url.pathname.startsWith(collection + '/') && url.pathname.endsWith('/history');
   if (historyRoute) {
