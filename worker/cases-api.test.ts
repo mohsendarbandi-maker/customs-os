@@ -17,6 +17,8 @@ class FakeD1 implements CasesD1Database {
   queries: Array<{ sql: string; values: unknown[] }> = [];
   lastChanges = 0;
   simulateCaseConflict = false;
+  clientRow: { id: string; organization_id: string } | null = { id: 'client-a', organization_id: 'org-a' };
+  existingOrderId: string | null = null;
   prepare(sql: string) { return new FakeStatement(sql, this); }
   async batch(statements: CasesD1Statement[]) {
     const results = [];
@@ -25,12 +27,46 @@ class FakeD1 implements CasesD1Database {
   }
   first<T>(sql: string, values: unknown[]): T | null {
     this.queries.push({ sql, values });
+    if (sql.includes('FROM clients WHERE id=?')) {
+      return this.clientRow?.id === values[0] && this.clientRow.organization_id === values[1]
+        ? this.clientRow as T : null;
+    }
+    if (sql.includes('SELECT id FROM cases WHERE organization_id=? AND registration_order_no=?')) {
+      return this.existingOrderId ? { id: this.existingOrderId } as T : null;
+    }
     if (sql.includes('COUNT(*) AS total FROM cases c')) return { total: this.list.length } as T;
-    if (sql.includes('FROM cases c LEFT JOIN clients cl')) return this.detail as T | null;
+    if (sql.includes('FROM cases c LEFT JOIN clients cl')) {
+      return this.detail && this.detail.id === values[0] ? this.detail as T : null;
+    }
     throw new Error('Unexpected query: ' + sql);
   }
   run(sql: string, values: unknown[]): { meta?: { changes?: number } } {
     this.queries.push({ sql, values });
+    if (sql.startsWith('INSERT INTO cases (')) {
+      const [id, organizationId, clientId, caseNumber, status, registrationOrderNo, createdAt, updatedAt] = values;
+      const registrationOrderExists = Boolean(registrationOrderNo) &&
+        (this.existingOrderId !== null || this.detail?.registration_order_no === registrationOrderNo);
+      if (registrationOrderExists) {
+        this.lastChanges = 0;
+        return { meta: { changes: 0 } };
+      }
+      this.detail = {
+        id, case_number: caseNumber, status, client_id: clientId, client_name: 'بازرگانی الف',
+        customs_office_id: null, registration_order_no: registrationOrderNo, proforma_no: null,
+        cargo_description: null, cargo_count: null, cargo_count_unit: null, net_weight_kg: null,
+        gross_weight_kg: null, warehouse_receipt_no: null, warehouse_receipt_date: null,
+        release_status: 'pending', valuation_status: 'pending', unloading_date: null, vessel_type: null,
+        customs_regime: null, origin_country_code: null, transaction_country_code: null, delivery_term: null,
+        invoice_amount: null, invoice_currency: null, insurance_amount_irr: null, tariff_code: null,
+        import_duty_rate: null, customs_fx_rate_irr: null, customs_value_irr: null,
+        import_duty_irr: null, vat_irr: null, total_payable_irr: null,
+        display_name: null, created_at: createdAt, updated_at: updatedAt,
+        shipment_count: 0, latest_shipment_id: null, shipment_display_name: null,
+        bill_of_lading_no: null, vessel_name: null, kottaj_number: null,
+      } as unknown as CaseRecord;
+      this.lastChanges = 1;
+      return { meta: { changes: 1 } };
+    }
     if (sql.startsWith('INSERT INTO customs_os_audit_events')) {
       if (this.lastChanges !== 1) return { meta: { changes: 0 } };
       this.auditEvents.push({
@@ -90,6 +126,10 @@ const caseRow: CaseRecord = {
   gross_weight_kg: 20200, warehouse_receipt_no: 'WH-1405-01', warehouse_receipt_date: '2026-11-02',
   release_status: 'pending', valuation_status: 'calculated', unloading_date: '2026-11-03',
   vessel_type: 'foreign', customs_regime: 'definitive_import',
+  origin_country_code: 'US', transaction_country_code: 'IR', delivery_term: 'CFR',
+  invoice_amount: 100, invoice_currency: 'USD', insurance_amount_irr: 50, tariff_code: '1001',
+  import_duty_rate: '10', customs_fx_rate_irr: null, customs_value_irr: null,
+  import_duty_irr: null, vat_irr: null, total_payable_irr: null,
   display_name: 'محموله الف', created_at: '2026-11-01', updated_at: null,
   shipment_count: 1, latest_shipment_id: 'shipment-a', shipment_display_name: 'محموله الف',
   bill_of_lading_no: 'BL-1', vessel_name: 'Vessel A', kottaj_number: null,
@@ -338,6 +378,172 @@ describe('Cloudflare D1 cases read API', () => {
     const url = new URL('https://staging.example/api/cases');
     const response = await handleCasesApi(req('GET', url.pathname), db, url, { ...owner, role: 'client' });
     expect(response.status).toBe(403);
+  });
+
+  it('creates an organization-scoped case and records its creation audit event', async () => {
+    const db = new FakeD1();
+    const url = new URL('https://staging.example/api/cases');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ client_id: 'client-a', registration_order_no: 'RO-NEW' }),
+    }), db, url, owner);
+    const body = await response.json() as { ok: boolean; created: boolean; case: CaseRecord };
+    expect(response.status).toBe(201);
+    expect(body.ok).toBe(true);
+    expect(body.created).toBe(true);
+    expect(body.case.status).toBe('registration_order');
+    expect(body.case.registration_order_no).toBe('RO-NEW');
+    expect(db.auditEvents).toHaveLength(1);
+    expect(db.auditEvents[0]).toMatchObject({
+      organization_id: 'org-a', actor_user_id: 'user-a', action: 'create', entity_type: 'case',
+    });
+    expect(db.queries.some(q => q.sql.includes('FROM clients WHERE id=?') && q.values.join('|') === 'client-a|org-a')).toBe(true);
+  });
+
+  it('returns the existing case for a duplicate registration order instead of creating another', async () => {
+    const db = new FakeD1();
+    db.existingOrderId = 'case-existing';
+    db.detail = { ...caseRow, id: 'case-existing' };
+    const url = new URL('https://staging.example/api/cases');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ client_id: 'client-a', registration_order_no: 'RO-1' }),
+    }), db, url, owner);
+    const body = await response.json() as { created: boolean; case: CaseRecord };
+    expect(response.status).toBe(200);
+    expect(body.created).toBe(false);
+    expect(body.case.id).toBe('case-existing');
+    expect(db.queries.some(q => q.sql.startsWith('INSERT INTO cases'))).toBe(false);
+  });
+
+  it('rejects case creation for a client outside the active organization', async () => {
+    const db = new FakeD1();
+    db.clientRow = { id: 'client-a', organization_id: 'org-other' };
+    const url = new URL('https://staging.example/api/cases');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ client_id: 'client-a' }),
+    }), db, url, owner);
+    expect(response.status).toBe(404);
+    expect(db.queries.some(q => q.sql.startsWith('INSERT INTO cases'))).toBe(false);
+  });
+
+  it('updates operational data and only advances early cases to documents_ready', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, organization_id: 'org-a', status: 'draft', warehouse_receipt_no: null,
+      warehouse_receipt_date: null, unloading_date: null, updated_at: '2026-11-25T09:00:00.000Z',
+    } as CaseRecord;
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({
+        vessel_type: 'foreign', unloading_date: '2026-11-12',
+        warehouse_receipt_no: 'WH-NEW', warehouse_receipt_date: '2026-11-11',
+        origin_country_code: 'us', transaction_country_code: 'ir', delivery_term: 'cfr',
+        invoice_amount: 250, invoice_currency: 'usd', insurance_amount_irr: 100,
+        import_duty_rate: 5, tariff_code: '1001',
+      }),
+    }), db, url, owner);
+    const body = await response.json() as { case: CaseRecord; stageAdvanced: boolean };
+    expect(response.status).toBe(200);
+    expect(body.case.status).toBe('documents_ready');
+    expect(body.case.origin_country_code).toBe('US');
+    expect(body.case.invoice_currency).toBe('USD');
+    expect(body.case.warehouse_receipt_date).toBe('2026-11-11');
+    expect(body.stageAdvanced).toBe(true);
+    const audit = db.auditEvents[0];
+    expect(JSON.parse(String(audit.after_json))).toMatchObject({ status: 'documents_ready', invoice_amount: 250 });
+  });
+
+  it('rejects an invalid ISO calendar date before performing any SQL write', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, organization_id: 'org-a' } as CaseRecord;
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ warehouse_receipt_date: '2026-02-30' }),
+    }), db, url, owner);
+    expect(response.status).toBe(422);
+    expect(db.queries.some(q => q.sql.startsWith('UPDATE cases SET'))).toBe(false);
+  });
+
+  it('calculates customs valuation with exact decimal arithmetic and audits the result', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, organization_id: 'org-a', status: 'valuation',
+      invoice_amount: 100, invoice_currency: 'USD', insurance_amount_irr: 50,
+      updated_at: '2026-11-25T09:00:00.000Z',
+    } as CaseRecord;
+    const url = new URL('https://staging.example/api/cases/case-a/valuation');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ customs_fx_rate_irr: '2', import_duty_rate: '10', vat_rate: '9' }),
+    }), db, url, owner);
+    const body = await response.json() as {
+      ok: boolean; valuation: { customs_value_irr: string; import_duty_irr: string; vat_irr: string; total_payable_irr: string };
+      case: CaseRecord;
+    };
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.valuation).toEqual({
+      customs_value_irr: '250', import_duty_irr: '25', vat_irr: '24.75', total_payable_irr: '49.75',
+      customs_fx_rate_irr: '2', import_duty_rate: '10', vat_rate: '9',
+    });
+    expect(body.case.status).toBe('duties_calculation');
+    expect(body.case.valuation_status).toBe('calculated');
+    expect(db.auditEvents).toHaveLength(1);
+    expect(JSON.parse(String(db.auditEvents[0].after_json))).toMatchObject({
+      status: 'duties_calculation', valuation_status: 'calculated', total_payable_irr: '49.75',
+    });
+  });
+
+  it('requires invoice, currency and insurance before valuation and blocks stage regression', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, organization_id: 'org-a', insurance_amount_irr: null } as CaseRecord;
+    const url = new URL('https://staging.example/api/cases/case-a/valuation');
+    const missingInsurance = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ customs_fx_rate_irr: 2, import_duty_rate: 10 }),
+    }), db, url, owner);
+    expect(missingInsurance.status).toBe(422);
+    expect(db.queries.some(q => q.sql.startsWith('UPDATE cases SET'))).toBe(false);
+
+    db.detail = { ...caseRow, organization_id: 'org-a', status: 'exit_permit' } as CaseRecord;
+    const closed = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ customs_fx_rate_irr: 2, import_duty_rate: 10 }),
+    }), db, url, owner);
+    expect(closed.status).toBe(409);
+    expect(db.queries.some(q => q.sql.startsWith('UPDATE cases SET'))).toBe(false);
+  });
+
+  it('rejects case creation and valuation for unauthorized roles', async () => {
+    const db = new FakeD1();
+    const url = new URL('https://staging.example/api/cases');
+    const create = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ client_id: 'client-a' }),
+    }), db, url, { ...owner, role: 'warehouse' });
+    expect(create.status).toBe(403);
+    expect(db.queries).toHaveLength(0);
+    const valuationUrl = new URL('https://staging.example/api/cases/case-a/valuation');
+    const valuation = await handleCasesApi(new Request(valuationUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: valuationUrl.origin },
+      body: JSON.stringify({ customs_fx_rate_irr: 2, import_duty_rate: 10 }),
+    }), db, valuationUrl, { ...owner, role: 'warehouse' });
+    expect(valuation.status).toBe(403);
+    expect(db.queries).toHaveLength(0);
   });
 
   it('rejects unsupported write methods without executing SQL', async () => {
