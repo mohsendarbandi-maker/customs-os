@@ -201,6 +201,7 @@ const parseOrderInput = (raw: Record<string, unknown>): OrderInput | null => {
     (raw.bank_branch != null && bankBranch == null) ||
     (raw.bank_branch_code != null && bankBranchCode == null) ||
     (raw.payment_instrument_code != null && paymentCode == null) ||
+    !bankName || !bankBranch || !bankBranchCode || !paymentCode ||
     (valueAmount !== null && (!currency || !/^[A-Z]{3}$/.test(currency))) ||
     (currency !== null && !/^[A-Z]{3}$/.test(currency)) ||
     (quantity !== null && quantity < 0) ||
