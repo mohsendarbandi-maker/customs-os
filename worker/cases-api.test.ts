@@ -146,6 +146,7 @@ describe('Cloudflare D1 cases read API', () => {
     expect(invalidStatus.status).toBe(422);
     expect(db.queries).toHaveLength(0);
 
+    db.detail = { ...caseRow };
     const invalidWeight = await handleCasesApi(new Request(url, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', origin: url.origin },
@@ -264,10 +265,10 @@ describe('Cloudflare D1 cases read API', () => {
     expect(response.status).toBe(403);
   });
 
-  it('rejects write methods without executing SQL', async () => {
+  it('rejects unsupported write methods without executing SQL', async () => {
     const db = new FakeD1();
     const url = new URL('https://staging.example/api/cases/case-a');
-    const response = await handleCasesApi(req('PATCH', url.pathname), db, url, owner);
+    const response = await handleCasesApi(req('POST', url.pathname), db, url, owner);
     expect(response.status).toBe(405);
     expect(db.queries).toHaveLength(0);
   });
