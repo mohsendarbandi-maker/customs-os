@@ -292,6 +292,7 @@ const safeProcedureValue = (value: unknown, depth = 0): boolean => {
 const validateProcedureState = (value: JsonObject): boolean =>
   Object.keys(value).every(key => PROCEDURE_STAGE_KEYS.has(key) && isObject(value[key])) &&
   safeProcedureValue(value);
+const safeProcedureSnapshot = (value: JsonObject): boolean => safeProcedureValue(value);
 const validProcedureStage = (value: unknown): value is string =>
   typeof value === 'string' && WORKFLOW_STAGE_KEYS.has(value);
 
@@ -454,7 +455,8 @@ export const handleCustomsDeclarationWorkflowApi = async (
       return fail('WORKFLOW_NOT_APPLICABLE', 409, { customsRegime: declaration.customs_regime });
     }
     const initial = makeDefaults(declaration);
-    const procedureState = parseJsonObject(body.procedureState) || {};
+    const procedureState = body.procedureState === undefined ? {} : parseJsonObject(body.procedureState);
+    if (!procedureState) return fail('INVALID_PROCEDURE_STATE', 422);
     const currentStage = body.currentStage === undefined
       ? (isDefinitiveImport ? 'evaluation' : 'documents')
       : body.currentStage;
@@ -548,7 +550,7 @@ export const handleCustomsDeclarationWorkflowApi = async (
     const expectedStage = typeof body.expectedCurrentStage === 'string' ? body.expectedCurrentStage : '';
     const nextStage = body.nextStage;
     if (!patch || !validateProcedureState(patch)) return fail('INVALID_PROCEDURE_PATCH', 422);
-    if (!baseState || !validateProcedureState(baseState)) return fail('WORKFLOW_BASELINE_REQUIRED', 422);
+    if (!baseState || !safeProcedureSnapshot(baseState)) return fail('WORKFLOW_BASELINE_REQUIRED', 422);
     if (!validProcedureStage(nextStage)) return fail('INVALID_WORKFLOW_STAGE', 422);
     try {
       for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -558,7 +560,7 @@ export const handleCustomsDeclarationWorkflowApi = async (
         const conflicts = collectConflicts(current, baseState, patch);
         if (conflicts.length) return fail('CUSTOMS_WORKFLOW_CONFLICT', 409, { conflicts });
         const merged = mergePatch(current, patch);
-        if (!validateProcedureState(merged)) return fail('INVALID_PROCEDURE_STATE', 422);
+        if (!safeProcedureSnapshot(merged)) return fail('INVALID_PROCEDURE_STATE', 422);
         const stage = row.current_stage === expectedStage ? nextStage : row.current_stage;
         const updatedAt = timestampAfter(row.updated_at);
         const changes = await writeUpdate(
