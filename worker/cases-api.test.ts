@@ -715,6 +715,80 @@ describe('Cloudflare D1 cases read API', () => {
     expect(db.queries.some(q => q.sql.startsWith('UPDATE cases SET'))).toBe(false);
   });
 
+  it('calculates customs value, duty and VAT with the legacy SQL formula', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, organization_id: 'org-a', status: 'valuation',
+      invoice_amount: '100', invoice_currency: 'USD', insurance_amount_irr: '50',
+      customs_fx_rate_irr: null, customs_value_irr: null, import_duty_irr: null,
+      vat_irr: null, total_payable_irr: null, valuation_status: 'pending',
+      updated_at: '2026-11-25T09:00:00.000Z',
+    } as CaseRecord;
+    const url = new URL('https://staging.example/api/cases/case-a/valuation/calculate');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ customs_fx_rate_irr: '2', import_duty_rate: '10', vat_rate: '9' }),
+    }), db, url, owner);
+    const body = await response.json() as {
+      ok: boolean; valuation: {
+        customs_value_irr: string; import_duty_irr: string; vat_irr: string; total_payable_irr: string;
+        customs_fx_rate_irr: string; import_duty_rate: string; vat_rate: string;
+      }; case: CaseRecord;
+    };
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.valuation).toEqual({
+      customs_value_irr: '250', import_duty_irr: '25', vat_irr: '24.75', total_payable_irr: '49.75',
+      customs_fx_rate_irr: '2', import_duty_rate: '10', vat_rate: '9',
+    });
+    expect(body.case.status).toBe('duties_calculation');
+    expect(body.case.valuation_status).toBe('calculated');
+    expect(db.auditEvents).toHaveLength(1);
+    expect(JSON.parse(String(db.auditEvents[0].after_json))).toMatchObject({
+      status: 'duties_calculation', valuation_status: 'calculated', total_payable_irr: '49.75',
+    });
+  });
+
+  it('keeps IRR invoices unconverted and requires source invoice and insurance inputs', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, organization_id: 'org-a', invoice_amount: '100', invoice_currency: 'IRR',
+      insurance_amount_irr: '50', updated_at: '2026-11-25T09:00:00.000Z',
+    } as CaseRecord;
+    const url = new URL('https://staging.example/api/cases/case-a/valuation/calculate');
+    const irr = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ customs_fx_rate_irr: '200000', import_duty_rate: '0', vat_rate: '0' }),
+    }), db, url, owner);
+    const irrBody = await irr.json() as { valuation: { customs_value_irr: string } };
+    expect(irr.status).toBe(200);
+    expect(irrBody.valuation.customs_value_irr).toBe('150');
+
+    db.detail = { ...caseRow, organization_id: 'org-a', invoice_currency: 'USD', insurance_amount_irr: null } as CaseRecord;
+    const missingInsurance = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ customs_fx_rate_irr: '2', import_duty_rate: '10' }),
+    }), db, url, owner);
+    expect(missingInsurance.status).toBe(422);
+    expect(db.auditEvents).toHaveLength(1);
+  });
+
+  it('rejects invalid automatic valuation rates before changing case data', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, organization_id: 'org-a' } as CaseRecord;
+    const url = new URL('https://staging.example/api/cases/case-a/valuation/calculate');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ customs_fx_rate_irr: '0', import_duty_rate: '-1', vat_rate: '-5' }),
+    }), db, url, owner);
+    expect(response.status).toBe(422);
+    expect(db.queries.some(q => q.sql.startsWith('UPDATE cases SET'))).toBe(false);
+  });
+
   it('records manually entered customs valuation only in an allowed route stage', async () => {
     const db = new FakeD1();
     db.detail = {
