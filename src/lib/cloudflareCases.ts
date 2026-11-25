@@ -6,6 +6,12 @@ export interface CaseRecord {
   warehouse_receipt_no: string | null; warehouse_receipt_date: string | null;
   release_status: string | null; valuation_status: string | null;
   unloading_date: string | null; vessel_type: string | null; customs_regime: string | null;
+  origin_country_code: string | null; transaction_country_code: string | null; delivery_term: string | null;
+  invoice_amount: number | string | null; invoice_currency: string | null;
+  insurance_amount_irr: number | string | null; tariff_code: string | null;
+  import_duty_rate: number | string | null; customs_fx_rate_irr: number | string | null;
+  customs_value_irr: number | string | null; import_duty_irr: number | string | null;
+  vat_irr: number | string | null; total_payable_irr: number | string | null;
   display_name: string | null; created_at: string | null; updated_at: string | null;
   shipment_count: number; latest_shipment_id: string | null; shipment_display_name: string | null;
   bill_of_lading_no: string | null; vessel_name: string | null; kottaj_number: string | null;
@@ -42,8 +48,20 @@ export interface CaseHistoryResponse {
 export type CloudflareCasePatch = Partial<Pick<CaseRecord,
   'case_number' | 'registration_order_no' | 'proforma_no' | 'cargo_description' |
   'cargo_count' | 'cargo_count_unit' | 'net_weight_kg' | 'gross_weight_kg' |
-  'warehouse_receipt_no' | 'release_status' | 'valuation_status'
+  'warehouse_receipt_no' | 'warehouse_receipt_date' | 'release_status' | 'valuation_status' |
+  'unloading_date' | 'vessel_type' | 'origin_country_code' | 'transaction_country_code' |
+  'delivery_term' | 'invoice_amount' | 'invoice_currency' | 'insurance_amount_irr' |
+  'tariff_code' | 'import_duty_rate'
 >>;
+export interface CloudflareCaseCreateInput {
+  client_id: string;
+  registration_order_no?: string | null;
+}
+export interface CloudflareCaseValuationInput {
+  customs_fx_rate_irr: number | string;
+  import_duty_rate: number | string;
+  vat_rate?: number | string;
+}
 
 
 export interface CasePermit {
@@ -89,7 +107,8 @@ export class CloudflareCasesApiError extends Error {
       : code === 'CASE_NOT_FOUND' ? 'پرونده پیدا نشد یا به آن دسترسی ندارید.'
       : code === 'INVALID_CASE_PATCH' || code === 'INVALID_RELEASE_STATUS' || code === 'INVALID_VALUATION_STATUS' || code === 'INVALID_CASE_NUMBER_VALUE' || code === 'INVALID_CASE_NUMBER' || code === 'GROSS_WEIGHT_BELOW_NET_WEIGHT' ? 'اطلاعات ویرایش پرونده معتبر نیست.'
       : code === 'CASE_NUMBER_EXISTS' ? 'شماره پرونده قبلاً در این سازمان ثبت شده است.'
-      : code === 'CASE_UPDATE_CONFLICT' || code === 'PERMIT_UPDATE_CONFLICT' || code === 'PERMIT_DELETE_CONFLICT' ? 'اطلاعات هم‌زمان توسط کاربر دیگری تغییر کرده است؛ دوباره بارگذاری کنید.'
+      : code === 'CASE_UPDATE_CONFLICT' || code === 'CASE_CREATE_CONFLICT' || code === 'CASE_NUMBER_EXISTS' ||
+        code === 'PERMIT_UPDATE_CONFLICT' || code === 'PERMIT_DELETE_CONFLICT' ? 'اطلاعات هم‌زمان توسط کاربر دیگری تغییر کرده است؛ دوباره بارگذاری کنید.'
       : code === 'PERMIT_NOT_FOUND' ? 'مجوز پیدا نشد یا به این پرونده تعلق ندارد.'
       : code === 'PERMIT_EXPIRY_BEFORE_ISSUE' || code === 'INVALID_PERMIT_INPUT' || code === 'INVALID_PERMIT_STATUS' || code === 'INVALID_PERMIT_DATE' ? 'اطلاعات مجوز یا تاریخ‌های آن معتبر نیست.'
       : code === 'PERMIT_CREATE_FAILED' || code === 'PERMIT_CREATE_NOT_CONFIRMED' ? 'ثبت مجوز تأیید نشد؛ اطلاعات پرونده و دسترسی را بررسی کنید.'
@@ -109,6 +128,10 @@ const get = async <T>(path: string): Promise<T> => {
   return body as T;
 };
 export const cloudflareCasesApi = {
+  create: (input: CloudflareCaseCreateInput) =>
+    write<{ ok: true; case: CaseRecord; created: boolean }>(
+      '/api/cases', 'POST', input as unknown as Record<string, unknown>,
+    ),
   list: (options: { search?: string; status?: string; limit?: number; offset?: number } = {}) => {
     const query = new URLSearchParams();
     query.set('limit', String(options.limit ?? 100));
@@ -145,6 +168,14 @@ export const cloudflareCasesApi = {
     if (!response.ok) throw new CloudflareCasesApiError(
       typeof body.error === 'string' ? body.error : 'REQUEST_FAILED',
     );
-    return body as { ok: true; case: CaseRecord; unchanged?: boolean };
+    return body as { ok: true; case: CaseRecord; unchanged?: boolean; stageAdvanced?: boolean };
   },
+  calculateValuation: (id: string, input: CloudflareCaseValuationInput) =>
+    write<{
+      ok: true; case: CaseRecord;
+      valuation: {
+        customs_value_irr: string; import_duty_irr: string; vat_irr: string;
+        total_payable_irr: string; customs_fx_rate_irr: string; import_duty_rate: string; vat_rate: string;
+      };
+    }>('/api/cases/' + encodeURIComponent(id) + '/valuation', 'POST', input as unknown as Record<string, unknown>),
 };
