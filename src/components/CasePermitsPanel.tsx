@@ -74,7 +74,14 @@ export const CasePermitsPanel: React.FC<Props> = ({
   const [error, setError] = useState('');
   const [dateTarget, setDateTarget] = useState<'issued_at' | 'expires_at' | null>(null);
 
-  useEffect(() => { setItems(initialPermits); }, [initialPermits]);
+  useEffect(() => {
+    setItems(initialPermits);
+    setEditingId(null);
+    setCreating(false);
+    setForm(blank());
+    setError('');
+    setDateTarget(null);
+  }, [caseId, initialPermits]);
 
   const setField = <K extends keyof PermitForm>(key: K, value: PermitForm[K]) =>
     setForm(previous => ({ ...previous, [key]: value }));
