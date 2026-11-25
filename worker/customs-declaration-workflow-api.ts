@@ -78,7 +78,7 @@ type JsonObject = Record<string, unknown>;
 type Activity =
   | 'evaluation' | 'expertise' | 'cashier' | 'loading_permit'
   | 'exit' | 'port_charges' | 'abandoned';
-type RouteAction = 'read' | 'events' | 'create' | 'activity' | 'complete' | 'rollback';
+type RouteAction = 'read' | 'events' | 'create' | 'activity' | 'procedure' | 'complete' | 'rollback';
 interface Route {
   declarationId: string;
   action: RouteAction;
@@ -192,7 +192,7 @@ const parseRoute = (pathname: string): Route | Response => {
       : suffix === 'activity' ? 'activity'
         : suffix === 'complete' ? 'complete'
           : suffix === 'rollback' ? 'rollback' : 'read';
-  if (suffix !== undefined && !['events', 'activity', 'complete', 'rollback'].includes(suffix)) {
+  if (suffix !== undefined && !['events', 'activity', 'procedure', 'complete', 'rollback'].includes(suffix)) {
     return fail('NOT_FOUND', 404);
   }
   return { declarationId, action };
@@ -259,6 +259,32 @@ const makeDefaults = (declaration: DeclarationRow) => {
   };
 };
 const jsonText = (value: unknown) => JSON.stringify(value);
+
+const PROCEDURE_STAGE_KEYS = new Set([
+  'documents','permits','declaration','valuation','loading','exit','completed',
+  'guarantee','use_period','re_export',
+]);
+const safeProcedureValue = (value: unknown, depth = 0): boolean => {
+  if (depth > 6) return false;
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return typeof value !== 'string' || value.length <= 12000;
+  }
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.length <= 100 && value.every(item => safeProcedureValue(item, depth + 1));
+  if (!isObject(value)) return false;
+  const entries = Object.entries(value);
+  return entries.length <= 150 && entries.every(([key, item]) =>
+    key.length > 0 && key.length <= 100 &&
+    !['__proto__','prototype','constructor'].includes(key) &&
+    safeProcedureValue(item, depth + 1)
+  );
+};
+const validateProcedureState = (value: JsonObject): boolean =>
+  Object.keys(value).every(key => PROCEDURE_STAGE_KEYS.has(key) && isObject(value[key])) &&
+  safeProcedureValue(value);
+const validProcedureStage = (value: unknown): value is string =>
+  typeof value === 'string' && PROCEDURE_STAGE_KEYS.has(value);
+
 const deepEqual = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
   if (Array.isArray(left) || Array.isArray(right)) {
@@ -409,12 +435,20 @@ export const handleCustomsDeclarationWorkflowApi = async (
   if (!WRITE_ROLES.has(profile.role)) return fail('FORBIDDEN', 403);
 
   if (action === 'read' && request.method === 'POST') {
+    const body = await readBody(request);
+    if (body instanceof Response) return body;
     const declaration = await parseDeclaration(db, declarationId, profile.organization_id).catch(() => null);
     if (!declaration) return fail('DECLARATION_NOT_FOUND', 404);
-    if (declaration.customs_regime !== 'import_definitive') {
-      return fail('WORKFLOW_NOT_APPLICABLE', 409, { customsRegime: declaration.customs_regime });
-    }
+    const isDefinitiveImport = declaration.customs_regime === 'import_definitive';
     const initial = makeDefaults(declaration);
+    const procedureState = parseJsonObject(body.procedureState) || {};
+    const currentStage = body.currentStage === undefined
+      ? (isDefinitiveImport ? 'evaluation' : 'documents')
+      : body.currentStage;
+    if (!validProcedureStage(currentStage)) return fail('INVALID_WORKFLOW_STAGE', 422);
+    if (!validateProcedureState(procedureState)) return fail('INVALID_PROCEDURE_STATE', 422);
+    if (!isDefinitiveImport && currentStage === 'evaluation') return fail('INVALID_WORKFLOW_STAGE', 422);
+    if (isDefinitiveImport && currentStage !== 'evaluation') return fail('INVALID_WORKFLOW_STAGE', 422);
     const now = new Date().toISOString();
     try {
       await db.prepare(
@@ -423,10 +457,10 @@ export const handleCustomsDeclarationWorkflowApi = async (
         'loading_permit_state,exit_state,port_charges_state,procedure_state,created_by,updated_by,created_at,updated_at' +
         ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       ).bind(
-        crypto.randomUUID(), profile.organization_id, declarationId, 'evaluation',
+        crypto.randomUUID(), profile.organization_id, declarationId, currentStage,
         jsonText(initial.evaluation), jsonText(initial.expertise), jsonText(initial.cashier),
         jsonText(initial.loadingPermit), jsonText(initial.exit), jsonText(initial.port),
-        '{}', profile.id, profile.id, now, now,
+        jsonText(procedureState), profile.id, profile.id, now, now,
       ).run();
       const row = await getWorkflow(db, declarationId, profile.organization_id);
       if (!row) return fail('CUSTOMS_WORKFLOW_CREATE_NOT_CONFIRMED', 500);
@@ -491,6 +525,42 @@ export const handleCustomsDeclarationWorkflowApi = async (
     } catch {
       return fail('CUSTOMS_WORKFLOW_SAVE_FAILED', 500);
     }
+  }
+
+  if (action === 'procedure' && request.method === 'PATCH') {
+    const body = await readBody(request);
+    if (body instanceof Response) return body;
+    const patch = parseJsonObject(body.patch);
+    const baseState = parseJsonObject(body.baseState);
+    const expectedStage = typeof body.expectedCurrentStage === 'string' ? body.expectedCurrentStage : '';
+    const nextStage = body.nextStage;
+    if (!patch || !validateProcedureState(patch)) return fail('INVALID_PROCEDURE_PATCH', 422);
+    if (!baseState || !validateProcedureState(baseState)) return fail('WORKFLOW_BASELINE_REQUIRED', 422);
+    if (!validProcedureStage(nextStage)) return fail('INVALID_WORKFLOW_STAGE', 422);
+    try {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const row = await getWorkflow(db, declarationId, profile.organization_id);
+        if (!row) return fail('WORKFLOW_NOT_FOUND', 404);
+        const current = parseDbObject(row.procedure_state);
+        const conflicts = collectConflicts(current, baseState, patch);
+        if (conflicts.length) return fail('CUSTOMS_WORKFLOW_CONFLICT', 409, { conflicts });
+        const merged = mergePatch(current, patch);
+        if (!validateProcedureState(merged)) return fail('INVALID_PROCEDURE_STATE', 422);
+        const stage = row.current_stage === expectedStage ? nextStage : row.current_stage;
+        const updatedAt = timestampAfter(row.updated_at);
+        const changes = await writeUpdate(
+          db,
+          'UPDATE customs_declaration_workflow SET procedure_state=?,current_stage=?,updated_by=?,updated_at=?,last_event_type=? ' +
+            'WHERE id=? AND organization_id=? AND updated_at=?',
+          [jsonText(merged), stage, profile.id, updatedAt, 'saved', row.id, profile.organization_id, row.updated_at],
+        );
+        if (changes === 1) {
+          const saved = await getWorkflow(db, declarationId, profile.organization_id);
+          return saved ? json({ ok: true, workflow: parseRow(saved) }) : fail('WORKFLOW_UPDATE_NOT_CONFIRMED', 500);
+        }
+      }
+      return fail('CUSTOMS_WORKFLOW_CONFLICT', 409);
+    } catch { return fail('CUSTOMS_WORKFLOW_SAVE_FAILED', 500); }
   }
 
   if (action === 'complete' && request.method === 'POST') {
