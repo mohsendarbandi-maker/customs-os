@@ -2,6 +2,7 @@ export interface CasesD1Statement {
   bind(...values: unknown[]): CasesD1Statement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
   all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
+  run(): Promise<{ meta?: { changes?: number } }>;
 }
 export interface CasesD1Database { prepare(sql: string): CasesD1Statement; }
 export interface CasesApiProfile { id: string; organization_id: string; role: string; is_active: boolean; }
@@ -111,6 +112,87 @@ const readRelated = async (db: CasesD1Database, id: string, organizationId: stri
   return { shipments: shipments.results, declarations: declarations.results, documents: documents.results };
 };
 
+const sameOrigin = (request: Request, url: URL) => {
+  const origin = request.headers.get('origin');
+  return (!origin || origin === url.origin) && request.headers.get('sec-fetch-site') !== 'cross-site';
+};
+const stringFields = new Set([
+  'case_number','registration_order_no','proforma_no','cargo_description',
+  'cargo_count_unit','warehouse_receipt_no',
+]);
+const numericFields = new Set(['cargo_count','net_weight_kg','gross_weight_kg']);
+const releaseStatuses = new Set(['pending','invoice_received','paid','released']);
+const valuationStatuses = new Set(['pending','calculated','reviewed','approved']);
+const patchCase = async (request: Request, db: CasesD1Database, id: string, organizationId: string, url: URL) => {
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  const length = Number(request.headers.get('content-length') || 0);
+  if (length > 32 * 1024) return fail('REQUEST_TOO_LARGE', 413);
+  let body: unknown;
+  try {
+    const raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > 32 * 1024) return fail('REQUEST_TOO_LARGE', 413);
+    body = JSON.parse(raw);
+  } catch { return fail('INVALID_JSON', 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return fail('INVALID_CASE_PATCH', 422);
+  const input = body as Record<string, unknown>;
+  const allowed = new Set([...stringFields, ...numericFields, 'release_status', 'valuation_status']);
+  const keys = Object.keys(input);
+  if (!keys.length || keys.some(key => !allowed.has(key))) return fail('INVALID_CASE_PATCH', 422);
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  const normalized: Record<string, unknown> = {};
+  for (const key of keys) {
+    const value = input[key];
+    if (stringFields.has(key)) {
+      if (value !== null && typeof value !== 'string') return fail('INVALID_CASE_PATCH', 422);
+      const text = typeof value === 'string' ? value.trim() : null;
+      if (key === 'case_number' && (!text || text.length > 100)) return fail('INVALID_CASE_NUMBER', 422);
+      const max = key === 'cargo_description' ? 4000 : key === 'cargo_count_unit' ? 40 : 200;
+      if (text !== null && text.length > max) return fail('INVALID_CASE_PATCH', 422);
+      normalized[key] = text;
+    } else if (numericFields.has(key)) {
+      if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
+        return fail('INVALID_CASE_NUMBER_VALUE', 422);
+      }
+      normalized[key] = value;
+    } else if (key === 'release_status') {
+      if (typeof value !== 'string' || !releaseStatuses.has(value)) return fail('INVALID_RELEASE_STATUS', 422);
+      normalized[key] = value;
+    } else if (key === 'valuation_status') {
+      if (typeof value !== 'string' || !valuationStatuses.has(value)) return fail('INVALID_VALUATION_STATUS', 422);
+      normalized[key] = value;
+    }
+  }
+  if (normalized.net_weight_kg !== undefined && normalized.gross_weight_kg !== undefined &&
+      normalized.net_weight_kg !== null && normalized.gross_weight_kg !== null &&
+      Number(normalized.gross_weight_kg) < Number(normalized.net_weight_kg)) {
+    return fail('GROSS_WEIGHT_BELOW_NET_WEIGHT', 422);
+  }
+  const before = await readCase(db, id, organizationId).catch(() => null);
+  if (!before) return fail('CASE_NOT_FOUND', 404);
+  for (const key of keys) {
+    sets.push(key + '=?');
+    values.push(normalized[key]);
+  }
+  sets.push("updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')");
+  values.push(id, organizationId);
+  try {
+    const result = await db.prepare(
+      'UPDATE cases SET ' + sets.join(', ') + ' WHERE id=? AND organization_id=?',
+    ).bind(...values).run();
+    if (!result.meta?.changes) {
+      const current = await readCase(db, id, organizationId);
+      return current ? json({ ok: true, case: current, unchanged: true }) : fail('CASE_NOT_FOUND', 404);
+    }
+    const saved = await readCase(db, id, organizationId);
+    return saved ? json({ ok: true, case: saved }) : fail('CASE_UPDATE_NOT_CONFIRMED', 500);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/UNIQUE constraint failed/i.test(message)) return fail('CASE_NUMBER_EXISTS', 409);
+    return fail('CASE_UPDATE_FAILED', 500);
+  }
+};
+
 const parseSnapshot = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
   if (typeof value !== 'string' || !value.trim()) return {};
@@ -210,7 +292,12 @@ export const handleCasesApi = async (
 
   const id = readId(url.pathname);
   if (id instanceof Response) return id;
-  if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: ['GET'] });
+  if (request.method === 'PATCH') {
+    if (id === null) return fail('CASE_ID_REQUIRED', 400);
+    if (!['owner','admin','broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
+    return patchCase(request, db, id, profile.organization_id, url);
+  }
+  if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: id === null ? ['GET'] : ['GET', 'PATCH'] });
 
   try {
     if (id !== null) {
