@@ -92,6 +92,10 @@ export class CloudflareCasesApiError extends Error {
       : code === 'CASE_UPDATE_CONFLICT' || code === 'PERMIT_UPDATE_CONFLICT' || code === 'PERMIT_DELETE_CONFLICT' ? 'اطلاعات هم‌زمان توسط کاربر دیگری تغییر کرده است؛ دوباره بارگذاری کنید.'
       : code === 'PERMIT_NOT_FOUND' ? 'مجوز پیدا نشد یا به این پرونده تعلق ندارد.'
       : code === 'PERMIT_EXPIRY_BEFORE_ISSUE' || code === 'INVALID_PERMIT_INPUT' || code === 'INVALID_PERMIT_STATUS' || code === 'INVALID_PERMIT_DATE' ? 'اطلاعات مجوز یا تاریخ‌های آن معتبر نیست.'
+      : code === 'PERMIT_CREATE_FAILED' || code === 'PERMIT_CREATE_NOT_CONFIRMED' ? 'ثبت مجوز تأیید نشد؛ اطلاعات پرونده و دسترسی را بررسی کنید.'
+      : code === 'PERMIT_UPDATE_FAILED' || code === 'PERMIT_UPDATE_NOT_CONFIRMED' ? 'ویرایش مجوز انجام نشد؛ دوباره اطلاعات را بارگذاری کنید.'
+      : code === 'PERMIT_DELETE_FAILED' ? 'حذف مجوز انجام نشد؛ دوباره تلاش کنید.'
+      : code === 'CASE_PERMITS_API_NOT_READY' ? 'اطلاعات مجوزهای این پرونده در D1 در دسترس نیست.'
       : 'دریافت اطلاعات پرونده ناموفق بود: ' + code);
     this.name = 'CloudflareCasesApiError'; this.code = code;
   }
