@@ -31,8 +31,29 @@ CREATE TABLE IF NOT EXISTS customs_declaration_workflow (
   last_event_type TEXT NOT NULL DEFAULT 'saved'
     CHECK (last_event_type IN ('saved','rollback')),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY (declaration_id) REFERENCES customs_declarations(id) ON DELETE CASCADE
 );
+
+CREATE TRIGGER IF NOT EXISTS customs_declaration_workflow_tenant_insert
+BEFORE INSERT ON customs_declaration_workflow
+WHEN NOT EXISTS (
+  SELECT 1 FROM customs_declarations d
+  WHERE d.id = NEW.declaration_id AND d.organization_id = NEW.organization_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'workflow declaration organization mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS customs_declaration_workflow_tenant_update
+BEFORE UPDATE OF declaration_id, organization_id ON customs_declaration_workflow
+WHEN NOT EXISTS (
+  SELECT 1 FROM customs_declarations d
+  WHERE d.id = NEW.declaration_id AND d.organization_id = NEW.organization_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'workflow declaration organization mismatch');
+END;
 
 CREATE INDEX IF NOT EXISTS customs_declaration_workflow_org_stage_idx
   ON customs_declaration_workflow(organization_id, current_stage);
@@ -54,13 +75,26 @@ CREATE TABLE IF NOT EXISTS customs_declaration_workflow_events (
   snapshot TEXT NOT NULL
     CHECK (json_valid(snapshot) AND json_type(snapshot) = 'object'),
   actor_id TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  FOREIGN KEY (workflow_id) REFERENCES customs_declaration_workflow(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS customs_declaration_workflow_events_timeline_idx
   ON customs_declaration_workflow_events(organization_id, declaration_id, created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS customs_declaration_workflow_events_workflow_idx
   ON customs_declaration_workflow_events(organization_id, workflow_id, created_at DESC, id DESC);
+
+CREATE TRIGGER IF NOT EXISTS customs_declaration_workflow_events_tenant_insert
+BEFORE INSERT ON customs_declaration_workflow_events
+WHEN NOT EXISTS (
+  SELECT 1 FROM customs_declaration_workflow w
+  WHERE w.id = NEW.workflow_id
+    AND w.organization_id = NEW.organization_id
+    AND w.declaration_id = NEW.declaration_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'workflow event organization mismatch');
+END;
 
 CREATE TRIGGER IF NOT EXISTS customs_declaration_workflow_events_after_insert
 AFTER INSERT ON customs_declaration_workflow
