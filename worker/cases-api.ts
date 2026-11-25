@@ -163,13 +163,14 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
       normalized[key] = value;
     }
   }
-  if (normalized.net_weight_kg !== undefined && normalized.gross_weight_kg !== undefined &&
-      normalized.net_weight_kg !== null && normalized.gross_weight_kg !== null &&
-      Number(normalized.gross_weight_kg) < Number(normalized.net_weight_kg)) {
-    return fail('GROSS_WEIGHT_BELOW_NET_WEIGHT', 422);
-  }
   const before = await readCase(db, id, organizationId).catch(() => null);
   if (!before) return fail('CASE_NOT_FOUND', 404);
+  const nextNetWeight = normalized.net_weight_kg !== undefined ? normalized.net_weight_kg : before.net_weight_kg;
+  const nextGrossWeight = normalized.gross_weight_kg !== undefined ? normalized.gross_weight_kg : before.gross_weight_kg;
+  if (nextNetWeight !== null && nextGrossWeight !== null &&
+      Number(nextGrossWeight) < Number(nextNetWeight)) {
+    return fail('GROSS_WEIGHT_BELOW_NET_WEIGHT', 422);
+  }
   for (const key of keys) {
     sets.push(key + '=?');
     values.push(normalized[key]);
