@@ -16,6 +16,11 @@ class FakeD1 implements CasesD1Database {
   auditEvents: Array<Record<string, unknown>> = [];
   queries: Array<{ sql: string; values: unknown[] }> = [];
   prepare(sql: string) { return new FakeStatement(sql, this); }
+  async batch(statements: CasesD1Statement[]) {
+    const results = [];
+    for (const statement of statements) results.push(await statement.run());
+    return results;
+  }
   first<T>(sql: string, values: unknown[]): T | null {
     this.queries.push({ sql, values });
     if (sql.includes('COUNT(*) AS total FROM cases c')) return { total: this.list.length } as T;
@@ -24,6 +29,15 @@ class FakeD1 implements CasesD1Database {
   }
   run(sql: string, values: unknown[]): { meta?: { changes?: number } } {
     this.queries.push({ sql, values });
+    if (sql.startsWith('INSERT INTO customs_os_audit_events')) {
+      this.auditEvents.push({
+        id: values[0], organization_id: values[1], actor_user_id: values[2],
+        action: values[3], entity_type: values[4], entity_id: values[5],
+        before_json: values[6], after_json: values[7], request_id: values[8],
+        created_at: '2026-11-25T09:00:00.000Z',
+      });
+      return { meta: { changes: 1 } };
+    }
     if (sql.startsWith('UPDATE cases SET')) {
       if (!this.detail || this.detail.id !== values[values.length - 2]) return { meta: { changes: 0 } };
       const setSql = sql.slice(sql.indexOf(' SET ') + 5, sql.lastIndexOf(' WHERE '));
@@ -122,6 +136,20 @@ describe('Cloudflare D1 cases read API', () => {
     const update = db.queries.find(query => query.sql.startsWith('UPDATE cases SET'));
     expect(update?.sql).toContain('WHERE id=? AND organization_id=?');
     expect(update?.values.slice(-2)).toEqual(['case-a', 'org-a']);
+    const audit = db.auditEvents.find(event => event.entity_type === 'case' && event.entity_id === 'case-a');
+    expect(audit).toMatchObject({
+      organization_id: 'org-a', actor_user_id: 'user-a', action: 'update', entity_type: 'case',
+    });
+    expect(JSON.parse(String(audit?.before_json))).toMatchObject({
+      warehouse_receipt_no: 'WH-1405-01',
+      release_status: 'pending',
+    });
+    expect(JSON.parse(String(audit?.after_json))).toMatchObject({
+      warehouse_receipt_no: 'WH-1405-2',
+      release_status: 'released',
+    });
+    expect(db.queries.findIndex(query => query.sql.startsWith('UPDATE cases SET')))
+      .toBeLessThan(db.queries.findIndex(query => query.sql.startsWith('INSERT INTO customs_os_audit_events')));
   });
 
   it('does not update a case outside the active organization', async () => {
