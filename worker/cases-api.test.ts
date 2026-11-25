@@ -15,6 +15,8 @@ class FakeD1 implements CasesD1Database {
   related = { shipments: [] as unknown[], declarations: [] as unknown[], documents: [] as unknown[], permits: [] as unknown[] };
   auditEvents: Array<Record<string, unknown>> = [];
   queries: Array<{ sql: string; values: unknown[] }> = [];
+  lastChanges = 0;
+  simulateCaseConflict = false;
   prepare(sql: string) { return new FakeStatement(sql, this); }
   async batch(statements: CasesD1Statement[]) {
     const results = [];
@@ -30,6 +32,7 @@ class FakeD1 implements CasesD1Database {
   run(sql: string, values: unknown[]): { meta?: { changes?: number } } {
     this.queries.push({ sql, values });
     if (sql.startsWith('INSERT INTO customs_os_audit_events')) {
+      if (this.lastChanges !== 1) return { meta: { changes: 0 } };
       this.auditEvents.push({
         id: values[0], organization_id: values[1], actor_user_id: values[2],
         action: values[3], entity_type: values[4], entity_id: values[5],
@@ -39,10 +42,26 @@ class FakeD1 implements CasesD1Database {
       return { meta: { changes: 1 } };
     }
     if (sql.startsWith('UPDATE cases SET')) {
-      if (!this.detail || this.detail.id !== values[values.length - 2]) return { meta: { changes: 0 } };
+      const [caseId, organizationId, previousUpdatedAt] = values.slice(-3);
+      if (!this.detail || this.detail.id !== caseId) {
+        this.lastChanges = 0;
+        return { meta: { changes: 0 } };
+      }
+      const current = this.detail as unknown as Record<string, unknown>;
+      if (this.simulateCaseConflict) {
+        current.updated_at = '2026-11-25T09:01:00.000Z';
+        this.simulateCaseConflict = false;
+        this.lastChanges = 0;
+        return { meta: { changes: 0 } };
+      }
+      if (current.organization_id !== organizationId || current.updated_at !== previousUpdatedAt) {
+        this.lastChanges = 0;
+        return { meta: { changes: 0 } };
+      }
       const setSql = sql.slice(sql.indexOf(' SET ') + 5, sql.lastIndexOf(' WHERE '));
       const columns = setSql.split(',').filter(part => part.includes('=?')).map(part => part.slice(0, part.indexOf('=')).trim());
-      columns.forEach((column, index) => { (this.detail as unknown as Record<string, unknown>)[column] = values[index]; });
+      columns.forEach((column, index) => { current[column] = values[index]; });
+      this.lastChanges = 1;
       return { meta: { changes: 1 } };
     }
     throw new Error('Unexpected run query: ' + sql);
@@ -135,7 +154,7 @@ describe('Cloudflare D1 cases read API', () => {
     expect(body.case.valuation_status).toBe('approved');
     const update = db.queries.find(query => query.sql.startsWith('UPDATE cases SET'));
     expect(update?.sql).toContain('WHERE id=? AND organization_id=?');
-    expect(update?.values.slice(-2)).toEqual(['case-a', 'org-a']);
+    expect(update?.values.slice(-3)).toEqual(['case-a', 'org-a', null]);
     const audit = db.auditEvents.find(event => event.entity_type === 'case' && event.entity_id === 'case-a');
     expect(audit).toMatchObject({
       organization_id: 'org-a', actor_user_id: 'user-a', action: 'update', entity_type: 'case',
@@ -150,6 +169,22 @@ describe('Cloudflare D1 cases read API', () => {
     });
     expect(db.queries.findIndex(query => query.sql.startsWith('UPDATE cases SET')))
       .toBeLessThan(db.queries.findIndex(query => query.sql.startsWith('INSERT INTO customs_os_audit_events')));
+  });
+
+  it('returns a conflict and writes no audit event when the case changed after it was read', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow };
+    db.simulateCaseConflict = true;
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ warehouse_receipt_no: 'WH-CONCURRENT' }),
+    }), db, url, owner);
+    expect(response.status).toBe(409);
+    expect(db.auditEvents).toHaveLength(0);
+    expect(db.queries.find(query => query.sql.startsWith('INSERT INTO customs_os_audit_events'))?.sql)
+      .toContain('WHERE changes()>0');
   });
 
   it('does not update a case outside the active organization', async () => {
