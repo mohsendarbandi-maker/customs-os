@@ -715,57 +715,64 @@ describe('Cloudflare D1 cases read API', () => {
     expect(db.queries.some(q => q.sql.startsWith('UPDATE cases SET'))).toBe(false);
   });
 
-  it('calculates customs valuation with exact decimal arithmetic and audits the result', async () => {
+  it('records manually entered customs valuation only in an allowed route stage', async () => {
     const db = new FakeD1();
     db.detail = {
-      ...caseRow, organization_id: 'org-a', status: 'valuation',
-      invoice_amount: 100, invoice_currency: 'USD', insurance_amount_irr: 50,
+      ...caseRow, organization_id: 'org-a', status: 'path_yellow',
+      customs_value_irr: null, import_duty_rate: null, import_duty_irr: null,
+      vat_irr: null, total_payable_irr: null, valuation_status: 'pending',
       updated_at: '2026-11-25T09:00:00.000Z',
     } as CaseRecord;
     const url = new URL('https://staging.example/api/cases/case-a/valuation');
     const response = await handleCasesApi(new Request(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: url.origin },
-      body: JSON.stringify({ customs_fx_rate_irr: '2', import_duty_rate: '10', vat_rate: '9' }),
+      body: JSON.stringify({
+        customs_value_irr: '123456.78', import_duty_rate: '10',
+        import_duty_irr: '12345.68', vat_irr: '11111.11', total_payable_irr: '23456.79',
+      }),
     }), db, url, owner);
     const body = await response.json() as {
-      ok: boolean; valuation: { customs_value_irr: string; import_duty_irr: string; vat_irr: string; total_payable_irr: string };
-      case: CaseRecord;
+      ok: boolean; valuation: {
+        customs_value_irr: string; import_duty_rate: string | null; import_duty_irr: string | null;
+        vat_irr: string | null; total_payable_irr: string | null; status: string;
+      }; case: CaseRecord;
     };
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.valuation).toEqual({
-      customs_value_irr: '250', import_duty_irr: '25', vat_irr: '24.75', total_payable_irr: '49.75',
-      customs_fx_rate_irr: '2', import_duty_rate: '10', vat_rate: '9',
+      customs_value_irr: '123456.78', import_duty_rate: '10', import_duty_irr: '12345.68',
+      vat_irr: '11111.11', total_payable_irr: '23456.79', status: 'valuation',
     });
-    expect(body.case.status).toBe('duties_calculation');
-    expect(body.case.valuation_status).toBe('calculated');
+    expect(body.case.status).toBe('valuation');
+    expect(body.case.valuation_status).toBe('pending');
     expect(db.auditEvents).toHaveLength(1);
     expect(JSON.parse(String(db.auditEvents[0].after_json))).toMatchObject({
-      status: 'duties_calculation', valuation_status: 'calculated', total_payable_irr: '49.75',
+      status: 'valuation', customs_value_irr: '123456.78', total_payable_irr: '23456.79',
     });
   });
 
-  it('requires invoice, currency and insurance before valuation and blocks stage regression', async () => {
+  it('requires a customs value and blocks manual valuation before a route is assigned', async () => {
     const db = new FakeD1();
-    db.detail = { ...caseRow, organization_id: 'org-a', insurance_amount_irr: null } as CaseRecord;
+    db.detail = { ...caseRow, organization_id: 'org-a', status: 'path_green' } as CaseRecord;
     const url = new URL('https://staging.example/api/cases/case-a/valuation');
-    const missingInsurance = await handleCasesApi(new Request(url, {
+    const missingValue = await handleCasesApi(new Request(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: url.origin },
-      body: JSON.stringify({ customs_fx_rate_irr: 2, import_duty_rate: 10 }),
+      body: JSON.stringify({ import_duty_rate: 10 }),
     }), db, url, owner);
-    expect(missingInsurance.status).toBe(422);
+    expect(missingValue.status).toBe(422);
     expect(db.queries.some(q => q.sql.startsWith('UPDATE cases SET'))).toBe(false);
 
-    db.detail = { ...caseRow, organization_id: 'org-a', status: 'exit_permit' } as CaseRecord;
-    const closed = await handleCasesApi(new Request(url, {
+    db.detail = { ...caseRow, organization_id: 'org-a', status: 'epl_submitted' } as CaseRecord;
+    const beforeRoute = await handleCasesApi(new Request(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: url.origin },
-      body: JSON.stringify({ customs_fx_rate_irr: 2, import_duty_rate: 10 }),
+      body: JSON.stringify({ customs_value_irr: '1000000' }),
     }), db, url, owner);
-    expect(closed.status).toBe(409);
+    expect(beforeRoute.status).toBe(409);
     expect(db.queries.some(q => q.sql.startsWith('UPDATE cases SET'))).toBe(false);
+    expect(db.auditEvents).toHaveLength(0);
   });
 
   it('rejects case creation and valuation for unauthorized roles', async () => {
