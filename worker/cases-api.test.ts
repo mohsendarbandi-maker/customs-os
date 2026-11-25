@@ -19,6 +19,7 @@ class FakeD1 implements CasesD1Database {
   queries: Array<{ sql: string; values: unknown[] }> = [];
   lastChanges = 0;
   simulateCaseConflict = false;
+  simulatePermitConflict = false;
   prepare(sql: string) { return new FakeStatement(sql, this); }
   async batch(statements: CasesD1Statement[]) {
     const results = [];
@@ -53,7 +54,12 @@ class FakeD1 implements CasesD1Database {
       const caseId = values[values.length - 3];
       const orgId = values[values.length - 2];
       const updatedAt = values[values.length - 1];
-      const row = this.permits.find(item => item.id === permitId && item.case_id === caseId && item.organization_id === orgId && item.updated_at === updatedAt);
+      const existing = this.permits.find(item => item.id === permitId && item.case_id === caseId && item.organization_id === orgId);
+      if (this.simulatePermitConflict && existing) {
+        existing.updated_at = '2026-11-25T09:02:00.000Z';
+        this.simulatePermitConflict = false;
+      }
+      const row = existing?.updated_at === updatedAt ? existing : undefined;
       if (!row) { this.lastChanges = 0; return { meta: { changes: 0 } }; }
       const setPart = sql.split(' SET ')[1]?.split(' WHERE ')[0] || '';
       const columns = setPart.split(',').map(value => value.split('=')[0].trim());
@@ -520,6 +526,44 @@ describe('Cloudflare D1 cases read API', () => {
     }), db, url, { ...owner, role: 'warehouse' });
     expect(response.status).toBe(403);
     expect(db.permits).toHaveLength(0);
+  });
+
+  it('does not overwrite a concurrent permit edit and records no false audit event', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    db.permits = [{
+      id: 'permit-a', organization_id: 'org-a', case_id: 'case-a', permit_type: 'health',
+      permit_number: 'H-1', issuing_authority: 'Authority', status: 'pending',
+      issued_at: null, expires_at: null, created_at: '2026-11-25T08:00:00.000Z',
+      updated_at: '2026-11-25T08:00:00.000Z',
+    }];
+    db.simulatePermitConflict = true;
+    const url = new URL('https://staging.example/api/cases/case-a/permits/permit-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'approved' }),
+    }), db, url, owner);
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('PERMIT_UPDATE_CONFLICT');
+    expect(db.permits[0].status).toBe('pending');
+    expect(db.auditEvents).toHaveLength(0);
+  });
+
+  it('rejects non-ISO permit timestamps before database writes', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    const url = new URL('https://staging.example/api/cases/case-a/permits');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        permit_type: 'health', issuing_authority: 'Authority',
+        issued_at: '11/25/2026', expires_at: '2026-12-25',
+      }),
+    }), db, url, owner);
+    expect(response.status).toBe(422);
+    expect(db.permits).toHaveLength(0);
+    expect(db.queries.some(query => query.sql.startsWith('INSERT INTO permits'))).toBe(false);
   });
 
 });
