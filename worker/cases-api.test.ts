@@ -306,7 +306,10 @@ describe('Cloudflare D1 cases read API', () => {
     expect(body.shipments).toHaveLength(1);
     expect(body.declarations).toHaveLength(1);
     expect(body.documents).toHaveLength(1);
-    expect(body.permits).toEqual([{ id: 'permit-a', permit_type: 'health', status: 'approved' }]);
+    expect(body.permits).toEqual([{
+      id: 'permit-a', organization_id: 'org-a', case_id: 'case-a',
+      permit_type: 'health', status: 'approved',
+    }]);
     expect(body.readOnly).toBe(true);
     const shipmentQuery = db.queries.find(query => query.sql.includes('sc.registration_order_date_shamsi'));
     const permitQuery = db.queries.find(query => query.sql.includes('FROM permits WHERE case_id'));
