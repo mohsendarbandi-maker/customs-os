@@ -506,7 +506,7 @@ const createOrUpdateOrder = async (
         input.bank_branch_code, input.payment_instrument_code, now, id, profile.organization_id,
       )
       : db.prepare(
-        'INSERT INTO registration_orders (id, organization_id, case_id, order_number, order_date, status, tariff_code, quantity, quantity_unit, value_amount, currency, notes, created_at, updated_at, client_id, net_weight_kg, gross_weight_kg, bank_name, bank_branch, bank_branch_code, payment_instrument_code, is_closed, closed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)',
+        'INSERT INTO registration_orders (id, organization_id, case_id, order_number, order_date, status, tariff_code, quantity, quantity_unit, value_amount, currency, notes, created_at, updated_at, client_id, net_weight_kg, gross_weight_kg, bank_name, bank_branch, bank_branch_code, payment_instrument_code, is_closed, closed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)',
       ).bind(
         id, profile.organization_id, input.case_id, input.order_number, input.order_date, input.status, input.tariff_code,
         input.quantity, input.quantity_unit, input.value_amount, input.currency, input.notes, now, now,
