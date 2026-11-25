@@ -3,7 +3,7 @@ name: Customs OS Cloudflare Free Staging
 on:
   push:
     branches:
-      - rebuild/cloudflare-free-first
+      - main
     paths:
       - "src/**"
       - "worker/**"
@@ -29,7 +29,8 @@ permissions:
 
 concurrency:
   group: customs-os-cloudflare-free-staging
-  cancel-in-progress: true
+  # Never interrupt a remote D1 migration or a deploy halfway through.
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -430,6 +431,16 @@ jobs:
             exit 1
           fi
 
+          # These are the exact new contracts needed by the D1 case-permits and
+          # customs-declaration workflow APIs. Verify them before treating the
+          # deployment as complete.
+          for required_table in customs_declaration_workflow customs_declaration_workflow_events permits; do
+            if ! jq -e --arg table "$required_table" '.tables | any(.[]; .name == $table)' "$work_dir/schema.json" >/dev/null; then
+              echo "::error::Required D1 table is missing after migration: $required_table"
+              exit 1
+            fi
+          done
+
           {
             echo "## Cloudflare Staging — read-only D1 diagnostics"
             echo
@@ -559,70 +570,18 @@ jobs:
           set -euo pipefail
           npx wrangler@4 secret list --config wrangler.migration-staging.jsonc --format json | jq -r '.[].name' | sort
 
-  # Independent priority lane: it deploys only the current D1-compatible API
-  # and static app. It intentionally does not apply migrations or alter D1 rows.
-  priority-login-shipments:
+  # Verify the already-deployed Worker only. Deployment and D1 migration
+  # happen once in build-and-deploy; this job must never publish another Worker.
+  verify-staging-login-and-case-permits:
+    needs: build-and-deploy
     environment:
       name: Preview – customs-os
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 10
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CUSTOMS_ADMIN_PASSWORD: ${{ secrets.CUSTOMS_ADMIN_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Assert Staging-only Worker and D1 configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import { readFileSync } from 'node:fs';
-          const config = JSON.parse(readFileSync('wrangler.migration-staging.jsonc', 'utf8'));
-          const databases = config.d1_databases ?? [];
-          const db = databases.find(item => item.binding === 'MIGRATION_DB');
-          const checks = {
-            worker: config.name === 'customs-os-migration-staging',
-            workersDevOnly: config.workers_dev === true,
-            previewUrlsDisabled: config.preview_urls === false,
-            noCustomRoutes: !Array.isArray(config.routes) || config.routes.length === 0,
-            staging: config.vars?.MIGRATION_ENVIRONMENT === 'staging',
-            productionDataDisabled: config.vars?.PRODUCTION_DATA_IMPORTED === 'false',
-            assets: config.assets?.binding === 'ASSETS' && config.assets?.directory === './dist',
-            onlyExpectedD1: databases.length === 1 && db?.database_name === 'customs-os-migration-staging' &&
-              String(db?.database_id ?? '').toLowerCase() === 'b938fa3c-4995-4d27-aeda-f72f2d484a3c',
-            noPaidBindings: !config.r2_buckets && !config.kv_namespaces && !config.queues &&
-              !config.ai && !config.vectorize && !config.services,
-          };
-          console.log(JSON.stringify({ worker: config.name, database: db?.database_name, checks }, null, 2));
-          if (!Object.values(checks).every(Boolean)) throw new Error('Staging isolation assertion failed.');
-          NODE
-          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            echo "::error::Preview Cloudflare Worker deployment credentials are missing."
-            exit 1
-          fi
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --no-audit --no-fund
-      - name: Unit tests
-        run: npm test
-      - name: TypeScript
-        run: npm run typecheck
-      - name: ESLint
-        run: npm run lint
-      - name: Build
-        run: npm run build
-
-      - name: Deploy Staging Worker without D1 migrations
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler@4 deploy --config wrangler.migration-staging.jsonc
-
-      - name: Verify live Staging D1 API and authorization boundary
+      - name: Verify live Staging D1 API, permits endpoint and authorization boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -636,29 +595,30 @@ jobs:
           curl --silent --show-error --fail --max-time 30 "$base/health/db" -o "$work_dir/db.json"
           jq -e '.ok == true and .database == "customs-os-migration-staging" and .operationalDataImported == true' "$work_dir/db.json" >/dev/null
 
-          # Confirm the deployed SPA shell and its actual compiled JavaScript asset,
-          # rather than treating a healthy Worker API as proof that the website loads.
+          curl --silent --show-error --fail --max-time 30 "$base/migration/schema" -o "$work_dir/schema.json"
+          for required_table in customs_declaration_workflow customs_declaration_workflow_events permits; do
+            jq -e --arg table "$required_table" '.tables | any(.[]; .name == $table)' "$work_dir/schema.json" >/dev/null
+          done
+
           page_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/login.html" --write-out '%{http_code}' "$base/login")"
           test "$page_code" = "200"
           grep -qi '<title>Customs OS' "$work_dir/login.html"
           asset_path="$(grep -oE 'src="/assets/[^"]+\.js"' "$work_dir/login.html" | head -1 | cut -d'"' -f2)"
           test -n "$asset_path"
-          case "$asset_path" in /assets/*) ;; *) echo "::error::Unexpected SPA asset path"; exit 1 ;; esac
           asset_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/app.js" --write-out '%{http_code}' "$base$asset_path")"
           test "$asset_code" = "200"
           test -s "$work_dir/app.js"
-          echo "SPA login shell and compiled JavaScript asset returned HTTP 200."
 
           session_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/session.json" --write-out '%{http_code}' "$base/api/auth/session")"
           test "$session_code" = "200"
           jq -e '.authenticated == false' "$work_dir/session.json" >/dev/null
 
-          shipments_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/unauthenticated.json" --write-out '%{http_code}' "$base/api/shipments")"
-          test "$shipments_code" = "401"
+          unauthenticated_code="$(curl --silent --show-error --max-time 20 --output "$work_dir/unauthenticated.json" --write-out '%{http_code}' "$base/api/cases")"
+          test "$unauthenticated_code" = "401"
           jq -e '.error == "UNAUTHORIZED"' "$work_dir/unauthenticated.json" >/dev/null
 
           if [ -z "${CUSTOMS_ADMIN_PASSWORD:-}" ]; then
-            echo "::warning::The Worker confirms its admin password is configured. Real credential login, cookie restoration and the authenticated 22-row list remain unverified because this GitHub Preview environment has no separate test credential; no secret value was read, printed, or changed."
+            echo "::warning::Staging schema, SPA shell, and unauthenticated authorization were verified. Login, authenticated permit API, and 22-shipment list remain unverified because CUSTOMS_ADMIN_PASSWORD is unavailable in this Preview environment."
             exit 0
           fi
 
@@ -677,9 +637,19 @@ jobs:
           test "$restore_code" = "200"
           jq -e '.authenticated == true and .profile.organization_id == "ad95fdf1-e0e2-439b-92b0-c20ab07cacdd"' "$work_dir/restored-session.json" >/dev/null
 
-          list_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/shipments.json" \
-            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/shipments?limit=200&offset=0")"
-          test "$list_code" = "200"
-          jq -e '.ok == true and .total == 22 and (.items | length) == 22' "$work_dir/shipments.json" >/dev/null
-          echo "Login, cookie restoration and 22 existing D1 shipments verified. No data rows were created or modified by this smoke test."
+          cases_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/cases.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/cases?limit=1&offset=0")"
+          test "$cases_code" = "200"
+          case_id="$(jq -r '.items[0].id // empty' "$work_dir/cases.json")"
+          test -n "$case_id"
 
+          permits_code="$(curl --silent --show-error --max-time 25 --output "$work_dir/permits.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/cases/$case_id/permits")"
+          test "$permits_code" = "200"
+          jq -e '.ok == true and (.permits | type == "array")' "$work_dir/permits.json" >/dev/null
+
+          shipments_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/shipments.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/shipments?limit=200&offset=0")"
+          test "$shipments_code" = "200"
+          jq -e '.ok == true and .total == 22 and (.items | length) == 22' "$work_dir/shipments.json" >/dev/null
+          echo "Staging schema, SPA asset, owner login, session restore, case permits GET, and 22 existing shipments verified. No operational rows were written."
