@@ -265,6 +265,11 @@ const SUPPORTED_PROCEDURE_REGIMES = new Set([
   'temporary_processing','external_transit','internal_transit','re_export',
   're_import','cabotage','customs_warehouse','free_zone','other',
 ]);
+const WORKFLOW_STAGE_KEYS = new Set([
+  'evaluation','expertise','cashier','loading_permit','exit','port_charges',
+  'abandoned','completed','documents','permits','declaration','valuation',
+  'loading','guarantee','use_period','re_export',
+]);
 const PROCEDURE_STAGE_KEYS = new Set([
   'documents','permits','declaration','valuation','loading','exit','completed',
   'guarantee','use_period','re_export',
@@ -288,7 +293,7 @@ const validateProcedureState = (value: JsonObject): boolean =>
   Object.keys(value).every(key => PROCEDURE_STAGE_KEYS.has(key) && isObject(value[key])) &&
   safeProcedureValue(value);
 const validProcedureStage = (value: unknown): value is string =>
-  typeof value === 'string' && PROCEDURE_STAGE_KEYS.has(value);
+  typeof value === 'string' && WORKFLOW_STAGE_KEYS.has(value);
 
 const deepEqual = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
