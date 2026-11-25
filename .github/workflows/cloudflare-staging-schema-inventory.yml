@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: customs-os-staging-d1-schema-inventory
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   inspect-staging-schema:
@@ -38,6 +38,12 @@ jobs:
               !Array.isArray(report.tables)) {
             throw new Error('Unexpected response; refusing to publish schema artifact.');
           }
+          const requiredCustomsTables = [
+            'customs_declaration_workflow',
+            'customs_declaration_workflow_events',
+            'permits',
+          ];
+          const presentTables = new Set(report.tables.map(table => table.name));
           const lines = [
             '## Isolated staging D1 schema inventory',
             '',
@@ -51,6 +57,11 @@ jobs:
             '| Table | Rows | Count verified |',
             '|---|---:|---|',
             ...report.tables.map(table => `| ${table.name} | ${table.rowCount ?? 'unknown'} | ${table.countVerified ? 'yes' : 'no'} |`),
+            '',
+            '### Customs workflow migration contracts',
+            '| Table | Present |',
+            '|---|---|',
+            ...requiredCustomsTables.map(table => `| ${table} | ${presentTables.has(table) ? 'yes' : 'no'} |`),
           ];
           appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n'));
           console.log(JSON.stringify({
