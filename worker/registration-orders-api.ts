@@ -15,7 +15,7 @@ export interface RegistrationOrdersProfile {
   is_active: boolean;
 }
 interface OrderInput {
-  client_id: string; order_number: string; order_date: string | null;
+  client_id: string; case_id: string | null; order_number: string; order_date: string | null;
   status: 'pending' | 'received' | 'verified' | 'used' | 'cancelled';
   tariff_code: string | null; quantity: number | null; quantity_unit: string | null;
   net_weight_kg: number | null; gross_weight_kg: number | null;
@@ -166,6 +166,7 @@ const sameOrigin = (request: Request, url: URL) => {
 };
 const parseOrderInput = (raw: Record<string, unknown>): OrderInput | null => {
   const clientId = parseText(raw.client_id, 128, false);
+  const caseId = parseText(raw.case_id, 128);
   const orderNumber = parseText(raw.order_number, 100, false);
   const status = parseText(raw.status ?? 'received', 30, false);
   const orderDate = parseText(raw.order_date, 32);
@@ -191,6 +192,7 @@ const parseOrderInput = (raw: Record<string, unknown>): OrderInput | null => {
     (raw.net_weight_kg != null && raw.net_weight_kg !== '' && netWeightMilli == null) ||
     (raw.gross_weight_kg != null && raw.gross_weight_kg !== '' && grossWeightMilli == null) ||
     (raw.value_amount != null && raw.value_amount !== '' && valueAmountMilli == null) ||
+    (raw.case_id != null && caseId == null) ||
     (raw.order_date != null && orderDate == null) ||
     (raw.tariff_code != null && tariffCode == null) ||
     (raw.quantity_unit != null && quantityUnit == null) ||
@@ -199,6 +201,7 @@ const parseOrderInput = (raw: Record<string, unknown>): OrderInput | null => {
     (raw.bank_branch != null && bankBranch == null) ||
     (raw.bank_branch_code != null && bankBranchCode == null) ||
     (raw.payment_instrument_code != null && paymentCode == null) ||
+    !bankName || !bankBranch || !bankBranchCode || !paymentCode ||
     (valueAmount !== null && (!currency || !/^[A-Z]{3}$/.test(currency))) ||
     (currency !== null && !/^[A-Z]{3}$/.test(currency)) ||
     (quantity !== null && quantity < 0) ||
@@ -208,7 +211,7 @@ const parseOrderInput = (raw: Record<string, unknown>): OrderInput | null => {
     (netWeight !== null && grossWeight !== null && grossWeight < netWeight)
   ) return null;
   return {
-    client_id: clientId, order_number: normalizeDigits(orderNumber), order_date: orderDate,
+    client_id: clientId, case_id: caseId, order_number: normalizeDigits(orderNumber), order_date: orderDate,
     status: status as OrderInput['status'], tariff_code: tariffCode, quantity, quantity_unit: quantityUnit,
     net_weight_kg: netWeight, gross_weight_kg: grossWeight,
     net_weight_milli: netWeightMilli, gross_weight_milli: grossWeightMilli,
@@ -471,28 +474,41 @@ const createOrUpdateOrder = async (
     const before = orderId ? await readOrder(db, orderId, profile.organization_id) : null;
     if (orderId && !before) return fail('REGISTRATION_ORDER_NOT_FOUND', 404);
     if (before?.is_closed) return fail('REGISTRATION_ORDER_CLOSED', 409);
+    if (input.case_id) {
+      const linkedCase = await db.prepare(
+        'SELECT id,client_id FROM cases WHERE id=? AND organization_id=? LIMIT 1',
+      ).bind(input.case_id, profile.organization_id).first<{ id: string; client_id: string | null }>();
+      if (!linkedCase) return fail('CASE_NOT_FOUND', 404);
+      if (linkedCase.client_id && linkedCase.client_id !== input.client_id) {
+        return fail('REGISTRATION_ORDER_CASE_CLIENT_MISMATCH', 409);
+      }
+    }
+    if (before?.case_id && input.case_id && before.case_id !== input.case_id) {
+      return fail('REGISTRATION_ORDER_CASE_LINK_CHANGE_FORBIDDEN', 409);
+    }
     if (await duplicateOrder(db, profile.organization_id, input.order_number, orderId)) return fail('REGISTRATION_ORDER_EXISTS', 409);
     const capacityError = await validateOrderCapacity(db, input, before, orderId, profile.organization_id);
     if (capacityError) return fail(capacityError, 409);
     const now = new Date().toISOString();
     const id = orderId || crypto.randomUUID();
     const after = {
-      id, organization_id: profile.organization_id, case_id: before?.case_id ?? null,
-      ...input, is_closed: false, closed_at: null, created_at: before?.created_at || now, updated_at: now,
+      ...input, id, organization_id: profile.organization_id,
+      case_id: before?.case_id ?? input.case_id ?? null,
+      is_closed: false, closed_at: null, created_at: before?.created_at || now, updated_at: now,
     };
     const statement = before
       ? db.prepare(
-        'UPDATE registration_orders SET client_id = ?, order_number = ?, order_date = ?, status = ?, tariff_code = ?, quantity = ?, quantity_unit = ?, value_amount = ?, currency = ?, notes = ?, net_weight_kg = ?, gross_weight_kg = ?, bank_name = ?, bank_branch = ?, bank_branch_code = ?, payment_instrument_code = ?, updated_at = ? WHERE id = ? AND organization_id = ?',
+        'UPDATE registration_orders SET case_id = COALESCE(case_id, ?), client_id = ?, order_number = ?, order_date = ?, status = ?, tariff_code = ?, quantity = ?, quantity_unit = ?, value_amount = ?, currency = ?, notes = ?, net_weight_kg = ?, gross_weight_kg = ?, bank_name = ?, bank_branch = ?, bank_branch_code = ?, payment_instrument_code = ?, updated_at = ? WHERE id = ? AND organization_id = ?',
       ).bind(
-        input.client_id, input.order_number, input.order_date, input.status, input.tariff_code,
+        input.case_id, input.client_id, input.order_number, input.order_date, input.status,
         input.quantity, input.quantity_unit, input.value_amount, input.currency, input.notes,
         input.net_weight_kg, input.gross_weight_kg, input.bank_name, input.bank_branch,
         input.bank_branch_code, input.payment_instrument_code, now, id, profile.organization_id,
       )
       : db.prepare(
-        'INSERT INTO registration_orders (id, organization_id, case_id, order_number, order_date, status, tariff_code, quantity, quantity_unit, value_amount, currency, notes, created_at, updated_at, client_id, net_weight_kg, gross_weight_kg, bank_name, bank_branch, bank_branch_code, payment_instrument_code, is_closed, closed_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)',
+        'INSERT INTO registration_orders (id, organization_id, case_id, order_number, order_date, status, tariff_code, quantity, quantity_unit, value_amount, currency, notes, created_at, updated_at, client_id, net_weight_kg, gross_weight_kg, bank_name, bank_branch, bank_branch_code, payment_instrument_code, is_closed, closed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)',
       ).bind(
-        id, profile.organization_id, input.order_number, input.order_date, input.status, input.tariff_code,
+        id, profile.organization_id, input.case_id, input.order_number, input.order_date, input.status, input.tariff_code,
         input.quantity, input.quantity_unit, input.value_amount, input.currency, input.notes, now, now,
         input.client_id, input.net_weight_kg, input.gross_weight_kg, input.bank_name, input.bank_branch,
         input.bank_branch_code, input.payment_instrument_code,
