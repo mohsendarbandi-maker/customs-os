@@ -324,7 +324,8 @@ const undoPatch = (current: unknown, before: unknown, after: unknown): unknown =
 };
 const validatePatch = (activity: string, patch: JsonObject): activity is Activity => {
   if (!Object.keys(patch).length) return false;
-  if (activity === 'abandoned') return Object.keys(patch).every(key => key === 'notes');
+  if (activity === 'abandoned') return Object.keys(patch).every(key => key === 'notes') &&
+    (typeof patch.notes === 'string' || patch.notes === null);
   if (!Object.prototype.hasOwnProperty.call(ALLOWED_FIELDS, activity)) return false;
   const allowed = ALLOWED_FIELDS[activity as Exclude<Activity, 'abandoned'>];
   if (Object.keys(patch).some(key => !allowed.includes(key))) return false;
@@ -442,41 +443,54 @@ export const handleCustomsDeclarationWorkflowApi = async (
     const expectedStage = typeof body.expectedCurrentStage === 'string' ? body.expectedCurrentStage : '';
     if (!patch || !validatePatch(activity, patch)) return fail('INVALID_WORKFLOW_PATCH', 422);
     if (!baseState) return fail('WORKFLOW_BASELINE_REQUIRED', 422);
-    const row = await getWorkflow(db, declarationId, profile.organization_id).catch(() => null);
-    if (!row) return fail('WORKFLOW_NOT_FOUND', 404);
-    const current = activity === 'abandoned'
-      ? { notes: row.notes }
-      : parseDbObject(row[STATE_COLUMNS[activity as Exclude<Activity, 'abandoned'>]]);
-    const conflicts = collectConflicts(current, baseState, patch);
-    if (conflicts.length) return fail('CUSTOMS_WORKFLOW_CONFLICT', 409, { conflicts });
-    const merged = activity === 'abandoned' ? null : mergePatch(current, patch);
-    const nextStage = row.current_stage === expectedStage ? activity : row.current_stage;
-    const updatedAt = timestampAfter(row.updated_at);
-    const sets: string[] = [];
-    const values: unknown[] = [];
-    if (activity === 'abandoned') {
-      sets.push('notes=?'); values.push(typeof patch.notes === 'string' && patch.notes.trim() ? patch.notes.trim() : null);
-    } else {
-      sets.push(STATE_COLUMNS[activity as Exclude<Activity, 'abandoned'>] + '=?');
-      values.push(jsonText(merged));
-    }
-    sets.push('current_stage=?','updated_by=?','updated_at=?','last_event_type=?');
-    values.push(nextStage, profile.id, updatedAt, 'saved', row.id, profile.organization_id, row.updated_at);
-    const sataMirror = activity === 'loading_permit' && Object.prototype.hasOwnProperty.call(patch, 'sata_code')
-      ? { declarationId, organizationId: profile.organization_id, sataCode: String(patch.sata_code ?? '').trim() }
-      : undefined;
+
+    // A concurrent edit to a different activity should not force the operator
+    // to discard their work. Re-read and retry the compare-and-swap when the
+    // row timestamp moved, while still rejecting conflicts on touched leaves.
     try {
-      const changes = await writeUpdate(
-        db,
-        'UPDATE customs_declaration_workflow SET ' + sets.join(', ') +
-          ' WHERE id=? AND organization_id=? AND updated_at=?',
-        values,
-        sataMirror,
-      );
-      if (changes !== 1) return fail('CUSTOMS_WORKFLOW_CONFLICT', 409);
-      const saved = await getWorkflow(db, declarationId, profile.organization_id);
-      return saved ? json({ ok: true, workflow: parseRow(saved) }) : fail('WORKFLOW_UPDATE_NOT_CONFIRMED', 500);
-    } catch { return fail('CUSTOMS_WORKFLOW_SAVE_FAILED', 500); }
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const row = await getWorkflow(db, declarationId, profile.organization_id);
+        if (!row) return fail('WORKFLOW_NOT_FOUND', 404);
+        const current = activity === 'abandoned'
+          ? { notes: row.notes }
+          : parseDbObject(row[STATE_COLUMNS[activity as Exclude<Activity, 'abandoned'>]]);
+        const conflicts = collectConflicts(current, baseState, patch);
+        if (conflicts.length) return fail('CUSTOMS_WORKFLOW_CONFLICT', 409, { conflicts });
+        const merged = activity === 'abandoned' ? null : mergePatch(current, patch);
+        const nextStage = row.current_stage === expectedStage ? activity : row.current_stage;
+        const updatedAt = timestampAfter(row.updated_at);
+        const sets: string[] = [];
+        const values: unknown[] = [];
+        if (activity === 'abandoned') {
+          sets.push('notes=?');
+          values.push(typeof patch.notes === 'string' && patch.notes.trim() ? patch.notes.trim() : null);
+        } else {
+          sets.push(STATE_COLUMNS[activity as Exclude<Activity, 'abandoned'>] + '=?');
+          values.push(jsonText(merged));
+        }
+        sets.push('current_stage=?','updated_by=?','updated_at=?','last_event_type=?');
+        values.push(nextStage, profile.id, updatedAt, 'saved', row.id, profile.organization_id, row.updated_at);
+        const sataMirror = activity === 'loading_permit' && Object.prototype.hasOwnProperty.call(patch, 'sata_code')
+          ? { declarationId, organizationId: profile.organization_id, sataCode: String(patch.sata_code ?? '').trim() }
+          : undefined;
+        const changes = await writeUpdate(
+          db,
+          'UPDATE customs_declaration_workflow SET ' + sets.join(', ') +
+            ' WHERE id=? AND organization_id=? AND updated_at=?',
+          values,
+          sataMirror,
+        );
+        if (changes === 1) {
+          const saved = await getWorkflow(db, declarationId, profile.organization_id);
+          return saved ? json({ ok: true, workflow: parseRow(saved) }) : fail('WORKFLOW_UPDATE_NOT_CONFIRMED', 500);
+        }
+        // Zero rows means another write won the CAS. Retry against its
+        // committed snapshot; after four collisions, fail closed with 409.
+      }
+      return fail('CUSTOMS_WORKFLOW_CONFLICT', 409);
+    } catch {
+      return fail('CUSTOMS_WORKFLOW_SAVE_FAILED', 500);
+    }
   }
 
   if (action === 'complete' && request.method === 'POST') {
