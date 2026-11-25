@@ -3,6 +3,7 @@ export type ExternalAllocationStatus = 'allocated' | 'dispatched' | 'completed' 
 
 export interface RegistrationOrderInput {
   client_id: string;
+  case_id?: string | null;
   order_number: string;
   order_date: string | null;
   status: RegistrationOrderStatus;
