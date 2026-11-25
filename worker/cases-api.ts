@@ -120,7 +120,7 @@ const readRelated = async (db: CasesD1Database, id: string, organizationId: stri
       'ORDER BY created_at DESC,id DESC LIMIT 200',
     ).bind(id, organizationId).all(),
     db.prepare(
-      'SELECT id,case_id,permit_type,permit_number,issuing_authority,status,issued_at,expires_at,created_at,updated_at ' +
+      'SELECT id,organization_id,case_id,permit_type,permit_number,issuing_authority,status,issued_at,expires_at,created_at,updated_at ' +
       'FROM permits WHERE case_id=? AND organization_id=? ORDER BY created_at DESC,id DESC LIMIT 200',
     ).bind(id, organizationId).all(),
   ]);
