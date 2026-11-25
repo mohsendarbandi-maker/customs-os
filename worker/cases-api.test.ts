@@ -200,6 +200,12 @@ describe('Cloudflare D1 cases read API', () => {
     expect(body.declarations).toHaveLength(1);
     expect(body.documents).toHaveLength(1);
     expect(body.readOnly).toBe(true);
+    const shipmentQuery = db.queries.find(query => query.sql.includes('FROM shipments s LEFT JOIN vessels v'));
+    expect(shipmentQuery?.sql).toContain('LEFT JOIN shipment_customs_data sc');
+    expect(shipmentQuery?.sql).toContain('sc.registration_order_date_shamsi');
+    expect(shipmentQuery?.sql).toContain('sc.insurance_irr');
+    const declarationQuery = db.queries.find(query => query.sql.includes('FROM customs_declarations WHERE case_id'));
+    expect(declarationQuery?.sql).toContain('payment_reference');
     expect(body.case.warehouse_receipt_date).toBe('2026-11-02');
     expect(body.case.unloading_date).toBe('2026-11-03');
     expect(body.case.vessel_type).toBe('foreign');
