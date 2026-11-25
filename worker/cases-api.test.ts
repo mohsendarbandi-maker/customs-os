@@ -155,6 +155,19 @@ describe('Cloudflare D1 cases read API', () => {
     expect(db.queries).toHaveLength(0);
   });
 
+  it('rejects a single weight edit that would violate the persisted gross/net relationship', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, net_weight_kg: 20000, gross_weight_kg: 20200 };
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ gross_weight_kg: 19000 }),
+    }), db, url, owner);
+    expect(response.status).toBe(422);
+    expect(db.queries.some(query => query.sql.startsWith('UPDATE cases SET'))).toBe(false);
+  });
+
   it('rejects case writes for roles without edit permissions', async () => {
     const db = new FakeD1();
     db.detail = { ...caseRow };
