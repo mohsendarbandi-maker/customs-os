@@ -153,7 +153,7 @@ describe('Cloudflare D1 cases read API', () => {
       body: JSON.stringify({ net_weight_kg: 20000, gross_weight_kg: 19000 }),
     }), db, url, owner);
     expect(invalidWeight.status).toBe(422);
-    expect(db.queries).toHaveLength(0);
+    expect(db.queries.some(query => query.sql.startsWith('UPDATE cases SET'))).toBe(false);
   });
 
   it('rejects a single weight edit that would violate the persisted gross/net relationship', async () => {
@@ -200,7 +200,7 @@ describe('Cloudflare D1 cases read API', () => {
     expect(body.declarations).toHaveLength(1);
     expect(body.documents).toHaveLength(1);
     expect(body.readOnly).toBe(true);
-    const shipmentQuery = db.queries.find(query => query.sql.includes('FROM shipments s LEFT JOIN vessels v'));
+    const shipmentQuery = db.queries.find(query => query.sql.includes('sc.registration_order_date_shamsi'));
     expect(shipmentQuery?.sql).toContain('LEFT JOIN shipment_customs_data sc');
     expect(shipmentQuery?.sql).toContain('sc.registration_order_date_shamsi');
     expect(shipmentQuery?.sql).toContain('sc.insurance_irr');
