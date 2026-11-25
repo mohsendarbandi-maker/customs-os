@@ -249,6 +249,40 @@ describe('Cloudflare D1 customs declaration workflow API', () => {
     expect(body.conflicts).toEqual(['documents.billOfLading']);
   });
 
+  it('rolls back a procedure-state save while recording an immutable rollback event', async () => {
+    const db = new FakeD1();
+    db.declaration = { ...declaration, customs_regime: 'export_definitive' };
+    const initial = {
+      documents: { invoiceNo: 'INV-1', goodsDescription: 'کالا' },
+      permits: { status: 'pending' },
+    };
+    const createUrl = new URL('https://staging.example/api/customs-declaration-workflows/decl-1');
+    await handleCustomsDeclarationWorkflowApi(
+      request('POST', createUrl.pathname, { currentStage: 'documents', procedureState: initial }),
+      db, createUrl, owner,
+    );
+    const patchUrl = new URL('https://staging.example/api/customs-declaration-workflows/decl-1/procedure');
+    await handleCustomsDeclarationWorkflowApi(
+      request('PATCH', patchUrl.pathname, {
+        baseState: initial,
+        patch: { documents: { invoiceNo: 'INV-2' } },
+        expectedCurrentStage: 'documents',
+        nextStage: 'permits',
+      }),
+      db, patchUrl, owner,
+    );
+    const rollbackUrl = new URL('https://staging.example/api/customs-declaration-workflows/decl-1/rollback');
+    const response = await handleCustomsDeclarationWorkflowApi(
+      request('POST', rollbackUrl.pathname, {}),
+      db, rollbackUrl, owner,
+    );
+    const body = await parse(response);
+    expect(response.status).toBe(200);
+    expect(body.workflow.procedure_state.documents.invoiceNo).toBe('INV-1');
+    expect(body.workflow.current_stage).toBe('documents');
+    expect(db.events[db.events.length - 1].event_type).toBe('rollback');
+  });
+
   it('rejects procedure state keys outside the supported stage model', async () => {
     const db = new FakeD1();
     db.declaration = { ...declaration, customs_regime: 'export_definitive' };
