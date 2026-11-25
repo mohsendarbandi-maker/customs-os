@@ -335,6 +335,15 @@ describe('Cloudflare D1 cases read API', () => {
       before_json: JSON.stringify({ status: 'draft', case_number: '1405-1' }),
       after_json: JSON.stringify({ status: 'documents', notes: 'اسناد دریافت شد' }),
       created_at: '2026-11-23T10:00:00.000Z',
+    }, {
+      id: 'event-permit-a',
+      actor_user_id: 'user-a',
+      action: 'update',
+      entity_type: 'permit',
+      entity_id: 'permit-a',
+      before_json: JSON.stringify({ case_id: 'case-a', status: 'pending' }),
+      after_json: JSON.stringify({ case_id: 'case-a', status: 'approved' }),
+      created_at: '2026-11-23T10:01:00.000Z',
     }];
     const url = new URL('https://staging.example/api/cases/case-a/history');
     const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
@@ -352,17 +361,16 @@ describe('Cloudflare D1 cases read API', () => {
       new_status: 'documents',
       notes: 'اسناد دریافت شد',
     })]);
-    expect(body.audit).toEqual([expect.objectContaining({
-      action: 'UPDATE',
-      table_name: 'case',
-      user_id: 'user-a',
-      record_id: 'case-a',
-    })]);
+    expect(body.audit).toHaveLength(2);
+    expect(body.audit).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: 'UPDATE', table_name: 'case', user_id: 'user-a', record_id: 'case-a' }),
+      expect.objectContaining({ action: 'UPDATE', table_name: 'permit', user_id: 'user-a', record_id: 'permit-a' }),
+    ]));
     expect(body.historySource).toBe('customs_os_audit_events');
     expect(body.legacyHistoryBackfill).toBe('not_imported');
     const auditQuery = db.queries.find(query => query.sql.includes('FROM customs_os_audit_events'));
     expect(auditQuery?.sql).toContain('organization_id=?');
-    expect(auditQuery?.values).toEqual(['org-a', 'case', 'case-a']);
+    expect(auditQuery?.values).toEqual(['org-a', 'case', 'case-a', 'permit', 'case-a']);
   });
 
   it('does not query audit history for a case outside the current organization', async () => {
