@@ -418,6 +418,20 @@ describe('Cloudflare D1 cases read API', () => {
     expect(db.queries.some(q => q.sql.startsWith('INSERT INTO cases'))).toBe(false);
   });
 
+  it('does not return an existing registration-order case to a different client', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, client_id: 'client-other' } as CaseRecord;
+    db.list = [{ id: 'case-existing', registration_order_no: 'RO-1' }];
+    const url = new URL('https://staging.example/api/cases');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ client_id: 'client-a', registration_order_no: 'RO-1' }),
+    }), db, url, owner);
+    expect(response.status).toBe(409);
+    expect(db.queries.some(q => q.sql.startsWith('INSERT INTO cases'))).toBe(false);
+  });
+
   it('rejects case creation for a client outside the active organization', async () => {
     const db = new FakeD1();
     db.clientRow = { id: 'client-a', organization_id: 'org-other' };
