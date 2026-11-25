@@ -295,7 +295,7 @@ const permitInput = (value: unknown, partial: boolean): Record<string, unknown> 
       const text = typeof item === 'string' ? item.trim() : '';
       if (!text) normalized[key] = null;
       else {
-        if (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(text)) {
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(text)) {
           return fail('INVALID_PERMIT_DATE', 422);
         }
         const timestamp = Date.parse(text);
