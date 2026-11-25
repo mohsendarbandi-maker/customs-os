@@ -2,6 +2,8 @@ import React,{useEffect,useState}from'react';
 import{ArrowRight,ExternalLink}from'lucide-react';
 import{Link,useSearchParams}from'react-router-dom';
 import{supabase}from'../lib/supabase';
+import{isCloudflareStagingHost}from'../lib/recoveryHost';
+import{cloudflareCasesApi}from'../lib/cloudflareCases';
 import{buildShipmentDisplayName}from'../lib/displayNames';
 
 type CaseRow={id:string;case_number:string|null;status:string;client_id?:string|null;cargo_count?:number|null;cargo_count_unit?:string|null;shipment_cargo_count?:number|null;shipment_cargo_count_unit?:string|null;shipment_client_name?:string|null;shipment_vessel_name?:string|null;effective_display_name?:string|null};
@@ -10,6 +12,49 @@ export const CaseStagePage:React.FC=()=>{
  const load=async(id:string)=>{
   setError('');
   try{
+   if(isCloudflareStagingHost()){
+    const first=await cloudflareCasesApi.list({limit:100,offset:0});
+    const all=[...first.items];
+    for(let offset=first.items.length;offset<first.total;offset+=100){
+     const page=await cloudflareCasesApi.list({limit:100,offset});
+     if(!page.items.length)break;
+     all.push(...page.items);
+    }
+    const rows=all.map(row=>({
+     ...row,status:row.status||'draft',
+     shipment_cargo_count:row.cargo_count,
+     shipment_cargo_count_unit:row.cargo_count_unit,
+     shipment_client_name:row.client_name,
+     shipment_vessel_name:row.vessel_name,
+     effective_display_name:row.display_name||row.shipment_display_name||null
+    })) as CaseRow[];
+    setCases(rows);
+    if(!id){setShipmentId('');setCustoms(null);setDeclaration(null);return}
+    const detail=await cloudflareCasesApi.get(id);
+    const shipment=detail.shipments?.[0] as Record<string,any>|undefined;
+    const sid=String(shipment?.id||'');
+    setShipmentId(sid);
+    setCustoms(shipment?{
+     vessel_type:shipment.vessel_type,
+     registration_order_no:shipment.registration_order_no,
+     registration_order_date_shamsi:shipment.registration_order_date_shamsi,
+     warehouse_receipt_no:shipment.warehouse_receipt_no,
+     warehouse_receipt_date_shamsi:shipment.warehouse_receipt_date_shamsi,
+     cargo_description:shipment.customs_cargo_description||shipment.cargo_description,
+     origin_country:shipment.origin_country,
+     transaction_country:shipment.transaction_country,
+     delivery_term:shipment.delivery_term,
+     tariff_code:shipment.tariff_code,
+     net_weight_kg:shipment.customs_net_weight_kg??shipment.net_weight_kg,
+     gross_weight_kg:shipment.customs_gross_weight_kg??shipment.gross_weight_kg,
+     bill_of_lading:shipment.customs_bill_of_lading||shipment.bill_of_lading_no,
+     invoice_amount:shipment.invoice_amount,
+     invoice_currency:shipment.invoice_currency,
+     insurance_irr:shipment.insurance_irr,
+    }:null);
+    setDeclaration(detail.declarations?.[0]||null);
+    return;
+   }
    const{data,error:e}=await supabase.from('case_display_context').select('id,case_number,status,client_id,cargo_count,cargo_count_unit,shipment_cargo_count,shipment_cargo_count_unit,shipment_client_name,shipment_vessel_name,effective_display_name').order('created_at',{ascending:false});
    if(e)throw e;setCases((data||[])as CaseRow[]);
    if(!id){setShipmentId('');setCustoms(null);setDeclaration(null);return}
@@ -25,7 +70,7 @@ export const CaseStagePage:React.FC=()=>{
  };
  useEffect(()=>{void load(selected)},[selected]);
  const current=cases.find(c=>c.id===selected);
- const display=current?buildShipmentDisplayName({cargo_count:current.shipment_cargo_count??current.cargo_count,cargo_count_unit:current.shipment_cargo_count_unit??current.cargo_count_unit,client_name:current.shipment_client_name,vessel_name:current.shipment_vessel_name}):'';
+ const display=current?(current.effective_display_name||buildShipmentDisplayName({cargo_count:current.shipment_cargo_count??current.cargo_count,cargo_count_unit:current.shipment_cargo_count_unit??current.cargo_count_unit,client_name:current.shipment_client_name,vessel_name:current.shipment_vessel_name})) :'';
  return <main dir="rtl" className="shipment-detail-page min-h-screen bg-[var(--bg)] text-[var(--text)] p-4 md:p-8"><div className="max-w-5xl mx-auto space-y-5">
   <header className="flex items-center justify-between gap-3"><div><div className="text-[10px] app-muted">مدیریت پرونده</div><h1 className="text-2xl md:text-3xl font-black mt-1">مدیریت پرونده</h1><p className="text-xs app-muted mt-1">اطلاعات گمرکی از Shipment خوانده می‌شود؛ این صفحه دیگر مسیر اجرای عملیات پنج‌مرحله‌ای نیست.</p></div><Link to="/" className="px-4 py-2 rounded-xl border app-border bg-[var(--surface)] text-xs font-bold"><ArrowRight className="inline ml-1" size={15}/>صفحه اصلی</Link></header>
   {error&&<div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">{error}</div>}
