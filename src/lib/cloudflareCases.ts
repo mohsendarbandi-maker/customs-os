@@ -92,7 +92,9 @@ export class CloudflareCasesApiError extends Error {
     super(code === 'UNAUTHORIZED' ? 'نشست ورود معتبر نیست؛ دوباره وارد شوید.'
       : code === 'FORBIDDEN' ? 'دسترسی لازم برای مشاهده پرونده‌ها وجود ندارد.'
       : code === 'CASE_NOT_FOUND' ? 'پرونده پیدا نشد یا به آن دسترسی ندارید.'
-      : code === 'INVALID_CASE_PATCH' || code === 'INVALID_RELEASE_STATUS' || code === 'INVALID_VALUATION_STATUS' || code === 'INVALID_CASE_NUMBER_VALUE' || code === 'INVALID_CASE_NUMBER' || code === 'GROSS_WEIGHT_BELOW_NET_WEIGHT' ? 'اطلاعات ویرایش پرونده معتبر نیست.'
+      : code === 'INVALID_CASE_PATCH' || code === 'INVALID_CASE_INPUT' || code === 'INVALID_RELEASE_STATUS' || code === 'INVALID_VALUATION_STATUS' || code === 'INVALID_CASE_NUMBER_VALUE' || code === 'INVALID_CASE_NUMBER' || code === 'INVALID_CASE_DATE' || code === 'INVALID_COUNTRY_CODE' || code === 'INVALID_INVOICE_CURRENCY' || code === 'GROSS_WEIGHT_BELOW_NET_WEIGHT' ? 'اطلاعات ویرایش پرونده معتبر نیست.'
+      : code === 'CLIENT_REQUIRED' || code === 'CLIENT_NOT_FOUND' ? 'صاحب کالا معتبر نیست یا به این سازمان تعلق ندارد.'
+      : code === 'CASE_CREATE_FAILED' || code === 'CASE_CREATE_NOT_CONFIRMED' ? 'ایجاد پرونده در D1 تأیید نشد.'
       : code === 'CASE_NUMBER_EXISTS' ? 'شماره پرونده قبلاً در این سازمان ثبت شده است.'
       : code === 'CASE_UPDATE_CONFLICT' || code === 'PERMIT_UPDATE_CONFLICT' || code === 'PERMIT_DELETE_CONFLICT' ? 'اطلاعات هم‌زمان توسط کاربر دیگری تغییر کرده است؛ دوباره بارگذاری کنید.'
       : code === 'PERMIT_NOT_FOUND' ? 'مجوز پیدا نشد یا به این پرونده تعلق ندارد.'
@@ -114,6 +116,7 @@ const get = async <T>(path: string): Promise<T> => {
   return body as T;
 };
 export const cloudflareCasesApi = {
+  create: (clientId: string) => write<{ ok: true; case: CaseRecord }>('/api/cases', 'POST', { client_id: clientId }),
   list: (options: { search?: string; status?: string; limit?: number; offset?: number } = {}) => {
     const query = new URLSearchParams();
     query.set('limit', String(options.limit ?? 100));
