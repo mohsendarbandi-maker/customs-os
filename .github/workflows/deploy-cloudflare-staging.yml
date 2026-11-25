@@ -29,7 +29,8 @@ permissions:
 
 concurrency:
   group: customs-os-cloudflare-free-staging
-  cancel-in-progress: true
+  # Never interrupt a remote D1 migration or a deploy halfway through.
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
