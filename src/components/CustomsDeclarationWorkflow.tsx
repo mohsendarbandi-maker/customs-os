@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState}from'react';
 import{AlertTriangle,Clock3,RefreshCw,Save,ShieldCheck}from'lucide-react';
 import{supabase}from'../lib/supabase';
+import{isCloudflareStagingHost}from'../lib/recoveryHost';
 import{CustomsStageDocumentAI}from'./CustomsStageDocumentAI';
 import{CUSTOMS_OPERATION_SECTION_KEYS,type CustomsOperationSection}from'../lib/customsDocumentAI';
 import{compareJalaliDates,getAbandonedGoodsWarnings,getWorkflowStageIssues,getInitialCustomsWorkflowStage,shouldShowAssessmentStage,parseJalaliDate,type CustomsWorkflowValidationState}from'../lib/customsDeclarationWorkflow';
@@ -11,7 +12,7 @@ import{JalaliDateTimePicker}from'../features/reminders/JalaliDateTimePicker';
 type WorkflowRow={
  id:string;organization_id:string;declaration_id:string;current_stage:string;
  evaluation_state:Record<string,any>;expertise_state:Record<string,any>;cashier_state:Record<string,any>;
- loading_permit_state:Record<string,any>;exit_state:Record<string,any>;port_charges_state:Record<string,any>;
+ loading_permit_state:Record<string,any>;exit_state:Record<string,any>;port_charges_state:Record<string,any>;procedure_state?:Record<string,any>;
  notes:string|null;updated_at:string;
 };
 type WorkflowEvent={id:string;event_type:'created'|'stage_changed'|'saved'|'rollback';previous_stage:string|null;current_stage:string;changed_fields:string[];actor_id:string|null;created_at:string;previous_snapshot:Record<string,any>|null};
@@ -22,6 +23,30 @@ type WorkflowBaseline={
  db:{evaluation:Record<string,any>;expertise:Record<string,any>;cashier:Record<string,any>;loadingPermit:Record<string,any>;exit:Record<string,any>;port:Record<string,any>};
 };
 const cloneWorkflowState=<T,>(value:T):T=>JSON.parse(JSON.stringify(value)) as T;
+const d1WorkflowRequest=async(declarationId:string,action:string='',method='GET',body?:Record<string,unknown>)=>{
+ const response=await fetch('/api/customs-declaration-workflows/'+encodeURIComponent(declarationId)+(action?'/'+action:''),{
+  method,credentials:'same-origin',
+  headers:body===undefined?undefined:{'Content-Type':'application/json'},
+  body:body===undefined?undefined:JSON.stringify(body)
+ });
+ const payload=await response.json().catch(()=>({}));
+ if(!response.ok){
+  const error=new Error(String(payload?.error||'CUSTOMS_WORKFLOW_REQUEST_FAILED')) as Error&{code?:string;details?:unknown};
+  error.code=String(payload?.error||'');error.details=payload;throw error;
+ }
+ return payload as Record<string,any>;
+};
+const saveWorkflowActivity=async(declarationId:string,workflowId:string,activity:string,patch:Record<string,unknown>,baseState:Record<string,unknown>,expectedCurrentStage:string):Promise<WorkflowRow>=>{
+ if(isCloudflareStagingHost()){
+  const result=await d1WorkflowRequest(declarationId,'activity','PATCH',{activity,patch,baseState,expectedCurrentStage});
+  return result.workflow as WorkflowRow;
+ }
+ const{data,error}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
+  p_workflow_id:workflowId,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:expectedCurrentStage
+ });
+ if(error)throw error;
+ return data as WorkflowRow;
+};
 const stages=[['evaluation','ارزیابی'],['expertise','کارشناسی و مجوزها'],['cashier','صندوق'],['loading_permit','مجوز بارگیری'],['exit','درب خروج'],['port_charges','عوارض بندری'],['abandoned','متروکه'],['completed','تکمیل']] as const;
 const emptyEvaluation={status:'not_required',evaluator_number:'',expert_requested:false,expert_request_note:''};
 const emptyExpertise={appointment_status:'not_requested',appointment_number:'',road_authority_status:'not_required',plant_quarantine_status:'not_required',standard:{expert_review:'pending',inspection_status:'not_requested',inspection_company:'',inspection_fee:null,inspection_paid:false,inspection_invoice_received:false,inspection_invoice_status:'pending',sample_status:'not_sent',laboratory:'',results_uploaded:false,standard_fee:null,standard_fee_paid:false,standard_notified:false}};
@@ -61,6 +86,11 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
  const refreshHistory=useCallback(async()=>{
   if(!declarationId||!organizationId){setHistory([]);return}
   setHistoryUnavailable(false);
+  if(isCloudflareStagingHost()){
+   try{const result=await d1WorkflowRequest(declarationId,'events');setHistory((result.events||[]) as WorkflowEvent[]);setHistoryUnavailable(false)}
+   catch{setHistory([]);setHistoryUnavailable(true)}
+   return;
+  }
   const{data,error:historyError}=await supabase.from('customs_declaration_workflow_events').select('id,event_type,previous_stage,current_stage,changed_fields,actor_id,created_at,previous_snapshot').eq('declaration_id',declarationId).eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(8);
   if(historyError){setHistory([]);setHistoryUnavailable(true);return}
   setHistory((data||[]) as WorkflowEvent[]);setHistoryUnavailable(false);
@@ -83,16 +113,26 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
   if(!declarationId||!organizationId){setLoading(false);return}
   setLoading(true);setError('');setMessage('');
   try{
-   const{data:declarationRef,error:declarationRefError}=await supabase.from('customs_declarations').select('shipment_id').eq('id',declarationId).single();
-   if(declarationRefError)throw declarationRefError;
+   let declarationRef:any=null,customData:any=null,existing:any=null;
+   if(isCloudflareStagingHost()){
+    const result=await d1WorkflowRequest(declarationId);
+    declarationRef={shipment_id:result.declaration?.shipment_id};customData=result.declaration||null;existing=result.workflow||null;
+   }else{
+    const{data:declarationData,error:declarationRefError}=await supabase.from('customs_declarations').select('shipment_id').eq('id',declarationId).single();
+    if(declarationRefError)throw declarationRefError;
+    declarationRef=declarationData;
+    if(!declarationRef?.shipment_id)throw new Error('اظهارنامه به محموله متصل نیست.');
+    const{data:customDataResult,error:customError}=await supabase.from('shipment_customs_data').select('vessel_type,cargo_description,tariff_code,sata_code').eq('shipment_id',declarationRef.shipment_id).maybeSingle();
+    if(customError)throw customError;
+    customData=customDataResult;
+    const{data:existingData,error:e}=await supabase.from('customs_declaration_workflow').select('*').eq('declaration_id',declarationId).maybeSingle();
+    if(e)throw e;
+    existing=existingData;
+   }
    if(!declarationRef?.shipment_id)throw new Error('اظهارنامه به محموله متصل نیست.');
    setShipmentId(declarationRef.shipment_id);
-   const{data:customData,error:customError}=await supabase.from('shipment_customs_data').select('vessel_type,cargo_description,tariff_code,sata_code').eq('shipment_id',declarationRef.shipment_id).maybeSingle();
-   if(customError)throw customError;
    const info={vesselType:String(customData?.vessel_type||''),description:String(customData?.cargo_description||''),hsCode:String(customData?.tariff_code||'')};
    setCommodity(info);
-   const{data:existing,error:e}=await supabase.from('customs_declaration_workflow').select('*').eq('declaration_id',declarationId).maybeSingle();
-   if(e)throw e;
    if(existing){
     const r=existing as WorkflowRow;setRow(r);const ev={...emptyEvaluation,...(r.evaluation_state||{})};setEvaluation(ev);setStage(getInitialCustomsWorkflowStage(r.current_stage,customsPath,ev));
     const storedStandard=((r.expertise_state||{}).standard||{}) as Record<string,any>;const mergedStandard={...emptyExpertise.standard,...storedStandard};if(!storedStandard.inspection_invoice_status&&storedStandard.inspection_invoice_received)mergedStandard.inspection_invoice_status='received';const ex={...emptyExpertise,...(r.expertise_state||{}),standard:mergedStandard};
@@ -112,13 +152,20 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
     };
    }else if(editable){
     const initial=defaults(info);
-    const{data:created,error:createError}=await supabase.from('customs_declaration_workflow').insert({
+    let created:any;
+    if(isCloudflareStagingHost()){
+     const result=await d1WorkflowRequest(declarationId,'','POST',{});
+     created=result.workflow;
+    }else{
+     const{data:createdData,error:createError}=await supabase.from('customs_declaration_workflow').insert({
       organization_id:organizationId,declaration_id:declarationId,current_stage:'evaluation',
       evaluation_state:initial.evaluation,expertise_state:initial.expertise,cashier_state:initial.cashier,
       loading_permit_state:initial.loadingPermit,exit_state:initial.exit,port_charges_state:initial.port,
       created_by:userId||null,updated_by:userId||null
-    }).select('*').single();
-    if(createError)throw createError;
+     }).select('*').single();
+     if(createError)throw createError;
+     created=createdData;
+    }
     const r=created as WorkflowRow;setRow(r);const ev={...emptyEvaluation,...r.evaluation_state};setEvaluation(ev);setStage(getInitialCustomsWorkflowStage(r.current_stage,customsPath,ev));
     setExpertise({...emptyExpertise,...r.expertise_state,standard:{...emptyExpertise.standard,...r.expertise_state?.standard}});
     setCashier({...emptyCashier,...r.cashier_state});setLoadingPermit({...emptyLoadingPermit,...r.loading_permit_state,sata_code:String(customData?.sata_code||r.loading_permit_state?.sata_code||'')});
@@ -150,8 +197,8 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
   if(!window.confirm('آخرین ذخیرهٔ ثبت‌شدهٔ این گردش‌کار به وضعیت قبل برگردد؟ تغییرات ذخیره‌نشدهٔ فرم نیز با وضعیت قبلی جایگزین می‌شوند. سابقهٔ این بازگردانی نگه داشته خواهد شد.'))return;
   setSaving(true);setError('');setMessage('');
   try{
-   const{error:e}=await supabase.rpc('rollback_customs_declaration_workflow',{p_workflow_id:row.id});
-   if(e)throw e;
+   if(isCloudflareStagingHost())await d1WorkflowRequest(declarationId,'rollback','POST',{});
+   else{const{error:e}=await supabase.rpc('rollback_customs_declaration_workflow',{p_workflow_id:row.id});if(e)throw e;}
    await load();
    setMessage('آخرین تغییر با موفقیت به وضعیت قبلی بازگردانده شد؛ سابقهٔ بازگردانی نیز ثبت شد.');
   }catch(e:any){
@@ -173,10 +220,15 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
   try{
    let savedRow:WorkflowRow;
    if(stage==='completed'){
-    const{data:complete,error:completeError}=await supabase.rpc('complete_customs_declaration_workflow',{
-     p_workflow_id:row.id,p_notes:notes.trim()||null
-    });
-    if(completeError)throw completeError;
+    let complete:any;
+    if(isCloudflareStagingHost())complete=await d1WorkflowRequest(declarationId,'complete','POST',{notes:notes.trim()||null});
+    else{
+     const{data:completeData,error:completeError}=await supabase.rpc('complete_customs_declaration_workflow',{
+      p_workflow_id:row.id,p_notes:notes.trim()||null
+     });
+     if(completeError)throw completeError;
+     complete=completeData;
+    }
     if(!complete?.ready){
      const issues=Array.isArray(complete?.issues)?complete.issues.map(String):['شرایط تکمیل نهایی هنوز برقرار نیست.'];
      setError(issues.join('\n• '));
@@ -193,72 +245,44 @@ export const CustomsDeclarationWorkflow:React.FC<Props>=({declarationId,organiza
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.evaluation,nextEvaluation);
      baseState=workflowBaseline.current.db.evaluation;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
-     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
-      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
-     });
-     if(saveError)throw saveError;
-     savedRow=data as WorkflowRow;
+     savedRow=await saveWorkflowActivity(declarationId,row.id,activity,patch,baseState,row.current_stage);
      setEvaluation(nextEvaluation);
      workflowBaseline.current.evaluation=cloneWorkflowState(nextEvaluation);workflowBaseline.current.db.evaluation=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.evaluation,patch);
     }else if(stage==='expertise'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.expertise,expertise);
      baseState=workflowBaseline.current.db.expertise;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
-     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
-      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
-     });
-     if(saveError)throw saveError;
-     savedRow=data as WorkflowRow;
+     savedRow=await saveWorkflowActivity(declarationId,row.id,activity,patch,baseState,row.current_stage);
      workflowBaseline.current.expertise=cloneWorkflowState(expertise);workflowBaseline.current.db.expertise=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.expertise,patch);
     }else if(stage==='cashier'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.cashier,cashier);
      baseState=workflowBaseline.current.db.cashier;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
-     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
-      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
-     });
-     if(saveError)throw saveError;
-     savedRow=data as WorkflowRow;
+     savedRow=await saveWorkflowActivity(declarationId,row.id,activity,patch,baseState,row.current_stage);
      workflowBaseline.current.cashier=cloneWorkflowState(cashier);workflowBaseline.current.db.cashier=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.cashier,patch);
     }else if(stage==='loading_permit'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.loadingPermit,loadingPermit);
      baseState=workflowBaseline.current.db.loadingPermit;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
-     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
-      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
-     });
-     if(saveError)throw saveError;
-     savedRow=data as WorkflowRow;
+     savedRow=await saveWorkflowActivity(declarationId,row.id,activity,patch,baseState,row.current_stage);
      workflowBaseline.current.loadingPermit=cloneWorkflowState(loadingPermit);workflowBaseline.current.db.loadingPermit=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.loadingPermit,patch);
     }else if(stage==='exit'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.exit,exitState);
      baseState=workflowBaseline.current.db.exit;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
-     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
-      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
-     });
-     if(saveError)throw saveError;
-     savedRow=data as WorkflowRow;
+     savedRow=await saveWorkflowActivity(declarationId,row.id,activity,patch,baseState,row.current_stage);
      workflowBaseline.current.exit=cloneWorkflowState(exitState);workflowBaseline.current.db.exit=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.exit,patch);
     }else if(stage==='port_charges'){
      patch=buildCustomsWorkflowJsonbPatch(workflowBaseline.current.port,port);
      baseState=workflowBaseline.current.db.port;
      if(Object.keys(patch).length===0){setMessage('تغییری برای ذخیره وجود ندارد.');return}
-     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
-      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
-     });
-     if(saveError)throw saveError;
-     savedRow=data as WorkflowRow;
+     savedRow=await saveWorkflowActivity(declarationId,row.id,activity,patch,baseState,row.current_stage);
      workflowBaseline.current.port=cloneWorkflowState(port);workflowBaseline.current.db.port=mergeCustomsWorkflowJsonbPatch(workflowBaseline.current.db.port,patch);
     }else if(stage==='abandoned'){
      activity='abandoned';
      patch={notes:notes.trim()||null};
      baseState={notes:row.notes};
-     const{data,error:saveError}=await supabase.rpc('patch_customs_declaration_workflow_activity',{
-      p_workflow_id:row.id,p_activity:activity,p_patch:patch,p_base_state:baseState,p_expected_current_stage:row.current_stage
-     });
-     if(saveError)throw saveError;
-     savedRow=data as WorkflowRow;
+     savedRow=await saveWorkflowActivity(declarationId,row.id,activity,patch,baseState,row.current_stage);
     }else{
      setError('این فعالیت برای ذخیره مستقل پشتیبانی نمی‌شود.');return;
     }

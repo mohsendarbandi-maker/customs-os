@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { History, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { isD1CustomsWorkflowEnabled, readD1CustomsWorkflowEvents } from '../lib/cloudflareCustomsWorkflow';
 
 type Props = { declarationId: string; organizationId: string; userId?: string };
 type EventRow = {
@@ -38,6 +39,19 @@ export const CustomsWorkflowAuditHistory: React.FC<Props> = ({ declarationId, or
   const refresh = useCallback(async () => {
     if (!declarationId || !organizationId) { setEvents([]); setLoading(false); return; }
     setLoading(true);
+    if (isD1CustomsWorkflowEnabled()) {
+      try {
+        const data = await readD1CustomsWorkflowEvents(declarationId);
+        setEvents(data as EventRow[]);
+        setUnavailable(false);
+      } catch {
+        setEvents([]);
+        setUnavailable(true);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     const { data, error } = await supabase.from('customs_declaration_workflow_events')
       .select('id,event_type,previous_stage,current_stage,changed_fields,actor_id,created_at')
       .eq('declaration_id', declarationId).eq('organization_id', organizationId)
