@@ -331,7 +331,9 @@ const createCase = async (
     ).bind(organizationId, registrationOrderNo).first<{ id: string }>();
     if (existing?.id) {
       const record = await readCase(db, existing.id, organizationId);
-      return record ? json({ ok: true, case: record, created: false }) : fail('CASE_NOT_FOUND', 404);
+      if (!record) return fail('CASE_NOT_FOUND', 404);
+      if (record.client_id !== clientId) return fail('REGISTRATION_ORDER_CLIENT_MISMATCH', 409);
+      return json({ ok: true, case: record, created: false });
     }
   }
 
@@ -373,7 +375,9 @@ const createCase = async (
       ).bind(organizationId, registrationOrderNo).first<{ id: string }>();
       if (existing?.id) {
         const record = await readCase(db, existing.id, organizationId);
-        return record ? json({ ok: true, case: record, created: false }) : fail('CASE_NOT_FOUND', 404);
+        if (!record) return fail('CASE_NOT_FOUND', 404);
+        if (record.client_id !== clientId) return fail('REGISTRATION_ORDER_CLIENT_MISMATCH', 409);
+        return json({ ok: true, case: record, created: false });
       }
     }
     if (!inserted) return fail('CASE_CREATE_CONFLICT', 409);
