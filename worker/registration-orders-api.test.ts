@@ -339,6 +339,21 @@ describe('Cloudflare D1 registration-orders API', () => {
     expect(db.orders[0].case_id).toBe('case-a');
   });
 
+  it('rejects changing the client on an order already linked to a case', async () => {
+    const db = new FakeD1();
+    db.clients.add('client-b');
+    db.cases = [{ id: 'case-a', organization_id: 'org-a', client_id: 'client-a' }];
+    db.orders = [baseOrder({ id: 'order-a', case_id: 'case-a', client_id: 'client-a' })];
+    const url = new URL('https://staging.example/api/registration-orders/order-a');
+    const response = await handleRegistrationOrdersApi(
+      makeRequest('PATCH', url.pathname, orderInput({ client_id: 'client-b', case_id: 'case-a' })),
+      db, url, profile,
+    );
+    expect(response.status).toBe(409);
+    expect(db.orders[0].client_id).toBe('client-a');
+    expect(db.queries.some(q => q.sql.startsWith('UPDATE registration_orders SET case_id = COALESCE'))).toBe(false);
+  });
+
   it('requires the complete bank profile for every registration order', async () => {
     const db = new FakeD1();
     const url = new URL('https://staging.example/api/registration-orders');
