@@ -214,6 +214,7 @@ export const OperationsPage:React.FC=()=>{
      throw new Error('برای هر ثبت سفارش، بانک، شعبه، کد شعبه و شماره اعتبار اسنادی الزامی است.');
     }
     if(existingOrder){
+     if(existingOrder.client_id!==clientId)throw new Error('این شماره ثبت سفارش از قبل برای صاحب کالای دیگری ثبت شده است.');
      if(existingOrder.case_id&&existingOrder.case_id!==caseId)throw new Error('این ثبت سفارش به پرونده دیگری متصل است و جابه‌جایی آن مجاز نیست.');
      await cloudflareRegistrationOrdersApi.update(existingOrder.id,d1OrderInput);
      setMessage(caseId?'ثبت سفارش موجود به همین پرونده متصل شد.':'ثبت سفارش در Cloudflare D1 به‌روزرسانی شد.');
