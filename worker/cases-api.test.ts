@@ -12,7 +12,7 @@ class FakeStatement implements CasesD1Statement {
 class FakeD1 implements CasesD1Database {
   list: CaseRecord[] = [];
   detail: CaseRecord | null = null;
-  related = { shipments: [] as unknown[], declarations: [] as unknown[], documents: [] as unknown[] };
+  related = { shipments: [] as unknown[], declarations: [] as unknown[], documents: [] as unknown[], permits: [] as unknown[] };
   auditEvents: Array<Record<string, unknown>> = [];
   queries: Array<{ sql: string; values: unknown[] }> = [];
   prepare(sql: string) { return new FakeStatement(sql, this); }
@@ -43,6 +43,7 @@ class FakeD1 implements CasesD1Database {
     if (sql.includes('FROM shipments s LEFT JOIN vessels v')) return { results: this.related.shipments as T[] };
     if (sql.includes('FROM customs_declarations WHERE case_id')) return { results: this.related.declarations as T[] };
     if (sql.includes('FROM customs_documents WHERE case_id')) return { results: this.related.documents as T[] };
+    if (sql.includes('FROM permits WHERE case_id')) return { results: this.related.permits as T[] };
     if (sql.includes('FROM customs_os_audit_events')) return { results: this.auditEvents as T[] };
     throw new Error('Unexpected query: ' + sql);
   }
@@ -189,18 +190,23 @@ describe('Cloudflare D1 cases read API', () => {
       shipments: [{ id: 'shipment-a' }],
       declarations: [{ id: 'declaration-a' }],
       documents: [{ id: 'document-a' }],
+      permits: [{ id: 'permit-a', permit_type: 'health', status: 'approved' }],
     };
     const url = new URL('https://staging.example/api/cases/case-a');
     const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
     const body = await response.json() as {
-      case: CaseRecord; shipments: unknown[]; declarations: unknown[]; documents: unknown[]; readOnly: boolean;
+      case: CaseRecord; shipments: unknown[]; declarations: unknown[]; documents: unknown[]; permits: unknown[]; readOnly: boolean;
     };
     expect(response.status).toBe(200);
     expect(body.shipments).toHaveLength(1);
     expect(body.declarations).toHaveLength(1);
     expect(body.documents).toHaveLength(1);
+    expect(body.permits).toEqual([{ id: 'permit-a', permit_type: 'health', status: 'approved' }]);
     expect(body.readOnly).toBe(true);
     const shipmentQuery = db.queries.find(query => query.sql.includes('sc.registration_order_date_shamsi'));
+    const permitQuery = db.queries.find(query => query.sql.includes('FROM permits WHERE case_id'));
+    expect(permitQuery?.sql).toContain('organization_id=?');
+    expect(permitQuery?.values).toEqual(['case-a', 'org-a']);
     expect(shipmentQuery?.sql).toContain('LEFT JOIN shipment_customs_data sc');
     expect(shipmentQuery?.sql).toContain('sc.registration_order_date_shamsi');
     expect(shipmentQuery?.sql).toContain('sc.insurance_irr');
