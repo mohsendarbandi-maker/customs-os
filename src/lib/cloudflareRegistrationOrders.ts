@@ -3,6 +3,7 @@ export type ExternalAllocationStatus = 'allocated' | 'dispatched' | 'completed' 
 
 export interface RegistrationOrderInput {
   client_id: string;
+  case_id?: string | null;
   order_number: string;
   order_date: string | null;
   status: RegistrationOrderStatus;
@@ -119,10 +120,13 @@ export class CloudflareRegistrationOrdersError extends Error {
       UNAUTHORIZED: 'نشست ورود معتبر نیست؛ دوباره وارد شوید.',
       FORBIDDEN: 'دسترسی لازم برای مدیریت ثبت سفارش‌ها وجود ندارد.',
       CLIENT_NOT_FOUND: 'صاحب کالا پیدا نشد یا به این سازمان تعلق ندارد.',
+      CASE_NOT_FOUND: 'پرونده پیدا نشد یا به این سازمان تعلق ندارد.',
+      REGISTRATION_ORDER_CASE_CLIENT_MISMATCH: 'صاحب کالای ثبت سفارش باید با صاحب کالای پرونده یکسان باشد.',
+      REGISTRATION_ORDER_CASE_LINK_CHANGE_FORBIDDEN: 'ثبت سفارش قبلاً به پرونده دیگری متصل شده و قابل انتقال نیست.',
       REGISTRATION_ORDER_NOT_FOUND: 'ثبت سفارش پیدا نشد یا به این سازمان تعلق ندارد.',
       REGISTRATION_ORDER_EXISTS: 'این شماره ثبت سفارش قبلاً در همین سازمان ثبت شده است.',
       REGISTRATION_ORDER_CLOSED: 'ثبت سفارش نهایی شده است و تغییر آن مجاز نیست.',
-      INVALID_REGISTRATION_ORDER_INPUT: 'اطلاعات ثبت سفارش معتبر نیست؛ وزن، ارزش، ارز و صاحب کالا را بررسی کنید.',
+      INVALID_REGISTRATION_ORDER_INPUT: 'اطلاعات ثبت سفارش معتبر نیست؛ صاحب کالا، وزن، ارزش، ارز و اطلاعات کامل بانک، شعبه، کد شعبه و اعتبار اسنادی را بررسی کنید.',
       INVALID_REGISTRATION_ORDER_ALLOCATION_INPUT: 'اطلاعات سهم واگذارشده معتبر نیست.',
       REGISTRATION_ORDER_CAPACITY_REQUIRED: 'ابتدا وزن خالص، ارزش کل و ارز ثبت سفارش مادر را تکمیل کنید.',
       REGISTRATION_ORDER_GROSS_WEIGHT_REQUIRED: 'وزن ناخالص سهم واگذارشده برای این ثبت سفارش الزامی است.',
