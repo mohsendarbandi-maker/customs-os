@@ -57,6 +57,11 @@ export interface CloudflareCaseCreateInput {
   client_id: string;
   registration_order_no?: string | null;
 }
+export interface CloudflareCaseCalculationInput {
+  customs_fx_rate_irr: number | string;
+  import_duty_rate: number | string;
+  vat_rate?: number | string;
+}
 export interface CloudflareCaseValuationInput {
   customs_value_irr: number | string;
   import_duty_rate?: number | string | null;
@@ -108,6 +113,10 @@ export class CloudflareCasesApiError extends Error {
       : code === 'FORBIDDEN' ? 'دسترسی لازم برای مشاهده پرونده‌ها وجود ندارد.'
       : code === 'CASE_NOT_FOUND' ? 'پرونده پیدا نشد یا به آن دسترسی ندارید.'
       : code === 'INVALID_CASE_PATCH' || code === 'INVALID_RELEASE_STATUS' || code === 'INVALID_VALUATION_STATUS' || code === 'INVALID_CASE_NUMBER_VALUE' || code === 'INVALID_CASE_NUMBER' || code === 'GROSS_WEIGHT_BELOW_NET_WEIGHT' ? 'اطلاعات ویرایش پرونده معتبر نیست.'
+      : code === 'INVOICE_AMOUNT_REQUIRED' ? 'مبلغ فاکتور معتبر و بزرگ‌تر از صفر الزامی است.'
+      : code === 'INVOICE_CURRENCY_REQUIRED' ? 'ارز فاکتور الزامی است.'
+      : code === 'INSURANCE_AMOUNT_REQUIRED' ? 'مبلغ بیمه به ریال الزامی است.'
+      : code === 'INVALID_VALUATION_RATE' ? 'نرخ ارز، حقوق ورودی یا مالیات معتبر نیست.'
       : code === 'VALUATION_STAGE_NOT_READY' ? 'ارزش‌گذاری فقط پس از تعیین مسیر گمرکی و در مرحله مجاز امکان‌پذیر است.'
       : code === 'CUSTOMS_VALUE_REQUIRED' ? 'ارزش گمرکی الزامی است.'
       : code === 'INVALID_VALUATION_AMOUNT' ? 'مقادیر مالی واردشده معتبر نیستند.'
@@ -175,6 +184,14 @@ export const cloudflareCasesApi = {
     );
     return body as { ok: true; case: CaseRecord; unchanged?: boolean; stageAdvanced?: boolean };
   },
+  calculateValuation: (id: string, input: CloudflareCaseCalculationInput) =>
+    write<{
+      ok: true; case: CaseRecord;
+      valuation: {
+        customs_value_irr: string; import_duty_irr: string; vat_irr: string;
+        total_payable_irr: string; customs_fx_rate_irr: string; import_duty_rate: string; vat_rate: string;
+      };
+    }>('/api/cases/' + encodeURIComponent(id) + '/valuation/calculate', 'POST', input as unknown as Record<string, unknown>),
   completeValuation: (id: string, input: CloudflareCaseValuationInput) =>
     write<{
       ok: true; case: CaseRecord;
