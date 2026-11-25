@@ -3,6 +3,9 @@ export interface CaseRecord {
   client_name: string | null; customs_office_id: string | null; registration_order_no: string | null;
   proforma_no: string | null; cargo_description: string | null; cargo_count: number | null;
   cargo_count_unit: string | null; net_weight_kg: number | null; gross_weight_kg: number | null;
+  warehouse_receipt_no: string | null; warehouse_receipt_date: string | null;
+  release_status: string | null; valuation_status: string | null;
+  unloading_date: string | null; vessel_type: string | null; customs_regime: string | null;
   display_name: string | null; created_at: string | null; updated_at: string | null;
   shipment_count: number; latest_shipment_id: string | null; shipment_display_name: string | null;
   bill_of_lading_no: string | null; vessel_name: string | null; kottaj_number: string | null;
@@ -35,12 +38,20 @@ export interface CaseHistoryResponse {
   legacyHistoryBackfill: 'not_imported';
   dataScope: 'authenticated_organization_only';
 }
+export type CloudflareCasePatch = Partial<Pick<CaseRecord,
+  'case_number' | 'registration_order_no' | 'proforma_no' | 'cargo_description' |
+  'cargo_count' | 'cargo_count_unit' | 'net_weight_kg' | 'gross_weight_kg' |
+  'warehouse_receipt_no' | 'release_status' | 'valuation_status'
+>>;
+
 export class CloudflareCasesApiError extends Error {
   readonly code: string;
   constructor(code: string) {
     super(code === 'UNAUTHORIZED' ? 'نشست ورود معتبر نیست؛ دوباره وارد شوید.'
       : code === 'FORBIDDEN' ? 'دسترسی لازم برای مشاهده پرونده‌ها وجود ندارد.'
       : code === 'CASE_NOT_FOUND' ? 'پرونده پیدا نشد یا به آن دسترسی ندارید.'
+      : code === 'INVALID_CASE_PATCH' || code === 'INVALID_RELEASE_STATUS' || code === 'INVALID_VALUATION_STATUS' || code === 'INVALID_CASE_NUMBER_VALUE' || code === 'INVALID_CASE_NUMBER' || code === 'GROSS_WEIGHT_BELOW_NET_WEIGHT' ? 'اطلاعات ویرایش پرونده معتبر نیست.'
+      : code === 'CASE_NUMBER_EXISTS' ? 'شماره پرونده قبلاً در این سازمان ثبت شده است.'
       : 'دریافت اطلاعات پرونده ناموفق بود: ' + code);
     this.name = 'CloudflareCasesApiError'; this.code = code;
   }
@@ -64,4 +75,20 @@ export const cloudflareCasesApi = {
   },
   get: (id: string) => get<CaseDetailResponse>('/api/cases/' + encodeURIComponent(id)),
   history: (id: string) => get<CaseHistoryResponse>('/api/cases/' + encodeURIComponent(id) + '/history'),
+  update: async (id: string, patch: CloudflareCasePatch) => {
+    const response = await fetch('/api/cases/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    let body: Record<string, unknown>;
+    try { body = await response.json() as Record<string, unknown>; }
+    catch { throw new CloudflareCasesApiError('INVALID_API_RESPONSE'); }
+    if (!response.ok) throw new CloudflareCasesApiError(
+      typeof body.error === 'string' ? body.error : 'REQUEST_FAILED',
+    );
+    return body as { ok: true; case: CaseRecord; unchanged?: boolean };
+  },
 };
