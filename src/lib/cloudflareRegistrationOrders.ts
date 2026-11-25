@@ -126,7 +126,7 @@ export class CloudflareRegistrationOrdersError extends Error {
       REGISTRATION_ORDER_NOT_FOUND: 'ثبت سفارش پیدا نشد یا به این سازمان تعلق ندارد.',
       REGISTRATION_ORDER_EXISTS: 'این شماره ثبت سفارش قبلاً در همین سازمان ثبت شده است.',
       REGISTRATION_ORDER_CLOSED: 'ثبت سفارش نهایی شده است و تغییر آن مجاز نیست.',
-      INVALID_REGISTRATION_ORDER_INPUT: 'اطلاعات ثبت سفارش معتبر نیست؛ وزن، ارزش، ارز و صاحب کالا را بررسی کنید.',
+      INVALID_REGISTRATION_ORDER_INPUT: 'اطلاعات ثبت سفارش معتبر نیست؛ صاحب کالا، وزن، ارزش، ارز و اطلاعات کامل بانک/شعبه/کد شعبه/اعتبار اسنادی را بررسی کنید.',
       INVALID_REGISTRATION_ORDER_ALLOCATION_INPUT: 'اطلاعات سهم واگذارشده معتبر نیست.',
       REGISTRATION_ORDER_CAPACITY_REQUIRED: 'ابتدا وزن خالص، ارزش کل و ارز ثبت سفارش مادر را تکمیل کنید.',
       REGISTRATION_ORDER_GROSS_WEIGHT_REQUIRED: 'وزن ناخالص سهم واگذارشده برای این ثبت سفارش الزامی است.',
