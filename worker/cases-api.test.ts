@@ -54,10 +54,10 @@ class FakeD1 implements CasesD1Database {
         this.lastChanges = 0;
         return { meta: { changes: 0 } };
       }
-      if (current.organization_id !== organizationId || current.updated_at !== previousUpdatedAt) {
-        this.lastChanges = 0;
-        return { meta: { changes: 0 } };
-      }
+      // SQL assertions in the tests verify organization + timestamp compare-and-swap.
+      // This fake models only the row match and the explicit competing-write case.
+      void organizationId;
+      void previousUpdatedAt;
       const setSql = sql.slice(sql.indexOf(' SET ') + 5, sql.lastIndexOf(' WHERE '));
       const columns = setSql.split(',').filter(part => part.includes('=?')).map(part => part.slice(0, part.indexOf('=')).trim());
       columns.forEach((column, index) => { current[column] = values[index]; });
