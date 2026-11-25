@@ -409,6 +409,103 @@ const formatScaled = (value: bigint, decimalPlaces: number) => {
   const fraction = (value % scale).toString().padStart(decimalPlaces, '0').replace(/0+$/, '');
   return fraction ? integer.toString() + '.' + fraction : integer.toString();
 };
+const calculateCaseValuation = async (
+  request: Request, db: CasesD1Database, id: string, organizationId: string, actorId: string, url: URL,
+) => {
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  const parsed = await readJsonBody(request);
+  if (parsed instanceof Response) return parsed;
+  if (Object.keys(parsed).some(key => !['customs_fx_rate_irr','import_duty_rate','vat_rate'].includes(key))) {
+    return fail('INVALID_VALUATION_INPUT', 422);
+  }
+  const fx = decimalToScaled(parsed.customs_fx_rate_irr, 6);
+  const dutyRate = decimalToScaled(parsed.import_duty_rate, 6);
+  const vatRate = decimalToScaled(parsed.vat_rate === undefined ? 10 : parsed.vat_rate, 6);
+  if (fx === null || fx <= 0n || dutyRate === null || dutyRate < 0n || vatRate === null || vatRate < 0n) {
+    return fail('INVALID_VALUATION_RATE', 422);
+  }
+  const before = await readCase(db, id, organizationId).catch(() => null);
+  if (!before) return fail('CASE_NOT_FOUND', 404);
+  const invoice = decimalToScaled(before.invoice_amount, 6);
+  const insurance = decimalToScaled(before.insurance_amount_irr, 6);
+  if (invoice === null || invoice <= 0n) return fail('INVOICE_AMOUNT_REQUIRED', 422);
+  if (!before.invoice_currency) return fail('INVOICE_CURRENCY_REQUIRED', 422);
+  if (insurance === null) return fail('INSURANCE_AMOUNT_REQUIRED', 422);
+
+  const scale = 1_000_000n;
+  const invoiceInIrr = before.invoice_currency.toUpperCase() === 'IRR'
+    ? invoice
+    : roundedDivide(invoice * fx, scale);
+  const customsValue = invoiceInIrr + insurance;
+  const duty = roundedDivide(customsValue * dutyRate, scale * 100n);
+  const vatBase = customsValue + duty;
+  const vat = roundedDivide(vatBase * vatRate, scale * 100n);
+  const total = duty + vat;
+  const after = {
+    customs_fx_rate_irr: formatScaled(fx, 6),
+    import_duty_rate: formatScaled(dutyRate, 6),
+    customs_value_irr: formatScaled(customsValue, 6),
+    import_duty_irr: formatScaled(duty, 6),
+    vat_irr: formatScaled(vat, 6),
+    total_payable_irr: formatScaled(total, 6),
+    valuation_status: 'calculated',
+    status: 'duties_calculation',
+  };
+  const beforeSnapshot = {
+    customs_fx_rate_irr: before.customs_fx_rate_irr,
+    import_duty_rate: before.import_duty_rate,
+    customs_value_irr: before.customs_value_irr,
+    import_duty_irr: before.import_duty_irr,
+    vat_irr: before.vat_irr,
+    total_payable_irr: before.total_payable_irr,
+    valuation_status: before.valuation_status,
+    status: before.status,
+  };
+  try {
+    const results = await db.batch([
+      db.prepare(
+        'UPDATE cases SET customs_fx_rate_irr=?,import_duty_rate=?,customs_value_irr=?,import_duty_irr=?,' +
+        'vat_irr=?,total_payable_irr=?,valuation_status=?,status=?,updated_at=strftime(\'%Y-%m-%dT%H:%M:%fZ\',\'now\') ' +
+        'WHERE id=? AND organization_id=? AND updated_at IS ?',
+      ).bind(
+        after.customs_fx_rate_irr, after.import_duty_rate, after.customs_value_irr,
+        after.import_duty_irr, after.vat_irr, after.total_payable_irr,
+        after.valuation_status, after.status, id, organizationId, before.updated_at,
+      ),
+      db.prepare(
+        'INSERT INTO customs_os_audit_events ' +
+        '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
+        'SELECT ?,?,?,?,?,?,?,?,? WHERE changes()>0',
+      ).bind(
+        crypto.randomUUID(), organizationId, actorId, 'update', 'case', id,
+        JSON.stringify(beforeSnapshot), JSON.stringify(after),
+        request.headers.get('cf-ray') || request.headers.get('x-request-id') || null,
+      ),
+    ]);
+    const updateResult = results[0] as { meta?: { changes?: number } } | undefined;
+    if (Number(updateResult?.meta?.changes || 0) !== 1) {
+      const current = await readCase(db, id, organizationId);
+      return current ? fail('CASE_UPDATE_CONFLICT', 409) : fail('CASE_NOT_FOUND', 404);
+    }
+    const saved = await readCase(db, id, organizationId);
+    return saved ? json({
+      ok: true,
+      case: saved,
+      valuation: {
+        customs_value_irr: after.customs_value_irr,
+        import_duty_irr: after.import_duty_irr,
+        vat_irr: after.vat_irr,
+        total_payable_irr: after.total_payable_irr,
+        customs_fx_rate_irr: after.customs_fx_rate_irr,
+        import_duty_rate: after.import_duty_rate,
+        vat_rate: formatScaled(vatRate, 6),
+      },
+    }) : fail('CASE_UPDATE_NOT_CONFIRMED', 500);
+  } catch {
+    return fail('CASE_VALUATION_FAILED', 500);
+  }
+};
+
 const completeCaseValuation = async (
   request: Request, db: CasesD1Database, id: string, organizationId: string, actorId: string, url: URL,
 ) => {
@@ -839,6 +936,18 @@ export const handleCasesApi = async (
   if (url.pathname === collection && request.method === 'POST') {
     if (!['owner','admin','broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
     return createCase(request, db, profile.organization_id, profile.id, url);
+  }
+  const valuationCalculationRoute = url.pathname.startsWith(collection + '/') && url.pathname.endsWith('/valuation/calculate');
+  if (valuationCalculationRoute) {
+    if (request.method !== 'POST') return fail('METHOD_NOT_ALLOWED', 405, { allowed: ['POST'] });
+    if (!['owner','admin','broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
+    const rawId = url.pathname.slice(collection.length + 1, -'/valuation/calculate'.length);
+    if (!rawId || rawId.includes('/')) return fail('INVALID_CASE_ID', 400);
+    let calculationId: string;
+    try { calculationId = decodeURIComponent(rawId); }
+    catch { return fail('INVALID_CASE_ID', 400); }
+    if (!calculationId || calculationId.length > 128 || calculationId.includes('/')) return fail('INVALID_CASE_ID', 400);
+    return calculateCaseValuation(request, db, calculationId, profile.organization_id, profile.id, url);
   }
   const valuationRoute = url.pathname.startsWith(collection + '/') && url.pathname.endsWith('/valuation');
   if (valuationRoute) {
