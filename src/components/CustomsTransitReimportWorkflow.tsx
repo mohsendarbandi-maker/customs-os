@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { cloneD1CustomsProcedureState, isD1CustomsWorkflowEnabled, readD1CustomsProcedureWorkflow, saveD1CustomsProcedureWorkflow } from '../lib/cloudflareCustomsWorkflow';
 import { CustomsWorkflowAuditHistory } from './CustomsWorkflowAuditHistory';
 
 type StageKey = 'documents' | 'permits' | 'declaration' | 'valuation' | 'loading' | 'exit' | 'completed';
@@ -84,6 +85,8 @@ export const CustomsTransitReimportWorkflow: React.FC<Props> = ({ declarationId,
   const [state, setState] = useState<State>(emptyState);
   const [stage, setStage] = useState<StageKey>('documents');
   const [savedStage, setSavedStage] = useState<StageKey>('documents');
+  const [workflowExists, setWorkflowExists] = useState(false);
+  const baseline = useRef<State>(emptyState());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -96,12 +99,22 @@ export const CustomsTransitReimportWorkflow: React.FC<Props> = ({ declarationId,
     if (!declarationId || !organizationId) return;
     setLoading(true); setError('');
     try {
-      const { data, error: fetchError } = await supabase.from('customs_declaration_workflow').select('current_stage,procedure_state').eq('declaration_id', declarationId).eq('organization_id', organizationId).maybeSingle();
-      if (fetchError) throw fetchError;
-      const merged = { ...emptyState(), ...(data?.procedure_state || {}) } as State;
-      setState(merged);
-      if (data?.current_stage && stages.some(item => item.key === data.current_stage)) {
-        setStage(data.current_stage as StageKey); setSavedStage(data.current_stage as StageKey);
+      if (isD1CustomsWorkflowEnabled()) {
+        const result = await readD1CustomsProcedureWorkflow(declarationId);
+        const workflow = result.workflow;
+        const merged = { ...emptyState(), ...(workflow?.procedure_state || {}) } as State;
+        setState(merged); baseline.current = cloneD1CustomsProcedureState(merged); setWorkflowExists(!!workflow);
+        const current = workflow?.current_stage;
+        const valid = current && stages.some(item => item.key === current) ? current as StageKey : 'documents';
+        setStage(valid); setSavedStage(valid);
+      } else {
+        const { data, error: fetchError } = await supabase.from('customs_declaration_workflow').select('current_stage,procedure_state').eq('declaration_id', declarationId).eq('organization_id', organizationId).maybeSingle();
+        if (fetchError) throw fetchError;
+        const merged = { ...emptyState(), ...(data?.procedure_state || {}) } as State;
+        setState(merged); baseline.current = cloneD1CustomsProcedureState(merged); setWorkflowExists(!!data);
+        if (data?.current_stage && stages.some(item => item.key === data.current_stage)) {
+          setStage(data.current_stage as StageKey); setSavedStage(data.current_stage as StageKey);
+        }
       }
     } catch (cause: any) {
       setError(cause?.message || 'دریافت گردش‌کار انجام نشد');
@@ -145,12 +158,24 @@ export const CustomsTransitReimportWorkflow: React.FC<Props> = ({ declarationId,
     }
     setSaving(true); setError(''); setMessage('');
     try {
-      const { error: saveError } = await supabase.from('customs_declaration_workflow').upsert({
-        organization_id: organizationId, declaration_id: declarationId, current_stage: next,
-        procedure_state: state, updated_by: userId || null
-      }, { onConflict: 'declaration_id' });
-      if (saveError) throw saveError;
-      setStage(next); setSavedStage(next); setMessage('گردش‌کار ذخیره شد و در سابقه ممیزی ثبت می‌شود.');
+      if (isD1CustomsWorkflowEnabled()) {
+        const saved = await saveD1CustomsProcedureWorkflow({
+          declarationId, workflowExists, currentStage: next, savedStage,
+          procedureState: state, baseState: baseline.current,
+        });
+        const merged = { ...emptyState(), ...(saved.procedure_state || {}) } as State;
+        setWorkflowExists(true); setState(merged); baseline.current = cloneD1CustomsProcedureState(merged);
+        const actual = stages.some(item => item.key === saved.current_stage) ? saved.current_stage as StageKey : 'documents';
+        setStage(actual); setSavedStage(actual);
+      } else {
+        const { error: saveError } = await supabase.from('customs_declaration_workflow').upsert({
+          organization_id: organizationId, declaration_id: declarationId, current_stage: next,
+          procedure_state: state, updated_by: userId || null
+        }, { onConflict: 'declaration_id' });
+        if (saveError) throw saveError;
+        setStage(next); setSavedStage(next);
+      }
+      setMessage('گردش‌کار ذخیره شد و در سابقه ممیزی ثبت می‌شود.');
     } catch (cause: any) {
       setError(cause?.message || 'ذخیره گردش‌کار انجام نشد');
     } finally { setSaving(false); }
