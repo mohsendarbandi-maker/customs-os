@@ -41,6 +41,10 @@ def main() -> None:
     """)
 
     sql = MIGRATION.read_text(encoding="utf-8")
+    if "UNION ALL" in sql.upper():
+        raise AssertionError("workflow migration must not use compound SELECT; D1 rejects the trigger expression")
+    if "json_each(json_array(" not in sql:
+        raise AssertionError("workflow audit changed_fields must use the SQLite JSON-array expression")
     connection.executescript(sql)
 
     defaults = {
@@ -96,6 +100,7 @@ def main() -> None:
     assert len(events) == 2
     assert events[-1][0] == "saved"
     assert json.loads(events[-1][1]) == ["expertise_state"]
+    assert len(json.loads(events[-1][1])) == 1, "unchanged workflow fields must not be included in the changed-fields audit"
     assert json.loads(events[-1][2])["expertise_state"] == defaults["expertise"]
     assert json.loads(events[-1][3])["expertise_state"]["standard"]["expert_review"] == "approved"
 
@@ -110,7 +115,7 @@ def main() -> None:
       WHERE workflow_id = 'workflow-1' ORDER BY created_at DESC, id DESC LIMIT 1
     """).fetchone()
     assert last[0] == "stage_changed"
-    assert "current_stage" in json.loads(last[1])
+    assert json.loads(last[1]) == ["current_stage"]
 
     connection.execute("""
       UPDATE customs_declaration_workflow

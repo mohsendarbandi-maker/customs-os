@@ -162,17 +162,19 @@ BEGIN
     OLD.current_stage,
     NEW.current_stage,
     (
-      SELECT json_group_array(field) FROM (
-        SELECT 'current_stage' AS field WHERE OLD.current_stage IS NOT NEW.current_stage
-        UNION ALL SELECT 'evaluation_state' WHERE OLD.evaluation_state IS NOT NEW.evaluation_state
-        UNION ALL SELECT 'expertise_state' WHERE OLD.expertise_state IS NOT NEW.expertise_state
-        UNION ALL SELECT 'cashier_state' WHERE OLD.cashier_state IS NOT NEW.cashier_state
-        UNION ALL SELECT 'loading_permit_state' WHERE OLD.loading_permit_state IS NOT NEW.loading_permit_state
-        UNION ALL SELECT 'exit_state' WHERE OLD.exit_state IS NOT NEW.exit_state
-        UNION ALL SELECT 'port_charges_state' WHERE OLD.port_charges_state IS NOT NEW.port_charges_state
-        UNION ALL SELECT 'procedure_state' WHERE OLD.procedure_state IS NOT NEW.procedure_state
-        UNION ALL SELECT 'notes' WHERE OLD.notes IS NOT NEW.notes
-      )
+      SELECT json_group_array(value)
+      FROM json_each(json_array(
+        CASE WHEN OLD.current_stage IS NOT NEW.current_stage THEN 'current_stage' END,
+        CASE WHEN OLD.evaluation_state IS NOT NEW.evaluation_state THEN 'evaluation_state' END,
+        CASE WHEN OLD.expertise_state IS NOT NEW.expertise_state THEN 'expertise_state' END,
+        CASE WHEN OLD.cashier_state IS NOT NEW.cashier_state THEN 'cashier_state' END,
+        CASE WHEN OLD.loading_permit_state IS NOT NEW.loading_permit_state THEN 'loading_permit_state' END,
+        CASE WHEN OLD.exit_state IS NOT NEW.exit_state THEN 'exit_state' END,
+        CASE WHEN OLD.port_charges_state IS NOT NEW.port_charges_state THEN 'port_charges_state' END,
+        CASE WHEN OLD.procedure_state IS NOT NEW.procedure_state THEN 'procedure_state' END,
+        CASE WHEN OLD.notes IS NOT NEW.notes THEN 'notes' END
+      ))
+      WHERE value IS NOT NULL
     ),
     json_object(
       'evaluation_state', json(OLD.evaluation_state),
