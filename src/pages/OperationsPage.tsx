@@ -24,20 +24,20 @@ export const OperationsPage:React.FC=()=>{
  const [searchParams,setSearchParams]=useSearchParams();
  const requestedTab=searchParams.get('tab');
  const requestedCaseId=searchParams.get('caseId');
+ const cloudflareMode=isCloudflareRecoveryHost();
  const [clients,setClients]=useState<any[]>([]),[cases,setCases]=useState<any[]>([]),[shipments,setShipments]=useState<any[]>([]),[orders,setOrders]=useState<any[]>([]),[documents,setDocuments]=useState<any[]>([]),[permits,setPermits]=useState<any[]>([]);
  const [caseId,setCaseId]=useState(''),[clientId,setClientId]=useState('');
- const [tab,setTab]=useState<'operation'|'registration'|'declaration'|'valuation'|'documents'>(()=>requestedTab==='declaration'?'declaration':requestedTab==='valuation'?'valuation':requestedTab==='documents'?'documents':requestedTab==='registration'?'registration':'operation');
+ const [tab,setTab]=useState<'operation'|'registration'|'declaration'|'valuation'|'documents'>(()=>cloudflareMode&&requestedTab==='declaration'?'operation':requestedTab==='declaration'?'declaration':requestedTab==='valuation'?'valuation':requestedTab==='documents'?'documents':requestedTab==='registration'?'registration':'operation');
  const [form,setForm]=useState<FormState>(blank),[decl,setDecl]=useState({kottaj:'',path:''}),[val,setVal]=useState({fx:'',duty:'',vat:'10'}),[valResult,setValResult]=useState<any>(null);
  const [paste,setPaste]=useState(''),[pasteOpen,setPasteOpen]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
  const [orderForm,setOrderForm]=useState({number:'',date:'',status:'received',tariff:'',quantity:'',unit:'',value:'',currency:'USD',bankName:'',bankBranch:'',bankBranchCode:'',paymentInstrumentCode:'',notes:''});
  const [permitForm,setPermitForm]=useState({type:'',number:'',authority:'',status:'pending',issued:'',expires:'',notes:''});
  const [docType,setDocType]=useState('other');
 
- useEffect(()=>{const t=cloudflareMode&&requestedTab==='declaration'?'operation':requestedTab==='declaration'||requestedTab==='valuation'||requestedTab==='documents'||requestedTab==='registration'?requestedTab:'operation';setTab(t)},[requestedTab]);
+ useEffect(()=>{const t=cloudflareMode&&requestedTab==='declaration'?'operation':requestedTab==='declaration'||requestedTab==='valuation'||requestedTab==='documents'||requestedTab==='registration'?requestedTab:'operation';setTab(t)},[requestedTab,cloudflareMode]);
  const changeTab=(t:typeof tab)=>{setTab(t);setSearchParams(t==='operation'?{}:{tab:t})};
  const set=(k:string,v:string)=>setForm(p=>({...p,[k]:v}));
 
- const cloudflareMode=isCloudflareRecoveryHost();
  const load=async()=>{
   if(cloudflareMode){
    try{
