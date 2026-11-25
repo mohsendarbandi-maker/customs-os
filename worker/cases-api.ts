@@ -4,7 +4,10 @@ export interface CasesD1Statement {
   all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
   run(): Promise<{ meta?: { changes?: number } }>;
 }
-export interface CasesD1Database { prepare(sql: string): CasesD1Statement; }
+export interface CasesD1Database {
+  prepare(sql: string): CasesD1Statement;
+  batch(statements: CasesD1Statement[]): Promise<unknown[]>;
+}
 export interface CasesApiProfile { id: string; organization_id: string; role: string; is_active: boolean; }
 export interface CaseRecord {
   id: string; case_number: string | null; status: string | null; client_id: string | null;
@@ -140,7 +143,7 @@ const stringFields = new Set([
 const numericFields = new Set(['cargo_count','net_weight_kg','gross_weight_kg']);
 const releaseStatuses = new Set(['pending','invoice_received','paid','released']);
 const valuationStatuses = new Set(['pending','calculated','reviewed','approved']);
-const patchCase = async (request: Request, db: CasesD1Database, id: string, organizationId: string, url: URL) => {
+const patchCase = async (request: Request, db: CasesD1Database, id: string, organizationId: string, actorId: string, url: URL) => {
   if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
   const length = Number(request.headers.get('content-length') || 0);
   if (length > 32 * 1024) return fail('REQUEST_TOO_LARGE', 413);
@@ -188,20 +191,34 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
       Number(nextGrossWeight) < Number(nextNetWeight)) {
     return fail('GROSS_WEIGHT_BELOW_NET_WEIGHT', 422);
   }
+  const beforeSnapshot: Record<string, unknown> = {};
+  const afterSnapshot: Record<string, unknown> = {};
+  const currentRecord = before as unknown as Record<string, unknown>;
   for (const key of keys) {
+    beforeSnapshot[key] = currentRecord[key] ?? null;
+    afterSnapshot[key] = normalized[key];
+    if (Object.is(beforeSnapshot[key], afterSnapshot[key])) continue;
     sets.push(key + '=?');
     values.push(normalized[key]);
   }
+  if (!sets.length) return json({ ok: true, case: before, unchanged: true });
   sets.push("updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')");
   values.push(id, organizationId);
   try {
-    const result = await db.prepare(
-      'UPDATE cases SET ' + sets.join(', ') + ' WHERE id=? AND organization_id=?',
-    ).bind(...values).run();
-    if (!result.meta?.changes) {
-      const current = await readCase(db, id, organizationId);
-      return current ? json({ ok: true, case: current, unchanged: true }) : fail('CASE_NOT_FOUND', 404);
-    }
+    await db.batch([
+      db.prepare(
+        'UPDATE cases SET ' + sets.join(', ') + ' WHERE id=? AND organization_id=?',
+      ).bind(...values),
+      db.prepare(
+        'INSERT INTO customs_os_audit_events ' +
+        '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
+        'VALUES (?,?,?,?,?,?,?,?,?)',
+      ).bind(
+        crypto.randomUUID(), organizationId, actorId, 'update', 'case', id,
+        JSON.stringify(beforeSnapshot), JSON.stringify(afterSnapshot),
+        request.headers.get('cf-ray') || request.headers.get('x-request-id') || null,
+      ),
+    ]);
     const saved = await readCase(db, id, organizationId);
     return saved ? json({ ok: true, case: saved }) : fail('CASE_UPDATE_NOT_CONFIRMED', 500);
   } catch (error) {
@@ -313,7 +330,7 @@ export const handleCasesApi = async (
   if (request.method === 'PATCH') {
     if (id === null) return fail('CASE_ID_REQUIRED', 400);
     if (!['owner','admin','broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
-    return patchCase(request, db, id, profile.organization_id, url);
+    return patchCase(request, db, id, profile.organization_id, profile.id, url);
   }
   if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: id === null ? ['GET'] : ['GET', 'PATCH'] });
 
