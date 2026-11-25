@@ -503,9 +503,11 @@ const readCaseHistory = async (db: CasesD1Database, id: string, organizationId: 
   if (!record) return fail('CASE_NOT_FOUND', 404);
   const events = await db.prepare(
     'SELECT id,actor_user_id,action,entity_type,entity_id,before_json,after_json,created_at ' +
-    'FROM customs_os_audit_events WHERE organization_id=? AND entity_type=? AND entity_id=? ' +
-    'ORDER BY created_at DESC,id DESC LIMIT 200',
-  ).bind(organizationId, 'case', id).all<{
+    'FROM customs_os_audit_events WHERE organization_id=? AND (' +
+    '(entity_type=? AND entity_id=?) OR ' +
+    '(entity_type=? AND json_extract(COALESCE(before_json,after_json),\'$.case_id\')=?)' +
+    ') ORDER BY created_at DESC,id DESC LIMIT 200',
+  ).bind(organizationId, 'case', id, 'permit', id).all<{
     id: string;
     actor_user_id: string;
     action: string;
@@ -526,6 +528,7 @@ const readCaseHistory = async (db: CasesD1Database, id: string, organizationId: 
     created_at: event.created_at,
   }));
   const history = events.results.flatMap((event) => {
+    if (event.entity_type !== 'case') return [];
     const before = parseSnapshot(event.before_json);
     const after = parseSnapshot(event.after_json);
     const previousStatus = typeof before.status === 'string' ? before.status
