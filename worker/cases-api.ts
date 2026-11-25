@@ -175,7 +175,7 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
       if (key === 'case_number' && (!text || text.length > 100)) return fail('INVALID_CASE_NUMBER', 422);
       const max = key === 'cargo_description' ? 4000 : key === 'delivery_term' ? 80 : key === 'cargo_count_unit' ? 40 : key === 'invoice_currency' ? 3 : key === 'origin_country_code' || key === 'transaction_country_code' ? 2 : key === 'tariff_code' ? 40 : 200;
       if (text !== null && text.length > max) return fail('INVALID_CASE_PATCH', 422);
-      if ((key === 'warehouse_receipt_date' || key === 'unloading_date') && text !== null && !/^\\d{4}-\\d{2}-\\d{2}$/.test(text)) return fail('INVALID_CASE_DATE', 422);
+      if ((key === 'warehouse_receipt_date' || key === 'unloading_date') && text !== null && !/^\d{4}-\d{2}-\d{2}$/.test(text)) return fail('INVALID_CASE_DATE', 422);
       if ((key === 'origin_country_code' || key === 'transaction_country_code') && text !== null && !/^[A-Za-z]{2}$/.test(text)) return fail('INVALID_COUNTRY_CODE', 422);
       if (key === 'invoice_currency' && text !== null && !/^[A-Za-z]{3}$/.test(text)) return fail('INVALID_INVOICE_CURRENCY', 422);
       normalized[key] = key === 'origin_country_code' || key === 'transaction_country_code' || key === 'invoice_currency' ? text?.toUpperCase() ?? null : text;
