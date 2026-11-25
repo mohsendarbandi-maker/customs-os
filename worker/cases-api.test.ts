@@ -63,7 +63,7 @@ class FakeD1 implements CasesD1Database {
       if (!row) { this.lastChanges = 0; return { meta: { changes: 0 } }; }
       const setPart = sql.split(' SET ')[1]?.split(' WHERE ')[0] || '';
       const columns = setPart.split(',').map(value => value.split('=')[0].trim());
-      columns.forEach((column, index) => { row[column] = column === 'updated_at' ? '2026-11-25T09:00:01.000Z' : values[index]; });
+      columns.forEach((column, index) => { row[column] = values[index]; });
       this.lastChanges = 1;
       return { meta: { changes: 1 } };
     }
@@ -477,6 +477,8 @@ describe('Cloudflare D1 cases read API', () => {
     expect(db.permits[0].status).toBe('approved');
     expect(db.permits[0].permit_number).toBe('H-2');
     expect(db.auditEvents.at(-1)?.action).toBe('update');
+    const afterSnapshot = JSON.parse(String(db.auditEvents.at(-1)?.after_json)) as { updated_at: string };
+    expect(db.permits[0].updated_at).toBe(afterSnapshot.updated_at);
     const update = db.queries.find(query => query.sql.startsWith('UPDATE permits SET'));
     expect(update?.sql).toContain('WHERE id=? AND case_id=? AND organization_id=? AND updated_at=?');
   });
