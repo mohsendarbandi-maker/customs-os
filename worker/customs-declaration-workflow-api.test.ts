@@ -272,7 +272,7 @@ describe('Cloudflare D1 customs declaration workflow API', () => {
     expect(customsWorkflowCollectConflicts(
       { standard: { expert_review: 'approved', inspection_fee: null } },
       { standard: { expert_review: 'pending', inspection_fee: null } },
-      { standard: { expert_review: 'pending', inspection_fee: 200 } },
+      { standard: { inspection_fee: 200 } },
     )).toEqual([]);
     expect(customsWorkflowCollectConflicts(
       { standard: { expert_review: 'approved', inspection_fee: null } },
