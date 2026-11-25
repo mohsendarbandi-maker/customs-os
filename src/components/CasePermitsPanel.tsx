@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Check, Edit3, Plus, Save, Trash2, X } from 'lucide-react';
+import { Edit3, Plus, Save, Trash2, X } from 'lucide-react';
 import {
   cloudflareCasesApi,
   type CasePermit,
