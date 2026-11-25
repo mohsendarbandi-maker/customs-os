@@ -190,6 +190,7 @@ const parseRoute = (pathname: string): Route | Response => {
   const action: RouteAction = suffix === undefined ? 'read'
     : suffix === 'events' ? 'events'
       : suffix === 'activity' ? 'activity'
+        : suffix === 'procedure' ? 'procedure'
         : suffix === 'complete' ? 'complete'
           : suffix === 'rollback' ? 'rollback' : 'read';
   if (suffix !== undefined && !['events', 'activity', 'procedure', 'complete', 'rollback'].includes(suffix)) {
