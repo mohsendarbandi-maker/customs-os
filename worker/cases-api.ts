@@ -286,7 +286,7 @@ const permitInput = (value: unknown, partial: boolean): Record<string, unknown> 
       const max = key === 'issuing_authority' ? 255 : 100;
       if (text !== null && text.length > max) return fail('INVALID_PERMIT_INPUT', 422);
       if ((key === 'permit_type' || key === 'issuing_authority') && !text) return fail('INVALID_PERMIT_INPUT', 422);
-      normalized[key] = text;
+      normalized[key] = key === 'permit_number' && !text ? null : text;
     } else if (key === 'status') {
       if (typeof item !== 'string' || !permitStatuses.has(item)) return fail('INVALID_PERMIT_STATUS', 422);
       normalized[key] = item;
@@ -295,6 +295,9 @@ const permitInput = (value: unknown, partial: boolean): Record<string, unknown> 
       const text = typeof item === 'string' ? item.trim() : '';
       if (!text) normalized[key] = null;
       else {
+        if (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(text)) {
+          return fail('INVALID_PERMIT_DATE', 422);
+        }
         const timestamp = Date.parse(text);
         if (!Number.isFinite(timestamp)) return fail('INVALID_PERMIT_DATE', 422);
         normalized[key] = new Date(timestamp).toISOString();
@@ -505,7 +508,7 @@ const readCaseHistory = async (db: CasesD1Database, id: string, organizationId: 
     'SELECT id,actor_user_id,action,entity_type,entity_id,before_json,after_json,created_at ' +
     'FROM customs_os_audit_events WHERE organization_id=? AND (' +
     '(entity_type=? AND entity_id=?) OR ' +
-    '(entity_type=? AND json_extract(COALESCE(before_json,after_json),\'$.case_id\')=?)' +
+    '(entity_type=? AND CASE WHEN json_valid(COALESCE(before_json,after_json)) THEN json_extract(COALESCE(before_json,after_json),\'$.case_id\') ELSE NULL END=?)' +
     ') ORDER BY created_at DESC,id DESC LIMIT 200',
   ).bind(organizationId, 'case', id, 'permit', id).all<{
     id: string;
