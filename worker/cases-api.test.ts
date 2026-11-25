@@ -12,6 +12,7 @@ class FakeStatement implements CasesD1Statement {
 class FakeD1 implements CasesD1Database {
   list: CaseRecord[] = [];
   detail: CaseRecord | null = null;
+  detailOrganizationId = 'org-a';
   related = { shipments: [] as unknown[], declarations: [] as unknown[], documents: [] as unknown[], permits: [] as unknown[] };
   permits: Array<Record<string, unknown>> = [];
   auditEvents: Array<Record<string, unknown>> = [];
@@ -27,7 +28,7 @@ class FakeD1 implements CasesD1Database {
   first<T>(sql: string, values: unknown[]): T | null {
     this.queries.push({ sql, values });
     if (sql.includes('SELECT id FROM cases WHERE id=? AND organization_id=?')) {
-      return this.detail?.id === values[0] && values[1] === 'org-a' ? { id: this.detail.id } as T : null;
+      return this.detail?.id === values[0] && this.detailOrganizationId === values[1] ? { id: this.detail.id } as T : null;
     }
     if (sql.includes('FROM permits WHERE id=? AND case_id=? AND organization_id=?')) {
       return (this.permits.find(row => row.id === values[0] && row.case_id === values[1] && row.organization_id === values[2]) || null) as T | null;
@@ -117,9 +118,6 @@ class FakeD1 implements CasesD1Database {
         row => row.case_id === values[0] && row.organization_id === values[1],
       );
       return { results: rows as T[] };
-    }
-    if (sql.includes('FROM permits WHERE case_id=? AND organization_id=?')) {
-      return { results: this.permits.filter(row => row.case_id === values[0] && row.organization_id === values[1]) as T[] };
     }
     if (sql.includes('FROM customs_os_audit_events')) return { results: this.auditEvents as T[] };
     throw new Error('Unexpected query: ' + sql);
@@ -297,7 +295,7 @@ describe('Cloudflare D1 cases read API', () => {
       shipments: [{ id: 'shipment-a' }],
       declarations: [{ id: 'declaration-a' }],
       documents: [{ id: 'document-a' }],
-      permits: [{ id: 'permit-a', permit_type: 'health', status: 'approved' }],
+      permits: [{ id: 'permit-a', organization_id: 'org-a', case_id: 'case-a', permit_type: 'health', status: 'approved' }],
     };
     const url = new URL('https://staging.example/api/cases/case-a');
     const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
@@ -433,6 +431,7 @@ describe('Cloudflare D1 cases read API', () => {
   it('rejects permit creation for a case outside the current organization', async () => {
     const db = new FakeD1();
     db.detail = { ...caseRow, id: 'foreign-case' };
+    db.detailOrganizationId = 'org-b';
     const url = new URL('https://staging.example/api/cases/foreign-case/permits');
     const response = await handleCasesApi(new Request(url, {
       method: 'POST',
