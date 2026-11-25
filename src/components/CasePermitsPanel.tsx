@@ -36,7 +36,7 @@ const dateFromIso = (value: string | null) => {
 };
 const dateForPicker = (value: string) => {
   const normalized = normalizeDigits(value.trim()).replace(/[.-]/g, '/');
-  const match = normalized.match(/^(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})$/);
+  const match = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
   if (!match) return new Date();
   try {
     return zonedJalaliToDate(Number(match[1]), Number(match[2]), Number(match[3]), 9, 0);
