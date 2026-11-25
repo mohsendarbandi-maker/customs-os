@@ -13,6 +13,7 @@ class FakeD1 implements CasesD1Database {
   list: CaseRecord[] = [];
   detail: CaseRecord | null = null;
   detailOrganizationId = 'org-a';
+  clientIds: string[] = ['client-a'];
   related = { shipments: [] as unknown[], declarations: [] as unknown[], documents: [] as unknown[], permits: [] as unknown[] };
   permits: Array<Record<string, unknown>> = [];
   auditEvents: Array<Record<string, unknown>> = [];
@@ -28,6 +29,9 @@ class FakeD1 implements CasesD1Database {
   }
   first<T>(sql: string, values: unknown[]): T | null {
     this.queries.push({ sql, values });
+    if (sql.includes('SELECT id FROM clients WHERE id=? AND organization_id=?')) {
+      return this.clientIds.includes(String(values[0])) && values[1] === 'org-a' ? { id: values[0] } as T : null;
+    }
     if (sql.includes('SELECT id FROM cases WHERE id=? AND organization_id=?')) {
       return this.detail?.id === values[0] && this.detailOrganizationId === values[1] ? { id: this.detail.id } as T : null;
     }
@@ -40,6 +44,13 @@ class FakeD1 implements CasesD1Database {
   }
   run(sql: string, values: unknown[]): { meta?: { changes?: number } } {
     this.queries.push({ sql, values });
+    if (sql.startsWith('INSERT INTO cases (id,organization_id,client_id,case_number,status,created_at,updated_at)')) {
+      const [id, organizationId, clientId, caseNumber, status, createdAt, updatedAt] = values;
+      this.detail = { ...caseRow, id: String(id), client_id: String(clientId), case_number: String(caseNumber), status: String(status), created_at: String(createdAt), updated_at: String(updatedAt) };
+      this.detailOrganizationId = String(organizationId);
+      this.lastChanges = 1;
+      return { meta: { changes: 1 } };
+    }
     if (sql.startsWith('INSERT INTO permits (')) {
       this.permits.push({
         id: values[0], organization_id: values[1], case_id: values[2], permit_type: values[3],
@@ -191,6 +202,16 @@ describe('Cloudflare D1 cases read API', () => {
       headers: { 'content-type': 'application/json', origin: url.origin },
       body: JSON.stringify({
         warehouse_receipt_no: 'WH-1405-2',
+        warehouse_receipt_date: '2026-11-05',
+        unloading_date: '2026-11-04',
+        origin_country_code: 'cn',
+        transaction_country_code: 'ae',
+        delivery_term: 'FOB',
+        invoice_amount: 51000,
+        invoice_currency: 'eur',
+        insurance_amount_irr: 275000,
+        tariff_code: '10059010',
+        import_duty_rate: 4,
         release_status: 'released',
         valuation_status: 'approved',
         net_weight_kg: 21000,
@@ -201,6 +222,16 @@ describe('Cloudflare D1 cases read API', () => {
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.case.warehouse_receipt_no).toBe('WH-1405-2');
+    expect(body.case.warehouse_receipt_date).toBe('2026-11-05');
+    expect(body.case.unloading_date).toBe('2026-11-04');
+    expect(body.case.origin_country_code).toBe('CN');
+    expect(body.case.transaction_country_code).toBe('AE');
+    expect(body.case.delivery_term).toBe('FOB');
+    expect(body.case.invoice_amount).toBe(51000);
+    expect(body.case.invoice_currency).toBe('EUR');
+    expect(body.case.insurance_amount_irr).toBe(275000);
+    expect(body.case.tariff_code).toBe('10059010');
+    expect(body.case.import_duty_rate).toBe(4);
     expect(body.case.release_status).toBe('released');
     expect(body.case.valuation_status).toBe('approved');
     const update = db.queries.find(query => query.sql.startsWith('UPDATE cases SET'));
@@ -570,6 +601,53 @@ describe('Cloudflare D1 cases read API', () => {
     expect(response.status).toBe(422);
     expect(db.permits).toHaveLength(0);
     expect(db.queries.some(query => query.sql.startsWith('INSERT INTO permits'))).toBe(false);
+  });
+
+  it('creates a tenant-scoped case and preserves an immutable creation audit record', async () => {
+    const db = new FakeD1();
+    const url = new URL('https://staging.example/api/cases');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ client_id: 'client-a' }),
+    }), db, url, owner);
+    const body = await response.json() as { ok: boolean; case: CaseRecord };
+    expect(response.status).toBe(201);
+    expect(body.ok).toBe(true);
+    expect(body.case.client_id).toBe('client-a');
+    expect(body.case.status).toBe('draft');
+    expect(body.case.case_number).toMatch(/^CASE-/);
+    const insert = db.queries.find(query => query.sql.startsWith('INSERT INTO cases'));
+    expect(insert?.values).toContain('org-a');
+    const audit = db.auditEvents.find(event => event.entity_type === 'case' && event.entity_id === body.case.id);
+    expect(audit).toMatchObject({ action: 'create', organization_id: 'org-a', actor_user_id: 'user-a' });
+    expect(JSON.parse(String(audit?.after_json))).toMatchObject({ client_id: 'client-a', status: 'draft' });
+  });
+
+  it('rejects cross-tenant or unknown clients when creating a case', async () => {
+    const db = new FakeD1();
+    db.clientIds = [];
+    const url = new URL('https://staging.example/api/cases');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ client_id: 'client-private' }),
+    }), db, url, owner);
+    expect(response.status).toBe(404);
+    expect(db.queries.some(query => query.sql.startsWith('INSERT INTO cases'))).toBe(false);
+  });
+
+  it('rejects invalid country, currency and Jalali-converted ISO date fields', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, organization_id: 'org-a' } as CaseRecord;
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ origin_country_code: 'IRAN', invoice_currency: 'US', warehouse_receipt_date: '۱۴۰۵/۰۸/۰۵' }),
+    }), db, url, owner);
+    expect(response.status).toBe(422);
+    expect(db.queries.some(query => query.sql.startsWith('UPDATE cases SET'))).toBe(false);
   });
 
 });
