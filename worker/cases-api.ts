@@ -431,7 +431,8 @@ const handleCasePermitsApi = async (
     if (raw instanceof Response) return raw;
     const input = permitInput(raw, true);
     if (input instanceof Response) return input;
-    const after = { ...before, ...input, updated_at: new Date().toISOString() } as PermitRecord;
+    const updatedAt = new Date().toISOString();
+    const after = { ...before, ...input, updated_at: updatedAt } as PermitRecord;
     if (after.issued_at && after.expires_at && Date.parse(after.expires_at) < Date.parse(after.issued_at)) {
       return fail('PERMIT_EXPIRY_BEFORE_ISSUE', 422);
     }
@@ -443,7 +444,8 @@ const handleCasePermitsApi = async (
     if (!changed.length) return json({ ok: true, permit: before, unchanged: true });
     const sets = changed.map(key => key + '=?');
     const values = changed.map(key => input[key]);
-    sets.push("updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')");
+    sets.push('updated_at=?');
+    values.push(updatedAt);
     const updateAudit = permitAuditStatement(profile.organization_id, profile.id, 'update', permitId, before, after, request);
     try {
       const results = await db.batch([
