@@ -17,6 +17,9 @@ export interface CaseRecord {
   warehouse_receipt_no: string | null; warehouse_receipt_date: string | null;
   release_status: string | null; valuation_status: string | null;
   unloading_date: string | null; vessel_type: string | null; customs_regime: string | null;
+  origin_country_code: string | null; transaction_country_code: string | null;
+  delivery_term: string | null; invoice_amount: number | null; invoice_currency: string | null;
+  insurance_amount_irr: number | null; tariff_code: string | null; import_duty_rate: number | null;
   display_name: string | null; created_at: string | null; updated_at: string | null;
   shipment_count: number; latest_shipment_id: string | null; shipment_display_name: string | null;
   bill_of_lading_no: string | null; vessel_name: string | null; kottaj_number: string | null;
@@ -30,6 +33,8 @@ const selectColumns = [
   'c.cargo_count', 'c.cargo_count_unit', 'c.net_weight_kg', 'c.gross_weight_kg',
   'c.warehouse_receipt_no', 'c.warehouse_receipt_date', 'c.release_status', 'c.valuation_status',
   'c.unloading_date', 'c.vessel_type', 'c.customs_regime',
+  'c.origin_country_code', 'c.transaction_country_code', 'c.delivery_term',
+  'c.invoice_amount', 'c.invoice_currency', 'c.insurance_amount_irr', 'c.tariff_code', 'c.import_duty_rate',
   'c.display_name', 'c.created_at', 'c.updated_at',
   '(SELECT COUNT(*) FROM shipments s WHERE s.case_id=c.id AND s.organization_id=c.organization_id) AS shipment_count',
   '(SELECT s.id FROM shipments s WHERE s.case_id=c.id AND s.organization_id=c.organization_id ORDER BY s.created_at DESC,s.id DESC LIMIT 1) AS latest_shipment_id',
@@ -138,9 +143,10 @@ const sameOrigin = (request: Request, url: URL) => {
 };
 const stringFields = new Set([
   'case_number','registration_order_no','proforma_no','cargo_description',
-  'cargo_count_unit','warehouse_receipt_no',
+  'cargo_count_unit','warehouse_receipt_no','warehouse_receipt_date','unloading_date',
+  'origin_country_code','transaction_country_code','delivery_term','invoice_currency','tariff_code',
 ]);
-const numericFields = new Set(['cargo_count','net_weight_kg','gross_weight_kg']);
+const numericFields = new Set(['cargo_count','net_weight_kg','gross_weight_kg','invoice_amount','insurance_amount_irr','import_duty_rate']);
 const releaseStatuses = new Set(['pending','invoice_received','paid','released']);
 const valuationStatuses = new Set(['pending','calculated','reviewed','approved']);
 const patchCase = async (request: Request, db: CasesD1Database, id: string, organizationId: string, actorId: string, url: URL) => {
@@ -167,9 +173,12 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
       if (value !== null && typeof value !== 'string') return fail('INVALID_CASE_PATCH', 422);
       const text = typeof value === 'string' ? value.trim() : null;
       if (key === 'case_number' && (!text || text.length > 100)) return fail('INVALID_CASE_NUMBER', 422);
-      const max = key === 'cargo_description' ? 4000 : key === 'cargo_count_unit' ? 40 : 200;
+      const max = key === 'cargo_description' ? 4000 : key === 'delivery_term' ? 80 : key === 'cargo_count_unit' ? 40 : key === 'invoice_currency' ? 3 : key === 'origin_country_code' || key === 'transaction_country_code' ? 2 : key === 'tariff_code' ? 40 : 200;
       if (text !== null && text.length > max) return fail('INVALID_CASE_PATCH', 422);
-      normalized[key] = text;
+      if ((key === 'warehouse_receipt_date' || key === 'unloading_date') && text !== null && !/^\\d{4}-\\d{2}-\\d{2}$/.test(text)) return fail('INVALID_CASE_DATE', 422);
+      if ((key === 'origin_country_code' || key === 'transaction_country_code') && text !== null && !/^[A-Za-z]{2}$/.test(text)) return fail('INVALID_COUNTRY_CODE', 422);
+      if (key === 'invoice_currency' && text !== null && !/^[A-Za-z]{3}$/.test(text)) return fail('INVALID_INVOICE_CURRENCY', 422);
+      normalized[key] = key === 'origin_country_code' || key === 'transaction_country_code' || key === 'invoice_currency' ? text?.toUpperCase() ?? null : text;
     } else if (numericFields.has(key)) {
       if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
         return fail('INVALID_CASE_NUMBER_VALUE', 422);
