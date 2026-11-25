@@ -339,6 +339,25 @@ describe('Cloudflare D1 registration-orders API', () => {
     expect(db.orders[0].case_id).toBe('case-a');
   });
 
+  it('requires the complete bank profile for every registration order', async () => {
+    const db = new FakeD1();
+    const url = new URL('https://staging.example/api/registration-orders');
+    for (const patch of [
+      { bank_name: null },
+      { bank_branch: null },
+      { bank_branch_code: null },
+      { payment_instrument_code: null },
+    ]) {
+      const response = await handleRegistrationOrdersApi(
+        makeRequest('POST', url.pathname, orderInput(patch)), db, url, profile,
+      );
+      expect(response.status).toBe(422);
+    }
+    expect(db.orders).toHaveLength(0);
+    expect(db.audit).toHaveLength(0);
+    expect(db.queries.some(q => q.sql.startsWith('INSERT INTO registration_orders'))).toBe(false);
+  });
+
   it('rejects duplicate registration-order numbers within the same organization', async () => {
     const db = new FakeD1();
     db.orders = [baseOrder({ order_number: '98765' })];
