@@ -260,6 +260,11 @@ const makeDefaults = (declaration: DeclarationRow) => {
 };
 const jsonText = (value: unknown) => JSON.stringify(value);
 
+const SUPPORTED_PROCEDURE_REGIMES = new Set([
+  'import_definitive','export_definitive','temporary_export','import_temporary',
+  'temporary_processing','external_transit','internal_transit','re_export',
+  're_import','cabotage','customs_warehouse','free_zone','other',
+]);
 const PROCEDURE_STAGE_KEYS = new Set([
   'documents','permits','declaration','valuation','loading','exit','completed',
   'guarantee','use_period','re_export',
@@ -440,6 +445,9 @@ export const handleCustomsDeclarationWorkflowApi = async (
     const declaration = await parseDeclaration(db, declarationId, profile.organization_id).catch(() => null);
     if (!declaration) return fail('DECLARATION_NOT_FOUND', 404);
     const isDefinitiveImport = declaration.customs_regime === 'import_definitive';
+    if (!declaration.customs_regime || !SUPPORTED_PROCEDURE_REGIMES.has(declaration.customs_regime)) {
+      return fail('WORKFLOW_NOT_APPLICABLE', 409, { customsRegime: declaration.customs_regime });
+    }
     const initial = makeDefaults(declaration);
     const procedureState = parseJsonObject(body.procedureState) || {};
     const currentStage = body.currentStage === undefined
@@ -451,7 +459,7 @@ export const handleCustomsDeclarationWorkflowApi = async (
     if (isDefinitiveImport && currentStage !== 'evaluation') return fail('INVALID_WORKFLOW_STAGE', 422);
     const now = new Date().toISOString();
     try {
-      await db.prepare(
+      const inserted = await db.prepare(
         'INSERT OR IGNORE INTO customs_declaration_workflow (' +
         'id,organization_id,declaration_id,current_stage,evaluation_state,expertise_state,cashier_state,' +
         'loading_permit_state,exit_state,port_charges_state,procedure_state,created_by,updated_by,created_at,updated_at' +
@@ -464,7 +472,7 @@ export const handleCustomsDeclarationWorkflowApi = async (
       ).run();
       const row = await getWorkflow(db, declarationId, profile.organization_id);
       if (!row) return fail('CUSTOMS_WORKFLOW_CREATE_NOT_CONFIRMED', 500);
-      return json({ ok: true, workflow: parseRow(row) }, 201);
+      return json({ ok: true, workflow: parseRow(row) }, Number(inserted.meta?.changes || 0) === 1 ? 201 : 200);
     } catch { return fail('CUSTOMS_WORKFLOW_CREATE_FAILED', 500); }
   }
 
