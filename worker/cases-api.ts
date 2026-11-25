@@ -205,20 +205,25 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
   sets.push("updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')");
   values.push(id, organizationId);
   try {
-    await db.batch([
+    const results = await db.batch([
       db.prepare(
-        'UPDATE cases SET ' + sets.join(', ') + ' WHERE id=? AND organization_id=?',
-      ).bind(...values),
+        'UPDATE cases SET ' + sets.join(', ') + ' WHERE id=? AND organization_id=? AND updated_at IS ?',
+      ).bind(...values, before.updated_at),
       db.prepare(
         'INSERT INTO customs_os_audit_events ' +
         '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
-        'VALUES (?,?,?,?,?,?,?,?,?)',
+        'SELECT ?,?,?,?,?,?,?,?,? WHERE changes()>0',
       ).bind(
         crypto.randomUUID(), organizationId, actorId, 'update', 'case', id,
         JSON.stringify(beforeSnapshot), JSON.stringify(afterSnapshot),
         request.headers.get('cf-ray') || request.headers.get('x-request-id') || null,
       ),
     ]);
+    const updateResult = results[0] as { meta?: { changes?: number } } | undefined;
+    if (Number(updateResult?.meta?.changes || 0) !== 1) {
+      const current = await readCase(db, id, organizationId);
+      return current ? fail('CASE_UPDATE_CONFLICT', 409) : fail('CASE_NOT_FOUND', 404);
+    }
     const saved = await readCase(db, id, organizationId);
     return saved ? json({ ok: true, case: saved }) : fail('CASE_UPDATE_NOT_CONFIRMED', 500);
   } catch (error) {
