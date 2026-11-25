@@ -40,7 +40,7 @@ export const CaseOperationsPage:React.FC=()=>{
     const detail=await cloudflareCasesApi.get(id2);
     setDocs(detail.documents||[]);
     setDecl(detail.declarations?.[0]||null);
-    setPermits([]);
+    setPermits(detail.permits||[]);
     setExit(null);
     setReadiness(null);
     return;
