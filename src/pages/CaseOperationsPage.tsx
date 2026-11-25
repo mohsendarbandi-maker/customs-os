@@ -68,7 +68,7 @@ export const CaseOperationsPage:React.FC=()=>{
  };
  useEffect(()=>{void load(requested)},[requested]);useEffect(()=>{if(selected&&selected!==requested)void load(selected)},[selected]);const current=useMemo(()=>cases.find(x=>x.id===selected)||null,[cases,selected]);
  const approved=new Set(docs.filter(d=>d.status==='approved').map(d=>String(d.document_type||'').toUpperCase()));const required=['PROFORMA_INVOICE','COMMERCIAL_INVOICE','PACKING_LIST','BILL_OF_LADING','CERTIFICATE_OF_ORIGIN'];const docCount=required.filter(t=>approved.has(t)).length;
- const displayName=current?buildShipmentDisplayName({cargo_count:current.shipment_cargo_count??current.cargo_count,cargo_count_unit:current.shipment_cargo_count_unit??current.cargo_count_unit,client_name:current.shipment_client_name,vessel_name:current.shipment_vessel_name}):'پرونده بدون نام';const nextAction=current?getCaseNextAction(current.status):'';
+ const displayName=current?(current.effective_display_name||buildShipmentDisplayName({cargo_count:current.shipment_cargo_count??current.cargo_count,cargo_count_unit:current.shipment_cargo_count_unit??current.cargo_count_unit,client_name:current.shipment_client_name||current.client_name,vessel_name:current.shipment_vessel_name||current.vessel_name})):'پرونده بدون نام';const nextAction=current?getCaseNextAction(current.status):'';
  const saveCase=async()=>{
   if(!current)return;
   setBusy(true);setError('');
