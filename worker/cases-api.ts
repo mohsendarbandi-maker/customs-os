@@ -156,10 +156,10 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
       }
       normalized[key] = value;
     } else if (key === 'release_status') {
-      if (typeof value !== 'string' || !releaseStatuses.has(value)) return fail('INVALID_RELEASE_STATUS', 422);
+      if (value !== null && (typeof value !== 'string' || !releaseStatuses.has(value))) return fail('INVALID_RELEASE_STATUS', 422);
       normalized[key] = value;
     } else if (key === 'valuation_status') {
-      if (typeof value !== 'string' || !valuationStatuses.has(value)) return fail('INVALID_VALUATION_STATUS', 422);
+      if (value !== null && (typeof value !== 'string' || !valuationStatuses.has(value))) return fail('INVALID_VALUATION_STATUS', 422);
       normalized[key] = value;
     }
   }
