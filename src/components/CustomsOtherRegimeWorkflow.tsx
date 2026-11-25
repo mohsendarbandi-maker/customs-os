@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { cloneD1CustomsProcedureState, isD1CustomsWorkflowEnabled, readD1CustomsProcedureWorkflow, saveD1CustomsProcedureWorkflow } from '../lib/cloudflareCustomsWorkflow';
 import { CustomsWorkflowAuditHistory } from './CustomsWorkflowAuditHistory';
 import { validateAdditionalRegimeStage } from '../lib/customsOtherRegimeValidation';
 
@@ -49,6 +50,8 @@ export const CustomsOtherRegimeWorkflow: React.FC<Props> = ({ declarationId, org
   const [state, setState] = useState<ProcedureState>(blankState);
   const [stage, setStage] = useState<StageKey>('documents');
   const [savedStage, setSavedStage] = useState<StageKey>('documents');
+  const [workflowExists, setWorkflowExists] = useState(false);
+  const baseline = useRef<ProcedureState>(blankState());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -59,15 +62,37 @@ export const CustomsOtherRegimeWorkflow: React.FC<Props> = ({ declarationId, org
   const load = useCallback(async () => {
     if (!declarationId || !organizationId) { setLoading(false); return; }
     setLoading(true); setError('');
+    if (isD1CustomsWorkflowEnabled()) {
+      try {
+        const result = await readD1CustomsProcedureWorkflow(declarationId);
+        const workflow = result.workflow;
+        const loaded = workflow?.procedure_state && typeof workflow.procedure_state === 'object'
+          ? workflow.procedure_state as ProcedureState : {};
+        const merged = { ...blankState(), ...loaded };
+        setState(merged); baseline.current = cloneD1CustomsProcedureState(merged);
+        setWorkflowExists(!!workflow);
+        const validStage = workflow && stages.some(item => item.key === workflow.current_stage)
+          ? workflow.current_stage as StageKey : 'documents';
+        setStage(validStage); setSavedStage(validStage);
+      } catch {
+        setError('دریافت گردش‌کار انجام نشد. دسترسی و اتصال را بررسی کنید.');
+      }
+      setLoading(false);
+      return;
+    }
     const { data, error: loadError } = await supabase.from('customs_declaration_workflow')
       .select('current_stage,procedure_state').eq('organization_id', organizationId)
       .eq('declaration_id', declarationId).maybeSingle();
     if (loadError) { setError('دریافت گردش‌کار انجام نشد. دسترسی و اتصال را بررسی کنید.'); setLoading(false); return; }
     if (data) {
       const loaded = data.procedure_state && typeof data.procedure_state === 'object' ? data.procedure_state as ProcedureState : {};
-      setState({ ...blankState(), ...loaded });
+      const merged = { ...blankState(), ...loaded };
+      setState(merged); baseline.current = cloneD1CustomsProcedureState(merged); setWorkflowExists(true);
       const validStage = stages.some(item => item.key === data.current_stage) ? data.current_stage as StageKey : 'documents';
       setStage(validStage); setSavedStage(validStage);
+    } else {
+      baseline.current = cloneD1CustomsProcedureState(blankState());
+      setWorkflowExists(false);
     }
     setLoading(false);
   }, [declarationId, organizationId]);
@@ -85,12 +110,25 @@ export const CustomsOtherRegimeWorkflow: React.FC<Props> = ({ declarationId, org
     }
     setSaving(true); setError(''); setMessage('');
     try {
-      const { error: saveError } = await supabase.from('customs_declaration_workflow').upsert({
-        organization_id: organizationId, declaration_id: declarationId,
-        current_stage: next, procedure_state: state, updated_by: userId || null,
-      }, { onConflict: 'declaration_id' });
-      if (saveError) throw saveError;
-      setStage(next); setSavedStage(next); setMessage('گردش‌کار ذخیره شد.');
+      if (isD1CustomsWorkflowEnabled()) {
+        const saved = await saveD1CustomsProcedureWorkflow({
+          declarationId, workflowExists, currentStage: next, savedStage,
+          procedureState: state, baseState: baseline.current,
+        });
+        const merged = { ...blankState(), ...(saved.procedure_state || {}) } as ProcedureState;
+        setWorkflowExists(true); setState(merged); baseline.current = cloneD1CustomsProcedureState(merged);
+        const actual = stages.some(item => item.key === saved.current_stage)
+          ? saved.current_stage as StageKey : 'documents';
+        setStage(actual); setSavedStage(actual);
+      } else {
+        const { error: saveError } = await supabase.from('customs_declaration_workflow').upsert({
+          organization_id: organizationId, declaration_id: declarationId,
+          current_stage: next, procedure_state: state, updated_by: userId || null,
+        }, { onConflict: 'declaration_id' });
+        if (saveError) throw saveError;
+        setStage(next); setSavedStage(next);
+      }
+      setMessage('گردش‌کار ذخیره شد.');
     } catch {
       setError('ذخیره گردش‌کار انجام نشد. اتصال و مجوز دسترسی را بررسی کنید.');
     } finally { setSaving(false); }
