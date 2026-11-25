@@ -576,6 +576,62 @@ const readCaseHistory = async (db: CasesD1Database, id: string, organizationId: 
   });
 };
 
+const createCase = async (
+  request: Request,
+  db: CasesD1Database,
+  url: URL,
+  profile: CasesApiProfile,
+): Promise<Response> => {
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  if (Number(request.headers.get('content-length') || 0) > 16 * 1024) return fail('REQUEST_TOO_LARGE', 413);
+  let raw: unknown;
+  try {
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > 16 * 1024) return fail('REQUEST_TOO_LARGE', 413);
+    raw = JSON.parse(text);
+  } catch { return fail('INVALID_JSON', 400); }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return fail('INVALID_CASE_INPUT', 422);
+  const input = raw as Record<string, unknown>;
+  const allowed = new Set(['client_id']);
+  if (Object.keys(input).length !== 1 || Object.keys(input).some(key => !allowed.has(key))) {
+    return fail('INVALID_CASE_INPUT', 422, { required: ['client_id'] });
+  }
+  const clientId = typeof input.client_id === 'string' ? input.client_id.trim() : '';
+  if (!clientId || clientId.length > 128) return fail('CLIENT_REQUIRED', 422);
+  try {
+    const client = await db.prepare(
+      'SELECT id FROM clients WHERE id=? AND organization_id=? LIMIT 1',
+    ).bind(clientId, profile.organization_id).first<{ id: string }>();
+    if (!client) return fail('CLIENT_NOT_FOUND', 404);
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const caseNumber = 'CASE-' + now.replace(/[-:.TZ]/g, '').slice(0, 14) + '-' + id.slice(0, 6).toUpperCase();
+    const audit = db.prepare(
+      'INSERT INTO customs_os_audit_events ' +
+      '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id,created_at) ' +
+      'SELECT ?,?,?,?,?,?,?,?, ?, ? WHERE changes()>0',
+    ).bind(
+      crypto.randomUUID(), profile.organization_id, profile.id, 'create', 'case', id, null,
+      JSON.stringify({ client_id: clientId, case_number: caseNumber, status: 'draft' }),
+      request.headers.get('cf-ray') || request.headers.get('x-request-id') || null, now,
+    );
+    const results = await db.batch([
+      db.prepare(
+        'INSERT INTO cases (id,organization_id,client_id,case_number,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?)',
+      ).bind(id, profile.organization_id, clientId, caseNumber, 'draft', now, now),
+      audit,
+    ]);
+    const inserted = results[0] as { meta?: { changes?: number } } | undefined;
+    if (Number(inserted?.meta?.changes || 0) !== 1) return fail('CASE_CREATE_NOT_CONFIRMED', 500);
+    const saved = await readCase(db, id, profile.organization_id);
+    return saved ? json({ ok: true, case: saved }, 201) : fail('CASE_CREATE_NOT_CONFIRMED', 500);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/UNIQUE constraint failed/i.test(message)) return fail('CASE_NUMBER_EXISTS', 409);
+    return fail('CASE_CREATE_FAILED', 500);
+  }
+};
+
 export const handleCasesApi = async (
   request: Request,
   db: CasesD1Database,
@@ -602,12 +658,16 @@ export const handleCasesApi = async (
 
   const id = readId(url.pathname);
   if (id instanceof Response) return id;
+  if (request.method === 'POST' && id === null) {
+    if (!['owner','admin','broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
+    return createCase(request, db, url, profile);
+  }
   if (request.method === 'PATCH') {
     if (id === null) return fail('CASE_ID_REQUIRED', 400);
     if (!['owner','admin','broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
     return patchCase(request, db, id, profile.organization_id, profile.id, url);
   }
-  if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: id === null ? ['GET'] : ['GET', 'PATCH'] });
+  if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: id === null ? ['GET', 'POST'] : ['GET', 'PATCH'] });
 
   try {
     if (id !== null) {
