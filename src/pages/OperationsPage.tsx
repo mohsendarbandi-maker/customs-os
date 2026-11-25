@@ -4,6 +4,10 @@ import React,{useEffect,useMemo,useState} from 'react';
 const makeCompatibleUUID=()=>{if(typeof globalThis.crypto?.randomUUID==='function')return globalThis.crypto.randomUUID();const bytes=new Uint8Array(16);if(globalThis.crypto?.getRandomValues)globalThis.crypto.getRandomValues(bytes);else{for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5')};import {ArrowRight,Calculator,ClipboardPaste,FileCheck2,FileText,Loader2,Save,Trash2,Upload,ShieldCheck,Plus} from 'lucide-react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {supabase} from '../lib/supabase';
+import {isCloudflareRecoveryHost} from '../lib/recoveryHost';
+import {cloudflareCasesApi} from '../lib/cloudflareCases';
+import {cloudflareClientsApi} from '../lib/cloudflareClients';
+import {cloudflareRegistrationOrdersApi} from '../lib/cloudflareRegistrationOrders';
 
 const digits=(v:string)=>v.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/,/g,'');
 const num=(v:string)=>v.trim()?Number(digits(v)):null;
@@ -33,7 +37,35 @@ export const OperationsPage:React.FC=()=>{
  const changeTab=(t:typeof tab)=>{setTab(t);setSearchParams(t==='operation'?{}:{tab:t})};
  const set=(k:string,v:string)=>setForm(p=>({...p,[k]:v}));
 
+ const cloudflareMode=isCloudflareRecoveryHost();
  const load=async()=>{
+  if(cloudflareMode){
+   try{
+    const [cr,sr,shipmentResponse,orr]=await Promise.all([
+     cloudflareClientsApi.list({limit:200}),
+     cloudflareCasesApi.list({limit:200}),
+     fetch('/api/shipments?limit=200',{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}}),
+     cloudflareRegistrationOrdersApi.list({limit:100})
+    ]);
+    const shipmentBody=await shipmentResponse.json() as {ok?:boolean;items?:any[];error?:string};
+    if(!shipmentResponse.ok||!shipmentBody.ok)throw new Error(shipmentBody.error||'SHIPMENTS_API_NOT_READY');
+    setClients(cr.items||[]);
+    setCases(sr.items||[]);
+    setShipments(shipmentBody.items||[]);
+    setOrders(orr.items||[]);
+    if(caseId){
+     const detail=await cloudflareCasesApi.get(caseId);
+     setDocuments((detail.documents||[]).map((d:any)=>({
+      id:d.id,doc_type:d.document_type||'other',file_name:d.display_name||d.original_name||'سند',
+      file_size_bytes:null,created_at:d.created_at,storage_path:null,
+     })));
+     setPermits(detail.permits||[]);
+    }else{setDocuments([]);setPermits([])}
+   }catch(error:any){
+    setMessage(error?.message||'دریافت اطلاعات از Cloudflare D1 ناموفق بود.');
+   }
+   return;
+  }
   const [cr,sr,shr,orr]=await Promise.all([
    supabase.from('clients').select('id,name,national_id').order('name'),
    supabase.from('cases').select('id,case_number,status,client_id,registration_order_no,proforma_no,vessel_type,unloading_date,warehouse_receipt_no,warehouse_receipt_date,release_status,cargo_count,cargo_count_unit,cargo_description,origin_country_code,transaction_country_code,delivery_term,invoice_amount,invoice_currency,insurance_amount_irr,tariff_code,import_duty_rate,net_weight_kg,gross_weight_kg,created_at').order('created_at',{ascending:false}),
@@ -48,26 +80,203 @@ export const OperationsPage:React.FC=()=>{
    ]);setDocuments(dr.data||[]);setPermits(pr.data||[])
   } else {setDocuments([]);setPermits([])}
  };
- useEffect(()=>{load();try{const raw=localStorage.getItem('customs_last_maritime');if(raw){const x=JSON.parse(raw);setForm(p=>({...p,...x}));if(x.clientId)setClientId(x.clientId)}}catch{}},[]);
- useEffect(()=>{if(requestedCaseId&&cases.some(c=>c.id===requestedCaseId)&&requestedCaseId!==caseId)selectCase(requestedCaseId)},[requestedCaseId,cases]);
- useEffect(()=>{if(caseId)load()},[caseId]);
-
  const selectedClient=useMemo(()=>clients.find(c=>c.id===clientId),[clients,clientId]);
  const ownerLabel=selectedClient?.name||form.client||'—';
  const applyShipment=(s:any)=>{if(!s)return;setForm(p=>({...p,shippingLine:s.shipping_line||'',billOfLading:s.bill_of_lading_no||'',billYear:String(s.bill_of_lading_year||p.billYear),voyageNo:s.voyage_no||'',originPort:s.origin_port||'',destinationPort:s.destination_port||'',cargoCount:s.cargo_count==null?p.cargoCount:String(s.cargo_count),cargoCountUnit:s.cargo_count_unit||p.cargoCountUnit,netWeight:s.net_weight_kg==null?p.netWeight:String(s.net_weight_kg),grossWeight:s.gross_weight_kg==null?p.grossWeight:String(s.gross_weight_kg)}))};
  const selectCase=(id:string)=>{const c=cases.find(x=>x.id===id);if(!c){setCaseId('');return}setCaseId(id);setClientId(c.client_id||'');const owner=clients.find(x=>x.id===c.client_id);setForm(p=>({...p,clientId:c.client_id||'',client:owner?.name||'',regNumber:c.registration_order_no||'',vesselType:c.vessel_type||p.vesselType,unloadingDate:c.unloading_date||'',warehouseReceiptNo:c.warehouse_receipt_no||'',warehouseReceiptDate:c.warehouse_receipt_date||'',releaseStatus:c.release_status||'pending',cargoCount:String(c.cargo_count??''),cargoCountUnit:c.cargo_count_unit||'',cargoDescription:c.cargo_description||'',originCountry:c.origin_country_code||'',transactionCountry:c.transaction_country_code||'',deliveryTerm:c.delivery_term||'',invoiceAmount:String(c.invoice_amount??''),invoiceCurrency:c.invoice_currency||'USD',insuranceIrr:String(c.insurance_amount_irr??''),tariffCode:c.tariff_code||'',dutyRate:String(c.import_duty_rate??''),netWeight:String(c.net_weight_kg??''),grossWeight:String(c.gross_weight_kg??'')}));const s=shipments.find(x=>x.case_id===id);if(s)applyShipment(s)};
- const createCase=async()=>{if(!clientId)return setMessage('ابتدا صاحب کالا را انتخاب کنید.');setBusy(true);try{const owner=clients.find(c=>c.id===clientId);const {data,error}=await supabase.rpc('create_case_workflow',{p_client_name:owner?.name||form.client,p_registration_order_no:null});if(error)throw error;if(form.regNumber.trim()){const {error:e}=await supabase.rpc('attach_registration_order',{p_case_id:data,p_order_number:form.regNumber.trim(),p_order_date:dateDb(form.regDate),p_status:'received',p_tariff_code:form.tariffCode||null,p_quantity:num(form.cargoCount),p_quantity_unit:form.cargoCountUnit||null,p_value_amount:num(form.invoiceAmount),p_currency:form.invoiceCurrency||null,p_notes:null});if(e)throw e}setCaseId(data);setMessage('پرونده ایجاد شد.');await load()}catch(e:any){setMessage(e?.message||'خطا در ایجاد پرونده')}finally{setBusy(false)}};
- const saveOp=async()=>{if(!caseId)return setMessage('ابتدا پرونده را انتخاب یا ایجاد کنید.');setBusy(true);try{const {error}=await supabase.rpc('update_case_operational_data',{p_case_id:caseId,p_vessel_type:form.vesselType||null,p_unloading_date:dateDb(form.unloadingDate),p_warehouse_receipt_no:form.warehouseReceiptNo||null,p_warehouse_receipt_date:dateDb(form.warehouseReceiptDate),p_release_status:form.releaseStatus,p_cargo_count:num(form.cargoCount),p_cargo_count_unit:form.cargoCountUnit||null,p_cargo_description:form.cargoDescription||null,p_origin_country_code:form.originCountry||null,p_transaction_country_code:form.transactionCountry||null,p_delivery_term:form.deliveryTerm||null,p_invoice_amount:num(form.invoiceAmount),p_invoice_currency:form.invoiceCurrency||null,p_net_weight_kg:num(form.netWeight),p_gross_weight_kg:num(form.grossWeight),p_insurance_amount_irr:num(form.insuranceIrr),p_tariff_code:form.tariffCode||null,p_import_duty_rate:num(form.dutyRate)});if(error)throw error;if(form.billOfLading&&form.shippingLine&&form.vesselName){const {error:e}=await supabase.rpc('update_shipment_maritime_data',{p_case_id:caseId,p_shipping_line:form.shippingLine,p_bill_of_lading_no:form.billOfLading,p_bill_of_lading_year:Number(form.billYear),p_vessel_name:form.vesselName,p_vessel_imo:null,p_vessel_flag_code:null,p_voyage_no:form.voyageNo||null,p_origin_port:form.originPort||null,p_destination_port:form.destinationPort||null,p_cargo_count:num(form.cargoCount),p_cargo_count_unit:form.cargoCountUnit||null,p_net_weight_kg:num(form.netWeight),p_gross_weight_kg:num(form.grossWeight),p_tally_no:null,p_release_invoice_no:null,p_release_invoice_date:null,p_release_status:form.releaseStatus,p_electronic_release_no:null,p_client_id:clientId||null});if(e)throw e;try{localStorage.setItem('customs_last_maritime',JSON.stringify({...form,clientId}))}catch{}}setMessage('اطلاعات پرونده ذخیره و با کشتیرانی همگام شد.');await load()}catch(e:any){setMessage(e?.message||'خطا در ذخیره اطلاعات')}finally{setBusy(false)}};
+ const createCase=async()=>{
+  if(!clientId)return setMessage('ابتدا صاحب کالا را انتخاب کنید.');
+  setBusy(true);
+  try{
+   if(cloudflareMode){
+    const result=await cloudflareCasesApi.create({client_id:clientId,registration_order_no:form.regNumber.trim()||null});
+    setCaseId(result.case.id);
+    setMessage(result.created?'پرونده در Cloudflare D1 ایجاد شد.':'پرونده با همین شماره ثبت سفارش از قبل وجود داشت و بازیابی شد.');
+    await load();
+    return;
+   }
+   const owner=clients.find(c=>c.id===clientId);
+   const {data,error}=await supabase.rpc('create_case_workflow',{p_client_name:owner?.name||form.client,p_registration_order_no:null});
+   if(error)throw error;
+   if(form.regNumber.trim()){
+    const {error:e}=await supabase.rpc('attach_registration_order',{p_case_id:data,p_order_number:form.regNumber.trim(),p_order_date:dateDb(form.regDate),p_status:'received',p_tariff_code:form.tariffCode||null,p_quantity:num(form.cargoCount),p_quantity_unit:form.cargoCountUnit||null,p_value_amount:num(form.invoiceAmount),p_currency:form.invoiceCurrency||null,p_notes:null});
+    if(e)throw e
+   }
+   setCaseId(data);setMessage('پرونده ایجاد شد.');await load()
+  }catch(e:any){setMessage(e?.message||'خطا در ایجاد پرونده')}
+  finally{setBusy(false)}
+ };
+ const saveOp=async()=>{
+  if(!caseId)return setMessage('ابتدا پرونده را انتخاب یا ایجاد کنید.');
+  setBusy(true);
+  try{
+   if(cloudflareMode){
+    const patch={
+     vessel_type:form.vesselType||null,
+     unloading_date:dateDb(form.unloadingDate),
+     warehouse_receipt_no:form.warehouseReceiptNo||null,
+     warehouse_receipt_date:dateDb(form.warehouseReceiptDate),
+     release_status:form.releaseStatus||'pending',
+     cargo_count:num(form.cargoCount),
+     cargo_count_unit:form.cargoCountUnit||null,
+     cargo_description:form.cargoDescription||null,
+     origin_country_code:form.originCountry||null,
+     transaction_country_code:form.transactionCountry||null,
+     delivery_term:form.deliveryTerm||null,
+     invoice_amount:num(form.invoiceAmount),
+     invoice_currency:form.invoiceCurrency||null,
+     net_weight_kg:num(form.netWeight),
+     gross_weight_kg:num(form.grossWeight),
+     insurance_amount_irr:num(form.insuranceIrr),
+     tariff_code:form.tariffCode||null,
+     import_duty_rate:num(form.dutyRate),
+    };
+    await cloudflareCasesApi.update(caseId,patch);
+    const linkedShipment=shipments.find(s=>s.case_id===caseId);
+    const hasMaritimeInput=Boolean(form.billOfLading.trim()&&form.shippingLine.trim()&&form.vesselName.trim());
+    if(linkedShipment&&hasMaritimeInput){
+     const response=await fetch('/api/shipments/'+encodeURIComponent(linkedShipment.id),{
+      method:'PATCH',credentials:'same-origin',cache:'no-store',
+      headers:{'Content-Type':'application/json',Accept:'application/json'},
+      body:JSON.stringify({
+       clientId:clientId||linkedShipment.client_id,
+       caseId,
+       registrationOrderId:linkedShipment.registration_order_id||null,
+       shippingLine:form.shippingLine,
+       billOfLading:form.billOfLading,
+       billOfLadingYear:Number(form.billYear),
+       voyageNo:form.voyageNo||null,
+       vesselName:form.vesselName,
+       vesselImo:null,vesselFlag:null,
+       originPort:form.originPort||null,destinationPort:form.destinationPort||null,
+       cargoCount:num(form.cargoCount)??linkedShipment.cargo_count,
+       cargoCountUnit:form.cargoCountUnit||linkedShipment.cargo_count_unit||'رول',
+       netWeightKg:num(form.netWeight)??linkedShipment.net_weight_kg,
+       grossWeightKg:num(form.grossWeight)??linkedShipment.gross_weight_kg,
+       currentStatus:linkedShipment.current_status||'draft',
+       currentLocation:linkedShipment.current_location||null,
+       transportDocumentsStatus:linkedShipment.transport_documents_status||'not_ready',
+       releaseInvoicePaymentStatus:linkedShipment.release_invoice_payment_status||'unpaid',
+       registrationOrderNo:form.regNumber||linkedShipment.registration_order_no||null,
+       customsRegime:linkedShipment.customs_regime||null,
+       sataCode:linkedShipment.sata_code||null,
+       cargoDescription:form.cargoDescription||linkedShipment.cargo_description||null,
+      }),
+     });
+     const body=await response.json() as {ok?:boolean;error?:string};
+     if(!response.ok||!body.ok)throw new Error('اطلاعات پرونده ذخیره شد، اما همگام‌سازی محموله ناموفق بود: '+(body.error||response.status));
+    }
+    try{localStorage.setItem('customs_last_maritime',JSON.stringify({...form,clientId}))}catch{}
+    setMessage(linkedShipment&&hasMaritimeInput?'اطلاعات پرونده و محموله در Cloudflare D1 ذخیره شد.':'اطلاعات عملیاتی پرونده در Cloudflare D1 ذخیره شد.');
+    await load();
+    return;
+   }
+   const {error}=await supabase.rpc('update_case_operational_data',{p_case_id:caseId,p_vessel_type:form.vesselType||null,p_unloading_date:dateDb(form.unloadingDate),p_warehouse_receipt_no:form.warehouseReceiptNo||null,p_warehouse_receipt_date:dateDb(form.warehouseReceiptDate),p_release_status:form.releaseStatus,p_cargo_count:num(form.cargoCount),p_cargo_count_unit:form.cargoCountUnit||null,p_cargo_description:form.cargoDescription||null,p_origin_country_code:form.originCountry||null,p_transaction_country_code:form.transactionCountry||null,p_delivery_term:form.deliveryTerm||null,p_invoice_amount:num(form.invoiceAmount),p_invoice_currency:form.invoiceCurrency||null,p_net_weight_kg:num(form.netWeight),p_gross_weight_kg:num(form.grossWeight),p_insurance_amount_irr:num(form.insuranceIrr),p_tariff_code:form.tariffCode||null,p_import_duty_rate:num(form.dutyRate)});
+   if(error)throw error;
+   if(form.billOfLading&&form.shippingLine&&form.vesselName){
+    const {error:e}=await supabase.rpc('update_shipment_maritime_data',{p_case_id:caseId,p_shipping_line:form.shippingLine,p_bill_of_lading_no:form.billOfLading,p_bill_of_lading_year:Number(form.billYear),p_vessel_name:form.vesselName,p_vessel_imo:null,p_vessel_flag_code:null,p_voyage_no:form.voyageNo||null,p_origin_port:form.originPort||null,p_destination_port:form.destinationPort||null,p_cargo_count:num(form.cargoCount),p_cargo_count_unit:form.cargoCountUnit||null,p_net_weight_kg:num(form.netWeight),p_gross_weight_kg:num(form.grossWeight),p_tally_no:null,p_release_invoice_no:null,p_release_invoice_date:null,p_release_status:form.releaseStatus,p_electronic_release_no:null,p_client_id:clientId||null});
+    if(e)throw e;
+    try{localStorage.setItem('customs_last_maritime',JSON.stringify({...form,clientId}))}catch{}
+   }
+   setMessage('اطلاعات پرونده ذخیره و با کشتیرانی همگام شد.');await load()
+  }catch(e:any){setMessage(e?.message||'خطا در ذخیره اطلاعات')}
+  finally{setBusy(false)}
+ };
  const applyPaste=()=>{const m:Record<string,string>={};paste.split(/\r?\n/).forEach(l=>{const x=l.match(/^\s*([^:=：]+?)\s*[:=：]\s*(.*?)\s*$/);if(x)m[x[1].trim()]=x[2].trim()});const get=(...keys:string[])=>Object.entries(m).find(([k])=>keys.some(x=>k.toLowerCase().includes(x.toLowerCase())))?.[1]||'';setForm(p=>({...p,shippingLine:get('کشتیرانی','shipping')||p.shippingLine,vesselName:get('کشتی','vessel')||p.vesselName,billOfLading:get('B/L','بارنامه','bill of lading')||p.billOfLading,voyageNo:get('voyage')||p.voyageNo,cargoCount:get('تعداد','quantity')||p.cargoCount,cargoCountUnit:get('واحد','unit')||p.cargoCountUnit,cargoDescription:get('شرح کالا','cargo description')||p.cargoDescription,originCountry:get('مبدأ','origin')||p.originCountry,transactionCountry:get('کشور معامله','transaction')||p.transactionCountry,deliveryTerm:get('اینکوترمز','incoterm')||p.deliveryTerm,invoiceAmount:get('فاکتور','invoice')||p.invoiceAmount,invoiceCurrency:get('ارز','currency')||p.invoiceCurrency,netWeight:get('وزن خالص','net weight')||p.netWeight,grossWeight:get('وزن ناخالص','gross weight')||p.grossWeight,insuranceIrr:get('بیمه ریالی','insurance')||p.insuranceIrr,tariffCode:get('HS','تعرفه')||p.tariffCode,dutyRate:get('حقوق ورودی','duty rate').replace('%','')||p.dutyRate,regNumber:get('ثبت سفارش','registration order')||p.regNumber,regDate:get('تاریخ ثبت سفارش','registration order date')||p.regDate,unloadingDate:get('تاریخ تخلیه','unloading date')||p.unloadingDate,warehouseReceiptNo:get('شماره قبض انبار','warehouse receipt')||p.warehouseReceiptNo}));setPaste('');setPasteOpen(false);setMessage('اطلاعات روی فرم عملیات اعمال شد؛ قبل از ذخیره کنترل کنید.')};
- const addOrder=async()=>{if(!orderForm.number.trim())return setMessage('شماره ثبت سفارش الزامی است.');if(!clientId&&!caseId)return setMessage('برای ثبت سفارش مستقل، صاحب کالا را انتخاب کنید.');setBusy(true);try{if(caseId){const {error}=await supabase.rpc('attach_registration_order',{p_case_id:caseId,p_order_number:orderForm.number.trim(),p_order_date:dateDb(orderForm.date),p_status:orderForm.status,p_tariff_code:orderForm.tariff||null,p_quantity:num(orderForm.quantity),p_quantity_unit:orderForm.unit||null,p_value_amount:num(orderForm.value),p_currency:orderForm.currency||null,p_notes:orderForm.notes||null});if(error)throw error;setMessage('ثبت سفارش به پرونده متصل شد.')}else{const {error}=await supabase.from('registration_orders').insert({client_id:clientId,order_number:orderForm.number.trim(),order_date:dateDb(orderForm.date),status:orderForm.status,tariff_code:orderForm.tariff||null,quantity:num(orderForm.quantity),quantity_unit:orderForm.unit||null,value_amount:num(orderForm.value),currency:orderForm.currency||null,notes:orderForm.notes||null});if(error)throw error;setMessage('ثبت سفارش مستقل برای صاحب کالا ثبت شد.')}setOrderForm({number:'',date:'',status:'received',tariff:'',quantity:'',unit:'',value:'',currency:'USD',notes:''});await load()}catch(e:any){setMessage(e?.message||'خطا در ثبت سفارش')}finally{setBusy(false)}};
+ const addOrder=async()=>{
+  if(!orderForm.number.trim())return setMessage('شماره ثبت سفارش الزامی است.');
+  if(!clientId)return setMessage('صاحب کالا را انتخاب کنید.');
+  if(cloudflareMode&&caseId)return setMessage('اتصال ثبت سفارش مادر به پرونده هنوز در API D1 تکمیل نشده؛ برای جلوگیری از ثبت مستقل و بدون اتصال، این عملیات متوقف شد.');
+  setBusy(true);
+  try{
+   if(cloudflareMode){
+    await cloudflareRegistrationOrdersApi.create({
+     client_id:clientId,order_number:orderForm.number.trim(),order_date:dateDb(orderForm.date),
+     status:orderForm.status==='active'?'verified':orderForm.status==='expired'?'cancelled':orderForm.status as any,
+     tariff_code:orderForm.tariff||null,quantity:num(orderForm.quantity),quantity_unit:orderForm.unit||null,
+     net_weight_kg:null,gross_weight_kg:null,value_amount:num(orderForm.value),
+     currency:orderForm.value.trim()?orderForm.currency:null,
+     bank_name:null,bank_branch:null,bank_branch_code:null,payment_instrument_code:null,notes:orderForm.notes||null,
+    });
+    setMessage('ثبت سفارش مستقل در Cloudflare D1 ثبت شد.');
+   }else if(caseId){
+    const {error}=await supabase.rpc('attach_registration_order',{p_case_id:caseId,p_order_number:orderForm.number.trim(),p_order_date:dateDb(orderForm.date),p_status:orderForm.status,p_tariff_code:orderForm.tariff||null,p_quantity:num(orderForm.quantity),p_quantity_unit:orderForm.unit||null,p_value_amount:num(orderForm.value),p_currency:orderForm.currency||null,p_notes:orderForm.notes||null});
+    if(error)throw error;setMessage('ثبت سفارش به پرونده متصل شد.')
+   }else{
+    const {error}=await supabase.from('registration_orders').insert({client_id:clientId,order_number:orderForm.number.trim(),order_date:dateDb(orderForm.date),status:orderForm.status,tariff_code:orderForm.tariff||null,quantity:num(orderForm.quantity),quantity_unit:orderForm.unit||null,value_amount:num(orderForm.value),currency:orderForm.currency||null,notes:orderForm.notes||null});
+    if(error)throw error;setMessage('ثبت سفارش مستقل برای صاحب کالا ثبت شد.')
+   }
+   setOrderForm({number:'',date:'',status:'received',tariff:'',quantity:'',unit:'',value:'',currency:'USD',notes:''});await load()
+  }catch(e:any){setMessage(e?.message||'خطا در ثبت سفارش')}
+  finally{setBusy(false)}
+ };
  const deleteOrder=async(id:string)=>{if(!window.confirm('این ثبت سفارش حذف شود؟'))return;setBusy(true);try{const{error}=await supabase.from('registration_orders').delete().eq('id',id);if(error)throw error;setMessage('ثبت سفارش حذف شد.');await load()}catch(e:any){setMessage(e?.message||'حذف انجام نشد')}finally{setBusy(false)}};
- const addPermit=async()=>{if(!caseId)return setMessage('ابتدا پرونده را انتخاب کنید.');if(!permitForm.type||!permitForm.authority)return setMessage('نوع مجوز و مرجع صادرکننده الزامی است.');setBusy(true);try{const{error}=await supabase.from('permits').insert({case_id:caseId,permit_type:permitForm.type.trim(),permit_number:permitForm.number.trim()||null,issuing_authority:permitForm.authority.trim(),status:permitForm.status,issued_at:permitForm.issued?new Date(permitForm.issued).toISOString():null,expires_at:permitForm.expires?new Date(permitForm.expires).toISOString():null});if(error)throw error;setPermitForm({type:'',number:'',authority:'',status:'pending',issued:'',expires:'',notes:''});setMessage('مجوز ثبت شد.');await load()}catch(e:any){setMessage(e?.message||'خطا در ثبت مجوز')}finally{setBusy(false)}};
- const deletePermit=async(id:string)=>{if(!window.confirm('مجوز حذف شود؟'))return;setBusy(true);try{const{error}=await supabase.from('permits').delete().eq('id',id);if(error)throw error;setMessage('مجوز حذف شد.');await load()}catch(e:any){setMessage(e?.message||'حذف انجام نشد')}finally{setBusy(false)}};
+ const addPermit=async()=>{
+  if(!caseId)return setMessage('ابتدا پرونده را انتخاب کنید.');
+  if(!permitForm.type||!permitForm.authority)return setMessage('نوع مجوز و مرجع صادرکننده الزامی است.');
+  setBusy(true);
+  try{
+   if(cloudflareMode){
+    await cloudflareCasesApi.createPermit(caseId,{
+     permit_type:permitForm.type.trim(),permit_number:permitForm.number.trim()||null,
+     issuing_authority:permitForm.authority.trim(),status:permitForm.status as any,
+     issued_at:permitForm.issued?new Date(permitForm.issued).toISOString():null,
+     expires_at:permitForm.expires?new Date(permitForm.expires).toISOString():null,
+    });
+   }else{
+    const {error}=await supabase.from('permits').insert({case_id:caseId,permit_type:permitForm.type.trim(),permit_number:permitForm.number.trim()||null,issuing_authority:permitForm.authority.trim(),status:permitForm.status,issued_at:permitForm.issued?new Date(permitForm.issued).toISOString():null,expires_at:permitForm.expires?new Date(permitForm.expires).toISOString():null});
+    if(error)throw error;
+   }
+   setPermitForm({type:'',number:'',authority:'',status:'pending',issued:'',expires:'',notes:''});
+   setMessage('مجوز ثبت شد.');await load()
+  }catch(e:any){setMessage(e?.message||'خطا در ثبت مجوز')}
+  finally{setBusy(false)}
+ };
+ const deletePermit=async(id:string)=>{
+  if(!window.confirm('مجوز حذف شود؟'))return;
+  setBusy(true);
+  try{
+   if(cloudflareMode)await cloudflareCasesApi.deletePermit(caseId,id);
+   else{
+    const {error}=await supabase.from('permits').delete().eq('id',id);
+    if(error)throw error;
+   }
+   setMessage('مجوز حذف شد.');await load()
+  }catch(e:any){setMessage(e?.message||'حذف انجام نشد')}
+  finally{setBusy(false)}
+ };
  const uploadDocument=async(e:React.ChangeEvent<HTMLInputElement>)=>{const file=e.target.files?.[0];e.target.value='';if(!file||!caseId)return;if(!['application/pdf','image/jpeg','image/png'].includes(file.type))return setMessage('فقط PDF/JPEG/PNG مجاز است.');if(file.size>15*1024*1024)return setMessage('حداکثر حجم فایل ۱۵MB است.');setBusy(true);try{const safe=file.name.replace(/[^\p{L}\p{N}._-]+/gu,'_');const path=`${caseId}/${makeCompatibleUUID()}-${safe}`;const{error:up}=await supabase.storage.from('customs_documents').upload(path,file,{contentType:file.type,upsert:false});if(up)throw up;const{error:ins}=await supabase.from('documents').insert({case_id:caseId,doc_type:docType,file_name:file.name,storage_path:path,mime_type:file.type,file_size_bytes:file.size,version:1});if(ins){await supabase.storage.from('customs_documents').remove([path]);throw ins}setMessage('سند با موفقیت بارگذاری شد.');await load()}catch(err:any){setMessage(err?.message||'خطا در بارگذاری سند')}finally{setBusy(false)}};
  const deleteDocument=async(id:string,path:string)=>{if(!window.confirm('این سند حذف شود؟'))return;setBusy(true);try{const{error}=await supabase.from('documents').delete().eq('id',id);if(error)throw error;await supabase.storage.from('customs_documents').remove([path]);setMessage('سند حذف شد.');await load()}catch(e:any){setMessage(e?.message||'حذف سند انجام نشد')}finally{setBusy(false)}};
- const valuation=async()=>{if(!caseId)return setMessage('ابتدا پرونده را انتخاب کنید.');const fx=num(val.fx),duty=num(val.duty);if(!fx||duty===null)return setMessage('نرخ ارز و حقوق ورودی را وارد کنید.');setBusy(true);try{const {data,error}=await supabase.rpc('calculate_case_valuation',{p_case_id:caseId,p_customs_fx_rate_irr:fx,p_import_duty_rate:duty,p_vat_rate:num(val.vat)||10});if(error)throw error;setValResult(data);setMessage('ارزش‌گذاری محاسبه شد.')}catch(e:any){setMessage(e?.message||'خطا در ارزش‌گذاری')}finally{setBusy(false)}};
+ const valuation=async()=>{
+  if(!caseId)return setMessage('ابتدا پرونده را انتخاب کنید.');
+  const fx=num(val.fx),duty=num(val.duty);
+  if(!fx||duty===null)return setMessage('نرخ ارز و حقوق ورودی را وارد کنید.');
+  setBusy(true);
+  try{
+   if(cloudflareMode){
+    const result=await cloudflareCasesApi.calculateValuation(caseId,{customs_fx_rate_irr:fx,import_duty_rate:duty,vat_rate:num(val.vat)??10});
+    setValResult(result.valuation);
+    setMessage('ارزش‌گذاری در Cloudflare D1 محاسبه و ثبت شد.');
+    await load();
+    return;
+   }
+   const {data,error}=await supabase.rpc('calculate_case_valuation',{p_case_id:caseId,p_customs_fx_rate_irr:fx,p_import_duty_rate:duty,p_vat_rate:num(val.vat)||10});
+   if(error)throw error;setValResult(data);setMessage('ارزش‌گذاری محاسبه شد.')
+  }catch(e:any){setMessage(e?.message||'خطا در ارزش‌گذاری')}
+  finally{setBusy(false)}
+ };
  const declaration=async()=>{if(!caseId||!decl.kottaj.trim())return setMessage('پرونده و کوتاژ الزامی است.');setBusy(true);try{const {error}=await supabase.rpc('register_declaration_workflow',{p_case_id:caseId,p_kottaj_number:decl.kottaj.trim(),p_declaration_date:new Date().toISOString(),p_customs_office_id:null,p_customs_path:decl.path||null,p_assessed_value_irr:null,p_total_duties_irr:null});if(error)throw error;setMessage('اظهار و کوتاژ ثبت شد.');await load()}catch(e:any){setMessage(e?.message||'خطا در ثبت اظهار')}finally{setBusy(false)}};
- const removeCase=async()=>{if(!caseId)return;if(!window.confirm('حذف کامل پرونده انجام شود؟ Audit و Status History باقی می‌مانند.'))return;setBusy(true);try{const {error}=await supabase.rpc('delete_case_workflow',{p_case_id:caseId});if(error)throw error;setCaseId('');setMessage('پرونده حذف شد؛ Audit/History باقی ماند.');await load()}catch(e:any){setMessage(e?.message||'خطا در حذف پرونده')}finally{setBusy(false)}};
+ const removeCase=async()=>{
+  if(cloudflareMode)return setMessage('حذف ایمن پرونده هنوز در API D1 پیاده‌سازی و آزمون نشده است؛ هیچ درخواستی ارسال نشد.');
+  if(!caseId)return;
+  if(!window.confirm('حذف کامل پرونده انجام شود؟ Audit و Status History باقی می‌مانند.'))return;
+  setBusy(true);
+  try{
+   const {error}=await supabase.rpc('delete_case_workflow',{p_case_id:caseId});
+   if(error)throw error;setCaseId('');setMessage('پرونده حذف شد؛ Audit/History باقی ماند.');await load()
+  }catch(e:any){setMessage(e?.message||'خطا در حذف پرونده')}
+  finally{setBusy(false)}
+ };
  const input=(k:string,label:string,dir='rtl')=><label key={k} className="text-xs text-slate-400">{label}<input value={form[k]||''} onChange={e=>set(k,e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5" dir={dir}/></label>;
  return <main className="operations-page min-h-screen bg-slate-950 text-slate-100 p-5 md:p-8" dir="rtl"><div className="max-w-7xl mx-auto">
   <header className="flex items-center justify-between gap-4 mb-6"><div><h1 className="text-2xl font-black">عملیات گمرکی / Customs Operations</h1><p className="text-sm text-slate-400 mt-2">یک پرونده، یک منبع اطلاعات؛ ثبت سفارش می‌تواند قبل یا بعد از ایجاد پرونده وارد شود.</p></div><Link to="/" className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900"><ArrowRight className="inline ml-2" size={16}/> صفحه اصلی</Link></header>
