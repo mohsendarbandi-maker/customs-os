@@ -318,7 +318,7 @@ const createCase = async (
   const registrationOrderNo = typeof parsed.registration_order_no === 'string'
     ? parsed.registration_order_no.trim() : '';
   if (!clientId || clientId.length > 128) return fail('CLIENT_REQUIRED', 422);
-  if (parsed.registration_order_no !== undefined &&
+  if (parsed.registration_order_no !== undefined && parsed.registration_order_no !== null &&
       (typeof parsed.registration_order_no !== 'string' || registrationOrderNo.length > 100)) {
     return fail('INVALID_REGISTRATION_ORDER_NUMBER', 422);
   }
