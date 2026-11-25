@@ -45,6 +45,42 @@ export type CloudflareCasePatch = Partial<Pick<CaseRecord,
   'warehouse_receipt_no' | 'release_status' | 'valuation_status'
 >>;
 
+
+export interface CasePermit {
+  id: string;
+  organization_id: string;
+  case_id: string;
+  permit_type: string;
+  permit_number: string | null;
+  issuing_authority: string;
+  status: 'pending' | 'approved' | 'rejected' | 'not_required';
+  issued_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export type CasePermitInput = Partial<Pick<CasePermit,
+  'permit_type' | 'permit_number' | 'issuing_authority' | 'status' | 'issued_at' | 'expires_at'
+>> & Pick<CasePermit, 'permit_type' | 'issuing_authority'>;
+const write = async <T>(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: Record<string, unknown>): Promise<T> => {
+  const response = await fetch(path, {
+    method,
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: body === undefined
+      ? { Accept: 'application/json' }
+      : { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let result: Record<string, unknown>;
+  try { result = await response.json() as Record<string, unknown>; }
+  catch { throw new CloudflareCasesApiError('INVALID_API_RESPONSE'); }
+  if (!response.ok) {
+    throw new CloudflareCasesApiError(typeof result.error === 'string' ? result.error : 'REQUEST_FAILED');
+  }
+  return result as T;
+};
+
 export class CloudflareCasesApiError extends Error {
   readonly code: string;
   constructor(code: string) {
@@ -53,7 +89,9 @@ export class CloudflareCasesApiError extends Error {
       : code === 'CASE_NOT_FOUND' ? 'پرونده پیدا نشد یا به آن دسترسی ندارید.'
       : code === 'INVALID_CASE_PATCH' || code === 'INVALID_RELEASE_STATUS' || code === 'INVALID_VALUATION_STATUS' || code === 'INVALID_CASE_NUMBER_VALUE' || code === 'INVALID_CASE_NUMBER' || code === 'GROSS_WEIGHT_BELOW_NET_WEIGHT' ? 'اطلاعات ویرایش پرونده معتبر نیست.'
       : code === 'CASE_NUMBER_EXISTS' ? 'شماره پرونده قبلاً در این سازمان ثبت شده است.'
-      : code === 'CASE_UPDATE_CONFLICT' ? 'پرونده هم‌زمان توسط کاربر دیگری تغییر کرده است؛ اطلاعات را دوباره بارگذاری کنید.'
+      : code === 'CASE_UPDATE_CONFLICT' || code === 'PERMIT_UPDATE_CONFLICT' || code === 'PERMIT_DELETE_CONFLICT' ? 'اطلاعات هم‌زمان توسط کاربر دیگری تغییر کرده است؛ دوباره بارگذاری کنید.'
+      : code === 'PERMIT_NOT_FOUND' ? 'مجوز پیدا نشد یا به این پرونده تعلق ندارد.'
+      : code === 'PERMIT_EXPIRY_BEFORE_ISSUE' || code === 'INVALID_PERMIT_INPUT' || code === 'INVALID_PERMIT_STATUS' || code === 'INVALID_PERMIT_DATE' ? 'اطلاعات مجوز یا تاریخ‌های آن معتبر نیست.'
       : 'دریافت اطلاعات پرونده ناموفق بود: ' + code);
     this.name = 'CloudflareCasesApiError'; this.code = code;
   }
@@ -77,6 +115,18 @@ export const cloudflareCasesApi = {
   },
   get: (id: string) => get<CaseDetailResponse>('/api/cases/' + encodeURIComponent(id)),
   history: (id: string) => get<CaseHistoryResponse>('/api/cases/' + encodeURIComponent(id) + '/history'),
+  permits: (caseId: string) => get<{ ok: true; permits: CasePermit[] }>(
+    '/api/cases/' + encodeURIComponent(caseId) + '/permits',
+  ),
+  createPermit: (caseId: string, input: CasePermitInput) => write<{ ok: true; permit: CasePermit }>(
+    '/api/cases/' + encodeURIComponent(caseId) + '/permits', 'POST', input as Record<string, unknown>,
+  ),
+  updatePermit: (caseId: string, permitId: string, patch: Partial<CasePermitInput>) => write<{ ok: true; permit: CasePermit }>(
+    '/api/cases/' + encodeURIComponent(caseId) + '/permits/' + encodeURIComponent(permitId), 'PATCH', patch as Record<string, unknown>,
+  ),
+  deletePermit: (caseId: string, permitId: string) => write<{ ok: true; deleted: boolean; permitId: string }>(
+    '/api/cases/' + encodeURIComponent(caseId) + '/permits/' + encodeURIComponent(permitId), 'DELETE',
+  ),
   update: async (id: string, patch: CloudflareCasePatch) => {
     const response = await fetch('/api/cases/' + encodeURIComponent(id), {
       method: 'PATCH',
