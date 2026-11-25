@@ -133,7 +133,7 @@ describe('Cloudflare D1 cases read API', () => {
 
   it('updates only allowlisted case operational fields within the active organization', async () => {
     const db = new FakeD1();
-    db.detail = { ...caseRow };
+    db.detail = { ...caseRow, organization_id: 'org-a' } as CaseRecord;
     const url = new URL('https://staging.example/api/cases/case-a');
     const response = await handleCasesApi(new Request(url, {
       method: 'PATCH',
@@ -173,7 +173,7 @@ describe('Cloudflare D1 cases read API', () => {
 
   it('returns a conflict and writes no audit event when the case changed after it was read', async () => {
     const db = new FakeD1();
-    db.detail = { ...caseRow };
+    db.detail = { ...caseRow, organization_id: 'org-a' } as CaseRecord;
     db.simulateCaseConflict = true;
     const url = new URL('https://staging.example/api/cases/case-a');
     const response = await handleCasesApi(new Request(url, {
