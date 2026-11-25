@@ -4,7 +4,7 @@ import {
   saveD1CustomsProcedureWorkflow,
 } from './cloudflareCustomsWorkflow';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('Cloudflare D1 customs procedure workflow client', () => {
   it('creates a first procedure workflow with the current state and stage', async () => {
