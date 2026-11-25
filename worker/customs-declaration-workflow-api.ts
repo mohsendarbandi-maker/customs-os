@@ -267,8 +267,7 @@ const SUPPORTED_PROCEDURE_REGIMES = new Set([
 ]);
 const WORKFLOW_STAGE_KEYS = new Set([
   'evaluation','expertise','cashier','loading_permit','exit','port_charges',
-  'abandoned','completed','documents','permits','declaration','valuation',
-  'loading','guarantee','use_period','re_export',
+  'abandoned','completed','documents','permits','declaration','valuation','loading',
 ]);
 const PROCEDURE_STAGE_KEYS = new Set([
   'documents','permits','declaration','valuation','loading','exit','completed',
