@@ -1,6 +1,7 @@
-import React,{useCallback,useEffect,useState}from'react';
+import React,{useCallback,useEffect,useRef,useState}from'react';
 import{AlertTriangle,RefreshCw,Save}from'lucide-react';
 import{supabase}from'../lib/supabase';
+import{cloneD1CustomsProcedureState,isD1CustomsWorkflowEnabled,readD1CustomsProcedureWorkflow,saveD1CustomsProcedureWorkflow}from'../lib/cloudflareCustomsWorkflow';
 import { CustomsWorkflowAuditHistory } from './CustomsWorkflowAuditHistory';
 
 type StageKey='documents'|'permits'|'declaration'|'valuation'|'loading'|'exit'|'completed';
@@ -43,7 +44,7 @@ const empty=()=>JSON.parse(JSON.stringify(defaults)) as State;
 const isJalaliDate=(value:string)=>{const v=digits(value).trim();const m=v.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);if(!m)return false;const month=Number(m[2]),day=Number(m[3]);return month>=1&&month<=12&&day>=1&&day<=(month<=6?31:month<=11?30:30);};
 const Label:React.FC<{children:React.ReactNode}>=({children})=><label className="block text-xs app-muted">{children}</label>;
 export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationId,userId,customsRegime,editable})=>{
- const[state,setState]=useState<State>(empty);const[stage,setStage]=useState<StageKey>('documents');const[savedStage,setSavedStage]=useState<StageKey>('documents');const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[error,setError]=useState('');const[message,setMessage]=useState('');
+ const[state,setState]=useState<State>(empty);const[stage,setStage]=useState<StageKey>('documents');const[savedStage,setSavedStage]=useState<StageKey>('documents');const[workflowExists,setWorkflowExists]=useState(false);const baseline=useRef<State>(empty());const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[error,setError]=useState('');const[message,setMessage]=useState('');
  const isTemp=isTemporary(customsRegime);
  const currentIndex=stages.findIndex(s=>s.key===stage);
  const patch=(key:string,value:any)=>setState((prev:State)=>({...prev,[stage]:{...(prev[stage]||{}),[key]:value}}));
@@ -51,11 +52,21 @@ export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationI
   if(!declarationId||!organizationId)return;
   setLoading(true);setError('');
   try{
-   const{data,error:e}=await supabase.from('customs_declaration_workflow').select('id,current_stage,procedure_state').eq('declaration_id',declarationId).eq('organization_id',organizationId).maybeSingle();
-   if(e)throw e;
-   const merged={...empty(),...(data?.procedure_state||{})};
-   setState(merged);
-   if(data?.current_stage&&stages.some(s=>s.key===data.current_stage)){setStage(data.current_stage as StageKey);setSavedStage(data.current_stage as StageKey)}
+   if(isD1CustomsWorkflowEnabled()){
+    const result=await readD1CustomsProcedureWorkflow(declarationId);
+    const workflow=result.workflow;
+    const merged={...empty(),...(workflow?.procedure_state||{})};
+    setState(merged);baseline.current=cloneD1CustomsProcedureState(merged);setWorkflowExists(!!workflow);
+    const current=workflow?.current_stage;
+    const valid=current&&stages.some(s=>s.key===current)?current as StageKey:'documents';
+    setStage(valid);setSavedStage(valid);
+   }else{
+    const{data,error:e}=await supabase.from('customs_declaration_workflow').select('id,current_stage,procedure_state').eq('declaration_id',declarationId).eq('organization_id',organizationId).maybeSingle();
+    if(e)throw e;
+    const merged={...empty(),...(data?.procedure_state||{})};
+    setState(merged);baseline.current=cloneD1CustomsProcedureState(merged);setWorkflowExists(!!data);
+    if(data?.current_stage&&stages.some(s=>s.key===data.current_stage)){setStage(data.current_stage as StageKey);setSavedStage(data.current_stage as StageKey)}
+   }
   }catch(e:any){setError(e?.message||'دریافت گردش‌کار انجام نشد')}finally{setLoading(false)}
  },[declarationId,organizationId]);
  useEffect(()=>{void load()},[load]);
@@ -79,10 +90,22 @@ export const CustomsExportWorkflow:React.FC<Props>=({declarationId,organizationI
   if(targetIndex>savedIndex){const blocked=stages.slice(savedIndex,targetIndex).flatMap(s=>validateStage(s.key).map(issue=>s.label+': '+issue));if(blocked.length){setError('برای ثبت پیشرفت، ابتدا این موارد را تکمیل کنید: '+blocked.join('، '));return}}
   setSaving(true);setError('');setMessage('');
   try{
-   const payload={organization_id:organizationId,declaration_id:declarationId,current_stage:nextStage,procedure_state:state,updated_by:userId||null};
-   const{error:e}=await supabase.from('customs_declaration_workflow').upsert(payload,{onConflict:'declaration_id'});
-   if(e)throw e;
-   setStage(nextStage);setSavedStage(nextStage);setMessage('گردش‌کار ذخیره شد. تغییرات در سابقه ممیزی ثبت می‌شود.');
+   if(isD1CustomsWorkflowEnabled()){
+    const saved=await saveD1CustomsProcedureWorkflow({
+     declarationId,workflowExists,currentStage:nextStage,savedStage,
+     procedureState:state,baseState:baseline.current
+    });
+    const merged={...empty(),...(saved.procedure_state||{})};
+    setWorkflowExists(true);setState(merged);baseline.current=cloneD1CustomsProcedureState(merged);
+    const actual=saved.current_stage as StageKey;
+    setStage(actual);setSavedStage(actual);
+   }else{
+    const payload={organization_id:organizationId,declaration_id:declarationId,current_stage:nextStage,procedure_state:state,updated_by:userId||null};
+    const{error:e}=await supabase.from('customs_declaration_workflow').upsert(payload,{onConflict:'declaration_id'});
+    if(e)throw e;
+    setStage(nextStage);setSavedStage(nextStage);
+   }
+   setMessage('گردش‌کار ذخیره شد. تغییرات در سابقه ممیزی ثبت می‌شود.');
   }catch(e:any){setError(e?.message||'ذخیره گردش‌کار انجام نشد')}finally{setSaving(false)}
  };
  const advance=async()=>{
