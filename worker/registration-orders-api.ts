@@ -192,6 +192,7 @@ const parseOrderInput = (raw: Record<string, unknown>): OrderInput | null => {
     (raw.net_weight_kg != null && raw.net_weight_kg !== '' && netWeightMilli == null) ||
     (raw.gross_weight_kg != null && raw.gross_weight_kg !== '' && grossWeightMilli == null) ||
     (raw.value_amount != null && raw.value_amount !== '' && valueAmountMilli == null) ||
+    (raw.case_id != null && caseId == null) ||
     (raw.order_date != null && orderDate == null) ||
     (raw.tariff_code != null && tariffCode == null) ||
     (raw.quantity_unit != null && quantityUnit == null) ||
@@ -490,8 +491,9 @@ const createOrUpdateOrder = async (
     const now = new Date().toISOString();
     const id = orderId || crypto.randomUUID();
     const after = {
-      id, organization_id: profile.organization_id, case_id: before?.case_id ?? input.case_id ?? null,
-      ...input, is_closed: false, closed_at: null, created_at: before?.created_at || now, updated_at: now,
+      ...input, id, organization_id: profile.organization_id,
+      case_id: before?.case_id ?? input.case_id ?? null,
+      is_closed: false, closed_at: null, created_at: before?.created_at || now, updated_at: now,
     };
     const statement = before
       ? db.prepare(
