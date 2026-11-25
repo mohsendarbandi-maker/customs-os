@@ -319,6 +319,7 @@ describe('Cloudflare D1 cases read API', () => {
     expect(body.readOnly).toBe(true);
     const shipmentQuery = db.queries.find(query => query.sql.includes('sc.registration_order_date_shamsi'));
     const permitQuery = db.queries.find(query => query.sql.includes('FROM permits WHERE case_id'));
+    expect(permitQuery?.sql).toContain('SELECT id,organization_id,case_id,permit_type');
     expect(permitQuery?.sql).toContain('organization_id=?');
     expect(permitQuery?.values).toEqual(['case-a', 'org-a']);
     expect(shipmentQuery?.sql).toContain('LEFT JOIN shipment_customs_data sc');
