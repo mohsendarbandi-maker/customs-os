@@ -18,6 +18,7 @@ export interface CasesListResponse {
 export interface CaseDetailResponse {
   ok: true; case: CaseRecord; shipments: Array<Record<string, unknown>>;
   declarations: Array<Record<string, unknown>>; documents: Array<Record<string, unknown>>;
+  permits: Array<Record<string, unknown>>;
   readOnly: true; workflowReadiness: 'not_included'; stageTransitions: 'not_supported';
 }
 export interface CaseStatusHistoryEvent {
