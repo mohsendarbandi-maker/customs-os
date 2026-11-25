@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Edit3, Plus, Save, Trash2, X } from 'lucide-react';
+import { CalendarDays, Edit3, Plus, Save, Trash2, X } from 'lucide-react';
 import {
   cloudflareCasesApi,
   type CasePermit,
   type CasePermitInput,
 } from '../lib/cloudflareCases';
 import { normalizeDigits, toJalali, zonedJalaliToDate } from '../lib/jalali';
+import { JalaliDateTimePicker } from '../features/reminders/JalaliDateTimePicker';
 
 type Props = {
   caseId: string;
@@ -32,6 +33,16 @@ const dateFromIso = (value: string | null) => {
   if (Number.isNaN(date.getTime())) return '';
   const jalali = toJalali(date);
   return jalali.year + '/' + pad(jalali.month) + '/' + pad(jalali.day);
+};
+const dateForPicker = (value: string) => {
+  const normalized = normalizeDigits(value.trim()).replace(/[.-]/g, '/');
+  const match = normalized.match(/^(\\d{4})\\/(\\d{1,2})\\/(\\d{1,2})$/);
+  if (!match) return new Date();
+  try {
+    return zonedJalaliToDate(Number(match[1]), Number(match[2]), Number(match[3]), 9, 0);
+  } catch {
+    return new Date();
+  }
 };
 const dateToIso = (value: string) => {
   const normalized = normalizeDigits(value.trim()).replace(/[.-]/g, '/');
@@ -61,6 +72,7 @@ export const CasePermitsPanel: React.FC<Props> = ({
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [dateTarget, setDateTarget] = useState<'issued_at' | 'expires_at' | null>(null);
 
   useEffect(() => { setItems(initialPermits); }, [initialPermits]);
 
@@ -196,10 +208,14 @@ export const CasePermitsPanel: React.FC<Props> = ({
           </select>
         </label>
         <label className="text-xs text-slate-400">تاریخ صدور (شمسی)
-          <input value={form.issued_at} onChange={event => setField('issued_at', event.target.value)} placeholder="۱۴۰۵/۰۸/۰۴" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-sm text-slate-100" dir="ltr"/>
+          <button type="button" onClick={() => setDateTarget('issued_at')} className="mt-1 flex w-full items-center justify-between rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-sm text-slate-100">
+            <span>{form.issued_at || 'انتخاب تاریخ شمسی'}</span><CalendarDays size={15} className="text-slate-400"/>
+          </button>
         </label>
         <label className="text-xs text-slate-400">تاریخ انقضا (شمسی)
-          <input value={form.expires_at} onChange={event => setField('expires_at', event.target.value)} placeholder="۱۴۰۵/۰۹/۰۴" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-sm text-slate-100" dir="ltr"/>
+          <button type="button" onClick={() => setDateTarget('expires_at')} className="mt-1 flex w-full items-center justify-between rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-sm text-slate-100">
+            <span>{form.expires_at || 'انتخاب تاریخ شمسی'}</span><CalendarDays size={15} className="text-slate-400"/>
+          </button>
         </label>
       </div>
       <div className="flex justify-end gap-2">
@@ -209,5 +225,17 @@ export const CasePermitsPanel: React.FC<Props> = ({
         </button>
       </div>
     </div>}
+    {dateTarget && <JalaliDateTimePicker
+      value={dateForPicker(form[dateTarget])}
+      allDay={true}
+      onAllDayChange={() => undefined}
+      language="fa"
+      onChange={date => {
+        const jalali = toJalali(date);
+        setField(dateTarget, jalali.year + '/' + pad(jalali.month) + '/' + pad(jalali.day));
+      }}
+      onClose={() => setDateTarget(null)}
+      onApply={() => setDateTarget(null)}
+    />}
   </section>;
 };
