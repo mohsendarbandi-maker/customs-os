@@ -136,18 +136,20 @@ def main() -> None:
         "workflow event update was not rejected",
     )
     expect_integrity_error(
-        lambda: connection.execute(
-            "DELETE FROM customs_declaration_workflow_events WHERE id=?",
-            (event_id,),
-        ),
-        "workflow event deletion was not rejected",
+        lambda: connection.execute("""
+          INSERT INTO customs_declaration_workflow (
+            id, organization_id, declaration_id, evaluation_state, expertise_state,
+            cashier_state, loading_permit_state, exit_state, port_charges_state, procedure_state
+          ) VALUES ('wrong-tenant', 'other-org', 'decl-1', '{}', '{}', '{}', '{}', '{}', '{}', '{}')
+        """),
+        "cross-organization workflow was accepted",
     )
     expect_integrity_error(
         lambda: connection.execute("""
           INSERT INTO customs_declaration_workflow (
             id, organization_id, declaration_id, evaluation_state, expertise_state,
             cashier_state, loading_permit_state, exit_state, port_charges_state, procedure_state
-          ) VALUES ('bad-json', 'org-1', 'decl-2', '{broken', '{}', '{}', '{}', '{}', '{}', '{}')
+          ) VALUES ('bad-json', 'org-1', 'decl-1', '{broken', '{}', '{}', '{}', '{}', '{}', '{}')
         """),
         "invalid JSON state was accepted",
     )
@@ -156,6 +158,16 @@ def main() -> None:
         "SELECT COUNT(*) FROM customs_declaration_workflow_events WHERE workflow_id='workflow-1'"
     ).fetchone()[0]
     assert count == 4, f"expected 4 immutable events, got {count}"
+
+    connection.execute("DELETE FROM customs_declarations WHERE id='decl-1'")
+    remaining_workflows = connection.execute(
+        "SELECT COUNT(*) FROM customs_declaration_workflow WHERE id='workflow-1'"
+    ).fetchone()[0]
+    remaining_events = connection.execute(
+        "SELECT COUNT(*) FROM customs_declaration_workflow_events WHERE workflow_id='workflow-1'"
+    ).fetchone()[0]
+    assert remaining_workflows == 0, "declaration deletion did not cascade to the workflow"
+    assert remaining_events == 0, "declaration deletion did not cascade to workflow audit events"
     print(json.dumps({
         "ok": True,
         "migration": MIGRATION.name,
@@ -165,7 +177,9 @@ def main() -> None:
             "before/after activity snapshot",
             "stage transition event",
             "rollback event classification",
-            "immutable event update/delete",
+            "immutable event updates",
+            "tenant isolation",
+            "declaration/workflow/event cascade deletion",
             "JSON state validation",
         ],
     }, ensure_ascii=False))
