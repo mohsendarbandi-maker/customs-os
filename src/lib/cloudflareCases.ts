@@ -6,6 +6,9 @@ export interface CaseRecord {
   warehouse_receipt_no: string | null; warehouse_receipt_date: string | null;
   release_status: string | null; valuation_status: string | null;
   unloading_date: string | null; vessel_type: string | null; customs_regime: string | null;
+  origin_country_code: string | null; transaction_country_code: string | null;
+  delivery_term: string | null; invoice_amount: number | null; invoice_currency: string | null;
+  insurance_amount_irr: number | null; tariff_code: string | null; import_duty_rate: number | null;
   display_name: string | null; created_at: string | null; updated_at: string | null;
   shipment_count: number; latest_shipment_id: string | null; shipment_display_name: string | null;
   bill_of_lading_no: string | null; vessel_name: string | null; kottaj_number: string | null;
@@ -42,7 +45,9 @@ export interface CaseHistoryResponse {
 export type CloudflareCasePatch = Partial<Pick<CaseRecord,
   'case_number' | 'registration_order_no' | 'proforma_no' | 'cargo_description' |
   'cargo_count' | 'cargo_count_unit' | 'net_weight_kg' | 'gross_weight_kg' |
-  'warehouse_receipt_no' | 'release_status' | 'valuation_status'
+  'warehouse_receipt_no' | 'warehouse_receipt_date' | 'unloading_date' | 'release_status' | 'valuation_status' |
+  'origin_country_code' | 'transaction_country_code' | 'delivery_term' | 'invoice_amount' |
+  'invoice_currency' | 'insurance_amount_irr' | 'tariff_code' | 'import_duty_rate'
 >>;
 
 
