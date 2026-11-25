@@ -204,8 +204,3 @@ BEGIN
   SELECT RAISE(ABORT, 'workflow audit events are immutable');
 END;
 
-CREATE TRIGGER IF NOT EXISTS customs_declaration_workflow_events_no_delete
-BEFORE DELETE ON customs_declaration_workflow_events
-BEGIN
-  SELECT RAISE(ABORT, 'workflow audit events are immutable');
-END;
