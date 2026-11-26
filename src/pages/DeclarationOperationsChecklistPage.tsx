@@ -151,7 +151,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
 
   }catch(e:any){setError(e?.message||'دریافت چک‌لیست عملیات گمرکی انجام نشد')}
   finally{setBusy(false)}
- },[canEdit,declarationId,profile?.organization_id]);
+ },[canEdit,declarationId,profile?.organization_id,useCloudflare]);
 
  useEffect(()=>{void load()},[load]);
  useEffect(()=>{
@@ -265,13 +265,13 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   {decl?.customs_regime==='import_definitive'&&<CustomsDeclarationWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} customsPath={decl.customs_path||''} editable={canEdit}/>}
   {decl&&['export_definitive','temporary_export'].includes(decl.customs_regime||'')&&<CustomsExportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
   {decl&&['import_temporary','temporary_processing'].includes(decl.customs_regime||'')&&<CustomsTemporaryImportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
-  {decl&&['external_transit','internal_transit','re_import','re_export'].includes(decl.customs_regime||'')&&<CustomsTransitReimportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
-  {decl&&['cabotage','customs_warehouse','free_zone','other'].includes(decl.customs_regime||'')&&<CustomsOtherRegimeWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||'other'} editable={canEdit}/>}
+  {!useCloudflare&&decl&&['external_transit','internal_transit','re_import','re_export'].includes(decl.customs_regime||'')&&<CustomsTransitReimportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
+  {!useCloudflare&&decl&&['cabotage','customs_warehouse','free_zone','other'].includes(decl.customs_regime||'')&&<CustomsOtherRegimeWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||'other'} editable={canEdit}/>}
 
-  {decl&&decl.customs_regime!=='import_definitive'&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5 space-y-3">
+  {!useCloudflare&&decl&&decl.customs_regime!=='import_definitive'&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5 space-y-3">
    <div><h2 className="font-black">مرکز اسناد هوشمند عملیات گمرکی</h2><p className="mt-1 text-xs app-muted">برای هر باکس، فایل مربوط را جداگانه انتخاب و استخراج را اجرا کنید. نتایج به همان اظهارنامه و باکس اختصاصی ذخیره می‌شوند.</p></div>
    <div className="flex flex-wrap gap-2">{Object.entries(CUSTOMS_OPERATION_SECTIONS).map(([key,config])=><button type="button" key={key} onClick={()=>setAiDocumentSection(key as CustomsOperationSection)} className={'rounded-lg border px-3 py-2 text-xs font-bold '+(aiDocumentSection===key?'border-[var(--primary)] bg-[var(--primary)] text-white':'app-border bg-[var(--surface-2)]')}>{config.label}</button>)}</div>
-   <CustomsStageDocumentAI declarationId={decl.id} shipmentId={decl.shipment_id||''} organizationId={profile?.organization_id||''} section={aiDocumentSection} editable={canEdit}/>
+   {!useCloudflare&&<CustomsStageDocumentAI declarationId={decl.id} shipmentId={decl.shipment_id||''} organizationId={profile?.organization_id||''} section={aiDocumentSection} editable={canEdit}/>}
   </section>}
 
   <section className="rounded-2xl border app-border bg-[var(--surface)] overflow-hidden">
@@ -295,7 +295,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
     </div>;
    })}
    <div className="p-5"><button disabled={busy||!canEdit} onClick={()=>void complete()} className="rounded-xl bg-[var(--primary)] text-white px-6 py-3 font-bold disabled:opacity-40">{busy?<><Loader2 className="inline ml-2 animate-spin" size={16}/>در حال انتقال...</>:pending.length===0?'تکمیل عملیات گمرکی و ورود به مرحله ۵ · درب خروج':'ورود به مرحله ۵ با ثبت هشدار موارد ناقص'}</button>{pending.length>0&&<div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs"><div className="font-bold mb-2 flex items-center gap-2"><AlertTriangle size={14}/> موارد ناقص قبل از خروج</div>{pending.map(x=><div key={x.id} className="py-1">{x.item_label}{x.note?` — ${x.note}`:''}</div>)}</div>}</div>
-  {decl?.shipment_id&&<ShipmentStageCosts stage="STAGE_4_CUSTOMS_OPERATIONS" shipmentId={decl.shipment_id}/>}
+  {decl?.shipment_id&&!useCloudflare&&<ShipmentStageCosts stage="STAGE_4_CUSTOMS_OPERATIONS" shipmentId={decl.shipment_id}/> }
 </section>
  </div></main>;
 };
