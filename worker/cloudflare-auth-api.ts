@@ -503,3 +503,353 @@ async function login(
     await recordIpFailure(db, ipHash, now);
     return fail('INVALID_CREDENTIALS', 401);
   }
+
+  if (!credential || credential.password_iterations !== PASSWORD_ITERATIONS) {
+    // Execute the same keyed proof path for unknown/legacy accounts before returning
+    // a generic credential error. This is not a password verifier for an account.
+    await verifyAuthProof(
+      new Uint8Array(32),
+      proof,
+      email,
+      'login',
+      challengeId,
+      challenge,
+    );
+    await recordIpFailure(db, ipHash, now);
+    return fail('INVALID_CREDENTIALS', 401);
+  }
+
+  const verifier = await decryptStoredVerifier(env.AUTH_PEPPER!, credential);
+  const valid = await verifyAuthProof(verifier, proof, email, 'login', challengeId, challenge);
+  if (!valid || (credential.locked_until && Date.parse(credential.locked_until) > now)) {
+    if (!valid) {
+      const failures = Number(credential.failed_attempts || 0) + 1;
+      const lockedUntil = failures >= USER_LOCK_THRESHOLD
+        ? new Date(now + USER_LOCK_MS).toISOString()
+        : null;
+      await db.prepare(
+        'UPDATE customs_os_auth_credentials SET failed_attempts = ?, locked_until = ?, updated_at = ? WHERE user_id = ?',
+      ).bind(failures, lockedUntil, nowIso, credential.user_id).run();
+    }
+    await recordIpFailure(db, ipHash, now);
+    return fail('INVALID_CREDENTIALS', 401);
+  }
+
+  const profileRow = await db.prepare(
+    'SELECT user_id AS id, organization_id, role, client_id, full_name, phone, is_active, verified_at ' +
+    'FROM customs_os_auth_principals WHERE user_id = ? LIMIT 1',
+  ).bind(credential.user_id).first<ProfileRow>();
+  const profile = parseProfile(profileRow, credential.user_id);
+  if (!profile) return fail('ACCOUNT_NOT_READY_OR_DISABLED', 403);
+
+  const token = secureToken();
+  const tokenHash = await sha256(token);
+  const sessionId = crypto.randomUUID();
+  const createdAt = new Date(now).toISOString();
+  const expiresAt = new Date(now + SESSION_SECONDS * 1000).toISOString();
+  const label = deviceLabel((request.headers.get('user-agent') || '').slice(0, 500));
+
+  await db.batch([
+    db.prepare(
+      'UPDATE customs_os_auth_credentials SET failed_attempts = 0, locked_until = NULL, updated_at = ? WHERE user_id = ?',
+    ).bind(createdAt, credential.user_id),
+    db.prepare(
+      'INSERT INTO customs_os_auth_sessions ' +
+      '(session_id, user_id, token_hash, created_at, expires_at, last_seen_at, device_label, app_origin) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).bind(sessionId, credential.user_id, tokenHash, createdAt, expiresAt, createdAt, label, url.origin),
+    db.prepare(
+      'DELETE FROM customs_os_auth_login_attempts WHERE ip_hash = ?',
+    ).bind(ipHash),
+    db.prepare(
+      'INSERT INTO customs_os_auth_audit_events ' +
+      '(id, actor_user_id, target_user_id, event_type, session_id, request_id, details_json, created_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).bind(
+      crypto.randomUUID(), credential.user_id, credential.user_id, 'login',
+      sessionId, requestId(request), JSON.stringify({ device_label: label }), createdAt,
+    ),
+  ]);
+
+  return json(responseForSession({
+    userId: credential.user_id,
+    email: credential.email_normalized,
+    profile,
+    sessionId,
+    passwordResetRequired: Boolean(credential.password_reset_required),
+  }), 200, { 'set-cookie': sessionCookie(url, token) });
+}
+
+async function getSession(request: Request, db: CloudflareAuthDatabase, url: URL) {
+  if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405);
+  const token = readCookie(request);
+  if (!token) return json({ authenticated: false });
+  const active = await readActiveSession(db, token, new Date().toISOString());
+  if (!active) return json({ authenticated: false }, 200, { 'set-cookie': sessionCookie(url, '', 0) });
+  const credential = await db.prepare(
+    'SELECT password_reset_required FROM customs_os_auth_credentials WHERE user_id = ? LIMIT 1',
+  ).bind(active.userId).first<{ password_reset_required: number | boolean }>();
+  return json(responseForSession({
+    ...active,
+    passwordResetRequired: Boolean(credential?.password_reset_required),
+  }));
+}
+
+async function logout(request: Request, db: CloudflareAuthDatabase, url: URL) {
+  if (request.method !== 'POST') return fail('METHOD_NOT_ALLOWED', 405);
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  const token = readCookie(request);
+  if (token) {
+    const active = await readActiveSession(db, token, new Date().toISOString());
+    if (active) {
+      const now = new Date().toISOString();
+      await db.prepare(
+        'UPDATE customs_os_auth_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL',
+      ).bind(now, active.tokenHash).run();
+      await writeEvent(db, active.userId, active.userId, 'logout', active.sessionId, request, {
+        scope: 'current_device',
+      });
+    }
+  }
+  return json({ ok: true }, 200, { 'set-cookie': sessionCookie(url, '', 0) });
+}
+
+async function createPasswordChangeChallenge(
+  request: Request,
+  db: CloudflareAuthDatabase,
+  url: URL,
+  env: CloudflareAuthEnvironment,
+) {
+  if (request.method !== 'POST') return fail('METHOD_NOT_ALLOWED', 405);
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  if (!isValidPepper(env.AUTH_PEPPER)) return fail('AUTH_NOT_CONFIGURED', 503);
+  const active = await readActiveSession(db, readCookie(request), new Date().toISOString());
+  if (!active) return fail('UNAUTHORIZED', 401);
+  const credential = await db.prepare(
+    'SELECT password_salt, password_iterations FROM customs_os_auth_credentials WHERE user_id = ? LIMIT 1',
+  ).bind(active.userId).first<{ password_salt: string; password_iterations: number }>();
+  if (!credential || !/^[0-9a-f]{64}$/i.test(credential.password_salt) ||
+      credential.password_iterations !== PASSWORD_ITERATIONS) return fail('AUTH_STORAGE_UNAVAILABLE', 503);
+  const ipHash = await sha256(request.headers.get('cf-connecting-ip') || 'unknown');
+  const challenge = await createChallengeRecord(
+    db, active.email, 'password_change', ipHash, active.userId,
+  );
+  return json({
+    ...challenge,
+    salt: credential.password_salt,
+    iterations: credential.password_iterations,
+  });
+}
+
+async function changePassword(
+  request: Request,
+  db: CloudflareAuthDatabase,
+  url: URL,
+  env: CloudflareAuthEnvironment,
+) {
+  if (request.method !== 'POST') return fail('METHOD_NOT_ALLOWED', 405);
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  if (!isValidPepper(env.AUTH_PEPPER)) return fail('AUTH_NOT_CONFIGURED', 503);
+  const active = await readActiveSession(db, readCookie(request), new Date().toISOString());
+  if (!active) return fail('UNAUTHORIZED', 401);
+
+  let body: {
+    challenge_id?: unknown;
+    challenge?: unknown;
+    proof?: unknown;
+    new_verifier?: unknown;
+    new_salt?: unknown;
+    new_iterations?: unknown;
+  };
+  try {
+    const parsed: unknown = await request.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return fail('INVALID_REQUEST', 400);
+    body = parsed as typeof body;
+  } catch { return fail('INVALID_REQUEST', 400); }
+
+  const challengeId = typeof body.challenge_id === 'string' ? body.challenge_id : '';
+  const challenge = typeof body.challenge === 'string' ? body.challenge : '';
+  const proof = typeof body.proof === 'string' ? body.proof : '';
+  const newVerifier = typeof body.new_verifier === 'string' ? body.new_verifier : '';
+  const newSalt = typeof body.new_salt === 'string' ? body.new_salt : '';
+  const newIterations = Number(body.new_iterations);
+  if (!UUID_PATTERN.test(challengeId) || !/^[0-9a-f]{64}$/i.test(challenge) ||
+      !/^[0-9a-f]{64}$/i.test(proof) || !/^[0-9a-f]{64}$/i.test(newVerifier) ||
+      !/^[0-9a-f]{64}$/i.test(newSalt) || newIterations !== PASSWORD_ITERATIONS) {
+    return fail('INVALID_REQUEST', 400);
+  }
+
+  const now = new Date().toISOString();
+  const ipHash = await sha256(request.headers.get('cf-connecting-ip') || 'unknown');
+  const consumed = await consumeChallenge(
+    db, challengeId, challenge, active.email, 'password_change', ipHash, active.userId, now,
+  );
+  if (!consumed) return fail('CURRENT_PASSWORD_INVALID', 401);
+
+  const credential = await db.prepare(
+    'SELECT user_id, email_normalized, password_verifier_encrypted, password_verifier_iv, password_salt, password_iterations ' +
+    'FROM customs_os_auth_credentials WHERE user_id = ? LIMIT 1',
+  ).bind(active.userId).first<CredentialRow>();
+  if (!credential || credential.password_iterations !== PASSWORD_ITERATIONS) {
+    return fail('AUTH_STORAGE_UNAVAILABLE', 503);
+  }
+  const verifier = await decryptStoredVerifier(env.AUTH_PEPPER!, credential);
+  if (!await verifyAuthProof(
+    verifier, proof, active.email, 'password_change', challengeId, challenge,
+  )) return fail('CURRENT_PASSWORD_INVALID', 401);
+
+  const encrypted = await encryptCloudflareVerifierForStorage(
+    env.AUTH_PEPPER!,
+    active.userId,
+    active.email,
+    newVerifier,
+  );
+  const token = secureToken();
+  const tokenHash = await sha256(token);
+  const expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000).toISOString();
+  const userAgent = (request.headers.get('user-agent') || '').slice(0, 500);
+  const label = deviceLabel(userAgent);
+
+  await db.batch([
+    db.prepare(
+      'UPDATE customs_os_auth_credentials SET password_verifier_encrypted = ?, password_verifier_iv = ?, ' +
+      'password_salt = ?, password_iterations = ?, password_version = password_version + 1, ' +
+      'failed_attempts = 0, locked_until = NULL, password_reset_required = 0, ' +
+      'password_changed_at = ?, updated_at = ? WHERE user_id = ?',
+    ).bind(
+      encrypted.password_verifier_encrypted,
+      encrypted.password_verifier_iv,
+      newSalt,
+      newIterations,
+      now,
+      now,
+      active.userId,
+    ),
+    db.prepare(
+      'UPDATE customs_os_auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL AND token_hash <> ?',
+    ).bind(now, active.userId, active.tokenHash),
+    db.prepare(
+      'UPDATE customs_os_auth_sessions SET token_hash = ?, created_at = ?, expires_at = ?, last_seen_at = ?, device_label = ? ' +
+      'WHERE token_hash = ? AND revoked_at IS NULL',
+    ).bind(tokenHash, now, expiresAt, now, label, active.tokenHash),
+    db.prepare(
+      'INSERT INTO customs_os_auth_audit_events ' +
+      '(id, actor_user_id, target_user_id, event_type, session_id, request_id, details_json, created_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).bind(
+      crypto.randomUUID(), active.userId, active.userId, 'password_changed',
+      active.sessionId, requestId(request), JSON.stringify({ other_sessions_revoked: true }), now,
+    ),
+  ]);
+
+  return json({ ok: true, password_reset_required: false }, 200, {
+    'set-cookie': sessionCookie(url, token),
+  });
+}
+
+async function devices(request: Request, db: CloudflareAuthDatabase, url: URL) {
+  const active = await readActiveSession(db, readCookie(request), new Date().toISOString());
+  if (!active) return fail('UNAUTHORIZED', 401);
+
+  if (request.method === 'GET' && url.pathname === '/api/auth/devices') {
+    const rows = await db.prepare(
+      'SELECT session_id, device_label, app_origin, created_at, last_seen_at, ' +
+      'CASE WHEN token_hash = ? THEN 1 ELSE 0 END AS is_current ' +
+      'FROM customs_os_auth_sessions WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ? ' +
+      'ORDER BY COALESCE(last_seen_at, created_at) DESC, created_at DESC LIMIT 50',
+    ).bind(active.tokenHash, active.userId, new Date().toISOString()).all<{
+      session_id: string;
+      device_label: string | null;
+      app_origin: string | null;
+      created_at: string;
+      last_seen_at: string | null;
+      is_current: number | boolean;
+    }>();
+    return json({
+      ok: true,
+      sessions: rows.results.map(row => ({
+        session_id: row.session_id,
+        device_label: row.device_label || 'دستگاه نامشخص',
+        app_origin: row.app_origin,
+        created_at: row.created_at,
+        last_active_at: row.last_seen_at || row.created_at,
+        is_current: Boolean(row.is_current),
+      })),
+      limit: 50,
+    });
+  }
+
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  if (request.method === 'POST' && url.pathname === '/api/auth/devices/revoke-others') {
+    const now = new Date().toISOString();
+    const results = await db.batch([
+      db.prepare(
+        'UPDATE customs_os_auth_sessions SET revoked_at = ? WHERE user_id = ? AND token_hash <> ? ' +
+        'AND revoked_at IS NULL AND expires_at > ?',
+      ).bind(now, active.userId, active.tokenHash, now),
+    ]);
+    const changed = typeof results[0] === 'object' && results[0] !== null
+      ? Number(((results[0] as { meta?: { changes?: number } }).meta?.changes) || 0)
+      : 0;
+    if (changed > 0) {
+      await writeEvent(db, active.userId, active.userId, 'other_sessions_revoked', null, request, {
+        revoked_count: changed,
+      });
+    }
+    return json({ ok: true, revoked_count: changed });
+  }
+
+  const match = url.pathname.match(/^\/api\/auth\/devices\/([0-9a-f-]{36})$/i);
+  if (request.method === 'DELETE' && match) {
+    const targetId = match[1];
+    if (targetId === active.sessionId) return fail('CANNOT_REVOKE_CURRENT_SESSION', 409);
+    const target = await db.prepare(
+      'SELECT session_id FROM customs_os_auth_sessions WHERE user_id = ? AND session_id = ? ' +
+      'AND revoked_at IS NULL AND expires_at > ? LIMIT 1',
+    ).bind(active.userId, targetId, new Date().toISOString()).first<{ session_id: string }>();
+    if (!target) return fail('DEVICE_SESSION_NOT_FOUND', 404);
+    const result = await db.prepare(
+      'UPDATE customs_os_auth_sessions SET revoked_at = ? WHERE user_id = ? AND session_id = ? AND revoked_at IS NULL',
+    ).bind(new Date().toISOString(), active.userId, targetId).run();
+    const changed = Number(result.meta?.changes || 0);
+    if (changed > 0) {
+      await writeEvent(db, active.userId, active.userId, 'session_revoked', targetId, request, {
+        scope: 'single_device',
+      });
+    }
+    return changed > 0
+      ? json({ ok: true, revoked_count: changed })
+      : fail('DEVICE_SESSION_NOT_FOUND', 404);
+  }
+
+  return fail('METHOD_NOT_ALLOWED', 405);
+}
+
+export async function handleCloudflareAuthApi(
+  request: Request,
+  db: CloudflareAuthDatabase,
+  url: URL,
+  env: CloudflareAuthEnvironment = {},
+): Promise<Response> {
+  try {
+    if (url.pathname === '/api/auth/challenge') return await createLoginChallenge(request, db, url, env);
+    if (url.pathname === '/api/auth/login') return await login(request, db, url, env);
+    if (url.pathname === '/api/auth/session') return await getSession(request, db, url);
+    if (url.pathname === '/api/auth/logout') return await logout(request, db, url);
+    if (url.pathname === '/api/auth/password/challenge') {
+      return await createPasswordChangeChallenge(request, db, url, env);
+    }
+    if (url.pathname === '/api/auth/password/change') {
+      return await changePassword(request, db, url, env);
+    }
+    if (url.pathname === '/api/auth/devices' || url.pathname.startsWith('/api/auth/devices/')) {
+      return await devices(request, db, url);
+    }
+    return fail('NOT_FOUND', 404);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'AUTH_PEPPER_NOT_CONFIGURED') {
+      return fail('AUTH_NOT_CONFIGURED', 503);
+    }
+    return fail('AUTH_STORAGE_UNAVAILABLE', 503);
+  }
+}
