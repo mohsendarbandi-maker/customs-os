@@ -84,6 +84,12 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Unit tests
         run: npm test
+      - name: Verify Cloudflare D1 case permits migration with SQLite
+        run: python3 scripts/verify-case-permits-d1-migration.py
+      - name: Verify Cloudflare D1 declaration exit migration with SQLite
+        run: python3 scripts/verify-declaration-exit-d1-migration.py
+      - name: Verify Cloudflare D1 case exit operations migration with SQLite
+        run: python3 scripts/verify-case-exit-d1-migration.py
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
