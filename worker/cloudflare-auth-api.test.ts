@@ -67,66 +67,65 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
   audit: Array<{ event_type: string; target_user_id: string }> = [];
 
   prepare(sql: string): CloudflareAuthStatement {
-    const db = this;
     let values: unknown[] = [];
-    return {
-      bind(...input: unknown[]) { values = input; return this; },
-      async first<T>() {
+    const statement: CloudflareAuthStatement = {
+      bind: (...input: unknown[]) => { values = input; return statement; },
+      first: async <T>() => {
         if (sql.includes('FROM customs_os_auth_login_attempts')) {
-          return (db.attempts.get(String(values[0])) ?? null) as T | null;
+          return (this.attempts.get(String(values[0])) ?? null) as T | null;
         }
         if (sql.includes('FROM customs_os_auth_credentials WHERE email_normalized')) {
           const email = String(values[0]);
-          if (!db.credential || db.credential.email_normalized !== email) return null;
-          if (sql.includes('password_verifier_encrypted')) return db.credential as T;
+          if (!this.credential || this.credential.email_normalized !== email) return null;
+          if (sql.includes('password_verifier_encrypted')) return this.credential as T;
           return {
-            user_id: db.credential.user_id,
-            email_normalized: db.credential.email_normalized,
-            password_salt: db.credential.password_salt,
-            password_iterations: db.credential.password_iterations,
+            user_id: this.credential.user_id,
+            email_normalized: this.credential.email_normalized,
+            password_salt: this.credential.password_salt,
+            password_iterations: this.credential.password_iterations,
           } as T;
         }
         if (sql.includes('FROM customs_os_auth_credentials WHERE user_id')) {
-          if (!db.credential || db.credential.user_id !== values[0]) return null;
-          return db.credential as T;
+          if (!this.credential || this.credential.user_id !== values[0]) return null;
+          return this.credential as T;
         }
         if (sql.includes('FROM customs_os_auth_principals WHERE user_id')) {
-          return (db.principal?.user_id === values[0]
-            ? { ...db.principal, id: db.principal.user_id }
+          return (this.principal?.user_id === values[0]
+            ? { ...this.principal, id: this.principal.user_id }
             : null) as T | null;
         }
         if (sql.includes('FROM customs_os_auth_sessions s')) {
           const [tokenHash, nowIso] = values as string[];
-          const session = db.sessions.find(item =>
+          const session = this.sessions.find(item =>
             item.token_hash === tokenHash && item.revoked_at === null && item.expires_at > nowIso
           );
-          if (!session || !db.credential || !db.principal) return null;
+          if (!session || !this.credential || !this.principal) return null;
           return {
             session_id: session.session_id,
             user_id: session.user_id,
             token_hash: session.token_hash,
             expires_at: session.expires_at,
             last_seen_at: session.last_seen_at,
-            email_normalized: db.credential.email_normalized,
-            id: db.principal.user_id,
-            organization_id: db.principal.organization_id,
-            role: db.principal.role,
-            client_id: db.principal.client_id,
-            full_name: db.principal.full_name,
-            phone: db.principal.phone,
-            is_active: db.principal.is_active,
-            verified_at: db.principal.verified_at,
+            email_normalized: this.credential.email_normalized,
+            id: this.principal.user_id,
+            organization_id: this.principal.organization_id,
+            role: this.principal.role,
+            client_id: this.principal.client_id,
+            full_name: this.principal.full_name,
+            phone: this.principal.phone,
+            is_active: this.principal.is_active,
+            verified_at: this.principal.verified_at,
           } as T;
         }
         if (sql.includes('SELECT password_reset_required FROM customs_os_auth_credentials')) {
-          return db.credential as T | null;
+          return this.credential as T | null;
         }
         throw new Error('Unexpected auth D1 first query: ' + sql);
       },
-      async all<T>() {
+      all: async <T>() => {
         if (sql.includes('FROM customs_os_auth_sessions WHERE user_id')) {
           const [currentHash, userId, now] = values as string[];
-          const results = db.sessions
+          const results = this.sessions
             .filter(item => item.user_id === userId && !item.revoked_at && item.expires_at > now)
             .map(item => ({
               session_id: item.session_id,
@@ -140,9 +139,9 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
         }
         throw new Error('Unexpected auth D1 all query: ' + sql);
       },
-      async run() {
+      run: async () => {
         if (sql.startsWith('DELETE FROM customs_os_auth_challenges')) {
-          db.challenges = db.challenges.filter(item =>
+          this.challenges = this.challenges.filter(item =>
             item.expires_at > String(values[0]) && item.consumed_at === null
           );
           return { meta: { changes: 1 } };
@@ -151,7 +150,7 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
           const [challenge_id, user_id, email_normalized, purpose, challenge_hash, ip_hash, created_at, expires_at] = values as [
             string, string | null, string, 'login' | 'password_change', string, string, string, string
           ];
-          db.challenges.push({
+          this.challenges.push({
             challenge_id, user_id, email_normalized, purpose, challenge_hash, ip_hash,
             created_at, expires_at, consumed_at: null,
           });
@@ -161,7 +160,7 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
           const [consumedAt, challengeId, email, purpose, challengeHash, ipHash, now, userId] = values as [
             string, string, string, string, string, string, string, string | null
           ];
-          const challenge = db.challenges.find(item =>
+          const challenge = this.challenges.find(item =>
             item.challenge_id === challengeId &&
             item.email_normalized === email &&
             item.purpose === purpose &&
@@ -175,61 +174,62 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
           return { meta: { changes: challenge ? 1 : 0 } };
         }
         if (sql.startsWith('UPDATE customs_os_auth_credentials SET failed_attempts = ?')) {
-          if (db.credential) {
-            db.credential.failed_attempts = Number(values[0]);
-            db.credential.locked_until = values[1] as string | null;
+          if (this.credential) {
+            this.credential.failed_attempts = Number(values[0]);
+            this.credential.locked_until = values[1] as string | null;
           }
-          return { meta: { changes: db.credential ? 1 : 0 } };
+          return { meta: { changes: this.credential ? 1 : 0 } };
         }
         if (sql.startsWith('UPDATE customs_os_auth_credentials SET failed_attempts = 0')) {
-          if (db.credential) {
-            db.credential.failed_attempts = 0;
-            db.credential.locked_until = null;
+          if (this.credential) {
+            this.credential.failed_attempts = 0;
+            this.credential.locked_until = null;
           }
-          return { meta: { changes: db.credential ? 1 : 0 } };
+          return { meta: { changes: this.credential ? 1 : 0 } };
         }
         if (sql.startsWith('INSERT INTO customs_os_auth_sessions')) {
           const [session_id, user_id, token_hash, created_at, expires_at, last_seen_at, device_label, app_origin] = values as string[];
-          db.sessions.push({
+          this.sessions.push({
             session_id, user_id, token_hash, created_at, expires_at, last_seen_at,
             revoked_at: null, device_label, app_origin,
           });
           return { meta: { changes: 1 } };
         }
         if (sql.startsWith('DELETE FROM customs_os_auth_login_attempts')) {
-          db.attempts.delete(String(values[0]));
+          this.attempts.delete(String(values[0]));
           return { meta: { changes: 1 } };
         }
         if (sql.startsWith('INSERT INTO customs_os_auth_login_attempts')) {
           const [ipHash, windowStartedAt] = values as string[];
-          db.attempts.set(ipHash, { window_started_at: windowStartedAt, attempts: 1 });
+          this.attempts.set(ipHash, { window_started_at: windowStartedAt, attempts: 1 });
           return { meta: { changes: 1 } };
         }
         if (sql.startsWith('UPDATE customs_os_auth_login_attempts')) {
           const ipHash = String(values[0]);
-          const previous = db.attempts.get(ipHash);
+          const previous = this.attempts.get(ipHash);
           if (previous) previous.attempts = Math.min(previous.attempts + 1, 100);
           return { meta: { changes: previous ? 1 : 0 } };
         }
         if (sql.startsWith('INSERT INTO customs_os_auth_audit_events')) {
-          db.audit.push({ event_type: String(values[3]), target_user_id: String(values[2]) });
+          this.audit.push({ event_type: String(values[3]), target_user_id: String(values[2]) });
           return { meta: { changes: 1 } };
         }
         if (sql.startsWith('UPDATE customs_os_auth_sessions SET last_seen_at')) {
           const [lastSeen, tokenHash] = values as string[];
-          const session = db.sessions.find(item => item.token_hash === tokenHash);
+          const session = this.sessions.find(item => item.token_hash === tokenHash);
           if (session) session.last_seen_at = lastSeen;
           return { meta: { changes: session ? 1 : 0 } };
         }
         if (sql.startsWith('UPDATE customs_os_auth_sessions SET revoked_at')) {
           const [revokedAt, tokenHash] = values as string[];
-          const session = db.sessions.find(item => item.token_hash === tokenHash);
+          const session = this.sessions.find(item => item.token_hash === tokenHash);
           if (session) session.revoked_at = revokedAt;
           return { meta: { changes: session ? 1 : 0 } };
         }
         throw new Error('Unexpected auth D1 run query: ' + sql);
       },
     };
+    return statement;
   }
 
   async batch(statements: CloudflareAuthStatement[]) {
