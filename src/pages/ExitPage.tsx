@@ -2,6 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRight, Check, Loader2, Upload } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { isCloudflareStagingHost } from '../lib/recoveryHost';
+import { cloudflareDeclarationExitApi, type DeclarationChecklistItem } from '../lib/cloudflareDeclarationExit';
+import {
+  createCloudflareFileManagerFolder,
+  createCloudflareFileManagerUploadIdempotencyKey,
+  listCloudflareFileManagerFolders,
+  uploadCloudflareFileManagerFile,
+} from '../lib/cloudflareFileManager';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 
 const EXIT_ITEMS = [
@@ -35,6 +43,7 @@ type RemainingChecklistItem = {
 const BUCKET = 'customs_documents';
 
 export const ExitPage: React.FC = () => {
+  const useCloudflare = isCloudflareStagingHost();
   const [params] = useSearchParams();
   const declarationId = params.get('declarationId') || '';
 
@@ -62,6 +71,34 @@ export const ExitPage: React.FC = () => {
 
     setBusy(true);
     setError('');
+
+    if (useCloudflare) {
+      try {
+        const result = await cloudflareDeclarationExitApi.get(declarationId);
+        const row = result.declaration;
+        const workflowPermit = (result.workflow?.loading_permit_state || {}) as Record<string, unknown>;
+        setDeclaration({
+          id: row.id,
+          shipment_id: row.shipment_id || null,
+          kottaj_number: String(row.kottaj_number || ''),
+          customs_regime: row.customs_regime || null,
+        });
+        setShipmentId(row.shipment_id || '');
+        setOrganizationId(row.organization_id || '');
+        setSataCode(String(row.sata_code || workflowPermit.sata_code || ''));
+        setShipPassed(row.ship_passed == null ? null : Boolean(row.ship_passed));
+        setTransportDocumentsStatus(row.transport_documents_status || 'not_ready');
+        setDone(Object.fromEntries(result.exitItems.map((item) => [item.key, Boolean(item.completed)])));
+        setRemainingChecklist(result.checklistItems
+          .filter((item: DeclarationChecklistItem) => item.is_active && !item.completed)
+          .map((item: DeclarationChecklistItem) => item));
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'دریافت اطلاعات درب خروج انجام نشد.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
 
     try {
       const {
@@ -157,6 +194,16 @@ export const ExitPage: React.FC = () => {
     setDone((current) => ({ ...current, [key]: next }));
     setError('');
 
+    if (useCloudflare) {
+      try {
+        await cloudflareDeclarationExitApi.setExitItem(declarationId, key, next);
+      } catch (err: unknown) {
+        setDone((current) => ({ ...current, [key]: !next }));
+        setError(err instanceof Error ? err.message : 'ثبت وضعیت چک‌لیست درب خروج انجام نشد.');
+      }
+      return;
+    }
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -190,6 +237,16 @@ export const ExitPage: React.FC = () => {
 
   const completeRemainingItem = async (itemId: string) => {
     setError('');
+
+    if (useCloudflare) {
+      try {
+        await cloudflareDeclarationExitApi.updateChecklistItem(declarationId, itemId, { completed: true });
+        setRemainingChecklist((current) => current.filter((item) => item.id !== itemId));
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'تکمیل مورد چک‌لیست انجام نشد.');
+      }
+      return;
+    }
 
     const { error: updateError } = await supabase.rpc(
       'update_declaration_checklist_item',
@@ -225,6 +282,64 @@ export const ExitPage: React.FC = () => {
 
     try {
       if (!organizationId) throw new Error('سازمان کاربر مشخص نیست.');
+
+      if (useCloudflare) {
+        const linkedShipmentId = shipmentId || declaration?.shipment_id || '';
+        if (!linkedShipmentId) throw new Error('محموله مرتبط برای ذخیره فایل مشخص نیست.');
+        if (!/^(application\/pdf|image\/(jpeg|png))$/i.test(file.type)) {
+          throw new Error('فقط PDF، JPG یا PNG مجاز است.');
+        }
+        const foldersResult = await listCloudflareFileManagerFolders();
+        const shipmentFolder = foldersResult.folders.find(folder =>
+          folder.shipment_id === linkedShipmentId && folder.folder_type === 'shipment',
+        );
+        if (!shipmentFolder) throw new Error('پوشه اصلی این محموله در فایل‌منیجر D1 پیدا نشد.');
+        // Reuse the canonical system folder created for every shipment by the File Manager.
+        // Never create a second "exit" subtree under the declaration-document folder.
+        let destination = foldersResult.folders.find(folder =>
+          folder.shipment_id === linkedShipmentId && folder.folder_type === 'exit',
+        ) || foldersResult.folders.find(folder =>
+          folder.parent_id === shipmentFolder.id && folder.display_name === 'ترخیص و درب خروج',
+        ) || foldersResult.folders.find(folder =>
+          folder.parent_id === shipmentFolder.id && folder.display_name === 'درب خروج',
+        );
+        const parentFolderId = shipmentFolder.id;
+        if (!destination) {
+          try {
+            const created = await createCloudflareFileManagerFolder({
+              parent_id: parentFolderId,
+              display_name: 'درب خروج',
+            });
+            destination = created.folder;
+          } catch {
+            const refreshed = await listCloudflareFileManagerFolders();
+            destination = refreshed.folders.find(folder =>
+              folder.parent_id === parentFolderId && folder.display_name === 'درب خروج',
+            );
+          }
+        }
+        if (!destination) throw new Error('ایجاد یا بازیابی پوشه درب خروج در فایل‌منیجر انجام نشد.');
+        const itemLabel = target.key === 'warehouse_invoice_initial'
+          ? 'انبارداری اولیه' : 'انبارداری متمم';
+        const kindLabel = target.kind === 'invoice' ? 'صورتحساب' : 'فیش پرداختی';
+        const documentName = `${itemLabel} - ${kindLabel}`;
+        const uploadInput = {
+          folderId: destination.id,
+          shipmentId: linkedShipmentId,
+          documentType: 'WAREHOUSE_RECEIPT',
+          documentName,
+          tags: ['exit', target.key, target.kind],
+          operationSections: ['exit'],
+        };
+        const idempotencyKey = await createCloudflareFileManagerUploadIdempotencyKey(file, uploadInput);
+        await uploadCloudflareFileManagerFile(file, { ...uploadInput, idempotencyKey });
+        setFiles((current) => ({
+          ...current,
+          [target.key]: { ...current[target.key], [target.kind]: file.name },
+        }));
+        setMessage('فایل از طریق File Manager و آرشیو تلگرام ثبت شد.');
+        return;
+      }
 
       if (!/^(application\/pdf|image\/(jpeg|png))$/i.test(file.type)) {
         throw new Error('فقط PDF، JPG یا PNG مجاز است.');
@@ -311,6 +426,25 @@ export const ExitPage: React.FC = () => {
     setBusy(true);
     setError('');
     setMessage('');
+
+    if (useCloudflare) {
+      try {
+        const result = await cloudflareDeclarationExitApi.complete(declarationId, sataCode);
+        if (!result.ready) {
+          const issues = Array.isArray(result.issues)
+            ? result.issues.map(String)
+            : ['شرایط نهایی خروج هنوز تکمیل نشده است.'];
+          setError(issues.join('\n• '));
+          return;
+        }
+        setMessage('خروج در D1 تأیید شد و وضعیت محموله «آماده برای امور مالی» ثبت شد. رابط مالی Cloudflare هنوز در این مسیر فعال نشده است؛ صفحه را ترک نکردیم.');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'تکمیل درب خروج انجام نشد.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
 
     try {
       if (declaration.customs_regime === 'import_definitive') {
@@ -509,7 +643,7 @@ export const ExitPage: React.FC = () => {
                 </div>
               </div>
             )}
-            {shipmentId&&<><ShipmentStageCosts stage="STAGE_5_EXIT_PREPARATION" shipmentId={shipmentId} allowStageSelection/></>}
+            {shipmentId && !useCloudflare && <ShipmentStageCosts stage="STAGE_5_EXIT_PREPARATION" shipmentId={shipmentId} allowStageSelection />}
 
 {shipmentId && <section className="rounded-2xl border app-border bg-[var(--surface)] p-4">
               <label className="block text-sm font-bold">کد ساتا محموله
@@ -548,7 +682,7 @@ export const ExitPage: React.FC = () => {
               <div className="p-5 border-b app-border flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-black">درب خروج</h2>
                 <div className="flex items-center gap-3">
-                  {shipmentId && <ShipmentStageCosts stage="STAGE_6_EXIT" shipmentId={shipmentId} />}
+                  {shipmentId && !useCloudflare && <ShipmentStageCosts stage="STAGE_6_EXIT" shipmentId={shipmentId} />}
                   <span className="text-xs app-muted">
                     {completedExitItems} از {EXIT_ITEMS.length}
                   </span>

@@ -9,6 +9,8 @@ import{CustomsTemporaryImportWorkflow}from'../components/CustomsTemporaryImportW
 import{CustomsTransitReimportWorkflow}from'../components/CustomsTransitReimportWorkflow';
 import { CustomsOtherRegimeWorkflow } from '../components/CustomsOtherRegimeWorkflow';
 import{supabase}from'../lib/supabase';
+import{isCloudflareStagingHost}from'../lib/recoveryHost';
+import{cloudflareDeclarationExitApi}from'../lib/cloudflareDeclarationExit';
 import{useAuth}from'../context/AuthContext';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import { resolveDeclarationRelationIds } from '../lib/declarationWorkflowContext';
@@ -31,6 +33,7 @@ const normalizeHs=(v:string)=>digits(v).replace(/\D/g,'');
 
 export const DeclarationOperationsChecklistPage:React.FC=()=>{
  const{profile}=useAuth();
+ const useCloudflare=isCloudflareStagingHost();
  const[params]=useSearchParams();
  const declarationId=params.get('declarationId')||'';
  const[decl,setDecl]=useState<Decl|null>(null);const[officeSummary,setOfficeSummary]=useState('');
@@ -51,6 +54,27 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
  const load=useCallback(async()=>{
   if(!declarationId)return;
   setBusy(true);setError('');setMessage('');
+   if(useCloudflare){
+    try{
+     const result=await cloudflareDeclarationExitApi.get(declarationId);
+     const d=result.declaration;
+     const workflowState=(result.workflow||null) as Record<string,unknown>|null;
+     const declarationData:Decl={
+      id:d.id,shipment_id:d.shipment_id||null,case_id:typeof d.case_id==='string'?d.case_id:null,
+      kottaj_number:String(d.kottaj_number||''),declaration_date:'',
+      customs_path:d.customs_path||null,payment_reference:null,total_duties_irr:null,
+      declaration_file_name:null,customs_office_id:null,customs_regime:d.customs_regime||undefined,
+     };
+     setDecl(declarationData);setOfficeSummary('');
+     setDeclarationContext({shipmentName:'',billOfLading:'',caseNumber:'',clientName:''});
+     setHs(normalizeHs(String(d.tariff_code||'')));
+     setItems(materializeChecklistItems(result.checklistItems||[],workflowState,d.customs_path||null));
+     for(const item of result.checklistItems||[]){if(item.note)setDraftNote(p=>({...p,[item.id]:item.note||''}))}
+    }catch(e:any){setError(e?.message||'دریافت چک‌لیست عملیات گمرکی از D1 انجام نشد')}
+    finally{setBusy(false)}
+    return;
+   }
+   
   try{
    const{data:d,error:de}=await supabase.from('customs_declarations').select('id,shipment_id,case_id,kottaj_number,declaration_date,customs_path,payment_reference,total_duties_irr,declaration_file_name,customs_office_id,customs_regime').eq('id',declarationId).maybeSingle();
    if(de)throw de;if(!d)throw new Error('اظهارنامه پیدا نشد.');
@@ -127,7 +151,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
 
   }catch(e:any){setError(e?.message||'دریافت چک‌لیست عملیات گمرکی انجام نشد')}
   finally{setBusy(false)}
- },[canEdit,declarationId,profile?.organization_id]);
+ },[canEdit,declarationId,profile?.organization_id,useCloudflare]);
 
  useEffect(()=>{void load()},[load]);
  useEffect(()=>{
@@ -148,14 +172,24 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   const next=!item.completed;
   setItems(p=>p.map(x=>x.id===item.id?{...x,completed:next}:x));
   setError('');setMessage('');
-  const{error:e}=await supabase.rpc('update_declaration_checklist_item',{p_item_id:item.id,p_completed:next});
+  if(useCloudflare){
+    try{await cloudflareDeclarationExitApi.updateChecklistItem(declarationId,item.id,{completed:next})}
+    catch(e:any){setItems(p=>p.map(x=>x.id===item.id?{...x,completed:item.completed}:x));setError(e?.message||'ثبت وضعیت چک‌لیست انجام نشد')}
+    return;
+   }
+   const{error:e}=await supabase.rpc('update_declaration_checklist_item',{p_item_id:item.id,p_completed:next});
   if(e){setItems(p=>p.map(x=>x.id===item.id?{...x,completed:item.completed}:x));setError(e.message)}
  };
 
  const saveNote=async(item:Item)=>{
   if(!canEdit)return;
   const note=(draftNote[item.id]??item.note??'').trim();
-  const{error:e}=await supabase.rpc('set_declaration_checklist_note',{p_item_id:item.id,p_note:note});
+  if(useCloudflare){
+    try{await cloudflareDeclarationExitApi.updateChecklistItem(declarationId,item.id,{note:note||null});setItems(p=>p.map(x=>x.id===item.id?{...x,note:note||null}:x));setDraftNote(p=>({...p,[item.id]:note}));setMessage(note?'توضیح مورد ذخیره شد.':'توضیح مورد پاک شد.')}
+    catch(e:any){setError(e?.message||'ذخیره توضیح انجام نشد')}
+    return;
+   }
+   const{error:e}=await supabase.rpc('set_declaration_checklist_note',{p_item_id:item.id,p_note:note});
   if(e){setError(e.message);return}
   setItems(p=>p.map(x=>x.id===item.id?{...x,note:note||null}:x));
   setDraftNote(p=>({...p,[item.id]:note}));
@@ -169,7 +203,8 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   setBusy(true);setError('');setMessage('');
   try{
    const nextOrder=Math.max(0,...items.map(x=>x.sort_order||0))+10;
-   const{error:e}=await supabase.rpc('add_declaration_checklist_item',{p_declaration_id:declarationId,p_item_label:label,p_sort_order:nextOrder});
+   if(useCloudflare){await cloudflareDeclarationExitApi.addChecklistItem(declarationId,label,nextOrder);setNewItem('');setAddOpen(false);setMessage('مورد جدید به چک‌لیست این اظهارنامه اضافه شد.');await load();return;}
+    const{error:e}=await supabase.rpc('add_declaration_checklist_item',{p_declaration_id:declarationId,p_item_label:label,p_sort_order:nextOrder});
    if(e)throw e;
    setNewItem('');setAddOpen(false);setMessage('مورد جدید به چک‌لیست این اظهارنامه اضافه شد.');await load();
   }catch(e:any){setError(e?.message||'افزودن مورد جدید انجام نشد')}finally{setBusy(false)}
@@ -177,7 +212,8 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
 
  const removeItem=async(item:Item)=>{
   if(!canEdit||item.workflowManaged)return;
-  const{error:e}=await supabase.rpc('set_declaration_checklist_item_active',{p_item_id:item.id,p_active:false});
+  if(useCloudflare){try{await cloudflareDeclarationExitApi.updateChecklistItem(declarationId,item.id,{is_active:false});setItems(p=>p.filter(x=>x.id!==item.id));setMessage('این مورد از چک‌لیست همین اظهارنامه حذف شد.')}catch(e:any){setError(e?.message||'حذف مورد انجام نشد')}return;}
+   const{error:e}=await supabase.rpc('set_declaration_checklist_item_active',{p_item_id:item.id,p_active:false});
   if(e){setError(e.message);return}
   setItems(p=>p.filter(x=>x.id!==item.id));setMessage('این مورد از چک‌لیست همین اظهارنامه حذف شد.');
  };
@@ -187,7 +223,12 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   setBusy(true);setError('');setMessage('');
   try{
    const remaining=pending.map(x=>x.note?`${x.item_label} — توضیح: ${x.note}`:x.item_label);
-   const{error:e}=await supabase.rpc('advance_declaration_to_exit_stage',{p_declaration_id:declarationId,p_remaining_items:remaining});
+   if(useCloudflare){
+     const result=await cloudflareDeclarationExitApi.advance(declarationId);
+     setMessage(result.partial_allowed&&result.remaining_items.length?'مرحله ۵ باز شد؛ موارد ناقص ثبت شدند: '+result.remaining_items.join('، '):'چک‌لیست کامل شد؛ ورود به درب خروج.');
+     window.location.assign(`/operations?tab=exit&declarationId=${encodeURIComponent(declarationId)}`);return;
+    }
+    const{error:e}=await supabase.rpc('advance_declaration_to_exit_stage',{p_declaration_id:declarationId,p_remaining_items:remaining});
    if(e)throw e;
    window.location.assign(`/operations?tab=exit&declarationId=${encodeURIComponent(declarationId)}`);
   }catch(e:any){setError(e?.message||'انتقال به مرحله درب خروج انجام نشد')}finally{setBusy(false)}
@@ -208,7 +249,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">کوتاژ</span><div className="font-black mt-1 ltr-num">{decl.kottaj_number||'—'}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">گمرک محل اظهار</span><div className="font-bold mt-1">{officeSummary||'ثبت نشده'}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">رویه گمرکی</span><div className="font-bold mt-1">{decl.customs_regime==='import_definitive'?'واردات قطعی':decl.customs_regime==='export_definitive'?'صادرات قطعی':decl.customs_regime==='temporary_export'?'صادرات موقت':decl.customs_regime==='import_temporary'?'ورود موقت':decl.customs_regime==='temporary_processing'?'ورود موقت برای پردازش':decl.customs_regime==='external_transit'?'ترانزیت خارجی':decl.customs_regime==='internal_transit'?'ترانزیت داخلی':decl.customs_regime==='re_export'?'مرجوعی / اعاده به خارج':decl.customs_regime==='re_import'?'ورود مجدد':decl.customs_regime==='cabotage'?'کابوتاژ':decl.customs_regime==='customs_warehouse'?'ورود به انبار گمرکی':decl.customs_regime==='free_zone'?'رویه منطقه آزاد':decl.customs_regime==='other'?'سایر رویه‌ها':'ثبت نشده'}</div></div>
-   <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">تاریخ اظهار</span><div className="font-bold mt-1">{new Date(decl.declaration_date).toLocaleDateString('fa-IR')}</div></div>
+   <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">تاریخ اظهار</span><div className="font-bold mt-1">{decl.declaration_date?new Date(decl.declaration_date).toLocaleDateString('fa-IR'):'—'}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">HS Code</span><div className="font-black mt-1 ltr-num">{hs||'ثبت نشده'}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">مسیر</span><div className="font-bold mt-1">{decl.customs_path?PATH_LABELS[decl.customs_path]||decl.customs_path:'—'}</div></div>
    <div className="rounded-xl border app-border bg-[var(--surface-2)] p-3"><span className="app-muted block">وضعیت چک‌لیست</span><div className="font-black mt-1">{completed} از {items.length}</div></div>
@@ -224,13 +265,13 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   {decl?.customs_regime==='import_definitive'&&<CustomsDeclarationWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} customsPath={decl.customs_path||''} editable={canEdit}/>}
   {decl&&['export_definitive','temporary_export'].includes(decl.customs_regime||'')&&<CustomsExportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
   {decl&&['import_temporary','temporary_processing'].includes(decl.customs_regime||'')&&<CustomsTemporaryImportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
-  {decl&&['external_transit','internal_transit','re_import','re_export'].includes(decl.customs_regime||'')&&<CustomsTransitReimportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
-  {decl&&['cabotage','customs_warehouse','free_zone','other'].includes(decl.customs_regime||'')&&<CustomsOtherRegimeWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||'other'} editable={canEdit}/>}
+  {!useCloudflare&&decl&&['external_transit','internal_transit','re_import','re_export'].includes(decl.customs_regime||'')&&<CustomsTransitReimportWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||''} editable={canEdit}/>}
+  {!useCloudflare&&decl&&['cabotage','customs_warehouse','free_zone','other'].includes(decl.customs_regime||'')&&<CustomsOtherRegimeWorkflow declarationId={decl.id} organizationId={profile?.organization_id||''} userId={profile?.id} customsRegime={decl.customs_regime||'other'} editable={canEdit}/>}
 
-  {decl&&decl.customs_regime!=='import_definitive'&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5 space-y-3">
+  {!useCloudflare&&decl&&decl.customs_regime!=='import_definitive'&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5 space-y-3">
    <div><h2 className="font-black">مرکز اسناد هوشمند عملیات گمرکی</h2><p className="mt-1 text-xs app-muted">برای هر باکس، فایل مربوط را جداگانه انتخاب و استخراج را اجرا کنید. نتایج به همان اظهارنامه و باکس اختصاصی ذخیره می‌شوند.</p></div>
    <div className="flex flex-wrap gap-2">{Object.entries(CUSTOMS_OPERATION_SECTIONS).map(([key,config])=><button type="button" key={key} onClick={()=>setAiDocumentSection(key as CustomsOperationSection)} className={'rounded-lg border px-3 py-2 text-xs font-bold '+(aiDocumentSection===key?'border-[var(--primary)] bg-[var(--primary)] text-white':'app-border bg-[var(--surface-2)]')}>{config.label}</button>)}</div>
-   <CustomsStageDocumentAI declarationId={decl.id} shipmentId={decl.shipment_id||''} organizationId={profile?.organization_id||''} section={aiDocumentSection} editable={canEdit}/>
+   {!useCloudflare&&<CustomsStageDocumentAI declarationId={decl.id} shipmentId={decl.shipment_id||''} organizationId={profile?.organization_id||''} section={aiDocumentSection} editable={canEdit}/>}
   </section>}
 
   <section className="rounded-2xl border app-border bg-[var(--surface)] overflow-hidden">
@@ -254,7 +295,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
     </div>;
    })}
    <div className="p-5"><button disabled={busy||!canEdit} onClick={()=>void complete()} className="rounded-xl bg-[var(--primary)] text-white px-6 py-3 font-bold disabled:opacity-40">{busy?<><Loader2 className="inline ml-2 animate-spin" size={16}/>در حال انتقال...</>:pending.length===0?'تکمیل عملیات گمرکی و ورود به مرحله ۵ · درب خروج':'ورود به مرحله ۵ با ثبت هشدار موارد ناقص'}</button>{pending.length>0&&<div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs"><div className="font-bold mb-2 flex items-center gap-2"><AlertTriangle size={14}/> موارد ناقص قبل از خروج</div>{pending.map(x=><div key={x.id} className="py-1">{x.item_label}{x.note?` — ${x.note}`:''}</div>)}</div>}</div>
-  {decl?.shipment_id&&<ShipmentStageCosts stage="STAGE_4_CUSTOMS_OPERATIONS" shipmentId={decl.shipment_id}/>}
+  {decl?.shipment_id&&!useCloudflare&&<ShipmentStageCosts stage="STAGE_4_CUSTOMS_OPERATIONS" shipmentId={decl.shipment_id}/> }
 </section>
  </div></main>;
 };

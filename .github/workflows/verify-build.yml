@@ -51,6 +51,9 @@ jobs:
       - name: Verify Cloudflare D1 case permits migration with SQLite
         run: python3 scripts/verify-case-permits-d1-migration.py
 
+      - name: Verify Cloudflare D1 declaration exit migration with SQLite
+        run: python3 scripts/verify-declaration-exit-d1-migration.py
+
       - name: Inventory remaining Supabase runtime dependencies
         run: npm run audit:cloudflare-deps
 

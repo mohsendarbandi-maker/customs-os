@@ -2,6 +2,7 @@ import { isMigrationIntegrityHealthy, isMigrationParityHealthy, isProductionTraf
 import { handleClientsApi } from './clients-api';
 import { handleCasesApi } from './cases-api';
 import { handleCustomsDeclarationWorkflowApi } from './customs-declaration-workflow-api';
+import { handleDeclarationExitApi } from './declaration-exit-api';
 import { handleShipmentsApi } from './shipments-api';
 import { handleCaseSelectorApi } from './case-selector-api';
 import { handleDeviceSessionsApi } from './device-sessions-api';
@@ -1259,6 +1260,12 @@ export default {
       if (!isSameOrigin(request, url)) return json({ ok: false, error: 'ORIGIN_FORBIDDEN' }, 403);
       if (!await getSession(request, env)) return json({ ok: false, error: 'UNAUTHORIZED' }, 401);
       return handleCustomsDeclarationWorkflowApi(request, env.MIGRATION_DB, url, profile);
+    }
+
+    if (url.pathname.startsWith('/api/declarations/') && url.pathname.includes('/exit')) {
+      if (!isSameOrigin(request, url)) return json({ ok: false, error: 'ORIGIN_FORBIDDEN' }, 403);
+      if (!await getSession(request, env)) return json({ ok: false, error: 'UNAUTHORIZED' }, 401);
+      return handleDeclarationExitApi(request, env.MIGRATION_DB, url, profile);
     }
 
     if (url.pathname === '/api/cases' || url.pathname.startsWith('/api/cases/')) {
