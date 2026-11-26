@@ -53,7 +53,8 @@ class FakeD1 implements CasesD1Database {
     }
     if (sql.includes('COUNT(*) AS total FROM cases c')) return { total: this.list.length } as T;
     if (sql.includes('FROM cases c LEFT JOIN clients cl')) {
-      return this.detail && this.detail.id === values[0] ? this.detail as T : null;
+      return this.detail && this.detail.id === values[0] && this.detailOrganizationId === values[1]
+        ? this.detail as T : null;
     }
     throw new Error('Unexpected query: ' + sql);
   }
