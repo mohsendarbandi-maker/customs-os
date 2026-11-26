@@ -75,7 +75,7 @@ export async function createCloudflareAuthProof(
   challenge: CloudflareAuthChallenge,
   password: string,
 ): Promise<string> {
-  if (!/^[0-9a-f]{32}$/i.test(challenge.challenge_id) ||
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(challenge.challenge_id) ||
       !/^[0-9a-f]{64}$/i.test(challenge.challenge) ||
       !Number.isInteger(challenge.iterations) ||
       challenge.iterations !== PASSWORD_ITERATIONS) {
