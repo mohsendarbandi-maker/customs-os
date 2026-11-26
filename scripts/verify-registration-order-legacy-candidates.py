@@ -103,6 +103,14 @@ def main() -> None:
     assert linked is None
     assert db.execute("SELECT COUNT(*) FROM registration_order_legacy_match_candidates WHERE registration_order_id='ro-1' AND organization_id<>'org-1'").fetchone()[0] == 0
 
+    # Normalized keys stay synchronized when source references change after migration.
+    db.execute("UPDATE registration_orders SET order_number='۶۶۶۶۶' WHERE id='ro-1'")
+    assert db.execute("SELECT order_number_normalized FROM registration_orders WHERE id='ro-1'").fetchone()[0] == '66666'
+    db.execute("UPDATE shipment_customs_data SET registration_order_no='۷۷۷۷۷' WHERE shipment_id='ship-candidate'")
+    assert db.execute("SELECT registration_order_no_normalized FROM shipment_customs_data WHERE shipment_id='ship-candidate'").fetchone()[0] == '77777'
+    db.execute("UPDATE cases SET registration_order_no='۸۸۸۸۸' WHERE id='case-conflict'")
+    assert db.execute("SELECT registration_order_no_normalized FROM cases WHERE id='case-conflict'").fetchone()[0] == '88888'
+
     indexes = {row[0] for row in db.execute(
         "SELECT name FROM sqlite_master WHERE type='index'"
     ).fetchall()}
@@ -124,7 +132,7 @@ def main() -> None:
             "direct and case-linked references excluded",
             "cross-client and cross-organization isolation",
             "candidate view does not auto-link or alter capacity",
-            "supporting indexes exist",
+            "source-update normalization triggers",\n            "supporting indexes exist",
         ],
     }, ensure_ascii=False))
 
