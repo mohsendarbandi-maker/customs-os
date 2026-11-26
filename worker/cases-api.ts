@@ -506,6 +506,261 @@ const calculateCaseValuation = async (
   }
 };
 
+interface PermitRecord {
+  id: string;
+  organization_id: string;
+  case_id: string;
+  permit_type: string;
+  permit_number: string | null;
+  issuing_authority: string;
+  status: 'pending' | 'approved' | 'rejected' | 'not_required';
+  issued_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+interface CasePermitRoute { caseId: string; permitId: string | null; }
+const permitStatuses = new Set(['pending', 'approved', 'rejected', 'not_required']);
+const permitColumns = 'id,organization_id,case_id,permit_type,permit_number,issuing_authority,status,issued_at,expires_at,created_at,updated_at';
+
+
+const parseCasePermitRoute = (pathname: string): CasePermitRoute | Response | null => {
+  if (!pathname.startsWith(collection + '/')) return null;
+  const segments = pathname.slice(collection.length + 1).split('/');
+  if (segments.length < 2 || segments[1] !== 'permits') return null;
+  if (segments.length > 3 || !segments[0] || (segments.length === 3 && !segments[2])) {
+    return fail('INVALID_PERMIT_ROUTE', 400);
+  }
+  try {
+    const caseId = decodeURIComponent(segments[0]);
+    const permitId = segments.length === 3 ? decodeURIComponent(segments[2]) : null;
+    if (!caseId || caseId.length > 128 || caseId.includes('/') ||
+        (permitId !== null && (!permitId || permitId.length > 128 || permitId.includes('/')))) {
+      return fail('INVALID_PERMIT_ROUTE', 400);
+    }
+    return { caseId, permitId };
+  } catch {
+    return fail('INVALID_PERMIT_ROUTE', 400);
+  }
+};
+
+const permitInput = (value: unknown, partial: boolean): Record<string, unknown> | Response => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return fail('INVALID_PERMIT_INPUT', 422);
+  const raw = value as Record<string, unknown>;
+  const allowed = new Set(['permit_type', 'permit_number', 'issuing_authority', 'status', 'issued_at', 'expires_at']);
+  const keys = Object.keys(raw);
+  if (!keys.length || keys.some(key => !allowed.has(key))) return fail('INVALID_PERMIT_INPUT', 422);
+  const normalized: Record<string, unknown> = {};
+  for (const key of keys) {
+    const item = raw[key];
+    if (key === 'permit_type' || key === 'issuing_authority' || key === 'permit_number') {
+      if (item !== null && typeof item !== 'string') return fail('INVALID_PERMIT_INPUT', 422);
+      const text = typeof item === 'string' ? item.trim() : null;
+      const max = key === 'issuing_authority' ? 255 : 100;
+      if (text !== null && text.length > max) return fail('INVALID_PERMIT_INPUT', 422);
+      if ((key === 'permit_type' || key === 'issuing_authority') && !text) return fail('INVALID_PERMIT_INPUT', 422);
+      normalized[key] = key === 'permit_number' && !text ? null : text;
+    } else if (key === 'status') {
+      if (typeof item !== 'string' || !permitStatuses.has(item)) return fail('INVALID_PERMIT_STATUS', 422);
+      normalized[key] = item;
+    } else if (key === 'issued_at' || key === 'expires_at') {
+      if (item !== null && typeof item !== 'string') return fail('INVALID_PERMIT_DATE', 422);
+      const text = typeof item === 'string' ? item.trim() : '';
+      if (!text) normalized[key] = null;
+      else {
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(text)) {
+          return fail('INVALID_PERMIT_DATE', 422);
+        }
+        const timestamp = Date.parse(text);
+        if (!Number.isFinite(timestamp)) return fail('INVALID_PERMIT_DATE', 422);
+        normalized[key] = new Date(timestamp).toISOString();
+      }
+    }
+  }
+  if (!partial && (!Object.prototype.hasOwnProperty.call(normalized, 'permit_type') ||
+      !Object.prototype.hasOwnProperty.call(normalized, 'issuing_authority'))) {
+    return fail('INVALID_PERMIT_INPUT', 422, { required: ['permit_type', 'issuing_authority'] });
+  }
+  return normalized;
+};
+
+const readPermitBody = async (request: Request): Promise<Record<string, unknown> | Response> => {
+  if (Number(request.headers.get('content-length') || 0) > 16 * 1024) return fail('REQUEST_TOO_LARGE', 413);
+  try {
+    const raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > 16 * 1024) return fail('REQUEST_TOO_LARGE', 413);
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return fail('INVALID_JSON', 400);
+  }
+};
+const permitById = (db: CasesD1Database, caseId: string, permitId: string, organizationId: string) =>
+  db.prepare('SELECT ' + permitColumns + ' FROM permits WHERE id=? AND case_id=? AND organization_id=? LIMIT 1')
+    .bind(permitId, caseId, organizationId).first<PermitRecord>();
+const permitsForCase = (db: CasesD1Database, caseId: string, organizationId: string) =>
+  db.prepare('SELECT ' + permitColumns + ' FROM permits WHERE case_id=? AND organization_id=? ORDER BY created_at DESC,id DESC LIMIT 200')
+    .bind(caseId, organizationId).all<PermitRecord>();
+const caseExists = (db: CasesD1Database, caseId: string, organizationId: string) =>
+  db.prepare('SELECT id FROM cases WHERE id=? AND organization_id=? LIMIT 1')
+    .bind(caseId, organizationId).first<{ id: string }>();
+const permitAuditStatement = (
+  organizationId: string,
+  actorId: string,
+  action: 'create' | 'update' | 'delete',
+  permitId: string,
+  before: PermitRecord | null,
+  after: PermitRecord | null,
+  request: Request,
+) => {
+  const now = new Date().toISOString();
+  return {
+    sql: 'INSERT INTO customs_os_audit_events ' +
+      '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id,created_at) ' +
+      'SELECT ?,?,?,?,?,?,?,?,?,? WHERE changes()>0',
+    values: [
+      crypto.randomUUID(), organizationId, actorId, action, 'permit', permitId,
+      before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null,
+      request.headers.get('cf-ray') || request.headers.get('x-request-id') || crypto.randomUUID(), now,
+    ],
+  };
+};
+
+const handleCasePermitsApi = async (
+  request: Request,
+  db: CasesD1Database,
+  url: URL,
+  profile: CasesApiProfile,
+  route: CasePermitRoute,
+): Promise<Response> => {
+  const { caseId, permitId } = route;
+  if (request.method === 'GET') {
+    try {
+      if (!await caseExists(db, caseId, profile.organization_id)) return fail('CASE_NOT_FOUND', 404);
+      if (permitId) {
+        const permit = await permitById(db, caseId, permitId, profile.organization_id);
+        return permit ? json({ ok: true, permit }) : fail('PERMIT_NOT_FOUND', 404);
+      }
+      const result = await permitsForCase(db, caseId, profile.organization_id);
+      return json({ ok: true, permits: result.results, caseId });
+    } catch {
+      return fail('CASE_PERMITS_API_NOT_READY', 503);
+    }
+  }
+
+  if (!['POST', 'PATCH', 'DELETE'].includes(request.method)) {
+    return fail('METHOD_NOT_ALLOWED', 405, { allowed: permitId ? ['GET', 'PATCH', 'DELETE'] : ['GET', 'POST'] });
+  }
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  if (!['owner', 'admin', 'broker'].includes(profile.role)) return fail('FORBIDDEN', 403);
+
+  if (request.method === 'POST') {
+    if (permitId) return fail('NOT_FOUND', 404);
+    const raw = await readPermitBody(request);
+    if (raw instanceof Response) return raw;
+    const input = permitInput(raw, false);
+    if (input instanceof Response) return input;
+    try {
+      if (!await caseExists(db, caseId, profile.organization_id)) return fail('CASE_NOT_FOUND', 404);
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const record: PermitRecord = {
+        id, organization_id: profile.organization_id, case_id: caseId,
+        permit_type: input.permit_type as string,
+        permit_number: (input.permit_number as string | null | undefined) ?? null,
+        issuing_authority: input.issuing_authority as string,
+        status: (input.status as PermitRecord['status'] | undefined) ?? 'pending',
+        issued_at: (input.issued_at as string | null | undefined) ?? null,
+        expires_at: (input.expires_at as string | null | undefined) ?? null,
+        created_at: now, updated_at: now,
+      };
+      if (record.issued_at && record.expires_at && Date.parse(record.expires_at) < Date.parse(record.issued_at)) {
+        return fail('PERMIT_EXPIRY_BEFORE_ISSUE', 422);
+      }
+      const audit = permitAuditStatement(profile.organization_id, profile.id, 'create', id, null, record, request);
+      const results = await db.batch([
+        db.prepare(
+          'INSERT INTO permits (' + permitColumns + ') VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        ).bind(
+          record.id, record.organization_id, record.case_id, record.permit_type,
+          record.permit_number, record.issuing_authority, record.status,
+          record.issued_at, record.expires_at, record.created_at, record.updated_at,
+        ),
+        db.prepare(audit.sql).bind(...audit.values),
+      ]);
+      const inserted = results[0] as { meta?: { changes?: number } } | undefined;
+      if (Number(inserted?.meta?.changes || 0) !== 1) return fail('PERMIT_CREATE_NOT_CONFIRMED', 500);
+      const saved = await permitById(db, caseId, id, profile.organization_id);
+      return saved ? json({ ok: true, permit: saved }, 201) : fail('PERMIT_CREATE_NOT_CONFIRMED', 500);
+    } catch {
+      return fail('PERMIT_CREATE_FAILED', 500);
+    }
+  }
+
+  if (!permitId) return fail('PERMIT_ID_REQUIRED', 400);
+  let before: PermitRecord | null;
+  try { before = await permitById(db, caseId, permitId, profile.organization_id); }
+  catch { return fail('CASE_PERMITS_API_NOT_READY', 503); }
+  if (!before) return fail('PERMIT_NOT_FOUND', 404);
+
+  if (request.method === 'PATCH') {
+    const raw = await readPermitBody(request);
+    if (raw instanceof Response) return raw;
+    const input = permitInput(raw, true);
+    if (input instanceof Response) return input;
+    const updatedAt = new Date().toISOString();
+    const after = { ...before, ...input, updated_at: updatedAt } as PermitRecord;
+    if (after.issued_at && after.expires_at && Date.parse(after.expires_at) < Date.parse(after.issued_at)) {
+      return fail('PERMIT_EXPIRY_BEFORE_ISSUE', 422);
+    }
+    const columns = Object.keys(input);
+    const changed = columns.filter(key => !Object.is(
+      (before as unknown as Record<string, unknown>)[key],
+      input[key],
+    ));
+    if (!changed.length) return json({ ok: true, permit: before, unchanged: true });
+    const sets = changed.map(key => key + '=?');
+    const values = changed.map(key => input[key]);
+    sets.push('updated_at=?');
+    values.push(updatedAt);
+    const updateAudit = permitAuditStatement(profile.organization_id, profile.id, 'update', permitId, before, after, request);
+    try {
+      const results = await db.batch([
+        db.prepare(
+          'UPDATE permits SET ' + sets.join(', ') +
+            ' WHERE id=? AND case_id=? AND organization_id=? AND updated_at=?',
+        ).bind(...values, permitId, caseId, profile.organization_id, before.updated_at),
+        db.prepare(updateAudit.sql).bind(...updateAudit.values),
+      ]);
+      const changedRows = results[0] as { meta?: { changes?: number } } | undefined;
+      if (Number(changedRows?.meta?.changes || 0) !== 1) {
+        const current = await permitById(db, caseId, permitId, profile.organization_id);
+        return current ? fail('PERMIT_UPDATE_CONFLICT', 409) : fail('PERMIT_NOT_FOUND', 404);
+      }
+      const saved = await permitById(db, caseId, permitId, profile.organization_id);
+      return saved ? json({ ok: true, permit: saved }) : fail('PERMIT_UPDATE_NOT_CONFIRMED', 500);
+    } catch {
+      return fail('PERMIT_UPDATE_FAILED', 500);
+    }
+  }
+
+  const deleteAudit = permitAuditStatement(profile.organization_id, profile.id, 'delete', permitId, before, null, request);
+  try {
+    const results = await db.batch([
+      db.prepare('DELETE FROM permits WHERE id=? AND case_id=? AND organization_id=? AND updated_at=?')
+        .bind(permitId, caseId, profile.organization_id, before.updated_at),
+      db.prepare(deleteAudit.sql).bind(...deleteAudit.values),
+    ]);
+    const changedRows = results[0] as { meta?: { changes?: number } } | undefined;
+    if (Number(changedRows?.meta?.changes || 0) !== 1) {
+      const current = await permitById(db, caseId, permitId, profile.organization_id);
+      return current ? fail('PERMIT_DELETE_CONFLICT', 409) : fail('PERMIT_NOT_FOUND', 404);
+    }
+    return json({ ok: true, deleted: true, permitId });
+  } catch {
+    return fail('PERMIT_DELETE_FAILED', 500);
+  }
+};
+
 const parseSnapshot = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
   if (typeof value !== 'string' || !value.trim()) return {};
@@ -590,6 +845,9 @@ export const handleCasesApi = async (
 ): Promise<Response> => {
   if (!profile.is_active || !roles.has(profile.role)) return fail('FORBIDDEN', 403);
   if (!profile.id || !profile.organization_id) return fail('INVALID_SESSION_PROFILE', 401);
+  const permitRoute = parseCasePermitRoute(url.pathname);
+  if (permitRoute instanceof Response) return permitRoute;
+  if (permitRoute) return handleCasePermitsApi(request, db, url, profile, permitRoute);
   const historyRoute = url.pathname.startsWith(collection + '/') && url.pathname.endsWith('/history');
   if (historyRoute) {
     if (request.method !== 'GET') return fail('METHOD_NOT_ALLOWED', 405, { allowed: ['GET'] });
