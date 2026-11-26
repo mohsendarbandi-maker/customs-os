@@ -84,6 +84,7 @@ interface RuleRow extends Record<string, unknown> {
   id: string;
   evidence_count: number;
   source: string;
+  confidence: number;
 }
 interface LearningEventRow extends Record<string, unknown> {
   id: string;
@@ -314,7 +315,7 @@ const recordLearning = async (
     }
   }
   const currentRule = await db.prepare(
-    'SELECT id,evidence_count,source FROM customs_operation_rules ' +
+    'SELECT id,evidence_count,source,confidence FROM customs_operation_rules ' +
     'WHERE organization_id=? AND hs_code_prefix=? AND customs_path=? AND transport_mode=? LIMIT 1',
   ).bind(profile.organization_id, hsCode, declaration.customs_path || '', declaration.transport_mode || 'sea').first<RuleRow>();
   const total = Number(evidence?.total || 0);
@@ -339,7 +340,7 @@ const recordLearning = async (
     ).bind(
       JSON.stringify(checklistCounts), JSON.stringify(fieldCounts),
       isNewEvent ? total : Number(currentRule.evidence_count || total),
-      isNewEvent ? confidence : undefined as unknown as number,
+      isNewEvent ? confidence : Number(currentRule.confidence || confidence),
       total >= 2 ? 1 : 0, profile.id, now, currentRule.id, profile.organization_id,
     ).run();
   }
@@ -506,7 +507,7 @@ const advanceToExitStage = async (
   const stage = Number(declaration.workflow_stage);
   if (![4, 5, 6].includes(stage)) return fail('DECLARATION_STAGE_NOT_ADVANCEABLE', 409, { workflowStage: declaration.workflow_stage });
   await ensureChecklist(db, declaration);
-  const learning = await recordLearning(db, profile, declaration).catch(() => null);
+  const learning = await recordLearning(db, profile, declaration);
   const now = new Date().toISOString();
   const after = { workflow_stage: 6, remaining_items: [] as string[], partial_allowed: true };
   const checklist = await readChecklist(db, declaration.id, profile.organization_id);
