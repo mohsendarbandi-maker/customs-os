@@ -299,6 +299,15 @@ describe('Cloudflare D1 declaration exit API', () => {
     expect(body.finance_status).toBe('ready');
     expect(db.shipmentFinanceStatus).toBe('ready');
     expect(db.writes.some(sql => sql.includes('INSERT INTO customs_os_audit_events'))).toBe(true);
+    const writesAfterFirstCompletion = db.writes.length;
+    const repeated = await handleDeclarationExitApi(
+      makeRequest('POST', path, { sata_code: '12345' }),
+      db, new URL('https://staging.example' + path), owner,
+    );
+    const repeatedBody = await parse(repeated);
+    expect(repeatedBody.ready).toBe(true);
+    expect(repeatedBody.finance_status).toBe('ready');
+    expect(db.writes).toHaveLength(writesAfterFirstCompletion);
   });
 
   it('preserves a closed finance status when the same SATA code is confirmed', async () => {
