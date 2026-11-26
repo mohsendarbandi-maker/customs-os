@@ -90,6 +90,16 @@ const normalizeDigits = (value: string) => Array.from(value.normalize('NFKC'), (
   if (n >= 0x0660 && n <= 0x0669) return String(n - 0x0660);
   return ch;
 }).join('');
+const normalizeRegistrationOrderSql = (column: string) => {
+  let expression = `UPPER(TRIM(COALESCE(${column},'')))`;
+  const digits = [...Array.from('۰۱۲۳۴۵۶۷۸۹').map((digit, index) => [digit, String(index)] as const),
+    ...Array.from('٠١٢٣٤٥٦٧٨٩').map((digit, index) => [digit, String(index)] as const)];
+  for (const [digit, ascii] of digits) expression = `REPLACE(${expression},'${digit}','${ascii}')`;
+  for (const whitespace of ["' '", 'char(9)', 'char(10)', 'char(13)', 'char(160)', 'char(8204)']) {
+    expression = `REPLACE(${expression},${whitespace},'')`;
+  }
+  return `NULLIF(${expression},'')`;
+};
 const parseMilliUnits = (value: unknown): number | null => {
   if (value == null || value === '') return null;
   const raw = normalizeDigits(String(value)).replace(/[٬,\s]/g, '').trim();
@@ -298,7 +308,7 @@ const ORDER_SELECT = [
   ' COALESCE(SUM(CASE WHEN s.id IS NOT NULL AND (d.invoice_amount IS NULL OR NULLIF(TRIM(d.invoice_currency), \'\') IS NULL) THEN 1 ELSE 0 END), 0) AS shipments_missing_invoice_value,',
   ' COALESCE(SUM(CASE WHEN d.invoice_amount IS NOT NULL AND (ro2.currency IS NULL OR NULLIF(TRIM(d.invoice_currency), \'\') IS NULL OR UPPER(TRIM(d.invoice_currency)) <> UPPER(ro2.currency)) THEN 1 ELSE 0 END), 0) AS shipments_with_currency_mismatch',
   ' FROM registration_orders ro2',
-  ' LEFT JOIN shipments s ON s.organization_id = ro2.organization_id AND (s.registration_order_id = ro2.id OR (s.registration_order_id IS NULL AND (s.case_id = ro2.case_id OR EXISTS (SELECT 1 FROM cases sc WHERE sc.id = s.case_id AND sc.organization_id = s.organization_id AND sc.registration_order_no = ro2.order_number))))',
+  ' LEFT JOIN shipments s ON s.organization_id = ro2.organization_id AND (s.registration_order_id = ro2.id OR (s.registration_order_id IS NULL AND (s.case_id = ro2.case_id OR EXISTS (SELECT 1 FROM cases sc WHERE sc.id = s.case_id AND sc.organization_id = s.organization_id AND ' + normalizeRegistrationOrderSql('sc.registration_order_no') + ' = ' + normalizeRegistrationOrderSql('ro2.order_number') + '))))',
   ' LEFT JOIN shipment_customs_data d ON d.shipment_id = s.id AND d.organization_id = s.organization_id',
   ' GROUP BY ro2.id, ro2.organization_id',
   ') sa ON sa.registration_order_id = ro.id AND sa.organization_id = ro.organization_id',
@@ -351,7 +361,7 @@ const shipmentCurrencyMismatchCount = async (
   if (!currency) return 0;
   const row = await db.prepare(
     'SELECT COUNT(s.id) AS total FROM registration_orders ro ' +
-    'JOIN shipments s ON s.organization_id = ro.organization_id AND (s.registration_order_id = ro.id OR (s.registration_order_id IS NULL AND (s.case_id = ro.case_id OR EXISTS (SELECT 1 FROM cases c WHERE c.id = s.case_id AND c.organization_id = s.organization_id AND c.registration_order_no = ro.order_number)))) ' +
+    'JOIN shipments s ON s.organization_id = ro.organization_id AND (s.registration_order_id = ro.id OR (s.registration_order_id IS NULL AND (s.case_id = ro.case_id OR EXISTS (SELECT 1 FROM cases c WHERE c.id = s.case_id AND c.organization_id = s.organization_id AND ' + normalizeRegistrationOrderSql('c.registration_order_no') + ' = ' + normalizeRegistrationOrderSql('ro.order_number') + ')))) ' +
     'LEFT JOIN shipment_customs_data d ON d.shipment_id = s.id AND d.organization_id = s.organization_id ' +
     'WHERE ro.id = ? AND ro.organization_id = ? AND d.invoice_amount IS NOT NULL AND (d.invoice_currency IS NULL OR UPPER(TRIM(d.invoice_currency)) <> ?)',
   ).bind(orderId, organizationId, currency).first<{ total: number }>();
