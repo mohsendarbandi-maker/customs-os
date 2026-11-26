@@ -65,6 +65,14 @@ must_fail(
     "invalid encrypted verifier length",
 )
 
+must_fail(
+    """INSERT INTO customs_os_auth_credentials
+       (user_id, email_normalized, password_verifier_encrypted, password_verifier_iv, password_salt)
+       VALUES (?, ?, ?, ?, ?)""",
+    ("owner-2", "other@example.test", "f" * 96, "short", "e" * 64),
+    "invalid AES-GCM IV length",
+)
+
 db.execute(
     "UPDATE customs_os_auth_credentials SET failed_attempts = 3, locked_until = ? WHERE user_id = ?",
     ("2099-01-01T00:00:00Z", "owner-1"),
