@@ -102,8 +102,57 @@ const readCase = (db: CasesD1Database, id: string, organizationId: string) =>
     'WHERE c.id=? AND c.organization_id=? LIMIT 1',
   ).bind(id, organizationId).first<CaseRecord>();
 
+const readCaseExit = (db: CasesD1Database, id: string, organizationId: string) =>
+  db.prepare(
+    'SELECT id,organization_id,case_id,exit_status,exit_permit_no,exit_permit_no AS exit_permit_number,' +
+    'exit_permit_date,exit_authorized_at,exit_authorized_at AS authorized_at,exit_at,exit_at AS exited_at,' +
+    'vehicle_plate,driver_name,driver_national_id,notes,created_by,created_at,updated_at ' +
+    'FROM case_exit_operations WHERE case_id=? AND organization_id=? LIMIT 1',
+  ).bind(id, organizationId).first<Record<string, unknown>>();
+
+const readCaseCompletionReadiness = async (
+  db: CasesD1Database, record: CaseRecord, id: string, organizationId: string,
+) => {
+  const [pending, exit] = await Promise.all([
+    db.prepare(
+      "SELECT COUNT(*) AS total FROM permits WHERE case_id=? AND organization_id=? AND status='pending'",
+    ).bind(id, organizationId).first<{ total: number }>(),
+    readCaseExit(db, id, organizationId),
+  ]);
+  const declarationReady = Boolean(record.kottaj_number && record.kottaj_number.trim());
+  const valuationReady = record.valuation_status === 'calculated';
+  const releaseReady = record.release_status === 'released';
+  const receiptReady = Boolean(record.warehouse_receipt_no && record.warehouse_receipt_no.trim());
+  const net = record.net_weight_kg == null ? null : Number(record.net_weight_kg);
+  const gross = record.gross_weight_kg == null ? null : Number(record.gross_weight_kg);
+  const weightsPresent = net !== null && gross !== null && Number.isFinite(net) && Number.isFinite(gross);
+  const weightsValid = weightsPresent && gross! >= net!;
+  const pendingPermits = Number(pending?.total || 0);
+  const exitStatus = typeof exit?.exit_status === 'string' ? exit.exit_status : 'pending';
+  const issues: string[] = [];
+  if (!declarationReady) issues.push('اظهار/کوتاژ ثبت نشده');
+  if (!receiptReady) issues.push('قبض انبار ثبت نشده');
+  if (!releaseReady) issues.push('ترخیصیه/تحویل محموله هنوز Released نشده است');
+  if (!weightsPresent) issues.push('وزن خالص و ناخالص ناقص است');
+  else if (!weightsValid) issues.push('وزن ناخالص نمی‌تواند کمتر از وزن خالص باشد');
+  if (!valuationReady) issues.push('ارزش‌گذاری محاسبه نشده');
+  if (pendingPermits > 0) issues.push(pendingPermits + ' مجوز در انتظار تعیین تکلیف است');
+  if (exitStatus !== 'exited') issues.push('خروج نهایی کالا ثبت نشده');
+  return {
+    case_id: id,
+    status: record.status,
+    ready: issues.length === 0,
+    issues,
+    declaration_ready: declarationReady,
+    valuation_ready: valuationReady,
+    pending_permits: pendingPermits,
+    release_ready: releaseReady,
+    exit_status: exitStatus,
+  };
+};
+
 const readRelated = async (db: CasesD1Database, id: string, organizationId: string) => {
-  const [shipments, declarations, documents, permits] = await Promise.all([
+  const [shipments, declarations, documents, permits, exit] = await Promise.all([
     db.prepare(
       'SELECT s.id,s.case_id,s.client_id,s.vessel_id,v.name AS vessel_name,s.bill_of_lading_no,s.bill_of_lading_year,' +
       's.voyage_no,s.cargo_count,s.cargo_count_unit,s.net_weight_kg,s.gross_weight_kg,s.current_status,' +
@@ -133,12 +182,14 @@ const readRelated = async (db: CasesD1Database, id: string, organizationId: stri
       'SELECT id,case_id,permit_type,permit_number,issuing_authority,status,issued_at,expires_at,created_at,updated_at ' +
       'FROM permits WHERE case_id=? AND organization_id=? ORDER BY created_at DESC,id DESC LIMIT 200',
     ).bind(id, organizationId).all(),
+    readCaseExit(db, id, organizationId),
   ]);
   return {
     shipments: shipments.results,
     declarations: declarations.results,
     documents: documents.results,
     permits: permits.results,
+    exit: exit || null,
   };
 };
 
@@ -761,6 +812,129 @@ const handleCasePermitsApi = async (
   }
 };
 
+interface CaseExitRoute { caseId: string; }
+const parseCaseExitRoute = (pathname: string): CaseExitRoute | null | Response => {
+  if (!pathname.startsWith(collection + '/') || !pathname.endsWith('/exit')) return null;
+  const raw = pathname.slice(collection.length + 1, -'/exit'.length);
+  if (!raw || raw.includes('/')) return fail('INVALID_CASE_ID', 400);
+  try {
+    const caseId = decodeURIComponent(raw);
+    return caseId && caseId.length <= 128 && !caseId.includes('/') ? { caseId } : fail('INVALID_CASE_ID', 400);
+  } catch { return fail('INVALID_CASE_ID', 400); }
+};
+
+const exitStatuses = new Set(['pending','authorized','released','exited','cancelled']);
+const parseExitTimestamp = (value: unknown): string | null | undefined => {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return undefined;
+  return new Date(value).toISOString();
+};
+const parseExitText = (value: unknown, max: number): string | null | undefined => {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  return text.length <= max ? (text || null) : undefined;
+};
+
+const handleCaseExitApi = async (
+  request: Request, db: CasesD1Database, url: URL, profile: CasesApiProfile, caseId: string,
+): Promise<Response> => {
+  if (request.method === 'GET') {
+    try {
+      const record = await readCase(db, caseId, profile.organization_id);
+      if (!record) return fail('CASE_NOT_FOUND', 404);
+      const [exit, readiness] = await Promise.all([
+        readCaseExit(db, caseId, profile.organization_id),
+        readCaseCompletionReadiness(db, record, caseId, profile.organization_id),
+      ]);
+      return json({ ok: true, case_id: caseId, exit: exit || null, readiness });
+    } catch { return fail('CASE_EXIT_API_NOT_READY', 503); }
+  }
+  if (request.method !== 'PATCH') return fail('METHOD_NOT_ALLOWED', 405, { allowed: ['GET','PATCH'] });
+  if (!['owner','admin','broker','warehouse'].includes(profile.role)) return fail('FORBIDDEN', 403);
+  if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
+  const raw = await readJsonBody(request);
+  if (raw instanceof Response) return raw;
+  const exitStatus = typeof raw.exit_status === 'string' ? raw.exit_status.trim() : '';
+  if (!exitStatuses.has(exitStatus)) return fail('INVALID_CASE_EXIT_STATUS', 400);
+  const permitNo = parseExitText(raw.exit_permit_no ?? raw.exit_permit_number, 120);
+  const permitDateRaw = raw.exit_permit_date;
+  const permitDate = permitDateRaw == null || permitDateRaw === '' ? null
+    : typeof permitDateRaw === 'string' && isIsoDate(permitDateRaw) ? permitDateRaw : undefined;
+  const authorizedAt = parseExitTimestamp(raw.exit_authorized_at ?? raw.authorized_at);
+  const exitAt = parseExitTimestamp(raw.exit_at ?? raw.exited_at);
+  const vehiclePlate = parseExitText(raw.vehicle_plate, 40);
+  const driverName = parseExitText(raw.driver_name, 200);
+  const driverNationalId = parseExitText(raw.driver_national_id, 32);
+  const notes = parseExitText(raw.notes, 4000);
+  if ([permitNo,permitDate,authorizedAt,exitAt,vehiclePlate,driverName,driverNationalId,notes].some(value => value === undefined)) {
+    return fail('INVALID_CASE_EXIT_INPUT', 400);
+  }
+  try {
+    const record = await readCase(db, caseId, profile.organization_id);
+    if (!record) return fail('CASE_NOT_FOUND', 404);
+    const currentStatus = String(record.status || '');
+    if (currentStatus === 'archived') return fail('ARCHIVED_CASE_EXIT_FORBIDDEN', 409);
+    if (exitStatus === 'exited' && !['exit_permit','completed'].includes(currentStatus)) {
+      return fail('CASE_EXIT_STAGE_REQUIRED', 409);
+    }
+    if (['authorized','released'].includes(exitStatus) && !['duties_calculation','exit_permit'].includes(currentStatus)) {
+      return fail('CASE_EXIT_AUTHORIZATION_STAGE_REQUIRED', 409);
+    }
+    const before = await readCaseExit(db, caseId, profile.organization_id);
+    const nextStatus = exitStatus === 'exited' ? 'completed'
+      : ['authorized','released'].includes(exitStatus) ? 'exit_permit'
+      : exitStatus === 'pending' ? (currentStatus === 'exit_permit' ? currentStatus : 'duties_calculation')
+      : currentStatus;
+    const now = new Date().toISOString();
+    const exitId = typeof before?.id === 'string' ? before.id : crypto.randomUUID();
+    const after = {
+      id: exitId, organization_id: profile.organization_id, case_id: caseId, exit_status: exitStatus,
+      exit_permit_no: permitNo, exit_permit_date: permitDate, exit_authorized_at: authorizedAt,
+      exit_at: exitAt, vehicle_plate: vehiclePlate, driver_name: driverName,
+      driver_national_id: driverNationalId, notes, updated_at: now,
+    };
+    const statements = [
+      db.prepare(
+        'INSERT INTO case_exit_operations (id,organization_id,case_id,exit_status,exit_permit_no,exit_permit_date,' +
+        'exit_authorized_at,exit_at,vehicle_plate,driver_name,driver_national_id,notes,created_by,created_at,updated_at) ' +
+        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(case_id) DO UPDATE SET ' +
+        'exit_status=excluded.exit_status,exit_permit_no=excluded.exit_permit_no,exit_permit_date=excluded.exit_permit_date,' +
+        'exit_authorized_at=excluded.exit_authorized_at,exit_at=excluded.exit_at,vehicle_plate=excluded.vehicle_plate,' +
+        'driver_name=excluded.driver_name,driver_national_id=excluded.driver_national_id,notes=excluded.notes,updated_at=excluded.updated_at',
+      ).bind(
+        exitId, profile.organization_id, caseId, exitStatus, permitNo, permitDate, authorizedAt, exitAt,
+        vehiclePlate, driverName, driverNationalId, notes, profile.id, before?.created_at || now, now,
+      ),
+    ];
+    if (nextStatus !== currentStatus) {
+      statements.push(db.prepare(
+        'UPDATE cases SET status=?,updated_at=? WHERE id=? AND organization_id=?',
+      ).bind(nextStatus, now, caseId, profile.organization_id));
+    }
+    statements.push(db.prepare(
+      'INSERT INTO customs_os_audit_events (id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
+      'VALUES (?,?,?,?,?,?,?,?,?)',
+    ).bind(
+      crypto.randomUUID(), profile.organization_id, profile.id, 'update', 'case', caseId,
+      JSON.stringify({ status: currentStatus, exit: before || null }),
+      JSON.stringify({ status: nextStatus, exit: after, notes }),
+      request.headers.get('cf-ray') || request.headers.get('x-request-id'),
+    ));
+    await db.batch(statements);
+    const updatedCase = await readCase(db, caseId, profile.organization_id);
+    const [exit, readiness] = await Promise.all([
+      readCaseExit(db, caseId, profile.organization_id),
+      updatedCase ? readCaseCompletionReadiness(db, updatedCase, caseId, profile.organization_id) : Promise.resolve(null),
+    ]);
+    return json({ ok: true, case: updatedCase, exit: exit || null, readiness });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('case exit organization mismatch')) return fail('CASE_EXIT_TENANT_MISMATCH', 409);
+    return fail('CASE_EXIT_SAVE_FAILED', 500);
+  }
+};
+
 const parseSnapshot = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
   if (typeof value !== 'string' || !value.trim()) return {};
@@ -845,6 +1019,9 @@ export const handleCasesApi = async (
 ): Promise<Response> => {
   if (!profile.is_active || !roles.has(profile.role)) return fail('FORBIDDEN', 403);
   if (!profile.id || !profile.organization_id) return fail('INVALID_SESSION_PROFILE', 401);
+  const exitRoute = parseCaseExitRoute(url.pathname);
+  if (exitRoute instanceof Response) return exitRoute;
+  if (exitRoute) return handleCaseExitApi(request, db, url, profile, exitRoute.caseId);
   const permitRoute = parseCasePermitRoute(url.pathname);
   if (permitRoute instanceof Response) return permitRoute;
   if (permitRoute) return handleCasePermitsApi(request, db, url, profile, permitRoute);
