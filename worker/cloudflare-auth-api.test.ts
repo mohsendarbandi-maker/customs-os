@@ -358,6 +358,16 @@ describe('Cloudflare D1 authentication HTTP boundary', () => {
     expect(await response.json()).toMatchObject({ ok: false, error: 'ORIGIN_FORBIDDEN' });
   });
 
+  it('keeps unknown-account challenge salts stable without exposing account existence', async () => {
+    const db = new MemoryAuthD1();
+    const first = await makeChallenge(db);
+    const second = await makeChallenge(db);
+    expect(first.salt).toMatch(/^[0-9a-f]{64}$/);
+    expect(second.salt).toBe(first.salt);
+    expect(first.iterations).toBe(600_000);
+    expect(db.challenges).toHaveLength(2);
+  });
+
   it('creates a tenant-scoped session for a verified active account and restores it from a subdomain', async () => {
     const db = await makeReadyDatabase();
     const challenge = await makeChallenge(db);
