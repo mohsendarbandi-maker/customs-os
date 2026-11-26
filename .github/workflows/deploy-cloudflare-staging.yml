@@ -648,8 +648,27 @@ jobs:
           test "$permits_code" = "200"
           jq -e '.ok == true and (.permits | type == "array")' "$work_dir/permits.json" >/dev/null
 
+          orders_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/registration-orders.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' \
+            "$base/api/registration-orders?limit=100&offset=0")"
+          test "$orders_code" = "200"
+          jq -e '.ok == true and (.items | type == "array") and (.reconciliation | type == "array") and all(.items[]; has("bank_name") and has("bank_branch") and has("bank_branch_code") and has("payment_instrument_code"))' "$work_dir/registration-orders.json" >/dev/null
+
+          order_id="$(jq -r '.items[0].id // empty' "$work_dir/registration-orders.json")"
+          if [ -n "$order_id" ]; then
+            order_detail_code="$(curl --silent --show-error --max-time 25 --output "$work_dir/registration-order-detail.json" \
+              --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/registration-orders/$order_id")"
+            test "$order_detail_code" = "200"
+            jq -e --arg id "$order_id" '.ok == true and .order.id == $id' "$work_dir/registration-order-detail.json" >/dev/null
+
+            allocations_code="$(curl --silent --show-error --max-time 25 --output "$work_dir/registration-order-allocations.json" \
+              --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/registration-orders/$order_id/external-allocations")"
+            test "$allocations_code" = "200"
+            jq -e '.ok == true and (.items | type == "array")' "$work_dir/registration-order-allocations.json" >/dev/null
+          fi
+
           shipments_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/shipments.json" \
             --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/shipments?limit=200&offset=0")"
           test "$shipments_code" = "200"
           jq -e '.ok == true and .total == 22 and (.items | length) == 22' "$work_dir/shipments.json" >/dev/null
-          echo "Staging schema, SPA asset, owner login, session restore, case permits GET, and 22 existing shipments verified. No operational rows were written."
+          echo "Staging schema, SPA asset, owner login, session restore, case permits GET, registration-order list/detail/allocations GET, and 22 existing shipments verified. No operational rows were written."
