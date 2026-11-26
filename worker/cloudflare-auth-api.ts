@@ -50,6 +50,7 @@ type SessionRow = {
   full_name: string | null;
   phone: string | null;
   is_active: number | boolean;
+  verified_at: string | null;
 };
 
 const COOKIE_NAME = 'customs_os_session';
@@ -224,10 +225,10 @@ async function readActiveSession(db: CloudflareAuthDatabase, token: string, nowI
   const tokenHash = await sha256(token);
   const row = await db.prepare(
     'SELECT s.session_id, s.user_id, s.token_hash, s.expires_at, s.last_seen_at, ' +
-    'c.email_normalized, p.id, p.organization_id, p.role, p.client_id, p.full_name, p.phone, p.is_active ' +
+    'c.email_normalized, p.user_id AS id, p.organization_id, p.role, p.client_id, p.full_name, p.phone, p.is_active, p.verified_at ' +
     'FROM customs_os_auth_sessions s ' +
     'JOIN customs_os_auth_credentials c ON c.user_id = s.user_id ' +
-    'JOIN profiles p ON p.id = s.user_id ' +
+    'JOIN customs_os_auth_principals p ON p.user_id = s.user_id ' +
     'WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? LIMIT 1',
   ).bind(tokenHash, nowIso).first<SessionRow>();
   if (!row) return null;
