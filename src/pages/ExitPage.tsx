@@ -286,7 +286,7 @@ export const ExitPage: React.FC = () => {
       if (useCloudflare) {
         const linkedShipmentId = shipmentId || declaration?.shipment_id || '';
         if (!linkedShipmentId) throw new Error('محموله مرتبط برای ذخیره فایل مشخص نیست.');
-        if (!/^(application\\/pdf|image\\/(jpeg|png))$/i.test(file.type)) {
+        if (!/^(application\/pdf|image\/(jpeg|png))$/i.test(file.type)) {
           throw new Error('فقط PDF، JPG یا PNG مجاز است.');
         }
         const foldersResult = await listCloudflareFileManagerFolders();
@@ -431,7 +431,7 @@ export const ExitPage: React.FC = () => {
           const issues = Array.isArray(result.issues)
             ? result.issues.map(String)
             : ['شرایط نهایی خروج هنوز تکمیل نشده است.'];
-          setError(issues.join('\\n• '));
+          setError(issues.join('\n• '));
           return;
         }
         setMessage('خروج در D1 تأیید شد و وضعیت محموله «آماده برای امور مالی» ثبت شد. رابط مالی Cloudflare هنوز در این مسیر فعال نشده است؛ صفحه را ترک نکردیم.');
