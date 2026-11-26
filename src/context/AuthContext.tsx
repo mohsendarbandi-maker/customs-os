@@ -9,6 +9,8 @@ import React, {
 } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { isCloudflareRecoveryHost } from '../lib/recoveryHost';
+import { isCloudflareNativeAuthEnabled } from '../lib/cloudflareAuthBackend';
+import { getCloudflareAuthSession, signOutFromCloudflare, type CloudflareAuthSession } from '../lib/cloudflareAuthClient';
 import { supabase, SUPABASE_AUTH_STORAGE_KEY } from '../lib/supabase';
 import { authSessionStorage } from '../lib/authStorage';
 import { readOfflineQueryCache, saveOfflineQueryCache } from '../lib/offlineQueue';
@@ -84,6 +86,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const activeAuthError = useRef<string | null>(null);
   const isMounted = useRef(false);
   const initialized = useRef(false);
+
+  const applyCloudflareAuthResponse = useCallback((
+    data: CloudflareAuthSession | { authenticated: false },
+  ) => {
+    if (data.authenticated) {
+      const nativeUser = {
+        id: data.user.id,
+        email: data.user.email,
+        app_metadata: { provider: 'cloudflare', providers: ['cloudflare'] },
+        user_metadata: { full_name: data.user.full_name },
+        aud: 'authenticated',
+        created_at: new Date().toISOString(),
+        role: 'authenticated',
+      } as unknown as User;
+      const nativeSession = {
+        access_token: 'cloudflare-http-only-session',
+        token_type: 'bearer',
+        expires_in: 12 * 60 * 60,
+        expires_at: Math.floor(Date.now() / 1000) + 12 * 60 * 60,
+        refresh_token: 'cloudflare-http-only-session',
+        user: nativeUser,
+      } as Session;
+      setUser(nativeUser);
+      setSession(nativeSession);
+      setProfile(data.profile);
+    } else {
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+    }
+    setNeedsOnboarding(false);
+    setError(null);
+  }, []);
+
 
   useEffect(() => {
     isMounted.current = true;
@@ -275,6 +311,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
    * Supabase request there can cause initialization/session races.
    */
   useEffect(() => {
+    if (isCloudflareNativeAuthEnabled()) {
+      let active = true;
+      let inFlight = false;
+      let lastRefreshAt = 0;
+      let initializedNativeSession = false;
+
+      const loadNativeSession = async () => {
+        if (!active || inFlight) return;
+        inFlight = true;
+        lastRefreshAt = Date.now();
+        try {
+          const data = await getCloudflareAuthSession();
+          if (!active) return;
+          applyCloudflareAuthResponse(data);
+          initializedNativeSession = true;
+          setError(null);
+        } catch (cause) {
+          if (!active) return;
+          if (!initializedNativeSession) {
+            setUser(null);
+            setSession(null);
+            setProfile(null);
+          }
+          setError(cause instanceof Error ? cause.message : 'خطا در بازیابی نشست Cloudflare');
+        } finally {
+          inFlight = false;
+          if (active) setLoading(false);
+        }
+      };
+
+      const recoverOnResume = () => {
+        if (
+          active &&
+          document.visibilityState === 'visible' &&
+          !inFlight &&
+          Date.now() - lastRefreshAt >= 15_000
+        ) {
+          void loadNativeSession();
+        }
+      };
+
+      void loadNativeSession();
+      document.addEventListener('visibilitychange', recoverOnResume);
+      window.addEventListener('focus', recoverOnResume);
+      window.addEventListener('pageshow', recoverOnResume);
+      return () => {
+        active = false;
+        document.removeEventListener('visibilitychange', recoverOnResume);
+        window.removeEventListener('focus', recoverOnResume);
+        window.removeEventListener('pageshow', recoverOnResume);
+      };
+    }
+
     if (isCloudflareRecoveryHost()) {
       let active = true;
       const loadCloudflareSession = async () => {
@@ -598,12 +687,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       window.removeEventListener('pageshow', handleVisibilityChange);
       subscription?.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [fetchProfile, applyCloudflareAuthResponse]);
 
   const signOut = useCallback(async () => {
     currentFetchId.current++;
 
     if (isMounted.current) setLoading(true);
+
+    if (isCloudflareNativeAuthEnabled()) {
+      try {
+        await signOutFromCloudflare();
+      } catch (err) {
+        console.warn('[Auth] Cloudflare logout failed:', err);
+      } finally {
+        clearLocalAuthStorage();
+        if (isMounted.current) {
+          setUser(null);
+          setSession(null);
+          setProfile(null);
+          setNeedsOnboarding(false);
+          setError(null);
+          setLoading(false);
+        }
+      }
+      return;
+    }
 
     if (isCloudflareRecoveryHost()) {
       try {
@@ -649,6 +757,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const refreshProfile = useCallback(async () => {
     const currentUserId = user?.id;
+
+    if (isCloudflareNativeAuthEnabled()) {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getCloudflareAuthSession();
+        applyCloudflareAuthResponse(data);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'خطا در بازیابی نشست Cloudflare');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     if (isCloudflareRecoveryHost()) {
       setLoading(true);
@@ -753,7 +875,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setLoading(false);
       }
     }
-  }, [user?.id, fetchProfile]);
+  }, [user?.id, fetchProfile, applyCloudflareAuthResponse]);
 
   const contextValue = useMemo<AuthContextType>(
     () => ({
