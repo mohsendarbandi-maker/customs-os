@@ -53,6 +53,13 @@ interface OrderRow extends Record<string, unknown> {
   external_allocated_value_milli: number; total_allocated_net_weight_milli: number;
   total_allocated_gross_weight_milli: number; total_allocated_value_milli: number;
 }
+interface LegacyMatchCandidateRow extends Record<string, unknown> {
+  registration_order_id: string; organization_id: string; order_number: string;
+  registration_order_client_id: string | null; shipment_id: string; shipment_client_id: string | null;
+  shipment_name: string | null; bill_of_lading_no: string | null; customs_registration_order_no: string;
+  candidate_net_weight_kg: number | null; candidate_gross_weight_kg: number | null;
+  candidate_invoice_amount: number | null; candidate_invoice_currency: string | null; candidate_source: string;
+}
 interface ExternalAllocationRow extends Record<string, unknown> {
   id: string; organization_id: string; registration_order_id: string;
   recipient_company: string | null; destination_customs: string | null;
@@ -427,6 +434,15 @@ const listOrders = async (
     ).bind(...binds, limit, offset).all<OrderRow>();
     const cases = await readCases(db, profile.organization_id);
     const items = rows.results.map((row) => ({ ...row, is_closed: Boolean(row.is_closed) }));
+    const legacyCandidates = items.length
+      ? await db.prepare(
+        'SELECT registration_order_id,organization_id,order_number,registration_order_client_id,shipment_id,' +
+        'shipment_client_id,shipment_name,bill_of_lading_no,customs_registration_order_no,candidate_net_weight_kg,' +
+        'candidate_gross_weight_kg,candidate_invoice_amount,candidate_invoice_currency,candidate_source ' +
+        'FROM registration_order_legacy_match_candidates WHERE organization_id = ? AND registration_order_id IN (' +
+        items.map(() => '?').join(',') + ') ORDER BY order_number,shipment_id',
+      ).bind(profile.organization_id, ...items.map((item) => item.id)).all<LegacyMatchCandidateRow>()
+      : { results: [] as LegacyMatchCandidateRow[] };
     const reconciliation = items.map((row) => ({
       registration_order_id: row.id,
       order_number: row.order_number,
@@ -454,7 +470,7 @@ const listOrders = async (
     }));
     return json({
       ok: true, items, total: Number(count?.total || 0), limit, offset,
-      cases: cases.results, reconciliation,
+      cases: cases.results, reconciliation, legacyCandidates: legacyCandidates.results,
     });
   } catch {
     return fail('REGISTRATION_ORDERS_API_NOT_READY', 503);
