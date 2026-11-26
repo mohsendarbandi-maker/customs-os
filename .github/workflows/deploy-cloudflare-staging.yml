@@ -648,6 +648,28 @@ jobs:
           test "$permits_code" = "200"
           jq -e '.ok == true and (.permits | type == "array")' "$work_dir/permits.json" >/dev/null
 
+          # Read-only workflow contract: case detail and declaration workflow
+          # state/events. Do not call declaration-exit GET here because that
+          # endpoint intentionally initializes missing checklist rows.
+          case_detail_code="$(curl --silent --show-error --max-time 25 --output "$work_dir/case-detail.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/cases/$case_id")"
+          test "$case_detail_code" = "200"
+          jq -e '.ok == true and (.declarations | type == "array")' "$work_dir/case-detail.json" >/dev/null
+          declaration_id="$(jq -r '.declarations[0].id // empty' "$work_dir/case-detail.json")"
+          if [ -n "$declaration_id" ]; then
+            workflow_code="$(curl --silent --show-error --max-time 25 --output "$work_dir/workflow.json" \
+              --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' \
+              "$base/api/customs-declaration-workflows/$declaration_id")"
+            test "$workflow_code" = "200"
+            jq -e '.ok == true and (.declaration.id | type == "string") and (.workflow == null or (.workflow | type == "object"))' "$work_dir/workflow.json" >/dev/null
+
+            events_code="$(curl --silent --show-error --max-time 25 --output "$work_dir/workflow-events.json" \
+              --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' \
+              "$base/api/customs-declaration-workflows/$declaration_id/events")"
+            test "$events_code" = "200"
+            jq -e '.ok == true and (.events | type == "array")' "$work_dir/workflow-events.json" >/dev/null
+          fi
+
           orders_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/registration-orders.json" \
             --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' \
             "$base/api/registration-orders?limit=100&offset=0")"
