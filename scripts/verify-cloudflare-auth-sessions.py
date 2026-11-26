@@ -40,6 +40,26 @@ attempt_columns = {row[1] for row in db.execute("PRAGMA table_info(customs_os_au
 assert {"ip_hash", "window_started_at", "attempts"} <= attempt_columns
 challenge_columns = {row[1] for row in db.execute("PRAGMA table_info(customs_os_auth_challenges)")}
 assert {"challenge_id", "user_id", "email_normalized", "purpose", "challenge_hash", "ip_hash", "created_at", "expires_at", "consumed_at"} <= challenge_columns
+db.execute(
+    """INSERT INTO customs_os_auth_challenges
+       (challenge_id, user_id, email_normalized, purpose, challenge_hash, ip_hash, created_at, expires_at)
+       VALUES (?, NULL, ?, 'login', ?, ?, ?, ?)""",
+    ("550e8400-e29b-41d4-a716-446655440099", "unknown@example.test", "f" * 64, "a" * 64,
+     "2026-11-26T00:00:00Z", "2026-11-26T00:02:00Z"),
+)
+challenge = db.execute(
+    "SELECT user_id, purpose, consumed_at FROM customs_os_auth_challenges WHERE challenge_id = ?",
+    ("550e8400-e29b-41d4-a716-446655440099",),
+).fetchone()
+assert challenge == (None, "login", None)
+must_fail(
+    """INSERT INTO customs_os_auth_challenges
+       (challenge_id, user_id, email_normalized, purpose, challenge_hash, ip_hash, created_at, expires_at)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?)""",
+    ("550e8400-e29b-41d4-a716-446655440098", "unknown@example.test", "signup", "f" * 64, "a" * 64,
+     "2026-11-26T00:00:00Z", "2026-11-26T00:02:00Z"),
+    "unsupported challenge purpose",
+)
 principal_columns = {row[1] for row in db.execute("PRAGMA table_info(customs_os_auth_principals)")}
 assert {"user_id", "organization_id", "role", "client_id", "full_name", "phone", "is_active", "verified_at"} <= principal_columns
 
