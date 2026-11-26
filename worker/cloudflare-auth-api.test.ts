@@ -1,17 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createCloudflarePasswordCredential,
+  createCloudflareAuthProof,
+  deriveCloudflarePasswordVerifier,
+  type CloudflareAuthChallenge,
+} from '../src/lib/cloudflareAuthCrypto';
+import {
+  encryptCloudflareVerifierForStorage,
   handleCloudflareAuthApi,
-  normalizeAuthEmail,
-  verifyCloudflarePassword,
   type CloudflareAuthDatabase,
   type CloudflareAuthStatement,
 } from './cloudflare-auth-api';
 
+const TEST_PEPPER = 'ab'.repeat(32);
+const TEST_IP = '192.0.2.10';
+
 type TestCredential = {
   user_id: string;
   email_normalized: string;
-  password_hash: string;
+  password_verifier_encrypted: string;
+  password_verifier_iv: string;
   password_salt: string;
   password_iterations: number;
   failed_attempts: number;
@@ -39,11 +46,23 @@ type TestSession = {
   device_label: string;
   app_origin: string;
 };
+type TestChallenge = {
+  challenge_id: string;
+  user_id: string | null;
+  email_normalized: string;
+  purpose: 'login' | 'password_change';
+  challenge_hash: string;
+  ip_hash: string;
+  created_at: string;
+  expires_at: string;
+  consumed_at: string | null;
+};
 
 class MemoryAuthD1 implements CloudflareAuthDatabase {
   credential: TestCredential | null = null;
   principal: TestPrincipal | null = null;
   sessions: TestSession[] = [];
+  challenges: TestChallenge[] = [];
   attempts = new Map<string, { window_started_at: string; attempts: number }>();
   audit: Array<{ event_type: string; target_user_id: string }> = [];
 
@@ -57,10 +76,24 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
           return (db.attempts.get(String(values[0])) ?? null) as T | null;
         }
         if (sql.includes('FROM customs_os_auth_credentials WHERE email_normalized')) {
-          return (db.credential?.email_normalized === values[0] ? db.credential : null) as T | null;
+          const email = String(values[0]);
+          if (!db.credential || db.credential.email_normalized !== email) return null;
+          if (sql.includes('password_verifier_encrypted')) return db.credential as T;
+          return {
+            user_id: db.credential.user_id,
+            email_normalized: db.credential.email_normalized,
+            password_salt: db.credential.password_salt,
+            password_iterations: db.credential.password_iterations,
+          } as T;
+        }
+        if (sql.includes('FROM customs_os_auth_credentials WHERE user_id')) {
+          if (!db.credential || db.credential.user_id !== values[0]) return null;
+          return db.credential as T;
         }
         if (sql.includes('FROM customs_os_auth_principals WHERE user_id')) {
-          return (db.principal?.user_id === values[0] ? { ...db.principal, id: db.principal.user_id } : null) as T | null;
+          return (db.principal?.user_id === values[0]
+            ? { ...db.principal, id: db.principal.user_id }
+            : null) as T | null;
         }
         if (sql.includes('FROM customs_os_auth_sessions s')) {
           const [tokenHash, nowIso] = values as string[];
@@ -108,6 +141,39 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
         throw new Error('Unexpected auth D1 all query: ' + sql);
       },
       async run() {
+        if (sql.startsWith('DELETE FROM customs_os_auth_challenges')) {
+          db.challenges = db.challenges.filter(item =>
+            item.expires_at > String(values[0]) && item.consumed_at === null
+          );
+          return { meta: { changes: 1 } };
+        }
+        if (sql.startsWith('INSERT INTO customs_os_auth_challenges')) {
+          const [challenge_id, user_id, email_normalized, purpose, challenge_hash, ip_hash, created_at, expires_at] = values as [
+            string, string | null, string, 'login' | 'password_change', string, string, string, string
+          ];
+          db.challenges.push({
+            challenge_id, user_id, email_normalized, purpose, challenge_hash, ip_hash,
+            created_at, expires_at, consumed_at: null,
+          });
+          return { meta: { changes: 1 } };
+        }
+        if (sql.startsWith('UPDATE customs_os_auth_challenges SET consumed_at')) {
+          const [consumedAt, challengeId, email, purpose, challengeHash, ipHash, now, userId] = values as [
+            string, string, string, string, string, string, string, string | null
+          ];
+          const challenge = db.challenges.find(item =>
+            item.challenge_id === challengeId &&
+            item.email_normalized === email &&
+            item.purpose === purpose &&
+            item.challenge_hash === challengeHash &&
+            item.ip_hash === ipHash &&
+            item.consumed_at === null &&
+            item.expires_at > now &&
+            (userId === null || item.user_id === userId)
+          );
+          if (challenge) challenge.consumed_at = consumedAt;
+          return { meta: { changes: challenge ? 1 : 0 } };
+        }
         if (sql.startsWith('UPDATE customs_os_auth_credentials SET failed_attempts = ?')) {
           if (db.credential) {
             db.credential.failed_attempts = Number(values[0]);
@@ -124,7 +190,10 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
         }
         if (sql.startsWith('INSERT INTO customs_os_auth_sessions')) {
           const [session_id, user_id, token_hash, created_at, expires_at, last_seen_at, device_label, app_origin] = values as string[];
-          db.sessions.push({ session_id, user_id, token_hash, created_at, expires_at, last_seen_at, revoked_at: null, device_label, app_origin });
+          db.sessions.push({
+            session_id, user_id, token_hash, created_at, expires_at, last_seen_at,
+            revoked_at: null, device_label, app_origin,
+          });
           return { meta: { changes: 1 } };
         }
         if (sql.startsWith('DELETE FROM customs_os_auth_login_attempts')) {
@@ -135,6 +204,12 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
           const [ipHash, windowStartedAt] = values as string[];
           db.attempts.set(ipHash, { window_started_at: windowStartedAt, attempts: 1 });
           return { meta: { changes: 1 } };
+        }
+        if (sql.startsWith('UPDATE customs_os_auth_login_attempts')) {
+          const ipHash = String(values[0]);
+          const previous = db.attempts.get(ipHash);
+          if (previous) previous.attempts = Math.min(previous.attempts + 1, 100);
+          return { meta: { changes: previous ? 1 : 0 } };
         }
         if (sql.startsWith('INSERT INTO customs_os_auth_audit_events')) {
           db.audit.push({ event_type: String(values[3]), target_user_id: String(values[2]) });
@@ -167,18 +242,18 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
   }
 }
 
-const unusedDatabase = (): CloudflareAuthDatabase => ({
-  prepare() { throw new Error('database should not be touched'); },
-  async batch() { throw new Error('database should not be touched'); },
-});
-
 const makeReadyDatabase = async () => {
   const db = new MemoryAuthD1();
-  const credential = await createCloudflarePasswordCredential('Strong-Password-2026!');
+  const verifier = await deriveCloudflarePasswordVerifier('Strong-Password-2026!');
+  const encrypted = await encryptCloudflareVerifierForStorage(
+    TEST_PEPPER, 'owner-1', 'owner@example.com', verifier.verifier,
+  );
   db.credential = {
     user_id: 'owner-1',
     email_normalized: 'owner@example.com',
-    ...credential,
+    ...encrypted,
+    password_salt: verifier.salt,
+    password_iterations: verifier.iterations,
     failed_attempts: 0,
     locked_until: null,
     password_reset_required: 0,
@@ -196,85 +271,103 @@ const makeReadyDatabase = async () => {
   return db;
 };
 
-const loginRequest = (email = 'OWNER@example.com', password = 'Strong-Password-2026!') =>
-  new Request('https://darbandicommercial.ir/api/auth/login', {
+const makeChallenge = async (db: CloudflareAuthDatabase) => {
+  const request = new Request('https://darbandicommercial.ir/api/auth/challenge', {
     method: 'POST',
     headers: {
       origin: 'https://darbandicommercial.ir',
       'content-type': 'application/json',
-      'cf-connecting-ip': '192.0.2.10',
+      'cf-connecting-ip': TEST_IP,
+    },
+    body: JSON.stringify({ email: 'OWNER@example.com' }),
+  });
+  const response = await handleCloudflareAuthApi(
+    request, db, new URL(request.url), { AUTH_PEPPER: TEST_PEPPER },
+  );
+  if (!response.ok) throw new Error('Could not create login challenge: ' + response.status);
+  return await response.json() as CloudflareAuthChallenge;
+};
+
+const completeLogin = async (db: CloudflareAuthDatabase, challenge: CloudflareAuthChallenge) => {
+  const email = 'OWNER@example.com';
+  const proof = await createCloudflareAuthProof(email, 'login', challenge, 'Strong-Password-2026!');
+  const request = new Request('https://darbandicommercial.ir/api/auth/login', {
+    method: 'POST',
+    headers: {
+      origin: 'https://darbandicommercial.ir',
+      'content-type': 'application/json',
+      'cf-connecting-ip': TEST_IP,
       'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
     },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      challenge_id: challenge.challenge_id,
+      challenge: challenge.challenge,
+      proof,
+    }),
+  });
+  return handleCloudflareAuthApi(
+    request, db, new URL(request.url), { AUTH_PEPPER: TEST_PEPPER },
+  );
+};
+
+describe('Cloudflare browser-side auth cryptography', () => {
+  it('derives fixed-cost PBKDF2 verifiers without sending a plaintext password to the Worker', async () => {
+    const verifier = await deriveCloudflarePasswordVerifier('Strong-Password-2026!');
+    expect(verifier.verifier).toMatch(/^[0-9a-f]{64}$/);
+    expect(verifier.salt).toMatch(/^[0-9a-f]{64}$/);
+    expect(verifier.iterations).toBe(310_000);
   });
 
-describe('Cloudflare D1 authentication primitives', () => {
-  it('normalizes Unicode-compatible email casing and whitespace', () => {
-    expect(normalizeAuthEmail('  OWNER@Example.COM  ')).toBe('owner@example.com');
+  it('generates a one-time HMAC proof bound to the email, purpose, and UUID challenge', async () => {
+    const challenge: CloudflareAuthChallenge = {
+      challenge_id: '550e8400-e29b-41d4-a716-446655440000',
+      challenge: 'a'.repeat(64),
+      salt: 'b'.repeat(64),
+      iterations: 310_000,
+      expires_in: 120,
+    };
+    const proof = await createCloudflareAuthProof(' Owner@Example.com ', 'login', challenge, 'Strong-Password-2026!');
+    expect(proof).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('creates salted PBKDF2-SHA-256 credentials and verifies only the matching password', async () => {
-    const credential = await createCloudflarePasswordCredential('Strong-Password-2026!');
-    expect(credential.password_hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(credential.password_salt).toMatch(/^[0-9a-f]{64}$/);
-    expect(credential.password_iterations).toBe(310_000);
-    await expect(
-      verifyCloudflarePassword(
-        'Strong-Password-2026!',
-        credential.password_hash,
-        credential.password_salt,
-        credential.password_iterations,
-      ),
-    ).resolves.toBe(true);
-    await expect(
-      verifyCloudflarePassword(
-        'Wrong-Password-2026!',
-        credential.password_hash,
-        credential.password_salt,
-        credential.password_iterations,
-      ),
-    ).resolves.toBe(false);
-  });
-
-  it('rejects short passwords at credential creation time', async () => {
-    await expect(createCloudflarePasswordCredential('short')).rejects.toThrow('PASSWORD_POLICY');
-  });
-
-  it('rejects weak or malformed stored PBKDF2 parameters without deriving a key', async () => {
-    await expect(verifyCloudflarePassword('test', 'bad-hash', 'a'.repeat(64), 310_000)).resolves.toBe(false);
-    await expect(verifyCloudflarePassword('test', 'a'.repeat(64), 'b'.repeat(64), 1)).resolves.toBe(false);
-    await expect(verifyCloudflarePassword('test', 'a'.repeat(64), 'b'.repeat(64), 1_000_001)).resolves.toBe(false);
+  it('rejects unsupported work factors and weak passwords in the browser helper', async () => {
+    await expect(deriveCloudflarePasswordVerifier('short')).rejects.toThrow('PASSWORD_POLICY');
+    await expect(deriveCloudflarePasswordVerifier('Strong-Password-2026!', 'b'.repeat(64), 100_000))
+      .rejects.toThrow('UNSUPPORTED_PASSWORD_KDF');
   });
 });
 
 describe('Cloudflare D1 authentication HTTP boundary', () => {
   it('rejects cross-origin login before accessing the database', async () => {
-    const request = new Request('https://darbandicommercial.ir/api/auth/login', {
+    const request = new Request('https://darbandicommercial.ir/api/auth/challenge', {
       method: 'POST',
       headers: {
         origin: 'https://attacker.example',
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ email: 'owner@example.com', password: 'irrelevant' }),
+      body: JSON.stringify({ email: 'owner@example.com' }),
     });
     const response = await handleCloudflareAuthApi(
       request,
-      unusedDatabase(),
+      { prepare() { throw new Error('database should not be touched'); }, async batch() { throw new Error('database should not be touched'); } },
       new URL(request.url),
+      { AUTH_PEPPER: TEST_PEPPER },
     );
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ ok: false, error: 'ORIGIN_FORBIDDEN' });
   });
 
-  it('creates a tenant-scoped session for a verified active account and restores it', async () => {
+  it('creates a tenant-scoped session for a verified active account and restores it from a subdomain', async () => {
     const db = await makeReadyDatabase();
-    const loginResponse = await handleCloudflareAuthApi(
-      loginRequest(),
-      db,
-      new URL('https://darbandicommercial.ir/api/auth/login'),
-    );
+    const challenge = await makeChallenge(db);
+    const loginResponse = await completeLogin(db, challenge);
     expect(loginResponse.status).toBe(200);
-    const loginBody = await loginResponse.json() as { authenticated: boolean; profile: { organization_id: string; role: string }; session_id: string };
+    const loginBody = await loginResponse.json() as {
+      authenticated: boolean;
+      profile: { organization_id: string; role: string };
+      session_id: string;
+    };
     expect(loginBody.authenticated).toBe(true);
     expect(loginBody.profile).toMatchObject({ organization_id: 'org-1', role: 'owner' });
     expect(db.sessions).toHaveLength(1);
@@ -292,6 +385,7 @@ describe('Cloudflare D1 authentication HTTP boundary', () => {
       sessionRequest,
       db,
       new URL(sessionRequest.url),
+      { AUTH_PEPPER: TEST_PEPPER },
     );
     expect(sessionResponse.status).toBe(200);
     expect(await sessionResponse.json()).toMatchObject({
@@ -299,30 +393,19 @@ describe('Cloudflare D1 authentication HTTP boundary', () => {
       user: { id: 'owner-1', email: 'owner@example.com' },
       profile: { organization_id: 'org-1', role: 'owner' },
     });
+
+    const replay = await completeLogin(db, challenge);
+    expect(replay.status).toBe(401);
   });
 
   it('does not create a session for a disabled profile', async () => {
     const db = await makeReadyDatabase();
     db.principal!.is_active = 0;
-    const response = await handleCloudflareAuthApi(
-      loginRequest(),
-      db,
-      new URL('https://darbandicommercial.ir/api/auth/login'),
-    );
+    const challenge = await makeChallenge(db);
+    const response = await completeLogin(db, challenge);
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ error: 'ACCOUNT_NOT_READY_OR_DISABLED' });
     expect(db.sessions).toHaveLength(0);
-  });
-
-  it('returns an unauthenticated session without querying D1 when no cookie exists', async () => {
-    const request = new Request('https://darbandicommercial.ir/api/auth/session');
-    const response = await handleCloudflareAuthApi(
-      request,
-      unusedDatabase(),
-      new URL(request.url),
-    );
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ authenticated: false });
   });
 
   it('does not expose internal D1 errors to the caller', async () => {
@@ -330,11 +413,16 @@ describe('Cloudflare D1 authentication HTTP boundary', () => {
       prepare() { throw new Error('private sql internals'); },
       async batch() { throw new Error('private sql internals'); },
     };
-    const request = loginRequest();
+    const request = new Request('https://darbandicommercial.ir/api/auth/challenge', {
+      method: 'POST',
+      headers: { origin: 'https://darbandicommercial.ir', 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'owner@example.com' }),
+    });
     const response = await handleCloudflareAuthApi(
       request,
       brokenDatabase,
       new URL(request.url),
+      { AUTH_PEPPER: TEST_PEPPER },
     );
     expect(response.status).toBe(503);
     const body = await response.text();
@@ -342,12 +430,41 @@ describe('Cloudflare D1 authentication HTTP boundary', () => {
     expect(body).not.toContain('private sql internals');
   });
 
+  it('fails closed when the Worker-side encryption secret is missing', async () => {
+    const request = new Request('https://darbandicommercial.ir/api/auth/challenge', {
+      method: 'POST',
+      headers: { origin: 'https://darbandicommercial.ir', 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'owner@example.com' }),
+    });
+    const response = await handleCloudflareAuthApi(
+      request,
+      { prepare() { throw new Error('must not access D1'); }, async batch() { throw new Error('must not access D1'); } },
+      new URL(request.url),
+      {},
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: 'AUTH_NOT_CONFIGURED' });
+  });
+
+  it('returns an unauthenticated session without querying D1 when no cookie exists', async () => {
+    const request = new Request('https://darbandicommercial.ir/api/auth/session');
+    const response = await handleCloudflareAuthApi(
+      request,
+      { prepare() { throw new Error('database should not be touched'); }, async batch() { throw new Error('database should not be touched'); } },
+      new URL(request.url),
+      { AUTH_PEPPER: TEST_PEPPER },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ authenticated: false });
+  });
+
   it('returns a 404 for unsupported auth routes', async () => {
     const request = new Request('https://darbandicommercial.ir/api/auth/unexpected');
     const response = await handleCloudflareAuthApi(
       request,
-      unusedDatabase(),
+      { prepare() { throw new Error('database should not be touched'); }, async batch() { throw new Error('database should not be touched'); } },
       new URL(request.url),
+      { AUTH_PEPPER: TEST_PEPPER },
     );
     expect(response.status).toBe(404);
   });
