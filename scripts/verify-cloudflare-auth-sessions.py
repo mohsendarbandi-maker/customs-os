@@ -22,6 +22,13 @@ CREATE TABLE profiles (
 db.executescript((MIGRATIONS / "0014_cloudflare_native_auth_credentials.sql").read_text(encoding="utf-8"))
 db.executescript((MIGRATIONS / "0015_cloudflare_native_auth_sessions.sql").read_text(encoding="utf-8"))
 
+def must_fail(statement, values, label):
+    try:
+        db.execute(statement, values)
+    except sqlite3.IntegrityError:
+        return
+    raise AssertionError(f"expected constraint failure: {label}")
+
 session_columns = {row[1] for row in db.execute("PRAGMA table_info(customs_os_auth_sessions)")}
 assert {
     "session_id", "user_id", "token_hash", "created_at", "expires_at",
@@ -85,13 +92,6 @@ db.execute(
     ("550e8400-e29b-41d4-a716-446655440000", "owner-1", "c" * 64,
      "2099-01-01T00:00:00Z", "iPhone · Safari", "https://darbandicommercial.ir"),
 )
-
-def must_fail(statement, values, label):
-    try:
-        db.execute(statement, values)
-    except sqlite3.IntegrityError:
-        return
-    raise AssertionError(f"expected constraint failure: {label}")
 
 must_fail(
     """INSERT INTO customs_os_auth_sessions
