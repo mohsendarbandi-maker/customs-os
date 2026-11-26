@@ -280,7 +280,7 @@ describe('Cloudflare D1 authentication HTTP boundary', () => {
     expect(db.sessions).toHaveLength(1);
     expect(db.audit.map(item => item.event_type)).toContain('login');
 
-    const cookie = loginResponse.headers.get('set-cookie')?.split(';')[0];
+    const cookie = loginResponse.headers.get('set-cookie')?.split(';')[0] ?? '';
     expect(cookie).toMatch(/^customs_os_session=[0-9a-f]{64}$/);
     expect(loginResponse.headers.get('set-cookie')).toContain('HttpOnly');
     expect(loginResponse.headers.get('set-cookie')).toContain('Secure');
@@ -301,7 +301,7 @@ describe('Cloudflare D1 authentication HTTP boundary', () => {
     });
   });
 
-  it('does not create a session for a disabled or unverified profile', async () => {
+  it('does not create a session for a disabled profile', async () => {
     const db = await makeReadyDatabase();
     db.principal!.is_active = 0;
     const response = await handleCloudflareAuthApi(
