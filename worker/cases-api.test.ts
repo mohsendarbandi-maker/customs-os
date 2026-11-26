@@ -14,6 +14,7 @@ class FakeD1 implements CasesD1Database {
   detail: CaseRecord | null = null;
   detailOrganizationId = 'org-a';
   permits: Array<Record<string, unknown>> = [];
+  exitRecord: Record<string, unknown> | null = null;
   simulatePermitConflict = false;
   related = { shipments: [] as unknown[], declarations: [] as unknown[], documents: [] as unknown[], permits: [] as unknown[] };
   auditEvents: Array<Record<string, unknown>> = [];
@@ -35,6 +36,13 @@ class FakeD1 implements CasesD1Database {
     }
     if (sql.includes('FROM permits WHERE id=? AND case_id=? AND organization_id=?')) {
       return (this.permits.find(row => row.id === values[0] && row.case_id === values[1] && row.organization_id === values[2]) || null) as T | null;
+    }
+    if (sql.includes('FROM case_exit_operations WHERE case_id=? AND organization_id=?')) {
+      return this.exitRecord?.case_id === values[0] && this.exitRecord.organization_id === values[1] ? this.exitRecord as T : null;
+    }
+    if (sql.includes('COUNT(*) AS total FROM permits WHERE case_id=? AND organization_id=?')) {
+      const rows = [...this.related.permits, ...this.permits].filter(row => row.case_id === values[0] && row.organization_id === values[1] && row.status === 'pending');
+      return { total: rows.length } as T;
     }
     if (sql.includes('FROM clients WHERE id=?')) {
       return this.clientRow?.id === values[0] && this.clientRow.organization_id === values[1]
@@ -76,6 +84,18 @@ class FakeD1 implements CasesD1Database {
       this.lastChanges = 1;
       return { meta: { changes: 1 } };
     }
+    if (sql.startsWith('INSERT INTO case_exit_operations (')) {
+      const [id, organizationId, caseId, exitStatus, permitNo, permitDate, authorizedAt, exitAt, vehiclePlate, driverName, driverNationalId, notes, createdBy, createdAt, updatedAt] = values;
+      this.exitRecord = {
+        id: this.exitRecord?.id || id, organization_id: organizationId, case_id: caseId, exit_status: exitStatus,
+        exit_permit_no: permitNo, exit_permit_number: permitNo, exit_permit_date: permitDate,
+        exit_authorized_at: authorizedAt, authorized_at: authorizedAt, exit_at: exitAt, exited_at: exitAt,
+        vehicle_plate: vehiclePlate, driver_name: driverName, driver_national_id: driverNationalId,
+        notes, created_by: createdBy, created_at: this.exitRecord?.created_at || createdAt, updated_at: updatedAt,
+      };
+      this.lastChanges = 1;
+      return { meta: { changes: 1 } };
+    }
     if (sql.startsWith('INSERT INTO permits (')) {
       this.permits.push({ id: values[0], organization_id: values[1], case_id: values[2], permit_type: values[3], permit_number: values[4], issuing_authority: values[5], status: values[6], issued_at: values[7], expires_at: values[8], created_at: values[9], updated_at: values[10] });
       this.lastChanges = 1;
@@ -108,6 +128,17 @@ class FakeD1 implements CasesD1Database {
         before_json: values[6], after_json: values[7], request_id: values[8],
         created_at: '2026-11-25T09:00:00.000Z',
       });
+      return { meta: { changes: 1 } };
+    }
+    if (sql.startsWith('UPDATE cases SET status=?')) {
+      const [status, updatedAt, caseId, organizationId] = values;
+      if (!this.detail || this.detail.id !== caseId || this.detailOrganizationId !== organizationId) {
+        this.lastChanges = 0;
+        return { meta: { changes: 0 } };
+      }
+      (this.detail as unknown as Record<string, unknown>).status = status;
+      (this.detail as unknown as Record<string, unknown>).updated_at = updatedAt;
+      this.lastChanges = 1;
       return { meta: { changes: 1 } };
     }
     if (sql.startsWith('UPDATE cases SET')) {
