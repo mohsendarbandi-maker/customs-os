@@ -440,9 +440,9 @@ const createChecklistItem = async (
     await db.batch([
       db.prepare(
         'INSERT INTO declaration_checklist_items ' +
-        '(id,organization_id,declaration_id,item_key,item_label,completed,sort_order,source,is_active,created_at,updated_at) ' +
-        'VALUES (?,?,?,?,?,0,?,\'manual\',1,?,?)',
-      ).bind(id, profile.organization_id, declaration.id, after.item_key, label, sortOrder, now, now),
+        '(id,organization_id,declaration_id,item_key,item_label,completed,sort_order,source,is_active,created_by,created_at,updated_at) ' +
+        'VALUES (?,?,?,?,?,0,?,\'manual\',1,?,?,?)',
+      ).bind(id, profile.organization_id, declaration.id, after.item_key, label, sortOrder, profile.id, now, now),
       insertAudit(db, profile, 'create', 'declaration_checklist_item', id, null, after, requestId),
     ]);
     return json({ ok: true, item: after }, 201);
@@ -593,8 +593,29 @@ const completeExit = async (
   const nextWorkflow = workflow
     ? { ...parseObject(workflow.loading_permit_state), ...(sataCode ? { sata_code: sataCode } : {}) }
     : null;
+  // Start with the shipment release update. Every following write is conditional
+  // on this statement changing exactly one tenant-scoped shipment row.
   statements.push(db.prepare(
-    'UPDATE customs_declarations SET workflow_stage=6,updated_at=? WHERE id=? AND organization_id=?',
+    'UPDATE shipments SET finance_status=\\'ready\\',updated_at=? ' +
+    'WHERE id=? AND organization_id=? ' +
+    'AND EXISTS (SELECT 1 FROM customs_declarations d WHERE d.id=? AND d.organization_id=? ' +
+    'AND d.shipment_id=shipments.id AND d.workflow_stage IN (4,5,6)) ' +
+    'AND (SELECT COUNT(*) FROM declaration_exit_checklist_items e WHERE e.declaration_id=? ' +
+    'AND e.organization_id=? AND e.completed=1) = 3 ' +
+    'AND (? <> \\'import_definitive\\' OR NOT EXISTS (' +
+    'SELECT 1 FROM declaration_checklist_items i WHERE i.declaration_id=? AND i.organization_id=? ' +
+    'AND i.is_active=1 AND i.completed=0)) ' +
+    'AND (? = \\'\\' OR EXISTS (SELECT 1 FROM customs_declaration_workflow w WHERE w.id=? ' +
+    'AND w.organization_id=? AND w.declaration_id=? AND w.updated_at=?))',
+  ).bind(
+    now, declaration.shipment_id, profile.organization_id, declaration.id, profile.organization_id,
+    declaration.id, profile.organization_id, declaration.customs_regime,
+    declaration.id, profile.organization_id, sataCode,
+    workflow?.id || '', workflow?.id || '', profile.organization_id, declaration.id, workflow?.updated_at || '',
+  ));
+  statements.push(db.prepare(
+    'UPDATE customs_declarations SET workflow_stage=6,updated_at=? ' +
+    'WHERE id=? AND organization_id=? AND changes()>0',
   ).bind(now, declaration.id, profile.organization_id));
   if (sataCode) {
     statements.push(db.prepare(
@@ -603,25 +624,25 @@ const completeExit = async (
       'ON CONFLICT(shipment_id) DO UPDATE SET sata_code=excluded.sata_code',
     ).bind(declaration.shipment_id, profile.organization_id, sataCode));
   }
-  statements.push(db.prepare(
-    'UPDATE shipments SET finance_status=\'ready\',updated_at=? ' +
-    'WHERE id=? AND organization_id=? AND changes()>0 AND EXISTS (' +
-    'SELECT 1 FROM customs_declarations d WHERE d.id=? AND d.organization_id=? AND d.workflow_stage=6)',
-  ).bind(now, declaration.shipment_id, profile.organization_id, declaration.id, profile.organization_id));
   if (workflow) {
     statements.push(db.prepare(
-      'UPDATE customs_declaration_workflow SET current_stage=\'completed\',loading_permit_state=?,updated_by=?,updated_at=?,last_event_type=\'saved\' ' +
-      'WHERE id=? AND organization_id=? AND declaration_id=? AND changes()>0',
-    ).bind(JSON.stringify(nextWorkflow), profile.id, now, workflow.id, profile.organization_id, declaration.id));
+      'UPDATE customs_declaration_workflow SET current_stage=\\'completed\\',loading_permit_state=?,updated_by=?,updated_at=?,last_event_type=\\'saved\\' ' +
+      'WHERE id=? AND organization_id=? AND declaration_id=? AND updated_at=? AND changes()>0',
+    ).bind(JSON.stringify(nextWorkflow), profile.id, now, workflow.id, profile.organization_id, declaration.id, workflow.updated_at));
   }
-  statements.push(insertAudit(
-    db, profile, 'update', 'customs_declaration_exit', declaration.id, before,
-    { workflow_stage: 6, finance_status: 'ready', sata_code: sataCode || null, completed_at: now }, requestId,
+  statements.push(db.prepare(
+    'INSERT INTO customs_os_audit_events ' +
+    '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
+    'SELECT ?,?,?,?,?,?,?,?,? WHERE changes()>0',
+  ).bind(
+    crypto.randomUUID(), profile.organization_id, profile.id, 'update', 'customs_declaration_exit',
+    declaration.id, JSON.stringify(before),
+    JSON.stringify({ workflow_stage: 6, finance_status: 'ready', sata_code: sataCode || null, completed_at: now }),
+    requestId.slice(0, 180),
   ));
   try {
     const results = await db.batch(statements);
-    const shipmentUpdateIndex = sataCode ? 2 : 1;
-    const shipmentChanges = (results[shipmentUpdateIndex] as { meta?: { changes?: number } } | undefined)?.meta?.changes;
+    const shipmentChanges = (results[0] as { meta?: { changes?: number } } | undefined)?.meta?.changes;
     if (!shipmentChanges) return fail('DECLARATION_EXIT_COMPLETION_FAILED', 503);
     return json({ ok: true, ready: true, workflow_stage: 6, finance_status: 'ready', shipment_id: declaration.shipment_id });
   } catch { return fail('DECLARATION_EXIT_COMPLETION_FAILED', 503); }
