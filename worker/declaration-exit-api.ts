@@ -618,7 +618,7 @@ const completeExit = async (
     'WHERE id=? AND organization_id=? ' +
     'AND EXISTS (SELECT 1 FROM customs_declarations d WHERE d.id=? AND d.organization_id=? ' +
     'AND d.shipment_id=shipments.id AND d.workflow_stage IN (4,5,6)) ' +
-    'AND finance_status IN (\'not_ready\',\'ready\',\'closed\') ' +
+    'AND finance_status=? ' +
     'AND (SELECT COUNT(*) FROM declaration_exit_checklist_items e WHERE e.declaration_id=? ' +
     'AND e.organization_id=? AND e.completed=1) = 3 ' +
     'AND (? <> \'import_definitive\' OR NOT EXISTS (' +
