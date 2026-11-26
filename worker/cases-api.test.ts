@@ -796,4 +796,134 @@ describe('Cloudflare D1 cases read API', () => {
     expect(db.queries.some(query => query.sql.startsWith('INSERT INTO permits'))).toBe(false);
   });
 
+
+  it('returns case exit state and exact completion blockers from D1', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, status: 'exit_permit', kottaj_number: 'K-1405-1',
+      release_status: 'released', warehouse_receipt_no: 'WH-1',
+    };
+    db.permits = [{
+      id: 'permit-pending', organization_id: 'org-a', case_id: 'case-a', status: 'pending',
+    }];
+    db.exitRecord = {
+      id: 'exit-a', organization_id: 'org-a', case_id: 'case-a', exit_status: 'authorized',
+      exit_permit_no: 'EP-1', exit_permit_number: 'EP-1', exit_permit_date: '2026-11-26',
+      exit_authorized_at: null, authorized_at: null, exit_at: null, exited_at: null,
+      vehicle_plate: null, driver_name: null, driver_national_id: null, notes: null,
+      created_by: 'user-a', created_at: '2026-11-26T08:00:00.000Z', updated_at: '2026-11-26T08:00:00.000Z',
+    };
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
+    const body = await response.json() as {
+      exit: Record<string, unknown>; readiness: { ready: boolean; pending_permits: number; issues: string[] };
+    };
+    expect(response.status).toBe(200);
+    expect(body.exit.exit_permit_no).toBe('EP-1');
+    expect(body.readiness.ready).toBe(false);
+    expect(body.readiness.pending_permits).toBe(1);
+    expect(body.readiness.issues).toContain('1 مجوز در انتظار تعیین تکلیف است');
+    expect(db.queries.some(query => query.sql.includes('case_exit_operations'))).toBe(true);
+  });
+
+  it('authorizes case exit and advances duties-calculation to exit-permit with audit', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, status: 'duties_calculation', kottaj_number: 'K-1405-1',
+      release_status: 'released', warehouse_receipt_no: 'WH-1',
+    };
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        exit_status: 'authorized', exit_permit_no: 'EP-1405-1',
+        exit_permit_date: '2026-11-26', vehicle_plate: '12الف345',
+        driver_name: 'راننده', driver_national_id: '0012345678',
+      }),
+    }), db, url, owner);
+    const body = await response.json() as { ok: boolean; case: CaseRecord; exit: Record<string, unknown> };
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.case.status).toBe('exit_permit');
+    expect(body.exit.exit_status).toBe('authorized');
+    expect(body.exit.exit_permit_no).toBe('EP-1405-1');
+    expect(db.auditEvents.at(-1)).toMatchObject({
+      organization_id: 'org-a', actor_user_id: 'user-a', action: 'update',
+      entity_type: 'case', entity_id: 'case-a',
+    });
+    expect(db.queries.find(query => query.sql.startsWith('UPDATE cases SET status=?'))?.values[0]).toBe('exit_permit');
+  });
+
+  it('allows final exit only from exit-permit stage and then marks the case completed', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, status: 'exit_permit', kottaj_number: 'K-1405-1', release_status: 'released' };
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'exited', exit_at: '2026-11-26T10:30:00+03:30' }),
+    }), db, url, owner);
+    const body = await response.json() as { case: CaseRecord; exit: Record<string, unknown> };
+    expect(response.status).toBe(200);
+    expect(body.case.status).toBe('completed');
+    expect(body.exit.exit_status).toBe('exited');
+    expect(body.exit.exit_at).toBe('2026-11-26T07:00:00.000Z');
+  });
+
+  it('rejects final exit before the case reaches exit-permit stage without writing', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, status: 'documents' };
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'exited' }),
+    }), db, url, owner);
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('CASE_EXIT_STAGE_REQUIRED');
+    expect(db.exitRecord).toBeNull();
+    expect(db.auditEvents).toHaveLength(0);
+  });
+
+  it('rejects case exit writes from a cross-origin request and for another tenant', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const crossOrigin = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: 'https://evil.example', 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'pending' }),
+    }), db, url, owner);
+    expect(crossOrigin.status).toBe(403);
+    expect(db.exitRecord).toBeNull();
+
+    const foreign = new FakeD1();
+    foreign.detail = { ...caseRow, id: 'case-b' };
+    foreign.detailOrganizationId = 'org-b';
+    const foreignUrl = new URL('https://staging.example/api/cases/case-b/exit');
+    const foreignResponse = await handleCasesApi(new Request(foreignUrl, {
+      method: 'PATCH', headers: { origin: foreignUrl.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'pending' }),
+    }), foreign, foreignUrl, owner);
+    expect(foreignResponse.status).toBe(404);
+    expect(foreign.exitRecord).toBeNull();
+  });
+
+  it('rejects invalid exit dates and unauthorized roles before database writes', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const invalidDate = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'pending', exit_permit_date: '26/11/2026' }),
+    }), db, url, owner);
+    expect(invalidDate.status).toBe(400);
+    expect(db.exitRecord).toBeNull();
+
+    const forbidden = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'pending' }),
+    }), db, url, { ...owner, role: 'accountant' });
+    expect(forbidden.status).toBe(403);
+    expect(db.exitRecord).toBeNull();
+  });
+
 });
