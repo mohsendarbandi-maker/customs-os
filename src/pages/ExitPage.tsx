@@ -294,13 +294,16 @@ export const ExitPage: React.FC = () => {
           folder.shipment_id === linkedShipmentId && folder.folder_type === 'shipment',
         );
         if (!shipmentFolder) throw new Error('پوشه اصلی این محموله در فایل‌منیجر D1 پیدا نشد.');
-        const declarationFolder = foldersResult.folders.find(folder =>
-          folder.parent_id === shipmentFolder.id && folder.display_name === 'اسناد گمرکی و اظهارنامه',
-        );
-        const parentFolderId = declarationFolder?.id || shipmentFolder.id;
+        // Reuse the canonical system folder created for every shipment by the File Manager.
+        // Never create a second "exit" subtree under the declaration-document folder.
         let destination = foldersResult.folders.find(folder =>
-          folder.parent_id === parentFolderId && folder.display_name === 'درب خروج',
+          folder.shipment_id === linkedShipmentId && folder.folder_type === 'exit',
+        ) || foldersResult.folders.find(folder =>
+          folder.parent_id === shipmentFolder.id && folder.display_name === 'ترخیص و درب خروج',
+        ) || foldersResult.folders.find(folder =>
+          folder.parent_id === shipmentFolder.id && folder.display_name === 'درب خروج',
         );
+        const parentFolderId = shipmentFolder.id;
         if (!destination) {
           try {
             const created = await createCloudflareFileManagerFolder({
