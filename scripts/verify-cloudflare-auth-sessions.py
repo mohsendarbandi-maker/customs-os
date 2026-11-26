@@ -21,6 +21,7 @@ CREATE TABLE profiles (
 """)
 db.executescript((MIGRATIONS / "0014_cloudflare_native_auth_credentials.sql").read_text(encoding="utf-8"))
 db.executescript((MIGRATIONS / "0015_cloudflare_native_auth_sessions.sql").read_text(encoding="utf-8"))
+db.executescript((MIGRATIONS / "0016_cloudflare_auth_challenges.sql").read_text(encoding="utf-8"))
 
 def must_fail(statement, values, label):
     try:
@@ -37,6 +38,8 @@ assert {
 
 attempt_columns = {row[1] for row in db.execute("PRAGMA table_info(customs_os_auth_login_attempts)")}
 assert {"ip_hash", "window_started_at", "attempts"} <= attempt_columns
+challenge_columns = {row[1] for row in db.execute("PRAGMA table_info(customs_os_auth_challenges)")}
+assert {"challenge_id", "user_id", "email_normalized", "purpose", "challenge_hash", "ip_hash", "created_at", "expires_at", "consumed_at"} <= challenge_columns
 principal_columns = {row[1] for row in db.execute("PRAGMA table_info(customs_os_auth_principals)")}
 assert {"user_id", "organization_id", "role", "client_id", "full_name", "phone", "is_active", "verified_at"} <= principal_columns
 
