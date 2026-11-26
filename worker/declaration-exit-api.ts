@@ -30,6 +30,7 @@ interface DeclarationRow extends Record<string, unknown> {
   id: string;
   organization_id: string;
   shipment_id: string | null;
+  linked_shipment_id: string | null;
   case_id: string | null;
   kottaj_number: string;
   customs_regime: string | null;
@@ -172,7 +173,7 @@ const getDeclaration = (db: DeclarationExitD1Database, id: string, organizationI
   db.prepare(
     'SELECT d.id,d.organization_id,d.case_id,d.shipment_id,d.kottaj_number,d.customs_regime,' +
     'd.customs_path,d.workflow_stage,sc.tariff_code,sc.cargo_description,sc.sata_code,' +
-    's.ship_passed,s.transport_documents_status,s.transport_mode,c.warehouse_receipt_no ' +
+    's.id AS linked_shipment_id,s.ship_passed,s.transport_documents_status,s.transport_mode,c.warehouse_receipt_no ' +
     'FROM customs_declarations d ' +
     'LEFT JOIN shipments s ON s.id=d.shipment_id AND s.organization_id=d.organization_id ' +
     'LEFT JOIN shipment_customs_data sc ON sc.shipment_id=d.shipment_id AND sc.organization_id=d.organization_id ' +
@@ -459,7 +460,7 @@ const updateChecklistItem = async (
   const body = await bodyObject(request);
   if (body instanceof Response) return body;
   const before = await db.prepare(
-    'SELECT id,organization_id,declaration_id,item_key,item_label,completed,note,sort_order,source,is_active,updated_at ' +
+    'SELECT id,organization_id,declaration_id,item_key,item_label,completed,completed_at,completed_by,note,sort_order,source,is_active,updated_at ' +
     'FROM declaration_checklist_items WHERE id=? AND organization_id=? AND declaration_id=? LIMIT 1',
   ).bind(itemId, profile.organization_id, declaration.id).first<ChecklistRow>();
   if (!before) return fail('CHECKLIST_ITEM_NOT_FOUND', 404);
@@ -491,12 +492,22 @@ const updateChecklistItem = async (
   const sets = columns.map(key => key + '=?').concat(['updated_at=?']);
   const after = { ...before, ...patch, updated_at: now };
   try {
-    const result = await db.prepare(
-      'UPDATE declaration_checklist_items SET ' + sets.join(', ') +
-      ' WHERE id=? AND organization_id=? AND declaration_id=? AND updated_at=?',
-    ).bind(...values, now, itemId, profile.organization_id, declaration.id, before.updated_at).run();
-    if (!result.meta?.changes) return fail('CHECKLIST_ITEM_UPDATE_CONFLICT', 409);
-    await db.batch([insertAudit(db, profile, 'update', 'declaration_checklist_item', itemId, before, after, requestId)]);
+    const results = await db.batch([
+      db.prepare(
+        'UPDATE declaration_checklist_items SET ' + sets.join(', ') +
+        ' WHERE id=? AND organization_id=? AND declaration_id=? AND updated_at=?',
+      ).bind(...values, now, itemId, profile.organization_id, declaration.id, before.updated_at),
+      db.prepare(
+        'INSERT INTO customs_os_audit_events ' +
+        '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
+        'SELECT ?,?,?,?,?,?,?,?,? WHERE changes()>0',
+      ).bind(
+        crypto.randomUUID(), profile.organization_id, profile.id, 'update',
+        'declaration_checklist_item', itemId, JSON.stringify(before), JSON.stringify(after), requestId.slice(0, 180),
+      ),
+    ]);
+    const updated = (results[0] as { meta?: { changes?: number } } | undefined)?.meta?.changes;
+    if (!updated) return fail('CHECKLIST_ITEM_UPDATE_CONFLICT', 409);
     return json({ ok: true, item: { ...after, completed: boolInt(after.completed) === 1, is_active: boolInt(after.is_active) === 1 } });
   } catch { return fail('CHECKLIST_ITEM_UPDATE_FAILED', 503); }
 };
@@ -515,13 +526,22 @@ const advanceToExitStage = async (
   const after = { workflow_stage: 6, remaining_items: [] as string[], partial_allowed: true };
   const checklist = await readChecklist(db, declaration.id, profile.organization_id);
   after.remaining_items = remainingItems(checklist.results);
-  await db.batch([
+  const results = await db.batch([
     db.prepare(
       'UPDATE customs_declarations SET workflow_stage=6,updated_at=? WHERE id=? AND organization_id=? AND workflow_stage IN (4,5,6)',
     ).bind(now, declaration.id, profile.organization_id),
-    insertAudit(db, profile, 'update', 'customs_declaration', declaration.id,
-      { workflow_stage: stage }, { ...after, remaining_items: after.remaining_items }, requestId),
+    db.prepare(
+      'INSERT INTO customs_os_audit_events ' +
+      '(id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
+      'SELECT ?,?,?,?,?,?,?,?,? WHERE changes()>0',
+    ).bind(
+      crypto.randomUUID(), profile.organization_id, profile.id, 'update',
+      'customs_declaration', declaration.id, JSON.stringify({ workflow_stage: stage }),
+      JSON.stringify({ ...after, remaining_items: after.remaining_items }), requestId.slice(0, 180),
+    ),
   ]);
+  const updated = (results[0] as { meta?: { changes?: number } } | undefined)?.meta?.changes;
+  if (!updated) return fail('DECLARATION_STAGE_UPDATE_CONFLICT', 409);
   return json({
     ok: true, workflow_stage: 6, partial_allowed: after.remaining_items.length > 0,
     remaining_items: after.remaining_items, learning,
@@ -559,6 +579,7 @@ const completeExit = async (
   }
   if (issues.length) return json({ ok: true, ready: false, issues });
   if (!declaration.shipment_id) return fail('DECLARATION_SHIPMENT_REQUIRED', 409);
+  if (!declaration.linked_shipment_id) return fail('DECLARATION_SHIPMENT_NOT_FOUND', 409);
   const columns = await db.prepare('PRAGMA table_info(shipments)').all<{ name: string }>();
   if (!columns.results.some(column => column.name === 'finance_status')) {
     return fail('SHIPMENT_FINANCE_STATUS_COLUMN_MISSING', 503);
