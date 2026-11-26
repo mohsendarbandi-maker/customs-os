@@ -82,6 +82,6 @@ row = db.execute(
     "FROM customs_os_auth_credentials WHERE user_id = ?",
     ("owner-1",),
 ).fetchone()
-assert row == ("owner@example.test", 310000, 3, "2099-01-01T00:00:00Z")
+assert row == ("owner@example.test", 600000, 3, "2099-01-01T00:00:00Z")
 
 print("Cloudflare native auth credential schema: PASS")
