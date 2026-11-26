@@ -13,7 +13,7 @@ db.executescript(MIGRATION.read_text(encoding="utf-8"))
 
 columns = {row[1] for row in db.execute("PRAGMA table_info(customs_os_auth_credentials)")}
 required = {
-    "user_id", "email_normalized", "password_hash", "password_salt",
+    "user_id", "email_normalized", "password_verifier_encrypted", "password_verifier_iv", "password_salt",
     "password_iterations", "password_version", "failed_attempts",
     "locked_until", "password_reset_required", "password_changed_at",
     "created_at", "updated_at",
@@ -23,9 +23,9 @@ assert required <= columns, f"missing credential columns: {sorted(required - col
 db.execute("INSERT INTO profiles(id) VALUES (?)", ("owner-1",))
 db.execute(
     """INSERT INTO customs_os_auth_credentials
-       (user_id, email_normalized, password_hash, password_salt)
-       VALUES (?, ?, ?, ?)""",
-    ("owner-1", "owner@example.test", "a" * 64, "b" * 64),
+       (user_id, email_normalized, password_verifier_encrypted, password_verifier_iv, password_salt)
+       VALUES (?, ?, ?, ?, ?)""",
+    ("owner-1", "owner@example.test", "a" * 96, "b" * 24, "b" * 64),
 )
 
 def must_fail(statement, values, label):
@@ -37,32 +37,32 @@ def must_fail(statement, values, label):
 
 must_fail(
     """INSERT INTO customs_os_auth_credentials
-       (user_id, email_normalized, password_hash, password_salt)
-       VALUES (?, ?, ?, ?)""",
-    ("owner-2", "other@example.test", "a" * 64, "b" * 64),
+       (user_id, email_normalized, password_verifier_encrypted, password_verifier_iv, password_salt)
+       VALUES (?, ?, ?, ?, ?)""",
+    ("owner-2", "other@example.test", "a" * 96, "b" * 24, "b" * 64),
     "unknown profile foreign key",
 )
 db.execute("INSERT INTO profiles(id) VALUES (?)", ("owner-2",))
 must_fail(
     """INSERT INTO customs_os_auth_credentials
-       (user_id, email_normalized, password_hash, password_salt)
-       VALUES (?, ?, ?, ?)""",
-    ("owner-2", "OWNER@example.test", "c" * 64, "d" * 64),
+       (user_id, email_normalized, password_verifier_encrypted, password_verifier_iv, password_salt)
+       VALUES (?, ?, ?, ?, ?)""",
+    ("owner-2", "OWNER@example.test", "c" * 96, "d" * 24, "d" * 64),
     "case-insensitive duplicate email",
 )
 must_fail(
     """INSERT INTO customs_os_auth_credentials
-       (user_id, email_normalized, password_hash, password_salt, password_iterations)
-       VALUES (?, ?, ?, ?, ?)""",
-    ("owner-2", "other@example.test", "c" * 64, "d" * 64, 999),
+       (user_id, email_normalized, password_verifier_encrypted, password_verifier_iv, password_salt, password_iterations)
+       VALUES (?, ?, ?, ?, ?, ?)""",
+    ("owner-2", "other@example.test", "c" * 96, "d" * 24, "d" * 64, 999),
     "weak PBKDF2 iteration count",
 )
 must_fail(
     """INSERT INTO customs_os_auth_credentials
        (user_id, email_normalized, password_hash, password_salt)
        VALUES (?, ?, ?, ?)""",
-    ("owner-2", "other@example.test", "short", "d" * 64),
-    "invalid password hash length",
+    ("owner-2", "other@example.test", "short", "d" * 24, "e" * 64),
+    "invalid encrypted verifier length",
 )
 
 db.execute(
