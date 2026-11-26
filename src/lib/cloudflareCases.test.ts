@@ -89,4 +89,35 @@ describe('Cloudflare cases API adapter', () => {
     expect((fetchMock.mock.calls[0][1] as RequestInit).cache).toBe('no-store');
   });
 
+
+  it('creates a case through the same-origin D1 API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true, created: true, case: { id: 'case-new' },
+    }), { status: 201, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    await cloudflareCasesApi.create({ client_id: 'client-1', registration_order_no: 'RO-1405-1' });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/cases');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(String(init.body))).toEqual({ client_id: 'client-1', registration_order_no: 'RO-1405-1' });
+  });
+
+  it('calculates case valuation through the D1 valuation endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true, case: { id: 'case-1' }, valuation: { total_payable_irr: '1000' },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    await cloudflareCasesApi.calculateValuation('case/1', {
+      customs_fx_rate_irr: '42000', import_duty_rate: '5', vat_rate: '10',
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/cases/case%2F1/valuation');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(String(init.body))).toEqual({
+      customs_fx_rate_irr: '42000', import_duty_rate: '5', vat_rate: '10',
+    });
+  });
+
 });
