@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS customs_os_auth_login_attempts (
   CHECK (length(ip_hash) = 64)
 );
 
-CREATE TABLE IF NOT EXISTS customs_os_auth_events (
+CREATE TABLE IF NOT EXISTS customs_os_auth_audit_events (
   id TEXT PRIMARY KEY,
   actor_user_id TEXT NOT NULL,
   target_user_id TEXT NOT NULL,
@@ -46,5 +46,5 @@ CREATE TABLE IF NOT EXISTS customs_os_auth_events (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE INDEX IF NOT EXISTS customs_os_auth_events_user_created_idx
-  ON customs_os_auth_events(target_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS customs_os_auth_audit_events_user_created_idx
+  ON customs_os_auth_audit_events(target_user_id, created_at DESC);
