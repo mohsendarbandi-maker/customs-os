@@ -106,7 +106,6 @@ export class CloudflareCasesApiError extends Error {
       : code === 'CASE_NOT_FOUND' ? 'پرونده پیدا نشد یا به آن دسترسی ندارید.'
       : code === 'INVALID_CASE_PATCH' || code === 'INVALID_RELEASE_STATUS' || code === 'INVALID_VALUATION_STATUS' || code === 'INVALID_CASE_NUMBER_VALUE' || code === 'INVALID_CASE_NUMBER' || code === 'GROSS_WEIGHT_BELOW_NET_WEIGHT' ? 'اطلاعات ویرایش پرونده معتبر نیست.'
       : code === 'CASE_NUMBER_EXISTS' ? 'شماره پرونده قبلاً در این سازمان ثبت شده است.'
-      : code === 'CASE_UPDATE_CONFLICT' ? 'پرونده هم‌زمان توسط کاربر دیگری تغییر کرده است؛ اطلاعات را دوباره بارگذاری کنید.'
       : code === 'CASE_UPDATE_CONFLICT' || code === 'PERMIT_UPDATE_CONFLICT' || code === 'PERMIT_DELETE_CONFLICT' ? 'اطلاعات هم‌زمان توسط کاربر دیگری تغییر کرده است؛ دوباره بارگذاری کنید.'
       : code === 'PERMIT_NOT_FOUND' ? 'مجوز پیدا نشد یا به این پرونده تعلق ندارد.'
       : code === 'PERMIT_EXPIRY_BEFORE_ISSUE' || code === 'INVALID_PERMIT_INPUT' || code === 'INVALID_PERMIT_STATUS' || code === 'INVALID_PERMIT_DATE' ? 'اطلاعات مجوز یا تاریخ‌های آن معتبر نیست.'
