@@ -10,9 +10,10 @@ import {CASE_WORKFLOW,getCaseNextAction} from '../lib/caseWorkflow';
 
 const labels:Record<string,string>=Object.fromEntries(CASE_WORKFLOW.map(x=>[x.key,x.label]));
 const stageLabel=(s:string)=>s?.startsWith('path_')?'مسیر گمرکی':labels[s]||s;
+const localDateTime=(value:string|null|undefined)=>{if(!value)return '';const date=new Date(value);return Number.isNaN(date.getTime())?'':new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16)};
 type CaseRow={id:string;case_number:string|null;status:string;registration_order_no:string|null;warehouse_receipt_no:string|null;release_status:string|null;valuation_status:string|null;cargo_description:string|null;proforma_no:string|null;cargo_count:number|null;cargo_count_unit:string|null;net_weight_kg:number|null;gross_weight_kg:number|null;client_name?:string|null;vessel_name?:string|null;shipment_cargo_count?:number|null;shipment_cargo_count_unit?:string|null;shipment_client_name?:string|null;shipment_vessel_name?:string|null;effective_display_name?:string|null;};
 export const CaseOperationsPage:React.FC=()=>{
- const[params]=useSearchParams();const requested=params.get('caseId')||'';const[cases,setCases]=useState<CaseRow[]>([]),[selected,setSelected]=useState(requested),[docs,setDocs]=useState<any[]>([]),[decl,setDecl]=useState<any>(null),[permits,setPermits]=useState<any[]>([]),[exit,setExit]=useState<any>(null),[readiness,setReadiness]=useState<any>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[editing,setEditing]=useState(false),[form,setForm]=useState<any>({});
+ const[params]=useSearchParams();const requested=params.get('caseId')||'';const[cases,setCases]=useState<CaseRow[]>([]),[selected,setSelected]=useState(requested),[docs,setDocs]=useState<any[]>([]),[decl,setDecl]=useState<any>(null),[permits,setPermits]=useState<any[]>([]),[exit,setExit]=useState<any>(null),[readiness,setReadiness]=useState<any>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[editing,setEditing]=useState(false),[form,setForm]=useState<any>({}),[exitForm,setExitForm]=useState<any>({exit_status:'pending',exit_permit_no:'',exit_permit_date:'',exit_authorized_at:'',exit_at:'',vehicle_plate:'',driver_name:'',driver_national_id:'',notes:''});
  const load=async(id:string)=>{
   setBusy(true);setError('');
   try{
@@ -35,15 +36,16 @@ export const CaseOperationsPage:React.FC=()=>{
     setCases(rows);
     const id2=id&&rows.some(x=>x.id===id)?id:(rows[0]?.id||'');
     if(id2!==id)setSelected(id2);
-    if(!id2){setDocs([]);setDecl(null);setPermits([]);setExit(null);setReadiness(null);return}
+    if(!id2){setDocs([]);setDecl(null);setPermits([]);setExit(null);setReadiness(null);setExitForm({exit_status:'pending',exit_permit_no:'',exit_permit_date:'',exit_authorized_at:'',exit_at:'',vehicle_plate:'',driver_name:'',driver_national_id:'',notes:''});return}
     const currentRow=rows.find(x=>x.id===id2);
     if(currentRow&&!editing)setForm({...currentRow});
     const detail=await cloudflareCasesApi.get(id2);
     setDocs(detail.documents||[]);
     setDecl(detail.declarations?.[0]||null);
     setPermits(detail.permits||[]);
-    setExit(null);
-    setReadiness(null);
+    setExit(detail.exit||null);
+    setReadiness(detail.readiness||null);
+    setExitForm({exit_status:detail.exit?.exit_status||'pending',exit_permit_no:detail.exit?.exit_permit_no||detail.exit?.exit_permit_number||'',exit_permit_date:detail.exit?.exit_permit_date||'',exit_authorized_at:localDateTime(detail.exit?.exit_authorized_at||detail.exit?.authorized_at),exit_at:localDateTime(detail.exit?.exit_at||detail.exit?.exited_at),vehicle_plate:detail.exit?.vehicle_plate||'',driver_name:detail.exit?.driver_name||'',driver_national_id:detail.exit?.driver_national_id||'',notes:detail.exit?.notes||''});
     return;
    }
    const{data:c,error:ce}=await supabase.from('case_display_context').select('id,case_number,status,registration_order_no,warehouse_receipt_no,release_status,valuation_status,cargo_description,proforma_no,cargo_count,cargo_count_unit,net_weight_kg,gross_weight_kg,shipment_cargo_count,shipment_cargo_count_unit,shipment_client_name,shipment_vessel_name,effective_display_name').order('created_at',{ascending:false});
@@ -98,6 +100,25 @@ export const CaseOperationsPage:React.FC=()=>{
   }catch(e:any){setError(e?.message||'ویرایش پرونده ناموفق بود')}
   finally{setBusy(false)}
  };
+ const saveExit=async()=>{
+  if(!current||!isCloudflareStagingHost())return;
+  setBusy(true);setError('');
+  try{
+   await cloudflareCasesApi.saveExit(current.id,{
+    exit_status:exitForm.exit_status,
+    exit_permit_no:exitForm.exit_permit_no.trim()||null,
+    exit_permit_date:exitForm.exit_permit_date||null,
+    exit_authorized_at:exitForm.exit_authorized_at?new Date(exitForm.exit_authorized_at).toISOString():null,
+    exit_at:exitForm.exit_at?new Date(exitForm.exit_at).toISOString():null,
+    vehicle_plate:exitForm.vehicle_plate.trim()||null,
+    driver_name:exitForm.driver_name.trim()||null,
+    driver_national_id:exitForm.driver_national_id.trim()||null,
+    notes:exitForm.notes.trim()||null
+   });
+   await load(current.id);
+  }catch(e:any){setError(e?.message||'ثبت وضعیت خروج پرونده ناموفق بود')}
+  finally{setBusy(false)}
+ };
  const deleteCase=async()=>{if(!current)return;if(isCloudflareStagingHost()){setError('حذف پرونده در D1 تا تکمیل انتقال تمام وابستگی‌ها غیرفعال است.');return;}if(!window.confirm(`پرونده «${displayName}» حذف شود؟`))return;setBusy(true);setError('');try{const{error}=await supabase.rpc('delete_case_safely',{p_case_id:current.id});if(error)throw error;window.location.href='/operations?tab=case'}catch(e:any){setError(e?.message||'حذف پرونده انجام نشد')}finally{setBusy(false)}};
  if(!current)return <main dir="rtl" className="native-case-operations-page min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8"><div className="max-w-6xl mx-auto"><h1 className="text-2xl font-black">مدیریت پرونده</h1><div className="mt-4 p-5 rounded-2xl border border-slate-800 bg-slate-900">پرونده‌ای برای نمایش وجود ندارد.</div></div></main>;
  return <main dir="rtl" className="native-case-operations-page min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8"><div className="max-w-6xl mx-auto space-y-5"><header className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs text-cyan-400 font-bold">مدیریت پرونده</div><h1 className="text-2xl font-black mt-1">{displayName}</h1><p className="text-sm text-slate-400 mt-1">{current.cargo_description||'پرونده گمرکی'} · وضعیت: <b className="text-slate-200">{stageLabel(current.status)}</b></p><p className="text-xs text-cyan-300 mt-2">اقدام بعدی: {nextAction}</p></div><div className="flex gap-2"><button onClick={()=>{setForm({...current});setEditing(true)}} className="px-3 py-2 rounded-xl border border-amber-500/40 text-amber-300 text-sm"><Edit3 className="inline ml-1" size={15}/>ویرایش</button>{!isCloudflareStagingHost()&&<button onClick={deleteCase} disabled={busy} className="px-3 py-2 rounded-xl border border-red-500/40 text-red-300 text-sm"><Trash2 className="inline ml-1" size={15}/>حذف</button>}<Link to="/" className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900"><ArrowLeft className="inline ml-2" size={16}/>صفحه اصلی</Link></div></header>{error&&<div className="p-4 rounded-xl border border-red-900 bg-red-950/20 text-red-300"><AlertCircle className="inline ml-2" size={16}/>{error}</div>}
@@ -105,6 +126,22 @@ export const CaseOperationsPage:React.FC=()=>{
  {editing&&<section className="rounded-2xl border border-amber-500/30 bg-slate-900 p-5"><div className="flex items-center justify-between mb-4"><h2 className="font-black">ویرایش پرونده</h2><button onClick={()=>setEditing(false)}><X size={18}/></button></div><div className="grid md:grid-cols-2 gap-3">{[['case_number','شماره پرونده'],['registration_order_no','شماره ثبت سفارش'],['proforma_no','شماره پروفرما'],['cargo_description','شرح کالا'],['cargo_count','تعداد'],['cargo_count_unit','واحد'],['net_weight_kg','وزن خالص (کیلوگرم)'],['gross_weight_kg','وزن ناخالص (کیلوگرم)'],['warehouse_receipt_no','شماره قبض انبار'],['release_status','وضعیت آزادسازی'],['valuation_status','وضعیت ارزش‌گذاری']].map(([k,l])=><label key={k} className="text-xs text-slate-400">{l}<input value={form[k]??''} onChange={e=>setForm((p:any)=>({...p,[k]:e.target.value}))} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100"/></label>)}</div><button onClick={saveCase} disabled={busy} className="mt-4 rounded-xl bg-cyan-600 px-5 py-3 font-bold"><Save className="inline ml-1" size={16}/>ذخیره تغییرات</button></section>}
  <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-center justify-between mb-4"><h2 className="font-black">گردش پرونده</h2><span className="text-xs text-cyan-300">{stageLabel(current.status)}</span></div><div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">{CASE_WORKFLOW.map((s,i)=><div key={s.key} className={`rounded-xl border p-3 text-center text-xs ${CASE_WORKFLOW.findIndex(x=>x.key===current.status)>=i?'border-emerald-900 bg-emerald-950/20 text-emerald-300':'border-slate-800 bg-slate-950 text-slate-500'}`}><div className="font-bold">{s.label}</div><div className="mt-1 opacity-80">{s.action}</div></div>)}</div></section>
  <CasePermitsPanel caseId={selected} initialPermits={permits as CasePermit[]} editable={isCloudflareStagingHost()} onChange={setPermits}/>
+ {isCloudflareStagingHost()&&<section className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+  <div className="flex items-center justify-between gap-3"><div><h2 className="font-black">مجوز خروج و تکمیل پرونده</h2><p className="text-xs text-slate-400 mt-1">وضعیت خروج با قواعد مرحله‌ای پرونده ثبت می‌شود.</p></div><span className={readiness?.ready?'text-emerald-400':'text-amber-300'}>{readiness?.ready?'آماده تکمیل':'نیازمند تکمیل موارد'}</span></div>
+  {readiness?.issues?.length>0&&<ul className="rounded-xl bg-slate-950 p-3 text-sm text-amber-200 space-y-1">{readiness.issues.map((issue:string,index:number)=><li key={index}>• {issue}</li>)}</ul>}
+  <div className="grid sm:grid-cols-2 gap-3">
+   <label className="text-xs text-slate-400">وضعیت خروج<select value={exitForm.exit_status} onChange={e=>setExitForm((p:any)=>({...p,exit_status:e.target.value}))} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm"><option value="pending">در انتظار</option><option value="authorized">مجاز</option><option value="released">آزادشده</option><option value="exited">خروج نهایی</option><option value="cancelled">لغوشده</option></select></label>
+   <label className="text-xs text-slate-400">شماره پروانه خروج<input value={exitForm.exit_permit_no} onChange={e=>setExitForm((p:any)=>({...p,exit_permit_no:e.target.value}))} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm"/></label>
+   <label className="text-xs text-slate-400">تاریخ پروانه خروج<input type="date" value={exitForm.exit_permit_date} onChange={e=>setExitForm((p:any)=>({...p,exit_permit_date:e.target.value}))} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm"/></label>
+   <label className="text-xs text-slate-400">زمان تأیید خروج<input type="datetime-local" value={exitForm.exit_authorized_at} onChange={e=>setExitForm((p:any)=>({...p,exit_authorized_at:e.target.value}))} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm"/></label>
+   <label className="text-xs text-slate-400">زمان خروج نهایی<input type="datetime-local" value={exitForm.exit_at} onChange={e=>setExitForm((p:any)=>({...p,exit_at:e.target.value}))} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm"/></label>
+   <label className="text-xs text-slate-400">شماره پلاک<input value={exitForm.vehicle_plate} onChange={e=>setExitForm((p:any)=>({...p,vehicle_plate:e.target.value}))} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm"/></label>
+   <label className="text-xs text-slate-400">نام راننده<input value={exitForm.driver_name} onChange={e=>setExitForm((p:any)=>({...p,driver_name:e.target.value}))} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm"/></label>
+   <label className="text-xs text-slate-400">کد ملی راننده<input value={exitForm.driver_national_id} onChange={e=>setExitForm((p:any)=>({...p,driver_national_id:e.target.value}))} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm"/></label>
+  </div>
+  <label className="block text-xs text-slate-400">یادداشت خروج<textarea value={exitForm.notes} onChange={e=>setExitForm((p:any)=>({...p,notes:e.target.value}))} rows={2} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm"/></label>
+  <button onClick={saveExit} disabled={busy} className="rounded-xl bg-cyan-700 px-5 py-3 text-sm font-bold disabled:opacity-50"><Save className="inline ml-1" size={16}/>ثبت وضعیت خروج</button>
+ </section>}
  <div className="grid lg:grid-cols-2 gap-5"><section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-center gap-2 mb-4"><FileCheck2 className="text-cyan-400" size={20}/><h2 className="font-black">اسناد پایه</h2><span className="mr-auto text-sm">{docCount}/۵</span></div>{required.map(t=><div key={t} className="flex items-center justify-between rounded-xl bg-slate-950 p-3 mb-2"><span>{t}</span><span className={approved.has(t)?'text-emerald-400':'text-amber-400'}>{approved.has(t)?'تأیید شده':'نیازمند تأیید'}</span></div>)}<Link to={`/documents?caseId=${encodeURIComponent(selected)}`} className="mt-4 inline-block rounded-xl border border-slate-700 px-4 py-2 text-sm"><FileText className="inline ml-2" size={15}/>مدیریت اسناد</Link></section><section className="rounded-2xl border border-slate-800 bg-slate-900 p-5"><div className="flex items-center gap-2 mb-4"><ShipWheel className="text-cyan-400" size={20}/><h2 className="font-black">اظهار و کوتاژ</h2></div><div className="grid grid-cols-2 gap-3"><Info t="ثبت سفارش" v={current.registration_order_no||'ثبت نشده'}/><Info t="کوتاژ" v={decl?.kottaj_number||'ثبت نشده'}/><Info t="مسیر گمرکی" v={decl?.customs_path?`مسیر ${decl.customs_path}`:'ثبت نشده'}/><Info t="قبض انبار" v={current.warehouse_receipt_no||'ثبت نشده'}/></div><Link to={`/operations?tab=declaration&caseId=${encodeURIComponent(selected)}`} className="mt-4 inline-block rounded-xl border border-slate-700 px-4 py-2 text-sm">اظهار / کوتاژ</Link></section></div></div></main>;
 };
 const Info=({t,v}:{t:string,v:string})=><div className="rounded-xl bg-slate-950 p-3"><div className="text-xs text-slate-500">{t}</div><div className="font-bold mt-1">{v}</div></div>;
