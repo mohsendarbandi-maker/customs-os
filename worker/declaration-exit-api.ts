@@ -36,6 +36,7 @@ interface DeclarationRow extends Record<string, unknown> {
   customs_regime: string | null;
   customs_path: string | null;
   workflow_stage: number | null;
+  finance_status: string | null;
   tariff_code: string | null;
   cargo_description: string | null;
   sata_code: string | null;
@@ -173,7 +174,7 @@ const getDeclaration = (db: DeclarationExitD1Database, id: string, organizationI
   db.prepare(
     'SELECT d.id,d.organization_id,d.case_id,d.shipment_id,d.kottaj_number,d.customs_regime,' +
     'd.customs_path,d.workflow_stage,sc.tariff_code,sc.cargo_description,sc.sata_code,' +
-    's.id AS linked_shipment_id,s.ship_passed,s.transport_documents_status,s.transport_mode,c.warehouse_receipt_no ' +
+    's.id AS linked_shipment_id,s.ship_passed,s.transport_documents_status,s.transport_mode,s.finance_status,c.warehouse_receipt_no ' +
     'FROM customs_declarations d ' +
     'LEFT JOIN shipments s ON s.id=d.shipment_id AND s.organization_id=d.organization_id ' +
     'LEFT JOIN shipment_customs_data sc ON sc.shipment_id=d.shipment_id AND sc.organization_id=d.organization_id ' +
@@ -565,21 +566,46 @@ const completeExit = async (
   const done = new Set(exitChecklist.results.filter(row => boolInt(row.completed) === 1).map(row => row.item_key));
   const missing = EXIT_ITEMS.filter(item => !done.has(item.key)).map(item => item.label);
   if (missing.length) return json({ ok: true, ready: false, issues: ['سه مورد اجباری درب خروج تکمیل نشده‌اند: ' + missing.join('، ')] });
-  const sataCode = boundedText(body.sata_code, 100) || declaration.sata_code || '';
+  // The legacy server-side completion contract is currently defined only for
+  // definitive imports. Other regimes have separate readiness rules and must
+  // remain blocked until those rules are ported rather than being released by
+  // a weaker generic checklist.
+  if (declaration.customs_regime !== 'import_definitive') {
+    return fail('CUSTOMS_REGIME_EXIT_NOT_MIGRATED', 409);
+  }
+
   const loadingPermit = workflow ? parseObject(workflow.loading_permit_state) : {};
+  const workflowSata = boundedText(loadingPermit.sata_code, 100) || '';
+  const existingSata = workflowSata || boundedText(declaration.sata_code, 100) || '';
+  const requestedSata = boundedText(body.sata_code, 100) || '';
+  const sataCode = requestedSata || existingSata;
+  const financeStatus = String(declaration.finance_status || '');
   const sataNotRequired = loadingPermit.central_bank_status === 'not_required' ||
     (loadingPermit.clearance_90_percent_requested === true && String(loadingPermit.comment || '').trim() !== '');
   const issues: string[] = [];
+  if (!['not_ready', 'ready', 'closed'].includes(financeStatus)) {
+    issues.push('وضعیت مالی محموله برای تحویل نهایی معتبر نیست.');
+  }
+  if (['ready', 'closed'].includes(financeStatus) && sataCode && sataCode !== existingSata) {
+    issues.push('کد ساتا پس از تحویل محموله به مالی قابل تغییر نیست.');
+  }
   if (!sataCode && !sataNotRequired) issues.push('کد ساتا ثبت نشده و استثنای مجاز عدم نیاز نیز وجود ندارد.');
-  if (declaration.customs_regime === 'import_definitive') {
-    issues.push(...stageIssue(declaration, workflow));
-    if (remainingItems(checklist.results).length) {
-      issues.push('چک‌لیست عمومی عملیات گمرکی هنوز موارد باز دارد.');
-    }
+  issues.push(...stageIssue(declaration, workflow));
+  if (remainingItems(checklist.results).length) {
+    issues.push('چک‌لیست عمومی عملیات گمرکی هنوز موارد باز دارد.');
   }
   if (issues.length) return json({ ok: true, ready: false, issues });
   if (!declaration.shipment_id) return fail('DECLARATION_SHIPMENT_REQUIRED', 409);
   if (!declaration.linked_shipment_id) return fail('DECLARATION_SHIPMENT_NOT_FOUND', 409);
+  // Repeated completion must not rewrite an already released shipment or emit
+  // another audit event when stage, finance status, and SATA are unchanged.
+  if (Number(declaration.workflow_stage) === 6 &&
+      financeStatus !== 'not_ready' && sataCode === existingSata) {
+    return json({
+      ok: true, ready: true, workflow_stage: 6,
+      finance_status: financeStatus, shipment_id: declaration.shipment_id,
+    });
+  }
   const columns = await db.prepare('PRAGMA table_info(shipments)').all<{ name: string }>();
   if (!columns.results.some(column => column.name === 'finance_status')) {
     return fail('SHIPMENT_FINANCE_STATUS_COLUMN_MISSING', 503);
@@ -596,10 +622,12 @@ const completeExit = async (
   // Start with the shipment release update. Every following write is conditional
   // on this statement changing exactly one tenant-scoped shipment row.
   statements.push(db.prepare(
-    'UPDATE shipments SET finance_status=\'ready\',updated_at=? ' +
+    'UPDATE shipments SET finance_status=CASE WHEN finance_status=\'not_ready\' THEN \'ready\' ELSE finance_status END,' +
+    'updated_at=CASE WHEN finance_status=\'not_ready\' THEN ? ELSE updated_at END ' +
     'WHERE id=? AND organization_id=? ' +
     'AND EXISTS (SELECT 1 FROM customs_declarations d WHERE d.id=? AND d.organization_id=? ' +
     'AND d.shipment_id=shipments.id AND d.workflow_stage IN (4,5,6)) ' +
+    'AND finance_status=? ' +
     'AND (SELECT COUNT(*) FROM declaration_exit_checklist_items e WHERE e.declaration_id=? ' +
     'AND e.organization_id=? AND e.completed=1) = 3 ' +
     'AND (? <> \'import_definitive\' OR NOT EXISTS (' +
@@ -608,7 +636,7 @@ const completeExit = async (
     'AND (? = \'\' OR EXISTS (SELECT 1 FROM customs_declaration_workflow w WHERE w.id=? ' +
     'AND w.organization_id=? AND w.declaration_id=? AND w.updated_at=?))',
   ).bind(
-    now, declaration.shipment_id, profile.organization_id, declaration.id, profile.organization_id,
+    now, declaration.shipment_id, profile.organization_id, declaration.id, profile.organization_id, financeStatus,
     declaration.id, profile.organization_id, declaration.customs_regime,
     declaration.id, profile.organization_id, sataCode,
     workflow?.id || '', workflow?.id || '', profile.organization_id, declaration.id, workflow?.updated_at || '',
@@ -637,14 +665,14 @@ const completeExit = async (
   ).bind(
     crypto.randomUUID(), profile.organization_id, profile.id, 'update', 'customs_declaration_exit',
     declaration.id, JSON.stringify(before),
-    JSON.stringify({ workflow_stage: 6, finance_status: 'ready', sata_code: sataCode || null, completed_at: now }),
+    JSON.stringify({ workflow_stage: 6, finance_status: financeStatus === 'not_ready' ? 'ready' : financeStatus, sata_code: sataCode || null, completed_at: now }),
     requestId.slice(0, 180),
   ));
   try {
     const results = await db.batch(statements);
     const shipmentChanges = (results[0] as { meta?: { changes?: number } } | undefined)?.meta?.changes;
-    if (!shipmentChanges) return fail('DECLARATION_EXIT_COMPLETION_FAILED', 503);
-    return json({ ok: true, ready: true, workflow_stage: 6, finance_status: 'ready', shipment_id: declaration.shipment_id });
+    if (!shipmentChanges) return fail('DECLARATION_EXIT_COMPLETION_CONFLICT', 409);
+    return json({ ok: true, ready: true, workflow_stage: 6, finance_status: financeStatus === 'not_ready' ? 'ready' : financeStatus, shipment_id: declaration.shipment_id });
   } catch { return fail('DECLARATION_EXIT_COMPLETION_FAILED', 503); }
 };
 
