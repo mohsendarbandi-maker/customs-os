@@ -9,6 +9,8 @@ import{CustomsTemporaryImportWorkflow}from'../components/CustomsTemporaryImportW
 import{CustomsTransitReimportWorkflow}from'../components/CustomsTransitReimportWorkflow';
 import { CustomsOtherRegimeWorkflow } from '../components/CustomsOtherRegimeWorkflow';
 import{supabase}from'../lib/supabase';
+import{isCloudflareStagingHost}from'../lib/recoveryHost';
+import{cloudflareDeclarationExitApi}from'../lib/cloudflareDeclarationExit';
 import{useAuth}from'../context/AuthContext';
 import {ShipmentStageCosts} from '../features/finance/ShipmentStageCosts';
 import { resolveDeclarationRelationIds } from '../lib/declarationWorkflowContext';
@@ -31,6 +33,7 @@ const normalizeHs=(v:string)=>digits(v).replace(/\D/g,'');
 
 export const DeclarationOperationsChecklistPage:React.FC=()=>{
  const{profile}=useAuth();
+ const useCloudflare=isCloudflareStagingHost();
  const[params]=useSearchParams();
  const declarationId=params.get('declarationId')||'';
  const[decl,setDecl]=useState<Decl|null>(null);const[officeSummary,setOfficeSummary]=useState('');
@@ -51,6 +54,27 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
  const load=useCallback(async()=>{
   if(!declarationId)return;
   setBusy(true);setError('');setMessage('');
+   if(useCloudflare){
+    try{
+     const result=await cloudflareDeclarationExitApi.get(declarationId);
+     const d=result.declaration;
+     const workflowState=(result.workflow||null) as Record<string,unknown>|null;
+     const declarationData:Decl={
+      id:d.id,shipment_id:d.shipment_id||null,case_id:null,
+      kottaj_number:String(d.kottaj_number||''),declaration_date:'',
+      customs_path:d.customs_path||null,payment_reference:null,total_duties_irr:null,
+      declaration_file_name:null,customs_office_id:null,customs_regime:d.customs_regime||undefined,
+     };
+     setDecl(declarationData);setOfficeSummary('');
+     setDeclarationContext({shipmentName:'',billOfLading:'',caseNumber:'',clientName:''});
+     setHs(normalizeHs(String(d.tariff_code||'')));
+     setItems(materializeChecklistItems(result.checklistItems||[],workflowState,d.customs_path||null));
+     for(const item of result.checklistItems||[]){if(item.note)setDraftNote(p=>({...p,[item.id]:item.note||''}))}
+    }catch(e:any){setError(e?.message||'دریافت چک‌لیست عملیات گمرکی از D1 انجام نشد')}
+    finally{setBusy(false)}
+    return;
+   }
+   
   try{
    const{data:d,error:de}=await supabase.from('customs_declarations').select('id,shipment_id,case_id,kottaj_number,declaration_date,customs_path,payment_reference,total_duties_irr,declaration_file_name,customs_office_id,customs_regime').eq('id',declarationId).maybeSingle();
    if(de)throw de;if(!d)throw new Error('اظهارنامه پیدا نشد.');
@@ -148,14 +172,24 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   const next=!item.completed;
   setItems(p=>p.map(x=>x.id===item.id?{...x,completed:next}:x));
   setError('');setMessage('');
-  const{error:e}=await supabase.rpc('update_declaration_checklist_item',{p_item_id:item.id,p_completed:next});
+  if(useCloudflare){
+    try{await cloudflareDeclarationExitApi.updateChecklistItem(declarationId,item.id,{completed:next})}
+    catch(e:any){setItems(p=>p.map(x=>x.id===item.id?{...x,completed:item.completed}:x));setError(e?.message||'ثبت وضعیت چک‌لیست انجام نشد')}
+    return;
+   }
+   const{error:e}=await supabase.rpc('update_declaration_checklist_item',{p_item_id:item.id,p_completed:next});
   if(e){setItems(p=>p.map(x=>x.id===item.id?{...x,completed:item.completed}:x));setError(e.message)}
  };
 
  const saveNote=async(item:Item)=>{
   if(!canEdit)return;
   const note=(draftNote[item.id]??item.note??'').trim();
-  const{error:e}=await supabase.rpc('set_declaration_checklist_note',{p_item_id:item.id,p_note:note});
+  if(useCloudflare){
+    try{await cloudflareDeclarationExitApi.updateChecklistItem(declarationId,item.id,{note:note||null});setItems(p=>p.map(x=>x.id===item.id?{...x,note:note||null}:x));setDraftNote(p=>({...p,[item.id]:note}));setMessage(note?'توضیح مورد ذخیره شد.':'توضیح مورد پاک شد.')}
+    catch(e:any){setError(e?.message||'ذخیره توضیح انجام نشد')}
+    return;
+   }
+   const{error:e}=await supabase.rpc('set_declaration_checklist_note',{p_item_id:item.id,p_note:note});
   if(e){setError(e.message);return}
   setItems(p=>p.map(x=>x.id===item.id?{...x,note:note||null}:x));
   setDraftNote(p=>({...p,[item.id]:note}));
@@ -169,7 +203,8 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   setBusy(true);setError('');setMessage('');
   try{
    const nextOrder=Math.max(0,...items.map(x=>x.sort_order||0))+10;
-   const{error:e}=await supabase.rpc('add_declaration_checklist_item',{p_declaration_id:declarationId,p_item_label:label,p_sort_order:nextOrder});
+   if(useCloudflare){await cloudflareDeclarationExitApi.addChecklistItem(declarationId,label,nextOrder);setNewItem('');setAddOpen(false);setMessage('مورد جدید به چک‌لیست این اظهارنامه اضافه شد.');await load();return;}
+    const{error:e}=await supabase.rpc('add_declaration_checklist_item',{p_declaration_id:declarationId,p_item_label:label,p_sort_order:nextOrder});
    if(e)throw e;
    setNewItem('');setAddOpen(false);setMessage('مورد جدید به چک‌لیست این اظهارنامه اضافه شد.');await load();
   }catch(e:any){setError(e?.message||'افزودن مورد جدید انجام نشد')}finally{setBusy(false)}
@@ -177,7 +212,8 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
 
  const removeItem=async(item:Item)=>{
   if(!canEdit||item.workflowManaged)return;
-  const{error:e}=await supabase.rpc('set_declaration_checklist_item_active',{p_item_id:item.id,p_active:false});
+  if(useCloudflare){try{await cloudflareDeclarationExitApi.updateChecklistItem(declarationId,item.id,{is_active:false});setItems(p=>p.filter(x=>x.id!==item.id));setMessage('این مورد از چک‌لیست همین اظهارنامه حذف شد.')}catch(e:any){setError(e?.message||'حذف مورد انجام نشد')}return;}
+   const{error:e}=await supabase.rpc('set_declaration_checklist_item_active',{p_item_id:item.id,p_active:false});
   if(e){setError(e.message);return}
   setItems(p=>p.filter(x=>x.id!==item.id));setMessage('این مورد از چک‌لیست همین اظهارنامه حذف شد.');
  };
@@ -187,7 +223,12 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   setBusy(true);setError('');setMessage('');
   try{
    const remaining=pending.map(x=>x.note?`${x.item_label} — توضیح: ${x.note}`:x.item_label);
-   const{error:e}=await supabase.rpc('advance_declaration_to_exit_stage',{p_declaration_id:declarationId,p_remaining_items:remaining});
+   if(useCloudflare){
+     const result=await cloudflareDeclarationExitApi.advance(declarationId);
+     setMessage(result.partial_allowed&&result.remaining_items.length?'مرحله ۵ باز شد؛ موارد ناقص ثبت شدند: '+result.remaining_items.join('، '):'چک‌لیست کامل شد؛ ورود به درب خروج.');
+     window.location.assign(`/operations?tab=exit&declarationId=${encodeURIComponent(declarationId)}`);return;
+    }
+    const{error:e}=await supabase.rpc('advance_declaration_to_exit_stage',{p_declaration_id:declarationId,p_remaining_items:remaining});
    if(e)throw e;
    window.location.assign(`/operations?tab=exit&declarationId=${encodeURIComponent(declarationId)}`);
   }catch(e:any){setError(e?.message||'انتقال به مرحله درب خروج انجام نشد')}finally{setBusy(false)}
