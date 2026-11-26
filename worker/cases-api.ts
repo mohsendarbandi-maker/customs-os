@@ -875,6 +875,11 @@ const handleCaseExitApi = async (
     if (!record) return fail('CASE_NOT_FOUND', 404);
     const currentStatus = String(record.status || '');
     if (currentStatus === 'archived') return fail('ARCHIVED_CASE_EXIT_FORBIDDEN', 409);
+    // A completed case is terminal. Only a repeated/confirmed final-exit state
+    // may be submitted; pending/cancelled/authorization updates cannot reopen it.
+    if (currentStatus === 'completed' && exitStatus !== 'exited') {
+      return fail('CASE_ALREADY_COMPLETED', 409);
+    }
     if (exitStatus === 'exited' && !['exit_permit','completed'].includes(currentStatus)) {
       return fail('CASE_EXIT_STAGE_REQUIRED', 409);
     }
@@ -888,6 +893,8 @@ const handleCaseExitApi = async (
       : currentStatus;
     const now = new Date().toISOString();
     const exitId = typeof before?.id === 'string' ? before.id : crypto.randomUUID();
+    const expectedCaseUpdatedAt = record.updated_at ?? null;
+    const expectedExitUpdatedAt = before && typeof before.updated_at === 'string' ? before.updated_at : null;
     const after = {
       id: exitId, organization_id: profile.organization_id, case_id: caseId, exit_status: exitStatus,
       exit_permit_no: permitNo, exit_permit_date: permitDate, exit_authorized_at: authorizedAt,
@@ -898,30 +905,45 @@ const handleCaseExitApi = async (
       db.prepare(
         'INSERT INTO case_exit_operations (id,organization_id,case_id,exit_status,exit_permit_no,exit_permit_date,' +
         'exit_authorized_at,exit_at,vehicle_plate,driver_name,driver_national_id,notes,created_by,created_at,updated_at) ' +
-        'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(case_id) DO UPDATE SET ' +
+        'SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (' +
+        'SELECT 1 FROM cases WHERE id=? AND organization_id=? AND updated_at IS ? AND status=?) ' +
+        'ON CONFLICT(case_id) DO UPDATE SET ' +
         'exit_status=excluded.exit_status,exit_permit_no=excluded.exit_permit_no,exit_permit_date=excluded.exit_permit_date,' +
         'exit_authorized_at=excluded.exit_authorized_at,exit_at=excluded.exit_at,vehicle_plate=excluded.vehicle_plate,' +
-        'driver_name=excluded.driver_name,driver_national_id=excluded.driver_national_id,notes=excluded.notes,updated_at=excluded.updated_at',
+        'driver_name=excluded.driver_name,driver_national_id=excluded.driver_national_id,notes=excluded.notes,updated_at=excluded.updated_at ' +
+        'WHERE case_exit_operations.updated_at IS ? AND EXISTS (' +
+        'SELECT 1 FROM cases WHERE id=? AND organization_id=? AND updated_at IS ? AND status=?)',
       ).bind(
         exitId, profile.organization_id, caseId, exitStatus, permitNo, permitDate, authorizedAt, exitAt,
         vehiclePlate, driverName, driverNationalId, notes, profile.id, before?.created_at || now, now,
+        caseId, profile.organization_id, expectedCaseUpdatedAt, currentStatus,
+        expectedExitUpdatedAt,
+        caseId, profile.organization_id, expectedCaseUpdatedAt, currentStatus,
       ),
     ];
     if (nextStatus !== currentStatus) {
       statements.push(db.prepare(
-        'UPDATE cases SET status=?,updated_at=? WHERE id=? AND organization_id=?',
-      ).bind(nextStatus, now, caseId, profile.organization_id));
+        'UPDATE cases SET status=?,updated_at=? WHERE id=? AND organization_id=? AND updated_at IS ? AND status=? AND changes()>0',
+      ).bind(nextStatus, now, caseId, profile.organization_id, expectedCaseUpdatedAt, currentStatus));
     }
     statements.push(db.prepare(
       'INSERT INTO customs_os_audit_events (id,organization_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,request_id) ' +
-      'VALUES (?,?,?,?,?,?,?,?,?)',
+      'SELECT ?,?,?,?,?,?,?,?,? WHERE changes()>0',
     ).bind(
       crypto.randomUUID(), profile.organization_id, profile.id, 'update', 'case', caseId,
       JSON.stringify({ status: currentStatus, exit: before || null }),
       JSON.stringify({ status: nextStatus, exit: after, notes }),
       request.headers.get('cf-ray') || request.headers.get('x-request-id'),
     ));
-    await db.batch(statements);
+    const results = await db.batch(statements);
+    const exitChanges = Number((results[0] as { meta?: { changes?: number } } | undefined)?.meta?.changes || 0);
+    const caseChanges = nextStatus === currentStatus ? 1
+      : Number((results[1] as { meta?: { changes?: number } } | undefined)?.meta?.changes || 0);
+    const auditIndex = statements.length - 1;
+    const auditChanges = Number((results[auditIndex] as { meta?: { changes?: number } } | undefined)?.meta?.changes || 0);
+    if (exitChanges !== 1 || caseChanges !== 1 || auditChanges !== 1) {
+      return fail('CASE_EXIT_UPDATE_CONFLICT', 409);
+    }
     const updatedCase = await readCase(db, caseId, profile.organization_id);
     const [exit, readiness] = await Promise.all([
       readCaseExit(db, caseId, profile.organization_id),
