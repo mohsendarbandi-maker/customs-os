@@ -271,7 +271,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
   {!useCloudflare&&decl&&decl.customs_regime!=='import_definitive'&&<section className="rounded-2xl border app-border bg-[var(--surface)] p-4 sm:p-5 space-y-3">
    <div><h2 className="font-black">مرکز اسناد هوشمند عملیات گمرکی</h2><p className="mt-1 text-xs app-muted">برای هر باکس، فایل مربوط را جداگانه انتخاب و استخراج را اجرا کنید. نتایج به همان اظهارنامه و باکس اختصاصی ذخیره می‌شوند.</p></div>
    <div className="flex flex-wrap gap-2">{Object.entries(CUSTOMS_OPERATION_SECTIONS).map(([key,config])=><button type="button" key={key} onClick={()=>setAiDocumentSection(key as CustomsOperationSection)} className={'rounded-lg border px-3 py-2 text-xs font-bold '+(aiDocumentSection===key?'border-[var(--primary)] bg-[var(--primary)] text-white':'app-border bg-[var(--surface-2)]')}>{config.label}</button>)}</div>
-   {!useCloudflare&&<CustomsStageDocumentAI declarationId={decl.id} shipmentId={decl.shipment_id||''} organizationId={profile?.organization_id||''} section={aiDocumentSection} editable={canEdit}/>}
+   {!useCloudflare&&{!useCloudflare&&<CustomsStageDocumentAI declarationId={decl.id} shipmentId={decl.shipment_id||''} organizationId={profile?.organization_id||''} section={aiDocumentSection} editable={canEdit}/>}}
   </section>}
 
   <section className="rounded-2xl border app-border bg-[var(--surface)] overflow-hidden">
