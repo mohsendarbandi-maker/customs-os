@@ -222,7 +222,7 @@ async function readActiveSession(db: CloudflareAuthDatabase, token: string, nowI
   const tokenHash = await sha256(token);
   const row = await db.prepare(
     'SELECT s.session_id, s.user_id, s.token_hash, s.expires_at, s.last_seen_at, ' +
-    'c.email_normalized, p.organization_id, p.role, p.client_id, p.full_name, p.phone, p.is_active ' +
+    'c.email_normalized, p.id, p.organization_id, p.role, p.client_id, p.full_name, p.phone, p.is_active ' +
     'FROM customs_os_auth_sessions s ' +
     'JOIN customs_os_auth_credentials c ON c.user_id = s.user_id ' +
     'JOIN profiles p ON p.id = s.user_id ' +
@@ -262,7 +262,7 @@ async function writeEvent(
   details: Record<string, unknown> = {},
 ) {
   await db.prepare(
-    'INSERT INTO customs_os_auth_events ' +
+    'INSERT INTO customs_os_auth_audit_events ' +
     '(id, actor_user_id, target_user_id, event_type, session_id, request_id, details_json, created_at) ' +
     'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   ).bind(
@@ -324,7 +324,7 @@ async function login(request: Request, db: CloudflareAuthDatabase, url: URL) {
   // Unknown addresses still execute a PBKDF2 operation to reduce account-enumeration timing.
   const validPassword = credential
     ? await verifyCloudflarePassword(password, credential.password_hash, credential.password_salt, credential.password_iterations)
-    : await verifyCloudflarePassword(password, '0'.repeat(64), 'a'.repeat(64), 100_000).then(() => false);
+    : await verifyCloudflarePassword(password, '0'.repeat(64), 'a'.repeat(64), PASSWORD_ITERATIONS).then(() => false);
 
   if (!credential || !validPassword) {
     if (credential) {
@@ -366,7 +366,7 @@ async function login(request: Request, db: CloudflareAuthDatabase, url: URL) {
       'DELETE FROM customs_os_auth_login_attempts WHERE ip_hash = ?',
     ).bind(ipHash),
     db.prepare(
-      'INSERT INTO customs_os_auth_events ' +
+      'INSERT INTO customs_os_auth_audit_events ' +
       '(id, actor_user_id, target_user_id, event_type, session_id, request_id, details_json, created_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     ).bind(
@@ -453,7 +453,7 @@ async function changePassword(request: Request, db: CloudflareAuthDatabase, url:
       'UPDATE customs_os_auth_sessions SET token_hash = ?, created_at = ?, expires_at = ?, last_seen_at = ? WHERE token_hash = ? AND revoked_at IS NULL',
     ).bind(tokenHash, now, expiresAt, now, active.tokenHash),
     db.prepare(
-      'INSERT INTO customs_os_auth_events ' +
+      'INSERT INTO customs_os_auth_audit_events ' +
       '(id, actor_user_id, target_user_id, event_type, session_id, request_id, details_json, created_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     ).bind(
