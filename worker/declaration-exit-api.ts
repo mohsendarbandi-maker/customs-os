@@ -604,13 +604,13 @@ const completeExit = async (
     ).bind(declaration.shipment_id, profile.organization_id, sataCode));
   }
   statements.push(db.prepare(
-    'UPDATE shipments SET finance_status=\\'ready\\',updated_at=? ' +
+    'UPDATE shipments SET finance_status=\'ready\',updated_at=? ' +
     'WHERE id=? AND organization_id=? AND changes()>0 AND EXISTS (' +
     'SELECT 1 FROM customs_declarations d WHERE d.id=? AND d.organization_id=? AND d.workflow_stage=6)',
   ).bind(now, declaration.shipment_id, profile.organization_id, declaration.id, profile.organization_id));
   if (workflow) {
     statements.push(db.prepare(
-      'UPDATE customs_declaration_workflow SET current_stage=\\'completed\\',loading_permit_state=?,updated_by=?,updated_at=?,last_event_type=\\'saved\\' ' +
+      'UPDATE customs_declaration_workflow SET current_stage=\'completed\',loading_permit_state=?,updated_by=?,updated_at=?,last_event_type=\'saved\' ' +
       'WHERE id=? AND organization_id=? AND declaration_id=? AND changes()>0',
     ).bind(JSON.stringify(nextWorkflow), profile.id, now, workflow.id, profile.organization_id, declaration.id));
   }
