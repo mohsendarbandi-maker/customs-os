@@ -60,7 +60,7 @@ class MemoryAuthD1 implements CloudflareAuthDatabase {
           return (db.credential?.email_normalized === values[0] ? db.credential : null) as T | null;
         }
         if (sql.includes('FROM customs_os_auth_principals WHERE user_id')) {
-          return (db.principal?.user_id === values[0] ? db.principal : null) as T | null;
+          return (db.principal?.user_id === values[0] ? { ...db.principal, id: db.principal.user_id } : null) as T | null;
         }
         if (sql.includes('FROM customs_os_auth_sessions s')) {
           const [tokenHash, nowIso] = values as string[];
