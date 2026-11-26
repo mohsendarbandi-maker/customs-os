@@ -303,7 +303,7 @@ async function login(request: Request, db: CloudflareAuthDatabase, url: URL) {
   } catch { return fail('INVALID_REQUEST', 400); }
   const email = typeof body.email === 'string' ? normalizeAuthEmail(body.email) : '';
   const password = typeof body.password === 'string' ? body.password : '';
-  if (email.length < 3 || email.length > 320 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(email) || password.length < 1 || password.length > 256) {
+  if (email.length < 3 || email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || password.length < 1 || password.length > 256) {
     return fail('INVALID_CREDENTIALS', 401);
   }
 
