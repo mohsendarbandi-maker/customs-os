@@ -12,6 +12,9 @@ class FakeStatement implements CasesD1Statement {
 class FakeD1 implements CasesD1Database {
   list: CaseRecord[] = [];
   detail: CaseRecord | null = null;
+  detailOrganizationId = 'org-a';
+  permits: Array<Record<string, unknown>> = [];
+  simulatePermitConflict = false;
   related = { shipments: [] as unknown[], declarations: [] as unknown[], documents: [] as unknown[], permits: [] as unknown[] };
   auditEvents: Array<Record<string, unknown>> = [];
   queries: Array<{ sql: string; values: unknown[] }> = [];
@@ -27,6 +30,12 @@ class FakeD1 implements CasesD1Database {
   }
   first<T>(sql: string, values: unknown[]): T | null {
     this.queries.push({ sql, values });
+    if (sql.includes('SELECT id FROM cases WHERE id=? AND organization_id=?')) {
+      return this.detail?.id === values[0] && this.detailOrganizationId === values[1] ? { id: this.detail.id } as T : null;
+    }
+    if (sql.includes('FROM permits WHERE id=? AND case_id=? AND organization_id=?')) {
+      return (this.permits.find(row => row.id === values[0] && row.case_id === values[1] && row.organization_id === values[2]) || null) as T | null;
+    }
     if (sql.includes('FROM clients WHERE id=?')) {
       return this.clientRow?.id === values[0] && this.clientRow.organization_id === values[1]
         ? this.clientRow as T : null;
@@ -66,6 +75,30 @@ class FakeD1 implements CasesD1Database {
       } as unknown as CaseRecord;
       this.lastChanges = 1;
       return { meta: { changes: 1 } };
+    }
+    if (sql.startsWith('INSERT INTO permits (')) {
+      this.permits.push({ id: values[0], organization_id: values[1], case_id: values[2], permit_type: values[3], permit_number: values[4], issuing_authority: values[5], status: values[6], issued_at: values[7], expires_at: values[8], created_at: values[9], updated_at: values[10] });
+      this.lastChanges = 1;
+      return { meta: { changes: 1 } };
+    }
+    if (sql.startsWith('UPDATE permits SET')) {
+      const permitId = values[values.length - 4], caseId = values[values.length - 3], orgId = values[values.length - 2], updatedAt = values[values.length - 1];
+      const existing = this.permits.find(item => item.id === permitId && item.case_id === caseId && item.organization_id === orgId);
+      if (this.simulatePermitConflict && existing) { existing.updated_at = '2026-11-25T09:02:00.000Z'; this.simulatePermitConflict = false; }
+      const row = existing?.updated_at === updatedAt ? existing : undefined;
+      if (!row) { this.lastChanges = 0; return { meta: { changes: 0 } }; }
+      const setPart = sql.split(' SET ')[1]?.split(' WHERE ')[0] || '';
+      const columns = setPart.split(',').map(value => value.split('=')[0].trim());
+      columns.forEach((column, index) => { row[column] = values[index]; });
+      this.lastChanges = 1;
+      return { meta: { changes: 1 } };
+    }
+    if (sql.startsWith('DELETE FROM permits')) {
+      const [permitId, caseId, orgId, updatedAt] = values;
+      const index = this.permits.findIndex(item => item.id === permitId && item.case_id === caseId && item.organization_id === orgId && item.updated_at === updatedAt);
+      this.lastChanges = index >= 0 ? 1 : 0;
+      if (index >= 0) this.permits.splice(index, 1);
+      return { meta: { changes: this.lastChanges } };
     }
     if (sql.startsWith('INSERT INTO customs_os_audit_events')) {
       if (this.lastChanges !== 1) return { meta: { changes: 0 } };
@@ -112,7 +145,10 @@ class FakeD1 implements CasesD1Database {
     if (sql.includes('FROM shipments s LEFT JOIN vessels v')) return { results: this.related.shipments as T[] };
     if (sql.includes('FROM customs_declarations WHERE case_id')) return { results: this.related.declarations as T[] };
     if (sql.includes('FROM customs_documents WHERE case_id')) return { results: this.related.documents as T[] };
-    if (sql.includes('FROM permits WHERE case_id')) return { results: this.related.permits as T[] };
+    if (sql.includes('FROM permits WHERE case_id')) {
+      const rows = [...this.related.permits, ...this.permits].filter(row => row.case_id === values[0] && row.organization_id === values[1]);
+      return { results: rows as T[] };
+    }
     if (sql.includes('FROM customs_os_audit_events')) return { results: this.auditEvents as T[] };
     throw new Error('Unexpected query: ' + sql);
   }
@@ -420,7 +456,8 @@ describe('Cloudflare D1 cases read API', () => {
 
   it('does not return an existing registration-order case to a different client', async () => {
     const db = new FakeD1();
-    db.detail = { ...caseRow, client_id: 'client-other' } as CaseRecord;
+    db.existingOrderId = 'case-existing';
+    db.detail = { ...caseRow, id: 'case-existing', client_id: 'client-other' } as CaseRecord;
     db.list = [{ id: 'case-existing', registration_order_no: 'RO-1' }];
     const url = new URL('https://staging.example/api/cases');
     const response = await handleCasesApi(new Request(url, {
@@ -567,4 +604,165 @@ describe('Cloudflare D1 cases read API', () => {
     expect(response.status).toBe(405);
     expect(db.queries).toHaveLength(0);
   });
+  it('lists case permits only inside the current organization', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    db.permits = [
+      { id: 'permit-a', organization_id: 'org-a', case_id: 'case-a', permit_type: 'health', status: 'approved' },
+      { id: 'permit-b', organization_id: 'org-b', case_id: 'case-a', permit_type: 'other', status: 'pending' },
+    ];
+    const url = new URL('https://staging.example/api/cases/case-a/permits');
+    const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
+    const body = await response.json() as { permits: Array<{ id: string }> };
+    expect(response.status).toBe(200);
+    expect(body.permits.map(row => row.id)).toEqual(['permit-a']);
+    expect(db.queries.some(query => query.sql.includes('FROM permits WHERE case_id=? AND organization_id=?') &&
+      query.values.join('|') === 'case-a|org-a')).toBe(true);
+  });
+
+  it('creates a permit atomically with an audit record for a case in the current organization', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    const url = new URL('https://staging.example/api/cases/case-a/permits');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        permit_type: 'health', permit_number: 'H-123',
+        issuing_authority: 'Health Authority', status: 'approved',
+      }),
+    }), db, url, owner);
+    const body = await response.json() as { permit: { permit_type: string; status: string } };
+    expect(response.status).toBe(201);
+    expect(body.permit.permit_type).toBe('health');
+    expect(body.permit.status).toBe('approved');
+    expect(db.permits).toHaveLength(1);
+    expect(db.auditEvents).toHaveLength(1);
+    expect(db.auditEvents[0].action).toBe('create');
+    expect(db.auditEvents[0].entity_type).toBe('permit');
+  });
+
+  it('rejects permit creation for a case outside the current organization', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, id: 'foreign-case' };
+    db.detailOrganizationId = 'org-b';
+    const url = new URL('https://staging.example/api/cases/foreign-case/permits');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST',
+      headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ permit_type: 'health', issuing_authority: 'Authority' }),
+    }), db, url, owner);
+    expect(response.status).toBe(404);
+    expect(db.permits).toHaveLength(0);
+  });
+
+  it('updates only allowlisted permit fields with an immutable audit record', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    db.permits = [{
+      id: 'permit-a', organization_id: 'org-a', case_id: 'case-a', permit_type: 'health',
+      permit_number: 'H-1', issuing_authority: 'Authority', status: 'pending',
+      issued_at: null, expires_at: null, created_at: '2026-11-25T08:00:00.000Z',
+      updated_at: '2026-11-25T08:00:00.000Z',
+    }];
+    const url = new URL('https://staging.example/api/cases/case-a/permits/permit-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'approved', permit_number: 'H-2' }),
+    }), db, url, owner);
+    expect(response.status).toBe(200);
+    expect(db.permits[0].status).toBe('approved');
+    expect(db.permits[0].permit_number).toBe('H-2');
+    expect(db.auditEvents.at(-1)?.action).toBe('update');
+    const afterSnapshot = JSON.parse(String(db.auditEvents.at(-1)?.after_json)) as { updated_at: string };
+    expect(db.permits[0].updated_at).toBe(afterSnapshot.updated_at);
+    const update = db.queries.find(query => query.sql.startsWith('UPDATE permits SET'));
+    expect(update?.sql).toContain('WHERE id=? AND case_id=? AND organization_id=? AND updated_at=?');
+  });
+
+  it('rejects permit expiration earlier than its issue date', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    const url = new URL('https://staging.example/api/cases/case-a/permits');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        permit_type: 'health', issuing_authority: 'Authority',
+        issued_at: '2026-11-10T00:00:00Z', expires_at: '2026-11-09T00:00:00Z',
+      }),
+    }), db, url, owner);
+    expect(response.status).toBe(422);
+    expect(db.permits).toHaveLength(0);
+  });
+
+  it('deletes a permit within the case tenant and preserves a delete audit record', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    db.permits = [{
+      id: 'permit-a', organization_id: 'org-a', case_id: 'case-a', permit_type: 'health',
+      permit_number: 'H-1', issuing_authority: 'Authority', status: 'pending',
+      issued_at: null, expires_at: null, created_at: '2026-11-25T08:00:00.000Z',
+      updated_at: '2026-11-25T08:00:00.000Z',
+    }];
+    const url = new URL('https://staging.example/api/cases/case-a/permits/permit-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'DELETE', headers: { origin: url.origin },
+    }), db, url, owner);
+    expect(response.status).toBe(200);
+    expect(db.permits).toHaveLength(0);
+    expect(db.auditEvents.at(-1)?.action).toBe('delete');
+    expect(db.auditEvents.at(-1)?.before_json).toContain('permit-a');
+    expect(db.auditEvents.at(-1)?.after_json).toBeNull();
+  });
+
+  it('rejects permit writes by warehouse and accountant roles', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    const url = new URL('https://staging.example/api/cases/case-a/permits');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ permit_type: 'health', issuing_authority: 'Authority' }),
+    }), db, url, { ...owner, role: 'warehouse' });
+    expect(response.status).toBe(403);
+    expect(db.permits).toHaveLength(0);
+  });
+
+  it('does not overwrite a concurrent permit edit and records no false audit event', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    db.permits = [{
+      id: 'permit-a', organization_id: 'org-a', case_id: 'case-a', permit_type: 'health',
+      permit_number: 'H-1', issuing_authority: 'Authority', status: 'pending',
+      issued_at: null, expires_at: null, created_at: '2026-11-25T08:00:00.000Z',
+      updated_at: '2026-11-25T08:00:00.000Z',
+    }];
+    db.simulatePermitConflict = true;
+    const url = new URL('https://staging.example/api/cases/case-a/permits/permit-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'approved' }),
+    }), db, url, owner);
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('PERMIT_UPDATE_CONFLICT');
+    expect(db.permits[0].status).toBe('pending');
+    expect(db.auditEvents).toHaveLength(0);
+  });
+
+  it('rejects non-ISO permit timestamps before database writes', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    const url = new URL('https://staging.example/api/cases/case-a/permits');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'POST', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        permit_type: 'health', issuing_authority: 'Authority',
+        issued_at: '11/25/2026', expires_at: '2026-12-25',
+      }),
+    }), db, url, owner);
+    expect(response.status).toBe(422);
+    expect(db.permits).toHaveLength(0);
+    expect(db.queries.some(query => query.sql.startsWith('INSERT INTO permits'))).toBe(false);
+  });
+
 });
