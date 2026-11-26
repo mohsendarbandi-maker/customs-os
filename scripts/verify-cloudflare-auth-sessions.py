@@ -30,6 +30,8 @@ assert {
 
 attempt_columns = {row[1] for row in db.execute("PRAGMA table_info(customs_os_auth_login_attempts)")}
 assert {"ip_hash", "window_started_at", "attempts"} <= attempt_columns
+principal_columns = {row[1] for row in db.execute("PRAGMA table_info(customs_os_auth_principals)")}
+assert {"user_id", "organization_id", "role", "client_id", "full_name", "phone", "is_active", "verified_at"} <= principal_columns
 
 db.execute(
     "INSERT INTO profiles(id, organization_id, role, full_name, is_active) VALUES (?, ?, ?, ?, 1)",
@@ -40,6 +42,12 @@ db.execute(
        (user_id, email_normalized, password_hash, password_salt)
        VALUES (?, ?, ?, ?)""",
     ("owner-1", "owner@example.test", "a" * 64, "b" * 64),
+)
+db.execute(
+    """INSERT INTO customs_os_auth_principals
+       (user_id, organization_id, role, full_name, is_active, verified_at)
+       VALUES (?, ?, ?, ?, 1, ?)""",
+    ("owner-1", "org-1", "owner", "مدیر سامانه", "2026-11-26T00:00:00Z"),
 )
 db.execute(
     """INSERT INTO customs_os_auth_sessions
