@@ -627,9 +627,9 @@ const completeExit = async (
     'AND (? = \'\' OR EXISTS (SELECT 1 FROM customs_declaration_workflow w WHERE w.id=? ' +
     'AND w.organization_id=? AND w.declaration_id=? AND w.updated_at=?))',
   ).bind(
-    now, declaration.shipment_id, profile.organization_id, declaration.id, profile.organization_id,
+    now, declaration.shipment_id, profile.organization_id, declaration.id, profile.organization_id, financeStatus,
     declaration.id, profile.organization_id, declaration.customs_regime,
-    declaration.id, profile.organization_id, sataCode, financeStatus,
+    declaration.id, profile.organization_id, sataCode,
     workflow?.id || '', workflow?.id || '', profile.organization_id, declaration.id, workflow?.updated_at || '',
   ));
   statements.push(db.prepare(
