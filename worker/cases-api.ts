@@ -1069,14 +1069,18 @@ export const handleCasesApi = async (
     if (id !== null) {
       const record = await readCase(db, id, profile.organization_id);
       if (!record) return fail('CASE_NOT_FOUND', 404);
-      const related = await readRelated(db, id, profile.organization_id);
+      const [related, readiness] = await Promise.all([
+        readRelated(db, id, profile.organization_id),
+        readCaseCompletionReadiness(db, record, id, profile.organization_id),
+      ]);
       return json({
         ok: true,
         case: record,
         ...related,
+        readiness,
         readOnly: true,
-        workflowReadiness: 'not_included',
-        stageTransitions: 'not_supported',
+        workflowReadiness: 'computed',
+        stageTransitions: 'case_exit_status_only',
       });
     }
     const limit = bounded(url.searchParams.get('limit'), 30, 1, 100);
