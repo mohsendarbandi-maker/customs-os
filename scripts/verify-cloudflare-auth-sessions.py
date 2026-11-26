@@ -49,6 +49,35 @@ db.execute(
        VALUES (?, ?, ?, ?, 1, ?)""",
     ("owner-1", "org-1", "owner", "مدیر سامانه", "2026-11-26T00:00:00Z"),
 )
+db.execute("INSERT INTO profiles(id) VALUES (?)", ("client-1",))
+must_fail(
+    """INSERT INTO customs_os_auth_principals
+       (user_id, organization_id, role, full_name, is_active, verified_at)
+       VALUES (?, ?, ?, ?, 1, ?)""",
+    ("client-1", "org-1", "client", "مشتری", "2026-11-26T00:00:00Z"),
+    "client role requires a client scope",
+)
+must_fail(
+    """INSERT INTO customs_os_auth_principals
+       (user_id, organization_id, role, full_name, is_active, verified_at)
+       VALUES (?, ?, ?, ?, 1, ?)""",
+    ("client-1", "org-1", "guest", "کاربر مهمان", "2026-11-26T00:00:00Z"),
+    "unsupported roles are forbidden",
+)
+must_fail(
+    """INSERT INTO customs_os_auth_principals
+       (user_id, organization_id, role, client_id, full_name, is_active, verified_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+    ("client-1", "org-1", "client", "client-1", "مشتری", 2, "2026-11-26T00:00:00Z"),
+    "active flag must be boolean",
+)
+db.execute(
+    """INSERT INTO customs_os_auth_principals
+       (user_id, organization_id, role, client_id, full_name, is_active, verified_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?)""",
+    ("client-1", "org-1", "client", "client-1", "مشتری", "2026-11-26T00:00:00Z"),
+)
+
 db.execute(
     """INSERT INTO customs_os_auth_sessions
        (session_id, user_id, token_hash, expires_at, device_label, app_origin)
