@@ -46,7 +46,7 @@ BEGIN
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(order_number_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE id=NEW.id;
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,' ',''),char(9),''),char(10),'') WHERE id=NEW.id;
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(13),''),char(160),''),char(8204),'') WHERE id=NEW.id;
-  UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+  UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE id=NEW.id;
 UPDATE registration_orders SET order_number_normalized = NULLIF(order_number_normalized,'') WHERE id=NEW.id;
 END;
 
@@ -59,7 +59,7 @@ BEGIN
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(order_number_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE id=NEW.id;
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,' ',''),char(9),''),char(10),'') WHERE id=NEW.id;
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(13),''),char(160),''),char(8204),'') WHERE id=NEW.id;
-  UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+  UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE id=NEW.id;
 UPDATE registration_orders SET order_number_normalized = NULLIF(order_number_normalized,'') WHERE id=NEW.id;
 END;
 
@@ -73,7 +73,7 @@ BEGIN
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE shipment_id=NEW.shipment_id;
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,' ',''),char(9),''),char(10),'') WHERE shipment_id=NEW.shipment_id;
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(13),''),char(160),''),char(8204),'') WHERE shipment_id=NEW.shipment_id;
-  UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+  UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE shipment_id=NEW.shipment_id;
 UPDATE shipment_customs_data SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE shipment_id=NEW.shipment_id;
 END;
 
@@ -86,7 +86,7 @@ BEGIN
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE shipment_id=NEW.shipment_id;
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,' ',''),char(9),''),char(10),'') WHERE shipment_id=NEW.shipment_id;
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(13),''),char(160),''),char(8204),'') WHERE shipment_id=NEW.shipment_id;
-  UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+  UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE shipment_id=NEW.shipment_id;
 UPDATE shipment_customs_data SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE shipment_id=NEW.shipment_id;
 END;
 
@@ -100,7 +100,7 @@ BEGIN
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE id=NEW.id;
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,' ',''),char(9),''),char(10),'') WHERE id=NEW.id;
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(13),''),char(160),''),char(8204),'') WHERE id=NEW.id;
-  UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+  UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE id=NEW.id;
 UPDATE cases SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE id=NEW.id;
 END;
 
@@ -113,7 +113,7 @@ BEGIN
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE id=NEW.id;
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,' ',''),char(9),''),char(10),'') WHERE id=NEW.id;
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(13),''),char(160),''),char(8204),'') WHERE id=NEW.id;
-  UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+  UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE id=NEW.id;
 UPDATE cases SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE id=NEW.id;
 END;
 
