@@ -1,6 +1,7 @@
 import { applySupabaseAuthForwardedFor } from './supabaseAuthProxy';
+import { handleCloudflareAuthRoute, type CloudflareAuthRouteEnvironment } from './cloudflare-auth-route';
 
-export interface Env {
+export interface Env extends CloudflareAuthRouteEnvironment {
   ASSETS: { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY?: string;
@@ -286,6 +287,11 @@ async function serveMaritimeConditions(request: Request): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // D1-native authentication is isolated behind an explicit binding and
+    // Worker secret. Until both are provisioned, auth API paths fail closed.
+    const cloudflareAuthResponse = await handleCloudflareAuthRoute(request, url, env);
+    if (cloudflareAuthResponse) return cloudflareAuthResponse;
 
     // The mobile-host auth bridge is a tiny static document, not the SPA shell.
     // It uses strict postMessage origin checks and never places session data in URLs.

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { isCloudflareRecoveryHost } from '../lib/recoveryHost';
+import { isCloudflareNativeAuthEnabled } from '../lib/cloudflareAuthBackend';
+import { CloudflareAuthError, signInWithCloudflarePassword } from '../lib/cloudflareAuthClient';
 import { useAuth } from '../context/AuthContext';
 import { CustomsLogo } from '../components/CustomsLogo';
 import { readReminderLanguage, type ReminderLanguage } from '../features/reminders/reminderI18n';
@@ -35,7 +37,10 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      if (isCloudflareRecoveryHost()) {
+      if (isCloudflareNativeAuthEnabled()) {
+        await signInWithCloudflarePassword(email, password);
+        await refreshProfile();
+      } else if (isCloudflareRecoveryHost()) {
         const response = await fetch('/api/auth/login', {
           method: 'POST',
           credentials: 'same-origin',
@@ -61,11 +66,23 @@ export const LoginPage: React.FC = () => {
         if (signInError) throw signInError;
       }
     } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'ورود ناموفق بود. اطلاعات ورود را بررسی کنید.',
-      );
+      if (err instanceof CloudflareAuthError) {
+        const messages: Record<string, string> = {
+          INVALID_CREDENTIALS: 'ایمیل یا رمز عبور صحیح نیست.',
+          RATE_LIMITED: 'تعداد تلاش‌ها زیاد است. چند دقیقه بعد دوباره امتحان کنید.',
+          AUTH_NOT_CONFIGURED: 'ورود ابری هنوز برای این سامانه فعال نشده است.',
+          ACCOUNT_NOT_READY_OR_DISABLED: 'این حساب هنوز فعال‌سازی یا تأیید نشده است.',
+          AUTH_STORAGE_UNAVAILABLE: 'سرویس ورود موقتاً در دسترس نیست.',
+          PASSWORD_POLICY: 'رمز عبور باید حداقل ۱۲ نویسه داشته باشد.',
+        };
+        setError(messages[err.code] || 'ورود انجام نشد. دوباره تلاش کنید.');
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'ورود ناموفق بود. اطلاعات ورود را بررسی کنید.',
+        );
+      }
     } finally {
       setLoading(false);
     }
