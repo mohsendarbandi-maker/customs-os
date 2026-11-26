@@ -82,6 +82,12 @@ describe('Cloudflare auth browser client', () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
       const url = String(input);
       calls.push({ url, init });
+      if (url.endsWith('/session')) {
+        return jsonResponse({
+          authenticated: true,
+          user: { id: 'owner-1', email: 'owner@example.com', full_name: 'مدیر' },
+        });
+      }
       if (url.endsWith('/password/challenge')) {
         return jsonResponse({
           challenge_id: '550e8400-e29b-41d4-a716-446655440000',
@@ -89,13 +95,6 @@ describe('Cloudflare auth browser client', () => {
           salt: 'b'.repeat(64),
           iterations: 600_000,
           expires_in: 120,
-          email: 'owner@example.com',
-        });
-      }
-      if (url.endsWith('/session')) {
-        return jsonResponse({
-          authenticated: true,
-          user: { id: 'owner-1', email: 'owner@example.com', full_name: 'مدیر' },
         });
       }
       return jsonResponse({ ok: true, password_reset_required: false });
@@ -106,6 +105,11 @@ describe('Cloudflare auth browser client', () => {
       'Even-Stronger-Password-2026!',
     );
     expect(result.ok).toBe(true);
+    expect(calls.map(call => call.url)).toEqual([
+      '/api/auth/session',
+      '/api/auth/password/challenge',
+      '/api/auth/password/change',
+    ]);
     const changeBody = String(calls[calls.length - 1].init.body);
     expect(changeBody).not.toContain('Strong-Password-2026!');
     expect(changeBody).not.toContain('Even-Stronger-Password-2026!');
