@@ -927,4 +927,44 @@ describe('Cloudflare D1 cases read API', () => {
     expect(db.exitRecord).toBeNull();
   });
 
+
+  it('marks completion ready only when release, weights, valuation, permits and final exit all pass', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, status: 'completed', kottaj_number: 'K-1405-1',
+      warehouse_receipt_no: 'WH-1', release_status: 'released', valuation_status: 'calculated',
+    };
+    db.exitRecord = {
+      id: 'exit-a', organization_id: 'org-a', case_id: 'case-a', exit_status: 'exited',
+      exit_permit_no: 'EP-1', exit_permit_number: 'EP-1', exit_permit_date: '2026-11-26',
+      exit_authorized_at: null, authorized_at: null, exit_at: '2026-11-26T07:00:00.000Z',
+      exited_at: '2026-11-26T07:00:00.000Z', vehicle_plate: null, driver_name: null,
+      driver_national_id: null, notes: null, created_by: 'user-a',
+      created_at: '2026-11-26T08:00:00.000Z', updated_at: '2026-11-26T08:00:00.000Z',
+    };
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
+    const body = await response.json() as { readiness: { ready: boolean; issues: string[]; release_ready: boolean } };
+    expect(response.status).toBe(200);
+    expect(body.readiness.ready).toBe(true);
+    expect(body.readiness.issues).toEqual([]);
+    expect(body.readiness.release_ready).toBe(true);
+  });
+
+  it('blocks completion when gross weight is below net weight', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, status: 'completed', kottaj_number: 'K-1405-1',
+      warehouse_receipt_no: 'WH-1', release_status: 'released', valuation_status: 'calculated',
+      net_weight_kg: 21000, gross_weight_kg: 20000,
+    };
+    db.exitRecord = { id: 'exit-a', organization_id: 'org-a', case_id: 'case-a', exit_status: 'exited' };
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
+    const body = await response.json() as { readiness: { ready: boolean; issues: string[] } };
+    expect(response.status).toBe(200);
+    expect(body.readiness.ready).toBe(false);
+    expect(body.readiness.issues).toContain('وزن ناخالص نمی‌تواند کمتر از وزن خالص باشد');
+  });
+
 });
