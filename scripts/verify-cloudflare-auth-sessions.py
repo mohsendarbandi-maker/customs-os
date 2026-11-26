@@ -46,9 +46,9 @@ db.execute(
 )
 db.execute(
     """INSERT INTO customs_os_auth_credentials
-       (user_id, email_normalized, password_hash, password_salt)
-       VALUES (?, ?, ?, ?)""",
-    ("owner-1", "owner@example.test", "a" * 64, "b" * 64),
+       (user_id, email_normalized, password_verifier_encrypted, password_verifier_iv, password_salt)
+       VALUES (?, ?, ?, ?, ?)""",
+    ("owner-1", "owner@example.test", "a" * 96, "c" * 24, "b" * 64),
 )
 db.execute(
     """INSERT INTO customs_os_auth_principals
