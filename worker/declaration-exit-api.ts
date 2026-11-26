@@ -590,30 +590,39 @@ const completeExit = async (
     sata_code: declaration.sata_code,
   };
   const statements: DeclarationExitD1Statement[] = [];
+  const nextWorkflow = workflow
+    ? { ...parseObject(workflow.loading_permit_state), ...(sataCode ? { sata_code: sataCode } : {}) }
+    : null;
+  statements.push(db.prepare(
+    'UPDATE customs_declarations SET workflow_stage=6,updated_at=? WHERE id=? AND organization_id=?',
+  ).bind(now, declaration.id, profile.organization_id));
   if (sataCode) {
     statements.push(db.prepare(
-      'INSERT INTO shipment_customs_data (shipment_id,organization_id,sata_code) VALUES (?,?,?) ' +
+      'INSERT INTO shipment_customs_data (shipment_id,organization_id,sata_code) ' +
+      'SELECT ?,?,? WHERE changes()>0 ' +
       'ON CONFLICT(shipment_id) DO UPDATE SET sata_code=excluded.sata_code',
     ).bind(declaration.shipment_id, profile.organization_id, sataCode));
   }
   statements.push(db.prepare(
-    'UPDATE customs_declarations SET workflow_stage=6,updated_at=? WHERE id=? AND organization_id=?',
-  ).bind(now, declaration.id, profile.organization_id));
-  statements.push(db.prepare(
-    'UPDATE shipments SET finance_status=\'ready\',updated_at=? WHERE id=? AND organization_id=?',
-  ).bind(now, declaration.shipment_id, profile.organization_id));
+    'UPDATE shipments SET finance_status=\\'ready\\',updated_at=? ' +
+    'WHERE id=? AND organization_id=? AND changes()>0 AND EXISTS (' +
+    'SELECT 1 FROM customs_declarations d WHERE d.id=? AND d.organization_id=? AND d.workflow_stage=6)',
+  ).bind(now, declaration.shipment_id, profile.organization_id, declaration.id, profile.organization_id));
   if (workflow) {
     statements.push(db.prepare(
-      'UPDATE customs_declaration_workflow SET current_stage=\'completed\',updated_by=?,updated_at=?,last_event_type=\'saved\' ' +
-      'WHERE id=? AND organization_id=? AND declaration_id=?',
-    ).bind(profile.id, now, workflow.id, profile.organization_id, declaration.id));
+      'UPDATE customs_declaration_workflow SET current_stage=\\'completed\\',loading_permit_state=?,updated_by=?,updated_at=?,last_event_type=\\'saved\\' ' +
+      'WHERE id=? AND organization_id=? AND declaration_id=? AND changes()>0',
+    ).bind(JSON.stringify(nextWorkflow), profile.id, now, workflow.id, profile.organization_id, declaration.id));
   }
   statements.push(insertAudit(
     db, profile, 'update', 'customs_declaration_exit', declaration.id, before,
     { workflow_stage: 6, finance_status: 'ready', sata_code: sataCode || null, completed_at: now }, requestId,
   ));
   try {
-    await db.batch(statements);
+    const results = await db.batch(statements);
+    const shipmentUpdateIndex = sataCode ? 2 : 1;
+    const shipmentChanges = (results[shipmentUpdateIndex] as { meta?: { changes?: number } } | undefined)?.meta?.changes;
+    if (!shipmentChanges) return fail('DECLARATION_EXIT_COMPLETION_FAILED', 503);
     return json({ ok: true, ready: true, workflow_stage: 6, finance_status: 'ready', shipment_id: declaration.shipment_id });
   } catch { return fail('DECLARATION_EXIT_COMPLETION_FAILED', 503); }
 };
