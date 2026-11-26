@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS customs_os_auth_credentials (
   password_verifier_encrypted TEXT NOT NULL,
   password_verifier_iv TEXT NOT NULL,
   password_salt TEXT NOT NULL,
-  password_iterations INTEGER NOT NULL DEFAULT 310000
-    CHECK (password_iterations = 310000),
+  password_iterations INTEGER NOT NULL DEFAULT 600000
+    CHECK (password_iterations = 600000),
   password_version INTEGER NOT NULL DEFAULT 1
     CHECK (password_version >= 1),
   failed_attempts INTEGER NOT NULL DEFAULT 0
