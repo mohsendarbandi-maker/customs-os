@@ -41,7 +41,6 @@ interface DeclarationRow extends Record<string, unknown> {
   ship_passed: number | boolean | null;
   transport_documents_status: string | null;
   transport_mode: string | null;
-  finance_status: string | null;
   warehouse_receipt_no: string | null;
 }
 interface WorkflowRow extends Record<string, unknown> {
@@ -69,6 +68,8 @@ interface ChecklistRow extends Record<string, unknown> {
   sort_order: number;
   source: string;
   is_active: number | boolean;
+  completed_at: string | null;
+  completed_by: string | null;
   updated_at: string;
 }
 interface ExitChecklistRow extends Record<string, unknown> {
@@ -171,7 +172,7 @@ const getDeclaration = (db: DeclarationExitD1Database, id: string, organizationI
   db.prepare(
     'SELECT d.id,d.organization_id,d.case_id,d.shipment_id,d.kottaj_number,d.customs_regime,' +
     'd.customs_path,d.workflow_stage,sc.tariff_code,sc.cargo_description,sc.sata_code,' +
-    's.ship_passed,s.transport_documents_status,s.transport_mode,s.finance_status,c.warehouse_receipt_no ' +
+    's.ship_passed,s.transport_documents_status,s.transport_mode,c.warehouse_receipt_no ' +
     'FROM customs_declarations d ' +
     'LEFT JOIN shipments s ON s.id=d.shipment_id AND s.organization_id=d.organization_id ' +
     'LEFT JOIN shipment_customs_data sc ON sc.shipment_id=d.shipment_id AND sc.organization_id=d.organization_id ' +
@@ -184,7 +185,7 @@ const getWorkflow = (db: DeclarationExitD1Database, declarationId: string, organ
   ).bind(declarationId, organizationId).first<WorkflowRow>();
 const readChecklist = (db: DeclarationExitD1Database, declarationId: string, organizationId: string) =>
   db.prepare(
-    'SELECT id,organization_id,declaration_id,item_key,item_label,completed,note,sort_order,source,is_active,updated_at ' +
+    'SELECT id,organization_id,declaration_id,item_key,item_label,completed,completed_at,completed_by,note,sort_order,source,is_active,updated_at ' +
     'FROM declaration_checklist_items WHERE declaration_id=? AND organization_id=? ' +
     'ORDER BY sort_order,created_at,id',
   ).bind(declarationId, organizationId).all<ChecklistRow>();
@@ -469,6 +470,8 @@ const updateChecklistItem = async (
   if ('completed' in body) {
     if (typeof body.completed !== 'boolean') return fail('INVALID_COMPLETED_VALUE', 422);
     patch.completed = body.completed ? 1 : 0;
+    patch.completed_at = body.completed ? new Date().toISOString() : null;
+    patch.completed_by = body.completed ? profile.id : null;
   }
   if ('is_active' in body) {
     if (typeof body.is_active !== 'boolean') return fail('INVALID_IS_ACTIVE_VALUE', 422);
@@ -563,7 +566,6 @@ const completeExit = async (
   const now = new Date().toISOString();
   const before = {
     workflow_stage: declaration.workflow_stage,
-    finance_status: declaration.finance_status,
     sata_code: declaration.sata_code,
   };
   const statements: DeclarationExitD1Statement[] = [];
