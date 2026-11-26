@@ -5,7 +5,7 @@
  * persisting it; D1-only disclosure therefore does not expose a pass-the-hash key.
  */
 
-const PASSWORD_ITERATIONS = 310_000;
+const PASSWORD_ITERATIONS = 600_000;
 const encoder = new TextEncoder();
 
 const toHex = (bytes: Uint8Array) =>
