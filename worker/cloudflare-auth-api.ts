@@ -334,7 +334,7 @@ async function consumeChallenge(
     'UPDATE customs_os_auth_challenges SET consumed_at = ? ' +
     'WHERE challenge_id = ? AND email_normalized = ? AND purpose = ? ' +
     'AND challenge_hash = ? AND ip_hash = ? AND consumed_at IS NULL AND expires_at > ? ' +
-    'AND ((user_id = ?) OR (user_id IS NULL AND ? IS NULL))',
+    'AND (? IS NULL OR user_id = ?)',
   ).bind(
     nowIso, challengeId, email, purpose, await sha256(challenge), ipHash, nowIso, userId, userId,
   ).run();
