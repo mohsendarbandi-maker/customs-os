@@ -597,6 +597,15 @@ const completeExit = async (
   if (issues.length) return json({ ok: true, ready: false, issues });
   if (!declaration.shipment_id) return fail('DECLARATION_SHIPMENT_REQUIRED', 409);
   if (!declaration.linked_shipment_id) return fail('DECLARATION_SHIPMENT_NOT_FOUND', 409);
+  // Repeated completion must not rewrite an already released shipment or emit
+  // another audit event when stage, finance status, and SATA are unchanged.
+  if (Number(declaration.workflow_stage) === 6 &&
+      financeStatus !== 'not_ready' && sataCode === existingSata) {
+    return json({
+      ok: true, ready: true, workflow_stage: 6,
+      finance_status: financeStatus, shipment_id: declaration.shipment_id,
+    });
+  }
   const columns = await db.prepare('PRAGMA table_info(shipments)').all<{ name: string }>();
   if (!columns.results.some(column => column.name === 'finance_status')) {
     return fail('SHIPMENT_FINANCE_STATUS_COLUMN_MISSING', 503);
