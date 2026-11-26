@@ -629,7 +629,7 @@ const completeExit = async (
   ).bind(
     now, declaration.shipment_id, profile.organization_id, declaration.id, profile.organization_id,
     declaration.id, profile.organization_id, declaration.customs_regime,
-    declaration.id, profile.organization_id, sataCode,
+    declaration.id, profile.organization_id, sataCode, financeStatus,
     workflow?.id || '', workflow?.id || '', profile.organization_id, declaration.id, workflow?.updated_at || '',
   ));
   statements.push(db.prepare(
@@ -656,13 +656,13 @@ const completeExit = async (
   ).bind(
     crypto.randomUUID(), profile.organization_id, profile.id, 'update', 'customs_declaration_exit',
     declaration.id, JSON.stringify(before),
-    JSON.stringify({ workflow_stage: 6, finance_status: 'ready', sata_code: sataCode || null, completed_at: now }),
+    JSON.stringify({ workflow_stage: 6, finance_status: financeStatus === 'not_ready' ? 'ready' : financeStatus, sata_code: sataCode || null, completed_at: now }),
     requestId.slice(0, 180),
   ));
   try {
     const results = await db.batch(statements);
     const shipmentChanges = (results[0] as { meta?: { changes?: number } } | undefined)?.meta?.changes;
-    if (!shipmentChanges) return fail('DECLARATION_EXIT_COMPLETION_FAILED', 503);
+    if (!shipmentChanges) return fail('DECLARATION_EXIT_COMPLETION_CONFLICT', 409);
     return json({ ok: true, ready: true, workflow_stage: 6, finance_status: financeStatus === 'not_ready' ? 'ready' : financeStatus, shipment_id: declaration.shipment_id });
   } catch { return fail('DECLARATION_EXIT_COMPLETION_FAILED', 503); }
 };
