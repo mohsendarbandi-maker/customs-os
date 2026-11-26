@@ -84,6 +84,12 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Unit tests
         run: npm test
+      - name: Verify Cloudflare D1 case permits migration with SQLite
+        run: python3 scripts/verify-case-permits-d1-migration.py
+      - name: Verify Cloudflare D1 declaration exit migration with SQLite
+        run: python3 scripts/verify-declaration-exit-d1-migration.py
+      - name: Verify Cloudflare D1 case exit operations migration with SQLite
+        run: python3 scripts/verify-case-exit-d1-migration.py
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
@@ -689,8 +695,20 @@ jobs:
             jq -e '.ok == true and (.items | type == "array")' "$work_dir/registration-order-allocations.json" >/dev/null
           fi
 
+          cases_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/cases.json" \
+            --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/cases?limit=1&offset=0")"
+          test "$cases_code" = "200"
+          jq -e '.ok == true and (.items | type == "array")' "$work_dir/cases.json" >/dev/null
+          case_id="$(jq -r '.items[0].id // empty' "$work_dir/cases.json")"
+          if [ -n "$case_id" ]; then
+            case_exit_code="$(curl --silent --show-error --max-time 25 --output "$work_dir/case-exit.json" \
+              --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/cases/$case_id/exit")"
+            test "$case_exit_code" = "200"
+            jq -e --arg id "$case_id" '.ok == true and .case_id == $id and (.readiness.ready | type == "boolean") and (.readiness.issues | type == "array") and (.exit == null or .exit.case_id == $id)' "$work_dir/case-exit.json" >/dev/null
+          fi
+
           shipments_code="$(curl --silent --show-error --max-time 30 --output "$work_dir/shipments.json" \
             --cookie "$work_dir/cookies.txt" --write-out '%{http_code}' "$base/api/shipments?limit=200&offset=0")"
           test "$shipments_code" = "200"
           jq -e '.ok == true and .total == 22 and (.items | length) == 22' "$work_dir/shipments.json" >/dev/null
-          echo "Staging schema, SPA asset, owner login, session restore, case permits GET, registration-order list/detail/allocations GET, and 22 existing shipments verified. No operational rows were written."
+          echo "Staging schema, SPA asset, owner login, session restore, case permits GET, case-exit readiness GET, registration-order list/detail/allocations GET, and 22 existing shipments verified. No operational rows were written."

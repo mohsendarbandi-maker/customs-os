@@ -14,6 +14,7 @@ class FakeD1 implements CasesD1Database {
   detail: CaseRecord | null = null;
   detailOrganizationId = 'org-a';
   permits: Array<Record<string, unknown>> = [];
+  exitRecord: Record<string, unknown> | null = null;
   simulatePermitConflict = false;
   related = { shipments: [] as unknown[], declarations: [] as unknown[], documents: [] as unknown[], permits: [] as unknown[] };
   auditEvents: Array<Record<string, unknown>> = [];
@@ -36,6 +37,13 @@ class FakeD1 implements CasesD1Database {
     if (sql.includes('FROM permits WHERE id=? AND case_id=? AND organization_id=?')) {
       return (this.permits.find(row => row.id === values[0] && row.case_id === values[1] && row.organization_id === values[2]) || null) as T | null;
     }
+    if (sql.includes('FROM case_exit_operations WHERE case_id=? AND organization_id=?')) {
+      return this.exitRecord?.case_id === values[0] && this.exitRecord.organization_id === values[1] ? this.exitRecord as T : null;
+    }
+    if (sql.includes('COUNT(*) AS total FROM permits WHERE case_id=? AND organization_id=?')) {
+      const rows = [...this.related.permits, ...this.permits].filter(row => row.case_id === values[0] && row.organization_id === values[1] && row.status === 'pending');
+      return { total: rows.length } as T;
+    }
     if (sql.includes('FROM clients WHERE id=?')) {
       return this.clientRow?.id === values[0] && this.clientRow.organization_id === values[1]
         ? this.clientRow as T : null;
@@ -45,7 +53,8 @@ class FakeD1 implements CasesD1Database {
     }
     if (sql.includes('COUNT(*) AS total FROM cases c')) return { total: this.list.length } as T;
     if (sql.includes('FROM cases c LEFT JOIN clients cl')) {
-      return this.detail && this.detail.id === values[0] ? this.detail as T : null;
+      return this.detail && this.detail.id === values[0] && this.detailOrganizationId === values[1]
+        ? this.detail as T : null;
     }
     throw new Error('Unexpected query: ' + sql);
   }
@@ -73,6 +82,18 @@ class FakeD1 implements CasesD1Database {
         shipment_count: 0, latest_shipment_id: null, shipment_display_name: null,
         bill_of_lading_no: null, vessel_name: null, kottaj_number: null,
       } as unknown as CaseRecord;
+      this.lastChanges = 1;
+      return { meta: { changes: 1 } };
+    }
+    if (sql.startsWith('INSERT INTO case_exit_operations (')) {
+      const [id, organizationId, caseId, exitStatus, permitNo, permitDate, authorizedAt, exitAt, vehiclePlate, driverName, driverNationalId, notes, createdBy, createdAt, updatedAt] = values;
+      this.exitRecord = {
+        id: this.exitRecord?.id || id, organization_id: organizationId, case_id: caseId, exit_status: exitStatus,
+        exit_permit_no: permitNo, exit_permit_number: permitNo, exit_permit_date: permitDate,
+        exit_authorized_at: authorizedAt, authorized_at: authorizedAt, exit_at: exitAt, exited_at: exitAt,
+        vehicle_plate: vehiclePlate, driver_name: driverName, driver_national_id: driverNationalId,
+        notes, created_by: createdBy, created_at: this.exitRecord?.created_at || createdAt, updated_at: updatedAt,
+      };
       this.lastChanges = 1;
       return { meta: { changes: 1 } };
     }
@@ -108,6 +129,17 @@ class FakeD1 implements CasesD1Database {
         before_json: values[6], after_json: values[7], request_id: values[8],
         created_at: '2026-11-25T09:00:00.000Z',
       });
+      return { meta: { changes: 1 } };
+    }
+    if (sql.startsWith('UPDATE cases SET status=?')) {
+      const [status, updatedAt, caseId, organizationId] = values;
+      if (!this.detail || this.detail.id !== caseId || this.detailOrganizationId !== organizationId) {
+        this.lastChanges = 0;
+        return { meta: { changes: 0 } };
+      }
+      (this.detail as unknown as Record<string, unknown>).status = status;
+      (this.detail as unknown as Record<string, unknown>).updated_at = updatedAt;
+      this.lastChanges = 1;
       return { meta: { changes: 1 } };
     }
     if (sql.startsWith('UPDATE cases SET')) {
@@ -763,6 +795,176 @@ describe('Cloudflare D1 cases read API', () => {
     expect(response.status).toBe(422);
     expect(db.permits).toHaveLength(0);
     expect(db.queries.some(query => query.sql.startsWith('INSERT INTO permits'))).toBe(false);
+  });
+
+
+  it('returns case exit state and exact completion blockers from D1', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, status: 'exit_permit', kottaj_number: 'K-1405-1',
+      release_status: 'released', warehouse_receipt_no: 'WH-1',
+    };
+    db.permits = [{
+      id: 'permit-pending', organization_id: 'org-a', case_id: 'case-a', status: 'pending',
+    }];
+    db.exitRecord = {
+      id: 'exit-a', organization_id: 'org-a', case_id: 'case-a', exit_status: 'authorized',
+      exit_permit_no: 'EP-1', exit_permit_number: 'EP-1', exit_permit_date: '2026-11-26',
+      exit_authorized_at: null, authorized_at: null, exit_at: null, exited_at: null,
+      vehicle_plate: null, driver_name: null, driver_national_id: null, notes: null,
+      created_by: 'user-a', created_at: '2026-11-26T08:00:00.000Z', updated_at: '2026-11-26T08:00:00.000Z',
+    };
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
+    const body = await response.json() as {
+      exit: Record<string, unknown>; readiness: { ready: boolean; pending_permits: number; issues: string[] };
+    };
+    expect(response.status).toBe(200);
+    expect(body.exit.exit_permit_no).toBe('EP-1');
+    expect(body.readiness.ready).toBe(false);
+    expect(body.readiness.pending_permits).toBe(1);
+    expect(body.readiness.issues).toContain('1 مجوز در انتظار تعیین تکلیف است');
+    expect(db.queries.some(query => query.sql.includes('case_exit_operations'))).toBe(true);
+  });
+
+  it('authorizes case exit and advances duties-calculation to exit-permit with audit', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, status: 'duties_calculation', kottaj_number: 'K-1405-1',
+      release_status: 'released', warehouse_receipt_no: 'WH-1',
+    };
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        exit_status: 'authorized', exit_permit_no: 'EP-1405-1',
+        exit_permit_date: '2026-11-26', vehicle_plate: '12الف345',
+        driver_name: 'راننده', driver_national_id: '0012345678',
+      }),
+    }), db, url, owner);
+    const body = await response.json() as { ok: boolean; case: CaseRecord; exit: Record<string, unknown> };
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.case.status).toBe('exit_permit');
+    expect(body.exit.exit_status).toBe('authorized');
+    expect(body.exit.exit_permit_no).toBe('EP-1405-1');
+    expect(db.auditEvents.at(-1)).toMatchObject({
+      organization_id: 'org-a', actor_user_id: 'user-a', action: 'update',
+      entity_type: 'case', entity_id: 'case-a',
+    });
+    expect(db.queries.find(query => query.sql.startsWith('UPDATE cases SET status=?'))?.values[0]).toBe('exit_permit');
+  });
+
+  it('allows final exit only from exit-permit stage and then marks the case completed', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, status: 'exit_permit', kottaj_number: 'K-1405-1', release_status: 'released' };
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'exited', exit_at: '2026-11-26T10:30:00+03:30' }),
+    }), db, url, owner);
+    const body = await response.json() as { case: CaseRecord; exit: Record<string, unknown> };
+    expect(response.status).toBe(200);
+    expect(body.case.status).toBe('completed');
+    expect(body.exit.exit_status).toBe('exited');
+    expect(body.exit.exit_at).toBe('2026-11-26T07:00:00.000Z');
+  });
+
+  it('rejects final exit before the case reaches exit-permit stage without writing', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, status: 'documents' };
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'exited' }),
+    }), db, url, owner);
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('CASE_EXIT_STAGE_REQUIRED');
+    expect(db.exitRecord).toBeNull();
+    expect(db.auditEvents).toHaveLength(0);
+  });
+
+  it('rejects case exit writes from a cross-origin request and for another tenant', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const crossOrigin = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: 'https://evil.example', 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'pending' }),
+    }), db, url, owner);
+    expect(crossOrigin.status).toBe(403);
+    expect(db.exitRecord).toBeNull();
+
+    const foreign = new FakeD1();
+    foreign.detail = { ...caseRow, id: 'case-b' };
+    foreign.detailOrganizationId = 'org-b';
+    const foreignUrl = new URL('https://staging.example/api/cases/case-b/exit');
+    const foreignResponse = await handleCasesApi(new Request(foreignUrl, {
+      method: 'PATCH', headers: { origin: foreignUrl.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'pending' }),
+    }), foreign, foreignUrl, owner);
+    expect(foreignResponse.status).toBe(404);
+    expect(foreign.exitRecord).toBeNull();
+  });
+
+  it('rejects invalid exit dates and unauthorized roles before database writes', async () => {
+    const db = new FakeD1();
+    db.detail = caseRow;
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const invalidDate = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'pending', exit_permit_date: '26/11/2026' }),
+    }), db, url, owner);
+    expect(invalidDate.status).toBe(400);
+    expect(db.exitRecord).toBeNull();
+
+    const forbidden = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'pending' }),
+    }), db, url, { ...owner, role: 'accountant' });
+    expect(forbidden.status).toBe(403);
+    expect(db.exitRecord).toBeNull();
+  });
+
+
+  it('marks completion ready only when release, weights, valuation, permits and final exit all pass', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, status: 'completed', kottaj_number: 'K-1405-1',
+      warehouse_receipt_no: 'WH-1', release_status: 'released', valuation_status: 'calculated',
+    };
+    db.exitRecord = {
+      id: 'exit-a', organization_id: 'org-a', case_id: 'case-a', exit_status: 'exited',
+      exit_permit_no: 'EP-1', exit_permit_number: 'EP-1', exit_permit_date: '2026-11-26',
+      exit_authorized_at: null, authorized_at: null, exit_at: '2026-11-26T07:00:00.000Z',
+      exited_at: '2026-11-26T07:00:00.000Z', vehicle_plate: null, driver_name: null,
+      driver_national_id: null, notes: null, created_by: 'user-a',
+      created_at: '2026-11-26T08:00:00.000Z', updated_at: '2026-11-26T08:00:00.000Z',
+    };
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
+    const body = await response.json() as { readiness: { ready: boolean; issues: string[]; release_ready: boolean } };
+    expect(response.status).toBe(200);
+    expect(body.readiness.ready).toBe(true);
+    expect(body.readiness.issues).toEqual([]);
+    expect(body.readiness.release_ready).toBe(true);
+  });
+
+  it('blocks completion when gross weight is below net weight', async () => {
+    const db = new FakeD1();
+    db.detail = {
+      ...caseRow, status: 'completed', kottaj_number: 'K-1405-1',
+      warehouse_receipt_no: 'WH-1', release_status: 'released', valuation_status: 'calculated',
+      net_weight_kg: 21000, gross_weight_kg: 20000,
+    };
+    db.exitRecord = { id: 'exit-a', organization_id: 'org-a', case_id: 'case-a', exit_status: 'exited' };
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(req('GET', url.pathname), db, url, owner);
+    const body = await response.json() as { readiness: { ready: boolean; issues: string[] } };
+    expect(response.status).toBe(200);
+    expect(body.readiness.ready).toBe(false);
+    expect(body.readiness.issues).toContain('وزن ناخالص نمی‌تواند کمتر از وزن خالص باشد');
   });
 
 });
