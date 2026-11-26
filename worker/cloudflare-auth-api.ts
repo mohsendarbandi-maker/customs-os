@@ -25,6 +25,7 @@ type ProfileRow = {
   full_name: string | null;
   phone: string | null;
   is_active: number | boolean;
+  verified_at: string | null;
 };
 type CredentialRow = {
   user_id: string;
@@ -185,6 +186,7 @@ const parseProfile = (row: ProfileRow | null, expectedUserId: string) => {
     !row || row.id !== expectedUserId ||
     (row.is_active !== true && row.is_active !== 1) ||
     typeof row.organization_id !== 'string' || !row.organization_id.trim() ||
+    typeof row.verified_at !== 'string' || row.verified_at.length < 20 ||
     typeof row.role !== 'string' || !ALLOWED_ROLES.has(row.role as Role) ||
     (row.role === 'client' && (typeof row.client_id !== 'string' || !row.client_id.trim()))
   ) return null;
@@ -341,7 +343,8 @@ async function login(request: Request, db: CloudflareAuthDatabase, url: URL) {
   }
 
   const profileRow = await db.prepare(
-    'SELECT id, organization_id, role, client_id, full_name, phone, is_active FROM profiles WHERE id = ? LIMIT 1',
+    'SELECT user_id AS id, organization_id, role, client_id, full_name, phone, is_active, verified_at ' +
+    'FROM customs_os_auth_principals WHERE user_id = ? LIMIT 1',
   ).bind(credential.user_id).first<ProfileRow>();
   const profile = parseProfile(profileRow, credential.user_id);
   if (!profile) return fail('ACCOUNT_NOT_READY_OR_DISABLED', 403);
