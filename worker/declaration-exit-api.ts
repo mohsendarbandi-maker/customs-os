@@ -596,16 +596,16 @@ const completeExit = async (
   // Start with the shipment release update. Every following write is conditional
   // on this statement changing exactly one tenant-scoped shipment row.
   statements.push(db.prepare(
-    'UPDATE shipments SET finance_status=\\'ready\\',updated_at=? ' +
+    'UPDATE shipments SET finance_status=\'ready\',updated_at=? ' +
     'WHERE id=? AND organization_id=? ' +
     'AND EXISTS (SELECT 1 FROM customs_declarations d WHERE d.id=? AND d.organization_id=? ' +
     'AND d.shipment_id=shipments.id AND d.workflow_stage IN (4,5,6)) ' +
     'AND (SELECT COUNT(*) FROM declaration_exit_checklist_items e WHERE e.declaration_id=? ' +
     'AND e.organization_id=? AND e.completed=1) = 3 ' +
-    'AND (? <> \\'import_definitive\\' OR NOT EXISTS (' +
+    'AND (? <> \'import_definitive\' OR NOT EXISTS (' +
     'SELECT 1 FROM declaration_checklist_items i WHERE i.declaration_id=? AND i.organization_id=? ' +
     'AND i.is_active=1 AND i.completed=0)) ' +
-    'AND (? = \\'\\' OR EXISTS (SELECT 1 FROM customs_declaration_workflow w WHERE w.id=? ' +
+    'AND (? = \'\' OR EXISTS (SELECT 1 FROM customs_declaration_workflow w WHERE w.id=? ' +
     'AND w.organization_id=? AND w.declaration_id=? AND w.updated_at=?))',
   ).bind(
     now, declaration.shipment_id, profile.organization_id, declaration.id, profile.organization_id,
@@ -626,7 +626,7 @@ const completeExit = async (
   }
   if (workflow) {
     statements.push(db.prepare(
-      'UPDATE customs_declaration_workflow SET current_stage=\\'completed\\',loading_permit_state=?,updated_by=?,updated_at=?,last_event_type=\\'saved\\' ' +
+      'UPDATE customs_declaration_workflow SET current_stage=\'completed\',loading_permit_state=?,updated_by=?,updated_at=?,last_event_type=\'saved\' ' +
       'WHERE id=? AND organization_id=? AND declaration_id=? AND updated_at=? AND changes()>0',
     ).bind(JSON.stringify(nextWorkflow), profile.id, now, workflow.id, profile.organization_id, declaration.id, workflow.updated_at));
   }
