@@ -507,4 +507,19 @@ describe('Cloudflare D1 registration-orders API', () => {
       query.values[0] === 'org-a' && query.values.includes('order-a'))).toBe(true);
   });
 
+
+  it('normalizes Persian and Arabic digits in case-linked registration-order capacity joins', async () => {
+    const db = new FakeD1();
+    db.orders = [baseOrder()];
+    const url = new URL('https://staging.example/api/registration-orders?limit=100');
+    const response = await handleRegistrationOrdersApi(makeRequest('GET', url.pathname + url.search), db, url, profile);
+    expect(response.status).toBe(200);
+    const aggregate = db.queries.find(query => query.sql.includes('FROM registration_orders ro2'));
+    expect(aggregate?.sql).toContain('REPLACE(');
+    expect(aggregate?.sql).not.toContain('sc.registration_order_no = ro2.order_number');
+    const mismatch = db.queries.find(query => query.sql.includes('JOIN shipments s') && query.sql.includes('FROM registration_orders ro '));
+    expect(mismatch?.sql).toContain('REPLACE(');
+    expect(mismatch?.sql).not.toContain('c.registration_order_no = ro.order_number');
+  });
+
 });
