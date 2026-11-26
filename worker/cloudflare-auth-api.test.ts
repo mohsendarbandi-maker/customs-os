@@ -316,7 +316,7 @@ describe('Cloudflare browser-side auth cryptography', () => {
     const verifier = await deriveCloudflarePasswordVerifier('Strong-Password-2026!');
     expect(verifier.verifier).toMatch(/^[0-9a-f]{64}$/);
     expect(verifier.salt).toMatch(/^[0-9a-f]{64}$/);
-    expect(verifier.iterations).toBe(310_000);
+    expect(verifier.iterations).toBe(600_000);
   });
 
   it('generates a one-time HMAC proof bound to the email, purpose, and UUID challenge', async () => {
@@ -324,7 +324,7 @@ describe('Cloudflare browser-side auth cryptography', () => {
       challenge_id: '550e8400-e29b-41d4-a716-446655440000',
       challenge: 'a'.repeat(64),
       salt: 'b'.repeat(64),
-      iterations: 310_000,
+      iterations: 600_000,
       expires_in: 120,
     };
     const proof = await createCloudflareAuthProof(' Owner@Example.com ', 'login', challenge, 'Strong-Password-2026!');
