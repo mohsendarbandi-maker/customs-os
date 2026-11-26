@@ -86,6 +86,10 @@ class FakeD1 implements RegistrationOrderD1Database {
     if (sql.startsWith('SELECT id FROM clients WHERE id = ? AND organization_id = ?')) {
       return this.clients.has(String(values[0])) && values[1] === 'org-a' ? { id: String(values[0]) } as T : null;
     }
+    if (sql.startsWith('SELECT id,client_id FROM cases WHERE id=? AND organization_id=?')) {
+      const row = this.cases.find(item => item.id === values[0] && item.organization_id === values[1]);
+      return row ? { id: row.id, client_id: row.client_id } as T : null;
+    }
     if (sql.startsWith('SELECT id FROM registration_orders WHERE organization_id = ? AND order_number = ?')) {
       const row = this.orders.find(item => item.organization_id === values[0] &&
         item.order_number === values[1] && item.id !== values[2]);
@@ -127,11 +131,11 @@ class FakeD1 implements RegistrationOrderD1Database {
   run(sql: string, values: unknown[], previousChanges = 0): number {
     this.queries.push({ sql, values });
     if (sql.startsWith('INSERT INTO registration_orders')) {
-      const [id, organizationId, orderNumber, orderDate, status, tariffCode, quantity, quantityUnit,
+      const [id, organizationId, caseId, orderNumber, orderDate, status, tariffCode, quantity, quantityUnit,
         valueAmount, currency, notes, createdAt, updatedAt, clientId, netWeight, grossWeight,
         bankName, bankBranch, bankBranchCode, paymentCode] = values;
       this.orders.push(baseOrder({
-        id, organization_id: organizationId, order_number: orderNumber, order_date: orderDate,
+        id, organization_id: organizationId, case_id: caseId, order_number: orderNumber, order_date: orderDate,
         status, tariff_code: tariffCode, quantity, quantity_unit: quantityUnit, value_amount: valueAmount,
         currency, notes, created_at: createdAt, updated_at: updatedAt, client_id: clientId,
         net_weight_kg: netWeight, gross_weight_kg: grossWeight, bank_name: bankName,
@@ -142,14 +146,14 @@ class FakeD1 implements RegistrationOrderD1Database {
       }));
       return 1;
     }
-    if (sql.startsWith('UPDATE registration_orders SET client_id')) {
-      const [clientId, orderNumber, orderDate, status, tariffCode, quantity, quantityUnit,
+    if (sql.startsWith('UPDATE registration_orders SET case_id = COALESCE(case_id, ?), client_id')) {
+      const [caseId, clientId, orderNumber, orderDate, status, tariffCode, quantity, quantityUnit,
         valueAmount, currency, notes, netWeight, grossWeight, bankName, bankBranch, bankCode,
         paymentCode, updatedAt, id, organizationId] = values;
       const row = this.orders.find(item => item.id === id && item.organization_id === organizationId);
       if (!row) return 0;
       Object.assign(row, {
-        client_id: clientId, order_number: orderNumber, order_date: orderDate, status,
+        case_id: row.case_id ?? caseId, client_id: clientId, order_number: orderNumber, order_date: orderDate, status,
         tariff_code: tariffCode, quantity, quantity_unit: quantityUnit, value_amount: valueAmount,
         currency, notes, net_weight_kg: netWeight, gross_weight_kg: grossWeight,
         bank_name: bankName, bank_branch: bankBranch, bank_branch_code: bankCode,
@@ -280,6 +284,78 @@ describe('Cloudflare D1 registration-orders API', () => {
     expect(db.audit).toHaveLength(1);
     expect(db.audit[0].entity_type).toBe('registration_order');
     expect(body.order.id).toBe(db.orders[0].id);
+  });
+
+  it('creates a registration order linked to a same-organization case owned by the same client', async () => {
+    const db = new FakeD1();
+    db.cases = [{ id: 'case-a', organization_id: 'org-a', client_id: 'client-a' }];
+    const url = new URL('https://staging.example/api/registration-orders');
+    const response = await handleRegistrationOrdersApi(
+      makeRequest('POST', url.pathname, orderInput({ case_id: 'case-a' })), db, url, profile,
+    );
+    const body = await response.json() as { order: Row };
+    expect(response.status).toBe(201);
+    expect(body.order.case_id).toBe('case-a');
+    expect(db.orders[0].case_id).toBe('case-a');
+    expect(db.audit[0].after_json).toContain('"case_id":"case-a"');
+  });
+
+  it('rejects linking a registration order to a case from another organization or client', async () => {
+    const db = new FakeD1();
+    db.cases = [{ id: 'case-other', organization_id: 'org-other', client_id: 'client-a' }];
+    const url = new URL('https://staging.example/api/registration-orders');
+    const response = await handleRegistrationOrdersApi(
+      makeRequest('POST', url.pathname, orderInput({ case_id: 'case-other' })), db, url, profile,
+    );
+    expect(response.status).toBe(404);
+    expect(db.orders).toHaveLength(0);
+    expect(db.audit).toHaveLength(0);
+
+    db.cases = [{ id: 'case-wrong-client', organization_id: 'org-a', client_id: 'client-b' }];
+    const mismatch = await handleRegistrationOrdersApi(
+      makeRequest('POST', url.pathname, orderInput({ case_id: 'case-wrong-client' })), db, url, profile,
+    );
+    expect(mismatch.status).toBe(409);
+    expect(db.orders).toHaveLength(0);
+    expect(db.audit).toHaveLength(0);
+  });
+
+  it('allows attaching an unlinked existing order once, but refuses moving a linked order', async () => {
+    const db = new FakeD1();
+    db.cases = [{ id: 'case-a', organization_id: 'org-a', client_id: 'client-a' }];
+    db.orders = [baseOrder({ id: 'order-a', case_id: null, order_number: '98765' })];
+    const url = new URL('https://staging.example/api/registration-orders/order-a');
+    const response = await handleRegistrationOrdersApi(
+      makeRequest('PATCH', url.pathname, orderInput({ case_id: 'case-a' })), db, url, profile,
+    );
+    expect(response.status).toBe(200);
+    expect(db.orders[0].case_id).toBe('case-a');
+
+    db.cases.push({ id: 'case-b', organization_id: 'org-a', client_id: 'client-a' });
+    const move = await handleRegistrationOrdersApi(
+      makeRequest('PATCH', url.pathname, orderInput({ case_id: 'case-b' })), db, url, profile,
+    );
+    expect(move.status).toBe(409);
+    expect(db.orders[0].case_id).toBe('case-a');
+  });
+
+  it('requires the complete bank profile for every registration order', async () => {
+    const db = new FakeD1();
+    const url = new URL('https://staging.example/api/registration-orders');
+    for (const patch of [
+      { bank_name: null },
+      { bank_branch: null },
+      { bank_branch_code: null },
+      { payment_instrument_code: null },
+    ]) {
+      const response = await handleRegistrationOrdersApi(
+        makeRequest('POST', url.pathname, orderInput(patch)), db, url, profile,
+      );
+      expect(response.status).toBe(422);
+    }
+    expect(db.orders).toHaveLength(0);
+    expect(db.audit).toHaveLength(0);
+    expect(db.queries.some(q => q.sql.startsWith('INSERT INTO registration_orders'))).toBe(false);
   });
 
   it('rejects duplicate registration-order numbers within the same organization', async () => {
