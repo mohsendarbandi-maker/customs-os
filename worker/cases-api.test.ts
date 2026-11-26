@@ -16,6 +16,8 @@ class FakeD1 implements CasesD1Database {
   permits: Array<Record<string, unknown>> = [];
   exitRecord: Record<string, unknown> | null = null;
   simulatePermitConflict = false;
+  simulateCaseExitConflict = false;
+  simulateExitConflict = false;
   related = { shipments: [] as unknown[], declarations: [] as unknown[], documents: [] as unknown[], permits: [] as unknown[] };
   auditEvents: Array<Record<string, unknown>> = [];
   queries: Array<{ sql: string; values: unknown[] }> = [];
@@ -87,6 +89,26 @@ class FakeD1 implements CasesD1Database {
     }
     if (sql.startsWith('INSERT INTO case_exit_operations (')) {
       const [id, organizationId, caseId, exitStatus, permitNo, permitDate, authorizedAt, exitAt, vehiclePlate, driverName, driverNationalId, notes, createdBy, createdAt, updatedAt] = values;
+      const expectedCaseUpdatedAt = values[17];
+      const expectedCaseStatus = values[18];
+      const expectedExitUpdatedAt = values[19];
+      if (this.simulateCaseExitConflict && this.detail) {
+        (this.detail as unknown as Record<string, unknown>).updated_at = '2026-11-26T09:01:00.000Z';
+        this.simulateCaseExitConflict = false;
+      }
+      if (this.simulateExitConflict && this.exitRecord) {
+        this.exitRecord.updated_at = '2026-11-26T09:02:00.000Z';
+        this.simulateExitConflict = false;
+      }
+      const caseMatches = this.detail?.id === caseId && this.detailOrganizationId === organizationId &&
+        this.detail.updated_at === expectedCaseUpdatedAt && this.detail.status === expectedCaseStatus;
+      const exitMatches = this.exitRecord
+        ? this.exitRecord.updated_at === expectedExitUpdatedAt
+        : expectedExitUpdatedAt === null;
+      if (!caseMatches || !exitMatches) {
+        this.lastChanges = 0;
+        return { meta: { changes: 0 } };
+      }
       this.exitRecord = {
         id: this.exitRecord?.id || id, organization_id: organizationId, case_id: caseId, exit_status: exitStatus,
         exit_permit_no: permitNo, exit_permit_number: permitNo, exit_permit_date: permitDate,
@@ -132,8 +154,9 @@ class FakeD1 implements CasesD1Database {
       return { meta: { changes: 1 } };
     }
     if (sql.startsWith('UPDATE cases SET status=?')) {
-      const [status, updatedAt, caseId, organizationId] = values;
-      if (!this.detail || this.detail.id !== caseId || this.detailOrganizationId !== organizationId) {
+      const [status, updatedAt, caseId, organizationId, previousUpdatedAt, previousStatus] = values;
+      if (!this.detail || this.detail.id !== caseId || this.detailOrganizationId !== organizationId ||
+          this.detail.updated_at !== previousUpdatedAt || this.detail.status !== previousStatus || this.lastChanges !== 1) {
         this.lastChanges = 0;
         return { meta: { changes: 0 } };
       }
@@ -825,6 +848,65 @@ describe('Cloudflare D1 cases read API', () => {
     expect(body.readiness.pending_permits).toBe(1);
     expect(body.readiness.issues).toContain('1 مجوز در انتظار تعیین تکلیف است');
     expect(db.queries.some(query => query.sql.includes('case_exit_operations'))).toBe(true);
+  });
+
+  it('does not reopen a completed case when a pending exit update is submitted', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, status: 'completed', updated_at: '2026-11-26T08:00:00.000Z' };
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'pending' }),
+    }), db, url, owner);
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('CASE_ALREADY_COMPLETED');
+    expect(db.exitRecord).toBeNull();
+    expect(db.auditEvents).toHaveLength(0);
+    expect(db.queries.some(query =>
+      query.sql.startsWith('INSERT INTO case_exit_operations') || query.sql.startsWith('UPDATE cases SET status=') ||
+      query.sql.startsWith('INSERT INTO customs_os_audit_events'),
+    )).toBe(false);
+  });
+
+  it('rejects a stale case snapshot without writing exit data or audit', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, status: 'duties_calculation', updated_at: '2026-11-26T08:00:00.000Z' };
+    db.simulateCaseExitConflict = true;
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'authorized', exit_permit_no: 'EP-STALE' }),
+    }), db, url, owner);
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('CASE_EXIT_UPDATE_CONFLICT');
+    expect(db.exitRecord).toBeNull();
+    expect(db.auditEvents).toHaveLength(0);
+    expect(db.detail?.status).toBe('duties_calculation');
+  });
+
+  it('rejects a stale exit-record snapshot without changing case stage or writing audit', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, status: 'exit_permit', updated_at: '2026-11-26T08:00:00.000Z' };
+    db.exitRecord = {
+      id: 'exit-a', organization_id: 'org-a', case_id: 'case-a', exit_status: 'authorized',
+      exit_permit_no: 'EP-OLD', exit_permit_date: null, exit_authorized_at: null, exit_at: null,
+      vehicle_plate: null, driver_name: null, driver_national_id: null, notes: null,
+      created_by: 'user-a', created_at: '2026-11-26T07:00:00.000Z', updated_at: '2026-11-26T07:30:00.000Z',
+    };
+    db.simulateExitConflict = true;
+    const url = new URL('https://staging.example/api/cases/case-a/exit');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH', headers: { origin: url.origin, 'content-type': 'application/json' },
+      body: JSON.stringify({ exit_status: 'exited', exit_permit_no: 'EP-NEW', exit_at: '2026-11-26T08:15:00Z' }),
+    }), db, url, owner);
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('CASE_EXIT_UPDATE_CONFLICT');
+    expect(db.exitRecord?.exit_status).toBe('authorized');
+    expect(db.detail?.status).toBe('exit_permit');
+    expect(db.auditEvents).toHaveLength(0);
   });
 
   it('authorizes case exit and advances duties-calculation to exit-permit with audit', async () => {
