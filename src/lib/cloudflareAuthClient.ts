@@ -90,19 +90,15 @@ export async function signOutFromCloudflare() {
 }
 
 export async function changeCloudflarePassword(currentPassword: string, newPassword: string) {
+  const session = await getCloudflareAuthSession();
+  if (!session.authenticated) throw new CloudflareAuthError('UNAUTHORIZED', 401);
   const challenge = await authRequest<ChallengeResponse>('/password/challenge', post({}));
   const proof = await createCloudflareAuthProof(
-    challenge.email ?? '',
+    session.user.email,
     'password_change',
     challenge,
     currentPassword,
-  ).catch(async () => {
-    // The Worker binds password-change challenges to the active session email;
-    // fetch the session rather than accepting an email from caller input.
-    const session = await getCloudflareAuthSession();
-    if (!session.authenticated) throw new CloudflareAuthError('UNAUTHORIZED', 401);
-    return createCloudflareAuthProof(session.user.email, 'password_change', challenge, currentPassword);
-  });
+  );
   const replacement = await deriveCloudflarePasswordVerifier(newPassword);
   return authRequest<{ ok: true; password_reset_required: false }>('/password/change', post({
     challenge_id: challenge.challenge_id,
