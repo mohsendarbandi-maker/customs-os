@@ -164,8 +164,9 @@ const sessionCookie = (url: URL, token: string, maxAge = SESSION_SECONDS) =>
   `${COOKIE_NAME}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}${cookieDomain(url.hostname)}`;
 const sameOrigin = (request: Request, url: URL) => {
   const origin = request.headers.get('origin');
-  return (!origin || origin === url.origin) &&
-    request.headers.get('sec-fetch-site') !== 'cross-site';
+  const fetchSite = request.headers.get('sec-fetch-site');
+  return (origin === url.origin || (!origin && fetchSite === 'same-origin')) &&
+    fetchSite !== 'cross-site';
 };
 const deviceLabel = (userAgent: string) => {
   const device = /iPhone/i.test(userAgent) ? 'iPhone'
@@ -295,11 +296,14 @@ async function login(request: Request, db: CloudflareAuthDatabase, url: URL) {
   if (contentLength > 8_192) return fail('REQUEST_TOO_LARGE', 413);
 
   let body: { email?: unknown; password?: unknown };
-  try { body = await request.json() as { email?: unknown; password?: unknown }; }
-  catch { return fail('INVALID_REQUEST', 400); }
+  try {
+    const parsed: unknown = await request.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return fail('INVALID_REQUEST', 400);
+    body = parsed as { email?: unknown; password?: unknown };
+  } catch { return fail('INVALID_REQUEST', 400); }
   const email = typeof body.email === 'string' ? normalizeAuthEmail(body.email) : '';
   const password = typeof body.password === 'string' ? body.password : '';
-  if (email.length < 3 || email.length > 320 || !email.includes('@') || password.length < 1 || password.length > 256) {
+  if (email.length < 3 || email.length > 320 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(email) || password.length < 1 || password.length > 256) {
     return fail('INVALID_CREDENTIALS', 401);
   }
 
@@ -321,7 +325,7 @@ async function login(request: Request, db: CloudflareAuthDatabase, url: URL) {
 
   if (credential?.locked_until && Date.parse(credential.locked_until) > now) {
     await recordIpFailure(db, ipHash, now);
-    return fail('RATE_LIMITED', 429);
+    return fail('INVALID_CREDENTIALS', 401);
   }
 
   // Unknown addresses still execute a PBKDF2 operation to reduce account-enumeration timing.
