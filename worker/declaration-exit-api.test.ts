@@ -16,6 +16,7 @@ const declaration = {
   customs_regime: 'import_definitive',
   customs_path: 'red',
   workflow_stage: 5,
+  finance_status: 'not_ready',
   tariff_code: null,
   cargo_description: 'ذرت دامی',
   sata_code: null,
@@ -49,7 +50,7 @@ class FakeD1 implements DeclarationExitD1Database {
   workflow: Row | null = null;
   checklist: Row[] = [];
   exitItems: Row[] = [];
-  shipmentFinanceStatus = 'pending';
+  shipmentFinanceStatus = 'not_ready';
   writes: string[] = [];
   prepare(sql: string) { return new Statement(this, sql); }
   async batch(statements: DeclarationExitD1Statement[]) {
@@ -113,7 +114,8 @@ class FakeD1 implements DeclarationExitD1Database {
       return { meta: { changes: 1 } };
     }
     if (sql.includes('UPDATE shipments SET finance_status')) {
-      this.shipmentFinanceStatus = 'ready';
+      this.shipmentFinanceStatus = this.shipmentFinanceStatus === 'not_ready' ? 'ready' : this.shipmentFinanceStatus;
+      if (this.declaration) this.declaration.finance_status = this.shipmentFinanceStatus;
       return { meta: { changes: 1 } };
     }
     if (sql.includes('UPDATE customs_declarations SET workflow_stage=6')) {
@@ -126,6 +128,66 @@ class FakeD1 implements DeclarationExitD1Database {
     throw new Error('Unexpected run query: ' + sql);
   }
 }
+const prepareCompleteImport = (db: FakeD1, financeStatus = 'not_ready', sataCode = '12345') => {
+  db.declaration = { ...declaration, finance_status: financeStatus, sata_code: sataCode };
+  db.shipmentFinanceStatus = financeStatus;
+  db.workflow = {
+    id: 'workflow-1',
+    organization_id: 'org-1',
+    declaration_id: 'declaration-1',
+    current_stage: 'exit',
+    evaluation_state: JSON.stringify({ status: 'completed', evaluator_number: 'E-1' }),
+    expertise_state: JSON.stringify({
+      appointment_status: 'not_required',
+      road_authority_status: 'not_required',
+      plant_quarantine_status: 'not_required',
+      standard: { expert_review: 'not_required' },
+    }),
+    cashier_state: JSON.stringify({ method: 'cash', cash_paid_irr: '0' }),
+    loading_permit_state: JSON.stringify({
+      clause2_request_status: 'not_required',
+      tax_permission_status: 'not_required',
+      central_bank_status: 'not_required',
+      sata_code: sataCode,
+    }),
+    exit_state: JSON.stringify({
+      loading_permission_status: 'approved',
+      financial_registration_status: 'registered',
+      loading_completed_at: '1405/01/03',
+    }),
+    port_charges_state: JSON.stringify({
+      warehouse_receipt_date: '1405/01/01',
+      insurance_issue_date: '1404/12/29',
+      initial_invoice_status: 'not_required',
+      transport_power_of_attorney_status: 'not_required',
+      loading_form_received_at: '1405/01/02',
+    }),
+    procedure_state: '{}',
+    updated_at: '2026-11-26T08:00:00.000Z',
+  };
+  db.checklist = Array.from({ length: 8 }, (_, index) => ({
+    id: 'check-' + index,
+    organization_id: 'org-1',
+    declaration_id: 'declaration-1',
+    item_key: 'item-' + index,
+    item_label: 'item-' + index,
+    completed: 1,
+    is_active: 1,
+    updated_at: '2026-11-26T08:00:00.000Z',
+  }));
+  db.exitItems = [
+    'warehouse_invoice_initial',
+    'warehouse_invoice_supplement',
+    'transport_power_of_attorney',
+  ].map((item_key, index) => ({
+    id: 'exit-' + index,
+    organization_id: 'org-1',
+    declaration_id: 'declaration-1',
+    item_key,
+    completed: 1,
+  }));
+};
+
 const parse = async (response: Response) => response.json() as Promise<Row>;
 
 describe('Cloudflare D1 declaration exit API', () => {
@@ -207,14 +269,25 @@ describe('Cloudflare D1 declaration exit API', () => {
     expect(db.writes.some(sql => sql.includes('UPDATE shipments SET finance_status'))).toBe(false);
   });
 
-  it('releases a complete non-definitive declaration to finance and records an audit event', async () => {
+  it('blocks non-definitive regimes until their specialized exit readiness is migrated', async () => {
     const db = new FakeD1();
     if (db.declaration) db.declaration.customs_regime = 'export_definitive';
-    const readPath = '/api/declarations/declaration-1/exit';
-    await handleDeclarationExitApi(
-      makeRequest('GET', readPath), db, new URL('https://staging.example' + readPath), owner,
+    db.exitItems = ['warehouse_invoice_initial','warehouse_invoice_supplement','transport_power_of_attorney']
+      .map((item_key, index) => ({ id: 'exit-' + index, organization_id: 'org-1', declaration_id: 'declaration-1', item_key, completed: 1 }));
+    const path = '/api/declarations/declaration-1/exit/complete';
+    const response = await handleDeclarationExitApi(
+      makeRequest('POST', path, { sata_code: '12345' }),
+      db, new URL('https://staging.example' + path), owner,
     );
-    db.exitItems = db.exitItems.map(item => ({ ...item, completed: 1 }));
+    const body = await parse(response);
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('CUSTOMS_REGIME_EXIT_NOT_MIGRATED');
+    expect(db.writes.some(sql => sql.includes('UPDATE shipments SET finance_status'))).toBe(false);
+  });
+
+  it('releases a ready definitive-import workflow and advances only not_ready finance to ready', async () => {
+    const db = new FakeD1();
+    prepareCompleteImport(db);
     const path = '/api/declarations/declaration-1/exit/complete';
     const response = await handleDeclarationExitApi(
       makeRequest('POST', path, { sata_code: '12345' }),
@@ -226,6 +299,51 @@ describe('Cloudflare D1 declaration exit API', () => {
     expect(body.finance_status).toBe('ready');
     expect(db.shipmentFinanceStatus).toBe('ready');
     expect(db.writes.some(sql => sql.includes('INSERT INTO customs_os_audit_events'))).toBe(true);
+  });
+
+  it('preserves a closed finance status when the same SATA code is confirmed', async () => {
+    const db = new FakeD1();
+    prepareCompleteImport(db, 'closed');
+    const path = '/api/declarations/declaration-1/exit/complete';
+    const response = await handleDeclarationExitApi(
+      makeRequest('POST', path, { sata_code: '12345' }),
+      db, new URL('https://staging.example' + path), owner,
+    );
+    const body = await parse(response);
+    expect(response.status).toBe(200);
+    expect(body.ready).toBe(true);
+    expect(body.finance_status).toBe('closed');
+    expect(db.shipmentFinanceStatus).toBe('closed');
+  });
+
+  it('rejects changing SATA after the shipment is ready for or closed by finance', async () => {
+    const db = new FakeD1();
+    prepareCompleteImport(db, 'ready');
+    const path = '/api/declarations/declaration-1/exit/complete';
+    const response = await handleDeclarationExitApi(
+      makeRequest('POST', path, { sata_code: '99999' }),
+      db, new URL('https://staging.example' + path), owner,
+    );
+    const body = await parse(response);
+    expect(response.status).toBe(200);
+    expect(body.ready).toBe(false);
+    expect((body.issues as string[]).some(issue => issue.includes('پس از تحویل محموله به مالی'))).toBe(true);
+    expect(db.writes.some(sql => sql.includes('UPDATE shipments SET finance_status'))).toBe(false);
+  });
+
+  it('rejects an unsupported shipment finance status before any exit write', async () => {
+    const db = new FakeD1();
+    prepareCompleteImport(db, 'pending');
+    const path = '/api/declarations/declaration-1/exit/complete';
+    const response = await handleDeclarationExitApi(
+      makeRequest('POST', path, { sata_code: '12345' }),
+      db, new URL('https://staging.example' + path), owner,
+    );
+    const body = await parse(response);
+    expect(response.status).toBe(200);
+    expect(body.ready).toBe(false);
+    expect((body.issues as string[]).some(issue => issue.includes('وضعیت مالی محموله'))).toBe(true);
+    expect(db.writes.some(sql => sql.includes('UPDATE shipments SET finance_status'))).toBe(false);
   });
 
   it('does not allow a declaration to advance from an unsupported workflow stage', async () => {
