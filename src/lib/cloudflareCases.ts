@@ -21,11 +21,31 @@ export interface CasesListResponse {
   searchApplied: boolean; statusFilter: string | null; dataScope: 'authenticated_organization_only';
   readOnly: true;
 }
+export interface CaseExitRecord {
+  id: string; organization_id: string; case_id: string;
+  exit_status: 'pending' | 'authorized' | 'released' | 'exited' | 'cancelled';
+  exit_permit_no: string | null; exit_permit_number: string | null; exit_permit_date: string | null;
+  exit_authorized_at: string | null; authorized_at: string | null; exit_at: string | null; exited_at: string | null;
+  vehicle_plate: string | null; driver_name: string | null; driver_national_id: string | null;
+  notes: string | null; created_by: string | null; created_at: string; updated_at: string;
+}
+export interface CaseCompletionReadiness {
+  case_id: string; status: string | null; ready: boolean; issues: string[];
+  declaration_ready: boolean; valuation_ready: boolean; pending_permits: number;
+  release_ready: boolean; exit_status: string;
+}
+export interface CaseExitInput {
+  exit_status: CaseExitRecord['exit_status'];
+  exit_permit_no?: string | null; exit_permit_date?: string | null;
+  exit_authorized_at?: string | null; exit_at?: string | null;
+  vehicle_plate?: string | null; driver_name?: string | null;
+  driver_national_id?: string | null; notes?: string | null;
+}
 export interface CaseDetailResponse {
   ok: true; case: CaseRecord; shipments: Array<Record<string, unknown>>;
   declarations: Array<Record<string, unknown>>; documents: Array<Record<string, unknown>>;
-  permits: CasePermit[];
-  readOnly: true; workflowReadiness: 'not_included'; stageTransitions: 'not_supported';
+  permits: CasePermit[]; exit: CaseExitRecord | null; readiness: CaseCompletionReadiness;
+  readOnly: true; workflowReadiness: 'computed'; stageTransitions: 'case_exit_status_only';
 }
 export interface CaseStatusHistoryEvent {
   id: string; case_id: string; changed_by: string; previous_status: string | null;
@@ -163,6 +183,11 @@ export const cloudflareCasesApi = {
   ),
   deletePermit: (caseId: string, permitId: string) => write<{ ok: true; deleted: boolean; permitId: string }>(
     '/api/cases/' + encodeURIComponent(caseId) + '/permits/' + encodeURIComponent(permitId), 'DELETE',
+  ),
+  saveExit: (caseId: string, input: CaseExitInput) => write<{
+    ok: true; case: CaseRecord; exit: CaseExitRecord | null; readiness: CaseCompletionReadiness;
+  }>(
+    '/api/cases/' + encodeURIComponent(caseId) + '/exit', 'PATCH', input as unknown as Record<string, unknown>,
   ),
   update: async (id: string, patch: CloudflareCasePatch) => {
     const response = await fetch('/api/cases/' + encodeURIComponent(id), {
