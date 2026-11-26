@@ -11,6 +11,7 @@ const declaration = {
   organization_id: 'org-1',
   case_id: 'case-1',
   shipment_id: 'shipment-1',
+  linked_shipment_id: 'shipment-1',
   kottaj_number: '14050012345',
   customs_regime: 'import_definitive',
   customs_path: 'red',
@@ -21,7 +22,6 @@ const declaration = {
   ship_passed: 0,
   transport_documents_status: 'ready',
   transport_mode: 'sea',
-  finance_status: 'pending',
   warehouse_receipt_no: 'WH-10',
 };
 const owner = { id: 'owner-1', organization_id: 'org-1', role: 'owner', is_active: true };
@@ -49,6 +49,7 @@ class FakeD1 implements DeclarationExitD1Database {
   workflow: Row | null = null;
   checklist: Row[] = [];
   exitItems: Row[] = [];
+  shipmentFinanceStatus = 'pending';
   writes: string[] = [];
   prepare(sql: string) { return new Statement(this, sql); }
   async batch(statements: DeclarationExitD1Statement[]) {
@@ -75,7 +76,7 @@ class FakeD1 implements DeclarationExitD1Database {
     throw new Error('Unexpected first query: ' + sql);
   }
   all<T>(sql: string, values: unknown[]): { results: T[] } {
-    if (sql.includes('PRAGMA table_info(shipments)')) return [{ name: 'finance_status' }] as T[];
+    if (sql.includes('PRAGMA table_info(shipments)')) return { results: [{ name: 'finance_status' }] as T[] };
     if (sql.includes('FROM declaration_checklist_items')) {
       return { results: this.checklist.filter(row =>
         row.declaration_id === values[0] && row.organization_id === values[1],
@@ -111,10 +112,16 @@ class FakeD1 implements DeclarationExitD1Database {
       }
       return { meta: { changes: 1 } };
     }
+    if (sql.includes('UPDATE shipments SET finance_status')) {
+      this.shipmentFinanceStatus = 'ready';
+      return { meta: { changes: 1 } };
+    }
     if (sql.includes('UPDATE customs_declarations SET workflow_stage=6')) {
       if (this.declaration) this.declaration.workflow_stage = 6;
       return { meta: { changes: 1 } };
     }
+    if (sql.includes('INSERT INTO shipment_customs_data')) return { meta: { changes: 1 } };
+    if (sql.includes('UPDATE customs_declaration_workflow SET current_stage')) return { meta: { changes: 1 } };
     if (sql.includes('INSERT INTO customs_os_audit_events')) return { meta: { changes: 1 } };
     throw new Error('Unexpected run query: ' + sql);
   }
@@ -198,6 +205,27 @@ describe('Cloudflare D1 declaration exit API', () => {
     expect(body.ready).toBe(false);
     expect(Array.isArray(body.issues)).toBe(true);
     expect(db.writes.some(sql => sql.includes('UPDATE shipments SET finance_status'))).toBe(false);
+  });
+
+  it('releases a complete non-definitive declaration to finance and records an audit event', async () => {
+    const db = new FakeD1();
+    if (db.declaration) db.declaration.customs_regime = 'export_definitive';
+    const readPath = '/api/declarations/declaration-1/exit';
+    await handleDeclarationExitApi(
+      makeRequest('GET', readPath), db, new URL('https://staging.example' + readPath), owner,
+    );
+    db.exitItems = db.exitItems.map(item => ({ ...item, completed: 1 }));
+    const path = '/api/declarations/declaration-1/exit/complete';
+    const response = await handleDeclarationExitApi(
+      makeRequest('POST', path, { sata_code: '12345' }),
+      db, new URL('https://staging.example' + path), owner,
+    );
+    const body = await parse(response);
+    expect(response.status).toBe(200);
+    expect(body.ready).toBe(true);
+    expect(body.finance_status).toBe('ready');
+    expect(db.shipmentFinanceStatus).toBe('ready');
+    expect(db.writes.some(sql => sql.includes('INSERT INTO customs_os_audit_events'))).toBe(true);
   });
 
   it('does not allow a declaration to advance from an unsupported workflow stage', async () => {
