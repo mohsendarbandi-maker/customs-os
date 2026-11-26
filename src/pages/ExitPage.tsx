@@ -434,10 +434,7 @@ export const ExitPage: React.FC = () => {
           setError(issues.join('\\n• '));
           return;
         }
-        setMessage('مرحله درب خروج تکمیل شد؛ محموله به مرکز مالی تحویل داده شد.');
-        window.setTimeout(() => {
-          window.location.assign(`/finance/shipments/${encodeURIComponent(shipmentId)}`);
-        }, 350);
+        setMessage('خروج در D1 تأیید شد و وضعیت محموله «آماده برای امور مالی» ثبت شد. رابط مالی Cloudflare هنوز در این مسیر فعال نشده است؛ صفحه را ترک نکردیم.');
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'تکمیل درب خروج انجام نشد.');
       } finally {
@@ -643,7 +640,7 @@ export const ExitPage: React.FC = () => {
                 </div>
               </div>
             )}
-            {shipmentId&&<><ShipmentStageCosts stage="STAGE_5_EXIT_PREPARATION" shipmentId={shipmentId} allowStageSelection/></>}
+            {shipmentId && !useCloudflare && <ShipmentStageCosts stage="STAGE_5_EXIT_PREPARATION" shipmentId={shipmentId} allowStageSelection />}
 
 {shipmentId && <section className="rounded-2xl border app-border bg-[var(--surface)] p-4">
               <label className="block text-sm font-bold">کد ساتا محموله
@@ -682,7 +679,7 @@ export const ExitPage: React.FC = () => {
               <div className="p-5 border-b app-border flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-black">درب خروج</h2>
                 <div className="flex items-center gap-3">
-                  {shipmentId && <ShipmentStageCosts stage="STAGE_6_EXIT" shipmentId={shipmentId} />}
+                  {shipmentId && !useCloudflare && <ShipmentStageCosts stage="STAGE_6_EXIT" shipmentId={shipmentId} />}
                   <span className="text-xs app-muted">
                     {completedExitItems} از {EXIT_ITEMS.length}
                   </span>
