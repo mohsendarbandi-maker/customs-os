@@ -50,6 +50,8 @@ export class CloudflareDeclarationExitError extends Error {
       : code === 'DECLARATION_SHIPMENT_REQUIRED' ? 'محموله مرتبط با اظهارنامه مشخص نیست.'
       : code === 'SHIPMENT_FINANCE_STATUS_COLUMN_MISSING' ? 'فیلد وضعیت مالی در ساختار D1 موجود نیست؛ تکمیل خروج متوقف شد.'
       : code === 'DECLARATION_EXIT_COMPLETION_FAILED' ? 'تکمیل خروج در پایگاه D1 انجام نشد؛ هیچ موفقیتی تأیید نشده است.'
+      : code === 'DECLARATION_EXIT_COMPLETION_CONFLICT' ? 'وضعیت مالی محموله هم‌زمان تغییر کرده است؛ اطلاعات را تازه‌سازی و دوباره بررسی کنید.'
+      : code === 'CUSTOMS_REGIME_EXIT_NOT_MIGRATED' ? 'قواعد خروج این رویه هنوز به D1 منتقل نشده است؛ خروج متوقف شد و هیچ تغییری در وضعیت مالی ثبت نشد.'
       : 'عملیات درب خروج ناموفق بود: ' + code);
     this.name = 'CloudflareDeclarationExitError';
   }
