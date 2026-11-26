@@ -59,8 +59,8 @@ must_fail(
 )
 must_fail(
     """INSERT INTO customs_os_auth_credentials
-       (user_id, email_normalized, password_hash, password_salt)
-       VALUES (?, ?, ?, ?)""",
+       (user_id, email_normalized, password_verifier_encrypted, password_verifier_iv, password_salt)
+       VALUES (?, ?, ?, ?, ?)""",
     ("owner-2", "other@example.test", "short", "d" * 24, "e" * 64),
     "invalid encrypted verifier length",
 )
