@@ -91,9 +91,10 @@ class FakeD1 implements RegistrationOrderD1Database {
       const row = this.cases.find(item => item.id === values[0] && item.organization_id === values[1]);
       return row ? { id: row.id, client_id: row.client_id } as T : null;
     }
-    if (sql.startsWith('SELECT id FROM registration_orders WHERE organization_id = ? AND order_number = ?')) {
+    if (sql.startsWith('SELECT id FROM registration_orders WHERE organization_id = ? AND order_number_normalized = ?')) {
+      const normalize = (value: unknown) => String(value ?? '').normalize('NFKC').replace(/[\\s\\u00a0\\u200b-\\u200d\\ufeff]/g, '').replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).toUpperCase();
       const row = this.orders.find(item => item.organization_id === values[0] &&
-        item.order_number === values[1] && item.id !== values[2]);
+        normalize(item.order_number) === values[1] && item.id !== values[2]);
       return row ? { id: row.id } as T : null;
     }
     if (sql.startsWith('SELECT ro.id')) {
@@ -515,10 +516,10 @@ describe('Cloudflare D1 registration-orders API', () => {
     const response = await handleRegistrationOrdersApi(makeRequest('GET', url.pathname + url.search), db, url, profile);
     expect(response.status).toBe(200);
     const aggregate = db.queries.find(query => query.sql.includes('FROM registration_orders ro2'));
-    expect(aggregate?.sql).toContain('REPLACE(');
+    expect(aggregate?.sql).toContain('sc.registration_order_no_normalized = ro2.order_number_normalized');
     expect(aggregate?.sql).not.toContain('sc.registration_order_no = ro2.order_number');
     const mismatch = db.queries.find(query => query.sql.includes('JOIN shipments s') && query.sql.includes('FROM registration_orders ro '));
-    expect(mismatch?.sql).toContain('REPLACE(');
+    expect(mismatch?.sql).toContain('c.registration_order_no_normalized = ro.order_number_normalized');
     expect(mismatch?.sql).not.toContain('c.registration_order_no = ro.order_number');
   });
 
