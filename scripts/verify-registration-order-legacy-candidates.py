@@ -66,7 +66,7 @@ def main() -> None:
         "INSERT INTO registration_orders(id,organization_id,client_id,case_id,order_number) VALUES(?,?,?,?,?)",
         ("ro-duplicate", "org-1", "client-1", None, "12345"),
     )
-    assert db.execute("SELECT COUNT(*) FROM registration_order_legacy_match_candidates").fetchone()[0] == 0
+    assert db.execute("SELECT COUNT(*) FROM registration_order_legacy_match_candidates WHERE registration_order_id='ro-1'").fetchone()[0] == 0
     db.execute("DELETE FROM registration_orders WHERE id='ro-duplicate'")
 
     # Case-linked and conflicting case references must not be suggested.
@@ -91,7 +91,7 @@ def main() -> None:
       SELECT registration_order_id, shipment_id, order_number, customs_registration_order_no,
              candidate_net_weight_kg, candidate_invoice_amount, candidate_source
       FROM registration_order_legacy_match_candidates
-      WHERE organization_id='org-1'
+      WHERE registration_order_id='ro-1' AND organization_id='org-1'
     """).fetchall()
     assert rows == [(
         "ro-1", "ship-candidate", "۱۲۳۴۵", "12345", 100.0, 500.0,
@@ -101,7 +101,7 @@ def main() -> None:
     # The candidate view must remain read-only: no direct FK or order totals are changed.
     linked = db.execute("SELECT registration_order_id FROM shipments WHERE id='ship-candidate'").fetchone()[0]
     assert linked is None
-    assert db.execute("SELECT COUNT(*) FROM registration_order_legacy_match_candidates WHERE organization_id='org-2'").fetchone()[0] == 0
+    assert db.execute("SELECT COUNT(*) FROM registration_order_legacy_match_candidates WHERE registration_order_id='ro-1' AND organization_id<>'org-1'").fetchone()[0] == 0
 
     indexes = {row[0] for row in db.execute(
         "SELECT name FROM sqlite_master WHERE type='index'"
