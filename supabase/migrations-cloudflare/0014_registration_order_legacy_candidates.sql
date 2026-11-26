@@ -46,8 +46,7 @@ BEGIN
   UPDATE registration_orders SET order_number_normalized = NULLIF(order_number_normalized,'') WHERE id=NEW.id;
 END;
 
-CREATE TRIGGER IF NOT EXISTS registration_orders_order_number_update AFTER UPDATE ON registration_orders
-OF order_number
+CREATE TRIGGER IF NOT EXISTS registration_orders_order_number_update AFTER UPDATE OF order_number ON registration_orders
 BEGIN
   UPDATE registration_orders SET order_number_normalized = UPPER(TRIM(COALESCE(NEW.order_number,''))) WHERE id=NEW.id;
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(order_number_normalized,'۰','0'),'۱','1'),'۲','2'),'۳','3'),'۴','4') WHERE id=NEW.id;
@@ -72,8 +71,7 @@ BEGIN
   UPDATE shipment_customs_data SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE shipment_id=NEW.shipment_id;
 END;
 
-CREATE TRIGGER IF NOT EXISTS shipment_customs_data_registration_order_no_update AFTER UPDATE ON shipment_customs_data
-OF registration_order_no
+CREATE TRIGGER IF NOT EXISTS shipment_customs_data_registration_order_no_update AFTER UPDATE OF registration_order_no ON shipment_customs_data
 BEGIN
   UPDATE shipment_customs_data SET registration_order_no_normalized = UPPER(TRIM(COALESCE(NEW.registration_order_no,''))) WHERE shipment_id=NEW.shipment_id;
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'۰','0'),'۱','1'),'۲','2'),'۳','3'),'۴','4') WHERE shipment_id=NEW.shipment_id;
@@ -98,8 +96,7 @@ BEGIN
   UPDATE cases SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE id=NEW.id;
 END;
 
-CREATE TRIGGER IF NOT EXISTS cases_registration_order_no_update AFTER UPDATE ON cases
-OF registration_order_no
+CREATE TRIGGER IF NOT EXISTS cases_registration_order_no_update AFTER UPDATE OF registration_order_no ON cases
 BEGIN
   UPDATE cases SET registration_order_no_normalized = UPPER(TRIM(COALESCE(NEW.registration_order_no,''))) WHERE id=NEW.id;
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'۰','0'),'۱','1'),'۲','2'),'۳','3'),'۴','4') WHERE id=NEW.id;
