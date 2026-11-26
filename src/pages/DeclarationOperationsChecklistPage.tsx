@@ -60,7 +60,7 @@ export const DeclarationOperationsChecklistPage:React.FC=()=>{
      const d=result.declaration;
      const workflowState=(result.workflow||null) as Record<string,unknown>|null;
      const declarationData:Decl={
-      id:d.id,shipment_id:d.shipment_id||null,case_id:d.case_id||null,
+      id:d.id,shipment_id:d.shipment_id||null,case_id:typeof d.case_id==='string'?d.case_id:null,
       kottaj_number:String(d.kottaj_number||''),declaration_date:'',
       customs_path:d.customs_path||null,payment_reference:null,total_duties_irr:null,
       declaration_file_name:null,customs_office_id:null,customs_regime:d.customs_regime||undefined,
