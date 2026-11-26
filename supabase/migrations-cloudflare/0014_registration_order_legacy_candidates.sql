@@ -13,6 +13,7 @@ UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE
 UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(order_number_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE 1=1;
 UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,' ',''),char(9),''),char(10),'') WHERE 1=1;
 UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(13),''),char(160),''),char(8204),'') WHERE 1=1;
+UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
 UPDATE registration_orders SET order_number_normalized = NULLIF(order_number_normalized,'') WHERE 1=1;
 
 UPDATE shipment_customs_data SET registration_order_no_normalized = UPPER(TRIM(COALESCE(registration_order_no,''))) WHERE 1=1;
@@ -22,6 +23,7 @@ UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPL
 UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE 1=1;
 UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,' ',''),char(9),''),char(10),'') WHERE 1=1;
 UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(13),''),char(160),''),char(8204),'') WHERE 1=1;
+UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
 UPDATE shipment_customs_data SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE 1=1;
 
 UPDATE cases SET registration_order_no_normalized = UPPER(TRIM(COALESCE(registration_order_no,''))) WHERE 1=1;
@@ -31,6 +33,7 @@ UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPL
 UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE 1=1;
 UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,' ',''),char(9),''),char(10),'') WHERE 1=1;
 UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(13),''),char(160),''),char(8204),'') WHERE 1=1;
+UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
 UPDATE cases SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE 1=1;
 
 CREATE TRIGGER IF NOT EXISTS registration_orders_order_number_insert AFTER INSERT ON registration_orders
@@ -43,7 +46,8 @@ BEGIN
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(order_number_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE id=NEW.id;
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,' ',''),char(9),''),char(10),'') WHERE id=NEW.id;
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(13),''),char(160),''),char(8204),'') WHERE id=NEW.id;
-  UPDATE registration_orders SET order_number_normalized = NULLIF(order_number_normalized,'') WHERE id=NEW.id;
+  UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+UPDATE registration_orders SET order_number_normalized = NULLIF(order_number_normalized,'') WHERE id=NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS registration_orders_order_number_update AFTER UPDATE OF order_number ON registration_orders
@@ -55,7 +59,8 @@ BEGIN
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(order_number_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE id=NEW.id;
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,' ',''),char(9),''),char(10),'') WHERE id=NEW.id;
   UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(13),''),char(160),''),char(8204),'') WHERE id=NEW.id;
-  UPDATE registration_orders SET order_number_normalized = NULLIF(order_number_normalized,'') WHERE id=NEW.id;
+  UPDATE registration_orders SET order_number_normalized = REPLACE(REPLACE(REPLACE(order_number_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+UPDATE registration_orders SET order_number_normalized = NULLIF(order_number_normalized,'') WHERE id=NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS shipment_customs_data_registration_order_no_insert AFTER INSERT ON shipment_customs_data
@@ -68,7 +73,8 @@ BEGIN
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE shipment_id=NEW.shipment_id;
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,' ',''),char(9),''),char(10),'') WHERE shipment_id=NEW.shipment_id;
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(13),''),char(160),''),char(8204),'') WHERE shipment_id=NEW.shipment_id;
-  UPDATE shipment_customs_data SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE shipment_id=NEW.shipment_id;
+  UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+UPDATE shipment_customs_data SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE shipment_id=NEW.shipment_id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS shipment_customs_data_registration_order_no_update AFTER UPDATE OF registration_order_no ON shipment_customs_data
@@ -80,7 +86,8 @@ BEGIN
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE shipment_id=NEW.shipment_id;
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,' ',''),char(9),''),char(10),'') WHERE shipment_id=NEW.shipment_id;
   UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(13),''),char(160),''),char(8204),'') WHERE shipment_id=NEW.shipment_id;
-  UPDATE shipment_customs_data SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE shipment_id=NEW.shipment_id;
+  UPDATE shipment_customs_data SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+UPDATE shipment_customs_data SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE shipment_id=NEW.shipment_id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS cases_registration_order_no_insert AFTER INSERT ON cases
@@ -93,7 +100,8 @@ BEGIN
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE id=NEW.id;
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,' ',''),char(9),''),char(10),'') WHERE id=NEW.id;
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(13),''),char(160),''),char(8204),'') WHERE id=NEW.id;
-  UPDATE cases SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE id=NEW.id;
+  UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+UPDATE cases SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE id=NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS cases_registration_order_no_update AFTER UPDATE OF registration_order_no ON cases
@@ -105,7 +113,8 @@ BEGIN
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(registration_order_no_normalized,'٥','5'),'٦','6'),'٧','7'),'٨','8'),'٩','9') WHERE id=NEW.id;
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,' ',''),char(9),''),char(10),'') WHERE id=NEW.id;
   UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(13),''),char(160),''),char(8204),'') WHERE id=NEW.id;
-  UPDATE cases SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE id=NEW.id;
+  UPDATE cases SET registration_order_no_normalized = REPLACE(REPLACE(REPLACE(registration_order_no_normalized,char(8203),''),char(8205),''),char(65279),'') WHERE 1=1;
+UPDATE cases SET registration_order_no_normalized = NULLIF(registration_order_no_normalized,'') WHERE id=NEW.id;
 END;
 
 CREATE INDEX IF NOT EXISTS shipments_org_registration_order_client_case_idx
