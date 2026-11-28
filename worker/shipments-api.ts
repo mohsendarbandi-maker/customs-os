@@ -308,15 +308,19 @@ const shipmentFolderStatements = (
   const shipmentFolderId = crypto.randomUUID();
   const shipmentDisplaySql = "ctx.shipment_name || ' — ' || ctx.office_name || ' (' || ctx.office_code || ')'";
   const rootFolderIdSql =
-    "(SELECT f.id FROM file_manager_folders f WHERE f.organization_id=ctx.organization_id " +
-    "AND f.parent_id IS NULL AND f.folder_key='owners-root' ORDER BY f.created_at,f.id LIMIT 1)";
+    "(SELECT root.id FROM shipment_context ctx JOIN file_manager_folders root " +
+    "ON root.organization_id=ctx.organization_id AND root.parent_id IS NULL AND root.folder_key='owners-root' " +
+    "ORDER BY root.created_at,root.id LIMIT 1)";
   const clientFolderIdSql =
-    "(SELECT f.id FROM file_manager_folders f WHERE f.organization_id=ctx.organization_id " +
-    "AND f.parent_id=" + rootFolderIdSql + " AND f.folder_key='client:'||ctx.client_id " +
-    "ORDER BY f.created_at,f.id LIMIT 1)";
+    "(SELECT client_folder.id FROM shipment_context ctx JOIN file_manager_folders root " +
+    "ON root.organization_id=ctx.organization_id AND root.parent_id IS NULL AND root.folder_key='owners-root' " +
+    "JOIN file_manager_folders client_folder ON client_folder.organization_id=ctx.organization_id " +
+    "AND client_folder.parent_id=root.id AND client_folder.folder_key='client:'||ctx.client_id " +
+    "ORDER BY client_folder.created_at,client_folder.id LIMIT 1)";
   const shipmentFolderIdSql =
-    "(SELECT f.id FROM file_manager_folders f WHERE f.organization_id=ctx.organization_id " +
-    "AND f.folder_type='shipment' AND f.shipment_id=ctx.id ORDER BY f.created_at,f.id LIMIT 1)";
+    "(SELECT shipment_folder.id FROM shipment_context ctx JOIN file_manager_folders shipment_folder " +
+    "ON shipment_folder.organization_id=ctx.organization_id AND shipment_folder.folder_type='shipment' " +
+    "AND shipment_folder.shipment_id=ctx.id ORDER BY shipment_folder.created_at,shipment_folder.id LIMIT 1)";
   const statements: ShipmentsD1Statement[] = [];
 
   statements.push(db.prepare(
@@ -554,6 +558,7 @@ export const handleShipmentsApi = async (
         0, now, now,
       ));
       statements.push(customsDataUpsert(db, shipmentId, profile.organization_id, input, profile.id, now));
+      statements.push(...shipmentFolderStatements(db, shipmentId, profile.organization_id, now));
       await db.batch(statements);
       const saved = await getShipment(db, shipmentId, profile.organization_id);
       return saved ? json({ ok: true, shipment: saved }, 201) : fail('SHIPMENT_WRITE_NOT_CONFIRMED', 500);
@@ -585,6 +590,7 @@ export const handleShipmentsApi = async (
       input.releaseInvoicePaymentStatus, now, id, profile.organization_id,
     ));
     statements.push(customsDataUpsert(db, id!, profile.organization_id, input, profile.id, now));
+    statements.push(...shipmentFolderStatements(db, id!, profile.organization_id, now));
     await db.batch(statements);
     const saved = await getShipment(db, id!, profile.organization_id);
     return saved ? json({ ok: true, shipment: saved }) : fail('SHIPMENT_WRITE_NOT_CONFIRMED', 500);
