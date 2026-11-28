@@ -11,8 +11,17 @@ const ledgerMigration=readFileSync(migrationPath('20260929170000_ai_operator_com
 const ownerProfileMigration=readFileSync(migrationPath('20260929200000_harden_owner_profile_auth_user.sql'),'utf8');
 
 describe('AI Operator security invariants',()=>{
- it('never references a service-role secret or raw SQL execution',()=>{
-   expect(operator).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEYS|supabase_secret|auth\.admin\./i);
+ it('keeps privileged audit writes server-only and business actions user-scoped',()=>{
+   expect(operator).toContain("Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')");
+   expect(operator).toContain("const auditSb=createClient(url,serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}})");
+   expect(operator).toContain("auditSb.rpc('ai_operator_create_command_trusted'");
+   expect(operator).toContain("auditSb.rpc('ai_operator_transition_command_trusted'");
+   expect(operator).toContain("sb.auth.getUser(jwt)");
+   expect(operator).toContain("execute(sb,user,pr.data.organization_id");
+   expect(operator).not.toContain("sb.from('ai_operator_commands').insert");
+   expect(operator).not.toContain("sb.rpc('ai_operator_transition_command'");
+   expect(operator).not.toContain("execute(auditSb");
+   expect(operator).not.toMatch(/auth\.admin\./i);
    expect(operator).not.toMatch(/['\"](database_reset|drop_table|truncate_table|bulk_delete)['\"]/i);
  });
  it('requires the caller Authorization JWT and uses the anon key client',()=>{

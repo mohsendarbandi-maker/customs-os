@@ -98,18 +98,20 @@ function riskFor(p:Plan):Risk{
 }
 const effectiveRisk=(p:Plan)=>riskFor(p);
 const catalog=()=>Object.entries(ACTIONS).map(([action_code,d])=>({action_code,module:d.module,label:d.label,description:d.description,risk:d.risk}));
-const transition=async(sb:any,id:string,patch:any)=>{
- const r=await sb.rpc('ai_operator_transition_command',{
-  p_command_id:id,p_status:patch.status,
+const transition=async(auditSb:any,userId:string,id:string,patch:any)=>{
+ const r=await auditSb.rpc('ai_operator_transition_command_trusted',{
+  p_command_id:id,p_user_id:userId,p_status:patch.status,
   p_confirmation_at:patch.confirmation_at??null,
   p_final_confirmation_at:patch.final_confirmation_at??null,
-  p_result:patch.result??null,
-  p_error_message:patch.error_message??null,
-  p_before_data:patch.before_data??null,
-  p_after_data:patch.after_data??null,
-  p_executed_by:patch.executed_by??null,
-  p_executed_at:patch.executed_at??null
+  p_result:patch.result??null,p_error_message:patch.error_message??null,
+  p_before_data:patch.before_data??null,p_after_data:patch.after_data??null,
+  p_executed_by:patch.executed_by??null,p_executed_at:patch.executed_at??null
  });
+ if(r.error)throw r.error;
+ return r.data;
+};
+const createCommand=async(auditSb:any,userId:string,command:Record<string,unknown>)=>{
+ const r=await auditSb.rpc('ai_operator_create_command_trusted',{p_user_id:userId,p_command:command});
  if(r.error)throw r.error;
  return r.data;
 };
@@ -137,11 +139,11 @@ async function loadOperatorContext(sb:any,org:string,q:string){
   sb.from('finance_payments').select('shipment_id,case_id,amount,currency,amount_irr,payment_type,description,payment_date').eq('organization_id',org).order('payment_date',{ascending:false}).limit(700),
   sb.from('finance_payment_requests').select('shipment_id,request_no,requested_amount,currency,status,subject').eq('organization_id',org).order('request_date',{ascending:false}).limit(500)
  ]);
- const cm=new Map((clients.data||[]).map((x:any)=>[x.id,x.name]));
- const km=new Map((cases.data||[]).map((x:any)=>[x.id,x]));
+ const cm=new Map<string,any>((clients.data||[]).map((x:any)=>[x.id,x.name] as [string,any]));
+ const km=new Map<string,any>((cases.data||[]).map((x:any)=>[x.id,x] as [string,any]));
  const dm=new Map<string,any>();for(const x of (decls.data||[])){if(x.shipment_id&&!dm.has(x.shipment_id))dm.set(x.shipment_id,x);}
  const scm=new Map<string,any>();for(const x of (customs.data||[])){if(x.shipment_id&&!scm.has(x.shipment_id))scm.set(x.shipment_id,x);}
- const vm=new Map((vessels.data||[]).map((x:any)=>[x.id,x]));
+ const vm=new Map<string,any>((vessels.data||[]).map((x:any)=>[x.id,x] as [string,any]));
  const db=new Map<string,any[]>();for(const x of (docs.data||[])){const a=db.get(x.shipment_id)||[];a.push(x);db.set(x.shipment_id,a);}
  const pb=new Map<string,any[]>();for(const x of (payments.data||[])){const a=pb.get(x.shipment_id)||[];a.push(x);pb.set(x.shipment_id,a);}
  const rb=new Map<string,any[]>();for(const x of (requests.data||[])){const a=rb.get(x.shipment_id)||[];a.push(x);rb.set(x.shipment_id,a);}
@@ -217,15 +219,15 @@ function validate(raw:any,g:any):Plan{
  const code=str(raw?.action_code),def=ACTIONS[code];if(!def)throw new Error('Action ناشناخته است.');
  const p:Plan={action_code:code,module:str(raw?.module),target:raw?.target&&typeof raw.target==='object'?raw.target:{},params:raw?.params&&typeof raw.params==='object'?raw.params:{},confidence:Number(raw?.confidence),clarification:raw?.clarification?str(raw.clarification):null,reason:str(raw?.reason)};
  if(p.module!==def.module)throw new Error('Module/action mismatch.');
- if(!Number.isFinite(p.confidence)||p.confidence<0||p.confidence>1)throw new Error('Confidence نامعتبر است.');
- p.risk=riskFor(p);if(p.confidence<(Number(g.confidence_threshold)||.75))p.clarification=p.clarification||'اطمینان برای اجرای امن کافی نیست؛ هدف یا پارامترها را دقیق تر مشخص کنید.';
+ const confidence=Number(p.confidence);if(!Number.isFinite(confidence)||confidence<0||confidence>1)throw new Error('Confidence نامعتبر است.');
+ p.risk=riskFor(p);if(confidence<(Number(g.confidence_threshold)||.75))p.clarification=p.clarification||'اطمینان برای اجرای امن کافی نیست؛ هدف یا پارامترها را دقیق تر مشخص کنید.';
  return p;
 }
-async function one(sb:any,table:string,id:any){if(!isUuid(id))return null;const{data,error}=await sb.from(table).select('*').eq('id',id).maybeSingle();if(error)throw error;return data||null;}
-async function byField(sb:any,table:string,field:string,value:any){if(!str(value))return{row:null};const{data,error}=await sb.from(table).select('*').eq(field,str(value)).limit(2);if(error)throw error;if((data||[]).length===1)return{row:data![0]};if((data||[]).length>1)return{clarification:'چند رکورد منطبق وجود دارد؛ شناسه دقیق را مشخص کنید.'};return{row:null};}
-async function shipment(sb:any,t:any){if(isUuid(t?.shipment_id)){const r=await one(sb,'shipments',t.shipment_id);if(r)return{row:r};}if(str(t?.bill_of_lading)){const x=await byField(sb,'shipments','bill_of_lading_no',t.bill_of_lading);if(x.clarification)return x;if(x.row)return x;}if(str(t?.shipment_name)){const x=await byField(sb,'shipments','display_name',t.shipment_name);if(x.clarification)return x;if(x.row)return x;}if(isUuid(t?.case_id)){const{data,error}=await sb.from('shipments').select('*').eq('case_id',t.case_id).limit(2);if(error)throw error;if((data||[]).length===1)return{row:data![0]};if((data||[]).length>1)return{clarification:'این پرونده چند محموله دارد؛ محموله دقیق را مشخص کنید.'};}return{clarification:'محموله یکتا پیدا نشد.'};}
-async function caseRow(sb:any,t:any){if(isUuid(t?.case_id)){const r=await one(sb,'cases',t.case_id);if(r)return{row:r};}if(isUuid(t?.shipment_id)){const x=await shipment(sb,t);if(x.clarification)return x;if(x.row?.case_id){const r=await one(sb,'cases',x.row.case_id);if(r)return{row:r,shipment:x.row};}}if(str(t?.case_number)){const x=await byField(sb,'cases','case_number',t.case_number);if(x.clarification)return x;if(x.row)return x;}return{clarification:'پرونده یکتا پیدا نشد. شماره پرونده، شناسه پرونده یا محموله دقیق را مشخص کنید.'};}
-async function target(sb:any,table:string,t:any,idKey:string,nameKey:string,nameField:string){if(isUuid(t?.[idKey])){const r=await one(sb,table,t[idKey]);if(r)return{row:r};}return byField(sb,table,nameField,t?.[nameKey]);}
+async function one(sb:any,table:string,id:any):Promise<any>{if(!isUuid(id))return null;const{data,error}=await sb.from(table).select('*').eq('id',id).maybeSingle();if(error)throw error;return data||null;}
+async function byField(sb:any,table:string,field:string,value:any):Promise<any>{if(!str(value))return{row:null};const{data,error}=await sb.from(table).select('*').eq(field,str(value)).limit(2);if(error)throw error;if((data||[]).length===1)return{row:data![0]};if((data||[]).length>1)return{clarification:'چند رکورد منطبق وجود دارد؛ شناسه دقیق را مشخص کنید.'};return{row:null};}
+async function shipment(sb:any,t:any):Promise<any>{if(isUuid(t?.shipment_id)){const r=await one(sb,'shipments',t.shipment_id);if(r)return{row:r};}if(str(t?.bill_of_lading)){const x=await byField(sb,'shipments','bill_of_lading_no',t.bill_of_lading);if(x.clarification)return x;if(x.row)return x;}if(str(t?.shipment_name)){const x=await byField(sb,'shipments','display_name',t.shipment_name);if(x.clarification)return x;if(x.row)return x;}if(isUuid(t?.case_id)){const{data,error}=await sb.from('shipments').select('*').eq('case_id',t.case_id).limit(2);if(error)throw error;if((data||[]).length===1)return{row:data![0]};if((data||[]).length>1)return{clarification:'این پرونده چند محموله دارد؛ محموله دقیق را مشخص کنید.'};}return{clarification:'محموله یکتا پیدا نشد.'};}
+async function caseRow(sb:any,t:any):Promise<any>{if(isUuid(t?.case_id)){const r=await one(sb,'cases',t.case_id);if(r)return{row:r};}if(isUuid(t?.shipment_id)){const x=await shipment(sb,t);if(x.clarification)return x;if(x.row?.case_id){const r=await one(sb,'cases',x.row.case_id);if(r)return{row:r,shipment:x.row};}}if(str(t?.case_number)){const x=await byField(sb,'cases','case_number',t.case_number);if(x.clarification)return x;if(x.row)return x;}return{clarification:'پرونده یکتا پیدا نشد. شماره پرونده، شناسه پرونده یا محموله دقیق را مشخص کنید.'};}
+async function target(sb:any,table:string,t:any,idKey:string,nameKey:string,nameField:string):Promise<any>{if(isUuid(t?.[idKey])){const r=await one(sb,table,t[idKey]);if(r)return{row:r};}return byField(sb,table,nameField,t?.[nameKey]);}
 
 const snap=async(sb:any,code:string,t:any)=>{
  if(code.startsWith('cases.')){const x=await caseRow(sb,t);return x.row?pick(x.row,['id','case_number','client_id','status','registration_order_no','proforma_no','warehouse_receipt_no','warehouse_receipt_date','cargo_description','cargo_count','cargo_count_unit','net_weight_kg','gross_weight_kg','release_status','valuation_status','total_payable_irr']):null;}
@@ -256,7 +258,7 @@ const snap=async(sb:any,code:string,t:any)=>{
 };
 
 const targetWithResult=(code:string,targetInput:any,resultData:any)=>{const t={...(targetInput||{})};const d=resultData&&typeof resultData==='object'?resultData:{};const pairs:Array<[string,string]>=[];if(code.startsWith('maritime.shipping_line.'))pairs.push(['shipping_line_id','id']);if(code.startsWith('maritime.vessel.'))pairs.push(['vessel_id','id']);if(code.startsWith('maritime.contact.'))pairs.push(['contact_id','id']);if(code.startsWith('documents.'))pairs.push(['document_id','id']);if(code.startsWith('permits.'))pairs.push(['permit_id','id']);if(code.startsWith('declarations.'))pairs.push(['declaration_id','id']);if(code.startsWith('finance.cost.'))pairs.push(['cost_id','id']);if(code.startsWith('finance.payment.'))pairs.push(['payment_id','id']);if(code.startsWith('finance.payment_request.'))pairs.push(['request_id','id']);if(code.startsWith('finance.invoice.'))pairs.push(['invoice_id','id']);if(code.startsWith('accounting_vouchers.create'))pairs.push(['voucher_id','voucher_id']);if(code==='accounting_vouchers.void_line')pairs.push(['line_id','id']);if(code.startsWith('control.reminder.'))pairs.push(['reminder_id','id']);if(code==='exit.update')pairs.push(['exit_id','exit_id']);if(code.startsWith('settings.cost_category.'))pairs.push(['category_id','id']);if(code.startsWith('settings.requirement_rule.'))pairs.push(['rule_id','id']);if(code.startsWith('settings.print_template.'))pairs.push(['template_id','id']);for(const [k,dkey] of pairs){if(isUuid(d[dkey])){t[k]=d[dkey];break;}}if(code==='exit.update'&&isUuid(resultData))t.exit_id=resultData;if((code==='settings.user.create'||code==='settings.user.update'||code==='settings.user.deactivate')&&isUuid(d.id))t.user_id=d.id;return t;};
-const execute=async(sb:any,user:any,org:string,code:string,t:any,p:any,attachment:any)=>{
+const execute=async(sb:any,user:any,org:string,code:string,t:any,p:any,attachment:any):Promise<any>=>{
  if(code==='assistant.answer'){return{type:'read',data:{answer:cleanText(p?.answer,12000)}};}
  if(code==='cases.read'){
    const x=await caseRow(sb,t);if(x.clarification)return x;
@@ -401,7 +403,7 @@ const execute=async(sb:any,user:any,org:string,code:string,t:any,p:any,attachmen
    let vid:string|null=null,old:any=null;if(code.endsWith('.update')){if(!isUuid(t.voucher_id))throw new Error('voucher_id لازم است.');old=await one(sb,'customs_accounting_vouchers',t.voucher_id);if(!old)throw new Error('سند حسابداری پیدا نشد یا دسترسی ندارید.');vid=old.id;}
    const cx=code.endsWith('.create')?await caseRow(sb,t):null;if(cx?.clarification)return cx;
    const h={company_name:str(p.company_name||old?.company_name),cargo_type:str(p.cargo_type||old?.cargo_type),tonnage:Number(p.tonnage??old?.tonnage??0),unit_count:Number(p.unit_count??old?.unit_count??0),unit_type:str(p.unit_type||old?.unit_type),cargo_entry_date:p.cargo_entry_date||old?.cargo_entry_date||null,kottaj_number:p.kottaj_number===undefined?(old?.kottaj_number||null):(str(p.kottaj_number)||null),permit_issue_date:p.permit_issue_date||old?.permit_issue_date||null};
-   if(code.endsWith('.create')){const r=await sb.rpc('create_customs_accounting_voucher',{p_case_id:cx.row.id,p_company_name:h.company_name,p_cargo_type:h.cargo_type,p_tonnage:h.tonnage,p_unit_count:h.unit_count,p_unit_type:h.unit_type,p_cargo_entry_date:h.cargo_entry_date,p_kottaj_number:h.kottaj_number,p_permit_issue_date:h.permit_issue_date});if(r.error)throw r.error;vid=r.data?.voucher_id||r.data;}
+   if(code.endsWith('.create')){if(!cx)throw new Error('پرونده برای ایجاد سند حسابداری مشخص نشده است.');const r=await sb.rpc('create_customs_accounting_voucher',{p_case_id:cx.row.id,p_company_name:h.company_name,p_cargo_type:h.cargo_type,p_tonnage:h.tonnage,p_unit_count:h.unit_count,p_unit_type:h.unit_type,p_cargo_entry_date:h.cargo_entry_date,p_kottaj_number:h.kottaj_number,p_permit_issue_date:h.permit_issue_date});if(r.error)throw r.error;vid=r.data?.voucher_id||r.data;}
    if(Array.isArray(p.lines)){const lines=p.lines.map((x:any,i:number)=>({id:x.id||null,row_number:Number(x.row_number||i+1),description:str(x.description)||str(x.description_category),category_id:isUuid(x.category_id)?x.category_id:null,description_category:str(x.description_category)||null,receipt_number:str(x.receipt_number)||null,debit_amount:Number(x.debit_amount||0),credit_amount:Number(x.credit_amount||0)}));const r=await sb.rpc('save_customs_accounting_voucher',{p_voucher_id:vid,p_company_name:h.company_name,p_cargo_type:h.cargo_type,p_tonnage:h.tonnage,p_unit_count:h.unit_count,p_unit_type:h.unit_type,p_cargo_entry_date:h.cargo_entry_date,p_kottaj_number:h.kottaj_number,p_permit_issue_date:h.permit_issue_date,p_lines:lines});if(r.error)throw r.error;return{type:'write',data:r.data};}
    return{type:'write',data:pick(await one(sb,'customs_accounting_vouchers',vid),['id','voucher_number','case_id','client_id','company_name','cargo_type','tonnage','unit_count','unit_type','debit_total','credit_total','balance_total','is_balanced'])};
  }
@@ -428,10 +430,13 @@ async function main(req:Request){
 
  const auth=req.headers.get('Authorization')||'';const jwt=auth.startsWith('Bearer ')?auth.slice(7).trim():'';
  if(!jwt)return out({error:'Unauthorized'},401,origin);
- const url=Deno.env.get('SUPABASE_URL'),anon=Deno.env.get('SUPABASE_ANON_KEY');
- if(!url||!anon)return out({error:'Supabase configuration missing'},503,origin);
+ const url=Deno.env.get('SUPABASE_URL'),anon=Deno.env.get('SUPABASE_ANON_KEY'),serviceRoleKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+ if(!url||!anon||!serviceRoleKey)return out({error:'Supabase server audit configuration missing'},503,origin);
 
+ // User JWT remains the only credential used for customs and finance actions.
+ // The service-role client is confined to the two server-owned ledger RPCs.
  const sb=createClient(url,anon,{global:{headers:{Authorization:'Bearer '+jwt}}});
+ const auditSb=createClient(url,serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}});
  const authUser=await sb.auth.getUser(jwt);if(!authUser.data.user)return out({error:'Unauthorized'},401,origin);
  const user=authUser.data.user;
  const pr=await sb.from('profiles').select('id,organization_id,role,is_active,client_id,full_name').eq('id',user.id).maybeSingle();
@@ -459,26 +464,26 @@ async function main(req:Request){
    if(plan.action_code.startsWith('settings.')&&pr.data.role!=='owner')return out({error:'این عملیات فقط برای Owner مجاز است.'},403,origin);
 
    if(plan.action_code==='clarification'||plan.clarification){
-     const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:'clarification',target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:'safe',status:'clarification_needed'}).select('id').single();
-     if(r.error)throw r.error;return out({command_id:r.data.id,status:'clarification_needed',plan,provider:planned.provider},200,origin);
+     const r=await createCommand(auditSb,user.id,{session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:'clarification',target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:'safe',status:'clarification_needed',confirmation_required:false,final_confirmation_phrase:null});
+     return out({command_id:r.id,status:'clarification_needed',plan,provider:planned.provider},200,origin);
    }
 
    const risk=riskFor(plan);const phrase=risk==='destructive'?'تأیید نهایی: '+ACTIONS[plan.action_code].label:null;
-   const r=await sb.from('ai_operator_commands').insert({organization_id:pr.data.organization_id,user_id:user.id,session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:plan.action_code,target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:risk,status:risk==='safe'?'executing':'awaiting_confirmation',confirmation_required:risk!=='safe',final_confirmation_phrase:phrase}).select('id').single();
-   if(r.error)throw r.error;
-   if(risk!=='safe')return out({command_id:r.data.id,status:'awaiting_confirmation',plan,risk_level:risk,confirmation_required:true,final_confirmation_phrase:phrase},200,origin);
+   const r=await createCommand(auditSb,user.id,{session_id:str(body.session_id)||null,natural_command:query,page_context:str(body.page_context),module:plan.module,action_code:plan.action_code,target:plan.target||{},plan,confidence:plan.confidence||0,risk_level:risk,status:risk==='safe'?'proposed':'awaiting_confirmation',confirmation_required:risk!=='safe',final_confirmation_phrase:phrase});
+   if(risk!=='safe')return out({command_id:r.id,status:'awaiting_confirmation',plan,risk_level:risk,confirmation_required:true,final_confirmation_phrase:phrase},200,origin);
 
    try{
+     await transition(auditSb,user.id,r.id,{status:'executing'});
      const before=await snap(sb,plan.action_code,plan.target||{});
      const result=await execute(sb,user,pr.data.organization_id,plan.action_code,plan.target||{},plan.params||{},body.attachment||null);
-     if(result?.clarification){await transition(sb,r.data.id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:r.data.id,status:'clarification_needed',clarification:result.clarification},200,origin);}
+     if(result?.clarification){await transition(auditSb,user.id,r.id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:r.id,status:'clarification_needed',clarification:result.clarification},200,origin);}
      const after=await snap(sb,plan.action_code,targetWithResult(plan.action_code,plan.target||{},result?.data??result));
-     await transition(sb,r.data.id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_by:user.id,executed_at:new Date().toISOString(),confirmation_at:new Date().toISOString()});
-     return out({command_id:r.data.id,status:'executed',plan,risk_level:risk,result:result?.data??result,before_data:before,after_data:after},200,origin);
+     await transition(auditSb,user.id,r.id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_by:user.id,executed_at:new Date().toISOString(),confirmation_at:new Date().toISOString()});
+     return out({command_id:r.id,status:'executed',plan,risk_level:risk,result:result?.data??result,before_data:before,after_data:after},200,origin);
    }catch(e){
      const msg=e instanceof Error?e.message:String(e);
-     await transition(sb,r.data.id,{status:'failed',error_message:msg,result:{error:msg},executed_by:user.id,executed_at:new Date().toISOString()});
-     return out({command_id:r.data.id,status:'failed',error:msg},403,origin);
+     await transition(auditSb,user.id,r.id,{status:'failed',error_message:msg,result:{error:msg},executed_by:user.id,executed_at:new Date().toISOString()});
+     return out({command_id:r.id,status:'failed',error:msg},403,origin);
    }
  }
 
@@ -501,22 +506,22 @@ async function main(req:Request){
    }
    if(risk==='destructive'&&!cmd.confirmation_at){
      if(body.confirm!==true)return out({error:'ابتدا تأیید اولیه عملیات مخرب لازم است.',command_id:id},409,origin);
-     await transition(sb,id,{status:'awaiting_confirmation',confirmation_at:new Date().toISOString()});
+     await transition(auditSb,user.id,id,{status:'awaiting_confirmation',confirmation_at:new Date().toISOString()});
      return out({status:'awaiting_final_confirmation',command_id:id,final_confirmation_phrase:cmd.final_confirmation_phrase},200,origin);
    }
    if(risk==='destructive'&&str(body.final_confirmation)!==str(cmd.final_confirmation_phrase))return out({error:'عبارت تأیید نهایی صحیح نیست.',command_id:id},409,origin);
 
    try{
-     await transition(sb,id,{status:'executing',confirmation_at:risk==='requires_confirmation'?new Date().toISOString():cmd.confirmation_at||null,final_confirmation_at:risk==='destructive'?new Date().toISOString():null});
+     await transition(auditSb,user.id,id,{status:'executing',confirmation_at:risk==='requires_confirmation'?new Date().toISOString():cmd.confirmation_at||null,final_confirmation_at:risk==='destructive'?new Date().toISOString():null});
      const before=await snap(sb,cmd.action_code,cmd.target||{});
      const result=await execute(sb,user,pr.data.organization_id,cmd.action_code,cmd.target||{},cmd.plan?.params||{},body.attachment||null);
-     if(result?.clarification){await transition(sb,id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:id,status:'clarification_needed',clarification:result.clarification},200,origin);}
+     if(result?.clarification){await transition(auditSb,user.id,id,{status:'clarification_needed',error_message:result.clarification,result:{clarification:result.clarification}});return out({command_id:id,status:'clarification_needed',clarification:result.clarification},200,origin);}
      const after=await snap(sb,cmd.action_code,targetWithResult(cmd.action_code,cmd.target||{},result?.data??result));
-     await transition(sb,id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_by:user.id,executed_at:new Date().toISOString()});
+     await transition(auditSb,user.id,id,{status:'executed',before_data:before,after_data:after,result:result?.data??result,executed_by:user.id,executed_at:new Date().toISOString()});
      return out({command_id:id,status:'executed',risk_level:risk,result:result?.data??result,before_data:before,after_data:after},200,origin);
    }catch(e){
      const msg=e instanceof Error?e.message:String(e);
-     try{await transition(sb,id,{status:'failed',error_message:msg,result:{error:msg},executed_by:user.id,executed_at:new Date().toISOString()});}catch{}
+     try{await transition(auditSb,user.id,id,{status:'failed',error_message:msg,result:{error:msg},executed_by:user.id,executed_at:new Date().toISOString()});}catch{}
      return out({command_id:id,status:'failed',error:msg},403,origin);
    }
  }
