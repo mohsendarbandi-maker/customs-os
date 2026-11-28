@@ -1,3 +1,5 @@
+import { buildShipmentFileManagerFolderStatements } from './shipments-file-manager';
+
 export interface ShipmentsD1Statement {
   bind(...values: unknown[]): ShipmentsD1Statement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
@@ -402,6 +404,7 @@ export const handleShipmentsApi = async (
         0, now, now,
       ));
       statements.push(customsDataUpsert(db, shipmentId, profile.organization_id, input, profile.id, now));
+      statements.push(...buildShipmentFileManagerFolderStatements(db, { shipmentId, organizationId: profile.organization_id, now }));
       await db.batch(statements);
       const saved = await getShipment(db, shipmentId, profile.organization_id);
       return saved ? json({ ok: true, shipment: saved }, 201) : fail('SHIPMENT_WRITE_NOT_CONFIRMED', 500);
@@ -433,6 +436,7 @@ export const handleShipmentsApi = async (
       input.releaseInvoicePaymentStatus, now, id, profile.organization_id,
     ));
     statements.push(customsDataUpsert(db, id!, profile.organization_id, input, profile.id, now));
+    statements.push(...buildShipmentFileManagerFolderStatements(db, { shipmentId: id!, organizationId: profile.organization_id, now }));
     await db.batch(statements);
     const saved = await getShipment(db, id!, profile.organization_id);
     return saved ? json({ ok: true, shipment: saved }) : fail('SHIPMENT_WRITE_NOT_CONFIRMED', 500);
