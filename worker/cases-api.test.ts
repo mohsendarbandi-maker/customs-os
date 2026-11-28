@@ -22,6 +22,8 @@ class FakeD1 implements CasesD1Database {
   lastChanges = 0;
   simulateCaseConflict = false;
   clientRow: { id: string; organization_id: string } | null = { id: 'client-a', organization_id: 'org-a' };
+  customsOfficeRows: Array<{ id: string; organization_id: string }> = [];
+  caseShipmentRows: Array<{ id: string; case_id: string; organization_id: string }> = [];
   existingOrderId: string | null = null;
   prepare(sql: string) { return new FakeStatement(sql, this); }
   async batch(statements: CasesD1Statement[]) {
@@ -43,6 +45,9 @@ class FakeD1 implements CasesD1Database {
     if (sql.includes('COUNT(*) AS total FROM permits WHERE case_id=? AND organization_id=?')) {
       const rows = [...this.related.permits, ...this.permits].filter(row => row.case_id === values[0] && row.organization_id === values[1] && row.status === 'pending');
       return { total: rows.length } as T;
+    }
+    if (sql.includes('FROM customs_offices WHERE id=? AND organization_id=?')) {
+      return (this.customsOfficeRows.find(row => row.id === values[0] && row.organization_id === values[1]) || null) as T | null;
     }
     if (sql.includes('FROM clients WHERE id=?')) {
       return this.clientRow?.id === values[0] && this.clientRow.organization_id === values[1]
@@ -165,10 +170,17 @@ class FakeD1 implements CasesD1Database {
       this.lastChanges = 1;
       return { meta: { changes: 1 } };
     }
+    if (sql.includes('file_manager_folders') || sql.includes('file_manager_files') || sql.includes('UPDATE customs_documents')) {
+      this.lastChanges = 1;
+      return { meta: { changes: 1 } };
+    }
     throw new Error('Unexpected run query: ' + sql);
   }
   all<T>(sql: string, values: unknown[]): { results: T[] } {
     this.queries.push({ sql, values });
+    if (sql.startsWith('SELECT id FROM shipments WHERE case_id=? AND organization_id=?')) {
+      return { results: this.caseShipmentRows.filter(row => row.case_id === values[0] && row.organization_id === values[1]).map(row => ({ id: row.id })) as T[] };
+    }
     if (sql.includes('FROM cases c LEFT JOIN clients cl')) {
       const limit = Number(values[values.length - 2]);
       const offset = Number(values[values.length - 1]);
@@ -277,6 +289,27 @@ describe('Cloudflare D1 cases read API', () => {
     });
     expect(db.queries.findIndex(query => query.sql.startsWith('UPDATE cases SET')))
       .toBeLessThan(db.queries.findIndex(query => query.sql.startsWith('INSERT INTO customs_os_audit_events')));
+  });
+
+  it('syncs organization-scoped D1 shipment folders when the case customs office changes', async () => {
+    const db = new FakeD1();
+    db.detail = { ...caseRow, organization_id: 'org-a' } as CaseRecord;
+    db.customsOfficeRows = [{ id: 'office-a', organization_id: 'org-a' }];
+    db.caseShipmentRows = [{ id: 'shipment-a', case_id: 'case-a', organization_id: 'org-a' }];
+    const url = new URL('https://staging.example/api/cases/case-a');
+    const response = await handleCasesApi(new Request(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: url.origin },
+      body: JSON.stringify({ customs_office_id: 'office-a' }),
+    }), db, url, owner);
+    const body = await response.json() as { ok: boolean; case: CaseRecord };
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.case.customs_office_id).toBe('office-a');
+    expect(db.queries.some(query => query.sql.startsWith('SELECT id FROM shipments WHERE case_id=? AND organization_id=?'))).toBe(true);
+    expect(db.queries.some(query => query.sql.includes('COALESCE(s.customs_office_id,c.customs_office_id,sc.customs_office_id)'))).toBe(true);
+    expect(db.queries.some(query => query.sql.includes('UPDATE file_manager_folders'))).toBe(true);
+    expect(db.queries.filter(query => query.sql.includes('file_manager_folders')).every(query => query.values.includes('org-a'))).toBe(true);
   });
 
   it('returns a conflict and writes no audit event when the case changed after it was read', async () => {
