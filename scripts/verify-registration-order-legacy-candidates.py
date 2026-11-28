@@ -69,7 +69,7 @@ def main() -> None:
     assert db.execute("SELECT COUNT(*) FROM registration_order_legacy_match_candidates WHERE registration_order_id='ro-1'").fetchone()[0] == 0
     db.execute("DELETE FROM registration_orders WHERE id='ro-duplicate'")
 
-    # Case-linked and conflicting case references must not be suggested.
+    # An explicit conflicting case order reference must not be suggested; an unnumbered case remains reviewable.
     db.execute("INSERT INTO cases(id,organization_id,registration_order_no) VALUES('case-linked','org-1',NULL)")
     db.execute("UPDATE registration_orders SET case_id='case-linked' WHERE id='ro-1'")
     db.execute(
@@ -92,11 +92,18 @@ def main() -> None:
              candidate_net_weight_kg, candidate_invoice_amount, candidate_source
       FROM registration_order_legacy_match_candidates
       WHERE registration_order_id='ro-1' AND organization_id='org-1'
+      ORDER BY shipment_id
     """).fetchall()
-    assert rows == [(
-        "ro-1", "ship-candidate", "۱۲۳۴۵", "12345", 100.0, 500.0,
-        "shipment_customs_data.registration_order_no",
-    )], rows
+    assert rows == [
+        (
+            "ro-1", "ship-candidate", "۱۲۳۴۵", "12345", 100.0, 500.0,
+            "shipment_customs_data.registration_order_no",
+        ),
+        (
+            "ro-1", "ship-case-linked", "۱۲۳۴۵", "12345", 50.0, 250.0,
+            "shipment_customs_data.registration_order_no",
+        ),
+    ], rows
 
     # The candidate view must remain read-only: no direct FK or order totals are changed.
     linked = db.execute("SELECT registration_order_id FROM shipments WHERE id='ship-candidate'").fetchone()[0]
