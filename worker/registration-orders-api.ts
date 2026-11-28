@@ -91,7 +91,7 @@ const normalizeDigits = (value: string) => Array.from(value.normalize('NFKC'), (
   return ch;
 }).join('');
 const normalizeRegistrationOrderReference = (value: string) =>
-  normalizeDigits(value).replace(/[\\s\\u00a0\\u200b-\\u200d\\ufeff]/g, '').toUpperCase();
+  normalizeDigits(value).replace(/[\s\u00a0\u200b-\u200d\ufeff]/g, '').toUpperCase();
 const parseMilliUnits = (value: unknown): number | null => {
   if (value == null || value === '') return null;
   const raw = normalizeDigits(String(value)).replace(/[٬,\s]/g, '').trim();
