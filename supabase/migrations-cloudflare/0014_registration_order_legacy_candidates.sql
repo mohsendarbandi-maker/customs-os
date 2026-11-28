@@ -191,4 +191,5 @@ WHERE NOT (
   registration_order_case_id IS NOT NULL
   AND case_id = registration_order_case_id
 )
+AND case_id IS NULL
 AND case_order_key IS NULL;
