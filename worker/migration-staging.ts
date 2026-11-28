@@ -4,6 +4,7 @@ import { handleCasesApi } from './cases-api';
 import { handleCustomsDeclarationWorkflowApi } from './customs-declaration-workflow-api';
 import { handleDeclarationExitApi } from './declaration-exit-api';
 import { handleShipmentsApi } from './shipments-api';
+import { handleShipmentTrackingApi } from './shipment-tracking-api';
 import { handleCaseSelectorApi } from './case-selector-api';
 import { handleDeviceSessionsApi } from './device-sessions-api';
 import { handleRegistrationOrdersApi } from './registration-orders-api';
@@ -1243,6 +1244,13 @@ export default {
       if (!await getSession(request, env)) return json({ error: 'UNAUTHORIZED' }, 401);
       if (!profile.is_active || !['owner', 'admin', 'broker'].includes(profile.role)) return json({ error: 'FORBIDDEN' }, 403);
       return handleClientsApi(request, env, url, profile);
+    }
+
+    if (url.pathname.startsWith('/api/shipments/') &&
+      (url.pathname.endsWith('/tracking-events') || url.pathname.endsWith('/ship-pass'))) {
+      if (!isSameOrigin(request, url)) return json({ ok: false, error: 'ORIGIN_FORBIDDEN' }, 403);
+      if (!await getSession(request, env)) return json({ ok: false, error: 'UNAUTHORIZED' }, 401);
+      return handleShipmentTrackingApi(request, env.MIGRATION_DB, url, profile);
     }
 
     if (url.pathname === '/api/shipments' || url.pathname.startsWith('/api/shipments/')) {
