@@ -27,6 +27,10 @@ const secondPass = buildShipmentFileManagerFolderStatements(database, {
   ...context,
   now: '2026-11-28T15:01:00.000Z',
 }).map(statement => ({ sql: statement.sql, values: statement.values }));
+const thirdPass = buildShipmentFileManagerFolderStatements(database, {
+  ...context,
+  now: '2026-11-28T15:02:00.000Z',
+}).map(statement => ({ sql: statement.sql, values: statement.values }));
 
 const python = String.raw`
 import json
@@ -36,6 +40,7 @@ import sys
 payload = json.load(sys.stdin)
 first_pass = payload["firstPass"]
 second_pass = payload["secondPass"]
+third_pass = payload["thirdPass"]
 db = sqlite3.connect(":memory:")
 db.row_factory = sqlite3.Row
 
@@ -137,7 +142,7 @@ assert document["client_id"] == "client-a"
 # Office removal is represented as an explicit unknown-office folder label, not a stale name.
 db.execute("UPDATE cases SET customs_office_id=NULL WHERE id='case-a'")
 db.commit()
-apply(build_again())
+apply(third_pass)
 shipment = db.execute(
     "SELECT * FROM file_manager_folders WHERE organization_id='org-a' AND folder_type='shipment' AND shipment_id='shipment-a'"
 ).fetchone()
@@ -158,7 +163,7 @@ print(json.dumps({
 }, ensure_ascii=False))
 `;
 
-const pyInput = JSON.stringify({ firstPass, secondPass });
+const pyInput = JSON.stringify({ firstPass, secondPass, thirdPass });
 const result = spawnSync('python3', ['-c', python], {
   input: pyInput,
   encoding: 'utf8',
