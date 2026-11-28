@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations-cloudflare/0014_registration_order_legacy_candidates.sql"
+MIGRATION = ROOT / "supabase/migrations-cloudflare/0017_registration_order_legacy_candidates.sql"
 
 
 def main() -> None:
