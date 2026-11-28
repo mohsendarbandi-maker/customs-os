@@ -1,3 +1,5 @@
+import { buildShipmentFileManagerFolderStatements } from './shipments-file-manager';
+
 export interface CasesD1Statement {
   bind(...values: unknown[]): CasesD1Statement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
@@ -199,7 +201,7 @@ const sameOrigin = (request: Request, url: URL) => {
 };
 const stringFields = new Set([
   'case_number','registration_order_no','proforma_no','cargo_description','cargo_count_unit',
-  'warehouse_receipt_no','vessel_type','origin_country_code','transaction_country_code',
+  'warehouse_receipt_no','vessel_type','customs_office_id','origin_country_code','transaction_country_code',
   'delivery_term','tariff_code',
 ]);
 const dateFields = new Set(['unloading_date','warehouse_receipt_date']);
@@ -288,6 +290,19 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
   }
   const before = await readCase(db, id, organizationId).catch(() => null);
   if (!before) return fail('CASE_NOT_FOUND', 404);
+  if (typeof normalized.customs_office_id === 'string') {
+    const office = await db.prepare(
+      'SELECT id FROM customs_offices WHERE id=? AND organization_id=? LIMIT 1',
+    ).bind(normalized.customs_office_id, organizationId).first<{ id: string }>();
+    if (!office) return fail('CUSTOMS_OFFICE_NOT_FOUND', 404);
+  }
+  const customsOfficeChanged = Object.prototype.hasOwnProperty.call(normalized, 'customs_office_id') &&
+    !Object.is(normalized.customs_office_id, before.customs_office_id);
+  const linkedShipmentIds = customsOfficeChanged
+    ? (await db.prepare(
+        'SELECT id FROM shipments WHERE case_id=? AND organization_id=? ORDER BY created_at,id',
+      ).bind(id, organizationId).all<{ id: string }>()).results.map(row => row.id)
+    : [];
   const nextNetWeight = normalized.net_weight_kg !== undefined ? normalized.net_weight_kg : before.net_weight_kg;
   const nextGrossWeight = normalized.gross_weight_kg !== undefined ? normalized.gross_weight_kg : before.gross_weight_kg;
   if (nextNetWeight !== null && nextGrossWeight !== null &&
@@ -330,7 +345,7 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
   sets.push("updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')");
   values.push(id, organizationId);
   try {
-    const results = await db.batch([
+    const statements = [
       db.prepare(
         'UPDATE cases SET ' + sets.join(', ') + ' WHERE id=? AND organization_id=? AND updated_at IS ?',
       ).bind(...values, before.updated_at),
@@ -343,7 +358,13 @@ const patchCase = async (request: Request, db: CasesD1Database, id: string, orga
         JSON.stringify(beforeSnapshot), JSON.stringify(afterSnapshot),
         request.headers.get('cf-ray') || request.headers.get('x-request-id') || null,
       ),
-    ]);
+    ];
+    for (const shipmentId of linkedShipmentIds) {
+      statements.push(...buildShipmentFileManagerFolderStatements(db, {
+        shipmentId, organizationId, now: new Date().toISOString(),
+      }));
+    }
+    const results = await db.batch(statements);
     const updateResult = results[0] as { meta?: { changes?: number } } | undefined;
     if (Number(updateResult?.meta?.changes || 0) !== 1) {
       const current = await readCase(db, id, organizationId);
