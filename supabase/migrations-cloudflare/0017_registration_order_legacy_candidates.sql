@@ -1,4 +1,4 @@
--- Migration 0014: read-only legacy registration-order reference candidates.
+-- Migration 0017: read-only legacy registration-order reference candidates.
 -- Normalized reference columns are maintained by triggers. Candidates are review-only:
 -- no shipment is auto-linked and candidate rows never enter capacity reconciliation.
 
