@@ -132,7 +132,8 @@ def main() -> None:
             "direct and case-linked references excluded",
             "cross-client and cross-organization isolation",
             "candidate view does not auto-link or alter capacity",
-            "source-update normalization triggers",\n            "supporting indexes exist",
+            "source-update normalization triggers",
+            "supporting indexes exist",
         ],
     }, ensure_ascii=False))
 
