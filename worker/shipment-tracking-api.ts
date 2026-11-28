@@ -16,7 +16,10 @@ export interface ShipmentTrackingProfile {
 }
 
 const BASE = '/api/shipments/';
+const ALLOWED_ROLES = new Set(['owner', 'admin', 'broker', 'warehouse']);
 const WRITE_ROLES = new Set(['owner', 'admin', 'broker']);
+const STATUSES = new Set(['draft','booking_confirmed','loading','loaded','departed','in_transit','approaching_destination','anchorage','berthing','discharging','discharged','completed','delayed','cancelled']);
+const STATUS_EVENT_CODES: Record<string, string> = { loading:'loading_start', loaded:'loading_complete', anchorage:'anchorage_arrived', discharging:'discharge_start', discharged:'discharge_complete' };
 const EVENT_CODES = new Set([
   'draft', 'booking_confirmed', 'loading_start', 'loading_complete', 'departed',
   'in_transit', 'approaching_destination', 'anchorage_arrived', 'berthing',
@@ -59,7 +62,7 @@ export const handleShipmentTrackingApi = async (
   url: URL,
   profile: ShipmentTrackingProfile,
 ): Promise<Response> => {
-  if (!profile.is_active || !profile.id || !profile.organization_id) return fail('FORBIDDEN', 403);
+  if (!profile.is_active || !profile.id || !profile.organization_id || !ALLOWED_ROLES.has(profile.role)) return fail('FORBIDDEN', 403);
   if (!sameOrigin(request, url)) return fail('ORIGIN_FORBIDDEN', 403);
 
   const eventsShipmentId = shipmentIdFromPath(url.pathname, '/tracking-events');
@@ -89,19 +92,24 @@ export const handleShipmentTrackingApi = async (
     if (eventsShipmentId && request.method === 'POST') {
       const body = await readBody(request);
       if (!body) return fail('INVALID_JSON', 400);
-      const eventCode = typeof body.eventCode === 'string' ? body.eventCode.trim() : '';
+      const status = typeof body.status === 'string' ? body.status.trim() : '';
+      const eventCode = typeof body.eventCode === 'string' ? body.eventCode.trim() : (STATUS_EVENT_CODES[status] || status);
       const timeType = typeof body.timeType === 'string' ? body.timeType.trim() : 'actual';
       const eventTime = typeof body.eventTime === 'string' && body.eventTime.trim()
         ? body.eventTime.trim() : new Date().toISOString();
       const location = typeof body.location === 'string' ? body.location.trim().slice(0, 160) || null : null;
       const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 2000) || null : null;
       const source = typeof body.source === 'string' ? body.source.trim().slice(0, 80) || 'Customs OS' : 'Customs OS';
+      if (!STATUSES.has(status)) return fail('INVALID_SHIPMENT_STATUS', 400);
       if (!EVENT_CODES.has(eventCode)) return fail('INVALID_EVENT_CODE', 400);
       if (!TIME_TYPES.has(timeType)) return fail('INVALID_TIME_TYPE', 400);
       if (Number.isNaN(Date.parse(eventTime))) return fail('INVALID_EVENT_TIME', 400);
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       await db.batch([
+        db.prepare(
+          'UPDATE shipments SET current_status=?,current_location=?,updated_at=? WHERE id=? AND organization_id=?',
+        ).bind(status, location, now, shipmentId, profile.organization_id),
         db.prepare(
           'INSERT INTO shipment_tracking_events ' +
           '(id,organization_id,shipment_id,event_code,event_time,time_type,location,notes,source,created_by,created_at) ' +
@@ -114,7 +122,7 @@ export const handleShipmentTrackingApi = async (
           'VALUES (?,?,?,?,?,?,?,?,?)',
         ).bind(crypto.randomUUID(), profile.organization_id, profile.id, 'create',
           'shipment_tracking_event', id, null,
-          JSON.stringify({ shipment_id: shipmentId, event_code: eventCode, event_time: eventTime, time_type: timeType }),
+          JSON.stringify({ shipment_id: shipmentId, status, event_code: eventCode, event_time: eventTime, time_type: timeType, location, notes }),
           request.headers.get('cf-ray') || crypto.randomUUID()),
       ]);
       const saved = await db.prepare(
