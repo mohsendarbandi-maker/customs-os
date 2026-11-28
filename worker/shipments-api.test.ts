@@ -249,9 +249,12 @@ class FakeD1 implements ShipmentsD1Database {
         transport_documents_status, release_invoice_payment_status, updated_at });
       return 1;
     }
-    if (sql.startsWith('INSERT INTO shipment_customs_data')) {
-      return 1;
-    }
+    if (
+      sql.includes('INSERT INTO file_manager_folders') ||
+      sql.includes('UPDATE file_manager_folders') ||
+      sql.includes('UPDATE file_manager_files') ||
+      sql.includes('UPDATE customs_documents')
+    ) return 1;
     throw new Error('Unexpected write query: ' + sql);
   }
 }
@@ -312,6 +315,19 @@ describe('Cloudflare D1 shipments API', () => {
     expect(db.customs[0].sata_code).toBe('SATA-1');
     expect(db.batches).toHaveLength(1);
     expect(db.batches[0].some(sql => sql.startsWith('INSERT INTO shipments'))).toBe(true);
+    const folderInserts = db.queries.filter(query => query.sql.includes('INSERT INTO file_manager_folders'));
+    expect(folderInserts).toHaveLength(11);
+    expect(folderInserts.every(query => query.values.includes(organizationId))).toBe(true);
+    const childInserts = folderInserts.filter(query => query.sql.includes('FROM file_manager_folders sf WHERE'));
+    expect(childInserts.map(query => query.values[2]).sort()).toEqual([
+      'accounting_finance', 'declaration', 'exit', 'other', 'permits', 'purchase_docs', 'shipping_docs', 'warehouse_receipt',
+    ]);
+    expect(childInserts.map(query => query.values[3]).sort()).toEqual([
+      'حسابداری مالی', 'اسناد حمل و کشتی', 'پیش‌فاکتور و ثبت سفارش', 'قبض انبار',
+      'اسناد گمرکی و اظهارنامه', 'مجوزها', 'ترخیص و درب خروج', 'سایر اسناد',
+    ].sort());
+    expect(db.queries.some(query => query.sql.includes('UPDATE file_manager_files'))).toBe(true);
+    expect(db.queries.some(query => query.sql.includes('UPDATE customs_documents'))).toBe(true);
   });
   it('rejects a cross-organization client before writing', async () => {
     const db = new FakeD1();
@@ -348,6 +364,9 @@ describe('Cloudflare D1 shipments API', () => {
     expect(body.shipment.id).toBe('shipment-a');
     expect(body.shipment.cargo_count).toBe(25);
     expect(db.shipments[0].organization_id).toBe(organizationId);
+    expect(db.batches).toHaveLength(1);
+    expect(db.queries.some(query => query.sql.includes("COALESCE(s.customs_office_id,c.customs_office_id,sc.customs_office_id)"))).toBe(true);
+    expect(db.queries.some(query => query.sql.includes('UPDATE file_manager_folders'))).toBe(true);
   });
   it('returns 404 when an identifier belongs to another organization', async () => {
     const db = new FakeD1();
