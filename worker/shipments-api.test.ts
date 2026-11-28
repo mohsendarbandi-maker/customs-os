@@ -205,6 +205,13 @@ class FakeD1 implements ShipmentsD1Database {
   }
   run(sql: string, values: unknown[]): number {
     this.queries.push({ sql, values });
+    if (
+      sql.includes('file_manager_folders') ||
+      sql.includes('file_manager_files') ||
+      sql.includes('customs_documents')
+    ) {
+      return 1;
+    }
     if (sql.startsWith('INSERT INTO vessels')) {
       const [id, organization_id, name, imo_number, flag_code, shipping_line_id, created_at] = values;
       this.vessels.push({ id, organization_id, name, imo_number, flag_code, shipping_line_id, created_at });
@@ -312,6 +319,40 @@ describe('Cloudflare D1 shipments API', () => {
     expect(db.customs[0].sata_code).toBe('SATA-1');
     expect(db.batches).toHaveLength(1);
     expect(db.batches[0].some(sql => sql.startsWith('INSERT INTO shipments'))).toBe(true);
+  });
+  it('creates the canonical shipment File Manager tree in the same D1 transaction', async () => {
+    const db = new FakeD1();
+    const url = urlFor('/api/shipments');
+    const response = await handleShipmentsApi(request('POST', url.pathname, input()), db, url, profile);
+    expect(response.status).toBe(201);
+    const statements = db.batches[0];
+    const inserts = statements.filter(sql => sql.includes('INSERT INTO file_manager_folders'));
+    const updates = statements.filter(sql => sql.includes('UPDATE file_manager_folders'));
+    expect(inserts).toHaveLength(11);
+    expect(updates).toHaveLength(11);
+    expect(statements.some(sql => sql.includes('UPDATE file_manager_files'))).toBe(true);
+    expect(statements.some(sql => sql.includes('UPDATE customs_documents'))).toBe(true);
+    const sql = statements.join('\\n');
+    expect(sql).toContain('Customs OS Documents/صاحبان کالا');
+    expect(sql).toContain('folder_key=\'owners-root\'');
+    expect(sql).toContain('folder_key=\'client:\'||ctx.client_id');
+    expect(sql).toContain('folder_type=\'shipment\'');
+    for (const label of [
+      'حسابداری مالی',
+      'اسناد حمل و کشتی',
+      'پیش‌فاکتور و ثبت سفارش',
+      'قبض انبار',
+      'اسناد گمرکی و اظهارنامه',
+      'مجوزها',
+      'ترخیص و درب خروج',
+      'سایر اسناد',
+    ]) {
+      expect(sql).toContain(label);
+    }
+    expect(inserts.every(statement => statement.includes('WHERE NOT EXISTS'))).toBe(true);
+    expect(statements.filter(statement => statement.includes('file_manager_folders')).every(statement =>
+      statement.includes('s.organization_id=?')
+    )).toBe(true);
   });
   it('rejects a cross-organization client before writing', async () => {
     const db = new FakeD1();
