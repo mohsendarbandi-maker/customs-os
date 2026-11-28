@@ -1,0 +1,51 @@
+name: Finance invoice hard-delete protection and reconciliation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'supabase/migrations/*finance_invoice_hard_delete_protection.sql'
+      - 'supabase/tests/fixtures/finance_invoice_integrity_fixture.sql'
+      - 'supabase/tests/*finance_invoice_integrity.test.sql'
+      - '.github/workflows/finance-invoice-integrity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  invoice-integrity-contract:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: customs_finance_invoice_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d customs_finance_invoice_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: customs_finance_invoice_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Create isolated finance fixture
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/fixtures/finance_invoice_integrity_fixture.sql
+      - name: Apply invoice hard-delete and integrity migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118150000_finance_invoice_hard_delete_protection.sql
+      - name: Re-run migration to verify repeatability
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261118150000_finance_invoice_hard_delete_protection.sql
+      - name: Verify invoice retention and orphan-cost detection
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/20261118_finance_invoice_integrity.test.sql
