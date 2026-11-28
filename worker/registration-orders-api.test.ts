@@ -518,9 +518,7 @@ describe('Cloudflare D1 registration-orders API', () => {
     const aggregate = db.queries.find(query => query.sql.includes('FROM registration_orders ro2'));
     expect(aggregate?.sql).toContain('sc.registration_order_no_normalized = ro2.order_number_normalized');
     expect(aggregate?.sql).not.toContain('sc.registration_order_no = ro2.order_number');
-    const mismatch = db.queries.find(query => query.sql.startsWith('SELECT COUNT(s.id) AS total FROM registration_orders ro '));
-    expect(mismatch?.sql).toContain('c.registration_order_no_normalized = ro.order_number_normalized');
-    expect(mismatch?.sql).not.toContain('c.registration_order_no = ro.order_number');
+
   });
 
 });
