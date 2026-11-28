@@ -278,6 +278,162 @@ const customsDataUpsert = (
   input.cargoDescription, input.netWeightKg, input.grossWeightKg, input.sataCode,
   input.customsRegime, actorId, now, now,
 );
+const SHIPMENT_FOLDER_CONTEXT_CTE =
+  'WITH shipment_context AS (' +
+  'SELECT s.id,s.organization_id,COALESCE(s.client_id,ca.client_id) AS client_id,' +
+  "COALESCE(NULLIF(TRIM(c.name),''),NULLIF(TRIM(case_client.name),''),'صاحب کالا') AS client_name," +
+  "COALESCE(NULLIF(TRIM(s.display_name),''),'محموله '||substr(s.id,1,8)) AS shipment_name," +
+  'COALESCE(s.customs_office_id,ca.customs_office_id,scd.customs_office_id) AS customs_office_id,' +
+  "COALESCE(NULLIF(TRIM(o.name),''),NULLIF(TRIM(o.code),''),'گمرک نامشخص') AS office_name," +
+  "COALESCE(NULLIF(TRIM(o.code),''),'کد نامشخص') AS office_code " +
+  'FROM shipments s ' +
+  'LEFT JOIN cases ca ON ca.id=s.case_id AND ca.organization_id=s.organization_id ' +
+  'LEFT JOIN clients c ON c.id=COALESCE(s.client_id,ca.client_id) AND c.organization_id=s.organization_id ' +
+  'LEFT JOIN clients case_client ON case_client.id=ca.client_id AND case_client.organization_id=s.organization_id ' +
+  'LEFT JOIN shipment_customs_data scd ON scd.shipment_id=s.id AND scd.organization_id=s.organization_id ' +
+  'LEFT JOIN customs_offices o ON o.id=COALESCE(s.customs_office_id,ca.customs_office_id,scd.customs_office_id) ' +
+  'AND o.organization_id=s.organization_id ' +
+  'WHERE s.id=? AND s.organization_id=?' +
+  ') ';
+
+const shipmentFolderStatements = (
+  db: ShipmentsD1Database,
+  shipmentId: string,
+  organizationId: string,
+  now: string,
+): ShipmentsD1Statement[] => {
+  const rootPath = 'Customs OS Documents/صاحبان کالا';
+  const rootId = crypto.randomUUID();
+  const clientFolderId = crypto.randomUUID();
+  const shipmentFolderId = crypto.randomUUID();
+  const shipmentDisplaySql = "ctx.shipment_name || ' — ' || ctx.office_name || ' (' || ctx.office_code || ')'";
+  const rootFolderIdSql =
+    "(SELECT root.id FROM shipment_context ctx JOIN file_manager_folders root " +
+    "ON root.organization_id=ctx.organization_id AND root.parent_id IS NULL AND root.folder_key='owners-root' " +
+    "ORDER BY root.created_at,root.id LIMIT 1)";
+  const clientFolderIdSql =
+    "(SELECT client_folder.id FROM shipment_context ctx JOIN file_manager_folders root " +
+    "ON root.organization_id=ctx.organization_id AND root.parent_id IS NULL AND root.folder_key='owners-root' " +
+    "JOIN file_manager_folders client_folder ON client_folder.organization_id=ctx.organization_id " +
+    "AND client_folder.parent_id=root.id AND client_folder.folder_key='client:'||ctx.client_id " +
+    "ORDER BY client_folder.created_at,client_folder.id LIMIT 1)";
+  const shipmentFolderIdSql =
+    "(SELECT shipment_folder.id FROM shipment_context ctx JOIN file_manager_folders shipment_folder " +
+    "ON shipment_folder.organization_id=ctx.organization_id AND shipment_folder.folder_type='shipment' " +
+    "AND shipment_folder.shipment_id=ctx.id ORDER BY shipment_folder.created_at,shipment_folder.id LIMIT 1)";
+  const statements: ShipmentsD1Statement[] = [];
+
+  statements.push(db.prepare(
+    SHIPMENT_FOLDER_CONTEXT_CTE +
+    'INSERT INTO file_manager_folders ' +
+    '(id,parent_id,folder_key,folder_type,display_name,client_id,shipment_id,customs_office_id,is_system,created_at,organization_id,relative_path) ' +
+    "SELECT ?,NULL,'owners-root','root','صاحبان کالا',NULL,NULL,NULL,1,?,ctx.organization_id,? " +
+    'FROM shipment_context ctx ' +
+    "WHERE NOT EXISTS (SELECT 1 FROM file_manager_folders f WHERE f.organization_id=ctx.organization_id AND f.parent_id IS NULL AND f.folder_key='owners-root')",
+  ).bind(shipmentId, organizationId, rootId, now, rootPath));
+
+  statements.push(db.prepare(
+    SHIPMENT_FOLDER_CONTEXT_CTE +
+    'UPDATE file_manager_folders SET display_name=?,relative_path=?,is_system=1 ' +
+    'WHERE id=' + rootFolderIdSql,
+  ).bind(shipmentId, organizationId, 'صاحبان کالا', rootPath));
+
+  statements.push(db.prepare(
+    SHIPMENT_FOLDER_CONTEXT_CTE +
+    'INSERT INTO file_manager_folders ' +
+    '(id,parent_id,folder_key,folder_type,display_name,client_id,shipment_id,customs_office_id,is_system,created_at,organization_id,relative_path) ' +
+    "SELECT ?,root.id,'client:'||ctx.client_id,'client',ctx.client_name,ctx.client_id,NULL,NULL,1,?,ctx.organization_id,root.relative_path||'/'||ctx.client_name " +
+    'FROM shipment_context ctx JOIN file_manager_folders root ' +
+    "ON root.organization_id=ctx.organization_id AND root.parent_id IS NULL AND root.folder_key='owners-root' " +
+    "WHERE ctx.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM file_manager_folders f WHERE f.organization_id=ctx.organization_id AND f.parent_id=root.id AND f.folder_key='client:'||ctx.client_id)",
+  ).bind(shipmentId, organizationId, clientFolderId, now));
+
+  statements.push(db.prepare(
+    SHIPMENT_FOLDER_CONTEXT_CTE +
+    'UPDATE file_manager_folders SET ' +
+    'display_name=(SELECT ctx.client_name FROM shipment_context ctx), ' +
+    'client_id=(SELECT ctx.client_id FROM shipment_context ctx), ' +
+    "relative_path=(SELECT root.relative_path||'/'||ctx.client_name FROM shipment_context ctx " +
+    "JOIN file_manager_folders root ON root.organization_id=ctx.organization_id AND root.parent_id IS NULL AND root.folder_key='owners-root'), " +
+    'is_system=1 WHERE id=(SELECT f.id FROM shipment_context ctx ' +
+    "JOIN file_manager_folders root ON root.organization_id=ctx.organization_id AND root.parent_id IS NULL AND root.folder_key='owners-root' " +
+    "JOIN file_manager_folders f ON f.organization_id=ctx.organization_id AND f.parent_id=root.id AND f.folder_key='client:'||ctx.client_id " +
+    'ORDER BY f.created_at,f.id LIMIT 1)',
+  ).bind(shipmentId, organizationId));
+
+  statements.push(db.prepare(
+    SHIPMENT_FOLDER_CONTEXT_CTE +
+    'INSERT INTO file_manager_folders ' +
+    '(id,parent_id,folder_key,folder_type,display_name,client_id,shipment_id,customs_office_id,is_system,created_at,organization_id,relative_path) ' +
+    "SELECT ?,client_folder.id,'shipment:'||ctx.id,'shipment'," + shipmentDisplaySql + ',ctx.client_id,ctx.id,ctx.customs_office_id,1,?,ctx.organization_id,' +
+    "client_folder.relative_path||'/'||" + shipmentDisplaySql + ' ' +
+    'FROM shipment_context ctx JOIN file_manager_folders client_folder ON client_folder.id=' + clientFolderIdSql + ' ' +
+    "WHERE ctx.client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM file_manager_folders f WHERE f.organization_id=ctx.organization_id AND f.folder_type='shipment' AND f.shipment_id=ctx.id)",
+  ).bind(shipmentId, organizationId, shipmentFolderId, now));
+
+  statements.push(db.prepare(
+    SHIPMENT_FOLDER_CONTEXT_CTE +
+    'UPDATE file_manager_folders SET ' +
+    'parent_id=' + clientFolderIdSql + ",folder_key='shipment:'||(SELECT ctx.id FROM shipment_context ctx)," +
+    'display_name=(SELECT ' + shipmentDisplaySql + ' FROM shipment_context ctx), ' +
+    'client_id=(SELECT ctx.client_id FROM shipment_context ctx), ' +
+    'customs_office_id=(SELECT ctx.customs_office_id FROM shipment_context ctx), ' +
+    "relative_path=(SELECT client_folder.relative_path||'/'||" + shipmentDisplaySql +
+    ' FROM shipment_context ctx JOIN file_manager_folders client_folder ON client_folder.id=' + clientFolderIdSql + '), ' +
+    'is_system=1 WHERE id=' + shipmentFolderIdSql,
+  ).bind(shipmentId, organizationId));
+
+  const subfolders = [
+    { key: 'accounting-finance', type: 'accounting_finance', label: 'حسابداری مالی' },
+    { key: 'shipping-docs', type: 'shipping_docs', label: 'اسناد حمل و کشتی' },
+    { key: 'purchase-docs', type: 'purchase_docs', label: 'پیش‌فاکتور و ثبت سفارش' },
+    { key: 'warehouse-receipt', type: 'warehouse_receipt', label: 'قبض انبار' },
+    { key: 'declaration', type: 'declaration', label: 'اسناد گمرکی و اظهارنامه' },
+    { key: 'permits-inspection', type: 'permits', label: 'مجوزها' },
+    { key: 'exit', type: 'exit', label: 'ترخیص و درب خروج' },
+    { key: 'other', type: 'other', label: 'سایر اسناد' },
+  ] as const;
+
+  for (const folder of subfolders) {
+    const folderId = crypto.randomUUID();
+    statements.push(db.prepare(
+      SHIPMENT_FOLDER_CONTEXT_CTE +
+      'INSERT INTO file_manager_folders ' +
+      '(id,parent_id,folder_key,folder_type,display_name,client_id,shipment_id,customs_office_id,is_system,created_at,organization_id,relative_path) ' +
+      'SELECT ?,shipment_folder.id,?,?,?,ctx.client_id,ctx.id,ctx.customs_office_id,1,?,ctx.organization_id,shipment_folder.relative_path||\'/\'||? ' +
+      'FROM shipment_context ctx JOIN file_manager_folders shipment_folder ON shipment_folder.id=' + shipmentFolderIdSql + ' ' +
+      'WHERE NOT EXISTS (SELECT 1 FROM file_manager_folders f WHERE f.organization_id=ctx.organization_id AND f.parent_id=shipment_folder.id AND f.folder_key=?)',
+    ).bind(shipmentId, organizationId, folderId, folder.key, folder.type, folder.label, now, folder.label, folder.key));
+
+    statements.push(db.prepare(
+      SHIPMENT_FOLDER_CONTEXT_CTE +
+      'UPDATE file_manager_folders SET display_name=?,client_id=(SELECT ctx.client_id FROM shipment_context ctx), ' +
+      'customs_office_id=(SELECT ctx.customs_office_id FROM shipment_context ctx), ' +
+      "relative_path=(SELECT shipment_folder.relative_path||'/'||? FROM shipment_context ctx " +
+      'JOIN file_manager_folders shipment_folder ON shipment_folder.id=' + shipmentFolderIdSql + ') ' +
+      'WHERE organization_id=(SELECT ctx.organization_id FROM shipment_context ctx) ' +
+      'AND parent_id=' + shipmentFolderIdSql + ' AND folder_key=?',
+    ).bind(shipmentId, organizationId, folder.label, folder.label, folder.key));
+  }
+
+  statements.push(db.prepare(
+    SHIPMENT_FOLDER_CONTEXT_CTE +
+    'UPDATE file_manager_files SET client_id=(SELECT ctx.client_id FROM shipment_context ctx), ' +
+    'relative_path=(SELECT folder.relative_path||\'/\'||file_manager_files.original_name FROM file_manager_folders folder WHERE folder.id=file_manager_files.folder_id) ' +
+    'WHERE organization_id=(SELECT ctx.organization_id FROM shipment_context ctx) AND shipment_id=(SELECT ctx.id FROM shipment_context ctx)',
+  ).bind(shipmentId, organizationId));
+
+  statements.push(db.prepare(
+    SHIPMENT_FOLDER_CONTEXT_CTE +
+    'UPDATE customs_documents SET client_id=(SELECT ctx.client_id FROM shipment_context ctx),updated_at=? ' +
+    'WHERE organization_id=(SELECT ctx.organization_id FROM shipment_context ctx) ' +
+    'AND shipment_id=(SELECT ctx.id FROM shipment_context ctx) ' +
+    'AND client_id IS NOT (SELECT ctx.client_id FROM shipment_context ctx)',
+  ).bind(shipmentId, organizationId, now));
+
+  return statements;
+};
+
 export const handleShipmentsApi = async (
   request: Request,
   db: ShipmentsD1Database,
@@ -402,6 +558,7 @@ export const handleShipmentsApi = async (
         0, now, now,
       ));
       statements.push(customsDataUpsert(db, shipmentId, profile.organization_id, input, profile.id, now));
+      statements.push(...shipmentFolderStatements(db, shipmentId, profile.organization_id, now));
       await db.batch(statements);
       const saved = await getShipment(db, shipmentId, profile.organization_id);
       return saved ? json({ ok: true, shipment: saved }, 201) : fail('SHIPMENT_WRITE_NOT_CONFIRMED', 500);
@@ -433,6 +590,7 @@ export const handleShipmentsApi = async (
       input.releaseInvoicePaymentStatus, now, id, profile.organization_id,
     ));
     statements.push(customsDataUpsert(db, id!, profile.organization_id, input, profile.id, now));
+    statements.push(...shipmentFolderStatements(db, id!, profile.organization_id, now));
     await db.batch(statements);
     const saved = await getShipment(db, id!, profile.organization_id);
     return saved ? json({ ok: true, shipment: saved }) : fail('SHIPMENT_WRITE_NOT_CONFIRMED', 500);
