@@ -101,6 +101,23 @@ export interface RegistrationOrderReconciliation {
   total_allocation_count: number;
 }
 
+export interface RegistrationOrderLegacyCandidate {
+  registration_order_id: string;
+  organization_id: string;
+  order_number: string;
+  registration_order_client_id: string | null;
+  shipment_id: string;
+  shipment_client_id: string | null;
+  shipment_name: string | null;
+  bill_of_lading_no: string | null;
+  customs_registration_order_no: string;
+  candidate_net_weight_kg: number | null;
+  candidate_gross_weight_kg: number | null;
+  candidate_invoice_amount: number | null;
+  candidate_invoice_currency: string | null;
+  candidate_source: string;
+}
+
 export interface RegistrationOrdersListResponse {
   ok: true;
   items: RegistrationOrderRecord[];
@@ -109,6 +126,7 @@ export interface RegistrationOrdersListResponse {
   offset: number;
   cases: RegistrationOrderCaseReference[];
   reconciliation: RegistrationOrderReconciliation[];
+  legacyCandidates: RegistrationOrderLegacyCandidate[];
 }
 
 export class CloudflareRegistrationOrdersError extends Error {

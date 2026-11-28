@@ -63,6 +63,7 @@ class FakeD1 implements RegistrationOrderD1Database {
   cases: Row[] = [];
   clients = new Set(['client-a']);
   allocations: Row[] = [];
+  legacyCandidates: Row[] = [];
   audit: Row[] = [];
   currencyMismatches = 0;
   clientConflicts = 0;
@@ -90,9 +91,10 @@ class FakeD1 implements RegistrationOrderD1Database {
       const row = this.cases.find(item => item.id === values[0] && item.organization_id === values[1]);
       return row ? { id: row.id, client_id: row.client_id } as T : null;
     }
-    if (sql.startsWith('SELECT id FROM registration_orders WHERE organization_id = ? AND order_number = ?')) {
+    if (sql.startsWith('SELECT id FROM registration_orders WHERE organization_id = ? AND order_number_normalized = ?')) {
+      const normalize = (value: unknown) => String(value ?? '').normalize('NFKC').replace(/[\s\u00a0\u200b-\u200d\ufeff]/g, '').replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).toUpperCase();
       const row = this.orders.find(item => item.organization_id === values[0] &&
-        item.order_number === values[1] && item.id !== values[2]);
+        normalize(item.order_number) === values[1] && item.id !== values[2]);
       return row ? { id: row.id } as T : null;
     }
     if (sql.startsWith('SELECT ro.id')) {
@@ -117,6 +119,10 @@ class FakeD1 implements RegistrationOrderD1Database {
   }
   all<T>(sql: string, values: unknown[]): { results: T[] } {
     this.queries.push({ sql, values });
+    if (sql.includes('FROM registration_order_legacy_match_candidates')) {
+      const orderIds = new Set(values.slice(1).map(String));
+      return { results: this.legacyCandidates.filter(row => row.organization_id === values[0] && orderIds.has(String(row.registration_order_id))) as T[] };
+    }
     if (sql.includes('FROM cases WHERE organization_id = ?')) {
       return { results: this.cases.filter(row => row.organization_id === values[0]) as T[] };
     }
@@ -464,4 +470,55 @@ describe('Cloudflare D1 registration-orders API', () => {
     expect(body.allocation.registration_order_id).toBe('order-a');
     expect(db.audit.some(entry => entry.entity_type === 'registration_order_external_allocation')).toBe(true);
   });
+
+  it('returns legacy reference candidates for the current organization without auto-linking or counting them', async () => {
+    const db = new FakeD1();
+    db.orders = [baseOrder()];
+    db.legacyCandidates = [
+      {
+        registration_order_id: 'order-a', organization_id: 'org-a', order_number: '12345',
+        shipment_id: 'legacy-shipment-a', shipment_name: 'محموله قدیمی', bill_of_lading_no: 'BL-OLD',
+        customs_registration_order_no: '۱۲۳۴۵', candidate_net_weight_kg: 250,
+        candidate_gross_weight_kg: 275, candidate_invoice_amount: 125, candidate_invoice_currency: 'USD',
+        candidate_source: 'shipment_customs_data.registration_order_no',
+      },
+      {
+        registration_order_id: 'order-other', organization_id: 'org-a', order_number: '99999',
+        shipment_id: 'other-order-shipment', shipment_name: 'سفارش دیگر',
+      },
+      {
+        registration_order_id: 'order-a', organization_id: 'org-b', order_number: '12345',
+        shipment_id: 'foreign-shipment', shipment_name: 'سازمان دیگر',
+      },
+    ];
+    const url = new URL('https://staging.example/api/registration-orders?limit=100');
+    const response = await handleRegistrationOrdersApi(makeRequest('GET', url.pathname + url.search), db, url, profile);
+    const body = await response.json() as {
+      legacyCandidates: Row[];
+      reconciliation: Array<{ registration_order_id: string; shipment_count: number; total_allocated_net_weight_kg: number }>;
+    };
+    expect(response.status).toBe(200);
+    expect(body.legacyCandidates).toHaveLength(1);
+    expect(body.legacyCandidates[0].shipment_id).toBe('legacy-shipment-a');
+    expect(body.legacyCandidates[0].customs_registration_order_no).toBe('۱۲۳۴۵');
+    expect(body.reconciliation[0].shipment_count).toBe(1);
+    expect(body.reconciliation[0].total_allocated_net_weight_kg).toBe(500);
+    expect(db.queries.some(query => query.sql.startsWith('UPDATE shipments'))).toBe(false);
+    expect(db.queries.some(query => query.sql.includes('registration_order_legacy_match_candidates') &&
+      query.values[0] === 'org-a' && query.values.includes('order-a'))).toBe(true);
+  });
+
+
+  it('normalizes Persian and Arabic digits in case-linked registration-order capacity joins', async () => {
+    const db = new FakeD1();
+    db.orders = [baseOrder()];
+    const url = new URL('https://staging.example/api/registration-orders?limit=100');
+    const response = await handleRegistrationOrdersApi(makeRequest('GET', url.pathname + url.search), db, url, profile);
+    expect(response.status).toBe(200);
+    const aggregate = db.queries.find(query => query.sql.includes('FROM registration_orders ro2'));
+    expect(aggregate?.sql).toContain('sc.registration_order_no_normalized = ro2.order_number_normalized');
+    expect(aggregate?.sql).not.toContain('sc.registration_order_no = ro2.order_number');
+
+  });
+
 });

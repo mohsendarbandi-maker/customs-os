@@ -53,6 +53,13 @@ interface OrderRow extends Record<string, unknown> {
   external_allocated_value_milli: number; total_allocated_net_weight_milli: number;
   total_allocated_gross_weight_milli: number; total_allocated_value_milli: number;
 }
+interface LegacyMatchCandidateRow extends Record<string, unknown> {
+  registration_order_id: string; organization_id: string; order_number: string;
+  registration_order_client_id: string | null; shipment_id: string; shipment_client_id: string | null;
+  shipment_name: string | null; bill_of_lading_no: string | null; customs_registration_order_no: string;
+  candidate_net_weight_kg: number | null; candidate_gross_weight_kg: number | null;
+  candidate_invoice_amount: number | null; candidate_invoice_currency: string | null; candidate_source: string;
+}
 interface ExternalAllocationRow extends Record<string, unknown> {
   id: string; organization_id: string; registration_order_id: string;
   recipient_company: string | null; destination_customs: string | null;
@@ -83,6 +90,8 @@ const normalizeDigits = (value: string) => Array.from(value.normalize('NFKC'), (
   if (n >= 0x0660 && n <= 0x0669) return String(n - 0x0660);
   return ch;
 }).join('');
+const normalizeRegistrationOrderReference = (value: string) =>
+  normalizeDigits(value).replace(/[\s\u00a0\u200b-\u200d\ufeff]/g, '').toUpperCase();
 const parseMilliUnits = (value: unknown): number | null => {
   if (value == null || value === '') return null;
   const raw = normalizeDigits(String(value)).replace(/[٬,\s]/g, '').trim();
@@ -291,7 +300,7 @@ const ORDER_SELECT = [
   ' COALESCE(SUM(CASE WHEN s.id IS NOT NULL AND (d.invoice_amount IS NULL OR NULLIF(TRIM(d.invoice_currency), \'\') IS NULL) THEN 1 ELSE 0 END), 0) AS shipments_missing_invoice_value,',
   ' COALESCE(SUM(CASE WHEN d.invoice_amount IS NOT NULL AND (ro2.currency IS NULL OR NULLIF(TRIM(d.invoice_currency), \'\') IS NULL OR UPPER(TRIM(d.invoice_currency)) <> UPPER(ro2.currency)) THEN 1 ELSE 0 END), 0) AS shipments_with_currency_mismatch',
   ' FROM registration_orders ro2',
-  ' LEFT JOIN shipments s ON s.organization_id = ro2.organization_id AND (s.registration_order_id = ro2.id OR (s.registration_order_id IS NULL AND (s.case_id = ro2.case_id OR EXISTS (SELECT 1 FROM cases sc WHERE sc.id = s.case_id AND sc.organization_id = s.organization_id AND sc.registration_order_no = ro2.order_number))))',
+  ' LEFT JOIN shipments s ON s.organization_id = ro2.organization_id AND (s.registration_order_id = ro2.id OR (s.registration_order_id IS NULL AND (s.case_id = ro2.case_id OR EXISTS (SELECT 1 FROM cases sc WHERE sc.id = s.case_id AND sc.organization_id = s.organization_id AND sc.registration_order_no_normalized = ro2.order_number_normalized))))',
   ' LEFT JOIN shipment_customs_data d ON d.shipment_id = s.id AND d.organization_id = s.organization_id',
   ' GROUP BY ro2.id, ro2.organization_id',
   ') sa ON sa.registration_order_id = ro.id AND sa.organization_id = ro.organization_id',
@@ -334,8 +343,8 @@ const readCases = (db: RegistrationOrderD1Database, organizationId: string) =>
     .bind(organizationId).all<Record<string, unknown>>();
 const duplicateOrder = async (db: RegistrationOrderD1Database, organizationId: string, orderNumber: string, excludingId: string | null) => {
   const row = await db.prepare(
-    'SELECT id FROM registration_orders WHERE organization_id = ? AND order_number = ? AND (? IS NULL OR id <> ?) LIMIT 1',
-  ).bind(organizationId, orderNumber, excludingId, excludingId).first<{ id: string }>();
+    'SELECT id FROM registration_orders WHERE organization_id = ? AND order_number_normalized = ? AND (? IS NULL OR id <> ?) LIMIT 1',
+  ).bind(organizationId, normalizeRegistrationOrderReference(orderNumber), excludingId, excludingId).first<{ id: string }>();
   return Boolean(row);
 };
 const shipmentCurrencyMismatchCount = async (
@@ -344,7 +353,7 @@ const shipmentCurrencyMismatchCount = async (
   if (!currency) return 0;
   const row = await db.prepare(
     'SELECT COUNT(s.id) AS total FROM registration_orders ro ' +
-    'JOIN shipments s ON s.organization_id = ro.organization_id AND (s.registration_order_id = ro.id OR (s.registration_order_id IS NULL AND (s.case_id = ro.case_id OR EXISTS (SELECT 1 FROM cases c WHERE c.id = s.case_id AND c.organization_id = s.organization_id AND c.registration_order_no = ro.order_number)))) ' +
+    'JOIN shipments s ON s.organization_id = ro.organization_id AND (s.registration_order_id = ro.id OR (s.registration_order_id IS NULL AND (s.case_id = ro.case_id OR EXISTS (SELECT 1 FROM cases c WHERE c.id = s.case_id AND c.organization_id = s.organization_id AND c.registration_order_no_normalized = ro.order_number_normalized)))) ' +
     'LEFT JOIN shipment_customs_data d ON d.shipment_id = s.id AND d.organization_id = s.organization_id ' +
     'WHERE ro.id = ? AND ro.organization_id = ? AND d.invoice_amount IS NOT NULL AND (d.invoice_currency IS NULL OR UPPER(TRIM(d.invoice_currency)) <> ?)',
   ).bind(orderId, organizationId, currency).first<{ total: number }>();
@@ -427,6 +436,15 @@ const listOrders = async (
     ).bind(...binds, limit, offset).all<OrderRow>();
     const cases = await readCases(db, profile.organization_id);
     const items = rows.results.map((row) => ({ ...row, is_closed: Boolean(row.is_closed) }));
+    const legacyCandidates = items.length
+      ? await db.prepare(
+        'SELECT registration_order_id,organization_id,order_number,registration_order_client_id,shipment_id,' +
+        'shipment_client_id,shipment_name,bill_of_lading_no,customs_registration_order_no,candidate_net_weight_kg,' +
+        'candidate_gross_weight_kg,candidate_invoice_amount,candidate_invoice_currency,candidate_source ' +
+        'FROM registration_order_legacy_match_candidates WHERE organization_id = ? AND registration_order_id IN (' +
+        items.map(() => '?').join(',') + ') ORDER BY order_number,shipment_id',
+      ).bind(profile.organization_id, ...items.map((item) => item.id)).all<LegacyMatchCandidateRow>()
+      : { results: [] as LegacyMatchCandidateRow[] };
     const reconciliation = items.map((row) => ({
       registration_order_id: row.id,
       order_number: row.order_number,
@@ -454,7 +472,7 @@ const listOrders = async (
     }));
     return json({
       ok: true, items, total: Number(count?.total || 0), limit, offset,
-      cases: cases.results, reconciliation,
+      cases: cases.results, reconciliation, legacyCandidates: legacyCandidates.results,
     });
   } catch {
     return fail('REGISTRATION_ORDERS_API_NOT_READY', 503);
