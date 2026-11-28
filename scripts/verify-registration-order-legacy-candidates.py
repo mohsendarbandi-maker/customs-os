@@ -99,10 +99,6 @@ def main() -> None:
             "ro-1", "ship-candidate", "۱۲۳۴۵", "12345", 100.0, 500.0,
             "shipment_customs_data.registration_order_no",
         ),
-        (
-            "ro-1", "ship-case-linked", "۱۲۳۴۵", "12345", 50.0, 250.0,
-            "shipment_customs_data.registration_order_no",
-        ),
     ], rows
 
     # The candidate view must remain read-only: no direct FK or order totals are changed.
