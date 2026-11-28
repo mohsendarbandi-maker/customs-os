@@ -69,6 +69,17 @@ describe('Cloudflare D1 shipment tracking API', () => {
     expect(body.events[0].id).toBe('event-a');
   });
 
+  it('rejects client-role access before querying shipment records', async () => {
+    const db = new FakeD1();
+    const path = '/api/shipments/shipment-a/tracking-events';
+    const response = await handleShipmentTrackingApi(
+      makeRequest('GET', path), db, makeUrl(path),
+      { ...profile, role: 'client' },
+    );
+    expect(response.status).toBe(403);
+    expect(db.batches).toHaveLength(0);
+  });
+
   it('rejects shipment identifiers from another organization', async () => {
     const db = new FakeD1();
     const path = '/api/shipments/foreign/tracking-events';
