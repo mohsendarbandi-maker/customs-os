@@ -69,7 +69,7 @@ def main() -> None:
     assert db.execute("SELECT COUNT(*) FROM registration_order_legacy_match_candidates WHERE registration_order_id='ro-1'").fetchone()[0] == 0
     db.execute("DELETE FROM registration_orders WHERE id='ro-duplicate'")
 
-    # An explicit conflicting case order reference must not be suggested; an unnumbered case remains reviewable.
+    # Any shipment already linked to a case must be excluded, even when that case has no order number.
     db.execute("INSERT INTO cases(id,organization_id,registration_order_no) VALUES('case-linked','org-1',NULL)")
     db.execute("UPDATE registration_orders SET case_id='case-linked' WHERE id='ro-1'")
     db.execute(
