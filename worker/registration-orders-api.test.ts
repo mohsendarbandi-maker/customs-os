@@ -92,7 +92,7 @@ class FakeD1 implements RegistrationOrderD1Database {
       return row ? { id: row.id, client_id: row.client_id } as T : null;
     }
     if (sql.startsWith('SELECT id FROM registration_orders WHERE organization_id = ? AND order_number_normalized = ?')) {
-      const normalize = (value: unknown) => String(value ?? '').normalize('NFKC').replace(/[\\s\\u00a0\\u200b-\\u200d\\ufeff]/g, '').replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).toUpperCase();
+      const normalize = (value: unknown) => String(value ?? '').normalize('NFKC').replace(/[\s\u00a0\u200b-\u200d\ufeff]/g, '').replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).toUpperCase();
       const row = this.orders.find(item => item.organization_id === values[0] &&
         normalize(item.order_number) === values[1] && item.id !== values[2]);
       return row ? { id: row.id } as T : null;
